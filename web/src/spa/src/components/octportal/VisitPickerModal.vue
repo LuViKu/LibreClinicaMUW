@@ -1,28 +1,15 @@
 <script setup lang="ts">
 /**
- * Wave 2B (retinal followups) — VisitPickerModal.
+ * VisitPickerModal — lists every scheduled/started/completed event the
+ * picked subject owns and lets the operator select one for the bind. Backs
+ * the {@code novisit} row state and the parked-scans "Visite zuweisen".
  *
- * Replaces the v1 no-op {@code pick-visit} emit on the {@code novisit}
- * row state AND backs the "Visite zuweisen" affordance on the parked-
- * scans tab. Lists every scheduled / started / completed event the
- * picked subject owns + lets the operator select one for the bind.
- *
- * <p>Backend handshake — two hops:
- *  - {@code GET /pages/api/v1/events?subjectId={subjectLabel}} — list
- *    visits for the subject. The endpoint identifies subjects by
- *    LABEL, not numeric id, so the parent must pass the label too.
- *  - {@code GET /pages/api/v1/events/{eventId}} — on click, resolve
- *    the picked event into an {@code eventCrfId} (the bind target).
- *    The picker emits the FIRST non-removed event_crf id; the bind
- *    rejects null targets so this is the only safe default.
- *
- * <p>If the picked event has no started CRFs yet, the picker emits
- * with {@code eventCrfId} set to the placeholder {@code -1} so the
- * parent can surface an error toast — this is a clinical-data-system,
- * we never paper over a backend invariant client-side.
- *
- * <p>Strings come from {@code octPortal.modals.visitPicker.*} in the
- * Wave 1C i18n registry — no hard-coded German.
+ * <p>Auth'd path is two hops:
+ *  - {@code GET /pages/api/v1/events?subjectId={subjectLabel}} — lists
+ *    visits; identifies subjects by LABEL, not numeric id.
+ *  - {@code GET /pages/api/v1/events/{eventId}} — resolves the picked event
+ *    into an {@code eventCrfId} (the bind target; first non-removed CRF).
+ * The {@code publicContext} path is single-hop (firstEventCrfId pre-resolved).
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -49,11 +36,10 @@ interface Props {
    *  public OCT-portal mount. */
   subjectLabel?: string
   /**
-   * 2026-06-19 — when true, load events via the anonymous
+   * When true, load events via the anonymous
    * {@code /api/v1/public/oct-upload/patients/{id}/events} endpoint
-   * (single-hop; firstEventCrfId pre-resolved). The portal at
-   * {@code /app/oct-upload} sets this to true; AssignParkedDialog in
-   * the admin view leaves it false (auth'd two-hop path).
+   * (single-hop; firstEventCrfId pre-resolved). The {@code /app/oct-upload}
+   * portal sets this true; AssignParkedDialog leaves it false (auth'd two-hop).
    */
   publicContext?: boolean
 }
@@ -64,14 +50,9 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 /**
- * Picked-event emit payload.
- *
- * 2026-06-23 — extended to carry {@code studyEventId} so the picker
- * can bind to planned-but-not-started visits (no event_crf yet).
- * Commit prefers {@code eventCrfId} when set and falls back to
- * {@code studyEventId}; the store handles the dispatch. With this
- * change, every selectable visit emits a valid binding — the legacy
- * {@code eventCrfId: -1} "Keine Eingabemaske" sentinel goes away.
+ * Picked-event emit payload. Carries {@code studyEventId} so the picker can
+ * bind planned-but-not-started visits (no event_crf yet). Commit prefers
+ * {@code eventCrfId} when set, else falls back to {@code studyEventId}.
  */
 export interface PickedEvent {
   studyEventId: number

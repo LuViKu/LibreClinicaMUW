@@ -342,11 +342,10 @@ export const useSubjectsStore = defineStore('subjects', () => {
       // Prepend so the just-created row is the first thing the user
       // sees when navigated back to the matrix.
       rows.value = [subject, ...rows.value]
-      // App-feedback Wave 1B (2026-06-19) — surface the PK so the
-      // AddSubject view can chain a link-patient call after the
-      // newly-created enrolment is in the DB. The matrix `Subject`
-      // type intentionally doesn't carry the PK (it uses label as the
-      // identity); we attach it on the return object only.
+      // Surface the PK so the AddSubject view can chain a link-patient
+      // call after enrolment. The matrix `Subject` type uses label as
+      // identity and doesn't carry the PK; we attach it on the return
+      // object only.
       return Object.assign({}, subject, { studySubjectId: detail.studySubjectId })
     } catch (e) {
       // 400 validation: backend returns { message, errors: [{field, message}] }
@@ -359,7 +358,6 @@ export const useSubjectsStore = defineStore('subjects', () => {
         throw new AddSubjectValidationError(message, fieldErrors)
       }
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
-        // Let the router-level auth guard handle these.
         throw e
       }
       if (e instanceof ApiNetworkError) {
@@ -871,19 +869,12 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
-   * App-feedback Wave 1B (2026-06-19) — cross-study patient identity
-   * soft-link.
-   *
-   * <p>Calls
+   * Cross-study patient identity soft-link. Calls
    * {@code POST /api/v1/study-subjects/{currentSsId}/link-patient} with
-   * {@code { targetSubjectId }}. The backend ties both rows under a
-   * common {@code patient_uuid} and returns it; the SPA surfaces a
-   * toast/error per the resolution branch (200 idempotent / 200 new
-   * link / 409 mismatch / 4xx role refusal).
-   *
-   * <p>Errors bubble as {@link ApiError} for the caller to map; the
-   * store keeps no local cache of the link since the cross-study
-   * patient-overview view re-fetches independently.
+   * {@code { targetSubjectId }}; the backend ties both rows under a
+   * common {@code patient_uuid} and returns it. Resolution branches:
+   * 200 idempotent / 200 new link / 409 mismatch / 4xx role refusal.
+   * Errors bubble as {@link ApiError} for the caller to map.
    */
   async function linkPatient(
     currentSsId: number,
@@ -941,7 +932,6 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   return {
-    // state
     rows,
     isLoading,
     error,
@@ -955,11 +945,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
     preflight,
     isLoadingPreflight,
     preflightError,
-    // derived
     filtered,
     totalCount,
     visibleCount,
-    // actions
     load,
     clearFilters,
     add,

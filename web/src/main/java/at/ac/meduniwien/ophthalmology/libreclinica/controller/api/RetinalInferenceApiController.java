@@ -103,12 +103,14 @@ public class RetinalInferenceApiController {
     public static final String DEFAULT_UPLOADS_PATH = "/var/lib/libreclinica/e2e-uploads";
 
     /**
-     * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}.
+     * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}:
+     * {@code ga}, {@code fluid}, {@code onl}, {@code pr}, {@code bm}, {@code layers}.
      * fluid/onl/pr run via the OptimaAdapter model-runners (async; the sidecar's
      * {@code /screen} returns 422 for them, so the controller's existing
      * null-result path queues them for the worker). {@code ga} is registered but
      * gated at the sidecar adapter (no runner) until the IOWA layer segmenter +
-     * a GPU host exist.
+     * a GPU host exist. {@code bm} (Bruch's membrane) and {@code layers} (the full
+     * IOWA surface stack) run through the same async worker path.
      */
     private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers");
 
@@ -629,13 +631,6 @@ public class RetinalInferenceApiController {
     }
 
     /**
-     * Resolve the on-disk uploads directory. Reads
-     * {@code core.retinalInference.e2eUploadsPath} via {@link CoreResources};
-     * falls back to {@link #DEFAULT_UPLOADS_PATH} when unset / blank /
-     * unreachable (the latter happens in some unit-test contexts where
-     * {@code CoreResources} hasn't been initialised).
-     */
-    /**
      * 2026-06-19 — terminal-failure helper used when the remote GPU
      * dispatch fails (network / sidecar 5xx / empty response /
      * artifact persist failure). Flips the job to status='failed' +
@@ -672,6 +667,13 @@ public class RetinalInferenceApiController {
         LOG.warn("Remote GPU dispatch failed for job {}: {}", jobId, msg);
     }
 
+    /**
+     * Resolve the on-disk uploads directory. Reads
+     * {@code core.retinalInference.e2eUploadsPath} via {@link CoreResources};
+     * falls back to {@link #DEFAULT_UPLOADS_PATH} when unset / blank /
+     * unreachable (the latter happens in some unit-test contexts where
+     * {@code CoreResources} hasn't been initialised).
+     */
     private static String uploadsDir() {
         try {
             String raw = CoreResources.getField("core.retinalInference.e2eUploadsPath");

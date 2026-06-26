@@ -21,7 +21,6 @@ export interface NamdPatient {
   eye: Laterality
   /** Diagnosis line, e.g. "exsudative AMD". */
   diagnosis: string
-  /** Age in years. */
   age: number | null
   /** Study identifier (label / OID), e.g. "MUW-AMD-T&E". */
   study: string

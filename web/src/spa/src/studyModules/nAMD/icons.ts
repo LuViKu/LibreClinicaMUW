@@ -31,17 +31,14 @@ const fill = (path: string, opts: { size?: number; viewBox?: string } = {}): Nam
 export const I: Record<string, NamdIcon> = {
   /** Logo mark — siegel-style circle echoing the MUW brand. */
   brand: sw('<circle cx="12" cy="12" r="9" /><path d="M7 13 L12 8 L17 13 M10 13 V17 H14 V13" />'),
-  /** Right chevron used in breadcrumbs. */
   chevron: sw('<path d="M9 6 L15 12 L9 18" />'),
   /** Eye — patient banner adornment. */
   eye: sw('<path d="M2 12 C5 6 10 4 12 4 C14 4 19 6 22 12 C19 18 14 20 12 20 C10 20 5 18 2 12 Z" /><circle cx="12" cy="12" r="3" />'),
-  /** Bar chart — Overview tab. */
   chart: sw('<path d="M4 20 V10 M10 20 V4 M16 20 V14 M22 20 H2" />'),
   /** Stacked layers — OCT Viewer tab. */
   layers: sw('<path d="M12 3 L21 8 L12 13 L3 8 Z M3 13 L12 18 L21 13 M3 18 L12 23 L21 18" />'),
   /** Two-column split — Compare tab. */
   compare: sw('<rect x="3" y="4" width="8" height="16" rx="1" /><rect x="13" y="4" width="8" height="16" rx="1" /><path d="M12 4 V20" />'),
-  /** Sheet of paper — Report tab. */
   report: sw('<path d="M6 3 H15 L19 7 V21 H6 Z M15 3 V7 H19 M9 12 H16 M9 16 H16" />'),
   /** Sparkle — AI affordance, segmentation pill. */
   spark: sw('<path d="M12 3 L13 9 L19 10 L13 11 L12 17 L11 11 L5 10 L11 9 Z" />'),

@@ -13,45 +13,24 @@ import {
 import { findPreset } from './presetCatalog'
 
 /**
- * App-feedback Wave 2 (2026-06-19) — middle canvas.
- *
- * <p>Renders each section in the draft as a drop-target card. Operators
- * can:
- *
- * <ul>
- *   <li>drop a palette primitive into a section (HTML5 DataTransfer with
- *       MIME type {@code application/x-crf-palette}, JSON payload
- *       {@code {"kind":"primitive","value":"INT"}}). The handler reads
- *       the data type and pushes a fresh item with that {@code dataType}
- *       into the section.</li>
- *   <li>drop a palette preset into a section. The handler dispatches
- *       {@code store.applyPreset(id, sectionUid, ...)} with the preset
- *       registry + translator.</li>
- *   <li>reorder items via vuedraggable (the existing wizard logic — we
- *       reuse the per-section list pattern, not the bilateral grid; the
- *       grid rendering happens in a future polish pass).</li>
- *   <li>click an item to select it (fills the right-rail properties
- *       panel).</li>
- *   <li>add / remove sections; rename the section title inline.</li>
- * </ul>
+ * Middle canvas — renders each draft section as a drop-target card.
+ * Operators drop palette primitives (DataTransfer MIME
+ * {@code application/x-crf-palette}) or presets ({@code store.applyPreset}),
+ * reorder items via vuedraggable, select items into the right rail, and
+ * add/remove/rename sections.
  *
  * <p>Bilateral OD/OS pairing on read: when {@code section.bilateral === true}
- * the renderer surfaces paired items in a two-column grid (OD on the
- * LEFT, OS on the RIGHT — face-to-face clinician convention). The
- * pairing key is the OID suffix after the {@code OD_} / {@code OS_}
- * prefix. This is a PORT of the wizard's {@code bilateralRowsForSection}
- * logic — simpler because the canvas only needs the visual pairing, not
- * the per-row editor.
+ * the renderer surfaces paired items in a two-column grid — OD on the LEFT,
+ * OS on the RIGHT (face-to-face clinician convention). Pairing key is the
+ * OID suffix after the {@code OD_} / {@code OS_} prefix.
  */
 
 const { t } = useI18n()
 const store = useCrfAuthoringStore()
 
 /**
- * 2026-06-21 user-feedback batch — collapsed-section state. Per-section
- * boolean tracked client-side (not persisted) so the operator can hide
- * a tall section to glance at the form structure without scrolling.
- * Keyed on section.uid so re-orders keep the collapse state stable.
+ * Collapsed-section state — client-side only (not persisted), keyed on
+ * section.uid so re-orders keep the collapse state stable.
  */
 const collapsedSections = ref<Set<string>>(new Set())
 
@@ -67,9 +46,8 @@ function toggleSectionCollapsed(sectionUid: string): void {
 }
 
 /**
- * 2026-06-21 user-feedback batch — section reorder via drag handle.
- * Forwards the new array to the store's reorderSections() which
- * re-numbers ordinals so the persisted payload stays contiguous.
+ * Section reorder via drag handle — forwards to store.reorderSections(),
+ * which re-numbers ordinals so the persisted payload stays contiguous.
  */
 function onSectionReorder(reordered: typeof store.draft.sections): void {
   store.reorderSections(reordered as AuthoringSection[])
@@ -199,12 +177,10 @@ function onAddSection(): void {
 }
 
 /**
- * 2026-06-21 user-feedback round 4 — drop-on-new-section. The
- * "Neue Sektion hinzufügen" footer accepts a palette drag-released
- * payload. Primitives spin up a fresh empty section + append the item;
- * presets re-use the empty-target-in-place branch of
- * {@link applyPresetAsSection} so the section's title + tag come from
- * the preset rather than the auto-numbered Sn fallback.
+ * Drop-on-new-section: the "Neue Sektion hinzufügen" footer accepts a
+ * palette payload. Primitives spin up a fresh section + append the item;
+ * presets reuse {@link applyPresetAsSection} so the section title + tag come
+ * from the preset rather than the auto-numbered Sn fallback.
  */
 const dragOverNewSection = ref(false)
 function onNewSectionDragOver(ev: DragEvent): void {
@@ -357,7 +333,6 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
         @dragleave="(ev) => onSectionDragLeave(ev, section.uid)"
         @drop="(ev) => onSectionDrop(ev, sIdx)"
       >
-        <!-- Section header -->
         <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
           <!-- 2026-06-21 user-feedback batch — drag handle for section
                reorder. Vuedraggable's handle prop limits drag to this
@@ -451,7 +426,6 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
              draggable list state inside so reorders + selection
              survive the toggle. -->
         <div v-show="!isSectionCollapsed(section.uid)" class="p-3 space-y-2">
-          <!-- Empty state -->
           <div
             v-if="section.items.length === 0"
             class="text-center text-xs italic text-slate-400 border border-dashed border-slate-300 rounded-md py-6"
@@ -460,7 +434,6 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
             {{ t('crfAuthoring.canvas.canvas.dropHere') }}
           </div>
 
-          <!-- Bilateral grid render -->
           <div
             v-else-if="section.bilateral"
             class="space-y-2"
@@ -521,7 +494,6 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
             </div>
           </div>
 
-          <!-- Flat list (default) -->
           <draggable
             v-else
             :model-value="section.items"

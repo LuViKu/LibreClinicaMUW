@@ -983,14 +983,6 @@ public class UsersApiController {
     }
 
     /**
-     * Multi-role check: walk every grant the user has, return true
-     * if any active row matches both {@code studyId} and
-     * {@code legacyRoleName}. {@link UserAccountDAO#findRoleByUserNameAndStudyId}
-     * only returns the FIRST match per (user, study) which is no
-     * longer sufficient now that the same pair can host multiple
-     * role rows.
-     */
-    /**
      * Map a SPA UserRole string to the LITERAL DB role_name string —
      * mirrors {@link Role}'s declared {@code name} field for each
      * constant (e.g. Investigator → "Investigator", Monitor → "monitor",
@@ -1011,6 +1003,14 @@ public class UsersApiController {
         };
     }
 
+    /**
+     * Multi-role check: walk every grant the user has, return true
+     * if any active row matches both {@code studyId} and
+     * {@code legacyRoleName}. {@link UserAccountDAO#findRoleByUserNameAndStudyId}
+     * only returns the FIRST match per (user, study) which is no
+     * longer sufficient now that the same pair can host multiple
+     * role rows.
+     */
     private static boolean hasActiveGrantWithRole(UserAccountDAO userDao,
                                                   String username,
                                                   int studyId,
@@ -1592,25 +1592,6 @@ public class UsersApiController {
     }
 
     /**
-     * Phase E.6.ci — emit a typed {@code audit_log_event} row for the
-     * unlock action. Same SQL shape as
-     * {@link MeApiController#emitProfileAudit}: column name lands in
-     * {@code entity_name} (audit_log_event has no {@code column_name}
-     * column), pre/post values land in {@code old_value / new_value}.
-     *
-     * <p>Reuses {@code audit_log_event_type_id = 50}
-     * ({@code user_account_profile_updated}) — the unlock is a
-     * user_account state mutation, lifecycle-adjacent to the SPA's
-     * own profile-edit audit rows, and the existing dictionary row
-     * already carries a sensible display name for the Audit Log view.
-     * Minting a dedicated type id would force a Liquibase changeset
-     * for cosmetic differentiation.
-     *
-     * <p>Failures are swallowed: the unlock itself has already
-     * persisted (account_non_locked = true), so a missed audit row
-     * should NOT roll back the admin's lifecycle change.
-     */
-    /**
      * Type ids for the user-account lifecycle §11.10(e) audit-coverage
      * gaps closed by
      * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
@@ -1649,6 +1630,25 @@ public class UsersApiController {
         }
     }
 
+    /**
+     * Phase E.6.ci — emit a typed {@code audit_log_event} row for the
+     * unlock action. Same SQL shape as
+     * {@link MeApiController#emitProfileAudit}: column name lands in
+     * {@code entity_name} (audit_log_event has no {@code column_name}
+     * column), pre/post values land in {@code old_value / new_value}.
+     *
+     * <p>Reuses {@code audit_log_event_type_id = 50}
+     * ({@code user_account_profile_updated}) — the unlock is a
+     * user_account state mutation, lifecycle-adjacent to the SPA's
+     * own profile-edit audit rows, and the existing dictionary row
+     * already carries a sensible display name for the Audit Log view.
+     * Minting a dedicated type id would force a Liquibase changeset
+     * for cosmetic differentiation.
+     *
+     * <p>Failures are swallowed: the unlock itself has already
+     * persisted (account_non_locked = true), so a missed audit row
+     * should NOT roll back the admin's lifecycle change.
+     */
     private void emitUnlockAudit(int adminUserId, int targetUserId) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(

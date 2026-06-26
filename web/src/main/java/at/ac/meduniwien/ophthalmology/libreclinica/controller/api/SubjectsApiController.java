@@ -278,14 +278,8 @@ public class SubjectsApiController {
 
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
-        // 2026-06-22 user-feedback round 8 — the SPA constructs the
-        // path arg as `SS_<label>` from the subject's label by
-        // convention, which works for subjects whose seed/auto-OID
-        // followed that pattern but misses on demo seeds that use a
-        // non-standard OID (e.g. `SS_EIAMD139_RIS` for label
-        // EIAMD139). Fall back to a label lookup in the active study
-        // when the bare OID misses, recovering the row without
-        // forcing a database rename.
+        // SPA passes `SS_<label>` by convention; when that OID misses (non-standard
+        // OID), fall back to a label lookup in the active study.
         if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
             String label = studySubjectOid.startsWith("SS_")
                     ? studySubjectOid.substring(3) : studySubjectOid;
@@ -854,7 +848,6 @@ public class SubjectsApiController {
             }
         }
 
-        // ----- Build the response DTO -----
         // No events scheduled yet — they're created via M11 (Schedule Event).
         // No queries either. Reuse the M3 DTO shape so the SPA can drop the
         // new subject straight into `rows` without a refetch.
@@ -893,10 +886,6 @@ public class SubjectsApiController {
 
         return ResponseEntity.status(201).body(dto);
     }
-
-    /* =============================================================== */
-    /* Phase E.6 — label-availability preflight                         */
-    /* =============================================================== */
 
     /**
      * Response shape for {@link #checkLabel}.
@@ -953,10 +942,6 @@ public class SubjectsApiController {
         return ResponseEntity.ok(new SubjectLabelAvailability(false, existing.getOid()));
     }
 
-    /* =============================================================== */
-    /* Phase E.6 retrospective-backfill — match-preflight              */
-    /* =============================================================== */
-
     /**
      * Request body for {@link #matchPreflight}.
      *
@@ -966,17 +951,14 @@ public class SubjectsApiController {
      * fields (matches need all three) and renders a permissive 400
      * with explicit reasons rather than leaking match counts.
      *
-     * <p>App-feedback Wave 1B (2026-06-19) — added the optional
-     * {@code label} field so the dialog can ALSO surface cross-study
-     * label collisions ("M-001 is already in study GA-Studie"). When
-     * blank or omitted the endpoint falls back to PHI-only matching
-     * (the legacy Phase E.6 contract).
+     * <p>Optional {@code label} field surfaces cross-study label collisions; when
+     * blank or omitted the endpoint falls back to PHI-only matching.
      */
     public record SubjectMatchPreflightRequest(
             String firstName,
             String lastName,
             String dateOfBirth,
-            /** App-feedback Wave 1B — optional cross-study label match. */
+            /** Optional cross-study label match. */
             String label
     ) {}
 
@@ -1182,15 +1164,10 @@ public class SubjectsApiController {
                     "Match preflight failed — see server log."));
         }
 
-        // App-feedback Wave 1B (2026-06-19) — optional cross-study label
-        // union. When the operator typed a study-subject id ("M-001") on
-        // the AddSubject form, ALSO surface candidates whose
-        // study_subject.label matches across visible studies — same
-        // human may be enrolled in a sibling study under a familiar
-        // institutional id, and the operator should see that collision
-        // before committing the new enrolment. Additive to the PHI
-        // branch: rows are merged into the same bySubject map keyed on
-        // subject_id, so a candidate matched by BOTH paths appears once.
+        // Optional cross-study label union: when a label is supplied, also surface
+        // candidates whose study_subject.label matches across visible studies.
+        // Additive to the PHI branch — merged into the same map keyed on subject_id,
+        // so a candidate matched by both paths appears once.
         String label = body.label() == null ? "" : body.label().trim();
         if (!label.isEmpty()) {
             String labelSql =
@@ -1398,7 +1375,7 @@ public class SubjectsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
 
-        // ---- Body validation (no password / attestation logging) ----
+        // Never log the password / attestation fields.
         if (body == null) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Request body is required (fields: password, attestation)."
@@ -1415,7 +1392,6 @@ public class SubjectsApiController {
             ));
         }
 
-        // ---- Subject resolution + scope guard ----
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
         if (ss == null || ss.getId() == 0) {
@@ -1434,7 +1410,6 @@ public class SubjectsApiController {
             ));
         }
 
-        // ---- Already-signed guard (one-way action) ----
         if (ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED)) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Subject is already signed — signing is a one-way action.",
@@ -1442,7 +1417,6 @@ public class SubjectsApiController {
             ));
         }
 
-        // ---- Password re-auth ----
         // We deliberately fetch UserDetails from the SecurityContext
         // rather than constructing it from the session's UserAccountBean
         // because the SecurityManager.verifyPassword wraps the call in
@@ -1466,7 +1440,6 @@ public class SubjectsApiController {
             ));
         }
 
-        // ---- Preflight gate (reuse M3 helper) ----
         SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser);
         List<SignPreflightDto.CheckRow> blockingFails = new ArrayList<>();
         for (SignPreflightDto.CheckRow c : preflight.checks()) {
@@ -1487,7 +1460,6 @@ public class SubjectsApiController {
             ));
         }
 
-        // ---- Persistence ----
         try {
             applySignaturePersistence(ss.getId(), currentUser.getId());
         } catch (SQLException e) {
@@ -1498,7 +1470,6 @@ public class SubjectsApiController {
             ));
         }
 
-        // ---- Audit log ----
         // The study_subject_trigger PL/pgSQL function inserts the
         // audit_log_event row automatically when status_id changes; no
         // Java-side audit write needed. The legacy
@@ -1506,7 +1477,6 @@ public class SubjectsApiController {
         LOG.info("Sign Subject: signed subject={} by user={} (study {})",
                 ss.getOid(), currentUser.getName(), currentStudy.getOid());
 
-        // ---- Refetch + return ----
         StudySubjectBean refreshed = studySubjectDAO.findByOid(studySubjectOid);
         SubjectDAO subjectDAO = new SubjectDAO(dataSource);
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
@@ -1581,7 +1551,6 @@ public class SubjectsApiController {
                     "Your role does not permit editing study-subject demographics"));
         }
 
-        // Validate input before touching the DB.
         List<ValidationErrorBody.FieldError> errors = validateUpdateSubject(body);
         if (!errors.isEmpty()) {
             ValidationErrorBody errResponse = new ValidationErrorBody(
@@ -1635,7 +1604,7 @@ public class SubjectsApiController {
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
         java.util.Date now = new java.util.Date();
 
-        // ---- secondaryId — null leaves unchanged; empty clears ----
+        // secondaryId — null leaves unchanged; empty clears.
         if (body.secondaryId() != null) {
             String oldSec = subj.getUniqueIdentifier() == null ? "" : subj.getUniqueIdentifier();
             String newSec = body.secondaryId().trim();
@@ -1646,7 +1615,6 @@ public class SubjectsApiController {
             }
         }
 
-        // ---- gender ----
         char newGenderChar = Character.toLowerCase(body.gender().charAt(0));
         char oldGenderChar = subj.getGender();
         if (oldGenderChar != newGenderChar) {
@@ -1655,7 +1623,7 @@ public class SubjectsApiController {
                     "gender", String.valueOf(oldGenderChar), String.valueOf(newGenderChar));
         }
 
-        // ---- yearOfBirth: stored on subject.date_of_birth as Jan-1 ----
+        // yearOfBirth: stored on subject.date_of_birth as Jan-1.
         if (body.yearOfBirth() != null) {
             int newYob = body.yearOfBirth();
             int oldYob = subj.getDateOfBirth() != null
@@ -1706,7 +1674,6 @@ public class SubjectsApiController {
         LOG.info("Subject demographics update: study_subject {} (label={}) by user={} role={}",
                 ss.getId(), ss.getLabel(), currentUser.getName(), roleId);
 
-        // Refresh + project.
         SubjectBean refreshedSubj = (SubjectBean) subjectDAO.findByPK(subj.getId());
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);

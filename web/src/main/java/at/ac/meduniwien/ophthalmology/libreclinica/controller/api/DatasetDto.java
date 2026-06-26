@@ -30,7 +30,6 @@ import java.util.Map;
  *       the convention used for studies / events / CRFs / subjects.</li>
  *   <li>{@code id} — the dataset id as an int (used by mutating
  *       endpoints).</li>
- *   <li>{@code name} / {@code description} — dataset metadata.</li>
  *   <li>{@code ownerName} — username of the operator who saved the
  *       dataset, or {@code null} when the owner is unknown.</li>
  *   <li>{@code dateCreated} — ISO-8601 UTC timestamp; may be {@code null}

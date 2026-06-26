@@ -1,30 +1,10 @@
 <script setup lang="ts">
 /**
- * Phase E retinal-inference (Wave C) — Assignment + Action cells.
- *
- * Mirrors the mockup's `Assignment` + `Action` primitives
- * (oct-portal.jsx ~ line 150 + 196). One sub-component handles the
- * five row sub-states the review queue shows; the parent ReviewRow
- * just drops this into the row's flexible middle/right segment.
- *
- * Sub-states the mockup renders:
- *  - {@code suggested}   — auto-pick visit + Bestätigen button
- *  - {@code confirmed}   — green check + Rückgängig link
- *  - {@code novisit}     — patient found, no event for date → Visite
- *                          wählen / Später zuordnen
- *  - {@code nopatient}   — PatientId not in any study → Patient suchen
- *                          / Parken
- *  - {@code ambiguous}   — multi-study match → currently surfaces as
- *                          a suggest pill with the "ändern" affordance
- *                          so the operator can pick the right cohort
- *  - {@code error}       — non-.e2e / parse failure → red ✕ dismiss
- *  - {@code committing}  — in-flight spinner overlay
- *  - {@code committed}   — temporary terminal state until undo
- *
- * Each user-facing action surfaces as an emit; the parent
- * (OctUploadPortalView) routes them to the store. We deliberately
- * keep ALL strings inline (German hard-coded) per the plan's "no
- * de.json for v1" choice.
+ * Assignment + Action cells for an OCT review-queue row. Renders one of the
+ * row sub-states — {@code suggested}, {@code confirmed}, {@code novisit},
+ * {@code nopatient}, {@code ambiguous}, {@code error}, {@code committing},
+ * {@code committed} — and surfaces each action as an emit the parent
+ * (OctUploadPortalView) routes to the store.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -59,12 +39,8 @@ const studyName = computed(() => candidate.value?.studyName ?? '')
 const subjectLabel = computed(() => candidate.value?.subjectLabel ?? props.row.scan?.patientId ?? '')
 const eventLabel = computed(() => props.row.selectedEvent?.definitionLabel ?? '')
 
-/** Format the matching event's date — "heute" when the scan was
- *  acquired today; otherwise DD.MM.YYYY per the institution-wide
- *  German short-date convention. 2026-06-24 user-feedback round —
- *  the operator wanted the dropdown to read "19.11.2025" instead of
- *  the raw ISO (or, when the backend mis-serialised LocalDate, the
- *  array form "[ 2025, 11, 19 ]"). */
+/** Format the matching event's date — "heute" when acquired today, otherwise
+ *  DD.MM.YYYY per the institution-wide German short-date convention. */
 const eventWhen = computed(() => {
   const ev = props.row.selectedEvent
   if (!ev) return ''
@@ -85,13 +61,9 @@ const scanDateLabel = computed(() => {
 })
 
 /**
- * 2026-06-19 — real upload-progress percent read from the store's
- * per-row {@code uploadPct} Map. Surfaced as the right-aligned
- * "{pct}%" label during the {@code committing} state, mirroring the
- * Claude Design oct-upload-portal reference's per-row percent.
- * Rounds to a whole number; below 100 % during the upload, snaps to
- * 100 % at {@code upload.onloadend}, then the row transitions out of
- * {@code committing} so this branch unmounts.
+ * Upload-progress percent from the store's per-row {@code uploadPct} Map,
+ * shown as the right-aligned "{pct}%" label during the {@code committing}
+ * state. Rounds to a whole number.
  */
 const uploadPercentLabel = computed(() => {
   const pct = store.uploadPct.get(props.row.rowId) ?? 0
@@ -101,7 +73,6 @@ const uploadPercentLabel = computed(() => {
 
 <template>
   <div class="flex items-center gap-4 flex-1 min-w-0">
-    <!-- ============================ Assignment column ============================ -->
     <div class="flex-1 min-w-0">
       <!-- suggested: green pill + amber visit chip -->
       <template v-if="props.row.state === 'suggested'">
@@ -223,7 +194,6 @@ const uploadPercentLabel = computed(() => {
         </div>
       </template>
 
-      <!-- error: red alert -->
       <template v-else-if="props.row.state === 'error'">
         <div class="inline-flex items-center gap-2 text-[12px] text-rose-700">
           <span>
@@ -266,7 +236,6 @@ const uploadPercentLabel = computed(() => {
       </template>
     </div>
 
-    <!-- ============================ Action column ============================ -->
     <div class="shrink-0">
       <template v-if="props.row.state === 'suggested'">
         <div class="flex items-center gap-2">

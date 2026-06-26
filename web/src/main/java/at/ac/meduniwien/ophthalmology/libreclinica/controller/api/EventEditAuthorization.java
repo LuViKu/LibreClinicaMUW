@@ -11,11 +11,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 
 /**
- * Phase E A4 — role gates for the study-event edit + cancel
- * endpoints.
+ * Role gates for the study-event edit + cancel endpoints.
  *
- * <p>Two predicates that since the 2026-06-21 user-feedback batch
- * share the same role set:
+ * <p>Both predicates share the same writer role set:
  *
  * <ul>
  *   <li>{@link #roleMayEdit(int)} — anyone who writes clinical
@@ -23,13 +21,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  *       (Investigator, CRC, DM, Admin). Mirrors the legacy
  *       {@code CreateNewStudyEventServlet#mayProceed} which is
  *       also used for edits via the same form.</li>
- *   <li>{@link #roleMayCancel(int)} — same writer set as edit.
- *       Originally restricted to DM/Admin, but the MUW workflow
- *       (small site, paper-first DDE, physician + CRC schedule
- *       and cancel visits routinely) made the DM-only gate read
- *       as a process bug. The cancel still requires a structured
- *       reason code (Wave 1A) so the audit trail captures the
- *       same accountability the DM-escalation was meant to add.</li>
+ *   <li>{@link #roleMayCancel(int)} — same writer set as edit;
+ *       widened from the original DM/Admin-only gate for the MUW
+ *       workflow. The cancel still requires a structured reason
+ *       code so the audit trail preserves accountability.</li>
  * </ul>
  *
  * <p>Monitor / RA / RA2 still cannot perform either operation

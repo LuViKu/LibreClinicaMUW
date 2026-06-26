@@ -83,8 +83,6 @@ const geometry = computed(() => {
 })
 const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
-// Combined empty-state error: by-id load error OR the per-subject deep-link
-// resolution error.
 const displayError = computed<string | null>(() => loadError.value ?? resolveError.value)
 
 // 2026-06-26 — breadcrumb trail on the per-subject deep link
@@ -158,8 +156,6 @@ const hoveredBscanZ = ref<number | null>(null)
  */
 const selectedEtdrsRegions = ref<EtdrsRegion[]>([])
 
-/** Always a defined integer for the BscanViewer's v-model — falls
- *  back to the middle slice when no hover has set hoveredBscanZ. */
 const currentBscanZ = computed<number>(() => {
   if (hoveredBscanZ.value != null) return hoveredBscanZ.value
   const n = geometry.value?.bscan?.dim_z_bscans ?? 0
@@ -176,8 +172,6 @@ const armGate = useStudyArm(() => job.value?.subjectArm ?? null)
 function onHoverBscan(z: number | null) {
   hoveredBscanZ.value = z
 }
-
-/* -------- Lifecycle -------------------------------------------------- */
 
 async function load() {
   try {
@@ -206,7 +200,6 @@ async function load() {
       await store.loadGeometry(jobId.value)
     }
   } catch {
-    // store records the error per-job; the template surfaces it.
   }
 }
 
@@ -237,8 +230,6 @@ watch(
   () => [routeJobId.value, subjectLabelParam.value, subjectSeqParam.value],
   () => { void load() },
 )
-
-/* -------- Derived view-model ---------------------------------------- */
 
 const isFluid = computed(() => job.value?.task === 'fluid')
 const isGa = computed(() => job.value?.task === 'ga')
@@ -548,8 +539,6 @@ const overlayTask = computed<FundusOverlayTask>(() => {
   return 'fluid'
 })
 
-/* -------- ETDRS region biomarker sums (2026-06-22) ----------------- */
-
 /**
  * Biomarker contributions per disjoint ETDRS region.
  *
@@ -783,8 +772,6 @@ function metricLabelClass(tone: KpiTile['tone']): string {
     default: return 'text-slate-500'
   }
 }
-
-/* -------- Display formatting helpers -------------------------------- */
 
 function formatIsoDate(iso: string | null): string {
   if (!iso) return '—'
@@ -1194,7 +1181,6 @@ onBeforeUnmount(stopInflightPoll)
             >{{ t('common.dismiss') }}</button>
           </div>
 
-          <!-- Empty / in-flight banner -->
           <div
             v-if="inflightMessage"
             class="mb-5 rounded-2xl border px-4 py-3 text-xs"
@@ -1227,7 +1213,6 @@ onBeforeUnmount(stopInflightPoll)
             :job-id="job.jobId"
           />
 
-          <!-- ════════ Metric cards — 4-card horizontal strip ════════ -->
           <div
             v-if="!armGate.hideAi.value && kpiTiles.length"
             class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5"
@@ -1258,9 +1243,7 @@ onBeforeUnmount(stopInflightPoll)
             {{ t('retinal.empty.noKpi') }}
           </div>
 
-          <!-- ════════ Viewer row: en-face (5) + B-scan (7) ════════ -->
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5 items-stretch">
-            <!-- En-face fundus locator -->
             <section
               class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] flex flex-col"
               data-testid="retinal-view-fundus"
@@ -1353,7 +1336,6 @@ onBeforeUnmount(stopInflightPoll)
               </div>
             </section>
 
-            <!-- B-Scan navigator -->
             <div class="lg:col-span-7 flex flex-col">
               <BscanViewer
                 v-if="job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
@@ -1373,7 +1355,6 @@ onBeforeUnmount(stopInflightPoll)
             </div>
           </div>
 
-          <!-- ════════ ETDRS + Downloads row ════════ -->
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
             <section
               v-if="etdrsRows.length"
@@ -1440,7 +1421,6 @@ onBeforeUnmount(stopInflightPoll)
             />
           </div>
 
-          <!-- Raw output payload (collapsible) -->
           <section
             class="rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] overflow-clip mb-6"
             data-testid="retinal-view-json"

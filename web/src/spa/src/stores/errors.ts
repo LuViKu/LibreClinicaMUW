@@ -7,8 +7,8 @@ import { ApiError, ApiNetworkError } from '@/api/client'
  *
  * Centralised, in-memory sink for uncaught errors raised anywhere in
  * the SPA — Vue render/setup throws (via `app.config.errorHandler`),
- * router resolution failures (`router.onError`), and (post-A4)
- * controller-level `ApiError` instances pushed by store actions.
+ * router resolution failures (`router.onError`), and controller-level
+ * `ApiError` instances pushed by store actions.
  *
  * The store is deliberately a thin ring buffer rather than a structured
  * event log: it carries the last 20 errors so `GlobalErrorToast` can
@@ -18,10 +18,9 @@ import { ApiError, ApiNetworkError } from '@/api/client'
  * trail + browser console + request-correlation ID are the single
  * error pathway (no `/client-errors` endpoint).
  *
- * A4 interaction: when the request-id filter lands, `ApiError` /
- * `ApiNetworkError` will gain a `reqId: string` field; this store
- * normalises it via `extractReqId()` so the toast renders the
- * "Fehler-ID: …" pill as soon as the field appears.
+ * `ApiError` / `ApiNetworkError` carry a `reqId: string` field; this
+ * store normalises it via `extractReqId()` so the toast renders the
+ * "Fehler-ID: …" pill.
  */
 
 const RING_BUFFER_CAP = 20
@@ -34,7 +33,7 @@ export interface TrackedError {
   id: number
   /** Human-readable message — `err.message` or the wrapper's fallback. */
   message: string
-  /** Request-correlation id from A4. May be empty until A4 lands. */
+  /** Request-correlation id. May be empty when the error carries none. */
   reqId: string
   /** Capture time — drives the auto-dismiss countdown in the toast. */
   when: Date
@@ -63,7 +62,7 @@ export interface TrackedError {
   method?: string
 }
 
-/** Read the `reqId` field defensively — A4 adds it; until then it's undefined. */
+/** Read the `reqId` field defensively — undefined when the error carries none. */
 function extractReqId(err: unknown): string {
   if (err && typeof err === 'object' && 'reqId' in err) {
     const r = (err as { reqId: unknown }).reqId

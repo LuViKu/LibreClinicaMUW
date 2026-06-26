@@ -58,10 +58,6 @@ const rules = useRulesStore()
 type Step = 1 | 2 | 3 | 4
 const step = ref<Step>(1)
 
-/* ------------------------------------------------------------------ */
-/* Step 1 — rule body                                                  */
-/* ------------------------------------------------------------------ */
-
 const ruleOid = ref('')
 const ruleName = ref('')
 const ruleDescription = ref('')
@@ -138,10 +134,6 @@ async function onSubmitStep1() {
     isSavingRule.value = false
   }
 }
-
-/* ------------------------------------------------------------------ */
-/* Step 2 — rule set target + scope                                    */
-/* ------------------------------------------------------------------ */
 
 const targetExpression = ref('')
 const targetSedOid = ref('')
@@ -239,10 +231,6 @@ async function onSubmitStep2() {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Step 3 — action                                                     */
-/* ------------------------------------------------------------------ */
-
 const actionType = ref<'FILE_DISCREPANCY_NOTE' | 'EMAIL' | 'SHOW' | 'HIDE'>('FILE_DISCREPANCY_NOTE')
 const actionMessage = ref('')
 const actionTo = ref('')
@@ -288,10 +276,6 @@ async function onSubmitStep3() {
     isSavingAction.value = false
   }
 }
-
-/* ------------------------------------------------------------------ */
-/* Wizard lifecycle                                                    */
-/* ------------------------------------------------------------------ */
 
 function resetAll() {
   step.value = 1

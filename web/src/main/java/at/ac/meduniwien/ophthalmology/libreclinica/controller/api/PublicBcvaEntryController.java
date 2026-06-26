@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,7 +40,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 2026-06-24 user-feedback round — public BCVA-entry portal backend.
+ * Public BCVA-entry portal backend.
  *
  * <p>Sibling of {@link PublicOctUploadController}: study nurses
  * bookmark {@code /app/bcva-entry/<studyOid>} and enter today's
@@ -49,10 +48,6 @@ import org.springframework.web.bind.annotation.RestController;
  * reverse proxy is the only access gate; this controller is
  * whitelisted in {@code SecurityConfig} alongside the OCT-upload
  * portal under {@code /pages/api/v1/public/bcva-entry/**}.
- *
- * <p>Two endpoints (the plan's 60-s undo is deferred to a follow-up
- * commit — single-shot persistence ships first, undo is a
- * quality-of-life add-on the plan calls out as v2):
  *
  * <ul>
  *   <li>{@code GET /{studyOid}/visits?date=YYYY-MM-DD} — lists every
@@ -837,14 +832,4 @@ public class PublicBcvaEntryController {
         @SuppressWarnings("unused")
         public void setValues(Map<String, Object> values) { this.values = values; }
     }
-
-    // Convenience unused — silences IDE warnings about unused imports
-    // when this controller is built in isolation. The Locale import
-    // is reserved for future locale-aware error-message rendering.
-    @SuppressWarnings("unused")
-    private static final Locale RESERVED = Locale.GERMAN;
-    @SuppressWarnings("unused")
-    private static final Set<Integer> RESERVED_STATUSES = ENTRY_OK_STATUS_IDS;
-    @SuppressWarnings("unused")
-    private static final Set<String> RESERVED_PROBE_OIDS = BCVA_PROBE_OIDS;
 }

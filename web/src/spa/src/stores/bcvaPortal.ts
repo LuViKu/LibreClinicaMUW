@@ -1,9 +1,8 @@
 /**
- * 2026-06-24 user-feedback round — public BCVA-entry portal store.
+ * BCVA-entry portal store (per-study visits + per-visit form state).
  *
- * <p>Holds the per-study visit list + per-visit form state. The
- * portal opens at {@code /app/bcva-entry/<studyOid>}; the store is
- * the single source of truth for the operator's entry session.
+ * <p>The portal opens at {@code /app/bcva-entry/<studyOid>}; the store
+ * is the single source of truth for the operator's entry session.
  */
 
 import { defineStore } from 'pinia'
@@ -224,7 +223,6 @@ export const useBcvaPortalStore = defineStore('bcvaPortal', () => {
   }
 
   return {
-    // state
     studyOid,
     study,
     selectedDate,
@@ -232,9 +230,7 @@ export const useBcvaPortalStore = defineStore('bcvaPortal', () => {
     loading,
     loadError,
     visits,
-    // derived
     enteredByValid,
-    // actions
     setEnteredBy,
     loadVisits,
     commitVisit,

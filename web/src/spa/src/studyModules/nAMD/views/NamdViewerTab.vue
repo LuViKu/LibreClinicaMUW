@@ -1,31 +1,14 @@
 <script setup lang="ts">
 /**
- * nAMD workspace — OCT Viewer tab.
+ * nAMD workspace — OCT Viewer tab: 5/7 fundus/B-scan split + quantification
+ * strip (mirrors RetinalMetricsView).
  *
- * <p>2026-06-26 user-feedback round — layout refactor to mirror the
- * inference-job viewer (RetinalMetricsView). Replaces the previous
- * 8-4 split (NamdScanFrame + side cards) with the inference-viewer's
- * 5-7 fundus + B-scan side-by-side and a quantification strip below:
+ * The ETDRS region breakdown: the runner reports cumulative central discs;
+ * we derive the four disjoint regions (center / ring 1-3 / ring 3-6 /
+ * corners) by subtraction so multi-select can sum without double-counting.
  *
- *   ┌─────────────────────┬───────────────────────────┐
- *   │  FundusOverlay      │  NamdScanFrame (B-scan)   │
- *   │  (click-quantify    │  · sky-blue slider        │
- *   │  ETDRS regions)     │  · KI-Maske toggle        │
- *   │                     │  · fullscreen button      │
- *   ├─────────────────────┴───────────────────────────┤
- *   │  ETDRS selection summary (chips + biomarkers)   │
- *   ├─────────────────────────────────────────────────┤
- *   │  RetinalVisitComparison (Δ vs previous visit)   │
- *   └─────────────────────────────────────────────────┘
- *
- * The ETDRS region breakdown mirrors RetinalMetricsView's logic in
- * miniature — the runner reports cumulative central discs, we derive
- * the four disjoint regions (center / ring 1-3 / ring 3-6 / corners)
- * by subtraction so multi-select can sum without double-counting.
- *
- * <p>Hover sync — the FundusOverlay's per-B-scan indicator highlights
- * the currently-visible B-scan; the NamdScanFrame's slice change
- * updates the indicator. Two-way binding via {@link slice}.
+ * Hover sync — FundusOverlay's per-B-scan indicator and NamdScanFrame's
+ * slice are two-way bound via {@link slice}.
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

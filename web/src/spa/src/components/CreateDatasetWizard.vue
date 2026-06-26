@@ -55,10 +55,6 @@ const saving = ref(false)
 const saveBanner = ref<string | null>(null)
 const fieldErrors = computed(() => ({ ...localErrors.value, ...remoteErrors.value }))
 
-/* ============================================================== */
-/* Mount — seed the draft + load the event tree.                  */
-/* ============================================================== */
-
 onMounted(async () => {
   const studyOid = auth.user?.activeStudy?.oid
   if (!studyOid) {
@@ -87,10 +83,6 @@ onMounted(async () => {
   }
 })
 
-/* ============================================================== */
-/* Step model                                                     */
-/* ============================================================== */
-
 const stepIsReachable = (idx: number): boolean => {
   if (idx <= 0) return true
   return scopeValid.value
@@ -102,10 +94,6 @@ const steps = computed<WizardStep[]>(() => [
   { id: 'filters', title: t('createDataset.steps.filters'), clickable: stepIsReachable(2) },
   { id: 'review', title: t('createDataset.steps.review'), clickable: stepIsReachable(3) },
 ])
-
-/* ============================================================== */
-/* Step 1 — Scope validation                                      */
-/* ============================================================== */
 
 const scopeValid = computed(() => {
   const d = datasets.draft
@@ -156,10 +144,6 @@ function stripField(src: Record<string, string>, field: string): Record<string, 
   return out
 }
 
-/* ============================================================== */
-/* Step 3 — Filters (Phase 3 FilterBuilder)                       */
-/* ============================================================== */
-
 const filterItems = computed<FilterItemDto[]>(() => {
   const d = datasets.draft
   if (!d) return []
@@ -197,10 +181,6 @@ function onPreviewRequested(next: DatasetFilterDto[]): void {
   void datasets.testFilter(datasetIdForPreview.value, next)
 }
 
-/* ============================================================== */
-/* Navigation                                                     */
-/* ============================================================== */
-
 function goNext() {
   const idx = step.value
   if (idx === 0) {
@@ -227,10 +207,6 @@ function cancel() {
   router.push({ name: 'data-export' })
 }
 
-/* ============================================================== */
-/* Save                                                            */
-/* ============================================================== */
-
 async function save() {
   const studyOid = auth.user?.activeStudy?.oid
   if (!studyOid || !draft.value) return
@@ -256,10 +232,6 @@ async function save() {
   }
 }
 
-/* ============================================================== */
-/* Cleanup — drop the draft when the route unmounts.              */
-/* ============================================================== */
-
 watch(
   () => router.currentRoute.value.name,
   (next) => {
@@ -272,10 +244,6 @@ watch(
     }
   },
 )
-
-/* ============================================================== */
-/* Review-step summary                                            */
-/* ============================================================== */
 
 const flagsSummary = computed(() => {
   const d = draft.value

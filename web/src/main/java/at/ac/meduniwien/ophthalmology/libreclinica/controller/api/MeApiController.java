@@ -191,18 +191,10 @@ public class MeApiController {
             if (protocolTypeKey != null && protocolTypeKey.isBlank()) {
                 protocolTypeKey = null;
             }
-            // 2026-06-21 user-feedback batch — admin-managed module
-            // enrollment list. Failing to load defaults to an empty
-            // list (the SPA treats empty as "no modules enabled") —
-            // never let a /me lookup 500 over an enrollment-table read
-            // error.
-            //
-            // 2026-06-22 — broadened catch from SQLException to Exception:
-            // MockMvc tests inject a Mockito DataSource whose
-            // getConnection() returns null, and the resulting NPE was
-            // leaking out and producing 500s on the /me happy-path
-            // tests. The fallback to empty-list is the right behaviour
-            // regardless of which exception family the DAO raises.
+            // Fall back to an empty module list on any load error (SPA treats
+            // empty as "no modules enabled") — never let /me 500 over a module
+            // enrollment read. Catch is broad (Exception, not SQLException) on
+            // purpose.
             java.util.List<String> enabledModules;
             try {
                 enabledModules = StudyModuleEnrollmentApiController

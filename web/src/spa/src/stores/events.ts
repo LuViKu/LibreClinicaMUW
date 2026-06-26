@@ -195,14 +195,11 @@ export const useEventsStore = defineStore('events', () => {
    * item_data as AUTO_DELETED. Role-gated to DM / Admin only;
    * Investigators must escalate.
    *
-   * <p>Wave 1A (app-feedback, 2026-06-19) — the call now carries the
-   * institutional cancel-reason metadata on the wire so the row's
-   * `cancel_reason_code` / `cancel_reason_text` columns capture why
-   * the visit was cancelled. The backend 400s when reasonCode is
-   * missing or when an is_other reason is paired with blank text.
+   * <p>The call carries cancel-reason metadata on the wire. The backend
+   * 400s when reasonCode is missing or when an is_other reason is
+   * paired with blank text.
    *
-   * <p>Returns 204 from the backend on success; the in-memory event
-   * row is removed locally.
+   * <p>Returns 204 on success; the in-memory event row is removed locally.
    */
   async function cancelEvent(
     eventId: string,
@@ -235,24 +232,12 @@ export const useEventsStore = defineStore('events', () => {
   }
 
   /**
-   * Phase E.6 restore-quickwins — restore a soft-deleted study event.
-   * Backend (`POST /api/v1/events/{id}/restore`) flips DELETED →
-   * AVAILABLE and cascades AUTO_DELETED event_crfs + item_data back
-   * to AVAILABLE. Returns the restored {@link StudyEvent} so the
-   * row's status flips in place — no full reload needed.
-   *
-   * <p>Role-gated to DM / Admin only. Investigators must escalate.
-   */
-  /**
-   * 2026-06-21 user-feedback round 7 — per-visit electronic signature.
-   * The whole-subject sign in {@link useSubjectsStore} flips every
-   * visit at once; this action attests one visit at a time without
-   * committing the rest of the casebook.
+   * Per-visit electronic signature — attests one visit at a time
+   * (vs. {@link useSubjectsStore}'s whole-subject sign).
    *
    * <p>POST /pages/api/v1/events/{id}/sign with `{ password, attestation }`.
-   * Returns true on success; on failure the store's {@link error}
-   * carries the surfaced message and the caller's modal stays open
-   * for retry.
+   * On failure the returned message is surfaced so the caller's modal
+   * stays open for retry.
    */
   async function signEvent(
     eventId: string,
@@ -289,6 +274,15 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  /**
+   * Phase E.6 restore-quickwins — restore a soft-deleted study event.
+   * Backend (`POST /api/v1/events/{id}/restore`) flips DELETED →
+   * AVAILABLE and cascades AUTO_DELETED event_crfs + item_data back
+   * to AVAILABLE. Returns the restored {@link StudyEvent} so the
+   * row's status flips in place — no full reload needed.
+   *
+   * <p>Role-gated to DM / Admin only. Investigators must escalate.
+   */
   async function restoreEvent(eventId: string): Promise<boolean> {
     try {
       const restored = await apiPost<StudyEvent>(

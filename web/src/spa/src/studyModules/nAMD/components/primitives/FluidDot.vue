@@ -17,7 +17,6 @@ import { FLUID, type FluidKey } from '../../fluid'
 interface Props {
   /** Biomarker key — IRF / SRF / PED. */
   k: FluidKey
-  /** Pixel size of the swatch (square). */
   size?: number
 }
 

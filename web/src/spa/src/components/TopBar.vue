@@ -233,12 +233,9 @@ function onReportBugClick() {
         </template>
       </nav>
 
-      <!-- 2026-06-21 user-feedback batch — the nav.modules consumer
-           was removed per user direction: modules should be reached
-           via the subject-detail "Open workspace" CTA (the
-           subject-detail.workspace slot already wires that), NOT the
-           top-nav. The nav.modules slot id stays in the contract for
-           future use; the host just no longer mounts entries here. -->
+      <!-- Modules are reached via the subject-detail "Open workspace" CTA,
+           NOT the top-nav. The nav.modules slot id stays in the contract for
+           future use; the host no longer mounts entries here. -->
 
       <!-- Phase E hardening B — sysadmin-only entry-point to the
            system-wide audit trail. Gated on Administrator role
@@ -253,11 +250,9 @@ function onReportBugClick() {
       >
         {{ t('topBar.systemAuditLog') }}
       </RouterLink>
-      <!-- 2026-06-19 — Administrator-only entry-point to the cross-
-           study parked-scans admin view. Same role gate as the system
-           audit-log link; needed because parked retinal jobs have no
-           study-subject linkage and therefore can't surface on a
-           per-subject page. -->
+      <!-- Administrator-only entry-point to the cross-study parked-scans admin
+           view. Parked retinal jobs have no study-subject linkage, so they
+           can't surface on a per-subject page. -->
       <RouterLink
         v-if="primaryRole === 'Administrator'"
         to="/retinal/parked"

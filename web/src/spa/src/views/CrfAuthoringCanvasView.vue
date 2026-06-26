@@ -267,7 +267,6 @@ function onUseLegacyWizard(): void {
 
 <template>
   <div class="flex flex-col h-[calc(100vh-3rem)]" data-testid="crf-canvas-view">
-    <!-- Header -->
     <header class="flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-white">
       <div>
         <h1 class="text-base font-semibold text-slate-800">
@@ -406,14 +405,12 @@ function onUseLegacyWizard(): void {
       </ul>
     </div>
 
-    <!-- Three-column body -->
     <div class="flex flex-1 min-h-0">
       <PaletteRail />
       <SectionCanvas />
       <PropertiesRail />
     </div>
 
-    <!-- Footer with metadata -->
     <footer class="flex items-center gap-3 px-4 py-2 border-t border-slate-200 bg-slate-50 text-[11px]">
       <label class="flex items-center gap-1.5 text-slate-700">
         <span>{{ t('crfAuthoring.canvas.versionName') }}</span>

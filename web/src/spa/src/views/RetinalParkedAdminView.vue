@@ -44,7 +44,6 @@ onMounted(() => { void store.load() })
  *  the per-row "Zuordnen", length N for the bulk-toolbar action).
  *  Null when no dialog is mounted. */
 const activeJobIds = ref<number[] | null>(null)
-/** Patient-id seed for the wizard's step 1; first row's value. */
 const activeInitialPatientId = ref<string>('')
 /** Soft toast after a successful or raced bind. */
 const toastMessage = ref<string | null>(null)
@@ -52,20 +51,13 @@ const toastTone = ref<'ok' | 'warn'>('ok')
 
 const rows = computed<ParkedJobAdminRow[]>(() => store.list)
 
-/* ====================================================================== */
-/* B2 selection state                                                     */
-/* ====================================================================== */
-
 /** Set of selected job_ids. Cleared on load + after a successful bind. */
 const selectedIds = ref<Set<number>>(new Set())
 
-/** True iff every row is currently selected (used by the "select all"
- *  checkbox indeterminate / checked rendering). */
 const allSelected = computed(
   () => rows.value.length > 0 && selectedIds.value.size === rows.value.length,
 )
 
-/** True iff at least one (but not every) row is selected. */
 const someSelected = computed(
   () => selectedIds.value.size > 0 && selectedIds.value.size < rows.value.length,
 )
@@ -93,11 +85,6 @@ function clearSelection(): void {
   selectedIds.value = new Set()
 }
 
-/* ====================================================================== */
-/* Dialog control                                                         */
-/* ====================================================================== */
-
-/** Per-row "Zuordnen" — opens the dialog seeded with one row only. */
 function openAssign(row: ParkedJobAdminRow): void {
   activeJobIds.value = [row.jobId]
   activeInitialPatientId.value = row.patientId ?? ''
@@ -148,7 +135,6 @@ async function onAssignBind(payload: {
     }
     return
   }
-  // Bulk path
   try {
     const response = await store.bulkBind(jobIds, payload.eventCrfId)
     activeJobIds.value = null

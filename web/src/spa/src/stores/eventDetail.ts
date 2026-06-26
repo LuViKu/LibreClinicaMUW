@@ -15,7 +15,7 @@ import type {
  * `/pages/EnterDataForStudyEvent?eventId=…` JSP bridge that
  * SubjectDetailView previously linked into).
  *
- * Surfaces three flavours of error so the view can branch:
+ * Surfaces four flavours of error so the view can branch:
  *  - `notFound`     — HTTP 404 (no such event id)
  *  - `forbidden`    — HTTP 403 (event in a study the user can't see)
  *  - `network`      — connection refused / abort

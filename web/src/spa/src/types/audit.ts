@@ -45,10 +45,8 @@ export type AuditEvent =
     /** ISO instant. */
     occurredAt: string
     variant: AuditEventVariant
-    /** Username of the actor. */
     actor: string
     /** Short title — e.g. "Subject sign-off" / "Data edit · Reason for change". */
     title: string
-    /** Optional role chip rendered next to the actor. */
     actorRole?: 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator'
   }

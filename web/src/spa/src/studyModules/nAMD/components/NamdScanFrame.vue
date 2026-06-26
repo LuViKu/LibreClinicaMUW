@@ -48,26 +48,11 @@ interface Props {
   /** Optional id suffix for testids when two frames coexist. */
   idBase?: string
   /**
-   * 2026-06-26 user-feedback round — opt-in fullscreen toggle.
-   * When true (default), the frame's top-right shows a maximize
-   * button; clicking it switches the wrapper to {@code fixed inset-0}
-   * positioning over a dark backdrop, the BscanViewer fills the
-   * whole viewport, and Esc / the close button restores inline mode.
-   * Cornerstone canvas stays mounted across the transition (we
-   * toggle CSS only, no Teleport) so the WebGL context survives.
-   * Compare-tab side-by-side frames opt out by passing false — that
-   * tab's stacked-fullscreen mode is owned at the tab level.
+   * Opt-in fullscreen toggle (default true). Toggles CSS only (no Teleport)
+   * so the Cornerstone WebGL context survives; Compare-tab frames pass false.
    */
   enableFullscreen?: boolean
-  /**
-   * 2026-06-26 user-feedback round — slider accent colour. The
-   * inline OCT-Viewer-tab variant (paired with FundusOverlay)
-   * uses the inference-job viewer's sky-blue thumb so the visual
-   * language between the two viewers matches. Other consumers
-   * (Overview-tab inline OCT, Compare-tab frames) keep the
-   * legacy navy thumb. Fullscreen mode always uses sky-blue
-   * regardless — the dark backdrop swallows navy.
-   */
+  /** Slider accent colour; fullscreen always uses sky (navy is swallowed by the dark backdrop). */
   sliderTone?: 'navy' | 'sky'
 }
 

@@ -280,13 +280,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     @Override
     public StudySubjectBean findByPK(int ID) {
         this.setTypesExpected();
-        // type for 'unique_identifier' from the subject table
-        // Phase E.6 Tier 1: positional override bumped from 14 → 16
-        // because setTypesExpected now declares 15 columns (was 13).
-        // Wave 1B (app-feedback 2026-06-19): bumped 16 → 17 because
-        // setTypesExpected gained patient_uuid (now declares 16 cols).
-        // C4 (2026-06-20): bumped 17 → 18 because setTypesExpected gained
-        // patient_id (now declares 17 cols).
+        // type for joined 'unique_identifier' from the subject table.
+        // Position is setTypesExpected column count + 1 (currently 17 cols → 18).
         setTypeExpected(18, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(ID);

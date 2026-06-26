@@ -149,12 +149,8 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
     const m = activeModule.value
     if (!m) return []
     const raw = (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
-    // Modules typically declare `component: () => import('./X.vue')` —
-    // a thunk returning Promise<{ default: Component }>. Vue's
-    // <component :is="..."> does NOT auto-wrap that; without
-    // defineAsyncComponent it gets stringified as "[object Promise]".
-    // Wrap here so host views can just do <component :is="entry.component" />
-    // without each module having to remember the defineAsyncComponent dance.
+    // Wrap lazy-component thunks here (see {@link wrapAsync}) so host
+    // views can just do <component :is="entry.component" />.
     return raw.map((entry) => ({
       ...entry,
       component: wrapAsync(entry.component as Component | (() => Promise<unknown>)),

@@ -1,20 +1,10 @@
 <script setup lang="ts">
 /**
- * 2026-06-21 user-feedback round 7 — per-visit electronic signature.
- *
- * <p>The whole-subject sign dialog (SignSubjectDialog) collects the
- * password + attestation and POSTs to
- * {@code /api/v1/subjects/{oid}/sign}. This dialog mirrors that
- * contract but scoped to a single study_event so an investigator
- * can attest one visit at a time. The wire payload + 401-on-bad-
- * password contract is the same.
- *
- * <p>The parent owns the submit lifecycle: this component emits
- * {@code submit} with {password, attestation}; the parent calls
- * the store's signEvent() and feeds the resulting error message
- * back via the {@code errorMessage} prop so it renders inline
- * inside the modal (not behind it — see TransitionEyeDialog for
- * the rationale).
+ * Per-visit electronic signature dialog — mirrors SignSubjectDialog's
+ * password + attestation contract (401 on bad password) but scoped to a
+ * single study_event. Parent owns the submit lifecycle: this emits
+ * {@code submit} with {password, attestation} and feeds any error back via
+ * the {@code errorMessage} prop so it renders inline inside the modal.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

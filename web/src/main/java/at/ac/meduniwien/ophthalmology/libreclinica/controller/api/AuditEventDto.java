@@ -18,7 +18,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * {@code web/src/spa/src/types/audit.ts} byte-for-byte. Optional
  * fields are serialised only when non-null so the JSON stays small.
  *
- * @param id            audit_id as a string
+ * @param id            audit_id, stringified
  * @param occurredAt    ISO-8601 instant of {@code audit_date}
  * @param variant       one of: {@code signed | reason-for-change |
  *                      sdv | admin | data | query}

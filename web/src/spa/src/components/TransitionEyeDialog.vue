@@ -1,23 +1,15 @@
 <script setup lang="ts">
 /**
- * Phase E.6 — Per-eye cohort transition dialog (iAMD → GA).
+ * Per-eye cohort transition dialog (iAMD → GA). Moves a single eye (OD or OS)
+ * of an observational-cohort subject from one study to another; the
+ * contralateral eye stays in the source cohort, so SubjectDetailView opens
+ * this once per eye rather than promoting the whole subject.
  *
- * <p>Modal that captures operator intent when moving a single eye (OD
- * or OS) of an observational-cohort subject from one study to another
- * — most commonly the iAMD → GA hand-off when an eye crosses the
- * geographic-atrophy threshold mid-follow-up. The contralateral eye
- * stays in the source cohort, so the SubjectDetailView opens this
- * dialog once per eye rather than promoting the whole subject.
- *
- * <p>2026-06-10 — new-enrollment branch wired. When the operator picks
- * a target study where the subject is NOT yet enrolled, a mandatory
- * "Subject-ID in der Zielstudie" input appears, with the same
- * debounced uniqueness check pattern as AddSubjectView's label check.
- * When the subject IS already enrolled in the target, the input is
- * hidden + replaced by a one-liner so the operator knows the transition
- * lands in the existing target row. Both flavours emit the same
- * TransitionEyeRequest shape — the new-enrollment branch sets
- * {@code targetLabel}, the upgrade branch leaves it unset.
+ * <p>When the target study has no existing enrollment, a mandatory
+ * "Subject-ID in der Zielstudie" input appears (debounced uniqueness check);
+ * when the subject is already enrolled there, it's hidden. Both emit the same
+ * TransitionEyeRequest — the new-enrollment branch sets {@code targetLabel},
+ * the upgrade branch leaves it unset.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -56,12 +48,7 @@ interface Props {
    * this is true so the operator can't double-fire the submit.
    */
   isSubmitting?: boolean
-  /**
-   * 2026-06-21 user-feedback round 4 — surface the parent's submit-
-   * error inside the modal. The previous error banner rendered on the
-   * page underneath the dialog overlay, so operators couldn't see why
-   * a transition was rejected without dismissing the dialog first.
-   */
+  /** Parent's submit-error, rendered inline inside the modal (not behind it). */
   errorMessage?: string | null
 }
 

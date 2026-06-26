@@ -218,7 +218,6 @@ function onClearSelection(): void {
         </button>
       </div>
 
-      <!-- Empty state -->
       <div
         v-if="!selectedItem"
         class="text-center text-[11px] italic text-slate-500 px-2 py-8 border border-dashed border-slate-300 rounded-md"
@@ -228,7 +227,6 @@ function onClearSelection(): void {
       </div>
 
       <div v-else class="space-y-3" data-testid="crf-canvas-properties-form">
-        <!-- Name -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.labelField') }}
@@ -242,7 +240,6 @@ function onClearSelection(): void {
           />
         </div>
 
-        <!-- OID -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.oidField') }}
@@ -259,7 +256,6 @@ function onClearSelection(): void {
           </p>
         </div>
 
-        <!-- Description label -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.descriptionField') }}
@@ -273,7 +269,6 @@ function onClearSelection(): void {
           />
         </div>
 
-        <!-- Data type -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.dataTypeField') }}
@@ -291,7 +286,6 @@ function onClearSelection(): void {
           </p>
         </div>
 
-        <!-- Response type -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.responseTypeField') }}
@@ -310,7 +304,6 @@ function onClearSelection(): void {
           </p>
         </div>
 
-        <!-- Units -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.unitsField') }}
@@ -324,7 +317,6 @@ function onClearSelection(): void {
           />
         </div>
 
-        <!-- Default value -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.defaultField') }}
@@ -338,7 +330,6 @@ function onClearSelection(): void {
           />
         </div>
 
-        <!-- Required -->
         <div>
           <label class="flex items-center gap-2 text-[11px] text-slate-700">
             <input
@@ -352,7 +343,6 @@ function onClearSelection(): void {
           </label>
         </div>
 
-        <!-- Validation -->
         <details class="border border-slate-200 rounded p-2">
           <summary class="text-[11px] font-semibold text-slate-700 cursor-pointer">
             {{ t('crfAuthoring.canvas.properties.validationSection') }}
@@ -377,7 +367,6 @@ function onClearSelection(): void {
           </div>
         </details>
 
-        <!-- Show-when -->
         <details class="border border-slate-200 rounded p-2" :open="!!selectedItem.showWhen">
           <summary class="text-[11px] font-semibold text-slate-700 cursor-pointer">
             {{ t('crfAuthoring.canvas.properties.showWhenSection') }}

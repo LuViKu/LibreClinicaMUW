@@ -40,7 +40,6 @@ export interface PatientEnrolment {
   lastVisitAt: string | null
 }
 
-/** Row in the patients list endpoint. */
 export interface PatientListItem {
   subjectId: number
   uniqueIdentifier: string | null

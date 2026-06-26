@@ -22,10 +22,6 @@
 
 import { apiGet, apiPatch, apiPost } from './client'
 
-/* ====================================================================== */
-/* Public types                                                           */
-/* ====================================================================== */
-
 /**
  * Per-task laterality of the underlying OCT volume — ophthalmology
  * convention: OD = right eye, OS = left eye.
@@ -98,7 +94,6 @@ export interface RetinalJobDetail {
   subjectArm: 'AI_SHOWN' | 'AI_HIDDEN' | null
 }
 
-/** Lean summary returned by the per-event-CRF + per-subject list endpoints. */
 /**
  * 2026-06-23 — Per-job summary. `visitDate` (study_event.date_start)
  * is the clinical date used by the trend chart + nAMD workspace; it
@@ -145,8 +140,6 @@ export interface RetinalJobSummary {
   subjectSeq?: number | null
   primaryMetric: PrimaryMetric | null
 }
-
-/* ---- Per-task output payload shapes ---------------------------------- */
 
 /**
  * `fluid` task — payload of {@link RetinalJobDetail.outputPayload}.
@@ -215,8 +208,6 @@ export interface GaPayload {
   per_bscan_mm2: number[]
 }
 
-/* ---- geometry.json shape --------------------------------------------- */
-
 /**
  * The {@code geometry.json} companion file written by the preprocess
  * sidecar. Shape pinned by Wave 1A.
@@ -273,10 +264,6 @@ export interface GeometryJson {
     source: string
   }
 }
-
-/* ====================================================================== */
-/* Endpoints                                                              */
-/* ====================================================================== */
 
 const BASE = '/pages/api/v1/retinal-jobs'
 
@@ -472,10 +459,6 @@ export function artifactUrl(jobId: number, name: string): string {
   return `/LibreClinica${BASE}/${jobId}/artifacts/${encodeURIComponent(name)}`
 }
 
-/* ====================================================================== */
-/* Wave 2B (retinal followups) — park-bind + study-subject search          */
-/* ====================================================================== */
-
 /**
  * Wave 2B — body of {@code PATCH /pages/api/v1/retinal-jobs/{jobId}/bind}.
  * The backend requires {@code eventCrfId > 0}; the modal flow gates
@@ -559,7 +542,6 @@ export interface RetinalJobBulkBindSummary {
   error: number
 }
 
-/** Full response shape of the bulk-bind endpoint. */
 export interface RetinalJobBulkBindResponse {
   results: RetinalJobBulkBindRow[]
   summary: RetinalJobBulkBindSummary

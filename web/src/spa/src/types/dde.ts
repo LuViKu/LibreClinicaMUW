@@ -76,7 +76,6 @@ export interface DdeConflicts {
   items: DdeConflictItem[]
 }
 
-/** winner alternative when a DM picks the canonical value. */
 export type DdeReconcileWinner = 'ide' | 'dde' | 'manual'
 
 /** Body of POST /api/v1/eventCrfs/{id}/dde-conflicts/{itemOid}/resolve. */

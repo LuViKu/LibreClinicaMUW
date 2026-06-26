@@ -94,8 +94,6 @@ const screen = computed<'ready' | 'parsing' | 'review'>(() => {
 })
 
 function onFilesAdded(files: File[]): void {
-  // Fire and forget — the store flips rows into the `parsing` state
-  // synchronously and the rest runs as promises.
   void store.addFiles(files)
 }
 
@@ -190,7 +188,6 @@ function onVisitPickerClose(): void {
     <PublicTopBar />
     <div class="flex-1 min-h-0">
       <div class="mx-auto max-w-[1248px] px-6 md:px-10 py-9">
-        <!-- ============================ Page head ============================ -->
         <div class="flex items-end justify-between gap-4 mb-6">
           <div>
             <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muw-coral-700 mb-1.5">{{ t('octPortal.head.eyebrow') }}</div>
@@ -209,7 +206,6 @@ function onVisitPickerClose(): void {
           </div>
         </div>
 
-        <!-- ============================ READY artboard ============================ -->
         <template v-if="screen === 'ready'">
           <E2eDropzone mode="hero" @files-added="onFilesAdded" />
           <div class="flex items-start gap-2.5 mt-5 text-[12.5px] text-slate-500">
@@ -225,13 +221,11 @@ function onVisitPickerClose(): void {
           </div>
         </template>
 
-        <!-- ============================ PARSING artboard ============================ -->
         <template v-else-if="screen === 'parsing'">
           <E2eDropzone mode="slim" @files-added="onFilesAdded" />
           <ParseQueue :rows="store.rows" />
         </template>
 
-        <!-- ============================ REVIEW artboard ============================ -->
         <template v-else>
           <E2eDropzone mode="slim" @files-added="onFilesAdded" />
           <SummaryBar :rows="store.rows" @confirm-all="onConfirmAll" />
@@ -250,7 +244,6 @@ function onVisitPickerClose(): void {
     </div>
     <PublicFooter />
 
-    <!-- ============================ Wave 2B modals ============================ -->
     <PatientSearchModal
       :open="searchTargetRowId !== null"
       :initial-query="searchInitialQuery"

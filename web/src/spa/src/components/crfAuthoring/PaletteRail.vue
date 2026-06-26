@@ -97,7 +97,6 @@ function onPresetDragStart(ev: DragEvent, p: PresetDescriptor): void {
         {{ t('crfAuthoring.canvas.palette.title') }}
       </h3>
 
-      <!-- Primitive items -->
       <section data-testid="crf-canvas-palette-primitives">
         <h4 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
           {{ t('crfAuthoring.canvas.palette.primitives') }}
@@ -120,7 +119,6 @@ function onPresetDragStart(ev: DragEvent, p: PresetDescriptor): void {
         </ul>
       </section>
 
-      <!-- Presets -->
       <section data-testid="crf-canvas-palette-presets">
         <h4 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
           {{ t('crfAuthoring.canvas.palette.presets') }}

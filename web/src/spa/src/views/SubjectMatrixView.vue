@@ -145,9 +145,6 @@ const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'n
 
 const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${status}`)
 
-// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
-// The DD.MM.YYYY German short-date is the SPA-wide convention.
-
 type Filter =
   | 'all'
   | 'open-events'

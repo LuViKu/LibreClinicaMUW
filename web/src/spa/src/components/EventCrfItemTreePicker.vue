@@ -69,10 +69,6 @@ const toggleExpanded = (key: string) => {
   expanded.value = next
 }
 
-/* ============================================================== */
-/* Selection sets — efficient lookups + change-emitters.          */
-/* ============================================================== */
-
 const eventSet = computed(() => new Set(props.eventOids))
 const versionSet = computed(() => new Set(props.versionIds))
 const itemSet = computed(() => new Set(props.itemIds))
@@ -86,10 +82,6 @@ function emitVersions(next: Set<number>) {
 function emitItems(next: Set<number>) {
   emit('update:itemIds', [...next])
 }
-
-/* ============================================================== */
-/* Tri-state checked / indeterminate                              */
-/* ============================================================== */
 
 function versionIsChecked(v: EventTreeVersionNode): boolean {
   if (v.items.length === 0) return versionSet.value.has(v.versionId)
@@ -136,10 +128,6 @@ function eventIsChecked(e: EventTreeNode): boolean {
 function eventIsIndeterminate(_e: EventTreeNode): boolean {
   return false
 }
-
-/* ============================================================== */
-/* Toggle handlers                                                */
-/* ============================================================== */
 
 /**
  * When the operator clicks a CRF, version, or item under an event, they
@@ -247,10 +235,6 @@ function syncVersionFromItems(v: EventTreeVersionNode, items: Set<number>) {
   emitVersions(versions)
 }
 
-/* ============================================================== */
-/* Search filter — keeps any node whose name / OID matches.        */
-/* ============================================================== */
-
 function matches(node: { name?: string; oid?: string }, term: string): boolean {
   if (!term) return true
   const t = term.toLowerCase()
@@ -294,10 +278,6 @@ const filteredTree = computed(() => {
   }
   return out
 })
-
-/* ============================================================== */
-/* Counts — shown in the header for fast feedback.                */
-/* ============================================================== */
 
 const totals = computed(() => {
   let events = 0

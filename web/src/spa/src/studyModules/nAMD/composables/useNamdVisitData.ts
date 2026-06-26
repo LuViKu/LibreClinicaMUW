@@ -239,15 +239,10 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   const error = ref<string | null>(null)
 
   /**
-   * 2026-06-24 user-feedback round — eye-switcher support.
-   *
-   * <p>The workspace is single-eye at render time, but a subject may
-   * have done fluid jobs for both OD and OS. {@link availableEyes}
-   * holds the set of eyes the subject has jobs for; the banner
-   * renders one pill per entry. {@link selectedEye} drives the
-   * filter applied to {@link allFluidDone} when assembling the
-   * visit timeline. {@link setEye} switches the active eye locally
-   * (no HTTP round-trip — we cached the summaries + details below).
+   * Eye-switcher: switch OD/OS from cache, no refetch. {@link availableEyes}
+   * = eyes the subject has jobs for; {@link selectedEye} filters
+   * {@link allFluidDone} when assembling the timeline; {@link setEye}
+   * switches locally (summaries + details cached below).
    */
   const availableEyes = ref<Laterality[]>([])
   const selectedEye = ref<Laterality>('OD')
@@ -444,19 +439,11 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   )
 
   // Reactive AI derivation — keeps the workspace's recommendation
-  // up-to-date if the data ref is later swapped (e.g. via {@code refresh()}).
+  // up-to-date if the data ref is later swapped (e.g. via refresh()).
   //
-  // 2026-06-24 user-feedback round — previously this re-assigned
-  // {@code data.value = { ...data.value, ai }} which spawned a new
-  // outer object identity on every aiRef tick. Vue's reactivity
-  // re-tracked the new proxy, App.vue's breadcrumb-consuming
-  // template re-ran, and (combined with the per-render array-literal
-  // identity from useViewBreadcrumb's source computed) tripped the
-  // "Maximum recursive updates exceeded" guard. Mutate the EXISTING
-  // {@code data.value.ai} field in place instead — same reactive
-  // outer object, only the nested property changes, so the
-  // breadcrumb computed isn't invalidated and the render loop stays
-  // bounded.
+  // Mutate data.value.ai in place — re-assigning the outer object broke its
+  // identity, which (via the breadcrumb computed) tripped Vue's "Maximum
+  // recursive updates exceeded" guard.
   const currentRef = computed(() => data.value?.current ?? null)
   const prevRef = computed(() => data.value?.prev ?? null)
   const aiRef = useNamdAiRecommendation({ current: currentRef, prev: prevRef })

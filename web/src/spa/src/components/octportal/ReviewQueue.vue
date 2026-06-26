@@ -34,7 +34,6 @@ const emit = defineEmits<{
     class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-[0_1px_2px_rgba(17,29,78,0.04)]"
     data-testid="review-queue"
   >
-    <!-- column header strip -->
     <div class="flex items-center gap-4 px-5 py-2.5 bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
       <div class="w-[224px] shrink-0">{{ t('octPortal.reviewQueue.colFile') }}</div>
       <div class="w-[96px] shrink-0">{{ t('octPortal.reviewQueue.colPatientId') }}</div>

@@ -1,11 +1,4 @@
-/**
- * 2026-06-23 user-feedback round — ZEISS Clarus 700 wide-field
- * fundus preset.
- *
- * Ultra-widefield true-color fundus photography. Uses the shared
- * acquisition scaffold; lesion description / peripheral findings go
- * in downstream interpretation eCRFs.
- */
+/** ZEISS Clarus 700 ultra-widefield fundus preset (shared scaffold, OID prefix 'CLARUS'). */
 import type { AuthoringItem } from '@/stores/crfAuthoring'
 import { generateImagingAcquisitionItems, type Translator } from './imagingAcquisitionPreset'
 

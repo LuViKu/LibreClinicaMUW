@@ -77,11 +77,7 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null)
   const availableStudies = ref<StudyOption[]>([])
 
-  // 2026-06-21 user-feedback round 6 — institutional Shibboleth SSO is
-  // no longer available to the deployment. The login page falls back
-  // to the local-credentials form only; flipping this back to enabled
-  // (with a real entryUrl) is the one-line escape hatch when SSO is
-  // re-instated.
+  // SSO disabled; re-enable via config (flip enabled + set a real entryUrl).
   const ssoConfig = ref<SsoConfig>({
     enabled: false,
     buttonLabel: 'Sign in with MedUni Wien',
@@ -192,7 +188,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Load the user's available studies for the picker. */
   async function loadStudies(): Promise<void> {
     try {
       availableStudies.value = await apiGet<StudyOption[]>('/pages/api/v1/studies')

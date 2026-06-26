@@ -17,21 +17,17 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
  * "within-3-days" / "next-scheduled"); for v1 the service emits only
  * {@code "same-day"}.
  *
- * <p>2026-06-23 — the candidate now anchors on {@code study_event}
- * (not {@code event_crf}). A planned-but-not-started visit has a
- * {@code studyEventId} but no {@code eventCrfId}; the commit endpoint
- * binds the new {@code retinal_inference_job} row against
- * {@code studyEventId} alone and leaves {@code event_crf_id} NULL
- * until the operator opens the CRF.
+ * <p>The candidate anchors on {@code study_event} (not {@code event_crf}).
+ * A planned-but-not-started visit has a {@code studyEventId} but no
+ * {@code eventCrfId}; the commit endpoint binds the new
+ * {@code retinal_inference_job} row against {@code studyEventId} alone and
+ * leaves {@code event_crf_id} NULL until the operator opens the CRF.
  *
- * <p>2026-06-24 user-feedback round — {@code dateStart} was
- * previously typed as {@link java.time.LocalDate}. Jackson's default
- * JSR-310 serializer emits LocalDate as a {@code [year, month, day]}
- * array unless WRITE_DATES_AS_TIMESTAMPS is disabled at the
- * ObjectMapper level; the SPA's uploader was rendering "[ 2025, 11,
- * 19 ]" verbatim because of that. Switching the record component to
- * a pre-formatted ISO {@code yyyy-MM-dd} string sidesteps the
- * ObjectMapper config dependency.
+ * <p>{@code dateStart} is a pre-formatted ISO {@code yyyy-MM-dd} string
+ * rather than {@link java.time.LocalDate}: Jackson's default JSR-310
+ * serializer emits LocalDate as a {@code [year, month, day]} array unless
+ * WRITE_DATES_AS_TIMESTAMPS is disabled at the ObjectMapper level. The
+ * string sidesteps that ObjectMapper config dependency.
  *
  * @param studyEventId    study_event.study_event_id — always present
  *                        for a valid candidate; the visit the scan is

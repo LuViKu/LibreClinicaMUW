@@ -141,7 +141,6 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
   { v: 'pending-invite',   l: () => t('manageUsers.auth.pending-invite') },
 ]
 
-// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
 </script>
 
 <template>
@@ -189,7 +188,6 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
         </button>
       </div>
 
-      <!-- Filter row -->
       <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
         <div class="w-64">
           <TextInput

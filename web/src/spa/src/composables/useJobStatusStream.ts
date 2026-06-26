@@ -66,20 +66,12 @@ export interface UseJobStatusStreamReturn {
   close: () => void
 }
 
-/* ----------------------------------------------------------------------- */
-/* Reconnect backoff schedule                                              */
-/* ----------------------------------------------------------------------- */
-
 /** Backoff schedule in ms — 1s, 2s, 4s, 8s, capped at 30s after step 5. */
 function backoffMsForAttempt(attempt: number): number {
   if (attempt <= 0) return 1_000
   const base = 1_000 * Math.pow(2, attempt)
   return Math.min(base, 30_000)
 }
-
-/* ----------------------------------------------------------------------- */
-/* Composable                                                              */
-/* ----------------------------------------------------------------------- */
 
 export function useJobStatusStream(
   jobId: Ref<number | null>,

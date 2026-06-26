@@ -42,7 +42,6 @@ export const useDdeStore = defineStore('dde', () => {
     (conflicts.value?.items ?? []).some((i: DdeConflictItem) => !i.resolved),
   )
 
-  /** Load the pass marker for an EventCRF. */
   async function loadPass(eventCrfOid: string): Promise<DdePassResponse | null> {
     isLoading.value = true
     error.value = null

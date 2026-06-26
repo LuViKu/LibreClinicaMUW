@@ -95,7 +95,6 @@ const scanDateTimeLabel = computed(() => {
     <div v-if="showFill" class="muw-portal-fill" aria-hidden="true"></div>
     <div v-if="showFill" class="muw-portal-fill-edge" aria-hidden="true"></div>
 
-    <!-- file / size column -->
     <div class="w-[224px] flex items-center gap-3 shrink-0 relative z-10">
       <span
         class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
@@ -116,7 +115,6 @@ const scanDateTimeLabel = computed(() => {
       </div>
     </div>
 
-    <!-- pid -->
     <div class="w-[96px] shrink-0 relative z-10">
       <span
         v-if="props.row.scan?.patientId"
@@ -125,13 +123,11 @@ const scanDateTimeLabel = computed(() => {
       <span v-else class="text-slate-300">—</span>
     </div>
 
-    <!-- scan date -->
     <div class="w-[150px] shrink-0 text-[12px] text-slate-500 relative z-10">
       <span v-if="scanDateTimeLabel">{{ scanDateTimeLabel }}</span>
       <span v-else class="text-slate-300">—</span>
     </div>
 
-    <!-- eye -->
     <div class="w-[68px] shrink-0 relative z-10">
       <EyeBadge :laterality="props.row.scan?.laterality ?? null" />
     </div>
