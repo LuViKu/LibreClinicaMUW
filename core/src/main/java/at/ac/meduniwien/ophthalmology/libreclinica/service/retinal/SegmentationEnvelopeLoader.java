@@ -68,8 +68,28 @@ public final class SegmentationEnvelopeLoader {
             int[] shape,
             List<String> labels,
             String task,
-            byte[] data
-    ) {}
+            byte[] data,
+            /*
+             * 2026-06-26 — surface indices (0-based, matching the order in
+             * {@code shape[0]}) whose CSV was served from the
+             * {@code corrections/} subfolder rather than the original AI
+             * output. Surfaces with no operator correction are omitted.
+             * Empty list = no corrections active for the job. The controller
+             * surfaces this as the {@code X-MUW-Seg-Corrected} response
+             * header.
+             */
+            List<Integer> correctedSurfaceIndices
+    ) {
+        /**
+         * Back-compat ctor for tasks that don't support corrections (fluid,
+         * ga, onl, pr). Defaults {@code correctedSurfaceIndices} to an
+         * empty list.
+         */
+        public SegmentationEnvelope(String kind, String dtype, int[] shape,
+                                    List<String> labels, String task, byte[] data) {
+            this(kind, dtype, shape, labels, task, data, List.of());
+        }
+    }
 
     /**
      * Load the segmentation envelope for the job's task from
@@ -396,8 +416,15 @@ public final class SegmentationEnvelopeLoader {
         java.util.regex.Pattern surfaceName = java.util.regex.Pattern.compile(
                 "^(\\d{3})-.+\\(([^)]+)\\)\\.csv$"
         );
-        record SurfaceCsv(int order, boolean iowa, String label, Path path) {}
+        record SurfaceCsv(int order, boolean iowa, String label, Path path, boolean corrected) {}
         List<SurfaceCsv> entries = new ArrayList<>();
+        // 2026-06-26 — prefer a per-surface CSV under the corrections/
+        // subfolder when present. The corrected file mirrors the original
+        // basename ({@code 001-ILM.csv}) so a contributor can drop one
+        // into the directory by hand for diagnostic purposes and the
+        // loader picks it up without the controller endpoint involved.
+        Path corrDir = bscanMasksDir.resolve("corrections");
+        boolean hasCorrDir = Files.isDirectory(corrDir);
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(bscanMasksDir, "*.csv")) {
             for (Path p : ds) {
                 java.util.regex.Matcher m = surfaceName.matcher(p.getFileName().toString());
@@ -408,7 +435,16 @@ public final class SegmentationEnvelopeLoader {
                 // _iowa_layers and form the primary stack. Everything
                 // else (BM task's 001- prefix) is appended after.
                 boolean iowa = prefix >= 1 && prefix <= 11 && !"BM".equalsIgnoreCase(label);
-                entries.add(new SurfaceCsv(prefix, iowa, label, p));
+                Path chosen = p;
+                boolean corrected = false;
+                if (hasCorrDir) {
+                    Path candidate = corrDir.resolve(p.getFileName().toString());
+                    if (Files.isRegularFile(candidate)) {
+                        chosen = candidate;
+                        corrected = true;
+                    }
+                }
+                entries.add(new SurfaceCsv(prefix, iowa, label, chosen, corrected));
             }
         }
         if (entries.isEmpty()) {
@@ -424,6 +460,7 @@ public final class SegmentationEnvelopeLoader {
 
         List<double[][]> surfaces = new ArrayList<>(entries.size());
         List<String> labels = new ArrayList<>(entries.size());
+        List<Integer> corrected = new ArrayList<>();
         int z = -1;
         int cols = -1;
         for (SurfaceCsv e : entries) {
@@ -471,6 +508,7 @@ public final class SegmentationEnvelopeLoader {
                         e.label(), cs, cols);
                 if (cs < cols) cols = cs;
             }
+            if (e.corrected()) corrected.add(surfaces.size());
             surfaces.add(rows);
             labels.add(e.label());
         }
@@ -495,7 +533,8 @@ public final class SegmentationEnvelopeLoader {
                 new int[]{surfaces.size(), z, cols},
                 List.copyOf(labels),
                 "layers",
-                bb.array()
+                bb.array(),
+                List.copyOf(corrected)
         );
     }
 

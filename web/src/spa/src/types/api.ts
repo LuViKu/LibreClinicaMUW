@@ -1124,6 +1124,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}/segmentation/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCorrections"];
+        put?: never;
+        post: operations["saveCorrection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retinal-jobs/{jobId}/retry": {
         parameters: {
             query?: never;
@@ -2820,6 +2836,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}/segmentation/corrections/{layerIndex}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteCorrection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/oct-upload/{jobId}": {
         parameters: {
             query?: never;
@@ -3685,6 +3717,14 @@ export interface components {
             oid?: string;
             value?: string;
             valueExpression?: string;
+        };
+        SaveCorrectionRequest: {
+            /** Format: int32 */
+            layerIndex?: number;
+            layerLabel?: string;
+            perSliceRows?: {
+                [key: string]: number[];
+            };
         };
         BulkBindRequest: {
             jobIds?: number[];
@@ -6827,6 +6867,54 @@ export interface operations {
             };
         };
     };
+    listCorrections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    saveCorrection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     retryJob: {
         parameters: {
             query?: never;
@@ -9579,6 +9667,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteCorrection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+                layerIndex: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
