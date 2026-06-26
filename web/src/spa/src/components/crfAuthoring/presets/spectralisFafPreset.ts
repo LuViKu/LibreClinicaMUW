@@ -1,10 +1,4 @@
-/**
- * 2026-06-23 user-feedback round — Spectralis FAF acquisition preset.
- *
- * Heidelberg Spectralis fundus autofluorescence (488 nm + Bluepeak).
- * Same scaffold as Spectralis OCT; the per-device-OID prefix
- * disambiguates the two on the wire.
- */
+/** Spectralis FAF (fundus autofluorescence) acquisition preset (shared scaffold, OID prefix 'SPEC_FAF'). */
 import type { AuthoringItem } from '@/stores/crfAuthoring'
 import { generateImagingAcquisitionItems, type Translator } from './imagingAcquisitionPreset'
 

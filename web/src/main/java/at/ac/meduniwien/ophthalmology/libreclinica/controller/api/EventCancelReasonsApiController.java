@@ -35,24 +35,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
- * Wave 1A (app-feedback, 2026-06-19) — institutional cancel-reason
- * catalog used by the SPA's cancel-visit dialog.
+ * Institutional cancel-reason catalog used by the SPA's cancel-visit dialog.
  *
- * <p>Lives as a separate REST controller (rather than a method on
- * {@link EventsApiController}) so the URL is the SPA-natural
- * {@code /pages/api/v1/event-cancel-reasons} instead of nested under
- * the events resource. The list is small (6 seeded rows at MUW) and
- * each call does a single indexed scan — no caching layer.
+ * <p>The companion DELETE {@code /api/v1/events/{id}} handler requires
+ * the operator to pick one of these rows; the {@code isOther} flag tells
+ * the SPA when to reveal a free-text field, and the controller server-side
+ * validates that the picked code exists + that free text is non-blank when
+ * the row is the "Other" entry.
  *
- * <p>The companion DELETE {@code /api/v1/events/{id}} handler now
- * requires the operator to pick one of these rows; the {@code isOther}
- * flag tells the SPA when to reveal a free-text field, and the
- * controller server-side validates that the picked code exists +
- * that free text is non-blank when the row is the "Other" entry.
- *
- * <p>Auth: session-bound; 401 anonymous. No additional role gate —
- * any user who can see the cancel button needs the list to populate
- * the dropdown.
+ * <p>Auth: session-bound; 401 anonymous. No additional role gate.
  */
 @RestController
 @RequestMapping("/api/v1/event-cancel-reasons")

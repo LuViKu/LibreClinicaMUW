@@ -1,16 +1,9 @@
 <script setup lang="ts">
 /**
- * nAMD workspace — visit picker.
+ * nAMD workspace — dropdown visit picker (T&E casebooks reach 20+ visits).
  *
- * 2026-06-21 round 7 — replaced the chip-strip with a dropdown
- * <select> per the user's "different visits can be selected from a
- * dropdown menu" feedback. The chip-strip didn't scale well past
- * eight visits (chronic Treat-and-Extend casebooks can reach
- * 20+ visits, see GA-cohort hardening 2026-05-31).
- *
- * Excluded visits (typically the OTHER pane's selection) render
- * as disabled options inside the select so the operator still
- * sees the full visit list but can't double-pick.
+ * Excluded visits (typically the OTHER pane's selection) render as disabled
+ * options so the operator sees the full list but can't double-pick.
  */
 import { formatDate } from '@/lib/dateFormat'
 import type { NamdVisit } from '../types'

@@ -1,26 +1,14 @@
 <script setup lang="ts">
 /**
- * Wave 1A (app-feedback, 2026-06-19) — Cancel-event dialog.
- *
- * Replaces the native browser `confirm()` previously used in
- * {@link SubjectDetailView.vue} with a proper modal that requires the
- * operator to pick an institutional cancel reason from a backend-seeded
- * catalog and (when the picked row is the "Other" entry) supply a
+ * Cancel-event dialog. Operator picks an institutional cancel reason from a
+ * backend-seeded catalog and, when the picked row is "Other", supplies a
  * free-text rationale.
  *
- * On confirm:
- *  - {@code DELETE /pages/api/v1/events/{eventId}} carries a JSON body
- *    `{ reasonCode, reasonText }`.
- *  - On 204 the dialog emits `cancelled` and closes; the parent
- *    re-fetches the subject to refresh the events table.
- *  - On 4xx the dialog stays open with an inline error so the operator
- *    can adjust; failures also push to the global errors store so the
- *    GlobalErrorToast surfaces a reqId-linkable message.
- *
- * The reason catalog (`GET /pages/api/v1/event-cancel-reasons`) is
- * fetched on the first open per dialog instance and cached for the
- * lifetime of that instance. The list is small (6 seeded rows at
- * MUW); re-opening the dialog after a brief pause does not refetch.
+ * On confirm: {@code DELETE /pages/api/v1/events/{eventId}} with body
+ * `{ reasonCode, reasonText }`. 204 → emit `cancelled` + close; 4xx → stay
+ * open with inline error (also pushed to the errors store for a reqId-linkable
+ * toast). Reason catalog (`GET /pages/api/v1/event-cancel-reasons`) is fetched
+ * on first open and cached for the dialog instance.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -43,7 +31,6 @@ interface CancelReason {
 }
 
 interface Props {
-  /** v-model:open — controls dialog visibility. */
   open: boolean
   /** study_event_id of the visit being cancelled. */
   eventId: string

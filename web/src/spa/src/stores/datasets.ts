@@ -275,10 +275,6 @@ export const useDatasetsStore = defineStore('datasets', () => {
     }
   }
 
-  /* ============================================================== */
-  /* Phase 2 — event tree                                            */
-  /* ============================================================== */
-
   async function loadEventTree(studyOid: string): Promise<void> {
     if (!studyOid) return
     isEventTreeLoading.value = true
@@ -297,10 +293,6 @@ export const useDatasetsStore = defineStore('datasets', () => {
       isEventTreeLoading.value = false
     }
   }
-
-  /* ============================================================== */
-  /* Phase 2 — draft lifecycle                                       */
-  /* ============================================================== */
 
   function startNewDraft(): void {
     draft.value = {
@@ -347,10 +339,6 @@ export const useDatasetsStore = defineStore('datasets', () => {
     draft.value.includeFlags = { ...draft.value.includeFlags, [key]: value }
   }
 
-  /* ============================================================== */
-  /* Phase 2 — single fetch (edit-mode hydration)                    */
-  /* ============================================================== */
-
   async function loadOne(datasetId: number): Promise<DatasetDto | null> {
     try {
       return await apiGet<DatasetDto>(`/pages/api/v1/datasets/${datasetId}`)
@@ -362,10 +350,6 @@ export const useDatasetsStore = defineStore('datasets', () => {
       return null
     }
   }
-
-  /* ============================================================== */
-  /* Phase 2 — mutations                                             */
-  /* ============================================================== */
 
   type MutationResult =
     | { ok: true; dataset: DatasetDto }
@@ -499,10 +483,6 @@ export const useDatasetsStore = defineStore('datasets', () => {
       }
     }
   }
-
-  /* ============================================================== */
-  /* Phase 3 — filter preview                                        */
-  /* ============================================================== */
 
   /**
    * Debounced filter-preview probe.
@@ -665,10 +645,6 @@ export const useDatasetsStore = defineStore('datasets', () => {
     reset,
   }
 })
-
-/* =================================================================== */
-/* Helpers                                                              */
-/* =================================================================== */
 
 function explain(e: unknown, fallback: string): string {
   if (e instanceof ApiNetworkError) {

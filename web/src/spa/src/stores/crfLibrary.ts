@@ -141,7 +141,6 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     }
   }
 
-  /* ------------------------- Version lifecycle ----------------------- */
   // Phase E.6 crf-library — lock/unlock/restore are atomic status flips
   // that return the updated CrfVersion row. We mutate the in-memory CRF
   // row inline so the view re-renders without an extra round-trip; on
@@ -321,8 +320,6 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     }
   }
 
-  /* --------------------------- Assignments --------------------------- */
-
   async function listAssignments(studyOid: string, sedOid: string): Promise<EventCrfAssignment[]> {
     return apiGet<EventCrfAssignment[]>(
       `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${encodeURIComponent(sedOid)}/crfs`,
@@ -373,8 +370,6 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return false
     }
   }
-
-  /* ----------------------------- Helpers ---------------------------- */
 
   function mapMutationError(e: unknown, op: string): CrfMutation {
     if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {

@@ -748,8 +748,6 @@ function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'n
   }
 }
 
-// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
-
 function genderLabel(g: string): string {
   return t(`addSubject.gender.${g === 'F' ? 'female' : g === 'M' ? 'male' : g === 'O' ? 'other' : 'unknown'}`)
 }

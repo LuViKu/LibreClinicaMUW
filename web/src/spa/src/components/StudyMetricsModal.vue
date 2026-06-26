@@ -151,7 +151,7 @@ const sexTotal = computed(() => sexBuckets.value.reduce((s, b) => s + b.value, 0
 
 /* ---------- donut geometry ---------- */
 
-const SEX_COLORS = ['#2f8e91', '#111d4e', '#94a3b8'] // teal / blue / slate
+const SEX_COLORS = ['#2f8e91', '#111d4e', '#94a3b8']
 const ageMax = computed(() => Math.max(1, ...ageBuckets.value.map((b) => b.value)))
 const fuMax = computed(() => Math.max(1, ...followUpBuckets.value.map((b) => b.value)))
 

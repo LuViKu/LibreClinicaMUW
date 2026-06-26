@@ -53,7 +53,6 @@ const linePct = computed(() => {
         v-else
         class="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900"
       />
-      <!-- Horizontal slice indicator -->
       <div
         data-testid="namd-enface-line"
         class="absolute left-0 right-0 h-[2px] bg-muw-coral-400 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"

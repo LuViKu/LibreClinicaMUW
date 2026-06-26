@@ -21,7 +21,6 @@ import java.util.Map;
  * component so each item label shows a chip when at least one parent
  * note is attached.
  *
- * @param eventCrfOid path param echoed back
  * @param totalCount  total parent notes attached to this CRF
  * @param openCount   subset of {@code totalCount} whose
  *                    {@code resolutionStatus} is {@code new} /

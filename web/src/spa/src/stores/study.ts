@@ -15,10 +15,6 @@ import type {
  * M12 adapter). Caller passes the active study OID; the response is
  * the 7-task setup tracker (create-study → CRF → events → groups
  * → rules → sites → users) with each task's current count + status.
- *
- * Mock removal — per the polished-jumping-swan plan's hard-removal
- * policy: the previous `loadMock()` helper + the LCDemo MOCK
- * fixture are deleted in this PR.
  */
 export const useStudyStore = defineStore('study', () => {
   const status = ref<StudyBuildStatus | null>(null)

@@ -1,30 +1,8 @@
 /**
- * App-feedback Wave 2 (2026-06-19) — IOP measurement preset.
- *
- * <p>The IOP preset materialises the canonical "IOP gemessen?
- * Ja / Nein / Unbekannt" clinical pattern as two paired authoring items:
- *
- * <ol>
- *   <li><b>Parent</b> — {@code IOP_GEMESSEN} ({@code TRISTATE_REASON}):
- *       Ja / Nein / Unbekannt segmented control. On the wire the parent
- *       materialises to a single-select with three canonical option codes
- *       (JA / NEIN / UNBEKANNT) so the show-when machinery can reference
- *       the parent value verbatim.</li>
- *   <li><b>Child A</b> — {@code IOP_VALUE} ({@code REAL}, mmHg): an IOP
- *       numeric input that is shown only when the parent equals "JA"
- *       (operator was able to measure IOP, the actual value goes here).</li>
- *   <li><b>Child B</b> — {@code IOP_REASON} ({@code ST} textarea): a free-
- *       text reason that is shown only when the parent equals "NEIN"
- *       (clinician explains why IOP could not be measured).</li>
- * </ol>
- *
- * <p>Hidden values are preserved client-side but not persisted, per the
- * show-when spec.
- *
- * <p>The preset is intentionally OU (both eyes) — IOP measurements in
- * the deployed MUW workflow are paired per visit and the bilateral
- * grouping happens at the section level rather than the preset level.
- * A future bilateral variant can be added without renaming this one.
+ * IOP preset — tristate parent (TRISTATE_REASON; wire single-select JA / NEIN /
+ * UNBEKANNT) + conditional children: value (REAL mmHg, shown when JA) and reason
+ * (ST textarea, shown when NEIN). Hidden values kept client-side, not persisted
+ * (show-when spec). Emits OD + OS bilateral pairs.
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'
@@ -149,14 +127,7 @@ function buildIopTriple(
   return [parent, value, reason]
 }
 
-/**
- * 2026-06-21 user-feedback batch — IOP preset emits OD + OS pairs so
- * the bilateral grid in SectionCanvas can pair items by suffix the
- * same way OPHTH_EXAM / BCVA / RNFL do. The operator can flip the
- * section to unilateral via the section header toggle; the items
- * stay (labelled OD_/OS_) and render as a flat list — operators can
- * delete the second-eye items manually for true monocular follow-up.
- */
+/** Emits OD + OS pairs (labelled OD_/OS_); bilateral grid pairs by suffix. */
 export function generateIopPresetItems(
   translate: Translator,
   opts: IopPresetOptions = {},

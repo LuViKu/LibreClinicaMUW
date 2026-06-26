@@ -35,7 +35,6 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  /** Fired after the backend confirms delivery. Payload is the ticket id. */
   submitted: [ticketId: string]
   'update:open': [value: boolean]
 }>()
@@ -71,9 +70,7 @@ function blank(): Form {
 }
 
 const form = ref<Form>(blank())
-/** Banner shown after a successful send — cleared next time the dialog opens. */
 const successTicketId = ref<string | null>(null)
-/** Controls the disclosure for the "preview attached console entries" block. */
 const showConsolePreview = ref(false)
 
 /**

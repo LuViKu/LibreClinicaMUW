@@ -172,9 +172,6 @@ const retinalCrfIds = computed<number[]>(() => {
     .filter((id): id is number => id != null)
 })
 
-// 2026-06-21 user-feedback round 4 — formatDate now lives in
-// @/lib/dateFormat so every view renders DD.MM.YYYY (German short).
-
 /**
  * Phase E.6 — start data entry for a CRF slot that has no
  * event_crf row yet. POSTs to the backend, then routes into the
@@ -304,7 +301,6 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               : t('eventDetail.crf.restoreFailed') }}
         </div>
 
-        <!-- CRFs -->
         <section class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">

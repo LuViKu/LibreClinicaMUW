@@ -39,24 +39,16 @@ import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
- * App-feedback Wave 1B (2026-06-19) — cross-study patient identity
- * soft-link endpoint. C4 (2026-06-20) — promoted to the hard
- * {@code patient} table FK; the {@code patient_uuid} column is now a
- * soft-deprecated mirror written alongside {@code patient_id} on every
- * UPDATE for one deprecation release.
+ * Cross-study patient identity link endpoint.
  *
  * <p>{@code POST /api/v1/study-subjects/{id}/link-patient} ties two
  * {@code study_subject} rows together under a single {@code patient_id}
- * (and the mirrored {@code patient_uuid}), so the cross-study
- * patient-overview view can surface "this human is M-001 in
- * default-study AND GA-008 in GA-Studie" even when the two enrolments
- * live in studies with disjoint subject naming conventions. The
- * {@code patient_uuid} column was seeded by
- * {@code lc-muw-2026-06-19-study-subject-patient-uuid.xml}; the hard
- * {@code patient} table + {@code patient_id} FK by
- * {@code lc-muw-2026-06-20-patient-table.xml}; the audit type id
- * {@link AuditTypeIds#STUDY_SUBJECT_PATIENT_LINKED} (119) by the
- * Wave 1B changeset.
+ * (with {@code patient_uuid} kept as a soft-deprecated mirror written
+ * alongside {@code patient_id} on every UPDATE), so the cross-study
+ * patient-overview view can link enrolments whose studies use disjoint
+ * subject naming conventions. Hard {@code patient} table + {@code patient_id}
+ * FK seeded by {@code lc-muw-2026-06-20-patient-table.xml}; audit type id
+ * {@link AuditTypeIds#STUDY_SUBJECT_PATIENT_LINKED} (119).
  *
  * <p><strong>Semantics</strong> (the migration guarantees no row has
  * NULL patient_uuid/patient_id after upgrade, but the controller still

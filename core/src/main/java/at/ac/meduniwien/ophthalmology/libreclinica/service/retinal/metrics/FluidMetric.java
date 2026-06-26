@@ -100,7 +100,7 @@ final class FluidMetric {
                         case 1 -> { irfVoxels++; irfPerBscan[z]++; }
                         case 2 -> { srfVoxels++; srfPerBscan[z]++; }
                         case 3 -> { pedVoxels++; pedPerBscan[z]++; }
-                        default -> { /* ignore other labels — schema only emits 0..3 */ }
+                        default -> { /* schema only emits 0..3 */ }
                     }
                     double dxMm = (x - foveaX) * lateralMm;
                     double distMm = Math.sqrt(dxMm * dxMm + dzMm * dzMm);

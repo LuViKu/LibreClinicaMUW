@@ -82,7 +82,6 @@ export class ApiNetworkError extends Error {
 interface RequestOptions {
   /** AbortSignal — typically `useAbortableRequest()` from the store. */
   signal?: AbortSignal
-  /** Extra headers to merge (rarely needed). */
   headers?: Record<string, string>
 }
 

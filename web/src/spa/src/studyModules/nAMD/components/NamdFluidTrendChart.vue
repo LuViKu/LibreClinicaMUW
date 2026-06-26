@@ -100,26 +100,10 @@ function xAt(week: number): number {
 }
 
 /**
- * 2026-06-24 user-feedback round — fluid Y-axis is dynamic.
- *
- * <p>The hardcoded 560 nL ceiling was a leftover from the design
- * mock (which uses an exsudative-AMD timeline that fits the
- * 0..560 band). Real datasets sit much lower — a "Trocken" patient
- * may never exceed 30 nL, and the chart collapsed to a sliver near
- * y=0 with most of the canvas empty. Compute the ceiling per
- * dataset:
- *
- * <ul>
- *   <li>Cap = max stack height (irf + srf + ped) across visits</li>
- *   <li>Rounded UP to a "nice" tick step — 10, 25, 50, 100, 200,
- *       500, 1000 — whichever lands the ceiling at exactly four
- *       evenly-spaced grid lines.</li>
- *   <li>Minimum 40 so a 0-fluid timeline still has a readable
- *       axis (otherwise the polygons collapse onto y=baseline).</li>
- * </ul>
- *
- * <p>The downstream {@code gridVals} computed re-derives the four
- * tick labels (0, ¼, ½, ¾, max) off the same ceiling.
+ * Fluid Y-axis scales to dataset max (was hardcoded 560 nL). Ceiling =
+ * max stack height (irf + srf + ped) rounded up to a "nice" tick step
+ * landing four evenly-spaced gridlines; minimum 40 nL so a dry timeline
+ * keeps a readable axis.
  */
 const fluidMax = computed(() => {
   let peak = 0
@@ -143,20 +127,9 @@ function yFluid(value: number): number {
 }
 
 /**
- * 2026-06-25 — dynamic CRT axis. The previous hardcoded [250..500]
- * band fit only the design-mock exsudative-AMD timeline. Real cohorts
- * span a much wider clinical envelope:
- *   * severe atrophy        ~150 µm
- *   * normal foveal CRT     ~250 µm
- *   * moderate IRF edema    ~400 µm
- *   * dense subretinal fluid ~600+ µm
- * Hardcoding to [250..500] meant atrophy datasets dove off the bottom
- * and severe-edema datasets ran out the top. Compute the visible band
- * from the actual data + a clinical-baseline anchor (always include
- * 250 µm so the normal-CRT line stays a familiar reference).
- *
- * Mirrors {@link fluidMax}'s "nice number" rounding so the axis ticks
- * land on values an operator can read.
+ * CRT axis dynamic, anchored at 250 µm (the normal-CRT reference is always
+ * in the visible band). Band computed from the data + 250 µm anchor;
+ * mirrors {@link fluidMax}'s "nice number" rounding.
  */
 const crtRange = computed<{ min: number; max: number }>(() => {
   const values = regionVisits.value.map((v) => v.crt).filter((c) => c > 0)
@@ -208,12 +181,7 @@ interface Layer {
   points: string
 }
 
-/**
- * 2026-06-24 — five evenly-spaced gridline values derived from the
- * dynamic {@link fluidMax}. Replaces the static
- * {@code [0, 140, 280, 420, 560]} ladder so the chart adapts to the
- * dataset's actual scale.
- */
+/** Five evenly-spaced gridline values derived from the dynamic {@link fluidMax}. */
 const gridVals = computed<number[]>(() => {
   const m = fluidMax.value
   return [0, m * 0.25, m * 0.5, m * 0.75, m]
@@ -251,14 +219,10 @@ const layers = computed<Layer[]>(() => {
 })
 
 /**
- * 2026-06-25 — break the polyline at visits with no data. The
- * NamdVisit type uses {@code 0} as a sentinel for "no CRT row" /
- * "no BCVA row"; a literal 0 µm or 0 letters is clinically
- * meaningless and would otherwise drag the line far below the
- * chart frame (the visible axis range starts at 250 µm / 58
- * letters). Treat 0 as "missing" and start a new sub-path at the
- * next valid datum so gaps render as breaks instead of off-frame
- * dives.
+ * Break the polyline at visits with no data. NamdVisit uses {@code 0} as a
+ * sentinel for "no CRT row" / "no BCVA row"; treat 0 as missing and start a
+ * new sub-path at the next valid datum so gaps render as breaks, not
+ * off-frame dives.
  */
 function buildBrokenPath(
   values: ReadonlyArray<{ x: number; y: number; present: boolean }>,
@@ -361,14 +325,7 @@ function fmtDate(iso: string): string {
     role="img"
     :aria-label="t('studyModules.namd.trend.aria')"
   >
-    <!-- 2026-06-26 user-feedback round — inline header.
-         Replaces the standalone right-column Legend Card with a chip
-         strip in the chart's own title bar:
-           IRF · SRF · PED · CRT line · Injektion marker
-         plus a region dropdown (Zentral 1 mm / 3 mm / 6 mm). The
-         Overview tab reclaims the freed right-column height for the
-         Decision panel. The strip stays compact on narrow widths by
-         flex-wrapping; the dropdown anchors right. -->
+    <!-- Inline header: legend chip strip + region dropdown (Zentral 1/3/6 mm). -->
     <header
       data-testid="namd-fluid-trend-header"
       class="flex items-center flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-slate-600"
@@ -416,12 +373,8 @@ function fmtDate(iso: string): string {
       style="overflow: visible"
       data-testid="namd-fluid-trend-svg"
     >
-      <!-- Gridlines + left axis (fluid, nL).
-           2026-06-24 user-feedback round — horizontal gridlines are
-           SOLID (continuous) so the eye can read the fluid value
-           horizontally across the chart; vertical guides at each
-           visit's X tick are dotted (rendered below alongside the
-           visit X labels) so the visit-time axis stays subordinate. -->
+      <!-- Gridlines + left axis (fluid, nL). Horizontal gridlines solid;
+           per-visit vertical guides dotted (rendered below). -->
       <g>
         <line
           v-for="g in gridVals"
@@ -452,12 +405,8 @@ function fmtDate(iso: string): string {
         >nL</text>
       </g>
 
-      <!-- 2026-06-24 user-feedback round — dotted vertical guides at
-           each visit's X tick. Drawn BEFORE the stacked polygons +
-           CRT line + BCVA strip so the data layers paint over them.
-           Span from the top of the fluid panel through the bottom of
-           the BCVA strip so the operator can read across the whole
-           chart for any visit. -->
+      <!-- Dotted vertical guides at each visit's X tick. Drawn before the
+           data layers so they paint over; span fluid panel through BCVA strip. -->
       <g>
         <line
           v-for="v in visits"

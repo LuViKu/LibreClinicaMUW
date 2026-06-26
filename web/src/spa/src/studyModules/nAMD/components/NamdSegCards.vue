@@ -59,12 +59,7 @@ const rows = computed(() =>
           {{ row.k }}
         </span>
       </div>
-      <!-- 2026-06-21 round 7 — the prior layout stacked the unit
-           ("nL") inline INSIDE the value span at half-height, which
-           rendered the unit dangling above the number's baseline.
-           Split into a flex baseline group: value + unit share the
-           same baseline, delta chip floats right. The number drops
-           to non-breaking-space + sup'd unit for a tighter read. -->
+      <!-- Number + unit (nL) share the same baseline; delta chip floats right. -->
       <div class="mt-1 flex items-baseline justify-between gap-2">
         <span class="inline-flex items-baseline gap-1 tabular-nums">
           <span class="text-[20px] font-semibold leading-none text-slate-900">

@@ -49,7 +49,6 @@ const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const isSubmitting = ref(false)
 
-// Re-seed the inputs every time the dialog opens.
 watch(
   () => [props.open, props.rule] as const,
   ([open, rule]) => {
@@ -63,7 +62,6 @@ watch(
   },
 )
 
-// === Test-expression integration ===========================================
 // Mirrors the wizard's pattern: empty testValues map, store call returns
 // the discriminated-union result type directly.
 
@@ -100,8 +98,6 @@ const testResultVariant = computed<'success' | 'warning' | 'neutral'>(() => {
     : testResult.value.result === 'false' ? 'warning'
       : 'neutral'
 })
-
-// === Submit ================================================================
 
 const hasChanges = computed(() => {
   if (!props.rule) return false

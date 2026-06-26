@@ -48,10 +48,9 @@ import org.slf4j.LoggerFactory;
  *   <li><b>fluid</b>: open {@code fluidseg.npz} (zip), find the
  *       {@code segmentation.npy} entry, parse the numpy v1.0 header,
  *       stream the raw uint8 data bytes verbatim.</li>
- *   <li><b>ga / onl / pr</b>: stub-only in this PR — returns
- *       {@code null} so the controller surfaces 501. The CSV
- *       loaders land in a follow-up alongside the SPA renderers
- *       for surface_y / binary_2d kinds.</li>
+ *   <li><b>ga / onl / pr</b>: parse the runner's CSV layer/area
+ *       artifacts into the matching surface_y / binary_2d envelope
+ *       kinds for the SPA renderers.</li>
  * </ul>
  */
 public final class SegmentationEnvelopeLoader {
@@ -250,7 +249,7 @@ public final class SegmentationEnvelopeLoader {
                     // (cols, n_bscans, n_rows). Use field 0 as the canonical
                     // cols count for the rest of the file.
                     if (tokens.length <= 8) {
-                        try { cols = Integer.parseInt(tokens[0].trim()); } catch (NumberFormatException ignore) { /* fall through */ }
+                        try { cols = Integer.parseInt(tokens[0].trim()); } catch (NumberFormatException ignore) { }
                         continue;
                     }
                     // No header — assume the row is symbol-only (cols wide).
@@ -677,7 +676,6 @@ public final class SegmentationEnvelopeLoader {
             try {
                 dims.add(Integer.parseInt(trimmed));
             } catch (NumberFormatException ignore) {
-                /* skip */
             }
         }
         int[] out = new int[dims.size()];

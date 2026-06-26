@@ -47,7 +47,6 @@ export interface ImportCrfPreviewRow {
   detail: string | null
 }
 
-/** One validator finding — surfaced before the commit. */
 export interface ImportCrfIssue {
   /** "metadata" — OID resolution; "row" — per-row validator. */
   scope: 'metadata' | 'row' | string
@@ -119,16 +118,11 @@ export interface ImportCrfCommitRequest {
   overwriteMode?: ImportOverwriteMode
 }
 
-/* ------------------------------------------------------------------- */
-/* Discriminated-union store results                                    */
-/* ------------------------------------------------------------------- */
-
 /** Upload result — unifies success + 4xx/5xx + network branches. */
 export type ImportUploadResult =
   | { ok: true; preview: ImportCrfPreview }
   | { ok: false; message: string; errors: string[] }
 
-/** Rows-page fetch result. */
 export type ImportRowsPageResult =
   | { ok: true; page: ImportCrfRowsPage }
   | { ok: false; message: string; expired: boolean }

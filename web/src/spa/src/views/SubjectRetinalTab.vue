@@ -214,7 +214,6 @@ const SORTABLE_COLS: { key: SortKey; label: string }[] = [
       <slot name="parked" />
     </div>
 
-    <!-- Task selector + chart -->
     <div class="px-5 py-4">
       <label class="flex items-center gap-2 text-xs text-slate-700 mb-3">
         <span class="font-medium">{{ t('retinal.trends.taskLabel') }}:</span>
@@ -232,7 +231,6 @@ const SORTABLE_COLS: { key: SortKey; label: string }[] = [
       <BiomarkerTrendsChart :subject-id="subjectId" :task="task" />
     </div>
 
-    <!-- Historical jobs table -->
     <div class="border-t border-slate-200">
       <div class="px-5 py-3 border-b border-slate-200">
         <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">

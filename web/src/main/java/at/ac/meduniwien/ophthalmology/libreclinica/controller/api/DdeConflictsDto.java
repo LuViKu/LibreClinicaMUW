@@ -38,7 +38,6 @@ public record DdeConflictsDto(
     /**
      * Single conflict row.
      *
-     * @param itemOid    item OID
      * @param label      display label (item_form_metadata.left_item_text)
      * @param ideValue   pass-1 IDE value (string-serialised)
      * @param ddeValue   pass-2 DDE value (string-serialised)

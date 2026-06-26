@@ -72,9 +72,6 @@ const statusVariant = (s: SdvStatus): 'success' | 'info' | 'warning' | 'danger' 
 const requirementLabel = (r: SdvRequirement) => t(`sdv.requirement.${r}`)
 const statusLabel = (s: SdvStatus) => t(`sdv.status.${s}`)
 
-// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
-
-/* ----- Bulk-verify confirmation modal ----- */
 const confirmOpen = ref(false)
 const justVerifiedCount = ref<number | null>(null)
 async function openConfirm() {
@@ -87,7 +84,6 @@ async function confirmVerify() {
   setTimeout(() => { justVerifiedCount.value = null }, 4_000)
 }
 
-/* ----- Add Query modal — launched from a row action ----- */
 type NoteType = 'query' | 'failed-validation' | 'annotation' | 'reason-for-change'
 const queryOpen = ref(false)
 const queryTarget = ref<SdvRow | null>(null)

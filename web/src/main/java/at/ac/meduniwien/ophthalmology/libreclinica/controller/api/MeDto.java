@@ -87,8 +87,7 @@ public record MeDto(
      * {@code POST /api/v1/users} body) accept {@code studyId} integers, and
      * the SPA needs to dispatch those calls against the active study without
      * a separate {@code /studies?oid=} lookup.
-     */
-    /**
+     *
      * <p>Multi-role per (user, study) — M2 (2026-06-08): {@code roles}
      * carries the full set of SPA-mapped role bindings the user holds
      * in this active study. The HomeView's catalogue filter reads this

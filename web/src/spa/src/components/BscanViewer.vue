@@ -304,21 +304,6 @@ function paintOverlay(): void {
     if (!ctx) return
     const data = env.data as Uint8Array
     const offset = z * cols
-    // 2026-06-23 — diagnostic: per-slice non-zero count + total. Lets
-    // us see immediately whether the SPA is receiving the new GA loader
-    // output (slice 0 should be all zeros, total ~2503) vs the cached
-    // pre-fix envelope (which paints the entire bottom band).
-    let nonZeroOnThisSlice = 0
-    for (let i = 0; i < cols; i++) if ((data[offset + i] ?? 0) !== 0) nonZeroOnThisSlice++
-    let totalNonZero = 0
-    for (let i = 0; i < data.length; i++) if (data[i] !== 0) totalNonZero++
-    // eslint-disable-next-line no-console
-    console.debug('[BscanViewer] binary_2d paint:',
-      'shape=', env.shape, 'z=', z, 'cols=', cols,
-      'nonZeroOnThisSlice=', nonZeroOnThisSlice,
-      'totalNonZero=', totalNonZero,
-      'first10=', Array.from(data.slice(offset, offset + 10)),
-    )
     const img = ctx.createImageData(cols, H)
     const bandStart = Math.floor(H * 0.88) // bottom 12%
     const COLOUR = [217, 70, 239] // fuchsia-500
@@ -372,13 +357,6 @@ function paintOverlay(): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, cols, h)
-    // eslint-disable-next-line no-console
-    console.debug('[BscanViewer] surface_y paint:',
-      'shape=', env.shape, 'nSurfaces=', nSurfaces, 'cols=', cols,
-      'z=', z, 'canvas=', canvas.width, 'x', canvas.height,
-      'firstUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + i]),
-      'lastUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + (cols - 5 + i)]),
-    )
     // 2026-06-25 — palette is task-specific. The `layers` task ships
     // an 11-surface IOWA stack; other surface_y tasks (onl, pr) stay
     // on the legacy 4-entry SURFACE_PALETTE which wraps modulo. Per-
@@ -497,8 +475,6 @@ function recomputeOverlayBbox(): void {
         // Our overlay sits as a sibling of containerEl, so its
         // (0,0) is the same as the canvas's (0,0).
         overlayBbox.value = { left, top, width, height }
-        // eslint-disable-next-line no-console
-        console.debug('[BscanViewer] overlay bbox via worldToCanvas:', overlayBbox.value)
         return
       }
     }

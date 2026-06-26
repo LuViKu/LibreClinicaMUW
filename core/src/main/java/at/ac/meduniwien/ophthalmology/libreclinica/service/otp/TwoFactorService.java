@@ -111,9 +111,6 @@ public class TwoFactorService {
 		return APPLICATION.equals(valueOf(TwoFactorType.class, settingValue));
     }
 
-    /**
-     * The negation of {@link #isTwoFactorApplication()}.
-     */
     public boolean isTwoFactorLetter() {
         return !isTwoFactorApplication();
     }
@@ -150,8 +147,6 @@ public class TwoFactorService {
     /**
      * Generates a {@link TowFactorBean} holding specifc 2-FA information needed
      * for client user configuration (secret, QR-code as image url).
-     * 
-     * @throws Exception In cases of errors.
      */
     public TowFactorBean generate() throws Exception {
         DefaultSecretGenerator secretGenerator = new DefaultSecretGenerator(64);
@@ -163,7 +158,6 @@ public class TwoFactorService {
      * of an already existing or given secret.
      * 
      * @param secret The secret to use for QR-code.
-     * @throws Exception In cases of errors.
      */
     public TowFactorBean generate(String secret) throws Exception {
         try {
@@ -184,7 +178,6 @@ public class TwoFactorService {
      * 
      * @param bean Bean with certificate information.
      * @param outStream The target stream.
-     * @throws Exception In cases of errors.
      */
     public void printoutCertificate(CertificateBean bean, OutputStream outStream) throws Exception {
         Paragraph paragraph1 = new Paragraph();
@@ -214,7 +207,9 @@ public class TwoFactorService {
 
         byte[] imageData = generateImageData(bean.getSecret());
 
-        // TODO: Finally close inputstream?
+        // The ByteArrayInputStream wraps an in-memory array and holds no OS
+        // resource, so its close() is a no-op and the stream needs no explicit
+        // closing here.
         ImageElement image = new ImageElement(new ByteArrayInputStream(imageData));
         image.setHeight(100);
         image.setWidth(100);

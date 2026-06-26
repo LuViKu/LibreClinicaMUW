@@ -52,7 +52,6 @@ export async function apiDownload(
   }
 
   if (!response.ok) {
-    // Try to surface a JSON error body when the backend returned one.
     const contentType = response.headers.get('content-type') ?? ''
     let parsed: unknown = null
     try {

@@ -20,7 +20,6 @@ export type StudyArm = 'AI_SHOWN' | 'AI_HIDDEN' | null
 export interface ArmGate {
   /** Raw arm value (null when the subject isn't in either arm). */
   arm: ComputedRef<StudyArm>
-  /** True when the AI panel should be hidden (arm === 'AI_HIDDEN'). */
   hideAi: ComputedRef<boolean>
   /** True when the badge component should render in place of the panel. */
   showBadge: ComputedRef<boolean>

@@ -47,17 +47,13 @@ import type { CrfVersion } from '@/types/crfLibrary'
  * The backend adapter accepts BL via the same code path used by the
  * XLS uploader.
  *
- * <p>App-feedback Wave 1D (2026-06-19) — {@code TRISTATE_REASON} is the
- * MUW-clinical-feedback shorthand for "Ja / Nein / Unbekannt" with a
- * conditional reason textarea that appears only when the operator
- * picks "Nein". It is NOT a new wire-level data type — at persistence
- * time it materialises as TWO {@code item_data} rows: a parent (BL-like
- * select-one with three options) plus a child string item driven by
- * the existing show-when machinery (parent == "Nein"). The CRF builder
- * (Wave 2) explodes the single drop into the pair; this Wave 1D ships
- * only the RENDER side so an authored CRF that already contains the
- * pair can opt the parent into the three-pill widget by setting its
- * authoring dataType to TRISTATE_REASON.
+ * <p>{@code TRISTATE_REASON} — "Ja / Nein / Unbekannt" with a
+ * conditional reason textarea shown only on "Nein". NOT a wire-level
+ * data type: at persistence it materialises as TWO {@code item_data}
+ * rows — a parent (select-one, three options) plus a child string item
+ * driven by show-when (parent == "Nein"). The render side opts the
+ * parent into the three-pill widget via authoring dataType
+ * TRISTATE_REASON.
  */
 export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE' | 'BL' | 'TRISTATE_REASON'
 
@@ -412,14 +408,10 @@ function nextUid(prefix: string): string {
 }
 
 /**
- * 2026-06-21 user-feedback round 6 — convert the wire payload from the
- * fork-from-version endpoint into an {@link AuthoringDraft}. Defensive
- * against any missing/null field so a partially-populated legacy
- * version still produces a usable draft.
- *
- * <p>{@code versionName} is intentionally blanked: the operator types a
- * fresh name for the forked version and the backend's unique-name
- * check would otherwise reject the submit with the prior version's name.
+ * Convert the fork-from-version wire payload into an {@link AuthoringDraft}.
+ * Defensive against missing/null fields. {@code versionName} is blanked
+ * so the operator types a fresh name (the backend's unique-name check
+ * would otherwise reject the prior version's name).
  */
 function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
   const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1))
@@ -569,13 +561,9 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   const isLoadingCatalog = ref(false)
 
   /**
-   * App-feedback Wave 2 (2026-06-19) — canvas selection model.
-   *
-   * <p>The canvas editor highlights a single item at a time; clicking
-   * an item fills the right rail's properties panel. The selection is
-   * keyed on the {@link AuthoringItem.uid} so it survives reorder.
-   * Clearing the selection ({@code null}) makes the properties rail
-   * show its empty state.
+   * Canvas selection — the single highlighted item, keyed on
+   * {@link AuthoringItem.uid} so it survives reorder. {@code null}
+   * clears it (properties rail shows its empty state).
    */
   const selectedItemUid = ref<string | null>(null)
 
@@ -592,22 +580,14 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   }
 
   /**
-   * 2026-06-21 user-feedback round 6 — fork-from-version. The CRF
-   * library's "Neue Version anlegen" flow can pre-seed the canvas with
-   * the contents of a prior version so the operator only has to tweak
-   * what changed instead of re-authoring the entire form.
+   * Fork-from-version — pre-seed the canvas with a prior version's
+   * contents so the operator tweaks only what changed.
    *
-   * <p>The backend's {@code GET /pages/api/v1/crfs/{oid}/versions/{vid}/contents}
+   * <p>{@code GET /pages/api/v1/crfs/{oid}/versions/{vid}/contents}
    * returns the wire-shaped {@code CrfVersionAuthoringRequest}; this
-   * action shape-converts it into an {@link AuthoringDraft} and
-   * replaces {@link draft} verbatim. {@code versionName} is intentionally
-   * blanked so the operator types a fresh name and the unique-name
-   * check doesn't trip on the prior version's name.
-   *
-   * <p>Returns {@code true} on success; on failure the draft stays
-   * untouched and {@link error} is populated so the canvas can surface
-   * a banner. Network + 404 + 401 all surface as a single error
-   * string — the caller will route the operator back to the library.
+   * shape-converts it into an {@link AuthoringDraft} and replaces
+   * {@link draft}. Returns {@code true} on success; on failure the draft
+   * stays untouched and {@link error} is populated for the canvas banner.
    */
   async function loadFromVersion(
     crfOid: string,
@@ -821,7 +801,6 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     items: Array<Omit<AuthoringItem, 'uid'>>
     /** Display title for the section. Defaults to {@code "Ophthalmology examination"}. */
     title?: string
-    /** Section instructions. Defaults to an empty string. */
     instructions?: string
     /**
      * When set, REPLACE the section at this index (keeping the
@@ -890,23 +869,12 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   }
 
   /**
-   * App-feedback Wave 2 (2026-06-19) — apply a canvas preset to a target
-   * section.
-   *
-   * <p>Resolves the {@code presetId} against the lazily-imported registry
-   * ({@link './components/crfAuthoring/presetCatalog'}), invokes the
-   * generator with the supplied translator, and pushes the materialised
-   * items into the section identified by {@code targetSectionUid}. When
-   * the preset declares {@code bilateralSection}, the section's
-   * bilateral flag is set so the canvas renders the OD-left / OS-right
-   * grid layout for the new items.
-   *
-   * <p>Returns the count of items appended, or {@code 0} when the preset
-   * id is unknown or the target section can't be found (defensive).
-   *
-   * <p>The signature accepts the preset registry + translator as
-   * parameters so the store stays decoupled from the i18n + the catalog
-   * import graph (avoids a circular import: store → presetCatalog → store).
+   * Apply a canvas preset's items into the section identified by
+   * {@code targetSectionUid}. When the preset declares
+   * {@code bilateralSection}, the section's bilateral flag is set.
+   * Returns the count of items appended, or {@code 0} when the preset
+   * id is unknown or the target section is missing. Registry + translator
+   * are passed in to avoid a store → presetCatalog → store import cycle.
    */
   function applyPreset(
     presetId: string,
@@ -937,25 +905,17 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   }
 
   /**
-   * 2026-06-21 user-feedback batch — each preset corresponds to a whole
-   * section, not items inside an existing section. The earlier
-   * {@link applyPreset} mixed presets together inside the target
-   * section, which produced a confused bilateral grid when (for example)
-   * an unbilateral IOP and a bilateral BCVA landed in the same section.
-   *
-   * <p>Semantics:
+   * Apply a preset as a whole section (not items mixed into an existing
+   * one — that produced confused bilateral grids).
    *
    * <ul>
-   *   <li>If the target section is empty (no items), transform it in
-   *       place — re-title it, set the bilateral flag from the preset
-   *       catalog, and fill it with the preset's items.</li>
-   *   <li>Otherwise create a NEW section immediately after the target,
-   *       carry the same conventions, and select the parent item so the
-   *       properties rail focuses on the freshly-materialised preset.</li>
+   *   <li>Empty target section → transform it in place (re-title, set
+   *       bilateral flag from the preset, fill with the preset's items).</li>
+   *   <li>Otherwise → insert a NEW section immediately after the target.</li>
    * </ul>
    *
-   * <p>Returns the new section's uid so the caller can drive selection
-   * / animation, or {@code null} when the preset id is unknown.
+   * <p>Returns the new section's uid, or {@code null} when the preset id
+   * is unknown.
    */
   function applyPresetAsSection(
     presetId: string,

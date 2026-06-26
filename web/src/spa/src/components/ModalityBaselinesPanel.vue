@@ -61,8 +61,6 @@ function modalityLabel(row: ModalityBaseline): string {
   return props.i18nLocale === 'en' ? row.labelEn : row.labelDe
 }
 
-// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
-
 function formatValue(snapshot: ModalityBaselineSnapshot, row: ModalityBaseline): string {
   if (snapshot.value === null) return '—'
   if (row.dataType === 'numeric' && row.unit) {

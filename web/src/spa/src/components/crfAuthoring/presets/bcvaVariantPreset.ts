@@ -1,26 +1,8 @@
 /**
- * 2026-06-23 user-feedback round — BCVA variant presets (Pinhole +
- * Low-Luminance).
- *
- * <p>Both clinical BCVA variants share the same item shape as the
- * canonical {@link bcvaPreset} but with a distinct OID prefix so a
- * single visit can carry uncorrected, pinhole, and low-luminance
- * readings side-by-side without name collisions:
- *
- * <ul>
- *   <li><b>PL-BCVA</b> ({@code PL_BCVA_*}) — Pinhole BCVA. The
- *       refraction-at-test fields are dropped (the pinhole removes
- *       most refractive error by design); only the letter score
- *       remains.</li>
- *   <li><b>LL-BCVA</b> ({@code LL_BCVA_*}) — Low-luminance BCVA,
- *       typically measured with a 2.0 ND filter. Captures the letter
- *       score under photopic-to-mesopic adaptation; refraction-at-test
- *       again dropped per the clinical protocol.</li>
- * </ul>
- *
- * <p>Bilateral OD/OS pair emitted in the same order as
- * {@code generateOphthSectionItems} so the bilateral grid pairs by
- * suffix.
+ * BCVA variant presets — Pinhole ({@code PL_BCVA_*}) + Low-Luminance
+ * ({@code LL_BCVA_*}). Same shape as bcvaPreset but distinct OID prefix (so
+ * variants coexist on one visit) and no refraction fields. Bilateral OD/OS,
+ * paired by suffix.
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'

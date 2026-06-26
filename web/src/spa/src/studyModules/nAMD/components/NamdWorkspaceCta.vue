@@ -35,11 +35,8 @@ const canOpen = computed(() => !!studyOid.value)
 
 function open() {
   if (!studyOid.value) return
-  // 2026-06-24 user-feedback round — also thread the subject LABEL
-  // through the route query. Without it the workspace's patient
-  // banner displayed "Patient 106" (the numeric study_subject_id
-  // passed via subjectOid) instead of the site-scoped label
-  // ("EIAMD150"). The composable prefers subjectLabel when set.
+  // Thread the subject label via route query (was showing the internal
+  // numeric id, e.g. "Patient 106"). The composable prefers subjectLabel.
   const query: Record<string, string> = {}
   if (props.subjectOid) query.subjectOid = props.subjectOid
   if (props.subjectLabel) query.subjectLabel = props.subjectLabel

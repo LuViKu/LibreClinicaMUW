@@ -1,26 +1,14 @@
 <script setup lang="ts">
 /**
- * Phase E.6 ophth-bilateral — per-item widget renderer.
+ * Per-item widget renderer. Renders inside a single-column row AND inside a
+ * bilateral 3-column row (each eye's cell hosts an independent widget).
+ * Deliberately dumb: reads modelValue from the caller, emits
+ * {@code update:modelValue} on edit; the parent funnels it into the store.
  *
- * Extracted from {@link CrfEntryView.vue} during the bilateral-layout
- * work so the same widget chain can render inside a single-column row
- * AND inside a bilateral 3-column row (where each eye's cell hosts an
- * independent widget for its own item).
- *
- * The component is deliberately dumb: it reads from a model-value
- * passed by the caller (the store value for the item) and emits
- * {@code update:modelValue} when the operator edits it. The parent —
- * {@code CrfEntryView} — funnels that emit back into
- * {@code store.setValue(item.oid, …)}, keeping the dirty/save loop
- * exactly where it already lives.
- *
- * Boolean ('BL' in the legacy data model, dataType=11) is rendered as
- * a Ja / Nein radio pair. A single checkbox would conflate "Nein"
- * with "unbeantwortet" — the radio pair forces an explicit answer
- * which then drives downstream show-when rules (e.g. the imaging
- * "reason if not done" follow-up that appears only when the parent
- * BL is explicitly "Nein"). Wire contract: `'1'` = Yes, `'0'` = No,
- * empty / null / undefined = unanswered (neither radio selected).
+ * Boolean (legacy 'BL', dataType=11) renders as a Ja/Nein radio pair — a
+ * single checkbox would conflate "Nein" with "unanswered", and the explicit
+ * answer drives downstream show-when rules. Wire contract: `'1'` = Yes,
+ * `'0'` = No, empty/null/undefined = unanswered.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -39,15 +27,10 @@ import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 
 interface Props {
   item: CrfItem
-  /** Current store value for this item. */
   modelValue: unknown
-  /** Inline-validation error message, if any. */
   errorMessage?: string | null
-  /** Read-only sessions disable every control. */
   disabled?: boolean
-  /** File-upload busy flag (shared across the form for now). */
   fileBusy?: boolean
-  /** Per-form file-upload caps mirrored from the entry payload. */
   maxFileBytes?: number
   fileExtensions?: string
   /**
@@ -58,30 +41,18 @@ interface Props {
    */
   suppressLabel?: boolean
   /**
-   * Phase E.6 ophth-bilateral-design (2026-06-11): switch to the
-   * compact 56×42 mini-input chrome used by compound-bilateral
-   * sub-fields (refraction Sph/Cyl/Axis/Vis). Numeric inputs drop
-   * the unit suffix + stepper buttons in compact mode so 4 sub-
-   * inputs fit on one eye-cell line.
+   * Compact 56×42 mini-input chrome for compound-bilateral sub-fields
+   * (refraction Sph/Cyl/Axis/Vis). Numeric inputs drop the unit suffix +
+   * stepper buttons so 4 sub-inputs fit on one eye-cell line.
    */
   compact?: boolean
   /**
-   * Phase E.6 ophth-field-catalog (2026-06-12): when this item is a
-   * conditional-reason input (catalog widget {@code text} +
-   * non-blank {@code conditional_on_code}), the parent's current
-   * value drives the input's three visual states:
-   *
-   *  - parent matches {@code conditional_show_when_value} +
-   *    reason is empty → "Grund erforderlich" coral border + tag
-   *  - parent matches {@code conditional_show_when_value} +
-   *    reason is filled → standard slate border
-   *  - parent doesn't match (or is unanswered) → grayed-out
-   *    disabled input with the "Aktiv, sobald X gewählt ist" hint
-   *
-   * Caller responsibility: CrfEntryView passes the parent item's
-   * value (looked up via the catalog's {@code conditionalOnCode} +
-   * the local OID-substitution helper). Undefined leaves the
-   * widget in the inactive state.
+   * For a conditional-reason input (catalog widget {@code text} + non-blank
+   * {@code conditional_on_code}), the parent's current value drives three
+   * visual states: parent matches show-when + reason empty → coral
+   * "Grund erforderlich"; matches + filled → standard; doesn't match /
+   * unanswered → grayed-out disabled with "Aktiv, sobald X gewählt ist".
+   * Undefined leaves the widget inactive.
    */
   parentValue?: unknown
 }
@@ -148,13 +119,10 @@ const isBooleanYes = computed(() => props.modelValue === '1')
 const isBooleanNo = computed(() => props.modelValue === '0')
 
 /**
- * Phase E.6 ophth-bilateral-design (2026-06-11): tokens for the
- * segmented yes/no rendered on a non-boolean (select-one) item. The
- * v2.0 OPHTH CRF authors {@code SPECTRALIS_DONE} as select-one with
- * options like {@code ja|Ja,nein|Nein}; we read the option codes so
- * the wire value matches whatever the CRF actually persists. Falls
- * back to the canonical boolean tokens {@code '1'} / {@code '0'} when
- * the item carries no options (the heuristic-only path).
+ * Tokens for the segmented yes/no on a non-boolean (select-one) item. Reads
+ * the item's option codes so the wire value matches what the CRF persists
+ * (e.g. {@code ja|Ja,nein|Nein}); falls back to canonical {@code '1'} /
+ * {@code '0'} when no options are present.
  */
 const yesNoYesToken = computed<string>(() => {
   const opts = props.item.options
@@ -176,27 +144,12 @@ const isYesNoNo = computed(() => {
 })
 
 /**
- * Phase E.6 ophth-field-catalog (2026-06-11): derive the ophthalmology
- * specific presentation hint. The catalog is the primary source of
- * truth — when an entry matches the item OID, its {@code widget} +
- * {@code unit} fields drive the rendering. When no entry matches the
- * OID falls back to the legacy heuristic so non-catalogued items
- * (and CRFs from studies that pre-date the catalog) still render
- * cleanly.
- *
- * <p>Heuristic patterns (legacy fallback, matches the catalog seed's
- * 12 entries verbatim):
- *
- * <ul>
- *   <li>{@code *_BCVA_LETTERS}  → number-stepper with "Buchst." unit</li>
- *   <li>{@code *_BCVA_LOGMAR}   → number-stepper with "logMAR" unit</li>
- *   <li>{@code *_BCVA_SNELLEN}  → snellen fraction</li>
- *   <li>{@code *_IOP}           → number-stepper with "mmHg" unit</li>
- *   <li>{@code *_CRT}           → number-stepper with "µm" unit</li>
- *   <li>{@code *_ACD}           → number-stepper with "mm" unit</li>
- *   <li>{@code *_*_DONE}        → segmented Ja/Nein</li>
- *   <li>{@code *_*_DONE_REASON} → grayed conditional text input</li>
- * </ul>
+ * Derive the ophthalmology presentation hint. Catalog-driven: a matching
+ * entry's {@code widget} + {@code unit} drive rendering. Falls back to the
+ * OID-suffix heuristic for non-catalogued items: {@code *_BCVA_LETTERS}
+ * (Buchst.), {@code *_BCVA_LOGMAR}, {@code *_BCVA_SNELLEN}, {@code *_IOP}
+ * (mmHg), {@code *_CRT} (µm), {@code *_ACD} (mm) → number-stepper/snellen;
+ * {@code *_DONE} → segmented Ja/Nein; {@code *_DONE_REASON} → conditional.
  */
 type OphthPresentation = {
   widget:
@@ -206,13 +159,11 @@ type OphthPresentation = {
     | 'segmented-yesno'
     | 'conditional-reason'
     /**
-     * App-feedback Wave 1D (2026-06-19) — tri-state radio chip set
-     * (Ja / Nein / Unbekannt) backing the {@code TRISTATE_REASON}
-     * authoring type. Detected via the OID-suffix heuristic
-     * ({@code *_TRISTATE}) so a non-catalogued spreadsheet-uploaded
-     * CRF can opt in without a catalog row. Wire format on the parent
-     * item: select-one with three options (codes {@code ja} / {@code nein}
-     * / {@code unbekannt} OR canonical {@code 1} / {@code 0} / {@code 2}).
+     * Tri-state radio chip set (Ja/Nein/Unbekannt) backing the
+     * {@code TRISTATE_REASON} authoring type; detected via the
+     * {@code *_TRISTATE} OID suffix. Parent wire shape: select-one with
+     * three options ({@code ja}/{@code nein}/{@code unbekannt} OR canonical
+     * {@code 1}/{@code 0}/{@code 2}).
      */
     | 'tristate-radio'
   unit?: string
@@ -263,11 +214,9 @@ const ophthPresentation = computed<OphthPresentation>(() => {
   if (tail.endsWith('_DONE_REASON')) {
     return { widget: 'conditional-reason' }
   }
-  // App-feedback Wave 1D (2026-06-19) — TRISTATE_REASON parent items
-  // detected via the {@code *_TRISTATE} OID suffix OR by carrying
-  // exactly three options with one matching the "unbekannt" / "unknown"
-  // token. Backed by the same select-one wire shape as segmented-yesno
-  // so legacy XLS uploads stay compatible.
+  // TRISTATE_REASON parent: detected via the *_TRISTATE OID suffix OR by
+  // three options, one matching "unbekannt"/"unknown". Same select-one wire
+  // shape as segmented-yesno (legacy XLS uploads stay compatible).
   if (tail.endsWith('_TRISTATE')) {
     return { widget: 'tristate-radio' }
   }

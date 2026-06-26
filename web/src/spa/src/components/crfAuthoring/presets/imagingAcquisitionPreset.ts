@@ -1,22 +1,8 @@
 /**
- * 2026-06-23 user-feedback round — shared scaffold for device-specific
- * imaging acquisition presets (Spectralis OCT/FAF, Plex ELITE OCT-A,
- * ZEISS Clarus, Topcon Maestro2 OCT).
- *
- * <p>Minimum capture: per the operator's 2026-06-23 follow-up the
- * scaffold is intentionally lean — a single Yes/No/Unknown tristate
- * plus a single conditional reason textarea that surfaces only when
- * the answer is "No". No quality / notes fields are emitted by default;
- * downstream studies that need richer capture can extend the section
- * after dropping the preset.
- *
- * <p>The device-specific wrappers re-use this shape with a per-device
- * OID prefix + label so the catalog surfaces them as distinct presets
- * but the underlying clinical capture stays consistent.
- *
- * <p>Bilateral by default — paired imaging is the norm for clinical
- * studies. Operators flip to unilateral via the section toggle when
- * only one eye is imaged at a given visit.
+ * Shared imaging-acquisition scaffold for device-specific presets. Per eye:
+ * a Yes/No/Unknown tristate (TRISTATE_REASON) + a conditional reason textarea
+ * shown only when "Nein". Device wrappers reuse this shape with a per-device
+ * OID prefix + label key. Bilateral by default.
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'

@@ -148,11 +148,10 @@ export function draftToPreviewSchema(draft: AuthoringDraft): CrfSchema {
 function authoringItemToRuntime(item: AuthoringItem): CrfItem {
   const dataType = authoringDataTypeToRuntime(item.dataType, item.responseType)
   const options = extractOptions(item.responseSet)
-  // 2026-06-21 user-feedback round 3 — carry the authoring show-when rule
-  // through to the preview's runtime schema. The runtime CrfItem.showWhen
-  // is a string (legacy + JSON shapes share that wire field); parseShowWhen
-  // accepts the JSON literal directly, so serialising here is the simplest
-  // path to consistent hide/show behaviour between authoring and preview.
+  // Serialize the authoring show-when rule onto the wire item. The
+  // runtime CrfItem.showWhen is a string; parseShowWhen accepts the
+  // JSON literal directly, keeping authoring and preview hide/show
+  // behaviour consistent.
   const showWhen = serialiseAuthoringShowWhen(item)
   return {
     oid: item.oid?.trim() || item.uid,
@@ -415,10 +414,6 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
     fillSampleData,
   }
 })
-
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
 
 function hasValue(v: unknown): boolean {
   if (v == null) return false

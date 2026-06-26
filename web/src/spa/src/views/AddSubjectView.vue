@@ -265,7 +265,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
         novalidate
         @submit.prevent="submit('matrix')"
       >
-        <!-- Identification section -->
         <section>
           <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
             {{ t('addSubject.section.identification') }}
@@ -309,7 +308,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
 
         <hr class="border-slate-200" />
 
-        <!-- Enrolment section -->
         <section>
           <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
             {{ t('addSubject.section.enrolment') }}
@@ -421,7 +419,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
 
         <hr class="border-slate-200" />
 
-        <!-- Live preview pill -->
         <div class="flex items-center gap-2 text-xs">
           <span class="text-slate-500">{{ t('addSubject.preview') }}</span>
           <StatusPill variant="info">
@@ -429,7 +426,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           </StatusPill>
         </div>
 
-        <!-- Server error region -->
         <div
           v-if="serverError"
           class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800"
@@ -438,7 +434,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           {{ serverError }}
         </div>
 
-        <!-- Save action row -->
         <div class="flex items-center justify-between pt-1">
           <RouterLink to="/subjects" class="text-xs text-slate-500 hover:text-slate-700">
             {{ t('addSubject.cancelLink') }}

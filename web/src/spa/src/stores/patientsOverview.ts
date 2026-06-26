@@ -27,7 +27,6 @@ import type {
  * of the store (cleared on study switch via `reset()`).
  */
 export const usePatientsOverviewStore = defineStore('patientsOverview', () => {
-  // --- list state ---
   const list = ref<PatientListItem[]>([])
   const totalCount = ref(0)
   const page = ref(0)
@@ -36,16 +35,13 @@ export const usePatientsOverviewStore = defineStore('patientsOverview', () => {
   const isLoadingList = ref(false)
   const listError = ref<string | null>(null)
 
-  // --- detail state ---
   const detail = ref<PatientDetail | null>(null)
   const isLoadingDetail = ref(false)
   const detailError = ref<string | null>(null)
 
-  // --- series state (keyed by subjectId|modalityCode|eye) ---
   const seriesByKey = ref<Map<string, MeasurementSeries>>(new Map())
   const isLoadingSeriesByKey = ref<Map<string, boolean>>(new Map())
 
-  // --- modality dictionary (loaded once per store lifetime) ---
   const modalities = ref<Modality[]>([])
   const isLoadingModalities = ref(false)
   const modalitiesError = ref<string | null>(null)
@@ -151,10 +147,7 @@ export const usePatientsOverviewStore = defineStore('patientsOverview', () => {
   }
 
   /**
-   * Load the modality dictionary once. The sibling worktree's
-   * `useModalitiesStore` is the long-term owner; we fall back to a
-   * direct fetch here because cross-worktree imports can't be assumed
-   * to resolve at build time.
+   * Load the modality dictionary once per store lifetime.
    */
   async function loadModalities(): Promise<void> {
     if (modalities.value.length > 0) return
@@ -216,7 +209,6 @@ export const usePatientsOverviewStore = defineStore('patientsOverview', () => {
   }
 
   return {
-    // state
     list,
     totalCount,
     page,
@@ -232,9 +224,7 @@ export const usePatientsOverviewStore = defineStore('patientsOverview', () => {
     modalities,
     isLoadingModalities,
     modalitiesError,
-    // helpers
     seriesKey,
-    // actions
     loadList,
     loadDetail,
     loadSeries,

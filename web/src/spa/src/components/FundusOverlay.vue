@@ -275,10 +275,6 @@ watch(
   },
 )
 
-// 2026-06-22 — onLineEnter / onLineLeave / isHovered removed alongside
-// the per-B-scan stripe layer. Hover-driven highlighting now comes
-// only from the per-B-scan trace chart via the hoveredBscanZ prop.
-
 /**
  * 2026-06-22 — current-B-scan position line tracking the BscanViewer's
  * slider via the {@code hoveredBscanZ} prop.

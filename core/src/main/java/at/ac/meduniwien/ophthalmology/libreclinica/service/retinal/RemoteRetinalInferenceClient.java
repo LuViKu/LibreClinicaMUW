@@ -340,15 +340,6 @@ public class RemoteRetinalInferenceClient {
     }
 
     /**
-     * POST the {@code .e2e} to {@code ${preprocessUrl}/preprocess} and return the
-     * PHI-redacted {@code bscan.dcm} bytes + parsed pixel geometry, or {@code null}
-     * on any failure (so the caller reverts + falls back rather than shipping a
-     * raw E2E to the DICOM-only cluster adapter).
-     *
-     * <p>{@code scanIndex} picks which volume from a multi-acquisition .e2e to
-     * convert; forwarded to /preprocess as a {@code scan_index} form field.
-     */
-    /**
      * 2026-06-19 — disk-side dedup probe. The async commit pipeline
      * has typically already populated
      * {@code bscanStorePath/<e2eUuid>/scan-{N}/bscan.dcm} (+
@@ -402,6 +393,15 @@ public class RemoteRetinalInferenceClient {
         return null;
     }
 
+    /**
+     * POST the {@code .e2e} to {@code ${preprocessUrl}/preprocess} and return the
+     * PHI-redacted {@code bscan.dcm} bytes + parsed pixel geometry, or {@code null}
+     * on any failure (so the caller reverts + falls back rather than shipping a
+     * raw E2E to the DICOM-only cluster adapter).
+     *
+     * <p>{@code scanIndex} picks which volume from a multi-acquisition .e2e to
+     * convert; forwarded to /preprocess as a {@code scan_index} form field.
+     */
     private PreprocessResult preprocessToDicom(RestTemplate rest,
                                                String prepUrl,
                                                long jobId,

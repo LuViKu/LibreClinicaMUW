@@ -133,7 +133,6 @@ onMounted(async () => {
         </dl>
       </section>
 
-      <!-- Repeating groups: one table per group. -->
       <section v-for="group in store.entry.groups" :key="group.oid" class="mb-6 break-inside-avoid">
         <h2 class="text-sm font-semibold border-b border-slate-300 pb-1 mb-2">{{ group.label }}</h2>
         <table v-if="group.rows.length > 0" class="w-full text-[11px] border border-slate-200">

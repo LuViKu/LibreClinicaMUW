@@ -183,6 +183,5 @@ export interface SsoConfig {
   enabled: boolean
   buttonLabel: string
   entryUrl: string | null
-  /** Human-readable provider hint shown under the button. */
   providerHint: string | null
 }

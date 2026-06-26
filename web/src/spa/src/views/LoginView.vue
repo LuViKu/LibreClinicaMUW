@@ -70,7 +70,6 @@ function onSsoBounce() {
 <template>
   <div class="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center px-6 py-10 bg-slate-50">
     <div class="w-full max-w-sm">
-      <!-- Brand lockup -->
       <div class="text-center mb-8">
         <div class="inline-flex items-center gap-2 mb-3">
           <svg class="w-10 h-10 text-muw-blue" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -110,13 +109,11 @@ function onSsoBounce() {
         <strong>{{ t('login.delegatedHint') }}</strong>
       </p>
 
-      <!-- Divider -->
       <div v-if="auth.ssoConfig.enabled" class="relative my-7">
         <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
         <div class="relative flex justify-center"><span class="bg-slate-50 px-3 text-[11px] uppercase tracking-wider text-slate-400">{{ t('login.orLocal') }}</span></div>
       </div>
 
-      <!-- Inline error -->
       <div v-if="auth.error" class="mb-3 rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800 flex items-start gap-2" role="alert">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="mt-0.5 shrink-0" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
@@ -126,7 +123,6 @@ function onSsoBounce() {
         <span>{{ auth.error }}</span>
       </div>
 
-      <!-- Local account form -->
       <details :open="!auth.ssoConfig.enabled" class="text-xs bg-white rounded-md border border-slate-200 px-3 py-3">
         <summary class="cursor-pointer text-slate-700 hover:text-slate-900 font-medium inline-flex items-center gap-1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">

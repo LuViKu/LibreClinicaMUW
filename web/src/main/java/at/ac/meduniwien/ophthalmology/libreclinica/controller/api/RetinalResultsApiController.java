@@ -185,10 +185,6 @@ public class RetinalResultsApiController {
         this(dataSource, siteVisibilityFilter, artifactStore, null, null, null, null);
     }
 
-    /* ====================================================================== */
-    /* DTOs                                                                   */
-    /* ====================================================================== */
-
     public record PrimaryMetric(BigDecimal value, String unit) { }
 
     public record RetinalJobDetailDto(
@@ -240,25 +236,17 @@ public class RetinalResultsApiController {
              */
             String visitDate,
             /**
-             * 2026-06-23 user-feedback round — OCT acquisition date
-             * (ISO yyyy-MM-dd) pulled from the .e2e header by the
-             * retinal-preprocess sidecar. This is the device's
-             * native scan-time stamp; the SPA's nAMD composable
-             * prefers this over visit_date / completed_at so a stack
-             * of historical scans uploaded today plot against the
-             * real acquisition date. Null when the original device
-             * left the field blank or the preprocess sidecar is
-             * older than this header.
+             * acquisition_date = device scan-time, ISO yyyy-MM-dd, from the .e2e header
+             * (via the retinal-preprocess sidecar). SPA prefers it over visit_date /
+             * completed_at so historical scans plot against real acquisition date.
+             * Defensive on legacy queries (null when header/sidecar absent).
              */
             String acquisitionDate,
             /**
-             * 2026-06-24 user-feedback round — the study_event the
-             * job's event_crf is attached to. Surfaces here so the
-             * SPA can look up the BCVA timeline row keyed by event
-             * (per-visit BCVA values write into a sibling event_crf
-             * on the same event). Null when the job is parked
-             * (event_crf_id NULL); the BCVA lookup short-circuits
-             * to "no BCVA known" for those.
+             * study_event_id surfaces so the SPA joins the BCVA timeline by event
+             * (per-visit BCVA writes into a sibling event_crf on the same event);
+             * defensive projection on legacy queries. Null when the job is parked
+             * (event_crf_id NULL).
              */
             Integer studyEventId,
             PrimaryMetric primaryMetric,
@@ -296,10 +284,6 @@ public class RetinalResultsApiController {
             java.math.BigDecimal primaryMetricValue,
             String primaryMetricUnit,
             Map<String, Object> outputPayload) { }
-
-    /* ====================================================================== */
-    /* GET /retinal-jobs/{jobId}                                              */
-    /* ====================================================================== */
 
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}",
                 produces = MediaType.APPLICATION_JSON_VALUE)
@@ -381,10 +365,6 @@ public class RetinalResultsApiController {
                 subjectArm);
         return ResponseEntity.ok(dto);
     }
-
-    /* ====================================================================== */
-    /* GET /subjects/{label}/retinal-jobs/{seq}  (per-subject deep link)       */
-    /* ====================================================================== */
 
     /**
      * 2026-06-26 — resolve a stable per-subject sequence number to a job
@@ -481,10 +461,6 @@ public class RetinalResultsApiController {
         }
     }
 
-    /* ====================================================================== */
-    /* GET /event-crfs/{eventCrfId}/retinal-jobs                              */
-    /* ====================================================================== */
-
     @GetMapping(path = "/event-crfs/{eventCrfId:[0-9]+}/retinal-jobs",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listByEventCrf(@PathVariable("eventCrfId") int eventCrfId,
@@ -538,10 +514,6 @@ public class RetinalResultsApiController {
         return ResponseEntity.ok(out);
     }
 
-    /* ====================================================================== */
-    /* GET /study-subjects/{studySubjectId}/retinal-jobs                      */
-    /* ====================================================================== */
-
     @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/retinal-jobs",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listByStudySubject(@PathVariable("studySubjectId") int studySubjectId,
@@ -583,10 +555,7 @@ public class RetinalResultsApiController {
                 + "       j.completed_at, "
                 + "       date(se.date_start) AS visit_date, "
                 + "       j.acquisition_date, "
-                // 2026-06-24 user-feedback round — surface study_event_id so
-                // the SPA can join into the BCVA timeline by event (the
-                // BCVA values live on a sibling event_crf on the same
-                // event).
+                // study_event_id surfaces so the SPA joins the BCVA timeline by event (see RetinalJobSummaryDto).
                 + "       se.study_event_id, "
                 // 2026-06-26 — stable 1-based per-subject sequence number.
                 // Ordered by enqueued_at then job_id (append-only: a new job
@@ -621,7 +590,7 @@ public class RetinalResultsApiController {
 
     /* ====================================================================== */
     /* GET /study-subjects/{studySubjectId}/bcva-timeline                      */
-    /* 2026-06-24 user-feedback round — BCVA values per visit                 */
+    /* BCVA values per visit                                                   */
     /* ====================================================================== */
 
     /**
@@ -766,7 +735,7 @@ public class RetinalResultsApiController {
 
     /* ====================================================================== */
     /* GET /study-subjects/{studySubjectId}/crt-timeline                       */
-    /* 2026-06-24 user-feedback round — central 1 mm retinal thickness        */
+    /* central 1 mm retinal thickness                                          */
     /* ====================================================================== */
 
     /**
@@ -883,10 +852,6 @@ public class RetinalResultsApiController {
         return out;
     }
 
-    /* ====================================================================== */
-    /* GET /study-subjects/{studySubjectId}/retinal-trends — Wave 2A          */
-    /* ====================================================================== */
-
     /**
      * Permitted values of the {@code task} query parameter on the
      * trends endpoint. Mirrors the Wave 2 task discriminator —
@@ -990,10 +955,6 @@ public class RetinalResultsApiController {
         }
         return ResponseEntity.ok(out);
     }
-
-    /* ====================================================================== */
-    /* GET /retinal-jobs/{jobId}/artifacts/{name}                             */
-    /* ====================================================================== */
 
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/artifacts/{name:.+}")
     public ResponseEntity<?> streamArtifact(@PathVariable("jobId") long jobId,
@@ -1189,10 +1150,6 @@ public class RetinalResultsApiController {
         return sb.toString();
     }
 
-    /* ====================================================================== */
-    /* PATCH /retinal-jobs/{jobId}/bind — Wave 1B park-bind                   */
-    /* ====================================================================== */
-
     /**
      * Request body for {@link #bindParkedJob(long, BindRequest, HttpSession)}.
      */
@@ -1238,7 +1195,6 @@ public class RetinalResultsApiController {
         }
         int eventCrfId = body.eventCrfId();
 
-        // ---- resolve event_crf + visibility once --------------------
         BindContext ctx;
         try {
             ctx = resolveBindContext(eventCrfId, session);
@@ -1255,7 +1211,6 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(403).body(Map.of("message", ctx.errorMessage()));
         }
 
-        // ---- delegate per-job work to the shared helper -------------
         BindOutcome outcome = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                 eventCrfId, ctx.currentUser(), ctx.currentStudy());
         return switch (outcome.status()) {
@@ -1272,10 +1227,6 @@ public class RetinalResultsApiController {
                     ResponseEntity.internalServerError().body(Map.of("message", outcome.message()));
         };
     }
-
-    /* ====================================================================== */
-    /* POST /retinal-jobs/bulk-bind — B2 bulk park-bind                       */
-    /* ====================================================================== */
 
     /**
      * Request body for {@link #bulkBindParkedJobs(BulkBindRequest, HttpSession)}.
@@ -1375,7 +1326,6 @@ public class RetinalResultsApiController {
         }
         int eventCrfId = body.eventCrfId();
 
-        // ---- resolve event_crf + visibility once for the whole batch ----
         BindContext ctx;
         try {
             ctx = resolveBindContext(eventCrfId, session);
@@ -1394,7 +1344,6 @@ public class RetinalResultsApiController {
         // is lenient by design (see endpoint javadoc).
         boolean batchForbidden = ctx.forbidden();
 
-        // ---- loop per job ------------------------------------------
         List<BindOutcome> results = new ArrayList<>();
         int bound = 0, alreadyBound = 0, forbidden = 0, invalidState = 0, notFound = 0, error = 0;
         for (Long jobIdBoxed : body.jobIds()) {
@@ -1418,7 +1367,6 @@ public class RetinalResultsApiController {
             }
         }
 
-        // Marshal — keep response shape stable per the spec.
         List<Map<String, Object>> rows = new ArrayList<>(results.size());
         for (BindOutcome o : results) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -1445,10 +1393,6 @@ public class RetinalResultsApiController {
                 invalidState, notFound, error);
         return ResponseEntity.ok(response);
     }
-
-    /* ====================================================================== */
-    /* shared bind helpers                                                    */
-    /* ====================================================================== */
 
     /**
      * Pre-resolved per-batch context for the bind helpers: the loaded
@@ -1534,7 +1478,6 @@ public class RetinalResultsApiController {
                                     int eventCrfId,
                                     UserAccountBean currentUser,
                                     StudyBean currentStudy) {
-        // ---- load the parked job ------------------------------------
         ParkedJob job;
         try (Connection c = dataSource.getConnection()) {
             job = fetchParkedJob(c, jobId);
@@ -1557,7 +1500,6 @@ public class RetinalResultsApiController {
                     "Job is not parked (status=" + job.status + ")");
         }
 
-        // ---- flip the job ------------------------------------------
         String newStatus = (remoteClient != null && remoteClient.isConfigured())
                 ? "remote_pending"
                 : "queued";
@@ -1582,7 +1524,6 @@ public class RetinalResultsApiController {
                     "Failed to bind retinal job: " + sqlEx.getMessage());
         }
 
-        // ---- emit audit + broadcast --------------------------------
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
         EventCrfsApiController.writeAuditEvent(
                 auditDAO, AuditTypeIds.RETINAL_PARK_BIND,
@@ -1619,10 +1560,6 @@ public class RetinalResultsApiController {
         return new BindOutcome(jobId, BindOutcomeStatus.BOUND, finalStatus, null);
     }
 
-    /* ====================================================================== */
-    /* POST /retinal-jobs/{jobId}/retry — operator re-dispatch of failed job  */
-    /* ====================================================================== */
-
     /**
      * Re-dispatch a {@code failed} retinal_inference_job to the remote GPU
      * sidecar without re-uploading the .e2e. Resets the row to
@@ -1650,7 +1587,6 @@ public class RetinalResultsApiController {
         ResponseEntity<?> guard = guardSession(session);
         if (guard != null) return guard;
 
-        // ---- load the failed job + its run handle in one shot --------
         FailedJob job;
         try (Connection c = dataSource.getConnection()) {
             job = fetchFailedJob(c, jobId);
@@ -1673,7 +1609,6 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
         }
-        // ---- visibility check via the job's binding ---------------
         // 2026-06-23 — accept either binding path. Planned-visit jobs
         // have event_crf_id=null + a valid study_event_id; resolve the
         // owning study_subject via whichever is set.
@@ -1720,7 +1655,6 @@ public class RetinalResultsApiController {
                     "message", "Retry temporarily unavailable"));
         }
 
-        // ---- reset the row + emit audit + broadcast ------------------
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "UPDATE retinal_inference_job "
@@ -1782,10 +1716,6 @@ public class RetinalResultsApiController {
         return ResponseEntity.accepted().body(resp);
     }
 
-    /* ====================================================================== */
-    /* POST /retinal-jobs/{jobId}/rerun-as — re-dispatch as a different task */
-    /* ====================================================================== */
-
     /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
      *  runner profiles + the FUNDUS overlay's recognised task discriminator.
      *  2026-06-25: `layers` added — returns the full IOWA 11-surface stack
@@ -1829,7 +1759,6 @@ public class RetinalResultsApiController {
                     "message", "task must be one of " + ALLOWED_RERUN_TASKS));
         }
 
-        // ---- load the source job's immutable metadata ----------------
         FailedJob source;
         Integer sourceStudyEventId;
         String sourceSha256;
@@ -1970,7 +1899,6 @@ public class RetinalResultsApiController {
                     "existingJobId", existingTwinJobId));
         }
 
-        // ---- insert the new job row ---------------------------------
         // 2026-06-24 — also threads study_event_id so a
         // planned-visit-bound source job (no event_crf yet) produces
         // a child job with the same planned-visit binding. Without
@@ -2147,10 +2075,6 @@ public class RetinalResultsApiController {
         } catch (SQLException ignored) { /* best-effort */ }
         return fallback;
     }
-
-    /* ====================================================================== */
-    /* GET /study-subjects/search — Wave 1B patient search                    */
-    /* ====================================================================== */
 
     /**
      * Wave 1B — staff-portal label prefix search. Backs the Wave 2B
@@ -2493,9 +2417,7 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // visit_date column not in this query — leave null.
         }
-        // 2026-06-23 user-feedback round — acquisition_date is on
-        // every job row but the legacy event-CRF-scoped query may
-        // not project it; same defensive lookup pattern as visit_date.
+        // acquisition_date: defensive lookup (legacy event-CRF-scoped query may not project it).
         String acquisitionDate = null;
         try {
             java.sql.Date ad = rs.getDate("acquisition_date");
@@ -2503,10 +2425,7 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // acquisition_date column not in this query — leave null.
         }
-        // 2026-06-24 user-feedback round — study_event_id surfaces
-        // alongside visit_date so the SPA can key into the BCVA
-        // timeline by event. Defensive: legacy callers may not
-        // project the column.
+        // study_event_id: defensive lookup (legacy callers may not project the column).
         Integer studyEventId = null;
         try {
             int sev = rs.getInt("study_event_id");
@@ -2557,17 +2476,8 @@ public class RetinalResultsApiController {
         if (visibleStudyIds.contains(studyId)) {
             return null;
         }
-        // 2026-06-22 user-feedback round 9 — retinal jobs surface
-        // through deep links from the upload portal / cross-study
-        // search; the job's owning study often differs from the
-        // operator's currently-active session study (e.g. an EIAMD
-        // upload routed into RIS while the user was browsing GA).
-        // Fall back to "does the user have ANY active grant on the
-        // owning study?" so the deep link works without forcing a
-        // study-switch. Sysadmins pass through their explicit
-        // admin grant; the same grant the seed + the
-        // 2026-06-22-seed-ris-amd-admin-grants changeset insert
-        // for the demo studies.
+        // A deep-linked job may belong to a non-active study; allow if the user has
+        // any active grant on the owning study. Sysadmins pass through.
         if (currentUser != null && currentUser.isSysAdmin()) {
             return null;
         }

@@ -12,11 +12,8 @@ import type { SdvRow, SdvRequirement, SdvStatus } from '@/types/sdv'
  * server returns `{ verified, rejected }` and the store optimistically
  * flips the verified rows while reporting any rejections via `error`.
  *
- * Mock removal — per the polished-jumping-swan plan's hard-removal
- * policy: the previous `loadMock()` helper + 10-row `MOCK_ROWS`
- * constant are deleted in this PR. If the backend is unreachable
- * the store sets `error` so the view can render an explicit message
- * rather than silently displaying stale demo data.
+ * If the backend is unreachable the store sets `error` so the view can
+ * render an explicit message rather than silently displaying stale data.
  */
 export const useSdvStore = defineStore('sdv', () => {
   const rows = ref<SdvRow[]>([])

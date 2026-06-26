@@ -39,8 +39,6 @@ const today = computed(() => {
 
 const nSlices = computed(() => props.data.nSlices ?? 49)
 
-/* ── 2026-06-26 user-feedback round — top-2 dynamic B-scans block ── */
-
 /**
  * Pull the per-B-scan fluid trace ({@code per_bscan_mm2}) out of a
  * fluid payload. Returns null when the payload isn't fluid-shaped
@@ -268,18 +266,8 @@ function printReport() {
       <NamdFluidTrendChart :visits="props.data.visits" />
     </section>
 
-    <!-- 2026-06-26 user-feedback round — top-2 dynamic B-scans.
-         Replaces the previous "Baseline vs. aktueller Besuch" block
-         for visits with a prior reference: the two B-scans whose
-         per-slice fluid total (irf+srf+ped) changed the most vs the
-         previous visit's same-index B-scan. Sorted by absolute |Δ|;
-         emitted in superior→inferior slice order so the printed
-         page reads top-to-bottom. The caption surfaces direction +
-         magnitude + slice index. Falls back to the legacy
-         baseline-vs-current block when (a) there's no prior visit
-         or (b) the payloads lack per_bscan_mm2 traces. Page-break-
-         before keeps the two scans + captions together on a second
-         sheet. -->
+    <!-- Top-2 B-scans by fluid Δ (fallback: baseline-vs-current when
+         no prior visit). -->
     <section
       v-if="dynamicBscans && dynamicBscans.length > 0"
       class="mb-6 print:break-before-page"

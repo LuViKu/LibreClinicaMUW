@@ -15,7 +15,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -457,11 +456,5 @@ public class StudyParametersApiController {
             out.add(new ValidationErrorBody.FieldError(
                     field, field + " must be one of " + allowed));
         }
-    }
-
-    /** Reserved for future date-fence checks; currently unused. */
-    @SuppressWarnings("unused")
-    private static Date utcNow() {
-        return new Date();
     }
 }
