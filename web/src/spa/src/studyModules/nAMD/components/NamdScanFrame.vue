@@ -385,15 +385,23 @@ function deltaColor(d: number): string {
 /**
  * Resolve the activity bar's fill colour for index i.
  * Precedence:
- *   1. selected slice → navy (or white in fullscreen for contrast)
+ *   1. selected slice → navy (or sky in fullscreen for contrast)
  *   2. per-slice Δ colormap when {@link prevVisit} supplied + payloads loaded
- *   3. legacy: coral when above the activity threshold, grey otherwise
+ *   3. neutral grey when there's no comparison data
+ *
+ * <p>2026-06-26 user-feedback round — the legacy coral / grey
+ * scheme was misleading without a reference visit: a coral bar
+ * means 'this slice has fluid', which the operator might read as
+ * 'this slice got worse' even though we never compared anything.
+ * Reverting to a single grey tone when no Δ is available makes
+ * the absence of comparison data visually clear.
  */
 function barColor(i: number, a: number): string {
+  void a
   if (i === props.slice) return fillsParent.value ? '#5fb4e5' : '#111d4e'
   const deltas = perSliceDeltaMm2.value
   if (deltas && deltas[i] != null) return deltaColor(deltas[i]!)
-  return a > 0.25 ? 'rgba(217,97,74,0.55)' : '#d7dce6'
+  return '#d7dce6'
 }
 
 /**
@@ -586,8 +594,15 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
         <span>1 mm</span>
       </div>
 
-      <!-- Bottom-right KI-Maske toggle -->
+      <!-- Bottom-right KI-Maske toggle. 2026-06-26 — suppressed
+           in fillContainer mode: the compare-fs stack provides a
+           single masthead KI-Maske button which already drives
+           both panes' mask state via the shared v-model, so two
+           more buttons in the lower-right of each pane are
+           redundant + their state can desync visually when the
+           operator clicks the wrong one. -->
       <button
+        v-if="!fillContainer"
         type="button"
         :data-testid="`namd-scan-mask-toggle-${idBase}`"
         class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
@@ -605,7 +620,17 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
          a wider slider strip and the locator chrome doesn't read
          against black) and re-tints the labels white. -->
     <div :class="['flex items-center gap-3', fillsParent ? 'mt-0 shrink-0' : 'mt-3']">
+      <!-- 2026-06-26 — play/pause hidden in fillContainer mode
+           (compare-fs stack). Each pane has its own local
+           `playing` ref so two play buttons would visually
+           desync the moment one was clicked (the other would
+           keep showing 'play' even though its slice was
+           advancing via the shared v-model). Heatmap clicks +
+           slider drag are sufficient navigation in the stacked
+           view; auto-play can be re-introduced as a single
+           masthead control if operators ask for it. -->
       <button
+        v-if="!fillContainer"
         type="button"
         :data-testid="`namd-scan-play-${idBase}`"
         class="shrink-0 w-9 h-9 rounded-lg bg-muw-blue text-white inline-flex items-center justify-center hover:bg-muw-blue-700 transition"
