@@ -26,8 +26,22 @@ import type { RetinalJobSummary } from '@/api/retinal'
 interface Props {
   /** Numeric study_subject_id — the trends + jobs endpoints take this. */
   subjectId: number
+  /** Study-subject label (e.g. EIAMD150) — builds the per-subject job
+   *  deep link /subjects/{label}/jobs/{n}. */
+  subjectLabel: string
 }
 const props = defineProps<Props>()
+
+/**
+ * 2026-06-26 — link to a job by its stable per-subject number when the
+ * backend supplied one; fall back to the canonical by-id route otherwise
+ * (e.g. older payloads without subjectSeq).
+ */
+function jobLink(row: RetinalJobSummary): string {
+  return row.subjectSeq != null
+    ? `/subjects/${encodeURIComponent(props.subjectLabel)}/jobs/${row.subjectSeq}`
+    : `/retinal-jobs/${row.jobId}`
+}
 
 const { t } = useI18n()
 
@@ -164,7 +178,7 @@ function formatPrimary(job: RetinalJobSummary): string {
           </tr>
         </template>
         <tr v-for="row in jobs" :key="row.jobId" data-testid="subject-retinal-tab-history-row">
-          <td class="px-5 py-2.5 font-mono text-xs">#{{ row.jobId }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs">#{{ row.subjectSeq ?? row.jobId }}</td>
           <td class="px-5 py-2.5 font-mono text-xs text-slate-600">{{ formatAcqDate(row.acquisitionDate) }}</td>
           <td class="px-5 py-2.5 text-xs uppercase">{{ row.task }}</td>
           <td class="px-5 py-2.5 text-xs">{{ row.laterality }}</td>
@@ -174,7 +188,7 @@ function formatPrimary(job: RetinalJobSummary): string {
           <td class="px-5 py-2.5 text-xs tabular-nums font-mono">{{ formatPrimary(row) }}</td>
           <td class="px-5 py-2.5 text-right text-xs">
             <RouterLink
-              :to="`/retinal-jobs/${row.jobId}`"
+              :to="jobLink(row)"
               class="text-muw-blue hover:underline"
             >
               {{ t('retinal.trends.history.viewLink') }}

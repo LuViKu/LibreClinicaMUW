@@ -326,6 +326,21 @@ const router = createRouter({
         role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
+    /* 2026-06-26 — per-subject deep link to a retinal job. Same view as
+       'retinal-job'; RetinalMetricsView resolves (label, seq) → jobId via
+       the /subjects/{label}/retinal-jobs/{seq} backend resolver. The
+       numeric-id route above stays for internal navigations (rerun-as) and
+       old bookmarks; this is the human-friendly address the subject's job
+       list links to + the one that renders breadcrumbs. */
+    {
+      path: '/subjects/:subjectLabel/jobs/:seq(\\d+)',
+      name: 'retinal-job-by-subject',
+      component: () => import('@/views/RetinalMetricsView.vue'),
+      meta: {
+        title: 'Retinal scan metrics',
+        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
     /* 2026-06-19 — Administrator-only cross-study parked-scans admin.
        Parked rows have no study-subject linkage so the per-subject
        ParkedScansList can never surface them; this view is the only

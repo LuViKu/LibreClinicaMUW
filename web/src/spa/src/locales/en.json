@@ -2927,6 +2927,9 @@
   "retinal": {
     "loading": "[NEEDS_REVIEW] Loading retinal scan metrics…",
     "failedToLoad": "[NEEDS_REVIEW] Failed to load retinal job: {error}",
+    "breadcrumb": {
+      "job": "[NEEDS_REVIEW] Job #{seq}"
+    },
     "header": {
       "eventCrfLabel": "[NEEDS_REVIEW] Event-CRF #{id} · Retinal inference job #{jobId}",
       "title": "[NEEDS_REVIEW] Retinal scan metrics",

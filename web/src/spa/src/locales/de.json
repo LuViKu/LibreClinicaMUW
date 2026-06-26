@@ -2929,6 +2929,9 @@
   "retinal": {
     "loading": "Netzhaut-Auswertung wird geladen …",
     "failedToLoad": "Netzhaut-Job konnte nicht geladen werden: {error}",
+    "breadcrumb": {
+      "job": "Job #{seq}"
+    },
     "header": {
       "eventCrfLabel": "Event-CRF #{id} · Inferenz-Job #{jobId}",
       "title": "Netzhaut-Auswertung",

@@ -261,7 +261,16 @@ public class RetinalResultsApiController {
              * to "no BCVA known" for those.
              */
             Integer studyEventId,
-            PrimaryMetric primaryMetric) { }
+            PrimaryMetric primaryMetric,
+            /**
+             * 2026-06-26 — stable per-subject sequence number (1-based,
+             * ordered by enqueued_at then job_id so it is append-only and
+             * never renumbers existing jobs). Lets the SPA show "Job #n"
+             * per subject and deep-link via /subjects/{label}/jobs/{n}.
+             * Only the per-subject list query computes it; null elsewhere
+             * (e.g. the event-CRF-scoped list).
+             */
+            Integer subjectSeq) { }
 
     /**
      * Wave 2A — longitudinal trends row. One point per completed job
@@ -298,7 +307,18 @@ public class RetinalResultsApiController {
                                     HttpSession session) {
         ResponseEntity<?> guard = guardSession(session);
         if (guard != null) return guard;
+        return buildJobDetailResponse(jobId, session);
+    }
 
+    /**
+     * 2026-06-26 — shared job-detail builder. Both {@code GET
+     * /retinal-jobs/{id}} and the subject-scoped {@code GET
+     * /subjects/{label}/retinal-jobs/{seq}} deep-link resolver return the
+     * identical {@link RetinalJobDetailDto}; this holds the fetch +
+     * visibility guard + DTO assembly so the two entry points can't drift.
+     * The caller must have already passed {@link #guardSession}.
+     */
+    private ResponseEntity<?> buildJobDetailResponse(long jobId, HttpSession session) {
         JobRow row;
         try (Connection c = dataSource.getConnection()) {
             row = fetchJobDetail(c, jobId);
@@ -360,6 +380,71 @@ public class RetinalResultsApiController {
                 bscanDcmUrl,
                 subjectArm);
         return ResponseEntity.ok(dto);
+    }
+
+    /* ====================================================================== */
+    /* GET /subjects/{label}/retinal-jobs/{seq}  (per-subject deep link)       */
+    /* ====================================================================== */
+
+    /**
+     * 2026-06-26 — resolve a stable per-subject sequence number to a job
+     * and return its detail, so the SPA can address jobs via the
+     * human-friendly {@code /app/subjects/{label}/jobs/{n}} URL instead of
+     * the opaque global job_id. {@code seq} matches the {@code subjectSeq}
+     * exported by the per-subject list (same ROW_NUMBER ordering:
+     * enqueued_at then job_id, scoped to the subject). 404 when the
+     * (subject, seq) pair resolves to no job; visibility is enforced by the
+     * shared {@link #buildJobDetailResponse} (job → study → session scope).
+     */
+    @GetMapping(path = "/subjects/{subjectLabel}/retinal-jobs/{seq:[0-9]+}",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getJobBySubjectSeq(
+            @PathVariable("subjectLabel") String subjectLabel,
+            @PathVariable("seq") int seq,
+            HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        Long jobId;
+        try (Connection c = dataSource.getConnection()) {
+            jobId = resolveJobIdBySubjectSeq(c, subjectLabel, seq);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to resolve retinal job for subject {} seq {}: {}",
+                    subjectLabel, seq, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve retinal job: " + sqlEx.getMessage()));
+        }
+        if (jobId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal job #" + seq + " for subject " + subjectLabel));
+        }
+        return buildJobDetailResponse(jobId, session);
+    }
+
+    /**
+     * Resolve (subject label, 1-based sequence) → job_id. Mirrors the
+     * per-subject list's ROW_NUMBER ordering + COALESCE binding join so the
+     * seq is identical to the {@code subjectSeq} the list exports.
+     */
+    private Long resolveJobIdBySubjectSeq(Connection c, String subjectLabel, int seq)
+            throws SQLException {
+        String sql = "SELECT t.job_id FROM ("
+                + "  SELECT j.job_id, "
+                + "         ROW_NUMBER() OVER (ORDER BY j.enqueued_at ASC, j.job_id ASC) AS seq "
+                + "    FROM retinal_inference_job j "
+                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                + "   WHERE ss.label = ?) t "
+                + " WHERE t.seq = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, subjectLabel);
+            ps.setInt(2, seq);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getLong("job_id");
+            }
+        }
     }
 
     /**
@@ -503,6 +588,13 @@ public class RetinalResultsApiController {
                 // BCVA values live on a sibling event_crf on the same
                 // event).
                 + "       se.study_event_id, "
+                // 2026-06-26 — stable 1-based per-subject sequence number.
+                // Ordered by enqueued_at then job_id (append-only: a new job
+                // gets the next number, existing numbers never shift), so it
+                // is safe to use in the /subjects/{label}/jobs/{n} deep link.
+                // Independent of the outer ORDER BY (which sorts the displayed
+                // rows by scan date).
+                + "       ROW_NUMBER() OVER (ORDER BY j.enqueued_at ASC, j.job_id ASC) AS subject_seq, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
@@ -2422,9 +2514,19 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // study_event_id column not in this query — leave null.
         }
+        // 2026-06-26 — per-subject sequence number, only present in the
+        // per-subject list query; same defensive lookup as the columns above.
+        Integer subjectSeq = null;
+        try {
+            int seq = rs.getInt("subject_seq");
+            if (!rs.wasNull()) subjectSeq = seq;
+        } catch (SQLException ignoredColumnAbsent) {
+            // subject_seq column not in this query — leave null.
+        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), visitDate, acquisitionDate, studyEventId, primaryMetric(pv, pu));
+                toIso(completedAt), visitDate, acquisitionDate, studyEventId,
+                primaryMetric(pv, pu), subjectSeq);
     }
 
     /** 401 if no authenticated user, 400 if no active study. */

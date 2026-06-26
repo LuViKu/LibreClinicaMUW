@@ -1362,6 +1362,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           v-if="shouldShowRetinalTab && retinalNumericId != null"
           data-testid="subject-retinal-tab-mount"
           :subject-id="retinalNumericId"
+          :subject-label="subject.id"
         >
           <template #parked>
             <ParkedScansList :study-subject-id="retinalNumericId" />

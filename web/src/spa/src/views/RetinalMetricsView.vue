@@ -38,6 +38,7 @@ import { useErrorsStore } from '@/stores/errors'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 /**
  * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
@@ -52,7 +53,27 @@ const router = useRouter()
 const store = useRetinalJobStore()
 const errors = useErrorsStore()
 
-const jobId = computed<number>(() => Number(route.params.jobId))
+// This view serves two routes:
+//   /retinal-jobs/:jobId               — canonical, by global job id
+//   /subjects/:subjectLabel/jobs/:seq  — per-subject deep link (2026-06-26)
+// For the deep link we resolve (label, seq) → jobId once via the backend
+// resolver; everything below keys off the resolved jobId exactly as before.
+const routeJobId = computed<number | null>(() => {
+  const j = route.params.jobId
+  return typeof j === 'string' && j !== '' ? Number(j) : null
+})
+const subjectLabelParam = computed<string | null>(() => {
+  const l = route.params.subjectLabel
+  return typeof l === 'string' && l !== '' ? l : null
+})
+const subjectSeqParam = computed<number | null>(() => {
+  const s = route.params.seq
+  return typeof s === 'string' && s !== '' ? Number(s) : null
+})
+const resolvedJobId = ref<number | null>(null)
+const resolving = ref(false)
+const resolveError = ref<string | null>(null)
+const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
 const geometry = computed(() => {
@@ -62,6 +83,23 @@ const geometry = computed(() => {
 })
 const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
+// Combined empty-state error: by-id load error OR the per-subject deep-link
+// resolution error.
+const displayError = computed<string | null>(() => loadError.value ?? resolveError.value)
+
+// 2026-06-26 — breadcrumb trail on the per-subject deep link
+// (/subjects/{label}/jobs/{n}): "Studienteilnehmer > {label} > Job #{n}".
+// The by-id route carries no label/seq in the URL, so it renders no trail.
+useViewBreadcrumb(computed(() => {
+  const label = subjectLabelParam.value
+  const seq = subjectSeqParam.value
+  if (label == null || seq == null) return null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label, to: `/subjects/${encodeURIComponent(label)}` },
+    { label: t('retinal.breadcrumb.job', { seq }), to: null },
+  ]
+}))
 
 /**
  * 2026-06-22 round 9 follow-up — German status + task labels.
@@ -143,7 +181,27 @@ function onHoverBscan(z: number | null) {
 
 async function load() {
   try {
-    await store.loadJob(jobId.value, true)
+    if (routeJobId.value != null) {
+      // Canonical by-id route.
+      resolvedJobId.value = routeJobId.value
+      await store.loadJob(routeJobId.value, true)
+    } else if (subjectLabelParam.value != null && subjectSeqParam.value != null) {
+      // Per-subject deep link — resolve (label, seq) → jobId first. Keeps a
+      // separate resolving/resolveError state because there's no jobId to key
+      // the store's per-job loading/error maps on until the resolve returns.
+      resolving.value = true
+      resolveError.value = null
+      try {
+        const detail = await store.loadJobBySubjectSeq(
+          subjectLabelParam.value, subjectSeqParam.value)
+        resolvedJobId.value = detail?.jobId ?? null
+        if (detail == null) resolveError.value = 'not found'
+      } catch (e) {
+        resolveError.value = e instanceof Error ? e.message : String(e)
+      } finally {
+        resolving.value = false
+      }
+    }
     if (job.value?.geometryUrl != null) {
       await store.loadGeometry(jobId.value)
     }
@@ -172,9 +230,13 @@ function closeRerunMenuOnEscape(ev: KeyboardEvent): void {
   if (ev.key === 'Escape') rerunMenuOpen.value = false
 }
 
-watch(jobId, () => {
-  void load()
-})
+// Re-load when the addressed job changes by EITHER route shape. We watch the
+// route params (not jobId) because jobId is itself derived from the resolve —
+// watching it would loop on the per-subject path.
+watch(
+  () => [routeJobId.value, subjectLabelParam.value, subjectSeqParam.value],
+  () => { void load() },
+)
 
 /* -------- Derived view-model ---------------------------------------- */
 
@@ -929,16 +991,16 @@ onBeforeUnmount(stopInflightPoll)
 
     <main class="flex-1 min-w-0 px-8 py-7">
       <div class="max-w-[1200px] mx-auto">
-        <p v-if="isLoading && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
+        <p v-if="(isLoading || resolving) && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
           {{ t('retinal.loading') }}
         </p>
 
         <div
-          v-else-if="loadError && !job"
+          v-else-if="displayError && !job"
           class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
           data-testid="retinal-view-error"
         >
-          {{ t('retinal.failedToLoad', { error: loadError }) }}
+          {{ t('retinal.failedToLoad', { error: displayError }) }}
         </div>
 
         <template v-else-if="job">

@@ -136,6 +136,13 @@ export interface RetinalJobSummary {
    * because parked jobs (event_crf_id NULL) have no event binding.
    */
   studyEventId?: number | null
+  /**
+   * 2026-06-26 — stable 1-based per-subject sequence number (ordered by
+   * enqueued_at, append-only). Used to show "Job #n" per subject and to
+   * build the /subjects/{label}/jobs/{n} deep link. Only the per-subject
+   * list endpoint computes it; null on the per-event-crf list.
+   */
+  subjectSeq?: number | null
   primaryMetric: PrimaryMetric | null
 }
 
@@ -291,6 +298,27 @@ const BASE = '/pages/api/v1/retinal-jobs'
  */
 export async function getJob(jobId: number): Promise<RetinalJobDetail> {
   const dto = await apiGet<RetinalJobDetail>(`${BASE}/${jobId}`)
+  return {
+    ...dto,
+    fundusUrl: prefixCtx(dto.fundusUrl),
+    geometryUrl: prefixCtx(dto.geometryUrl),
+    bscanDcmUrl: prefixCtx(dto.bscanDcmUrl),
+  }
+}
+
+/**
+ * 2026-06-26 — resolve a stable per-subject sequence number to the job
+ * detail via {@code GET /subjects/{label}/retinal-jobs/{seq}}, so the SPA
+ * can deep-link the {@code /app/subjects/{label}/jobs/{n}} URL. Returns the
+ * same shape as {@link getJob} (artifact URLs context-prefixed).
+ */
+export async function getJobBySubjectSeq(
+  subjectLabel: string,
+  seq: number,
+): Promise<RetinalJobDetail> {
+  const dto = await apiGet<RetinalJobDetail>(
+    `/pages/api/v1/subjects/${encodeURIComponent(subjectLabel)}/retinal-jobs/${seq}`,
+  )
   return {
     ...dto,
     fundusUrl: prefixCtx(dto.fundusUrl),
