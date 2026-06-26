@@ -55,7 +55,11 @@
         "pause": "[NEEDS_REVIEW] Pause volume scroll",
         "superior": "[NEEDS_REVIEW] superior",
         "inferior": "[NEEDS_REVIEW] inferior",
-        "volumeScroll": "[NEEDS_REVIEW] Volume scroll · {n} B-scans"
+        "volumeScroll": "[NEEDS_REVIEW] Volume scroll · {n} B-scans",
+        "fsMaximize": "[NEEDS_REVIEW] Fullscreen · review B-scans",
+        "fsMinimize": "[NEEDS_REVIEW] Close fullscreen",
+        "fsClose": "[NEEDS_REVIEW] Close (Esc)",
+        "fsEyebrow": "[NEEDS_REVIEW] OCT viewer"
       },
       "compare": {
         "delta": "[NEEDS_REVIEW] Delta between visits",

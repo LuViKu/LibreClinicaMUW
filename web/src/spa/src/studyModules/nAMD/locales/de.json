@@ -55,7 +55,11 @@
         "pause": "Volumen-Scroll pausieren",
         "superior": "superior",
         "inferior": "inferior",
-        "volumeScroll": "Volumen-Scroll · {n} B-Scans"
+        "volumeScroll": "Volumen-Scroll · {n} B-Scans",
+        "fsMaximize": "Vollbild · B-Scans prüfen",
+        "fsMinimize": "Vollbild schließen",
+        "fsClose": "Schließen (Esc)",
+        "fsEyebrow": "OCT-Viewer"
       },
       "compare": {
         "delta": "Delta zwischen Visiten",

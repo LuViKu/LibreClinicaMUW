@@ -27,6 +27,7 @@ import { artifactUrl } from '@/api/retinal'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 import { formatDate } from '@/lib/dateFormat'
 import NamdEnFaceLocator from './NamdEnFaceLocator.vue'
+import { I } from '../icons'
 import type { NamdVisit, Laterality } from '../types'
 
 interface Props {
@@ -46,11 +47,24 @@ interface Props {
   showThumbs?: boolean
   /** Optional id suffix for testids when two frames coexist. */
   idBase?: string
+  /**
+   * 2026-06-26 user-feedback round — opt-in fullscreen toggle.
+   * When true (default), the frame's top-right shows a maximize
+   * button; clicking it switches the wrapper to {@code fixed inset-0}
+   * positioning over a dark backdrop, the BscanViewer fills the
+   * whole viewport, and Esc / the close button restores inline mode.
+   * Cornerstone canvas stays mounted across the transition (we
+   * toggle CSS only, no Teleport) so the WebGL context survives.
+   * Compare-tab side-by-side frames opt out by passing false — that
+   * tab's stacked-fullscreen mode is owned at the tab level.
+   */
+  enableFullscreen?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showThumbs: true,
   idBase: 'frame',
+  enableFullscreen: true,
 })
 
 const emit = defineEmits<{
@@ -199,23 +213,112 @@ onBeforeUnmount(() => {
 })
 
 const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
+
+/**
+ * 2026-06-26 user-feedback round — fullscreen state.
+ *
+ * The wrapper toggles between inline layout and {@code fixed inset-0}
+ * full-viewport mode. While open we Esc-handle + body-scroll-lock.
+ * Auto-play stays running across the transition so a play-pause-fs
+ * session resumes where it left off; ditto the slice / mask state
+ * which lives on the parent via v-model.
+ */
+const fsOpen = ref(false)
+
+function openFullscreen(): void {
+  if (!props.enableFullscreen) return
+  fsOpen.value = true
+}
+
+function closeFullscreen(): void {
+  fsOpen.value = false
+}
+
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && fsOpen.value) {
+    closeFullscreen()
+  }
+}
+
+watch(fsOpen, (open) => {
+  if (typeof document === 'undefined') return
+  if (open) {
+    document.addEventListener('keydown', onKey)
+    // Body scroll-lock — preserve the previous overflow so the
+    // restore on close doesn't stomp a value the page set itself.
+    fsPrevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.removeEventListener('keydown', onKey)
+    document.body.style.overflow = fsPrevOverflow
+    fsPrevOverflow = ''
+  }
+})
+
+let fsPrevOverflow = ''
+
+onBeforeUnmount(() => {
+  // Defensive — if the consumer tears the component down while
+  // we're still fullscreen, make sure we don't leak the scroll-lock
+  // or the keydown listener.
+  if (fsOpen.value && typeof document !== 'undefined') {
+    document.removeEventListener('keydown', onKey)
+    document.body.style.overflow = fsPrevOverflow
+  }
+})
+
+/** Format the visit date + label for the fullscreen header subtitle. */
+const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${formatDate(props.visit.date)}`)
 </script>
 
 <template>
   <div
     :data-testid="`namd-scan-frame-${idBase}`"
-    class="select-none"
+    :class="
+      fsOpen
+        ? 'fixed inset-0 z-50 bg-black/95 backdrop-blur-sm px-5 py-4 flex flex-col gap-3 select-none'
+        : 'select-none'
+    "
   >
+    <!-- Fullscreen header — eyebrow + title + close button. Mirrors
+         the design's FsHeader; only rendered when fsOpen so the
+         inline layout keeps its original height. -->
+    <header
+      v-if="fsOpen"
+      data-testid="namd-scan-fs-header"
+      class="flex items-center justify-between gap-4 shrink-0"
+    >
+      <div class="flex items-center gap-3 text-white min-w-0">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.12em] whitespace-nowrap">
+          {{ t('studyModules.namd.scanFrame.fsEyebrow') }}
+        </span>
+        <span class="text-white/45 text-[12px] truncate">{{ fsTitle }}</span>
+      </div>
+      <button
+        type="button"
+        data-testid="namd-scan-fs-close"
+        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-white/10 text-white hover:bg-white/20 transition"
+        @click="closeFullscreen"
+      >
+        <span class="inline-block w-3.5 h-3.5" v-html="I.close" />
+        {{ t('studyModules.namd.scanFrame.fsClose') }}
+      </button>
+    </header>
+
     <!-- Scan frame: black background, rounded corners, the
-         BscanViewer fills the entire aspect-[16/9] box and the
-         corner overlays sit absolutely on top. Hover + scroll
-         scrubs through the B-scans via the wheel handler. -->
+         BscanViewer fills the entire aspect-[16/9] box (or h-full
+         in fullscreen) and the corner overlays sit absolutely on
+         top. Hover + scroll scrubs through the B-scans via the
+         wheel handler. -->
     <div
-      class="relative rounded-xl overflow-hidden bg-black ring-1 ring-black/40"
+      :class="[
+        'relative rounded-xl overflow-hidden bg-black ring-1 ring-black/40',
+        fsOpen ? 'flex-1 min-h-0' : '',
+      ]"
       style="box-shadow: 0 8px 20px -8px rgba(0,0,0,0.45)"
       @wheel.prevent="onWheel"
     >
-      <div class="aspect-[16/9]">
+      <div :class="fsOpen ? 'w-full h-full' : 'aspect-[16/9]'">
         <div v-if="bscanDcmUrl" class="w-full h-full">
           <!-- 2026-06-24 user-feedback round — `:key` forces a fresh
                BscanViewer mount whenever the bound DICOM URL changes
@@ -260,14 +363,27 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
         </span>
       </div>
 
-      <!-- Top-right slice counter -->
-      <div class="absolute top-3 right-3 flex items-center gap-2 pointer-events-none">
+      <!-- Top-right slice counter + maximize/minimize button. The
+           buttons cluster MUST be pointer-events-auto so the click
+           on the maximize/minimize affordance lands. -->
+      <div class="absolute top-3 right-3 flex items-center gap-2">
         <span
-          class="rounded-md bg-black/55 backdrop-blur-sm text-white/85 text-[11px] px-2 py-1 font-mono tabular-nums"
+          class="rounded-md bg-black/55 backdrop-blur-sm text-white/85 text-[11px] px-2 py-1 font-mono tabular-nums pointer-events-none"
           :data-testid="`namd-scan-counter-${idBase}`"
         >
           {{ t('studyModules.namd.scanFrame.bscanCounter', { z: slice + 1, n: nSlices }) }}<template v-if="atFovea"> · {{ t('studyModules.namd.scanFrame.fovea') }}</template>
         </span>
+        <button
+          v-if="enableFullscreen"
+          type="button"
+          :data-testid="`namd-scan-fs-toggle-${idBase}`"
+          :aria-label="fsOpen ? t('studyModules.namd.scanFrame.fsMinimize') : t('studyModules.namd.scanFrame.fsMaximize')"
+          :title="fsOpen ? t('studyModules.namd.scanFrame.fsMinimize') : t('studyModules.namd.scanFrame.fsMaximize')"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/55 backdrop-blur-sm text-white/85 hover:bg-white hover:text-muw-blue transition"
+          @click="fsOpen ? closeFullscreen() : openFullscreen()"
+        >
+          <span class="inline-block w-3.5 h-3.5" v-html="fsOpen ? I.minimize : I.maximize" />
+        </button>
       </div>
 
       <!-- Bottom-left scale bar — 1 mm of design real estate -->
@@ -289,8 +405,11 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
       </button>
     </div>
 
-    <!-- Controls row: play/pause + activity heatmap + slider + en-face -->
-    <div class="mt-3 flex items-center gap-3">
+    <!-- Controls row: play/pause + activity heatmap + slider + en-face.
+         Fullscreen mode drops the en-face thumb (the dark backdrop
+         leaves room for a wider slider strip and the locator chrome
+         doesn't read against black) and re-tints the labels white. -->
+    <div :class="['flex items-center gap-3', fsOpen ? 'mt-0 shrink-0' : 'mt-3']">
       <button
         type="button"
         :data-testid="`namd-scan-play-${idBase}`"
@@ -336,13 +455,13 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
           min="0"
           :max="Math.max(0, nSlices - 1)"
           :value="slice"
-          class="w-full accent-muw-blue"
+          :class="['w-full', fsOpen ? 'accent-muw-sky' : 'accent-muw-blue']"
           :data-testid="`namd-scan-slider-${idBase}`"
           @input="(e) => setSlice(Number((e.target as HTMLInputElement).value))"
         />
-        <div class="flex justify-between text-[10px] text-slate-400 mt-1 px-0.5">
+        <div :class="['flex justify-between text-[10px] mt-1 px-0.5', fsOpen ? 'text-white/40' : 'text-slate-400']">
           <span>{{ t('studyModules.namd.scanFrame.superior') }}</span>
-          <span class="font-medium text-slate-500">
+          <span :class="['font-medium', fsOpen ? 'text-white/60' : 'text-slate-500']">
             {{ t('studyModules.namd.scanFrame.volumeScroll', { n: nSlices }) }}
           </span>
           <span>{{ t('studyModules.namd.scanFrame.inferior') }}</span>
@@ -350,7 +469,7 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
       </div>
 
       <NamdEnFaceLocator
-        v-if="showThumbs"
+        v-if="showThumbs && !fsOpen"
         :job-id="jobIdRef"
         :slice="slice"
         :n-slices="nSlices"
