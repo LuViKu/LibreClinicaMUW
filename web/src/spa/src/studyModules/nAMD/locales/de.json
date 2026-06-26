@@ -79,7 +79,17 @@
       },
       "trend": {
         "aria": "Verlauf der Flüssigkeitsvolumina IRF, SRF und PED über die letzten Visiten.",
-        "bcvaSuffix": "Buchst."
+        "bcvaSuffix": "Buchst.",
+        "injectionLegend": "Injektion",
+        "region": {
+          "label": "Region",
+          "c1": "Zentral 1 mm",
+          "c3": "Zentral 3 mm",
+          "c6": "Zentral 6 mm"
+        }
+      },
+      "overview2": {
+        "crtDeltaAria": "Veränderung der zentralen Netzhautdicke gegenüber der Vorvisite"
       },
       "report": {
         "letterhead": "nAMD Fluid-Monitoring · Bericht",

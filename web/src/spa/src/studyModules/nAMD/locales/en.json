@@ -79,7 +79,17 @@
       },
       "trend": {
         "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits.",
-        "bcvaSuffix": "[NEEDS_REVIEW] letters"
+        "bcvaSuffix": "[NEEDS_REVIEW] letters",
+        "injectionLegend": "[NEEDS_REVIEW] Injection",
+        "region": {
+          "label": "[NEEDS_REVIEW] Region",
+          "c1": "[NEEDS_REVIEW] Central 1 mm",
+          "c3": "[NEEDS_REVIEW] Central 3 mm",
+          "c6": "[NEEDS_REVIEW] Central 6 mm"
+        }
+      },
+      "overview2": {
+        "crtDeltaAria": "[NEEDS_REVIEW] Change in central retinal thickness vs previous visit"
       },
       "report": {
         "letterhead": "[NEEDS_REVIEW] nAMD Fluid Monitoring · Report",

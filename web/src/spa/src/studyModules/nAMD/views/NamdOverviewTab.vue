@@ -12,12 +12,13 @@
  * waiting for the Compare or Viewer bundles to load. Stays Chart.js-free
  * deliberately (see {@link NamdFluidTrendChart}'s rationale comment).
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Card from '../components/primitives/Card.vue'
+import DeltaChip from '../components/primitives/DeltaChip.vue'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdDecisionPanel from '../components/NamdDecisionPanel.vue'
-import NamdFluidLegend from '../components/NamdFluidLegend.vue'
 import type { NamdWorkspaceData } from '../types'
 
 interface Props {
@@ -25,6 +26,25 @@ interface Props {
 }
 const props = defineProps<Props>()
 const { t } = useI18n()
+
+/**
+ * 2026-06-26 user-feedback round — surface the CRT delta-vs-prev
+ * next to the current value. CRT was the only metric on the Overview
+ * tab that DIDN'T show its delta even though the prior-visit data is
+ * already in props.data.prev. Null + zero are both treated as "no
+ * prior data" so a first-visit case renders the neutral grey chip.
+ *
+ * Direction is {@code badUp} — a rising CRT is clinically bad in the
+ * nAMD context (thickening = re-accumulating fluid). Matches the
+ * fluid-biomarker chips in {@link NamdSegCards}.
+ */
+const crtDelta = computed<number | null>(() => {
+  const cur = props.data.current?.crt
+  const prev = props.data.prev?.crt
+  if (cur == null || prev == null) return null
+  if (cur === 0 || prev === 0) return null
+  return cur - prev
+})
 </script>
 
 <template>
@@ -32,17 +52,32 @@ const { t } = useI18n()
     <div class="col-span-12 lg:col-span-8 space-y-5">
       <Card :title="t('studyModules.namd.overview.current')">
         <NamdSegCards :current="props.data.current" :prev="props.data.prev" />
-        <div class="mt-3 rounded-md bg-slate-50 px-3.5 py-2.5 flex items-center justify-between">
+        <div class="mt-3 rounded-md bg-slate-50 px-3.5 py-2.5 flex items-center justify-between gap-3">
           <span class="text-[12px] text-slate-500">
             {{ t('studyModules.namd.overview.crt') }}
           </span>
-          <span class="text-[15px] font-semibold text-slate-900 tabular-nums">
-            <template v-if="props.data.current">{{ props.data.current.crt }} µm</template>
-            <template v-else>—</template>
+          <span class="flex items-center gap-2">
+            <DeltaChip
+              v-if="crtDelta != null"
+              :value="crtDelta"
+              direction="badUp"
+              :unit="' µm'"
+              data-testid="namd-overview-crt-delta"
+              :aria-label="t('studyModules.namd.overview2.crtDeltaAria')"
+            />
+            <span class="text-[15px] font-semibold text-slate-900 tabular-nums" data-testid="namd-overview-crt-value">
+              <template v-if="props.data.current">{{ props.data.current.crt }} µm</template>
+              <template v-else>—</template>
+            </span>
           </span>
         </div>
       </Card>
 
+      <!-- 2026-06-26 user-feedback round — the chart now owns its
+           inline legend chip strip + the ETDRS-ring region selector
+           (Zentral 1 mm / 3 mm / 6 mm) in its header. The old
+           right-column Legend Card is gone; that real estate is
+           reclaimed by the Decision panel below. -->
       <Card :title="t('studyModules.namd.overview.trend')">
         <NamdFluidTrendChart :visits="props.data.visits" />
       </Card>
@@ -50,9 +85,6 @@ const { t } = useI18n()
 
     <div class="col-span-12 lg:col-span-4 space-y-5">
       <NamdDecisionPanel />
-      <Card :title="t('studyModules.namd.overview.legend')">
-        <NamdFluidLegend />
-      </Card>
     </div>
   </div>
 </template>

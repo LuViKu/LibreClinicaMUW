@@ -64,12 +64,31 @@ export interface NamdVisit {
    * discrepancy.
    */
   dateMismatch: boolean
-  /** Intraretinal fluid volume (nL). */
+  /**
+   * Intraretinal fluid volume (nL). Equals the central-6 mm value
+   * (the widest ETDRS ring); identical to {@link fluidByRegion}.c6.irf
+   * when {@link fluidByRegion} is present. Stays on the visit shape
+   * for backwards-compat with the existing seg-cards / report / SegCards
+   * read sites that don't care about the ring filter.
+   */
   irf: number
-  /** Subretinal fluid volume (nL). */
+  /** Subretinal fluid volume (nL). Mirrors {@link irf}'s c6 semantics. */
   srf: number
-  /** Pigment-epithelial detachment volume (nL). */
+  /** Pigment-epithelial detachment volume (nL). Mirrors {@link irf}'s c6 semantics. */
   ped: number
+  /**
+   * 2026-06-26 user-feedback round — per-ETDRS-ring biomarker
+   * breakdown driving the Flüssigkeitsverlauf chart's region filter
+   * (Zentral 1 mm / 3 mm / 6 mm). Null when the source job's payload
+   * predates the etdrs_mm3 emission, or for the demo dataset which
+   * only carries the flat c6 values. The chart falls through to
+   * {@link irf} / {@link srf} / {@link ped} when this is missing.
+   */
+  fluidByRegion: {
+    c1: { irf: number; srf: number; ped: number }
+    c3: { irf: number; srf: number; ped: number }
+    c6: { irf: number; srf: number; ped: number }
+  } | null
   /** Central retinal thickness (µm). */
   crt: number
   /** Best-corrected visual acuity (ETDRS letters). */
