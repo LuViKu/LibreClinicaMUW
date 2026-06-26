@@ -56,19 +56,45 @@ interface DeltaTile {
   pct: number | null
 }
 
+// 2026-06-26 — the fluid task's output_payload uses `total_mm3` for
+// the sum of all three biomarkers (under the nested `biomarkers` map).
+// The previous key (`total_fluid_volume_mm3`) never matched anything
+// on the backend, so the "Total" tile rendered "—" even on jobs with
+// a real previous-visit comparison. The controller's compareToPrevious
+// flattens the nested `biomarkers` block into the deltas map so the
+// keys here line up 1:1 with the entries on `data.deltas`.
 const METRIC_LABELS: Record<string, string> = {
   irf_mm3: 'IRF',
   srf_mm3: 'SRF',
   ped_mm3: 'PED',
-  total_fluid_volume_mm3: 'Total',
+  total_mm3: 'Total',
+}
+
+/**
+ * Read a numeric metric from a payload that may nest fluid biomarkers
+ * inside a {@code biomarkers} object. The fluid task's payload shape
+ * is {@code { biomarkers: { irf_mm3, srf_mm3, ped_mm3, total_mm3 }, ... }};
+ * older / future tasks may surface metrics at the top level. Look in
+ * {@code biomarkers} first, fall through to the top level. Anything
+ * non-numeric returns null so the tile renders an em-dash.
+ */
+function readMetric(payload: Record<string, unknown> | undefined, key: string): number | null {
+  if (!payload) return null
+  const bio = payload['biomarkers']
+  if (bio != null && typeof bio === 'object') {
+    const v = (bio as Record<string, unknown>)[key]
+    if (typeof v === 'number') return v
+  }
+  const top = payload[key]
+  return typeof top === 'number' ? top : null
 }
 
 const tiles = computed<DeltaTile[]>(() => {
   const d = data.value
   if (!d || d.previousJobId == null) return []
   return Object.entries(METRIC_LABELS).map(([key, label]) => {
-    const cur = typeof d.currentMetrics?.[key] === 'number' ? (d.currentMetrics[key] as number) : null
-    const prev = typeof d.previousMetrics?.[key] === 'number' ? (d.previousMetrics[key] as number) : null
+    const cur = readMetric(d.currentMetrics as Record<string, unknown>, key)
+    const prev = readMetric(d.previousMetrics as Record<string, unknown>, key)
     const delta = key in (d.deltas ?? {}) ? d.deltas[key] : null
     const pct = (prev != null && prev !== 0 && delta != null) ? (delta / prev) * 100 : null
     return { key, label, current: cur, previous: prev, delta, pct }

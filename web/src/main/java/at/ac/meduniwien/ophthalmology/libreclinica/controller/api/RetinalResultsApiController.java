@@ -2746,10 +2746,24 @@ public class RetinalResultsApiController {
         Map<String, Object> previousMetrics = previous == null
                 ? Map.of()
                 : parsePayload(previous.outputPayloadJson);
+        // 2026-06-26 — the fluid task's output_payload nests the four
+        // biomarker totals inside a `biomarkers` object:
+        //   { "biomarkers": { "irf_mm3": …, "srf_mm3": …, "ped_mm3": …,
+        //                     "total_mm3": … }, … }
+        // The previous loop read those keys at the TOP level, so the
+        // deltas map was always empty and the SPA's RetinalVisitComparison
+        // strip rendered "—" everywhere even when a previous job existed.
+        // Plus the fourth key was misnamed (`total_fluid_volume_mm3` vs
+        // the payload's `total_mm3`). Both fixed in one pass: descend
+        // into `biomarkers` (gracefully fall back to top-level for any
+        // future task whose payload doesn't nest) and use the correct
+        // total key.
         if (previous != null) {
-            for (String key : List.of("irf_mm3", "srf_mm3", "ped_mm3", "total_fluid_volume_mm3")) {
-                Double curV = asDouble(currentMetrics.get(key));
-                Double prevV = asDouble(previousMetrics.get(key));
+            Map<String, Object> curBio = nestedMap(currentMetrics, "biomarkers");
+            Map<String, Object> prevBio = nestedMap(previousMetrics, "biomarkers");
+            for (String key : List.of("irf_mm3", "srf_mm3", "ped_mm3", "total_mm3")) {
+                Double curV = asDouble(curBio.getOrDefault(key, currentMetrics.get(key)));
+                Double prevV = asDouble(prevBio.getOrDefault(key, previousMetrics.get(key)));
                 if (curV != null && prevV != null) {
                     deltas.put(key, curV - prevV);
                 }
@@ -2818,6 +2832,20 @@ public class RetinalResultsApiController {
             catch (NumberFormatException ignored) { return null; }
         }
         return null;
+    }
+
+    /**
+     * Read a nested object out of a parsed output_payload map. Returns an
+     * empty map (not null) if the key is absent or holds a non-object
+     * value so callers can call {@code .getOrDefault(...)} on the result
+     * without an NPE check. Used by {@code compareToPrevious} to descend
+     * into the fluid task's {@code "biomarkers"} block.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> nestedMap(Map<String, Object> source, String key) {
+        if (source == null) return Map.of();
+        Object child = source.get(key);
+        return (child instanceof Map<?, ?> m) ? (Map<String, Object>) m : Map.of();
     }
 
     private static final class PreviousJobView {
