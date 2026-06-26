@@ -319,7 +319,7 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
       fsOpen
         ? 'fixed inset-0 z-50 bg-black/95 backdrop-blur-sm px-5 py-4 flex flex-col gap-3 select-none'
         : fillContainer
-          ? 'h-full flex flex-col gap-3 select-none'
+          ? 'h-full flex flex-col gap-2 select-none'
           : 'select-none'
     "
   >
@@ -507,7 +507,15 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
           :data-testid="`namd-scan-slider-${idBase}`"
           @input="(e) => setSlice(Number((e.target as HTMLInputElement).value))"
         />
-        <div :class="['flex justify-between text-[10px] mt-1 px-0.5', fillsParent ? 'text-white/40' : 'text-slate-400']">
+        <!-- 2026-06-26 — superior/inferior + count label hidden in
+             the compare-stacked fillContainer mode to reclaim ~16px
+             of vertical space per pane (two panes → 32px). The
+             single-fullscreen variant keeps the labels since it
+             has the budget. -->
+        <div
+          v-if="!props.fillContainer"
+          :class="['flex justify-between text-[10px] mt-1 px-0.5', fillsParent ? 'text-white/40' : 'text-slate-400']"
+        >
           <span>{{ t('studyModules.namd.scanFrame.superior') }}</span>
           <span :class="['font-medium', fillsParent ? 'text-white/60' : 'text-slate-500']">
             {{ t('studyModules.namd.scanFrame.volumeScroll', { n: nSlices }) }}

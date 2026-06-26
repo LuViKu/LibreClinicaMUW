@@ -207,22 +207,28 @@ function toggleSynced(): void {
       </div>
     </header>
 
-    <!-- ── Fullscreen stacked layout: A on top + B below ── -->
+    <!-- ── Fullscreen stacked layout: A on top + B below.
+         2026-06-26 user-feedback round — maximise B-scan real estate:
+         drop the per-pane card chrome (background/padding/rounded),
+         drop the inter-pane <hr>, and inline the header row directly
+         above the scan box (no gap). The two scans get the full
+         vertical budget minus the masthead + two thin info rows +
+         two compact slider strips. ── -->
     <div
       v-if="fsOpen"
-      class="flex-1 min-h-0 flex flex-col gap-3"
+      class="flex-1 min-h-0 flex flex-col gap-2"
       data-testid="namd-compare-fs-stack"
     >
       <section
-        v-for="(side, i) in [
+        v-for="side in [
           { key: 'A', tag: t('studyModules.namd.compare.tagReference'), visit: aVisit, slice: leftSlice, setSlice: leftSetSlice, idBase: 'cmp-fs-a' },
           { key: 'B', tag: t('studyModules.namd.compare.tagCurrent'),   visit: bVisit, slice: rightSlice, setSlice: rightSetSlice, idBase: 'cmp-fs-b' },
         ]"
         :key="side.key"
         :data-testid="`namd-compare-fs-pane-${side.key}`"
-        class="flex-1 min-h-0 flex flex-col gap-2 rounded-xl bg-black/40 px-2 py-2"
+        class="flex-1 min-h-0 flex flex-col"
       >
-        <div class="flex items-center gap-3 text-white/75 text-[11px] shrink-0">
+        <div class="flex items-center gap-3 text-white/75 text-[11px] shrink-0 pb-1">
           <span class="font-semibold uppercase tracking-[0.1em] text-white/55">{{ side.tag }}</span>
           <span v-if="side.visit" class="font-semibold text-white">{{ side.visit.label }}</span>
           <span v-if="side.visit" class="text-white/50">{{ side.visit.date || '—' }}</span>
@@ -252,7 +258,6 @@ function toggleSynced(): void {
         >
           {{ t('studyModules.namd.viewer.empty') }}
         </div>
-        <hr v-if="i === 0" class="border-white/10 mt-1" />
       </section>
     </div>
 

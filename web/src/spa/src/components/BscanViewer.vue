@@ -804,7 +804,26 @@ onMounted(async () => {
       // container. recomputeOverlayBbox runs after so the seg
       // overlay tracks the new canvas position.
       try {
-        renderingEngineRef.value?.resize?.(true, true)
+        // 2026-06-26 user-feedback round — keepCamera=false so the
+        // image REFITS to the new canvas bounds. With keepCamera=true
+        // the canvas grew on fullscreen open but the camera's zoom
+        // stayed at the smaller-container value, leaving the image
+        // visually shrunk in the centre of the now-much-larger
+        // canvas. A pan/zoom panel isn't surfaced on the nAMD scan
+        // frames so the operator doesn't lose any state they care
+        // about by the refit.
+        renderingEngineRef.value?.resize?.(true, false)
+        // Belt-and-suspenders: explicitly resetCamera on the active
+        // viewport. resize(immediate=true, keepCamera=false) SHOULD
+        // refit; we call resetCamera too because some cornerstone3D
+        // viewport types only honour the engine-level refit on the
+        // next render tick and we want a synchronous refit here.
+        const vp = viewport.value as {
+          resetCamera?: () => void
+          render?: () => void
+        } | null
+        vp?.resetCamera?.()
+        vp?.render?.()
       } catch {
         /* cornerstone may throw if mid-tear-down; non-fatal */
       }
