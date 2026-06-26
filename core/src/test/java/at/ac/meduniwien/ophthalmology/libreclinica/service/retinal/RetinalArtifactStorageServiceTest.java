@@ -117,4 +117,57 @@ public class RetinalArtifactStorageServiceTest {
         assertTrue(jobDir.startsWith(storeRoot));
         assertTrue(Files.isRegularFile(jobDir.resolve("a.csv")));
     }
+
+    /* ── 2026-06-26 — persistCorrection + deleteCorrection ── */
+
+    @Test
+    public void persistCorrection_writesUnderCorrectionsSubdir() throws IOException {
+        RetinalArtifactStorageService svc = new RetinalArtifactStorageService();
+        Path masksDir = tmp.newFolder("masks").toPath();
+
+        String relpath = svc.persistCorrection(
+                masksDir,
+                "001-ILM (ILM).csv",
+                "header\n1.0,2.0\n3.0,4.0\n".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("corrections/001-ILM (ILM).csv", relpath);
+        Path target = masksDir.resolve("corrections").resolve("001-ILM (ILM).csv");
+        assertTrue("correction file landed", Files.isRegularFile(target));
+        // Idempotent re-write — REPLACE_EXISTING means the second call wins.
+        svc.persistCorrection(masksDir, "001-ILM (ILM).csv",
+                "v2\n".getBytes(StandardCharsets.UTF_8));
+        assertArrayEquals("v2\n".getBytes(StandardCharsets.UTF_8),
+                Files.readAllBytes(target));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void persistCorrection_rejectsPathTraversal() throws IOException {
+        RetinalArtifactStorageService svc = new RetinalArtifactStorageService();
+        Path masksDir = tmp.newFolder("masks").toPath();
+        // Basename with a path separator → defensive reject. The
+        // controller never sends one, but defence-in-depth.
+        svc.persistCorrection(masksDir, "../escape.csv",
+                "x\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void deleteCorrection_removesFile() throws IOException {
+        RetinalArtifactStorageService svc = new RetinalArtifactStorageService();
+        Path masksDir = tmp.newFolder("masks").toPath();
+        svc.persistCorrection(masksDir, "001-ILM (ILM).csv",
+                "x\n".getBytes(StandardCharsets.UTF_8));
+        Path target = masksDir.resolve("corrections").resolve("001-ILM (ILM).csv");
+        assertTrue(Files.isRegularFile(target));
+
+        svc.deleteCorrection(masksDir, "001-ILM (ILM).csv");
+        assertTrue("file removed", !Files.exists(target));
+    }
+
+    @Test
+    public void deleteCorrection_noOpWhenFileAbsent() throws IOException {
+        // No file written; delete should not throw.
+        RetinalArtifactStorageService svc = new RetinalArtifactStorageService();
+        Path masksDir = tmp.newFolder("masks").toPath();
+        svc.deleteCorrection(masksDir, "001-ILM (ILM).csv");
+    }
 }

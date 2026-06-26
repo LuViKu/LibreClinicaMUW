@@ -1,0 +1,117 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        OCT layer-segmentation correction (HEYEX-style) — backend table +
+        audit type. Lets investigators + data managers hand-correct the AI's
+        IOWA layer surfaces (ILM / RPE / BM) on a per-(job, layer) basis.
+        Corrections persist as derivative CSVs under bscan_masks_dir/corrections/
+        and never overwrite the original AI output. The SegmentationEnvelopeLoader
+        prefers the corrected CSV when present.
+
+        Table shape — UNIQUE (job_id, layer_index) means re-saving the same
+        layer overwrites; the audit_log_event row carries the revision history.
+        edited_slice_count surfaces "how many B-scans did this revision touch"
+        on the SPA's correction-list view without needing to re-parse the CSV.
+
+        Layer scope — layer_index 0..10 covers the 11 IOWA surfaces (ILM=0,
+        NFL=1, GCL-IPL=2, INL=3, OPL=4, ONL=5, ELM=6, IS/OS=7, OPR=8, RPE=9,
+        BM=10). The dedicated bm task's correction would also use this table
+        with layer_index 0 (its single surface), distinguished by job_id.
+
+        Audit type 123 — next free after 122 (RETINAL_CRT_AUTOPOPULATE). Visible
+        in the operator-facing /api/v1/audit feed so the timeline reads
+        "Layer correction: ILM (data manager, 12 slices touched)".
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-26-retinal-correction-table">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="retinal_inference_correction"/></not>
+        </preConditions>
+        <createTable tableName="retinal_inference_correction">
+            <column autoIncrement="true" name="correction_id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="job_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="layer_index" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="layer_label" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="edited_slice_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="csv_relpath" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="edited_by_user_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="edited_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!--
+            One correction row per (job_id, layer_index). Resaving the same
+            layer replaces the file on disk + the row's metadata via UPSERT;
+            history lives in audit_log_event.
+        -->
+        <addUniqueConstraint tableName="retinal_inference_correction"
+                             columnNames="job_id, layer_index"
+                             constraintName="uq_retinal_correction_job_layer"/>
+
+        <!--
+            On retinal_inference_job delete, drop all corrections — they reference
+            on-disk artifacts owned by the job, which also disappear.
+        -->
+        <addForeignKeyConstraint baseTableName="retinal_inference_correction"
+                                 baseColumnNames="job_id"
+                                 constraintName="fk_retinal_correction_job"
+                                 referencedTableName="retinal_inference_job"
+                                 referencedColumnNames="job_id"
+                                 onDelete="CASCADE"/>
+
+        <!--
+            On user_account delete RESTRICT — the audit trail needs the
+            authoring user_id to resolve to a real account. Mirrors the
+            eye_cohort_transition.actor_user_id pattern (lc-muw-2026-06-07).
+        -->
+        <addForeignKeyConstraint baseTableName="retinal_inference_correction"
+                                 baseColumnNames="edited_by_user_id"
+                                 constraintName="fk_retinal_correction_user"
+                                 referencedTableName="user_account"
+                                 referencedColumnNames="user_id"
+                                 onDelete="RESTRICT"/>
+
+        <createIndex tableName="retinal_inference_correction"
+                     indexName="ix_retinal_correction_job">
+            <column name="job_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2026-06-26-audit-event-type-retinal-segmentation-corrected"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 123;
+            </sqlCheck>
+        </preConditions>
+        <comment>Audit type for RetinalResultsApiController.saveCorrection writes.</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="123"/>
+            <column name="name" value="retinal_segmentation_corrected"/>
+            <column name="display_name" value="Retinal segmentation layer corrected"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

@@ -153,6 +153,71 @@ public class RetinalArtifactStorageService {
         return resolveCompanion(e2eUuid, "geometry.json", scanIndex);
     }
 
+    /**
+     * 2026-06-26 — corrections subdir (one CSV per edited layer).
+     *
+     * <p>{@code bscanMasksDir} is the per-job artifact directory the
+     * {@link #persist} call wrote ({@code <store>/<jobUuid>/}). Corrected
+     * layers land at {@code <bscanMasksDir>/corrections/<csvBaseName>}. The
+     * basename mirrors the original IOWA CSV name (e.g. {@code 001-ILM.csv})
+     * so {@link SegmentationEnvelopeLoader} can substitute file-by-file
+     * without touching the rest of the layers_csv directory.
+     *
+     * <p>Atomic via tempfile + REPLACE_EXISTING move, same as
+     * {@link #persistInto}. Returns the relative path from
+     * {@code bscanMasksDir} ({@code "corrections/001-ILM.csv"}) for storage
+     * in {@code retinal_inference_correction.csv_relpath}.
+     */
+    public String persistCorrection(Path bscanMasksDir, String csvBaseName, byte[] csvBytes)
+            throws IOException {
+        if (bscanMasksDir == null) throw new IllegalArgumentException("bscanMasksDir is required");
+        if (csvBaseName == null || csvBaseName.isBlank()) {
+            throw new IllegalArgumentException("csvBaseName is required");
+        }
+        if (csvBytes == null) throw new IllegalArgumentException("csvBytes is required");
+        // Defence-in-depth: the basename is operator-influenced (via the
+        // layer_label → filename mapping in the controller). Reject any
+        // path component or traversal segment outright — a buggy caller
+        // that tries to write into a parent dir surfaces as a bad-request
+        // instead of silently re-rooting under corrections/. The IOWA
+        // CSV names never contain '/' or '..'; rejecting them is safe.
+        if (csvBaseName.contains("/") || csvBaseName.contains("\\")
+                || csvBaseName.contains("..")) {
+            throw new IllegalArgumentException(
+                    "csvBaseName must be a plain basename: " + csvBaseName);
+        }
+        String safeName = Path.of(csvBaseName).getFileName().toString();
+        if (!safeName.matches("[A-Za-z0-9._()# -]+")) {
+            throw new IllegalArgumentException("csvBaseName has disallowed chars: " + safeName);
+        }
+        Path corrDir = bscanMasksDir.resolve("corrections");
+        Files.createDirectories(corrDir);
+        Path target = corrDir.resolve(safeName);
+        Path tmp = Files.createTempFile(corrDir, safeName + ".", ".part");
+        Files.write(tmp, csvBytes,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE);
+        Files.move(tmp, target,
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE);
+        LOG.info("Persisted retinal correction {} under {}", safeName, corrDir);
+        return "corrections/" + safeName;
+    }
+
+    /**
+     * 2026-06-26 — drop a previously-written correction CSV. No-op when
+     * the file is already gone. Used by the
+     * {@code DELETE /retinal-jobs/{id}/segmentation/corrections/{layerIndex}}
+     * endpoint to restore the original AI output for one layer.
+     */
+    public void deleteCorrection(Path bscanMasksDir, String csvBaseName) throws IOException {
+        if (bscanMasksDir == null || csvBaseName == null || csvBaseName.isBlank()) return;
+        String safeName = Path.of(csvBaseName).getFileName().toString();
+        Path target = bscanMasksDir.resolve("corrections").resolve(safeName);
+        Files.deleteIfExists(target);
+    }
+
     private Path resolveCompanion(String e2eUuid, String name, int scanIndex) throws IOException {
         if (e2eUuid == null || e2eUuid.isBlank()) {
             throw new IllegalArgumentException("e2eUuid required to resolve " + name);

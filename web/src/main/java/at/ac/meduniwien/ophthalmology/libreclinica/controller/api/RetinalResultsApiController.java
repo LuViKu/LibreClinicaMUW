@@ -31,6 +31,7 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -59,9 +60,11 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -1120,6 +1123,17 @@ public class RetinalResultsApiController {
         if (env.labels() != null && !env.labels().isEmpty()) {
             response.setHeader("X-MUW-Seg-Labels", String.join(",", env.labels()));
         }
+        // 2026-06-26 — surface indices the loader served from
+        // corrections/. Empty list = no operator corrections active for
+        // the job; we still emit the header (as an empty value) so the
+        // SPA can distinguish "no header at all" (older backend) from
+        // "header present + empty" (no corrections this job).
+        response.setHeader("X-MUW-Seg-Corrected",
+                env.correctedSurfaceIndices() == null
+                        ? ""
+                        : env.correctedSurfaceIndices().stream()
+                                .map(String::valueOf)
+                                .collect(java.util.stream.Collectors.joining(",")));
         // Expose the X-MUW-Seg-* headers to the SPA fetch — without
         // this CORS hides them client-side (same-origin in dev /
         // single-domain in prod, but the headers also need to be in
@@ -1127,7 +1141,7 @@ public class RetinalResultsApiController {
         // fetch().headers.get(...)).
         response.setHeader("Access-Control-Expose-Headers",
                 "X-MUW-Seg-Kind, X-MUW-Seg-Dtype, X-MUW-Seg-Shape, "
-                        + "X-MUW-Seg-Labels, X-MUW-Seg-Task");
+                        + "X-MUW-Seg-Labels, X-MUW-Seg-Task, X-MUW-Seg-Corrected");
         response.setContentLengthLong(env.data().length);
         response.setHeader(HttpHeaders.CACHE_CONTROL,
                 CacheControl.maxAge(Duration.ofHours(1)).cachePrivate().getHeaderValue());
@@ -2830,4 +2844,501 @@ public class RetinalResultsApiController {
             Map<String, Object> previousMetrics,
             Integer daysBetween,
             Map<String, Double> deltas) {}
+
+    /* ====================================================================== */
+    /* 2026-06-26 — Layer-segmentation correction endpoints                   */
+    /*                                                                        */
+    /* HEYEX-style hand correction of the AI's IOWA layer surfaces            */
+    /* (ILM / RPE / BM / 11 surfaces total). The SPA's fullscreen B-scan      */
+    /* overlay edits a per-(slice, layer) curve and POSTs the diff here; we   */
+    /* read the original CSV from bscan_masks_dir, splice the operator's      */
+    /* per-slice rows over the originals, and write the merged CSV to         */
+    /* <bscan_masks_dir>/corrections/<basename>. The SegmentationEnvelopeLoader*/
+    /* prefers the corrected file on next read. Original AI output is never   */
+    /* overwritten.                                                           */
+    /*                                                                        */
+    /* Role gate — INVESTIGATOR + STUDYDIRECTOR (sysadmin always). DELETE     */
+    /* reverts to the AI output by removing the corrections file + DB row.    */
+    /* ====================================================================== */
+
+    /**
+     * 2026-06-26 — gate for the layer-correction endpoints. INVESTIGATOR
+     * is the clinical lead (signs-off persona); STUDYDIRECTOR is the
+     * data-manager persona shown on the design's oct-inference-job mock.
+     * Sysadmin always allowed. Coordinators / monitors / others rejected.
+     */
+    static boolean canCorrectSegmentation(UserAccountBean user, StudyUserRoleBean currentRole) {
+        if (user != null && user.isSysAdmin()) return true;
+        if (currentRole == null || currentRole.getRole() == null) return false;
+        Role r = currentRole.getRole();
+        return r.equals(Role.STUDYDIRECTOR) || r.equals(Role.INVESTIGATOR);
+    }
+
+    /**
+     * Request shape for the save endpoint. {@code perSliceRows} is keyed
+     * by stringified B-scan index (so JSON-friendly); each value is the
+     * per-A-scan y-pixel value for that slice's layer surface, length
+     * MUST equal the original CSV's {@code cols} count.
+     */
+    public record SaveCorrectionRequest(
+            Integer layerIndex,
+            String layerLabel,
+            Map<String, List<Double>> perSliceRows) {}
+
+    /** Response shape for save + the list endpoint's array members. */
+    public record CorrectionDto(
+            long correctionId,
+            long jobId,
+            int layerIndex,
+            String layerLabel,
+            int editedSliceCount,
+            String csvRelpath,
+            int editedByUserId,
+            String editedByUserName,
+            String editedAt) {}
+
+    @PostMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation/corrections",
+                 consumes = MediaType.APPLICATION_JSON_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> saveCorrection(@PathVariable("jobId") long jobId,
+                                            @RequestBody SaveCorrectionRequest req,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!canCorrectSegmentation(currentUser, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Layer-segmentation corrections require Investigator or Data-Manager role"));
+        }
+        if (req == null || req.layerIndex() == null || req.layerLabel() == null
+                || req.layerLabel().isBlank() || req.perSliceRows() == null
+                || req.perSliceRows().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "layerIndex, layerLabel and a non-empty perSliceRows are required"));
+        }
+
+        JobRow row;
+        try (Connection c = dataSource.getConnection()) {
+            row = fetchJobDetail(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("saveCorrection: fetch job {} failed: {}", jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        if (visGuard != null) return visGuard;
+        if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Job " + jobId + " has no segmentation directory; cannot accept corrections"));
+        }
+
+        Path masksDir = Paths.get(row.bscanMasksDir).toAbsolutePath().normalize();
+
+        // Locate the IOWA / BM CSV that corresponds to layerIndex. The
+        // file naming is "NNN-(long description) (SHORT).csv"; we walk
+        // the dir, parse the NNN prefix, and pick the file whose
+        // (zero-based) position in the sorted list matches layerIndex.
+        Path originalCsv;
+        try {
+            originalCsv = findLayerCsv(masksDir, req.layerIndex());
+        } catch (IOException ioEx) {
+            LOG.error("saveCorrection: enumerate {} failed: {}", masksDir, ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to enumerate segmentation directory: " + ioEx.getMessage()));
+        }
+        if (originalCsv == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No layer CSV found for layerIndex=" + req.layerIndex()
+                            + " under " + masksDir));
+        }
+
+        // Merge the operator's per-slice rows over the original CSV.
+        byte[] mergedBytes;
+        try {
+            mergedBytes = mergeCorrectionCsv(originalCsv, req.perSliceRows());
+        } catch (IllegalArgumentException badShape) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", badShape.getMessage()));
+        } catch (IOException ioEx) {
+            LOG.error("saveCorrection: read {} failed: {}", originalCsv, ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to read original CSV: " + ioEx.getMessage()));
+        }
+
+        String relpath;
+        try {
+            relpath = artifactStore.persistCorrection(masksDir,
+                    originalCsv.getFileName().toString(), mergedBytes);
+        } catch (IOException ioEx) {
+            LOG.error("saveCorrection: persist failed for job {} layer {}: {}",
+                    jobId, req.layerIndex(), ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to persist correction file: " + ioEx.getMessage()));
+        }
+
+        // UPSERT the metadata row.
+        int editedSliceCount = req.perSliceRows().size();
+        long correctionId;
+        String previousRelpath;
+        try (Connection c = dataSource.getConnection()) {
+            previousRelpath = fetchCorrectionRelpath(c, jobId, req.layerIndex());
+            correctionId = upsertCorrection(c, jobId, req.layerIndex(),
+                    req.layerLabel(), editedSliceCount, relpath,
+                    currentUser.getId());
+        } catch (SQLException sqlEx) {
+            LOG.error("saveCorrection: UPSERT failed for job {} layer {}: {}",
+                    jobId, req.layerIndex(), sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to persist correction row: " + sqlEx.getMessage()));
+        }
+
+        // Audit row + STUDY-SUBJECT context for the timeline lookup.
+        StudySubjectBean ss = resolveStudySubjectForJob(row);
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(
+                auditDAO, AuditTypeIds.RETINAL_SEGMENTATION_CORRECTED,
+                currentUser, currentStudy, ss,
+                "Layer correction: " + req.layerLabel() + " (" + editedSliceCount + " slices)",
+                /* auditTable */ "retinal_inference_correction",
+                /* entityId   */ (int) correctionId,
+                /* columnName */ "csv_relpath",
+                /* oldValue   */ previousRelpath == null ? "" : previousRelpath,
+                /* newValue   */ relpath);
+
+        return ResponseEntity.ok(new CorrectionDto(
+                correctionId, jobId, req.layerIndex(), req.layerLabel(),
+                editedSliceCount, relpath, currentUser.getId(),
+                currentUser.getName(), Instant.now().toString()));
+    }
+
+    @DeleteMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation/corrections/{layerIndex:[0-9]+}",
+                   produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deleteCorrection(@PathVariable("jobId") long jobId,
+                                              @PathVariable("layerIndex") int layerIndex,
+                                              HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!canCorrectSegmentation(currentUser, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Layer-segmentation corrections require Investigator or Data-Manager role"));
+        }
+
+        JobRow row;
+        try (Connection c = dataSource.getConnection()) {
+            row = fetchJobDetail(c, jobId);
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        if (visGuard != null) return visGuard;
+        if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Job " + jobId + " has no segmentation directory"));
+        }
+
+        String previousRelpath;
+        int affected;
+        try (Connection c = dataSource.getConnection()) {
+            previousRelpath = fetchCorrectionRelpath(c, jobId, layerIndex);
+            if (previousRelpath == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No correction found for job " + jobId + " layer " + layerIndex));
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM retinal_inference_correction "
+                            + " WHERE job_id = ? AND layer_index = ?")) {
+                ps.setLong(1, jobId);
+                ps.setInt(2, layerIndex);
+                affected = ps.executeUpdate();
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("deleteCorrection: DELETE failed for job {} layer {}: {}",
+                    jobId, layerIndex, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to delete correction row: " + sqlEx.getMessage()));
+        }
+        if (affected == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No correction found for job " + jobId + " layer " + layerIndex));
+        }
+
+        Path masksDir = Paths.get(row.bscanMasksDir).toAbsolutePath().normalize();
+        try {
+            artifactStore.deleteCorrection(masksDir,
+                    Path.of(previousRelpath).getFileName().toString());
+        } catch (IOException ioEx) {
+            // The DB row is gone; the file delete is best-effort. Log
+            // so an operator can sweep dangling files manually.
+            LOG.warn("deleteCorrection: file delete failed for {}: {}",
+                    previousRelpath, ioEx.getMessage());
+        }
+
+        StudySubjectBean ss = resolveStudySubjectForJob(row);
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(
+                auditDAO, AuditTypeIds.RETINAL_SEGMENTATION_CORRECTED,
+                currentUser, currentStudy, ss,
+                "Layer correction reverted (layerIndex=" + layerIndex + ")",
+                "retinal_inference_correction", 0,
+                "csv_relpath", previousRelpath, "");
+        return ResponseEntity.ok(Map.of(
+                "jobId", jobId,
+                "layerIndex", layerIndex,
+                "reverted", true));
+    }
+
+    @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation/corrections",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listCorrections(@PathVariable("jobId") long jobId,
+                                             HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        JobRow row;
+        try (Connection c = dataSource.getConnection()) {
+            row = fetchJobDetail(c, jobId);
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        if (visGuard != null) return visGuard;
+
+        List<CorrectionDto> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT c.correction_id, c.layer_index, c.layer_label, "
+                             + "       c.edited_slice_count, c.csv_relpath, "
+                             + "       c.edited_by_user_id, u.user_name, c.edited_at "
+                             + "  FROM retinal_inference_correction c "
+                             + "  LEFT JOIN user_account u ON u.user_id = c.edited_by_user_id "
+                             + " WHERE c.job_id = ? "
+                             + " ORDER BY c.layer_index ASC")) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new CorrectionDto(
+                            rs.getLong("correction_id"), jobId,
+                            rs.getInt("layer_index"), rs.getString("layer_label"),
+                            rs.getInt("edited_slice_count"), rs.getString("csv_relpath"),
+                            rs.getInt("edited_by_user_id"), rs.getString("user_name"),
+                            toIso(rs.getTimestamp("edited_at"))));
+                }
+            }
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list corrections: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /* ── correction helpers ── */
+
+    /**
+     * Walk {@code masksDir} for {@code NNN-...(LABEL).csv}, sort by IOWA
+     * prefix (BM appended), and return the file at zero-based
+     * {@code layerIndex}. Mirrors {@link SegmentationEnvelopeLoader}'s
+     * ordering so the SPA's layer-index slot maps to the same CSV.
+     */
+    private static Path findLayerCsv(Path masksDir, int layerIndex) throws IOException {
+        java.util.regex.Pattern pat = java.util.regex.Pattern.compile(
+                "^(\\d{3})-.+\\(([^)]+)\\)\\.csv$");
+        record Entry(int order, boolean iowa, String label, Path path) {}
+        List<Entry> entries = new ArrayList<>();
+        try (java.nio.file.DirectoryStream<Path> ds =
+                     Files.newDirectoryStream(masksDir, "*.csv")) {
+            for (Path p : ds) {
+                java.util.regex.Matcher m = pat.matcher(p.getFileName().toString());
+                if (!m.matches()) continue;
+                int prefix = Integer.parseInt(m.group(1));
+                String label = m.group(2).trim();
+                boolean iowa = prefix >= 1 && prefix <= 11 && !"BM".equalsIgnoreCase(label);
+                entries.add(new Entry(prefix, iowa, label, p));
+            }
+        }
+        entries.sort((a, b) -> {
+            if (a.iowa() != b.iowa()) return a.iowa() ? -1 : 1;
+            if (a.iowa()) return Integer.compare(a.order(), b.order());
+            return a.label().compareTo(b.label());
+        });
+        if (layerIndex < 0 || layerIndex >= entries.size()) return null;
+        return entries.get(layerIndex).path();
+    }
+
+    /**
+     * Read the original IOWA CSV, splice the operator-edited slice
+     * rows over the originals, and return the merged bytes. Preserves
+     * the original header row and the padding sentinel (100) layout
+     * so {@link SegmentationEnvelopeLoader} parses the merged CSV the
+     * same way it parses the original.
+     */
+    private static byte[] mergeCorrectionCsv(Path originalCsv,
+                                             Map<String, List<Double>> perSliceRows)
+            throws IOException {
+        List<String> lines = Files.readAllLines(originalCsv, java.nio.charset.StandardCharsets.UTF_8);
+        if (lines.isEmpty()) {
+            throw new IOException("Original CSV is empty: " + originalCsv);
+        }
+        // Parse the 3-element dimensions header (cols, n_bscans, n_rows)
+        // when present; otherwise treat every line as a data row.
+        String header = lines.get(0);
+        String[] headerTokens = header.split(",");
+        int dataStartIdx = 0;
+        int cols = -1;
+        if (headerTokens.length == 3 && lines.size() > 1) {
+            try {
+                cols = (int) Double.parseDouble(headerTokens[0].trim());
+                dataStartIdx = 1;
+            } catch (NumberFormatException ignored) {
+                // First row isn't a 3-element numeric header — fall through.
+            }
+        }
+        if (cols < 0) {
+            // Derive cols from the first data row's width.
+            String[] tokens = lines.get(dataStartIdx).split(",");
+            cols = tokens.length;
+        }
+        // Derive the padded width from the FIRST data row so the
+        // sentinel layout is preserved exactly.
+        int paddedWidth = lines.get(dataStartIdx).split(",").length;
+        if (paddedWidth < cols) paddedWidth = cols;
+
+        int nSlices = lines.size() - dataStartIdx;
+        // Splice each edited slice.
+        for (Map.Entry<String, List<Double>> e : perSliceRows.entrySet()) {
+            int z;
+            try {
+                z = Integer.parseInt(e.getKey().trim());
+            } catch (NumberFormatException badZ) {
+                throw new IllegalArgumentException("perSliceRows key not an integer: " + e.getKey());
+            }
+            if (z < 0 || z >= nSlices) {
+                throw new IllegalArgumentException(
+                        "Slice index " + z + " out of range [0, " + (nSlices - 1) + "]");
+            }
+            List<Double> values = e.getValue();
+            if (values == null || values.size() != cols) {
+                throw new IllegalArgumentException(
+                        "Slice " + z + ": expected " + cols + " values, got "
+                                + (values == null ? "null" : values.size()));
+            }
+            StringBuilder sb = new StringBuilder(paddedWidth * 8);
+            for (int i = 0; i < paddedWidth; i++) {
+                if (i > 0) sb.append(',');
+                if (i < cols) {
+                    sb.append(formatCsvDouble(values.get(i)));
+                } else {
+                    sb.append("100");
+                }
+            }
+            lines.set(dataStartIdx + z, sb.toString());
+        }
+        StringBuilder out = new StringBuilder(lines.size() * 256);
+        for (String line : lines) {
+            out.append(line).append('\n');
+        }
+        return out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Format a y-pixel value with a sensible precision: integer if the
+     * fractional part is < 1e-6, else 4-decimal float. Mirrors what the
+     * IOWA converter produces.
+     */
+    private static String formatCsvDouble(double v) {
+        if (Math.abs(v - Math.rint(v)) < 1e-6) return Long.toString((long) Math.rint(v));
+        return String.format(java.util.Locale.ROOT, "%.4f", v);
+    }
+
+    /** DB UPSERT — returns the correction_id (existing or new). */
+    private static long upsertCorrection(Connection c, long jobId, int layerIndex,
+                                         String layerLabel, int editedSliceCount,
+                                         String csvRelpath, int userId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO retinal_inference_correction ("
+                        + "job_id, layer_index, layer_label, edited_slice_count, "
+                        + "csv_relpath, edited_by_user_id"
+                        + ") VALUES (?, ?, ?, ?, ?, ?) "
+                        + "ON CONFLICT (job_id, layer_index) DO UPDATE "
+                        + "SET layer_label = EXCLUDED.layer_label, "
+                        + "    edited_slice_count = EXCLUDED.edited_slice_count, "
+                        + "    csv_relpath = EXCLUDED.csv_relpath, "
+                        + "    edited_by_user_id = EXCLUDED.edited_by_user_id, "
+                        + "    edited_at = CURRENT_TIMESTAMP "
+                        + "RETURNING correction_id")) {
+            ps.setLong(1, jobId);
+            ps.setInt(2, layerIndex);
+            ps.setString(3, layerLabel);
+            ps.setInt(4, editedSliceCount);
+            ps.setString(5, csvRelpath);
+            ps.setInt(6, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new SQLException("UPSERT returned no row");
+                }
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    private static String fetchCorrectionRelpath(Connection c, long jobId, int layerIndex)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT csv_relpath FROM retinal_inference_correction "
+                        + " WHERE job_id = ? AND layer_index = ?")) {
+            ps.setLong(1, jobId);
+            ps.setInt(2, layerIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
+
+    /**
+     * Resolve the {@link StudySubjectBean} for an audit row from the
+     * job's binding (event_crf preferred; falls back to study_event for
+     * planned-visit-bound jobs). Returns null when neither path
+     * resolves — the audit row's entity_id still points at the
+     * correction_id, so the timeline lookup degrades gracefully.
+     */
+    private StudySubjectBean resolveStudySubjectForJob(JobRow row) {
+        try {
+            StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+            if (row.eventCrfId > 0) {
+                EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+                EventCRFBean ecb = eventCrfDAO.findByPK(row.eventCrfId);
+                if (ecb != null && ecb.getId() > 0 && ecb.getStudySubjectId() > 0) {
+                    return (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+                }
+            }
+            // Planned-visit-bound jobs carry no event_crf — fall back via
+            // the existing helper that walks study_event_id → subject.
+            Integer ssId = fetchStudySubjectIdForStudyEvent(0);
+            if (ssId != null) {
+                return (StudySubjectBean) ssDAO.findByPK(ssId);
+            }
+        } catch (Exception ignored) {
+            // Best-effort — audit row still lands without ss context.
+        }
+        return null;
+    }
 }
