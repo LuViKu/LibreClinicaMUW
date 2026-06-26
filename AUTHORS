@@ -1,0 +1,32 @@
+LibreClinica MUW Ophthalmology — Authors
+========================================
+
+Maintainer / lead developer (institutional fork)
+-------------------------------------------------
+Lukas Kuchernig — Department of Ophthalmology and Optometry,
+                  Medical University of Vienna (MUW)
+
+Copyright & license
+-------------------
+Institutional contributions to this fork are
+  copyright (C) 2026 Department of Ophthalmology and Optometry,
+                     Medical University of Vienna
+and distributed under the GNU Lesser General Public License, version 3
+(LGPL v3) — see LICENSE and COPYING.LESSER.
+
+This is an independent (released) fork: as of June 2026 it no longer
+tracks, merges, or cherry-picks changes from upstream LibreClinica.
+
+Upstream heritage
+-----------------
+Built on LibreClinica, the community-driven successor of OpenClinica.
+
+LibreClinica is primarily maintained by ReliaTec GmbH
+  (Ralph Heerlein, Christian Hänsel, Otmar Bayer), with contributions from:
+  - Julia Bley, University Hospital RWTH Aachen
+  - Thomas Hillger, University Hospital RWTH Aachen
+  - Gerben Rienk Visser, Trial Data Solutions
+  - Tomas Skripcak, DKFZ Partner Site Dresden (DKTK)
+
+LibreClinica was forked in 2019 from OpenClinica 3.14.
+All upstream copyright notices are retained.

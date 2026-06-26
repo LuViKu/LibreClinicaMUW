@@ -5,17 +5,20 @@ _Institutional eCRF / EDC platform for the Department of Ophthalmology and Optom
 
 This repository is an institutional fork of [LibreClinica](https://libreclinica.org) — the community-driven open-source successor of OpenClinica — adapted for use by the **Department of Ophthalmology and Optometry, Medical University of Vienna (MUW)** as the department's eCRF (electronic Case Report Form) and Clinical Data Management platform.
 
+It is authored and maintained by **Lukas Kuchernig** (MUW Ophthalmology). As of June 2026 it is an **independent (released) fork** — it no longer tracks, merges, or cherry-picks changes from upstream LibreClinica.
+
 This fork is undergoing a planned multi-phase backend modernization. See [MIGRATION.md](MIGRATION.md) for the technical plan, target stack, and phase status, and [docs/development/modernization/decision-record.md](docs/development/modernization/decision-record.md) for the strategic decisions behind it.
 
 ### Status
 
 | | |
 |---|---|
-| Modernization phase | **Phase 0 — Safety net** *(in progress)* |
-| Current stack | Spring 5.1.4 · Hibernate 5.4.2 · Java 11 · Tomcat 9 · PostgreSQL 13/14 · `javax.*` |
-| Target stack | Spring Boot 3 · Hibernate 6 · Java 21 · embedded Tomcat · PostgreSQL 14+ · `jakarta.*` |
-| Posture | Hard fork from `reliatec-gmbh/LibreClinica:lc-develop` (manual cherry-picks) |
-| License | LGPL (see [COPYING.LESSER](COPYING.LESSER) and [LICENSE](LICENSE)) |
+| Maintainer | **Lukas Kuchernig** — lead developer, MUW Ophthalmology backend modernization |
+| Modernization | Phases B–D complete (Java 21 · Spring 6 · Jakarta · Shibboleth SSO); Phase E (Vue SPA) in progress |
+| Current stack | Java 21 · Spring 6.1.18 · Spring Security 6.3.6 · Hibernate 5.6.15 · Tomcat 10 (WAR, Jakarta Servlet 6) · PostgreSQL 13/14 · `jakarta.*` |
+| Target stack | Spring Boot 3 · Hibernate 6 · embedded Tomcat (executable JAR) · PostgreSQL 14+ |
+| Posture | **Independent (released) fork** — no longer tracks upstream LibreClinica; no cherry-picks planned |
+| License | LGPL v3 (see [COPYING.LESSER](COPYING.LESSER) and [LICENSE](LICENSE)) |
 | Build version | `1.5.0-beta.4-muw` |
 
 ### Quick start (local development)
@@ -26,15 +29,15 @@ docker compose up --build
 
 Then open http://127.0.0.1:8080/ — Tomcat will redirect to the application at `/LibreClinica/`. The bundled `marlonb/mailcrab` SMTP service exposes its inbox UI at http://127.0.0.1:1080.
 
-For full installation guidance (Tomcat configuration, Postgres setup, LDAP integration, reverse-proxy TLS) see [LibreClinica's upstream documentation](https://libreclinica.org/documentation/install.html) — the deployment model is unchanged in this fork during Phase 0/A.
+For the heritage installation model (Tomcat configuration, Postgres setup, LDAP integration, reverse-proxy TLS) see [LibreClinica's original documentation](https://libreclinica.org/documentation/install.html); MUW-specific deployment notes live under [`docs/`](docs/). Shibboleth SSO is the supported authentication path for this fork (see the modernization decision records).
 
-### System requirements (current, pre-modernization)
+### System requirements
 
-| LibreClinica | Application Server | Java       | Database                     | Schema Changeset |
-|--------------|--------------------|------------|------------------------------|------------------|
-| v1.4.0       | Tomcat 9           | OpenJDK 11 | PostgreSQL 13, PostgreSQL 14 | lc-1.4.0         |
+| Version          | Application Server | Java       | Database                     |
+|------------------|--------------------|------------|------------------------------|
+| 1.5.0-beta.4-muw | Tomcat 10          | OpenJDK 21 | PostgreSQL 13, PostgreSQL 14 |
 
-After Phase C the deployment model changes to executable JAR + embedded Tomcat + Java 21.
+The post-modernization target deployment is an executable JAR with embedded Tomcat.
 
 > **Note:** the LibreClinica SOAP web API (`ws/` module) was removed in Phase B.4 (PR #31, 2026-05-29) — upstream had it marked "legacy, not tested, not actively developed", and there is no active SOAP consumer at MUW Ophthalmology. See [MIGRATION.md § Phase B](MIGRATION.md#phase-b--java-21--spring-6--jakarta-cliff).
 
@@ -61,7 +64,11 @@ This software is built on the work of:
   - Tomas Skripcak, DKFZ Partner Site Dresden — member of the German Cancer Consortium (DKTK)
 - **OpenClinica** — LibreClinica was forked in 2019 from [OpenClinica 3.14](https://github.com/OpenClinica/OpenClinica/commit/425de43caf8e7afcbf66713ad2fb6b83062d66ef)
 
-The institutional MUW fork retains the LGPL license and all upstream copyright notices.
+### Authorship & licensing
+
+The MUW institutional fork is authored and maintained by **Lukas Kuchernig** (Department of Ophthalmology and Optometry, Medical University of Vienna). Institutional contributions are copyright © 2026 Medical University of Vienna; see [AUTHORS](AUTHORS).
+
+This fork **retains the GNU Lesser General Public License (v3)** and all upstream copyright notices. As a derivative work of LibreClinica / OpenClinica it remains LGPL-licensed. As of June 2026 it is an **independent (released) fork**: it no longer tracks, merges, or cherry-picks changes from upstream LibreClinica.
 
 ### Security
 
