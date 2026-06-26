@@ -46,6 +46,15 @@
         "segCardsHeader": "[NEEDS_REVIEW] Segmentation · this scan",
         "empty": "[NEEDS_REVIEW] No OCT acquisition is linked to this visit."
       },
+      "viewer2": {
+        "fundusHeader": "[NEEDS_REVIEW] Fundus · ETDRS selection",
+        "fundusSub": "[NEEDS_REVIEW] B-scan position · click a region to quantify",
+        "fundusEmpty": "[NEEDS_REVIEW] Fundus image not available for this visit.",
+        "selectionHeader": "[NEEDS_REVIEW] Selected regions",
+        "selectionClear": "[NEEDS_REVIEW] Clear selection",
+        "selectionHint": "[NEEDS_REVIEW] Click an ETDRS region (center / ring 1–3 mm / ring 3–6 mm / corners) to select it; multi-select sums the volumes without double-counting.",
+        "deltaHeader": "[NEEDS_REVIEW] Comparison to previous visit"
+      },
       "scanFrame": {
         "bscanCounter": "[NEEDS_REVIEW] B-scan {z}/{n}",
         "fovea": "[NEEDS_REVIEW] Fovea",
@@ -112,6 +121,12 @@
         "dateMismatchTitle": "[NEEDS_REVIEW] Planned visit date ({visit}) does not match OCT acquisition date ({acquired}).",
         "signaturePhysician": "[NEEDS_REVIEW] Physician signature",
         "signatureDate": "[NEEDS_REVIEW] Date"
+      },
+      "report2": {
+        "dynamicHeader": "[NEEDS_REVIEW] Dynamic B-scans · largest change vs previous visit",
+        "dynamicCaption": "[NEEDS_REVIEW] {dir} {sign}{value} nL · B-scan {z}/{n}",
+        "dynamicRise": "[NEEDS_REVIEW] Rise",
+        "dynamicFall": "[NEEDS_REVIEW] Drop"
       }
     }
   }

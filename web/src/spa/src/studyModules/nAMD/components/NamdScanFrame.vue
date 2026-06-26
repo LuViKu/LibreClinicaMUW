@@ -59,12 +59,23 @@ interface Props {
    * tab's stacked-fullscreen mode is owned at the tab level.
    */
   enableFullscreen?: boolean
+  /**
+   * 2026-06-26 user-feedback round — slider accent colour. The
+   * inline OCT-Viewer-tab variant (paired with FundusOverlay)
+   * uses the inference-job viewer's sky-blue thumb so the visual
+   * language between the two viewers matches. Other consumers
+   * (Overview-tab inline OCT, Compare-tab frames) keep the
+   * legacy navy thumb. Fullscreen mode always uses sky-blue
+   * regardless — the dark backdrop swallows navy.
+   */
+  sliderTone?: 'navy' | 'sky'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showThumbs: true,
   idBase: 'frame',
   enableFullscreen: true,
+  sliderTone: 'navy',
 })
 
 const emit = defineEmits<{
@@ -455,7 +466,10 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
           min="0"
           :max="Math.max(0, nSlices - 1)"
           :value="slice"
-          :class="['w-full', fsOpen ? 'accent-muw-sky' : 'accent-muw-blue']"
+          :class="[
+            'w-full',
+            fsOpen || sliderTone === 'sky' ? 'accent-muw-sky' : 'accent-muw-blue',
+          ]"
           :data-testid="`namd-scan-slider-${idBase}`"
           @input="(e) => setSlice(Number((e.target as HTMLInputElement).value))"
         />
