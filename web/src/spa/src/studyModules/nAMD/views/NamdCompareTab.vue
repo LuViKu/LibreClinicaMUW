@@ -239,6 +239,7 @@ function toggleSynced(): void {
           :mask="mask"
           :show-thumbs="false"
           :enable-fullscreen="false"
+          :fill-container="true"
           slider-tone="sky"
           :id-base="side.idBase"
           class="flex-1 min-h-0"

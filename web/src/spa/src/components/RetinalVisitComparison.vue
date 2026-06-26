@@ -47,6 +47,24 @@ watch(() => props.jobId, load)
 
 const hasPrevious = computed<boolean>(() => data.value?.previousJobId != null)
 
+/**
+ * Days → weeks for the header timeframe.
+ *
+ * <p>nAMD treat-and-extend regimens are scheduled, reviewed and
+ * documented in WEEKS, not days. Days are too granular for clinical
+ * reading and amplify historical-backfill noise (a one-day drift in
+ * the planned visit date jitters the count). Round to whole weeks;
+ * use {@code Math.ceil} so a 4-day gap still surfaces as "Vor 1
+ * Woche" rather than collapsing to "Vor 0 Wochen". 0 days → 0
+ * weeks (and {@link load} hides the strip in that case via the
+ * caller's gating).
+ */
+const weeksBetween = computed<number>(() => {
+  const d = data.value?.daysBetween
+  if (d == null || d <= 0) return 0
+  return Math.max(1, Math.ceil(d / 7))
+})
+
 interface DeltaTile {
   key: string
   label: string
@@ -137,8 +155,13 @@ function formatPct(v: number | null): string {
       <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
         {{ t('retinal.compare.header') }}
       </h2>
+      <!-- 2026-06-26 user-feedback round — clinical reasoning happens
+           on a weekly cadence in nAMD treat-and-extend; days are too
+           granular and historical-backfill drift makes the day count
+           visually noisy. Round to whole weeks, ceil so a 4-day gap
+           still reads "Vor 1 Woche" instead of "Vor 0 Wochen". -->
       <span class="text-xs text-slate-500">
-        {{ t('retinal.compare.daysAgo', { days: data?.daysBetween ?? 0 }) }}
+        {{ t('retinal.compare.weeksAgo', { weeks: weeksBetween }) }}
       </span>
     </header>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">

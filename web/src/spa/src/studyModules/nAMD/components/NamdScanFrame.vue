@@ -69,6 +69,26 @@ interface Props {
    * regardless — the dark backdrop swallows navy.
    */
   sliderTone?: 'navy' | 'sky'
+  /**
+   * 2026-06-26 user-feedback round (round 2) — opt-in
+   * fill-the-parent layout WITHOUT spawning the frame's own
+   * dark-backdrop fullscreen. Used by the Compare-tab stacked
+   * fullscreen, which provides its own backdrop + masthead and
+   * just wants the scan box to grow to fill the pane it's been
+   * placed in. When true:
+   *   * Root becomes {@code h-full flex flex-col gap-3} — controls
+   *     row sits below the scan box.
+   *   * The scan box becomes {@code flex-1 min-h-0} so it expands
+   *     to the available vertical space, and the inner aspect-
+   *     [16/9] constraint is released to {@code w-full h-full}.
+   *   * The BscanViewer's {@code fillContainer} flag is set so its
+   *     internal 4:3 wrapper releases too.
+   *   * Slider tone forced to sky regardless of {@code sliderTone}
+   *     (dark backdrop above forbids navy contrast).
+   *   * Per-frame maximize button suppressed — the parent owns
+   *     the fullscreen affordance.
+   */
+  fillContainer?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -76,6 +96,7 @@ const props = withDefaults(defineProps<Props>(), {
   idBase: 'frame',
   enableFullscreen: true,
   sliderTone: 'navy',
+  fillContainer: false,
 })
 
 const emit = defineEmits<{
@@ -280,6 +301,15 @@ onBeforeUnmount(() => {
 
 /** Format the visit date + label for the fullscreen header subtitle. */
 const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${formatDate(props.visit.date)}`)
+
+/**
+ * Layout-mode flag — true when the frame should fill its parent
+ * (own fullscreen overlay OR external fill-container request).
+ * The internal aspect-[16/9] constraint is released and the
+ * scan box becomes a flex-1 child so the controls row lives
+ * below it instead of below a fixed-aspect canvas.
+ */
+const fillsParent = computed(() => fsOpen.value || props.fillContainer)
 </script>
 
 <template>
@@ -288,7 +318,9 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
     :class="
       fsOpen
         ? 'fixed inset-0 z-50 bg-black/95 backdrop-blur-sm px-5 py-4 flex flex-col gap-3 select-none'
-        : 'select-none'
+        : fillContainer
+          ? 'h-full flex flex-col gap-3 select-none'
+          : 'select-none'
     "
   >
     <!-- Fullscreen header — eyebrow + title + close button. Mirrors
@@ -324,12 +356,12 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
     <div
       :class="[
         'relative rounded-xl overflow-hidden bg-black ring-1 ring-black/40',
-        fsOpen ? 'flex-1 min-h-0' : '',
+        fillsParent ? 'flex-1 min-h-0' : '',
       ]"
       style="box-shadow: 0 8px 20px -8px rgba(0,0,0,0.45)"
       @wheel.prevent="onWheel"
     >
-      <div :class="fsOpen ? 'w-full h-full' : 'aspect-[16/9]'">
+      <div :class="fillsParent ? 'w-full h-full' : 'aspect-[16/9]'">
         <div v-if="bscanDcmUrl" class="w-full h-full">
           <!-- 2026-06-24 user-feedback round — `:key` forces a fresh
                BscanViewer mount whenever the bound DICOM URL changes
@@ -347,7 +379,7 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
             :job-id="jobIdRef"
             :show-segmentation="mask"
             :static-frame="true"
-            :fill-container="fsOpen"
+            :fill-container="fillsParent"
           />
         </div>
         <div
@@ -418,10 +450,11 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
     </div>
 
     <!-- Controls row: play/pause + activity heatmap + slider + en-face.
-         Fullscreen mode drops the en-face thumb (the dark backdrop
-         leaves room for a wider slider strip and the locator chrome
-         doesn't read against black) and re-tints the labels white. -->
-    <div :class="['flex items-center gap-3', fsOpen ? 'mt-0 shrink-0' : 'mt-3']">
+         Fullscreen mode (own backdrop OR external fill-container)
+         drops the en-face thumb (the dark backdrop leaves room for
+         a wider slider strip and the locator chrome doesn't read
+         against black) and re-tints the labels white. -->
+    <div :class="['flex items-center gap-3', fillsParent ? 'mt-0 shrink-0' : 'mt-3']">
       <button
         type="button"
         :data-testid="`namd-scan-play-${idBase}`"
@@ -469,14 +502,14 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
           :value="slice"
           :class="[
             'w-full',
-            fsOpen || sliderTone === 'sky' ? 'accent-muw-sky' : 'accent-muw-blue',
+            fillsParent || sliderTone === 'sky' ? 'accent-muw-sky' : 'accent-muw-blue',
           ]"
           :data-testid="`namd-scan-slider-${idBase}`"
           @input="(e) => setSlice(Number((e.target as HTMLInputElement).value))"
         />
-        <div :class="['flex justify-between text-[10px] mt-1 px-0.5', fsOpen ? 'text-white/40' : 'text-slate-400']">
+        <div :class="['flex justify-between text-[10px] mt-1 px-0.5', fillsParent ? 'text-white/40' : 'text-slate-400']">
           <span>{{ t('studyModules.namd.scanFrame.superior') }}</span>
-          <span :class="['font-medium', fsOpen ? 'text-white/60' : 'text-slate-500']">
+          <span :class="['font-medium', fillsParent ? 'text-white/60' : 'text-slate-500']">
             {{ t('studyModules.namd.scanFrame.volumeScroll', { n: nSlices }) }}
           </span>
           <span>{{ t('studyModules.namd.scanFrame.inferior') }}</span>
@@ -484,7 +517,7 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
       </div>
 
       <NamdEnFaceLocator
-        v-if="showThumbs && !fsOpen"
+        v-if="showThumbs && !fillsParent"
         :job-id="jobIdRef"
         :slice="slice"
         :n-slices="nSlices"

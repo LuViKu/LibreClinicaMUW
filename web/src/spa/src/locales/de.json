@@ -3081,6 +3081,7 @@
     "compare": {
       "header": "Vergleich zum vorherigen Besuch",
       "daysAgo": "Vor {days} Tagen",
+      "weeksAgo": "Vor {weeks} Wochen",
       "loading": "Vergleich wird geladen…",
       "errorPrefix": "Vergleich konnte nicht geladen werden:"
     },

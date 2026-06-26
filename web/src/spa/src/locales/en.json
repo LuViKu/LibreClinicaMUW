@@ -3076,6 +3076,7 @@
     "compare": {
       "header": "Vs previous visit",
       "daysAgo": "{days} days ago",
+      "weeksAgo": "{weeks} weeks ago",
       "loading": "Loading comparison…",
       "errorPrefix": "Could not load comparison:"
     },

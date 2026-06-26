@@ -800,7 +800,10 @@ onBeforeUnmount(() => {
 <template>
   <section
     data-testid="bscan-viewer"
-    class="bg-slate-900 rounded-2xl overflow-clip border border-slate-800"
+    :class="[
+      'bg-slate-900 rounded-2xl overflow-clip border border-slate-800',
+      fillContainer ? 'h-full flex flex-col' : '',
+    ]"
   >
     <header
       v-if="!staticFrame"
@@ -902,7 +905,7 @@ onBeforeUnmount(() => {
     <div
       :class="[
         'relative w-full bg-black flex items-center justify-center overflow-hidden',
-        fillContainer ? 'h-full' : 'aspect-[4/3]',
+        fillContainer ? 'flex-1 min-h-0' : 'aspect-[4/3]',
       ]"
     >
       <div
