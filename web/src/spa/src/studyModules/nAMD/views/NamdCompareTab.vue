@@ -321,6 +321,7 @@ function toggleSynced(): void {
           :slice="side.slice"
           :mask="mask"
           :show-thumbs="false"
+          :enable-fullscreen="false"
           :id-base="side.idBase"
           @update:slice="(z) => side.setSlice(z)"
           @update:mask="(m) => (mask = m)"

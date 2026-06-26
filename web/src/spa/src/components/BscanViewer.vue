@@ -95,7 +95,10 @@ const errorMessage = ref<string | null>(null)
 // Hold the cornerstone viewport ref non-reactively (the cornerstone
 // objects mutate internally; we don't want Vue's proxy attached).
 const viewport = shallowRef<unknown | null>(null)
-const renderingEngineRef = shallowRef<{ destroy: () => void } | null>(null)
+const renderingEngineRef = shallowRef<{
+  destroy: () => void
+  resize?: (immediate?: boolean, keepCamera?: boolean) => void
+} | null>(null)
 
 const sliderMax = computed(() => Math.max(0, props.nBscans - 1))
 
@@ -585,6 +588,16 @@ async function initViewer(): Promise<void> {
       destroy: () => void
       enableElement: (input: unknown) => void
       getViewport: (id: string) => unknown
+      /**
+       * 2026-06-26 user-feedback round — cornerstone3D
+       * RenderingEngine.resize(immediate=true, keepCamera=true)
+       * re-fits the viewport's canvas to the host element's
+       * current size. Without this the canvas stays at whatever
+       * dimensions it had at enableElement time; the nAMD
+       * fullscreen transition resizes the container but the
+       * B-scan stayed half-width inside it.
+       */
+      resize: (immediate?: boolean, keepCamera?: boolean) => void
     }
     const RenderingEngine = (cornerstoneCore as unknown as {
       RenderingEngine: new (id: string) => RE
@@ -781,7 +794,22 @@ onMounted(async () => {
   // Recompute on resize so the overlay tracks the bscan as the
   // browser window or surrounding layout changes.
   if (containerEl.value && 'ResizeObserver' in window) {
-    resizeObs = new ResizeObserver(() => recomputeOverlayBbox())
+    resizeObs = new ResizeObserver(() => {
+      // 2026-06-26 user-feedback round — cornerstone re-fits its
+      // viewport canvas to the now-resized host element. The
+      // nAMD fullscreen + compare-stacked flows toggle the
+      // wrapper's flex-1 height after mount; without this the
+      // B-scan stays at the pre-fullscreen pixel dimensions and
+      // sits awkwardly in the left half of a much larger
+      // container. recomputeOverlayBbox runs after so the seg
+      // overlay tracks the new canvas position.
+      try {
+        renderingEngineRef.value?.resize?.(true, true)
+      } catch {
+        /* cornerstone may throw if mid-tear-down; non-fatal */
+      }
+      recomputeOverlayBbox()
+    })
     resizeObs.observe(containerEl.value)
   }
 })
