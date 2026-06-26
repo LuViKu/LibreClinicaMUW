@@ -56,6 +56,30 @@ watch(
 const aVisit = computed(() => props.data.visits.find((v) => v.id === aId.value) ?? null)
 const bVisit = computed(() => props.data.visits.find((v) => v.id === bId.value) ?? null)
 
+/**
+ * 2026-06-26 user-feedback round — colormap reference visit.
+ *
+ * <p>The activity-heatmap colormap means 'change since the
+ * chronologically previous visit'. For each compare pane, that's
+ * the visit immediately BEFORE the one being displayed in the
+ * full timeline, NOT the other pane's selected visit. So when the
+ * operator picks A=V01 and B=V03 the V01 pane shows uniform grey
+ * (no predecessor exists), while the V03 pane shows change vs V02.
+ *
+ * <p>Returns null when the visit is the first in the timeline or
+ * isn't in the visits array at all. NamdScanFrame's barColor
+ * falls back to grey on null prev.
+ */
+function chronologicalPrev(visit: NamdVisit | null): NamdVisit | null {
+  if (!visit) return null
+  const idx = props.data.visits.findIndex((v) => v.id === visit.id)
+  if (idx <= 0) return null
+  return props.data.visits[idx - 1] ?? null
+}
+
+const aPrev = computed<NamdVisit | null>(() => chronologicalPrev(aVisit.value))
+const bPrev = computed<NamdVisit | null>(() => chronologicalPrev(bVisit.value))
+
 // Shared scroll state. When synced, both frames write through
 // `slice`. When unsynced, each pane uses its own solo ref so the
 // operator can park one frame at the fovea while scrolling the
@@ -221,8 +245,8 @@ function toggleSynced(): void {
     >
       <section
         v-for="side in [
-          { key: 'A', tag: t('studyModules.namd.compare.tagReference'), visit: aVisit, other: bVisit, slice: leftSlice, setSlice: leftSetSlice, idBase: 'cmp-fs-a' },
-          { key: 'B', tag: t('studyModules.namd.compare.tagCurrent'),   visit: bVisit, other: aVisit, slice: rightSlice, setSlice: rightSetSlice, idBase: 'cmp-fs-b' },
+          { key: 'A', tag: t('studyModules.namd.compare.tagReference'), visit: aVisit, prev: aPrev, slice: leftSlice, setSlice: leftSetSlice, idBase: 'cmp-fs-a' },
+          { key: 'B', tag: t('studyModules.namd.compare.tagCurrent'),   visit: bVisit, prev: bPrev, slice: rightSlice, setSlice: rightSetSlice, idBase: 'cmp-fs-b' },
         ]"
         :key="side.key"
         :data-testid="`namd-compare-fs-pane-${side.key}`"
@@ -239,7 +263,7 @@ function toggleSynced(): void {
         <NamdScanFrame
           v-if="side.visit"
           :visit="side.visit"
-          :prev-visit="side.other"
+          :prev-visit="side.prev"
           :eye="props.data.patient.eye"
           :n-slices="nSlices"
           :slice="side.slice"
@@ -300,8 +324,8 @@ function toggleSynced(): void {
     <div v-if="!fsOpen" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <Card
         v-for="(side, i) in [
-          { tag: t('studyModules.namd.compare.tagReference'), id: aId, setId: (v: string) => (aId = v), visit: aVisit, other: bVisit, slice: leftSlice, setSlice: leftSetSlice, excludeOther: bId, variant: 'A' as const, idBase: 'cmp-a' },
-          { tag: t('studyModules.namd.compare.tagCurrent'),   id: bId, setId: (v: string) => (bId = v), visit: bVisit, other: aVisit, slice: rightSlice, setSlice: rightSetSlice, excludeOther: aId, variant: 'B' as const, idBase: 'cmp-b' },
+          { tag: t('studyModules.namd.compare.tagReference'), id: aId, setId: (v: string) => (aId = v), visit: aVisit, prev: aPrev, slice: leftSlice, setSlice: leftSetSlice, excludeOther: bId, variant: 'A' as const, idBase: 'cmp-a' },
+          { tag: t('studyModules.namd.compare.tagCurrent'),   id: bId, setId: (v: string) => (bId = v), visit: bVisit, prev: bPrev, slice: rightSlice, setSlice: rightSetSlice, excludeOther: aId, variant: 'B' as const, idBase: 'cmp-b' },
         ]"
         :key="i"
       >
@@ -322,7 +346,7 @@ function toggleSynced(): void {
         <NamdScanFrame
           v-if="side.visit"
           :visit="side.visit"
-          :prev-visit="side.other"
+          :prev-visit="side.prev"
           :eye="props.data.patient.eye"
           :n-slices="nSlices"
           :slice="side.slice"
