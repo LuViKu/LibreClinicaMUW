@@ -189,8 +189,20 @@ jobs:
     name: Compose smoke test
     needs: build
     runs-on: ubuntu-latest
+    # 2026-06-26 — contents: write so the openapi-drift heal step can push
+    # the auto-regenerated api.ts back to lc-develop/master without the
+    # default read-only token. No other job in this workflow needs write,
+    # so the elevated scope is per-job rather than workflow-wide.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need ref + token configured for the heal step's `git push` to
+          # land on the SAME branch that fired the workflow. The default
+          # checkout uses a detached HEAD at GITHUB_SHA which can't push.
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -363,7 +375,58 @@ jobs:
           pnpm install --frozen-lockfile --prefer-offline
           pnpm run codegen:openapi
 
-      - name: Fail on api.ts drift
+      # 2026-06-26 user-feedback round — auto-heal drift instead of
+      # blocking the build.
+      #
+      # Background: PRs to lc-develop don't fire this workflow (the
+      # build.yml triggers list is push-only by cost-saving design,
+      # 2026-05-28 comment above). That means contributors never see
+      # the drift check on their PR — they merge a PR that quietly
+      # left api.ts stale, and the smoke job fails AFTER the merge
+      # on the post-merge lc-develop push. Reverting + redoing the
+      # commit takes the contributor offline; in practice the api.ts
+      # regen is mechanical and idempotent, so a self-healing CI is
+      # the lower-friction option.
+      #
+      # Behaviour:
+      #   * Regen ran above against the live stack; the working tree's
+      #     api.ts is now the "fresh" version.
+      #   * If `git diff` is clean → no-op, the committed file matches
+      #     and we log OK.
+      #   * If drift exists → commit + push back to the same branch
+      #     with a [skip ci] tag on the commit message so we don't
+      #     loop. The next push (e.g. a real change to lc-develop)
+      #     starts from the now-fresh api.ts.
+      #
+      # The push uses the workflow's GITHUB_TOKEN, which has
+      # `contents: write` per the job-level permissions block. The
+      # commit is attributed to the github-actions[bot] identity so
+      # `git log` reads cleanly: routine maintenance, not an attempt
+      # to attribute changes to a real contributor.
+      - name: Auto-heal api.ts drift (regenerate + push back)
+        if: github.ref == 'refs/heads/lc-develop' || github.ref == 'refs/heads/master'
+        run: |
+          if git diff --quiet web/src/spa/src/types/api.ts; then
+            echo "OK — api.ts matches the live OpenAPI spec."
+            exit 0
+          fi
+          echo "Drift detected — regenerated api.ts diverges from the committed copy. Auto-committing on ${GITHUB_REF_NAME}."
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add web/src/spa/src/types/api.ts
+          git commit -m "chore(spa): auto-regenerate api.ts to match live OpenAPI spec [skip ci]" \
+                     -m "Triggered by the openapi-drift heal step in build.yml on $GITHUB_REF_NAME after a contributor merged backend changes without re-running pnpm run codegen:openapi locally. The [skip ci] tag prevents a CI loop on this auto-commit; the next real push picks up the fresh file."
+          # Use the workflow's token explicitly so push succeeds under the default-checkout posture.
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Non-default branches (release/**, hotfix/**, workflow_dispatch
+      # against a tag) keep the strict fail-fast behaviour — those
+      # surfaces shouldn't carry auto-commits, the contributor should
+      # see the failure and fix it locally before the release.
+      - name: Fail on api.ts drift (strict — non-lc-develop refs)
+        if: github.ref != 'refs/heads/lc-develop' && github.ref != 'refs/heads/master'
         run: |
           if ! git diff --exit-code web/src/spa/src/types/api.ts; then
             echo "::error::OpenAPI spec drift — the committed web/src/spa/src/types/api.ts is out of date with the live backend spec. Run 'pnpm run codegen:openapi' locally against a running stack and commit the regenerated file."
