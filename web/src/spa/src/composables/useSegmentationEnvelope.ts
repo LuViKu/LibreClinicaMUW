@@ -31,6 +31,32 @@ export interface SegmentationEnvelope {
 
 const cache = new Map<number, Promise<SegmentationEnvelope | null>>()
 
+/**
+ * 2026-06-26 user-feedback round — bust the module-level cache for
+ * one job + signal all live consumers to re-fetch.
+ *
+ * <p>Symptom that motivated this: when a job transitioned from
+ * {@code segmenting} to {@code done} while the metrics view was
+ * already mounted, the initial 'no seg dir yet' fetch returned 404
+ * → null, the Promise got cached as null, and the BscanViewer +
+ * FundusOverlay kept resolving from that null even after the SSE
+ * stream pushed 'done'. The visual symptom: the layers task's
+ * surface overlay never appeared until the operator manually
+ * refreshed the page; the downloads list (driven by the job DTO)
+ * updated fine because that took the {@code load()} path.
+ *
+ * <p>Consumers re-watch the {@link refreshTick} ref so the same
+ * watcher that drove the initial fetch re-fires when this gets
+ * bumped.
+ */
+const refreshTick = ref(0)
+
+export function clearSegmentationEnvelopeCache(jobId: number | null | undefined): void {
+  if (jobId == null) return
+  cache.delete(jobId)
+  refreshTick.value += 1
+}
+
 async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null> {
   // /LibreClinica is the WAR context path the Vite dev proxy
   // forwards to Tomcat — `apiGet` in @/api/client prepends it
@@ -124,6 +150,10 @@ export function useSegmentationEnvelope(jobId: Ref<number | null>): {
   // sees null. Without a watcher the canvas would stay empty until
   // a manual re-mount. Immediate so we still kick off on the
   // initial value.
-  watch(jobId, () => { void refresh() }, { immediate: true })
+  // 2026-06-26 — also re-fire on refreshTick bumps, which
+  // clearSegmentationEnvelopeCache() drives when an external
+  // signal (SSE done push, manual reset) wants every live
+  // consumer to drop its cached null and re-poll the endpoint.
+  watch([jobId, refreshTick], () => { void refresh() }, { immediate: true })
   return { envelope, loading, error }
 }

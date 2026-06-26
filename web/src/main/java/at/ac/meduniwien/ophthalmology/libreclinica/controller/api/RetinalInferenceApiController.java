@@ -479,6 +479,17 @@ public class RetinalInferenceApiController {
                     /* setScreenedAt */ false,
                     /* setCompletedAt */ true,
                     remote.modelVersion());
+            // 2026-06-26 user-feedback round — persist the .e2e
+            // acquisition_date the preprocess sidecar pulled from the
+            // device header. This mirrors what
+            // PublicOctUploadController.persistAcquisitionDate does on
+            // the public-portal flow; without this the authenticated
+            // job-list shows "—" in the Aufnahmedatum column even
+            // though the preprocess HEADER stamped it. Soft-fail: the
+            // job's still done, the operator can still review +
+            // re-trigger; the only visible regression is the empty
+            // column on the list view.
+            persistAcquisitionDate(c, jobId, remote.acquisitionDate());
         } catch (SQLException sqlEx) {
             LOG.error("Remote /run succeeded but result persist failed for job {}: {}",
                     jobId, sqlEx.getMessage());
@@ -587,6 +598,49 @@ public class RetinalInferenceApiController {
     private void updateStatus(Connection c, long jobId, String newStatus,
                               boolean setScreenedAt, String modelVersion) throws SQLException {
         updateStatus(c, jobId, newStatus, setScreenedAt, /* setCompletedAt */ false, modelVersion);
+    }
+
+    /**
+     * 2026-06-26 user-feedback round — UPDATE {@code retinal_inference_job}
+     * with the .e2e acquisition_date the preprocess sidecar pulled from
+     * the device header. Mirrors
+     * {@link at.ac.meduniwien.ophthalmology.libreclinica.controller.api.PublicOctUploadController#persistAcquisitionDate}
+     * but scoped to a single {@code job_id} (the public-portal flow
+     * fans out by {@code e2e_uuid} because one source scan can spawn
+     * multiple downstream jobs; the authenticated flow always has the
+     * job_id in hand).
+     *
+     * <p>Soft-fail by design: a null / blank / unparseable date is
+     * skipped silently (no exception, no log) so an older preprocess
+     * deploy that doesn't stamp the header doesn't litter WARNs.
+     * Anything else logs a single WARN — the job is still done +
+     * browseable; only the {@code Aufnahmedatum} column on the
+     * job-list reads blank for that one row.
+     */
+    private void persistAcquisitionDate(Connection c, long jobId, String iso) {
+        if (iso == null || iso.isBlank()) return;
+        java.sql.Date asDate;
+        try {
+            asDate = java.sql.Date.valueOf(iso);
+        } catch (IllegalArgumentException badIso) {
+            LOG.warn("Job {} — acquisition_date '{}' is not parseable as YYYY-MM-DD: {}",
+                    jobId, iso, badIso.getMessage());
+            return;
+        }
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE retinal_inference_job SET acquisition_date = ? "
+                        + "WHERE job_id = ? AND acquisition_date IS DISTINCT FROM ?")) {
+            ps.setDate(1, asDate);
+            ps.setLong(2, jobId);
+            ps.setDate(3, asDate);
+            int rows = ps.executeUpdate();
+            if (rows > 0) {
+                LOG.info("Persisted acquisition_date={} on job {}", iso, jobId);
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Job {} — acquisition_date persist failed: {}",
+                    jobId, sqlEx.getMessage());
+        }
     }
 
     /**

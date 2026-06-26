@@ -197,9 +197,11 @@ public class RemoteRetinalInferenceClient {
             Map<String, Object> b = (Map<String, Object>) resp.getBody();
             RemoteRunResult parsed = parseEnvelope(b);
             if (prep != null) {
-                // Thread the preprocess-derived geometry + e2e UUID through; the
-                // /run envelope itself doesn't carry pixel geometry (the runners
-                // read it off the DCM tags directly).
+                // Thread the preprocess-derived geometry + e2e UUID + the .e2e
+                // acquisition_date through; the /run envelope itself doesn't
+                // carry pixel geometry (the runners read it off the DCM tags
+                // directly), and acquisition_date lives only on the preprocess
+                // response header (the GPU /run is task-only, not header-aware).
                 parsed = new RemoteRunResult(
                         parsed.modelVersion(),
                         parsed.primaryMetricValue(),
@@ -210,7 +212,8 @@ public class RemoteRetinalInferenceClient {
                         parsed.task(),
                         parsed.laterality(),
                         prep.geometry(),
-                        prep.e2eUuid()
+                        prep.e2eUuid(),
+                        prep.acquisitionDate()
                 );
             }
             return parsed;

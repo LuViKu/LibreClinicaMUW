@@ -35,7 +35,7 @@ import { useStudyArm } from '@/composables/useStudyArm'
 
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import { useErrorsStore } from '@/stores/errors'
-import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
 import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
@@ -959,6 +959,13 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
     // stage completes, with no manual refresh. (A bare loadJob() did not
     // reload geometry, so the overlays could stay blank on `done` when the
     // geometry wasn't available at initial mount — that was the refresh bug.)
+    // 2026-06-26 user-feedback round — also bust the segmentation
+    // envelope cache for this job. The first fetch during 'segmenting'
+    // resolves to null (no seg dir yet → 404), and the module-level
+    // Map caches that null forever. Without this, the layers-task
+    // overlay never appears on the BscanViewer + FundusOverlay until
+    // a manual page reload, even though the SSE 'done' push reaches us.
+    clearSegmentationEnvelopeCache(jobId.value)
     void load()
   },
 })
