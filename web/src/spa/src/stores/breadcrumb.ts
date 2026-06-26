@@ -1,28 +1,15 @@
 /**
- * Breadcrumb store — per-view nested-navigation trail.
+ * Breadcrumb store — views publish the full nested trail; clear() on unmount.
  *
- * <p>2026-06-23 user-feedback round — the original breadcrumb in
- * {@code App.vue} surfaced two crumbs ({@code activeStudy} +
- * {@code route.meta.title}) and never reflected the nested
- * navigation that brought the operator to a leaf view. Opening a
- * subject from the matrix showed {@code RIS > Subject} instead of
- * {@code RIS > Subjects > EIAMD150}; opening a CRF from a visit
- * showed {@code RIS > CRF Entry} instead of
- * {@code RIS > Subjects > EIAMD150 > V03 > CRF Name}.
+ * <p>A leaf view publishes the full trail it knows (parents + leaf +
+ * dynamic IDs) and {@code App.vue}'s top-bar consumes it. The view
+ * calls {@code set([...])} when its data resolves and {@code clear()}
+ * on unmount so the next view's fallback (the static activeStudy-only
+ * chain) wins.
  *
- * <p>This store lets a leaf view publish the full trail it knows
- * about (parents + leaf + dynamic IDs) and have {@code App.vue}'s
- * top-bar consume it. The view is responsible for:
- *   1. Calling {@code set([...])} when its data resolves (subject
- *      label, event label, etc.).
- *   2. Calling {@code clear()} on unmount so the next view's
- *      fallback (the static activeStudy-only chain) wins.
- *
- * <p>Each crumb's {@code label} is already translated (the view has
- * {@code useI18n()}); the store stays i18n-agnostic so non-translated
- * dynamic data (subject ids, visit labels) can sit next to translated
- * statics. {@code to} is a Vue Router target ({@code /subjects},
- * {@code `/subjects/${oid}`}); {@code null} marks the active leaf.
+ * <p>Each crumb's {@code label} is already translated by the view; the
+ * store stays i18n-agnostic. {@code to} is a Vue Router target;
+ * {@code null} marks the active leaf.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'

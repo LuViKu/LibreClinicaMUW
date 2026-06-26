@@ -1,35 +1,8 @@
 /**
- * 2026-06-21 user-feedback batch — backend → SPA error message localiser.
- *
- * <p>The CRF JSON validator (Java) emits stable English strings like
- * "Item name is required" or "Data type must be one of ...". The user
- * wanted these surfaced in German in the canvas's error summary
- * (everything else in the surface is German).
- *
- * <p>The pragmatic path — without rewriting the validator to emit
- * codes + parameters — is a lookup table on the SPA side. This module
- * exposes {@link humanizeValidationError}: pass the raw English
- * message + a vue-i18n {@code t()} reference; get back a localised
- * string or the original message verbatim when no mapping exists.
- *
- * <p>Strategy:
- *
- * <ol>
- *   <li>Try an exact-match lookup against the known message set
- *       (covers the common "X is required" / "X must contain only Y"
- *       cases).</li>
- *   <li>Try a prefix-match against parameterised messages — e.g. the
- *       "Data type must be one of …" string changes whenever the
- *       allowed-types list grows, so we match on the prefix
- *       "Data type must be one of".</li>
- *   <li>Fall back to the raw message verbatim — the operator still
- *       sees something actionable; future i18n additions just lift
- *       more mappings into the table.</li>
- * </ol>
- *
- * <p>Translator keys live under {@code crfAuthoring.validation.*} in
- * the locale files. Adding a new mapping is two lines: a regex/
- * literal here + the matching key on both DE and EN bundles.
+ * Localize backend validation errors via lookup table. The Java CRF
+ * validator emits stable English strings; this maps them to German keys
+ * under {@code crfAuthoring.validation.*} (exact-match, then prefix-match
+ * for parameterised messages), falling back to the raw message verbatim.
  */
 
 export type ValidationTranslator = (key: string) => string

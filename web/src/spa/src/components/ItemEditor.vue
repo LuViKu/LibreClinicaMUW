@@ -218,8 +218,6 @@ function onResponseSetUpdate(next: AuthoringResponseSet): void {
   props.item.responseSet = next
 }
 
-/* ---------------- Show-when rule editor ---------------- */
-
 /**
  * Conditional-visibility toggle state. Mirrors {@code item.showWhen
  * != null} so the operator can flip the rule on/off without losing
@@ -502,7 +500,6 @@ const literalInputMode = computed<'select' | 'numeric' | 'text'>(() => {
       </div>
     </div>
 
-    <!-- Validation (regex + error message) -->
     <div class="border-t border-slate-200 pt-3 grid grid-cols-2 gap-3">
       <div>
         <FieldLabel :for="`${idPrefix}-regex`">
@@ -562,7 +559,6 @@ const literalInputMode = computed<'select' | 'numeric' | 'text'>(() => {
       </p>
     </div>
 
-    <!-- Show-when rule editor (per-item conditional visibility). -->
     <div
       class="border-t border-slate-200 pt-3 space-y-3"
       :data-testid="`${idPrefix}-show-when`"

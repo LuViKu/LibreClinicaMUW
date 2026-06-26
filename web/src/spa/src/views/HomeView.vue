@@ -47,7 +47,6 @@ const notes = useNotesStore()
 const users = useUsersStore()
 const rules = useRulesStore()
 
-/* ---------- role set with M1 → M2 fallback chain ---------- */
 const userRoles = computed<UserRole[]>(() => {
   const active = auth.user?.activeStudy
   if (active?.roles && active.roles.length > 0) return [...active.roles]
@@ -90,7 +89,6 @@ const canSwitchStudy = computed(
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
 const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
 
-/* ---------- count derivations from already-loaded store state ---------- */
 //
 // All store .rows arrays are populated by the eager onMounted load. We
 // derive badges from them. Each computed is null until the load has
@@ -118,8 +116,6 @@ const activeRuleSetsCount = computed<number | null>(() => {
   return rules.rows.filter((rs) => rs.status === 'available').length
 })
 
-/* ---------- de-duplicated card catalogue ---------- */
-
 interface CatalogEntry {
   id: string
   to: RouteLocationRaw | (() => RouteLocationRaw)
@@ -144,7 +140,6 @@ interface CatalogEntry {
 }
 
 const CATALOG = computed<CatalogEntry[]>(() => [
-  // ---------- subject-centred workflows ----------
   {
     id: 'subject-matrix',
     to: { name: 'subject-matrix' },
@@ -178,7 +173,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'general',
   },
 
-  // ---------- SDV (Monitor-only) ----------
   {
     id: 'sdv',
     to: { name: 'sdv' },
@@ -190,7 +184,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
 
-  // ---------- cross-role Notes (consolidated) ----------
   {
     id: 'notes',
     to: { name: 'notes' },
@@ -202,7 +195,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
 
-  // ---------- cross-role Audit log ----------
   {
     id: 'audit-log',
     to: { name: 'audit-log' },
@@ -212,7 +204,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
 
-  // ---------- Data Manager workflows ----------
   {
     id: 'build-study',
     to: { name: 'build-study' },
@@ -239,7 +230,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
 
-  // ---------- cross-role Data Export ----------
   {
     id: 'data-export',
     to: { name: 'data-export' },
@@ -249,7 +239,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
 
-  // ---------- Administrator platform actions ----------
   {
     id: 'manage-users',
     to: { name: 'manage-users' },
@@ -294,7 +283,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
 
-  // ---------- cross-study Patient Overview (Phase E.6) ----------
   {
     id: 'patients-overview',
     to: { name: 'patients-overview' },
@@ -304,7 +292,6 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'general',
   },
 
-  // ---------- cross-role Switch active study ----------
   {
     id: 'switch-study',
     to: { name: 'pick-study' },
@@ -369,7 +356,6 @@ const studyScopedCards = computed<VisibleCard[]>(() =>
   visibleCards.value.filter((c) => c.scope === 'study-scoped'),
 )
 
-/* ---------- eager load on mount ---------- */
 onMounted(() => {
   // Kick everything off in parallel; tolerate per-action failures so
   // one transient backend hiccup doesn't cascade-blank the whole

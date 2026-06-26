@@ -40,9 +40,7 @@ export interface ModalityBaseline {
    * locales — the SPA only uses this as a key, not a label.
    */
   modalityCode: string
-  /** English display label (e.g. "Intraocular pressure"). */
   labelEn: string
-  /** German display label (e.g. "Augeninnendruck"). */
   labelDe: string
   /** OpenClinica item OID the baseline was derived from. */
   itemOid: string

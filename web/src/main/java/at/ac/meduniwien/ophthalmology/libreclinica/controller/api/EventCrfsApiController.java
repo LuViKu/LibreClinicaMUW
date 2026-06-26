@@ -17,8 +17,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -204,7 +202,6 @@ public class EventCrfsApiController {
                     "No event_crf with id " + eventCrfId));
         }
 
-        // Resolve the StudySubject + verify it lives in the active study.
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
         if (ss == null || ss.getId() == 0) {
@@ -219,7 +216,6 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
 
-        // Resolve the StudyEvent + its definition for the {eventLabel}.
         StudyEventDAO seDAO = new StudyEventDAO(dataSource);
         StudyEventBean se = (StudyEventBean) seDAO.findByPK(ecb.getStudyEventId());
         StudyEventDefinitionDAO sedDAO = new StudyEventDefinitionDAO(dataSource);
@@ -263,8 +259,6 @@ public class EventCrfsApiController {
             ));
         }
 
-        // Map item_id → ItemFormMetadataBean so we can look up its
-        // response-set + per-item display config when iterating items.
         Map<Integer, ItemFormMetadataBean> ifmByItemId = new HashMap<>();
         for (ItemFormMetadataBean ifm : allIfms) {
             ifmByItemId.put(ifm.getItemId(), ifm);
@@ -350,7 +344,6 @@ public class EventCrfsApiController {
             dataRows.addAll(idDAO.findAllBySectionIdAndEventCRFId(sb.getId(), ecb.getId()));
         }
         Map<String, Object> values = new LinkedHashMap<>();
-        // groupId → ordinal → (itemOid → value)
         Map<Integer, Map<Integer, Map<String, Object>>> groupRowValues = new LinkedHashMap<>();
         for (ItemDataBean idb : dataRows) {
             ItemBean ib = (ItemBean) itemDAO.findByPK(idb.getItemId());
@@ -368,8 +361,6 @@ public class EventCrfsApiController {
             }
         }
 
-        // Build the groups[] payload: one CrfItemGroupDto per repeating
-        // group declared on the CRF version, with ordered rows by ordinal.
         List<CrfEntryDto.CrfItemGroupDto> groupDtos = new ArrayList<>();
         for (Map.Entry<Integer, ItemGroupBean> grpEntry : repeatingGroupsByItemGroupId.entrySet()) {
             ItemGroupBean grp = grpEntry.getValue();
@@ -601,7 +592,6 @@ public class EventCrfsApiController {
             if (existing != null && existing.getId() > 0) {
                 oldValue = existing.getValue() == null ? "" : existing.getValue();
                 if (oldValue.equals(newValue)) {
-                    // Same value — skip the write but still count as saved.
                     saved++;
                     continue;
                 }
@@ -732,7 +722,7 @@ public class EventCrfsApiController {
         out.put("rfcCreatedCount", rfcCreatedCount);
         out.put("groupRowsSaved", groupRowsSaved);
         out.put("lastSavedAt", formatIsoInstant(latestUpdate(eventCrfDAO.findByPK(ecb.getId()))));
-        out.put("status", computeStatus(ecb, /* re-check after touch */ saved > 0 || groupRowsSaved > 0));
+        out.put("status", computeStatus(ecb, saved > 0 || groupRowsSaved > 0));
 
         LOG.info("CRF save: event_crf {} got {} items + {} group-rows (rejected {}, rfc {}); user {} study {}",
                 ecb.getId(), saved, groupRowsSaved, rejected, rfcCreatedCount, currentUser.getName(), currentStudy.getOid());
@@ -824,17 +814,6 @@ public class EventCrfsApiController {
                                     /* columnName */ "date_completed", /* old */ "",
                                     /* new */ Instant.now().toString());
                         }
-
-                        // 2026-06-21 user-feedback round 5 — the
-                        // auto-cascade-to-COMPLETED was removed.
-                        // Operators told us the visit-completion
-                        // decision is theirs; the manual "Visite
-                        // abschließen" action on EventDetailView
-                        // (POST /api/v1/events/{id}/complete) now
-                        // owns that transition. The cascade helper
-                        // is kept (private, unused) in case a future
-                        // workflow needs to opt back in per study.
-                        // cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
 
                         EventCRFBean refreshed = eventCrfDAORef.findByPK(ecbRef.getId());
 
@@ -1030,8 +1009,6 @@ public class EventCrfsApiController {
                     "No event_crf with id " + currentEventCrfId));
         }
 
-        // Visibility guard — verify the current event_crf belongs to a
-        // study the caller is allowed to see.
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(currentEcb.getStudySubjectId());
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
@@ -1085,12 +1062,10 @@ public class EventCrfsApiController {
                     "message", "No prior completed CRF of the same definition for this subject."));
         }
 
-        // Load the source CRF's item_data + materialise the wire DTO.
         ItemDataDAO idDAO = new ItemDataDAO(dataSource);
         ItemDAO itemDAO = new ItemDAO(dataSource);
         ItemFormMetadataDAO ifmDAO = new ItemFormMetadataDAO(dataSource);
         ArrayList<ItemDataBean> rows = idDAO.findAllByEventCRFId(sourceEventCrfId);
-        // Map item_id → ItemFormMetadataBean for label lookup.
         Map<Integer, ItemFormMetadataBean> ifmByItemId = new HashMap<>();
         try {
             List<ItemFormMetadataBean> allIfms = ifmDAO.findAllByCRFVersionId(currentEcb.getCRFVersionId());
@@ -1302,7 +1277,6 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " references missing crf_version"));
         }
 
-        // Pre-fetch item-form-metadata so we know which items are required.
         ItemFormMetadataDAO ifmDAO = new ItemFormMetadataDAO(dataSource);
         Map<Integer, Boolean> requiredByItemId = new HashMap<>();
         try {
@@ -1316,7 +1290,6 @@ public class EventCrfsApiController {
                     "Schema load failed: " + ifmEx.getMessage()));
         }
 
-        // Walk the discrepancy notes once and bucket them by section.
         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
         dnDao.setFetchMapping(true);
         @SuppressWarnings("unchecked")
@@ -1357,7 +1330,6 @@ public class EventCrfsApiController {
         for (SectionBean sb : sections) {
             int requiredCount = 0;
             int filledCount = 0;
-            // Iterate items in this section.
             List<ItemBean> items = itemDAO.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
             Set<Integer> requiredItemIds = new HashSet<>();
             for (ItemBean ib : items) {
@@ -1366,7 +1338,6 @@ public class EventCrfsApiController {
                     requiredItemIds.add(ib.getId());
                 }
             }
-            // Resolve which required items have a non-blank persisted value.
             List<ItemDataBean> dataRows = idDAO.findAllBySectionIdAndEventCRFId(sb.getId(), ecb.getId());
             for (ItemDataBean idb : dataRows) {
                 if (idb == null) continue;
@@ -1374,7 +1345,6 @@ public class EventCrfsApiController {
                 String v = idb.getValue();
                 if (v != null && !v.isBlank()) filledCount++;
             }
-            // Open-queries: count notes that landed in this section.
             int openQueries = 0;
             for (DiscrepancyNoteBean n : notes) {
                 if (n == null || n.getId() == 0) continue;
@@ -1394,8 +1364,6 @@ public class EventCrfsApiController {
         }
         return ResponseEntity.ok(out);
     }
-
-    /* ----- Phase E.6 helpers ------------------------------------------------ */
 
     /**
      * Centralised guard: 401 if no user, 400 if no active study, 404
@@ -1478,7 +1446,6 @@ public class EventCrfsApiController {
                 if (ifm.getItemId() == itemId) return ifm;
             }
         } catch (Exception ignored) {
-            // best-effort
         }
         return null;
     }
@@ -2077,14 +2044,6 @@ public class EventCrfsApiController {
         return Instant.ofEpochMilli(d.getTime()).toString();
     }
 
-    /** A YYYY-MM-DD helper kept for symmetry with the Subjects adapter
-     * (and future date-of-birth fields the SPA may want to render). */
-    @SuppressWarnings("unused")
-    private static String formatIsoDate(Date d) {
-        if (d == null) return null;
-        return LocalDate.ofInstant(Instant.ofEpochMilli(d.getTime()), ZoneId.systemDefault()).toString();
-    }
-
     private static String firstNonBlank(String... candidates) {
         for (String s : candidates) {
             if (s != null && !s.isBlank()) return s;
@@ -2319,46 +2278,10 @@ public class EventCrfsApiController {
         ));
     }
 
-    /* ------------------------------------------------------------------ */
-    /* Phase E.6 — study_event status cascade after CRF mark/reopen.       */
-    /*                                                                    */
-    /* Operators saw "Abgeschlossen" on every CRF row and a parent visit  */
-    /* still pinned at "In Bearbeitung" because the legacy markComplete   */
-    /* never bumped the visit. Cascade now: when every required EDC has  */
-    /* a complete event_crf, flip study_event → COMPLETED. The reopen    */
-    /* path rewinds COMPLETED back to DATA_ENTRY_STARTED for symmetry.   */
-    /*                                                                    */
-    /* "Required" matches the legacy edc.required_crf flag. Optional     */
-    /* CRFs don't gate the cascade; their state is operator discretion.  */
-    /* SIGNED / LOCKED visits are terminal — left alone in both helpers. */
-    /* ------------------------------------------------------------------ */
-
-    @SuppressWarnings("unused")
-    private void cascadeEventStatusIfAllCrfsComplete(int studyEventId, UserAccountBean actor) {
-        try {
-            StudyEventDAO seDAO = new StudyEventDAO(dataSource);
-            StudyEventBean ev = (StudyEventBean) seDAO.findByPK(studyEventId);
-            if (ev == null || ev.getId() == 0) return;
-            SubjectEventStatus current = ev.getSubjectEventStatus();
-            if (current == null
-                    || current.equals(SubjectEventStatus.COMPLETED)
-                    || current.equals(SubjectEventStatus.SIGNED)
-                    || current.equals(SubjectEventStatus.LOCKED)) {
-                return;
-            }
-            if (!allRequiredEventCrfsComplete(ev)) return;
-            ev.setSubjectEventStatus(SubjectEventStatus.COMPLETED);
-            ev.setUpdater(actor);
-            ev.setUpdatedDate(new Date());
-            seDAO.update(ev);
-        } catch (Exception cascadeEx) {
-            // Best-effort — the CRF mark already committed. Don't let
-            // the cascade failure surface as a 500 to the SPA.
-            LOG.warn("study_event {} cascade-to-COMPLETED failed (continuing): {}",
-                    studyEventId, cascadeEx.getMessage());
-        }
-    }
-
+    // On reopen, rewind COMPLETED back to DATA_ENTRY_STARTED for symmetry.
+    // "Required" matches the legacy edc.required_crf flag; optional CRFs
+    // don't gate the status, their state is operator discretion. SIGNED /
+    // LOCKED visits are terminal — left alone in both helpers.
     private void rewindEventStatusOnReopen(int studyEventId, UserAccountBean actor) {
         try {
             StudyEventDAO seDAO = new StudyEventDAO(dataSource);
@@ -2376,6 +2299,7 @@ public class EventCrfsApiController {
         }
     }
 
+    @SuppressWarnings("unused") // companion to the removed auto-cascade; retained for a future per-study opt-in
     private boolean allRequiredEventCrfsComplete(StudyEventBean ev) {
         EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
         @SuppressWarnings("unchecked")
@@ -2469,7 +2393,6 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " is locked -- cannot upload files"));
         }
 
-        // Size + extension gates before reading the stream.
         if (!fileStorageService.checkSize(file)) {
             return ResponseEntity.status(413).body(Map.of(
                     "message", "File exceeds cap of " + fileStorageService.maxBytes() + " bytes",
@@ -2513,7 +2436,6 @@ public class EventCrfsApiController {
         String absolutePath = target.toString();
         String storedFilename = target.getFileName().toString();
 
-        // Upsert the item_data row with the absolute path as the value.
         ItemDataDAO idDAO = new ItemDataDAO(dataSource);
         int ordinal = Math.max(1, rowOrdinal);
         ItemDataBean existing = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
@@ -2558,7 +2480,6 @@ public class EventCrfsApiController {
                 "item_data", existing.getId(),
                 itemOid + "[" + ordinal + "]", oldValue, absolutePath);
 
-        // Touch the EventCRF so {date_updated} reflects the upload.
         ecb.setUpdater(currentUser);
         ecb.setUpdatedDate(new Date());
         eventCrfDAO.update(ecb);
@@ -2701,7 +2622,6 @@ public class EventCrfsApiController {
                 "item_data_file_delete", "item_data", idb.getId(),
                 itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
 
-        // Touch the EventCRF so {date_updated} reflects the delete.
         ecb.setUpdater(currentUser);
         ecb.setUpdatedDate(new Date());
         eventCrfDAO.update(ecb);
@@ -2817,7 +2737,6 @@ public class EventCrfsApiController {
                     "message", "event_crf " + eventCrfId + " is not DDE-enabled"));
         }
         if (ecb.getDateCompleted() == null) {
-            // Pass 1 not yet complete — commit makes no sense.
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Pass 1 (IDE) is not yet complete — cannot commit Pass 2"));
         }

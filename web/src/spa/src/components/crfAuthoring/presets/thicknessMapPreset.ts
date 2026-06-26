@@ -1,34 +1,7 @@
 /**
- * D4 (2026-06-20) — ETDRS 9-zone macular thickness map preset.
- *
- * <p>Bilateral capture of the nine ETDRS subfields per the standard
- * ETDRS macular grid: one central circle + four inner ring subfields
- * (S/T/I/N) + four outer ring subfields (S/T/I/N "outer"). Source is a
- * Spectralis macular cube; a single "modality code" item is included
- * per eye so the trial reviewer can pin which device captured the map.
- *
- * <p>ETDRS subfields per eye (per Early Treatment Diabetic Retinopathy
- * Study, 1991):
- * <ol>
- *   <li>{@code OD_THICKNESS_CENTRAL} / OS — central 1mm subfield.</li>
- *   <li>{@code OD_THICKNESS_INNER_S} / OS — inner superior (1–3mm).</li>
- *   <li>{@code OD_THICKNESS_INNER_T} / OS — inner temporal.</li>
- *   <li>{@code OD_THICKNESS_INNER_I} / OS — inner inferior.</li>
- *   <li>{@code OD_THICKNESS_INNER_N} / OS — inner nasal.</li>
- *   <li>{@code OD_THICKNESS_OUTER_S} / OS — outer superior (3–6mm).</li>
- *   <li>{@code OD_THICKNESS_OUTER_T} / OS — outer temporal.</li>
- *   <li>{@code OD_THICKNESS_OUTER_I} / OS — outer inferior.</li>
- *   <li>{@code OD_THICKNESS_OUTER_N} / OS — outer nasal.</li>
- *   <li>{@code OD_THICKNESS_MODALITY} / OS — Spectralis modality code
- *       single-select (SPECTRALIS / CIRRUS / TOPCON / OTHER).</li>
- * </ol>
- *
- * <p>Order: all-OD-first then all-OS, same as the other D4 presets.
- *
- * <p>CHOICE: brief said "Spectralis modality code" — we expose a small
- * single-select so multi-device sites (e.g. MUW satellite clinics
- * borrow Cirrus or Topcon) don't have to drop the preset and
- * re-author; the operator can rename / restrict on the properties rail.
+ * ETDRS 9-zone macular thickness preset — bilateral, µm (INT): central + inner
+ * S/T/I/N + outer S/T/I/N, plus a per-eye modality single-select
+ * (SPECTRALIS / CIRRUS / TOPCON / OTHER). All-OD-first then all-OS.
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'

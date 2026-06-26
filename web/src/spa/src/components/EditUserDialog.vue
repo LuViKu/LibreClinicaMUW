@@ -118,8 +118,6 @@ async function submit() {
     const result = await users.updateUser(props.user.username, patch)
     if (result.ok) {
       successFlag.value = true
-      // Auto-close after a brief success flash so the operator sees the
-      // confirmation without an extra click.
       setTimeout(close, 800)
     } else {
       fieldErrors.value = result.fieldErrors

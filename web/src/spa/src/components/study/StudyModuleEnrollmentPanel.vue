@@ -6,22 +6,11 @@ import { STUDY_MODULES } from '@/studyModules/registry'
 import { useErrorsStore } from '@/stores/errors'
 
 /**
- * 2026-06-21 user-feedback batch — per-study SPA-module enrollment panel.
- *
- * <p>Renders one toggle per known SPA module (sourced from the
- * convention-discovered {@code STUDY_MODULES} registry). Each toggle
- * fires {@code PUT /api/v1/studies/{oid}/modules/{moduleId}} on enroll
- * or {@code DELETE} on un-enroll. The panel reflects the server
- * truth after each round-trip, so a failed write rolls the UI back
- * automatically.
- *
- * <p>The catalog itself lives entirely in the SPA — the backend stores
- * opaque module-id strings. Adding a new module under
- * {@code studyModules/<id>/index.ts} surfaces it here automatically.
- *
- * <p>The host view ({@code StudyParametersEditView}) is already
- * Administrator-gated; the backend endpoint re-enforces via
- * {@code StudyAdminAuthorization.userMayEditStudy}.
+ * Per-study SPA-module enrollment (PUT/DELETE toggles). One toggle per known
+ * SPA module from the {@code STUDY_MODULES} registry; enroll fires
+ * {@code PUT /api/v1/studies/{oid}/modules/{moduleId}}, un-enroll {@code DELETE}.
+ * The panel reflects server truth after each round-trip so a failed write
+ * rolls back. Backend stores opaque module-id strings; Administrator-gated.
  */
 
 interface Props {

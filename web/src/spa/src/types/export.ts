@@ -21,15 +21,9 @@
  * backend, the Phase 3 wire shapes are hand-mirrored here.
  */
 
-/* ------------------------------------------------------------------ */
-/*  Phase 1 — saved-dataset list + export trigger                     */
-/* ------------------------------------------------------------------ */
-
-/** One saved dataset row in the SPA's table. */
 export interface DatasetDto {
   /** Dataset id as a string — stable handle for SPA. */
   oid: string
-  /** Dataset id as the numeric primary key. */
   id: number
   name: string
   description: string | null
@@ -58,11 +52,9 @@ export interface DatasetDto {
   hasRun?: boolean
 }
 
-/** One generated export file row in the SPA's per-dataset sub-table. */
 export interface ArchivedFileDto {
   /** archived_dataset_file.id */
   id: number
-  /** Zip / xls filename. */
   name: string
   /** Pretty label — "ODM", "CSV", "Excel", "TXT", "PDF", "Other". */
   formatName: string
@@ -91,10 +83,6 @@ export interface ExportTriggerResponse {
   downloadUrl: string
 }
 
-/* ------------------------------------------------------------------ */
-/*  Phase 3 — filters (:test-filter preview)                          */
-/* ------------------------------------------------------------------ */
-
 /**
  * Per-item value predicate. Mirrors the backend's
  * {@code DatasetFilterDto} — {@code value} is the scalar (for the
@@ -104,7 +92,6 @@ export interface ExportTriggerResponse {
 export interface DatasetFilterDto {
   /** OID of the item the predicate sits on. */
   itemOid: string
-  /** Operator the predicate uses. See {@link FilterOperator}. */
   operator: FilterOperator
   /** Scalar value; only meaningful for the comparison operators. */
   value?: string | null
@@ -211,10 +198,6 @@ export interface CreateDatasetRequest {
   /** Phase 3 — filter predicate list. Optional. */
   filters?: DatasetFilterDto[]
 }
-
-/* ------------------------------------------------------------------ */
-/*  Phase 2 — wizard shapes (event tree, inclusion flags, draft)      */
-/* ------------------------------------------------------------------ */
 
 /** Returned by {@code GET /api/v1/studies/{oid}/event-tree}. */
 export interface EventTreeNode {
@@ -386,7 +369,6 @@ export interface CreateDatasetDraft extends CreateDatasetInput {
   step: number
 }
 
-/** Default-empty draft seed. */
 export const EMPTY_DRAFT: CreateDatasetDraft = {
   name: '',
   description: '',

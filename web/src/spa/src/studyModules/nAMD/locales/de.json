@@ -46,6 +46,15 @@
         "segCardsHeader": "Segmentierung · dieser Scan",
         "empty": "Für diese Visite ist keine OCT-Aufnahme verknüpft."
       },
+      "viewer2": {
+        "fundusHeader": "Fundus · ETDRS-Auswahl",
+        "fundusSub": "B-Scan-Position · Klick auf Region quantifiziert",
+        "fundusEmpty": "Fundusbild für diese Visite nicht verfügbar.",
+        "selectionHeader": "Ausgewählte Regionen",
+        "selectionClear": "Auswahl löschen",
+        "selectionHint": "Klick auf eine ETDRS-Region (Mitte / Ring 1–3 mm / Ring 3–6 mm / Ecken) wählt sie aus; Mehrfachauswahl summiert die Volumina ohne Doppelzählung.",
+        "deltaHeader": "Vergleich zur Vorvisite"
+      },
       "scanFrame": {
         "bscanCounter": "B-Scan {z}/{n}",
         "fovea": "Fovea",
@@ -55,7 +64,11 @@
         "pause": "Volumen-Scroll pausieren",
         "superior": "superior",
         "inferior": "inferior",
-        "volumeScroll": "Volumen-Scroll · {n} B-Scans"
+        "volumeScroll": "Volumen-Scroll · {n} B-Scans",
+        "fsMaximize": "Vollbild · B-Scans prüfen",
+        "fsMinimize": "Vollbild schließen",
+        "fsClose": "Schließen (Esc)",
+        "fsEyebrow": "OCT-Viewer"
       },
       "compare": {
         "delta": "Delta zwischen Visiten",
@@ -65,7 +78,9 @@
         "syncedScroll": "Synchroner Scroll",
         "syncedScrollTip": "Mit synchronem Scroll bewegen sich beide Volumina gleichzeitig durch dieselbe B-Scan-Ebene.",
         "tagReference": "Referenz",
-        "tagCurrent": "Aktuell"
+        "tagCurrent": "Aktuell",
+        "fsEyebrow": "Vergleich",
+        "fsMaximize": "Vollbild · gestapelt vergleichen"
       },
       "decision": {
         "header": "Entscheidung",
@@ -79,7 +94,17 @@
       },
       "trend": {
         "aria": "Verlauf der Flüssigkeitsvolumina IRF, SRF und PED über die letzten Visiten.",
-        "bcvaSuffix": "Buchst."
+        "bcvaSuffix": "Buchst.",
+        "injectionLegend": "Injektion",
+        "region": {
+          "label": "Region",
+          "c1": "Zentral 1 mm",
+          "c3": "Zentral 3 mm",
+          "c6": "Zentral 6 mm"
+        }
+      },
+      "overview2": {
+        "crtDeltaAria": "Veränderung der zentralen Netzhautdicke gegenüber der Vorvisite"
       },
       "report": {
         "letterhead": "nAMD Fluid-Monitoring · Bericht",
@@ -98,6 +123,13 @@
         "dateMismatchTitle": "Geplantes Visitendatum ({visit}) weicht vom OCT-Akquisitionsdatum ({acquired}) ab.",
         "signaturePhysician": "Unterschrift Arzt/Ärztin",
         "signatureDate": "Datum"
+      },
+      "report2": {
+        "dynamicHeader": "Dynamische B-Scans · grösste Veränderung vs. Vorvisite",
+        "dynamicCaptionPrev": "{label} · B-Scan {z}/{n}",
+        "dynamicCaptionCurrent": "{label} · B-Scan {z}/{n} · {dir} {sign}{value} nL",
+        "dynamicRise": "Anstieg",
+        "dynamicFall": "Rückgang"
       }
     }
   }

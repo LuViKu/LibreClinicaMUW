@@ -24,8 +24,27 @@ import type { NamdVisit } from '../types'
 interface Props {
   visit: NamdVisit
   nSlices: number
+  /**
+   * 2026-06-26 — explicit slice index. Defaults to the median
+   * (foveal) when omitted so the legacy baseline-vs-current block
+   * keeps painting the same B-scan it always did. The Report tab's
+   * new "top-2 dynamic B-scans" block uses this to point at the
+   * slices with the biggest fluid Δ vs prior visit.
+   */
+  slice?: number | null
+  /**
+   * 2026-06-26 — optional caption override. When supplied,
+   * replaces the static "Foveale B-Scan-Ebene · KI-Segmentierung
+   * eingeblendet" line — used by the dynamic-B-scans block to
+   * surface a slice-specific tag like
+   * "Anstieg +12.4 nL @ B-Scan 23/49".
+   */
+  caption?: string | null
 }
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  slice: null,
+  caption: null,
+})
 const { t } = useI18n()
 
 const BscanViewer = defineAsyncComponent(() => import('@/components/BscanViewer.vue'))
@@ -35,6 +54,7 @@ const bscanDcmUrl = computed(() =>
 )
 
 const fovealSlice = computed(() => Math.floor(props.nSlices / 2))
+const renderedSlice = computed(() => (props.slice == null ? fovealSlice.value : props.slice))
 </script>
 
 <template>
@@ -51,10 +71,10 @@ const fovealSlice = computed(() => Math.floor(props.nSlices / 2))
              report's baseline / current blocks would render the same
              DICOM if the BscanViewer instance is reused. -->
         <BscanViewer
-          :key="bscanDcmUrl"
+          :key="`${bscanDcmUrl}#${renderedSlice}`"
           :bscan-dcm-url="bscanDcmUrl"
           :n-bscans="nSlices"
-          :model-value="fovealSlice"
+          :model-value="renderedSlice"
           :job-id="visit.retinalJobId"
           :static-frame="true"
           :show-segmentation="true"
@@ -68,7 +88,8 @@ const fovealSlice = computed(() => Math.floor(props.nSlices / 2))
       </div>
     </div>
     <div class="text-[10.5px] text-slate-400 mt-1">
-      {{ t('studyModules.namd.report.octCaption') }}
+      <template v-if="caption">{{ caption }}</template>
+      <template v-else>{{ t('studyModules.namd.report.octCaption') }}</template>
     </div>
   </div>
 </template>

@@ -1,22 +1,7 @@
 /**
- * App-feedback Wave 2 (2026-06-19) — canvas preset registry.
- *
- * <p>Lists the presets the canvas's left rail surfaces in the "Preset
- * einfügen" section. Each entry pairs an opaque {@code id} with a
- * generator that materialises a list of items, plus presentation
- * metadata (i18n labelKey + descriptionKey).
- *
- * <p>The store ({@code crfAuthoring.ts}) dispatches on the id via
- * {@code applyPreset(id, sectionId)}; the canvas drop handler also
- * dispatches on the id when an entry is dragged into a section.
- *
- * <p>Adding a preset:
- *
- * <ol>
- *   <li>Create the generator under {@code presets/}.</li>
- *   <li>Add i18n keys under {@code crfAuthoring.presets.<id>.*}.</li>
- *   <li>Append a {@link PresetDescriptor} entry here.</li>
- * </ol>
+ * CRF authoring preset registry — id + generator + metadata. The store
+ * dispatches on the id via {@code applyPreset(id, sectionId)}; the canvas
+ * drop handler does likewise when an entry is dragged into a section.
  */
 
 import type { AuthoringItem, AuthoringDataType } from '@/stores/crfAuthoring'

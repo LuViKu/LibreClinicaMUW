@@ -1283,38 +1283,6 @@ public class EventsApiController {
     }
 
 
-    /**
-     * Phase E.6 restore-quickwins — inverse of {@link #cancel}. Restores
-     * a previously soft-deleted study event: parent flips back to
-     * {@link Status#AVAILABLE}; nested {@code event_crf} +
-     * {@code item_data} rows currently in {@link Status#AUTO_DELETED}
-     * cascade back to {@link Status#AVAILABLE}.
-     *
-     * <p>Mirrors {@code RestoreStudyEventServlet} (the post-confirm
-     * branch) but expressed as a single REST endpoint — the SPA renders
-     * its own confirm dialog and trusts the click.
-     *
-     * <p>Guards (order matters):
-     * <ol>
-     *   <li>{@code 401} — no authenticated user.</li>
-     *   <li>{@code 400} — no active study bound.</li>
-     *   <li>{@code 403} — caller's role is not DM/Admin (same gate as
-     *       {@link #cancel}; restore is the inverse half).</li>
-     *   <li>{@code 404} — no study_event with that id.</li>
-     *   <li>{@code 403} — event's subject lives outside the visible
-     *       study set.</li>
-     *   <li>{@code 409} — event is not currently DELETED (idempotent
-     *       restore would be wrong here — caller likely has stale UI
-     *       state and should refetch).</li>
-     *   <li>{@code 409} — study_subject is removed; legacy
-     *       {@code RestoreStudyEventServlet} blocks the restore in that
-     *       case ("study_subject_has_been_deleted") and the SPA
-     *       surfaces the same error.</li>
-     * </ol>
-     *
-     * <p>Returns the restored {@link StudyEventDto} so the SPA can
-     * splice it back into the events store without a list refetch.
-     */
     /* ------------------------------------------------------------------ */
     /* POST /api/v1/events/{id}/sign                                       */
     /*                                                                    */
@@ -1508,6 +1476,38 @@ public class EventsApiController {
      */
     public record SignEventRequest(String password, Boolean attestation) {}
 
+    /**
+     * Phase E.6 restore-quickwins — inverse of {@link #cancel}. Restores
+     * a previously soft-deleted study event: parent flips back to
+     * {@link Status#AVAILABLE}; nested {@code event_crf} +
+     * {@code item_data} rows currently in {@link Status#AUTO_DELETED}
+     * cascade back to {@link Status#AVAILABLE}.
+     *
+     * <p>Mirrors {@code RestoreStudyEventServlet} (the post-confirm
+     * branch) but expressed as a single REST endpoint — the SPA renders
+     * its own confirm dialog and trusts the click.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 403} — caller's role is not DM/Admin (same gate as
+     *       {@link #cancel}; restore is the inverse half).</li>
+     *   <li>{@code 404} — no study_event with that id.</li>
+     *   <li>{@code 403} — event's subject lives outside the visible
+     *       study set.</li>
+     *   <li>{@code 409} — event is not currently DELETED (idempotent
+     *       restore would be wrong here — caller likely has stale UI
+     *       state and should refetch).</li>
+     *   <li>{@code 409} — study_subject is removed; legacy
+     *       {@code RestoreStudyEventServlet} blocks the restore in that
+     *       case ("study_subject_has_been_deleted") and the SPA
+     *       surfaces the same error.</li>
+     * </ol>
+     *
+     * <p>Returns the restored {@link StudyEventDto} so the SPA can
+     * splice it back into the events store without a list refetch.
+     */
     @PostMapping("/{id:[0-9]+}/restore")
     public ResponseEntity<?> restore(@PathVariable("id") int eventId,
                                      HttpSession session) {

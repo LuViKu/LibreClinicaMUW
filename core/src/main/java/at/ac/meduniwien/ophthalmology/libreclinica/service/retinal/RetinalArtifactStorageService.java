@@ -72,7 +72,6 @@ public class RetinalArtifactStorageService {
             // Defence-in-depth: never let a runner name escape the job dir.
             String safeName = Path.of(a.name()).getFileName().toString();
             Path target = jobDir.resolve(safeName);
-            // Write atomically — create + truncate + replace existing.
             Path tmp = Files.createTempFile(jobDir, safeName + ".", ".part");
             Files.write(tmp, a.content(),
                     StandardOpenOption.CREATE,

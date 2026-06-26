@@ -9,7 +9,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -184,10 +183,6 @@ public class CrtComputeService {
         return Optional.of(new Result(r.crtMicrons(), r.pixelsInDisk(), layers.jobId));
     }
 
-    /* ====================================================================== */
-    /* DB lookups                                                             */
-    /* ====================================================================== */
-
     /** Internal carrier holding everything we need about one task's
      *  source job. Populated by {@link #findJob}. */
     private record JobRef(long jobId, String task, String bscanMasksDir,
@@ -226,10 +221,6 @@ public class CrtComputeService {
             }
         }
     }
-
-    /* ====================================================================== */
-    /* File resolution                                                        */
-    /* ====================================================================== */
 
     /**
      * Walk the artifact dir for a file whose name (case-insensitive)
@@ -311,12 +302,6 @@ public class CrtComputeService {
         return base;
     }
 
-    /* ====================================================================== */
-    /* Convenience — emit empty placeholder rows alongside the populated      */
-    /* ones so the timeline endpoint's per-event response can carry a stable  */
-    /* shape regardless of which eye(s) actually computed.                    */
-    /* ====================================================================== */
-
     /**
      * Compute CRT for a list of study_event_ids in a single pass.
      * Returns insertion-ordered {@code Map<studyEventId, Map<Eye, Result>>}
@@ -331,11 +316,5 @@ public class CrtComputeService {
             out.put(eventId, computeForStudyEvent(eventId));
         }
         return out;
-    }
-
-    /** Bridge for callers that wrap I/O exceptions in unchecked form. */
-    @SuppressWarnings("unused")
-    private static UncheckedIOException uio(IOException ioEx) {
-        return new UncheckedIOException(ioEx);
     }
 }

@@ -1,10 +1,4 @@
-/**
- * 2026-06-23 user-feedback round — Spectralis OCT acquisition preset.
- *
- * Heidelberg Spectralis SD-OCT — the workhorse posterior segment
- * scanner in the MUW eye clinic. Wraps the shared imaging-acquisition
- * scaffold with the Spectralis OID prefix + label key.
- */
+/** Spectralis SD-OCT acquisition preset (shared scaffold, OID prefix 'SPEC_OCT'). */
 import type { AuthoringItem } from '@/stores/crfAuthoring'
 import { generateImagingAcquisitionItems, type Translator } from './imagingAcquisitionPreset'
 

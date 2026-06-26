@@ -1,36 +1,7 @@
 /**
- * D4 (2026-06-20) — RNFL (Retinal Nerve Fiber Layer) thickness preset.
- *
- * <p>Bilateral grouped block from a Heidelberg HRA / Spectralis ONH
- * (Optic Nerve Head) module run. Captures the global mean RNFL
- * thickness plus the four quadrant means (Superior / Temporal /
- * Inferior / Nasal) plus a signal-quality score per eye.
- *
- * <p>Items per eye:
- * <ol>
- *   <li><b>{@code OD_RNFL_GLOBAL} / {@code OS_RNFL_GLOBAL}</b> — global
- *       mean RNFL thickness in µm (INT, 0–999). The "global" reading
- *       is the average around the peripapillary circle.</li>
- *   <li><b>{@code OD_RNFL_S} / OS</b> — Superior quadrant (INT µm).</li>
- *   <li><b>{@code OD_RNFL_T} / OS</b> — Temporal quadrant (INT µm).</li>
- *   <li><b>{@code OD_RNFL_I} / OS</b> — Inferior quadrant (INT µm).</li>
- *   <li><b>{@code OD_RNFL_N} / OS</b> — Nasal quadrant (INT µm).</li>
- *   <li><b>{@code OD_RNFL_SIGNAL_QUALITY} / OS</b> — Heidelberg signal
- *       quality score (INT, 0–10). Spectralis exports an integer Q
- *       score in 0–40 dB, but the MUW reporting convention is the
- *       0–10 abbreviation used by clinicians on paper review; the
- *       wider range can be authored post-drop on the properties rail.
- *       CHOICE.</li>
- * </ol>
- *
- * <p>Order: {@code [OD_global, OD_S, OD_T, OD_I, OD_N, OD_quality,
- * OS_global, OS_S, OS_T, OS_I, OS_N, OS_quality]} — all-OD-first then
- * all-OS, same as {@code bcvaPreset}. Bilateral grid pairs on suffix.
- *
- * <p>CHOICE: brief says "Heidelberg HRA or Spectralis ONH module" —
- * the items themselves don't encode the modality (modality is captured
- * upstream on the visit), so the preset is one shape that fits both
- * sources.
+ * RNFL preset — per eye: global mean + 4 quadrant means (S/T/I/N) in µm (INT)
+ * + signal-quality score (INT 0–10; MUW reporting scale, not Spectralis' 0–40 dB).
+ * All-OD-first then all-OS; bilateral grid pairs on suffix.
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'

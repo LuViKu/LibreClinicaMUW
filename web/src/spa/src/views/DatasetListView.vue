@@ -106,8 +106,6 @@ watch(studyOid, (next, prev) => {
   if (next && next !== prev) datasets.load(next)
 })
 
-/* --------------------- Per-row expand / file list --------------------- */
-
 const expanded = ref<Set<number>>(new Set())
 
 function toggleExpanded(datasetId: number) {
@@ -122,8 +120,6 @@ function toggleExpanded(datasetId: number) {
   }
   expanded.value = next
 }
-
-/* --------------------------- Export modal --------------------------- */
 
 interface ExportModalState {
   datasetId: number
@@ -164,8 +160,6 @@ async function submitExport() {
   }
 }
 
-/* ---------------------------- Quick ODM ---------------------------- */
-
 async function runQuickOdm() {
   if (!studyOid.value) return
   const result = await datasets.quickOdm(studyOid.value)
@@ -175,8 +169,6 @@ async function runQuickOdm() {
 }
 
 /* ----------------------------- Helpers ----------------------------- */
-
-// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
 
 function formatBytes(n: number): string {
   if (!n || n < 0) return '—'

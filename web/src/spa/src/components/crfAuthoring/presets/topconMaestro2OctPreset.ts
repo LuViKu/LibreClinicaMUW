@@ -1,11 +1,4 @@
-/**
- * 2026-06-23 user-feedback round — Topcon Maestro2 SD-OCT
- * acquisition preset.
- *
- * Tabletop SD-OCT used as the screening-line scanner in the MUW
- * clinic. Uses the shared acquisition scaffold; SmartCapture-driven
- * quality metrics map onto the same 1-5 quality scale.
- */
+/** Topcon Maestro2 SD-OCT acquisition preset (shared scaffold, OID prefix 'TOPCON_OCT'). */
 import type { AuthoringItem } from '@/stores/crfAuthoring'
 import { generateImagingAcquisitionItems, type Translator } from './imagingAcquisitionPreset'
 

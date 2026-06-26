@@ -28,14 +28,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * statuses ({@code data-entry-started}, {@code completed},
  * {@code signed}, {@code locked}) are not accepted here — they
  * come from CRF completion / signing workflows.
- *
- * @param dateStarted ISO YYYY-MM-DD, or empty to clear, or null to
- *                    leave unchanged.
- * @param dateEnded   same shape as dateStarted.
- * @param location    free-text location, or empty to clear, or null
- *                    to leave unchanged.
- * @param status      SPA-side status: {@code scheduled | stopped |
- *                    skipped}. {@code null} to leave unchanged.
  */
 @Schema(name = "UpdateEventRequest")
 public record UpdateEventRequest(

@@ -195,7 +195,6 @@ const vClickOutside = {
   },
 }
 
-/* ----------------------------- Disable ---------------------------- */
 async function onDisableCrf(crf: Crf) {
   if (!confirm(t('crfLibrary.disableConfirm', { name: crf.name }))) return
   await lib.disableCrf(crf.oid)

@@ -2388,6 +2388,7 @@
       "moreActions": "Weitere Aktionen",
       "save": "Speichern",
       "location": "Ort",
+      "saveSuccess": "Visite gespeichert.",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "cancelConfirm": "Visite »{label}« stornieren? Verbundene CRFs und Items werden als gelöscht markiert. Die Aktion wird im Audit Trail dokumentiert.",
       "lockedBanner": "Diese Visite ist abgeschlossen. Klicken Sie «Bearbeiten», um Änderungen zu erfassen.",
@@ -2928,6 +2929,9 @@
   "retinal": {
     "loading": "Netzhaut-Auswertung wird geladen …",
     "failedToLoad": "Netzhaut-Job konnte nicht geladen werden: {error}",
+    "breadcrumb": {
+      "job": "Job #{seq}"
+    },
     "header": {
       "eventCrfLabel": "Event-CRF #{id} · Inferenz-Job #{jobId}",
       "title": "Netzhaut-Auswertung",
@@ -2973,6 +2977,7 @@
       "noMetric": "Metriken konnten nicht berechnet werden — Segmentierungs-Artefakte sind unten weiterhin verfügbar.",
       "noKpi": "Noch keine Kennzahlen.",
       "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
+      "bscanNotAvailable": "OCT-B-Scan ist noch nicht verfügbar.",
       "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
     },
     "kpi": {
@@ -3025,7 +3030,8 @@
     "retry": {
       "cta": "Erneut versuchen",
       "inflight": "Wird neu gestartet…",
-      "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
+      "error": "Neustart fehlgeschlagen — bitte später erneut versuchen.",
+      "successBanner": "Auswertung wird erneut ausgeführt — der Status aktualisiert sich automatisch."
     },
     "rerunAs": {
       "cta": "Anderen Task ausführen",
@@ -3075,6 +3081,7 @@
     "compare": {
       "header": "Vergleich zum vorherigen Besuch",
       "daysAgo": "Vor {days} Tagen",
+      "weeksAgo": "Vor {weeks} Wochen",
       "loading": "Vergleich wird geladen…",
       "errorPrefix": "Vergleich konnte nicht geladen werden:"
     },
@@ -3118,6 +3125,7 @@
       "history": {
         "colJob": "Job",
         "colCompleted": "Abgeschlossen",
+        "colAcquired": "Aufnahmedatum",
         "colTask": "Aufgabe",
         "colEye": "Auge",
         "colStatus": "Status",

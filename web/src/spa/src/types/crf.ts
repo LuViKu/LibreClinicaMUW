@@ -44,7 +44,6 @@ export type CrfItem =
     dataType: ItemDataType
     /** Set when the type is `select-one` / `select-multi`. */
     options?: ResponseOption[]
-    /** Optional helper text under the input. */
     helper?: string
     /** Inclusive numeric range when applicable. */
     min?: number
@@ -186,16 +185,16 @@ export interface MissingReasonsError {
   missingReasonItemOids: string[]
 }
 
-/* ------------------------------------------------------------------ */
-/* Phase E A5 — CRF reopen role-aware helper.                         */
-/*                                                                    */
-/* Mirrors CrfReopenAuthorization.java backend-side:                  */
-/*   permitted: Investigator, CRC, Data Manager, Administrator        */
-/*   forbidden: Monitor, RA, RA2 (data entry / read-only roles)       */
-/*                                                                    */
-/* Plus state guards: status must be 'complete' (you can't reopen     */
-/* what's already in-progress) and not 'locked' (admin-only).         */
-/* ------------------------------------------------------------------ */
+/*
+ * Phase E A5 — CRF reopen role-aware helper.
+ *
+ * Mirrors CrfReopenAuthorization.java backend-side:
+ *   permitted: Investigator, CRC, Data Manager, Administrator
+ *   forbidden: Monitor, RA, RA2 (data entry / read-only roles)
+ *
+ * Plus state guards: status must be 'complete' (you can't reopen
+ * what's already in-progress) and not 'locked' (admin-only).
+ */
 
 import type { UserRole } from './auth'
 
@@ -209,15 +208,15 @@ export function canReopenCrf(role: UserRole, status: CrfEntryStatus): boolean {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Phase E.6 crf-entry-advanced — TOC badges, concurrent-edit probe,  */
-/*                                 per-item notes roll-up.            */
-/*                                                                    */
-/* Shapes mirror the new backend records:                             */
-/*   SectionStatusDto                                                 */
-/*   EventCrfLockProbeDto                                             */
-/*   EventCrfNotesRollupDto + nested ItemNoteSummary                  */
-/* ------------------------------------------------------------------ */
+/*
+ * Phase E.6 crf-entry-advanced — TOC badges, concurrent-edit probe,
+ * per-item notes roll-up.
+ *
+ * Shapes mirror the new backend records:
+ *   SectionStatusDto
+ *   EventCrfLockProbeDto
+ *   EventCrfNotesRollupDto + nested ItemNoteSummary
+ */
 
 /** Per-section TOC roll-up. Driven by GET …/section-status. */
 export interface SectionStatus {
@@ -242,7 +241,6 @@ export interface LockProbe {
   ttlSeconds: number
 }
 
-/** Per-item summary inside the rollup. */
 export interface ItemNoteSummary {
   totalCount: number
   openCount: number

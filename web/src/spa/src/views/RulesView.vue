@@ -135,10 +135,6 @@ function activePhases(gates: { administrativeDataEntry: boolean; initialDataEntr
   return out
 }
 
-/* -------------------------------------------------------------- */
-/* RX.3 — Test rule pane                                            */
-/* -------------------------------------------------------------- */
-
 /**
  * Per-row state for the test-values key/value editor. Local IDs
  * (rather than relying on array index as the v-for key) make
@@ -214,19 +210,11 @@ const resultLabel = computed(() => {
   return t('rules.test.resultOther', { value: r.result })
 })
 
-// Reset the test pane when the user switches rule_sets — the
-// expression and mock values were specific to the previous
-// selection, so carrying them over is more surprising than
-// helpful.
 watch(selectedId, () => {
   testExpression.value = ''
   testValueRows.value = [makeRow(), makeRow()]
   testResult.value = null
 })
-
-/* -------------------------------------------------------------- */
-/* RX.4 — lifecycle actions                                         */
-/* -------------------------------------------------------------- */
 
 /**
  * One-shot busy flag per row so the SPA can dim a single button
@@ -287,20 +275,12 @@ async function onRestoreAttachedRule(rs: RuleSet, ar: AttachedRule) {
   }
 }
 
-/* -------------------------------------------------------------- */
-/* RX.2 — Import rules dialog                                       */
-/* -------------------------------------------------------------- */
-
 const importDialogOpen = ref(false)
 function openImportDialog() { importDialogOpen.value = true }
 function onImportCommitted() {
   // Reload the list so the freshly committed rule_sets appear.
   rules.load()
 }
-
-/* -------------------------------------------------------------- */
-/* RX.5b — Rule authoring wizard                                    */
-/* -------------------------------------------------------------- */
 
 /**
  * RX.5b — 3-step inline authoring (rule body, target+scope, action).
@@ -312,10 +292,6 @@ function onImportCommitted() {
 const createWizardOpen = ref(false)
 function openCreateWizard() { createWizardOpen.value = true }
 
-/* -------------------------------------------------------------- */
-/* RX.6b — Inline edit dialogs (rule + action)                      */
-/* -------------------------------------------------------------- */
-
 const ruleEditOpen = ref(false)
 const ruleEditTarget = ref<AttachedRule | null>(null)
 function openRuleEdit(ar: AttachedRule) {
@@ -323,8 +299,6 @@ function openRuleEdit(ar: AttachedRule) {
   ruleEditOpen.value = true
 }
 function onRuleEditSaved() {
-  // Store call already triggers fetchOne(selected.id) on success;
-  // no extra refresh needed here.
 }
 
 const actionEditOpen = ref(false)
@@ -334,7 +308,6 @@ function openActionEdit(action: RuleAction) {
   actionEditOpen.value = true
 }
 function onActionEditSaved() {
-  // Store call already triggers fetchOne(selected.id) on success.
 }
 function onCreateWizardDone() {
   rules.load()
@@ -399,17 +372,10 @@ async function saveSchedule(rs: RuleSet) {
   }
 }
 
-// Close the schedule form when the user switches rule_sets — same
-// rationale as the test pane reset below: form state belonged to the
-// previous selection.
 watch(selectedId, () => {
   scheduleFormOpen.value = false
   scheduleSaveError.value = null
 })
-
-/* -------------------------------------------------------------- */
-/* Phase E.6 restore-quickwins — Dry-run + Download XML            */
-/* -------------------------------------------------------------- */
 
 /**
  * Dry-run preview state. The {@code results} array holds whichever
@@ -459,8 +425,6 @@ function onExportXml() {
   }
 }
 
-// Clear dry-run state on selection change so a previous selection's
-// preview doesn't bleed into the new pane.
 watch(selectedId, () => {
   dryRunResults.value = null
   dryRunError.value = null
@@ -611,7 +575,6 @@ watch(selectedId, () => {
                 </dd>
               </dl>
 
-              <!-- RX.7 — inline schedule edit form -->
               <div
                 v-if="scheduleFormOpen"
                 class="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 space-y-2"
@@ -742,7 +705,6 @@ watch(selectedId, () => {
               </ul>
             </div>
 
-            <!-- Phase E.6 restore-quickwins — Dry-run + Download XML -->
             <div v-if="canManage" class="border-t border-slate-100 pt-3">
               <div class="flex items-center gap-2 flex-wrap">
                 <button
@@ -797,7 +759,6 @@ watch(selectedId, () => {
               </div>
             </div>
 
-            <!-- RX.1b — fire history (rule_action_run_log) -->
             <div>
               <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
                 {{ t('rules.detail.runLogHeading', { count: rules.runLog.length }) }}
@@ -838,7 +799,6 @@ watch(selectedId, () => {
               </button>
             </div>
 
-            <!-- RX.3 — Test rule pane -->
             <div>
               <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
                 {{ t('rules.test.heading') }}

@@ -54,8 +54,6 @@ public class MailNotificationService {
 
 	/**
 	 * Checks whether mail notification is enabled or disabled for study. Returns true if enabled - false otherwise.
-	 * 
-	 * @param studyId The study unique identifier.
 	 */
 	public boolean isMailNotificationEnabled(int studyId) {
 		StudyBean studyBean = getStudyDao().findByPK(studyId);
@@ -64,8 +62,6 @@ public class MailNotificationService {
 
 	/**
      * Sends mail notification for successful login attempts.
-     * 
-     * @param bean Bean with addressee information.
      */
     public void sendSuccessfulLoginMail(UserAccountBean bean) {
         sendMail(bean, LoginResult.SUCCESSFUL_LOGIN);
@@ -73,8 +69,6 @@ public class MailNotificationService {
 	
 	/**
 	 * Sends mail notification for denied login attempts.
-	 * 
-	 * @param bean Bean with addressee information.
 	 */
     public void sendDeniedLoginMail(UserAccountBean bean) {
         sendMail(bean, LoginResult.DENIED_LOGIN);
@@ -93,7 +87,7 @@ public class MailNotificationService {
 	                TimeZone.getDefault().getDisplayName(ENGLISH), 
 	                loginResult.textual(),
 	                studyBean.getContactEmail());
-	        // @formatter:off
+	        // @formatter:on
 	        
 	        mailSender.sendEmail(bean.getEmail(), "Login Notification", message, false);
 	    } catch (IOException e) {

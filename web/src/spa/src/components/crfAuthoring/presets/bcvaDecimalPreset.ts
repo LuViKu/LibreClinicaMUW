@@ -1,38 +1,9 @@
 /**
- * 2026-06-24 user-feedback round — BCVA-Decimal canvas preset.
- *
- * <p>Counterpart to {@link bcvaPreset} (which captures ETDRS
- * letters). The deployed MUW clinical routine uses an
- * autorefractometer that emits Snellen-equivalent decimal acuity
- * plus refraction; the study nurse enters the decimal value with an
- * optional signed partial-line marker (`1,0p-2` / `0,8+2` — German
- * clinical convention). This preset materialises the matching ten
- * items per visit so the public BCVA-entry portal has a CRF to
- * write into.
- *
- * <p>Items per eye (5 × 2 eyes = 10 total):
- *
- * <ol>
- *   <li>{@code OD_BCVA_DECIMAL} / {@code OS_BCVA_DECIMAL} — REAL,
- *       0.01–2.0. The raw chart-line decimal.</li>
- *   <li>{@code OD_BCVA_PARTIAL} / {@code OS_BCVA_PARTIAL} — INT,
- *       signed, −4…+4. The optotype offset from the decimal line:
- *       negative = missed N optotypes on that line; positive =
- *       read N additional optotypes from the next better line. Zero
- *       (or absent) is the common case (full line read).</li>
- *   <li>{@code OD_BCVA_REFRACTION_SPHERE} / {@code OS_BCVA_REFRACTION_SPHERE}
- *       — REAL, dioptres. Reuses the OID + shape from
- *       {@link bcvaPreset} so a study using both presets writes
- *       refraction into the same column.</li>
- *   <li>{@code OD_BCVA_REFRACTION_CYLINDER} / {@code OS_BCVA_REFRACTION_CYLINDER}
- *       — REAL, dioptres.</li>
- *   <li>{@code OD_BCVA_REFRACTION_AXIS} / {@code OS_BCVA_REFRACTION_AXIS}
- *       — INT, 0–180°.</li>
- * </ol>
- *
- * <p>Bilateral OD/OS pair emitted in the same order as
- * {@link bcvaPreset} (all OD items first, then all OS) so the
- * SectionCanvas bilateral grid pairs by suffix.
+ * BCVA-Decimal preset — per eye: Snellen-equivalent decimal (REAL 0.01–2.0)
+ * + signed partial-line marker (INT −4…+4, optotype offset from the line;
+ * German convention e.g. `1,0p-2`) + refraction (sphere/cylinder in D, axis
+ * 0–180°; reuses bcvaPreset's OIDs so both presets share columns). All-OD
+ * first then all-OS; bilateral grid pairs by suffix.
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'

@@ -1,25 +1,13 @@
 <script setup lang="ts">
 /**
- * App-feedback Wave 1D (2026-06-19) — "Vom letzten Besuch übernehmen"
- * modal. Fetches the most-recent COMPLETED event_crf of the same CRF
- * definition for the current subject and shows each item's prior
- * value with a per-row checkbox. The operator picks which values to
- * carry forward; on confirm the modal emits the selected map back to
- * {@link CrfEntryView} which applies it to the local
- * {@code crfEntry} store. Nothing is auto-applied without confirmation.
+ * "Vom letzten Besuch übernehmen" modal — fetches the most-recent COMPLETED
+ * event_crf of the same CRF definition for the subject and shows each prior
+ * value with a per-row checkbox. On confirm the modal emits the selected map
+ * to {@link CrfEntryView}; nothing is auto-applied without confirmation.
  *
- * <p>Wire contract for the GET endpoint:
- * <pre>
- * GET /pages/api/v1/eventCrfs/{eventCrfId}/previous-values
- * 200 { sourceEventCrfId, sourceCompletedAt, values: [{ itemOid, value, itemLabel }] }
- * 404 — no prior completed CRF exists
- * 403 — site visibility / study-mismatch
- * </pre>
- *
- * <p>The modal stays focused on the per-item checkbox grid: there is
- * no inline edit affordance. Operators who want to change a copied
- * value un-check the row and type it themselves in the entry form
- * after the modal closes.
+ * <p>GET /pages/api/v1/eventCrfs/{eventCrfId}/previous-values →
+ * 200 { sourceEventCrfId, sourceCompletedAt, values: [{ itemOid, value, itemLabel }] };
+ * 404 no prior completed CRF; 403 site/study-mismatch.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

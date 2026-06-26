@@ -30,13 +30,7 @@ import {
  * the numeric id as the same string.
  *
  * The `pendingChanges` flag drives the "unsaved · auto-saving…" tell
- * in the header. Real save/markComplete land in M6 — for now those
- * actions update local state only and remain `TODO(E.4 M6)`.
- *
- * Mock removal — per the polished-jumping-swan plan's "hard removal"
- * policy: the previous `loadMock()` Demographics builder + the
- * `decodeContext` / `KNOWN_EVENTS` / `humaniseTokens` helpers are
- * deleted in this PR. If the backend is unreachable the store sets
+ * in the header. If the backend is unreachable the store sets
  * `error` so the view can render a clear message rather than
  * silently falling back to mock data.
  */
@@ -794,10 +788,6 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
   }
 })
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
 function hasValue(v: unknown): boolean {
   if (v == null) return false
   if (typeof v === 'string') return v.trim().length > 0
@@ -864,14 +854,6 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
       return null
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/* Phase E.4 M5 + M6 (2026-06-01): the hardcoded Demographics mock loader +    */
-/* OID-decoding helpers (decodeContext, humaniseTokens, KNOWN_EVENTS) were     */
-/* removed. The store now hydrates exclusively from                            */
-/* `GET /pages/api/v1/eventCrfs/{id}` via apiGet above, and persists via       */
-/* POST /pages/api/v1/eventCrfs/{id}/items  + POST .../markComplete (M6).      */
-/* -------------------------------------------------------------------------- */
 
 /** Wire shape of the POST /items endpoint response (M6 + E.6). */
 interface SaveItemsResponse {

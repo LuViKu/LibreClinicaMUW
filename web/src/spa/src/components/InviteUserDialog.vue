@@ -207,7 +207,6 @@ async function copyPassword() {
         {{ t('manageUsers.invite.ssoSuccessHint') }}
       </div>
     </div>
-    <!-- Local-account success view: show the one-time password and a copy button. -->
     <div v-else-if="generatedPassword !== null" class="space-y-3">
       <p class="text-sm text-slate-700">{{ t('manageUsers.invite.successIntro') }}</p>
       <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">
@@ -224,7 +223,6 @@ async function copyPassword() {
       <p class="text-xs text-slate-500">{{ t('manageUsers.invite.firstLoginNote') }}</p>
     </div>
 
-    <!-- Form view. -->
     <div v-else class="space-y-4">
       <div v-if="studyId == null" class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
         {{ t('manageUsers.invite.studyMissing') }}

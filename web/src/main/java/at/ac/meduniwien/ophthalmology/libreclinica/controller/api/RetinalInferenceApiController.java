@@ -103,12 +103,14 @@ public class RetinalInferenceApiController {
     public static final String DEFAULT_UPLOADS_PATH = "/var/lib/libreclinica/e2e-uploads";
 
     /**
-     * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}.
+     * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}:
+     * {@code ga}, {@code fluid}, {@code onl}, {@code pr}, {@code bm}, {@code layers}.
      * fluid/onl/pr run via the OptimaAdapter model-runners (async; the sidecar's
      * {@code /screen} returns 422 for them, so the controller's existing
      * null-result path queues them for the worker). {@code ga} is registered but
      * gated at the sidecar adapter (no runner) until the IOWA layer segmenter +
-     * a GPU host exist.
+     * a GPU host exist. {@code bm} (Bruch's membrane) and {@code layers} (the full
+     * IOWA surface stack) run through the same async worker path.
      */
     private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers");
 
@@ -479,6 +481,17 @@ public class RetinalInferenceApiController {
                     /* setScreenedAt */ false,
                     /* setCompletedAt */ true,
                     remote.modelVersion());
+            // 2026-06-26 user-feedback round — persist the .e2e
+            // acquisition_date the preprocess sidecar pulled from the
+            // device header. This mirrors what
+            // PublicOctUploadController.persistAcquisitionDate does on
+            // the public-portal flow; without this the authenticated
+            // job-list shows "—" in the Aufnahmedatum column even
+            // though the preprocess HEADER stamped it. Soft-fail: the
+            // job's still done, the operator can still review +
+            // re-trigger; the only visible regression is the empty
+            // column on the list view.
+            persistAcquisitionDate(c, jobId, remote.acquisitionDate());
         } catch (SQLException sqlEx) {
             LOG.error("Remote /run succeeded but result persist failed for job {}: {}",
                     jobId, sqlEx.getMessage());
@@ -590,6 +603,49 @@ public class RetinalInferenceApiController {
     }
 
     /**
+     * 2026-06-26 user-feedback round — UPDATE {@code retinal_inference_job}
+     * with the .e2e acquisition_date the preprocess sidecar pulled from
+     * the device header. Mirrors
+     * {@link at.ac.meduniwien.ophthalmology.libreclinica.controller.api.PublicOctUploadController#persistAcquisitionDate}
+     * but scoped to a single {@code job_id} (the public-portal flow
+     * fans out by {@code e2e_uuid} because one source scan can spawn
+     * multiple downstream jobs; the authenticated flow always has the
+     * job_id in hand).
+     *
+     * <p>Soft-fail by design: a null / blank / unparseable date is
+     * skipped silently (no exception, no log) so an older preprocess
+     * deploy that doesn't stamp the header doesn't litter WARNs.
+     * Anything else logs a single WARN — the job is still done +
+     * browseable; only the {@code Aufnahmedatum} column on the
+     * job-list reads blank for that one row.
+     */
+    private void persistAcquisitionDate(Connection c, long jobId, String iso) {
+        if (iso == null || iso.isBlank()) return;
+        java.sql.Date asDate;
+        try {
+            asDate = java.sql.Date.valueOf(iso);
+        } catch (IllegalArgumentException badIso) {
+            LOG.warn("Job {} — acquisition_date '{}' is not parseable as YYYY-MM-DD: {}",
+                    jobId, iso, badIso.getMessage());
+            return;
+        }
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE retinal_inference_job SET acquisition_date = ? "
+                        + "WHERE job_id = ? AND acquisition_date IS DISTINCT FROM ?")) {
+            ps.setDate(1, asDate);
+            ps.setLong(2, jobId);
+            ps.setDate(3, asDate);
+            int rows = ps.executeUpdate();
+            if (rows > 0) {
+                LOG.info("Persisted acquisition_date={} on job {}", iso, jobId);
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Job {} — acquisition_date persist failed: {}",
+                    jobId, sqlEx.getMessage());
+        }
+    }
+
+    /**
      * Like {@link #updateStatus(Connection, long, String, boolean, String)} but
      * also stamps {@code completed_at} when {@code setCompletedAt=true}. The
      * remote DR-022 branch needs this on the {@code 'done'} transition; the
@@ -629,13 +685,6 @@ public class RetinalInferenceApiController {
     }
 
     /**
-     * Resolve the on-disk uploads directory. Reads
-     * {@code core.retinalInference.e2eUploadsPath} via {@link CoreResources};
-     * falls back to {@link #DEFAULT_UPLOADS_PATH} when unset / blank /
-     * unreachable (the latter happens in some unit-test contexts where
-     * {@code CoreResources} hasn't been initialised).
-     */
-    /**
      * 2026-06-19 — terminal-failure helper used when the remote GPU
      * dispatch fails (network / sidecar 5xx / empty response /
      * artifact persist failure). Flips the job to status='failed' +
@@ -672,6 +721,13 @@ public class RetinalInferenceApiController {
         LOG.warn("Remote GPU dispatch failed for job {}: {}", jobId, msg);
     }
 
+    /**
+     * Resolve the on-disk uploads directory. Reads
+     * {@code core.retinalInference.e2eUploadsPath} via {@link CoreResources};
+     * falls back to {@link #DEFAULT_UPLOADS_PATH} when unset / blank /
+     * unreachable (the latter happens in some unit-test contexts where
+     * {@code CoreResources} hasn't been initialised).
+     */
     private static String uploadsDir() {
         try {
             String raw = CoreResources.getField("core.retinalInference.e2eUploadsPath");

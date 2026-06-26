@@ -14,11 +14,8 @@ import type { AuditEvent, AuditEventVariant } from '@/types/audit'
  * keeps client-side filters as the default UX so dropdown changes
  * don't trigger a round-trip per keypress.
  *
- * Mock removal — per the polished-jumping-swan plan's hard-removal
- * policy: the previous `loadMock()` helper + 7-row MOCK_EVENTS
- * fixture are deleted in this PR. If the backend is unreachable
- * the store sets `error` so the view can render an explicit
- * message rather than silently displaying stale demo data.
+ * If the backend is unreachable the store sets `error` so the view can
+ * render an explicit message rather than silently displaying stale data.
  */
 export const useAuditLogStore = defineStore('auditLog', () => {
   const events = ref<AuditEvent[]>([])

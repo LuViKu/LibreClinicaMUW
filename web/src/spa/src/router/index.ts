@@ -98,7 +98,6 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
-    /* Phase E.8 Slice L3 (2026-06-20) — sysadmin admin tooling. */
     {
       path: '/admin/system-status',
       name: 'admin-system-status',
@@ -131,14 +130,12 @@ const router = createRouter({
       component: () => import('@/views/CrfEntryView.vue'),
       meta: { title: 'Read-only CRF', role: ['Monitor', 'Administrator'] as const, readOnly: true },
     },
-    /* Phase E.7 — Data Manager workflow. */
     {
       path: '/build-study',
       name: 'build-study',
       component: () => import('@/views/BuildStudyView.vue'),
       meta: { title: 'Build Study', role: ['Data Manager', 'Administrator'] as const },
     },
-    /* Phase E A8.1 — Study identity create/edit (sysadmin only). */
     {
       path: '/studies/new',
       name: 'study-create',
@@ -151,21 +148,18 @@ const router = createRouter({
       component: () => import('@/views/StudyIdentityEditView.vue'),
       meta: { title: 'Edit Study', role: 'Administrator' as const },
     },
-    /* Phase E.6 study-params — per-study parameter settings panel. */
     {
       path: '/studies/:oid/parameters',
       name: 'study-parameters',
       component: () => import('@/views/StudyParametersEditView.vue'),
       meta: { title: 'Study Parameters', role: 'Administrator' as const },
     },
-    /* Phase E A8.2 — Event-definition CRUD for the active study. */
     {
       path: '/event-definitions',
       name: 'event-definitions',
       component: () => import('@/views/EventDefinitionsView.vue'),
       meta: { title: 'Event definitions', role: ['Data Manager', 'Administrator'] as const },
     },
-    /* Phase E A8.3 — CRF library + version upload. */
     {
       path: '/crf-library',
       name: 'crf-library',
@@ -182,7 +176,6 @@ const router = createRouter({
       component: () => import('@/views/CrfAuthoringCanvasView.vue'),
       meta: { title: 'CRF Builder', role: ['Data Manager', 'Administrator'] as const, canvasBuilder: true },
     },
-    /* Phase E A8.4 — sites / multi-center setup. */
     {
       path: '/sites',
       name: 'sites',
@@ -196,7 +189,6 @@ const router = createRouter({
       component: () => import('@/views/GroupClassesView.vue'),
       meta: { title: 'Group classes', role: ['Data Manager', 'Administrator'] as const },
     },
-    /* Phase E RX.1 — read-only rules viewer. */
     {
       path: '/rules',
       name: 'rules',
@@ -209,7 +201,6 @@ const router = createRouter({
       component: () => import('@/views/ManageUsersView.vue'),
       meta: { title: 'Manage Users', role: 'Administrator' as const },
     },
-    /* Phase E.6 — Data Export MVP. */
     {
       path: '/export',
       name: 'data-export',
@@ -316,10 +307,24 @@ const router = createRouter({
       component: () => import('@/views/ModalitiesView.vue'),
       meta: { title: 'Modalitäten', role: 'Administrator' as const },
     },
-    /* Phase E.7 Wave 4 — Retinal scan metrics viewer. */
     {
       path: '/retinal-jobs/:jobId(\\d+)',
       name: 'retinal-job',
+      component: () => import('@/views/RetinalMetricsView.vue'),
+      meta: {
+        title: 'Retinal scan metrics',
+        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
+    /* 2026-06-26 — per-subject deep link to a retinal job. Same view as
+       'retinal-job'; RetinalMetricsView resolves (label, seq) → jobId via
+       the /subjects/{label}/retinal-jobs/{seq} backend resolver. The
+       numeric-id route above stays for internal navigations (rerun-as) and
+       old bookmarks; this is the human-friendly address the subject's job
+       list links to + the one that renders breadcrumbs. */
+    {
+      path: '/subjects/:subjectLabel/jobs/:seq(\\d+)',
+      name: 'retinal-job-by-subject',
       component: () => import('@/views/RetinalMetricsView.vue'),
       meta: {
         title: 'Retinal scan metrics',

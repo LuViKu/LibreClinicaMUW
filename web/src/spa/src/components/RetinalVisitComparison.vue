@@ -47,6 +47,24 @@ watch(() => props.jobId, load)
 
 const hasPrevious = computed<boolean>(() => data.value?.previousJobId != null)
 
+/**
+ * Days → weeks for the header timeframe.
+ *
+ * <p>nAMD treat-and-extend regimens are scheduled, reviewed and
+ * documented in WEEKS, not days. Days are too granular for clinical
+ * reading and amplify historical-backfill noise (a one-day drift in
+ * the planned visit date jitters the count). Round to whole weeks;
+ * use {@code Math.ceil} so a 4-day gap still surfaces as "Vor 1
+ * Woche" rather than collapsing to "Vor 0 Wochen". 0 days → 0
+ * weeks (and {@link load} hides the strip in that case via the
+ * caller's gating).
+ */
+const weeksBetween = computed<number>(() => {
+  const d = data.value?.daysBetween
+  if (d == null || d <= 0) return 0
+  return Math.max(1, Math.ceil(d / 7))
+})
+
 interface DeltaTile {
   key: string
   label: string
@@ -56,19 +74,45 @@ interface DeltaTile {
   pct: number | null
 }
 
+// 2026-06-26 — the fluid task's output_payload uses `total_mm3` for
+// the sum of all three biomarkers (under the nested `biomarkers` map).
+// The previous key (`total_fluid_volume_mm3`) never matched anything
+// on the backend, so the "Total" tile rendered "—" even on jobs with
+// a real previous-visit comparison. The controller's compareToPrevious
+// flattens the nested `biomarkers` block into the deltas map so the
+// keys here line up 1:1 with the entries on `data.deltas`.
 const METRIC_LABELS: Record<string, string> = {
   irf_mm3: 'IRF',
   srf_mm3: 'SRF',
   ped_mm3: 'PED',
-  total_fluid_volume_mm3: 'Total',
+  total_mm3: 'Total',
+}
+
+/**
+ * Read a numeric metric from a payload that may nest fluid biomarkers
+ * inside a {@code biomarkers} object. The fluid task's payload shape
+ * is {@code { biomarkers: { irf_mm3, srf_mm3, ped_mm3, total_mm3 }, ... }};
+ * older / future tasks may surface metrics at the top level. Look in
+ * {@code biomarkers} first, fall through to the top level. Anything
+ * non-numeric returns null so the tile renders an em-dash.
+ */
+function readMetric(payload: Record<string, unknown> | undefined, key: string): number | null {
+  if (!payload) return null
+  const bio = payload['biomarkers']
+  if (bio != null && typeof bio === 'object') {
+    const v = (bio as Record<string, unknown>)[key]
+    if (typeof v === 'number') return v
+  }
+  const top = payload[key]
+  return typeof top === 'number' ? top : null
 }
 
 const tiles = computed<DeltaTile[]>(() => {
   const d = data.value
   if (!d || d.previousJobId == null) return []
   return Object.entries(METRIC_LABELS).map(([key, label]) => {
-    const cur = typeof d.currentMetrics?.[key] === 'number' ? (d.currentMetrics[key] as number) : null
-    const prev = typeof d.previousMetrics?.[key] === 'number' ? (d.previousMetrics[key] as number) : null
+    const cur = readMetric(d.currentMetrics as Record<string, unknown>, key)
+    const prev = readMetric(d.previousMetrics as Record<string, unknown>, key)
     const delta = key in (d.deltas ?? {}) ? d.deltas[key] : null
     const pct = (prev != null && prev !== 0 && delta != null) ? (delta / prev) * 100 : null
     return { key, label, current: cur, previous: prev, delta, pct }
@@ -111,8 +155,13 @@ function formatPct(v: number | null): string {
       <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
         {{ t('retinal.compare.header') }}
       </h2>
+      <!-- 2026-06-26 user-feedback round — clinical reasoning happens
+           on a weekly cadence in nAMD treat-and-extend; days are too
+           granular and historical-backfill drift makes the day count
+           visually noisy. Round to whole weeks, ceil so a 4-day gap
+           still reads "Vor 1 Woche" instead of "Vor 0 Wochen". -->
       <span class="text-xs text-slate-500">
-        {{ t('retinal.compare.daysAgo', { days: data?.daysBetween ?? 0 }) }}
+        {{ t('retinal.compare.weeksAgo', { weeks: weeksBetween }) }}
       </span>
     </header>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">

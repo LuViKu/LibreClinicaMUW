@@ -116,11 +116,7 @@ useViewBreadcrumb(computed(() => {
         <NamdCompareTab v-else-if="tab === 'compare'" :data="data" />
         <NamdReportTab v-else-if="tab === 'report'" :data="data" />
       </template>
-      <!-- 2026-06-21 round 7 — empty state for the case where the
-           operator opened the workspace for a subject that has no
-           inference jobs yet. Previously the composable would silently
-           fall back to a mocked T&E timeline (Patient S-0042) which
-           read as real data. -->
+      <!-- Empty state — subject has no inference jobs yet; no silent mock fallback. -->
       <div
         v-else
         data-testid="namd-workspace-empty"

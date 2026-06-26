@@ -104,11 +104,9 @@ export const useModalityBaselinesStore = defineStore('modalityBaselines', () => 
   }
 
   return {
-    // state
     byKey,
     isLoadingByKey,
     errorByKey,
-    // actions
     load,
     reset,
   }

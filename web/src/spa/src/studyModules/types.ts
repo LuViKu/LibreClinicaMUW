@@ -76,7 +76,6 @@ export interface InjectionEntry<S extends InjectionSlotId = InjectionSlotId> {
   key: string
   /** i18n key for the label (resolved at render time). */
   labelKey: string
-  /** Vue SFC to mount. */
   component: Component
   /** Optional predicate — receives slot context and decides whether to mount. */
   predicate?: (ctx: SlotContextMap[S]) => boolean

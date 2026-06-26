@@ -13,9 +13,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.otp;
  * @author thillger
  */
 public enum LoginResult {
-    /**
-     * 
-     */
     SUCCESSFUL_LOGIN {
 
         @Override
@@ -23,9 +20,6 @@ public enum LoginResult {
             return "successful";
         }
     },
-    /**
-     * 
-     */
     DENIED_LOGIN {
 
         @Override
@@ -34,8 +28,5 @@ public enum LoginResult {
         }
     };
 
-    /**
-     * Returns a textual representation of the given item.
-     */
     public abstract String textual();
 }

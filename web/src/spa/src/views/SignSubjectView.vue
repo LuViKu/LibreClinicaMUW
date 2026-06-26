@@ -177,14 +177,12 @@ async function onSign(payload: ESignaturePayload) {
           </p>
         </div>
 
-        <!-- Preflight rows from the M3 endpoint -->
         <ConfirmationWithPreflight
           :heading="t('signSubject.preflightHeading')"
           :rows="preflightRows"
           class="mb-5"
         />
 
-        <!-- Casebook snapshot from the subject's events[] -->
         <section class="bg-white border border-slate-200 rounded-muw overflow-hidden mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t('signSubject.casebookHeading') }}</h2>
@@ -215,7 +213,6 @@ async function onSign(payload: ESignaturePayload) {
           </DenseTable>
         </section>
 
-        <!-- E-signature block — wired to the real /sign endpoint -->
         <ESignatureBlock
           :username="username"
           signature-mode="local"
@@ -236,7 +233,6 @@ async function onSign(payload: ESignaturePayload) {
           </template>
         </ESignatureBlock>
 
-        <!-- Inline submit error -->
         <div
           v-if="submitError"
           class="mt-4 rounded-muw bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700"
@@ -245,7 +241,6 @@ async function onSign(payload: ESignaturePayload) {
           {{ submitError }}
         </div>
 
-        <!-- Success toast on signed -->
         <div
           v-if="justSigned"
           class="mt-5 rounded-muw bg-muw-teal-50 border border-muw-teal-200 px-4 py-3 text-xs text-muw-teal-700 flex items-center gap-2.5"

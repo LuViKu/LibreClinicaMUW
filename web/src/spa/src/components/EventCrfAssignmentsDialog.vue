@@ -70,8 +70,6 @@ watch(
   },
 )
 
-/* --------------------------- Attach form --------------------------- */
-
 interface AttachForm {
   crfOid: string
   defaultVersionOid: string
@@ -152,8 +150,6 @@ async function submitAttach() {
   }
 }
 
-/* --------------------------- Edit panel --------------------------- */
-
 interface EditState {
   crfOid: string
   crfName: string
@@ -232,16 +228,12 @@ async function submitEdit() {
   }
 }
 
-/* ----------------------------- Remove ---------------------------- */
-
 async function onRemove(a: EventCrfAssignment) {
   if (!props.studyOid || !props.eventDef) return
   if (!confirm(t('assignCrfs.removeConfirm', { crf: a.crfName, event: props.eventDef.name }))) return
   const ok = await lib.removeAssignment(props.studyOid, props.eventDef.oid, a.crfOid)
   if (ok) await refresh()
 }
-
-/* ----------------------------- Helpers --------------------------- */
 
 const sdvOptions: { v: SdvRequirement; l: () => string }[] = [
   { v: 'NOTREQUIRED',    l: () => t('assignCrfs.sdv.NOTREQUIRED') },
@@ -278,7 +270,6 @@ const activeAssignments = computed(() =>
     </template>
 
     <div v-if="props.eventDef" class="space-y-6">
-      <!-- Current assignments -->
       <section>
         <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
           {{ t('assignCrfs.attachedHeading') }}
@@ -324,7 +315,6 @@ const activeAssignments = computed(() =>
         </ul>
       </section>
 
-      <!-- Inline edit panel -->
       <section
         v-if="editing"
         class="rounded-md border border-amber-200 bg-amber-50 p-3"
@@ -401,7 +391,6 @@ const activeAssignments = computed(() =>
         </div>
       </section>
 
-      <!-- Attach form -->
       <section v-if="eligibleCrfs.length > 0">
         <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
           {{ t('assignCrfs.attachHeading') }}

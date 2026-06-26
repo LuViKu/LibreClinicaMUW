@@ -47,7 +47,6 @@ const isSearching = ref(false)
 const errorMessage = ref<string | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
 
-/** Reactive shape so the template can hide / show empty / too-short. */
 const queryTrimmed = computed(() => query.value.trim())
 const tooShort = computed(() => queryTrimmed.value.length < 2)
 

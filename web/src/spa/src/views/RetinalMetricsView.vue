@@ -35,9 +35,10 @@ import { useStudyArm } from '@/composables/useStudyArm'
 
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import { useErrorsStore } from '@/stores/errors'
-import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 /**
  * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
@@ -52,7 +53,27 @@ const router = useRouter()
 const store = useRetinalJobStore()
 const errors = useErrorsStore()
 
-const jobId = computed<number>(() => Number(route.params.jobId))
+// This view serves two routes:
+//   /retinal-jobs/:jobId               — canonical, by global job id
+//   /subjects/:subjectLabel/jobs/:seq  — per-subject deep link (2026-06-26)
+// For the deep link we resolve (label, seq) → jobId once via the backend
+// resolver; everything below keys off the resolved jobId exactly as before.
+const routeJobId = computed<number | null>(() => {
+  const j = route.params.jobId
+  return typeof j === 'string' && j !== '' ? Number(j) : null
+})
+const subjectLabelParam = computed<string | null>(() => {
+  const l = route.params.subjectLabel
+  return typeof l === 'string' && l !== '' ? l : null
+})
+const subjectSeqParam = computed<number | null>(() => {
+  const s = route.params.seq
+  return typeof s === 'string' && s !== '' ? Number(s) : null
+})
+const resolvedJobId = ref<number | null>(null)
+const resolving = ref(false)
+const resolveError = ref<string | null>(null)
+const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
 const geometry = computed(() => {
@@ -62,6 +83,21 @@ const geometry = computed(() => {
 })
 const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
+const displayError = computed<string | null>(() => loadError.value ?? resolveError.value)
+
+// 2026-06-26 — breadcrumb trail on the per-subject deep link
+// (/subjects/{label}/jobs/{n}): "Studienteilnehmer > {label} > Job #{n}".
+// The by-id route carries no label/seq in the URL, so it renders no trail.
+useViewBreadcrumb(computed(() => {
+  const label = subjectLabelParam.value
+  const seq = subjectSeqParam.value
+  if (label == null || seq == null) return null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label, to: `/subjects/${encodeURIComponent(label)}` },
+    { label: t('retinal.breadcrumb.job', { seq }), to: null },
+  ]
+}))
 
 /**
  * 2026-06-22 round 9 follow-up — German status + task labels.
@@ -120,8 +156,6 @@ const hoveredBscanZ = ref<number | null>(null)
  */
 const selectedEtdrsRegions = ref<EtdrsRegion[]>([])
 
-/** Always a defined integer for the BscanViewer's v-model — falls
- *  back to the middle slice when no hover has set hoveredBscanZ. */
 const currentBscanZ = computed<number>(() => {
   if (hoveredBscanZ.value != null) return hoveredBscanZ.value
   const n = geometry.value?.bscan?.dim_z_bscans ?? 0
@@ -139,16 +173,33 @@ function onHoverBscan(z: number | null) {
   hoveredBscanZ.value = z
 }
 
-/* -------- Lifecycle -------------------------------------------------- */
-
 async function load() {
   try {
-    await store.loadJob(jobId.value, true)
+    if (routeJobId.value != null) {
+      // Canonical by-id route.
+      resolvedJobId.value = routeJobId.value
+      await store.loadJob(routeJobId.value, true)
+    } else if (subjectLabelParam.value != null && subjectSeqParam.value != null) {
+      // Per-subject deep link — resolve (label, seq) → jobId first. Keeps a
+      // separate resolving/resolveError state because there's no jobId to key
+      // the store's per-job loading/error maps on until the resolve returns.
+      resolving.value = true
+      resolveError.value = null
+      try {
+        const detail = await store.loadJobBySubjectSeq(
+          subjectLabelParam.value, subjectSeqParam.value)
+        resolvedJobId.value = detail?.jobId ?? null
+        if (detail == null) resolveError.value = 'not found'
+      } catch (e) {
+        resolveError.value = e instanceof Error ? e.message : String(e)
+      } finally {
+        resolving.value = false
+      }
+    }
     if (job.value?.geometryUrl != null) {
       await store.loadGeometry(jobId.value)
     }
   } catch {
-    // store records the error per-job; the template surfaces it.
   }
 }
 
@@ -172,11 +223,13 @@ function closeRerunMenuOnEscape(ev: KeyboardEvent): void {
   if (ev.key === 'Escape') rerunMenuOpen.value = false
 }
 
-watch(jobId, () => {
-  void load()
-})
-
-/* -------- Derived view-model ---------------------------------------- */
+// Re-load when the addressed job changes by EITHER route shape. We watch the
+// route params (not jobId) because jobId is itself derived from the resolve —
+// watching it would loop on the per-subject path.
+watch(
+  () => [routeJobId.value, subjectLabelParam.value, subjectSeqParam.value],
+  () => { void load() },
+)
 
 const isFluid = computed(() => job.value?.task === 'fluid')
 const isGa = computed(() => job.value?.task === 'ga')
@@ -486,8 +539,6 @@ const overlayTask = computed<FundusOverlayTask>(() => {
   return 'fluid'
 })
 
-/* -------- ETDRS region biomarker sums (2026-06-22) ----------------- */
-
 /**
  * Biomarker contributions per disjoint ETDRS region.
  *
@@ -722,8 +773,6 @@ function metricLabelClass(tone: KpiTile['tone']): string {
   }
 }
 
-/* -------- Display formatting helpers -------------------------------- */
-
 function formatIsoDate(iso: string | null): string {
   if (!iso) return '—'
   // Show date + HH:MM in UTC. Operators ask for the run time the same
@@ -753,12 +802,23 @@ const inflightMessage = computed(() => emptyStateMessage(job.value?.status))
 /* communicates the new status.                                  */
 /* ------------------------------------------------------------- */
 const retrying = computed<boolean>(() => !!store.retryInflight[jobId.value])
+// 2026-06-25 — explicit retry feedback. Success drives a dismissable banner;
+// failures go through the GlobalErrorToast. The inline loadError banner only
+// renders when the job failed to load (v-else-if="loadError && !job"), so a
+// retry failure on an already-open job would otherwise vanish silently.
+const retryNotice = ref<boolean>(false)
 async function onRetry(): Promise<void> {
   try {
     await store.retryJob(jobId.value)
+    retryNotice.value = true
   } catch (e) {
-    const message = e instanceof Error ? e.message : t('retinal.retry.error')
-    store.errors[jobId.value] = message
+    const status = (e as { status?: number }).status
+    const baseMsg = t('retinal.retry.error')
+    const fullMsg = status ? `${baseMsg} — HTTP ${status}` : baseMsg
+    errors.push(
+      e instanceof Error ? Object.assign(new Error(fullMsg), { cause: e }) : new Error(fullMsg),
+      'retinal.retry',
+    )
   }
 }
 
@@ -797,7 +857,7 @@ type RerunNotice =
   | { kind: 'duplicate'; task: RerunTask; jobId: number }
 const rerunNotice = ref<RerunNotice | null>(null)
 
-watch(jobId, () => { rerunNotice.value = null })
+watch(jobId, () => { rerunNotice.value = null; retryNotice.value = false })
 
 async function onRerunAs(task: RerunTask): Promise<void> {
   rerunMenuOpen.value = false
@@ -879,15 +939,40 @@ const streamJobId = computed<number | null>(() =>
 
 const { connected: liveConnected } = useJobStatusStream(streamJobId, {
   enabled: streamEnabled,
-  onStatus: (e) => {
-    // The store's DTO carries the authoritative payload (e.g.
-    // metrics, artifacts). The SSE event just tells us "something
-    // changed" — re-fetch when the status hits a terminal state.
-    if (e.status === 'done' || e.status === 'failed') {
-      void store.loadJob(jobId.value, true)
-    }
+  onStatus: () => {
+    // Any status push means the DTO (status, companion URLs, metrics) may
+    // have changed — re-fetch the job AND geometry via load() so the status
+    // pill, SLO/fundus, B-scan, and segmentation overlays render as each
+    // stage completes, with no manual refresh. (A bare loadJob() did not
+    // reload geometry, so the overlays could stay blank on `done` when the
+    // geometry wasn't available at initial mount — that was the refresh bug.)
+    // 2026-06-26 user-feedback round — also bust the segmentation
+    // envelope cache for this job. The first fetch during 'segmenting'
+    // resolves to null (no seg dir yet → 404), and the module-level
+    // Map caches that null forever. Without this, the layers-task
+    // overlay never appears on the BscanViewer + FundusOverlay until
+    // a manual page reload, even though the SSE 'done' push reaches us.
+    clearSegmentationEnvelopeCache(jobId.value)
+    void load()
   },
 })
+
+// 2026-06-25 — belt-and-suspenders live refresh while in-flight. The SSE
+// stream only pushes on actual status transitions, and the backend flips to
+// 'segmenting' BEFORE /preprocess writes the SLO/B-scan companions — so a job
+// can sit in 'segmenting' with freshly-available imagery the view hasn't
+// re-fetched. A slow poll while in-flight picks those up so the SLO/OCT/
+// segmentation appear when ready without a manual refresh; it stops the moment
+// the job reaches a terminal state (streamEnabled flips false) or unmount.
+let inflightPoll: ReturnType<typeof setInterval> | undefined
+function stopInflightPoll(): void {
+  if (inflightPoll) { clearInterval(inflightPoll); inflightPoll = undefined }
+}
+watch(streamEnabled, (active) => {
+  stopInflightPoll()
+  if (active) inflightPoll = setInterval(() => { void load() }, 12000)
+}, { immediate: true })
+onBeforeUnmount(stopInflightPoll)
 </script>
 
 <template>
@@ -900,16 +985,16 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
 
     <main class="flex-1 min-w-0 px-8 py-7">
       <div class="max-w-[1200px] mx-auto">
-        <p v-if="isLoading && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
+        <p v-if="(isLoading || resolving) && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
           {{ t('retinal.loading') }}
         </p>
 
         <div
-          v-else-if="loadError && !job"
+          v-else-if="displayError && !job"
           class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
           data-testid="retinal-view-error"
         >
-          {{ t('retinal.failedToLoad', { error: loadError }) }}
+          {{ t('retinal.failedToLoad', { error: displayError }) }}
         </div>
 
         <template v-else-if="job">
@@ -1086,7 +1171,23 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
             >{{ t('common.dismiss') }}</button>
           </div>
 
-          <!-- Empty / in-flight banner -->
+          <!-- Retry success banner. Re-dispatch confirmation so the operator
+               gets explicit feedback; failures surface via GlobalErrorToast
+               (see onRetry catch). Dismissable + auto-clears on jobId change. -->
+          <div
+            v-if="retryNotice"
+            class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 px-4 py-3 text-xs flex items-center gap-3"
+            data-testid="retinal-view-retry-notice"
+          >
+            <span class="flex-1">{{ t('retinal.retry.successBanner') }}</span>
+            <button
+              type="button"
+              class="text-[11px] underline hover:no-underline"
+              data-testid="retinal-view-retry-notice-dismiss"
+              @click="retryNotice = false"
+            >{{ t('common.dismiss') }}</button>
+          </div>
+
           <div
             v-if="inflightMessage"
             class="mb-5 rounded-2xl border px-4 py-3 text-xs"
@@ -1119,7 +1220,6 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
             :job-id="job.jobId"
           />
 
-          <!-- ════════ Metric cards — 4-card horizontal strip ════════ -->
           <div
             v-if="!armGate.hideAi.value && kpiTiles.length"
             class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5"
@@ -1150,9 +1250,7 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
             {{ t('retinal.empty.noKpi') }}
           </div>
 
-          <!-- ════════ Viewer row: en-face (5) + B-scan (7) ════════ -->
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5 items-stretch">
-            <!-- En-face fundus locator -->
             <section
               class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] flex flex-col"
               data-testid="retinal-view-fundus"
@@ -1245,7 +1343,6 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
               </div>
             </section>
 
-            <!-- B-Scan navigator -->
             <div class="lg:col-span-7 flex flex-col">
               <BscanViewer
                 v-if="job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
@@ -1260,12 +1357,11 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 v-else
                 class="flex-1 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center text-xs text-slate-500 italic min-h-[300px]"
               >
-                {{ t('retinal.empty.fundusNotAvailable') }}
+                {{ t('retinal.empty.bscanNotAvailable') }}
               </div>
             </div>
           </div>
 
-          <!-- ════════ ETDRS + Downloads row ════════ -->
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
             <section
               v-if="etdrsRows.length"
@@ -1332,7 +1428,6 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
             />
           </div>
 
-          <!-- Raw output payload (collapsible) -->
           <section
             class="rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] overflow-clip mb-6"
             data-testid="retinal-view-json"

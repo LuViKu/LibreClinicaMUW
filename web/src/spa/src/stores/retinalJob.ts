@@ -28,6 +28,7 @@ import { ref } from 'vue'
 import {
   fetchGeometry,
   getJob,
+  getJobBySubjectSeq,
   listEventCrfJobs,
   listSubjectJobs,
   retryRetinalJob,
@@ -77,6 +78,21 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
       delete next[jobId]
       loading.value = next
     }
+  }
+
+  /**
+   * 2026-06-26 — resolve a per-subject sequence number to the job detail
+   * (deep-link path /subjects/{label}/jobs/{n}) and cache it by its
+   * resolved jobId so the rest of the view works exactly as the by-id
+   * path. Re-throws on error so the view can surface a not-found state.
+   */
+  async function loadJobBySubjectSeq(
+    subjectLabel: string,
+    seq: number,
+  ): Promise<RetinalJobDetail | null> {
+    const detail = await getJobBySubjectSeq(subjectLabel, seq)
+    jobs.value = { ...jobs.value, [detail.jobId]: detail }
+    return detail
   }
 
   /**
@@ -205,6 +221,7 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
     retryInflight,
     rerunAsInflight,
     loadJob,
+    loadJobBySubjectSeq,
     loadGeometry,
     loadEventCrfJobs,
     loadSubjectJobs,

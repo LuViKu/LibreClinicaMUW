@@ -4,55 +4,22 @@ import { useI18n } from 'vue-i18n'
 import { useErrorsStore, type TrackedError } from '@/stores/errors'
 
 /**
- * Phase E hardening — A5 (SPA global error boundary). Extended by
- * Wave 1C (2026-06-19) to lengthen the dismiss window for clinical
- * reading time + surface raw server data (reqId, server message,
- * request URL) behind a Details disclosure, plus a stacked dropdown
- * listing the most recent queued errors when ≥2 are present.
+ * Singleton global error toast mounted once in {@link App.vue}. Surfaces
+ * the most recent {@link useErrorsStore} entry as a fixed bottom-right
+ * panel until dismissed or auto-dismiss elapses. The `reqId` pill renders
+ * the audit-trace id verbatim (copy-friendly) so operators can quote it to
+ * the sysadmin; hidden when no reqId. Server message + URL sit behind a
+ * Details disclosure. A "{N} weitere Fehler" pill lists recent queued
+ * errors when ≥2 are present.
  *
- * Singleton toast mounted once in {@link App.vue}. Surfaces the most
- * recent entry from {@link useErrorsStore} as a fixed bottom-right
- * panel until the user dismisses it or the auto-dismiss elapses.
- *
- * Auto-dismiss is 30 seconds (was 8s) — clinical operators typically
- * need 10–20 seconds to read + decide whether to copy the reqId,
- * and 8 seconds proved too short in the field. The timer is paused
- * while the Details disclosure is open so an operator inspecting the
- * raw payload isn't surprised by a mid-read disappearance.
- *
- * The audit-trail decision (2026-06-10) dictates that operator
- * "this didn't save" reports must be tied to a backend log line and
- * audit row via a trace id. The `reqId` pill renders that id verbatim
- * (mono font, copy-friendly) so the operator can quote it to the
- * sysadmin. The pill is hidden when no `reqId` is present so dev-time
- * render errors (which never had a request) don't display "Fehler-ID: ".
- *
- * Stacked dropdown: when ≥2 errors are queued in the ring buffer,
- * a "{N} weitere Fehler" pill appears. Clicking it opens a list of
- * the last 5 entries (excluding the one currently shown); clicking
- * an item promotes it to the main toast view (via {@link useErrorsStore}
- * removing the intermediate entries so the chosen one becomes
- * `latest`). Clinical fast-sequence failures (e.g. autosave + manual
- * save + signature-verify all 500 within 2 seconds) stay reviewable.
- *
- * Accessibility — WCAG SC 4.1.3 (Status Messages):
- *   - `role="status"` + `aria-live="polite"` so the toast announces
- *     without stealing focus from the user's current task.
- *   - The close button and details disclosure have i18n aria-labels.
- *   - The <details> element is intrinsically accessible (summary +
- *     aria-expanded on the native element); we surface a data-testid
- *     for tests but no extra aria.
+ * Accessibility — WCAG SC 4.1.3 (Status Messages): `role="status"` +
+ * `aria-live="polite"` announce without stealing focus.
  */
 
 const errors = useErrorsStore()
 const { t } = useI18n()
 
-/**
- * Auto-dismiss window. 30 seconds gives clinical operators time to
- * read the message, decide whether to copy the reqId, and optionally
- * expand the Details — Phase E hardening shipped with 8s which the
- * field reported as too short (Wave 1C feedback batch, 2026-06-19).
- */
+/** Auto-dismiss window — 30s gives clinical operators time to read and copy the reqId. */
 const AUTO_DISMISS_MS = 30000
 
 const current = computed<TrackedError | null>(() => errors.latest)

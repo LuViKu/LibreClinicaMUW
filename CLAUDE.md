@@ -20,7 +20,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.5.0-beta.3-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.4-muw` | continues with `-muw` suffix |
 
 ## Build & run
 

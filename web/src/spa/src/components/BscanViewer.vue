@@ -64,11 +64,25 @@ interface Props {
    * single-slice B-scan that survives {@code Cmd-P}.
    */
   staticFrame?: boolean
+  /**
+   * 2026-06-26 user-feedback round — release the canvas wrapper
+   * from its hardcoded {@code aspect-[4/3]} constraint. The
+   * default behaviour (false) keeps the viewer at a stable
+   * 4:3 footprint regardless of available height — the same
+   * shape every consumer used historically. The nAMD scan-frame
+   * fullscreen mode passes {@code true} so the wrapper grows
+   * to {@code h-full w-full}, letting cornerstone fit-inside
+   * use the entire viewport. The overlay bbox recompute is
+   * ResizeObserver-driven so the seg overlay tracks the new
+   * canvas size automatically.
+   */
+  fillContainer?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showSegmentation: true,
   staticFrame: false,
+  fillContainer: false,
 })
 const emit = defineEmits<{
   'update:modelValue': [z: number]
@@ -81,7 +95,10 @@ const errorMessage = ref<string | null>(null)
 // Hold the cornerstone viewport ref non-reactively (the cornerstone
 // objects mutate internally; we don't want Vue's proxy attached).
 const viewport = shallowRef<unknown | null>(null)
-const renderingEngineRef = shallowRef<{ destroy: () => void } | null>(null)
+const renderingEngineRef = shallowRef<{
+  destroy: () => void
+  resize?: (immediate?: boolean, keepCamera?: boolean) => void
+} | null>(null)
 
 const sliderMax = computed(() => Math.max(0, props.nBscans - 1))
 
@@ -287,21 +304,6 @@ function paintOverlay(): void {
     if (!ctx) return
     const data = env.data as Uint8Array
     const offset = z * cols
-    // 2026-06-23 — diagnostic: per-slice non-zero count + total. Lets
-    // us see immediately whether the SPA is receiving the new GA loader
-    // output (slice 0 should be all zeros, total ~2503) vs the cached
-    // pre-fix envelope (which paints the entire bottom band).
-    let nonZeroOnThisSlice = 0
-    for (let i = 0; i < cols; i++) if ((data[offset + i] ?? 0) !== 0) nonZeroOnThisSlice++
-    let totalNonZero = 0
-    for (let i = 0; i < data.length; i++) if (data[i] !== 0) totalNonZero++
-    // eslint-disable-next-line no-console
-    console.debug('[BscanViewer] binary_2d paint:',
-      'shape=', env.shape, 'z=', z, 'cols=', cols,
-      'nonZeroOnThisSlice=', nonZeroOnThisSlice,
-      'totalNonZero=', totalNonZero,
-      'first10=', Array.from(data.slice(offset, offset + 10)),
-    )
     const img = ctx.createImageData(cols, H)
     const bandStart = Math.floor(H * 0.88) // bottom 12%
     const COLOUR = [217, 70, 239] // fuchsia-500
@@ -355,13 +357,6 @@ function paintOverlay(): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, cols, h)
-    // eslint-disable-next-line no-console
-    console.debug('[BscanViewer] surface_y paint:',
-      'shape=', env.shape, 'nSurfaces=', nSurfaces, 'cols=', cols,
-      'z=', z, 'canvas=', canvas.width, 'x', canvas.height,
-      'firstUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + i]),
-      'lastUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + (cols - 5 + i)]),
-    )
     // 2026-06-25 — palette is task-specific. The `layers` task ships
     // an 11-surface IOWA stack; other surface_y tasks (onl, pr) stay
     // on the legacy 4-entry SURFACE_PALETTE which wraps modulo. Per-
@@ -480,8 +475,6 @@ function recomputeOverlayBbox(): void {
         // Our overlay sits as a sibling of containerEl, so its
         // (0,0) is the same as the canvas's (0,0).
         overlayBbox.value = { left, top, width, height }
-        // eslint-disable-next-line no-console
-        console.debug('[BscanViewer] overlay bbox via worldToCanvas:', overlayBbox.value)
         return
       }
     }
@@ -571,6 +564,16 @@ async function initViewer(): Promise<void> {
       destroy: () => void
       enableElement: (input: unknown) => void
       getViewport: (id: string) => unknown
+      /**
+       * 2026-06-26 user-feedback round — cornerstone3D
+       * RenderingEngine.resize(immediate=true, keepCamera=true)
+       * re-fits the viewport's canvas to the host element's
+       * current size. Without this the canvas stays at whatever
+       * dimensions it had at enableElement time; the nAMD
+       * fullscreen transition resizes the container but the
+       * B-scan stayed half-width inside it.
+       */
+      resize: (immediate?: boolean, keepCamera?: boolean) => void
     }
     const RenderingEngine = (cornerstoneCore as unknown as {
       RenderingEngine: new (id: string) => RE
@@ -767,7 +770,41 @@ onMounted(async () => {
   // Recompute on resize so the overlay tracks the bscan as the
   // browser window or surrounding layout changes.
   if (containerEl.value && 'ResizeObserver' in window) {
-    resizeObs = new ResizeObserver(() => recomputeOverlayBbox())
+    resizeObs = new ResizeObserver(() => {
+      // 2026-06-26 user-feedback round — cornerstone re-fits its
+      // viewport canvas to the now-resized host element. The
+      // nAMD fullscreen + compare-stacked flows toggle the
+      // wrapper's flex-1 height after mount; without this the
+      // B-scan stays at the pre-fullscreen pixel dimensions and
+      // sits awkwardly in the left half of a much larger
+      // container. recomputeOverlayBbox runs after so the seg
+      // overlay tracks the new canvas position.
+      try {
+        // 2026-06-26 user-feedback round — keepCamera=false so the
+        // image REFITS to the new canvas bounds. With keepCamera=true
+        // the canvas grew on fullscreen open but the camera's zoom
+        // stayed at the smaller-container value, leaving the image
+        // visually shrunk in the centre of the now-much-larger
+        // canvas. A pan/zoom panel isn't surfaced on the nAMD scan
+        // frames so the operator doesn't lose any state they care
+        // about by the refit.
+        renderingEngineRef.value?.resize?.(true, false)
+        // Belt-and-suspenders: explicitly resetCamera on the active
+        // viewport. resize(immediate=true, keepCamera=false) SHOULD
+        // refit; we call resetCamera too because some cornerstone3D
+        // viewport types only honour the engine-level refit on the
+        // next render tick and we want a synchronous refit here.
+        const vp = viewport.value as {
+          resetCamera?: () => void
+          render?: () => void
+        } | null
+        vp?.resetCamera?.()
+        vp?.render?.()
+      } catch {
+        /* cornerstone may throw if mid-tear-down; non-fatal */
+      }
+      recomputeOverlayBbox()
+    })
     resizeObs.observe(containerEl.value)
   }
 })
@@ -786,7 +823,10 @@ onBeforeUnmount(() => {
 <template>
   <section
     data-testid="bscan-viewer"
-    class="bg-slate-900 rounded-2xl overflow-clip border border-slate-800"
+    :class="[
+      'bg-slate-900 rounded-2xl overflow-clip border border-slate-800',
+      fillContainer ? 'h-full flex flex-col' : '',
+    ]"
   >
     <header
       v-if="!staticFrame"
@@ -880,8 +920,17 @@ onBeforeUnmount(() => {
          The overlay canvas is absolutely positioned via :style at the
          bscan's actual rendered bbox (queried from worldToCanvas),
          so it ALWAYS aligns regardless of how cornerstone chooses to
-         scale internally. -->
-    <div class="relative aspect-[4/3] w-full bg-black flex items-center justify-center overflow-hidden">
+         scale internally.
+         2026-06-26 — fillContainer releases the aspect constraint so
+         the nAMD fullscreen mode can have cornerstone span the entire
+         viewport. ResizeObserver-driven overlay-bbox recompute tracks
+         the new canvas size automatically. -->
+    <div
+      :class="[
+        'relative w-full bg-black flex items-center justify-center overflow-hidden',
+        fillContainer ? 'flex-1 min-h-0' : 'aspect-[4/3]',
+      ]"
+    >
       <div
         ref="containerEl"
         data-testid="bscan-viewer-canvas"

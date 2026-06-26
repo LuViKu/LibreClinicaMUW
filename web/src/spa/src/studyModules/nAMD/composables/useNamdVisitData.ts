@@ -127,14 +127,14 @@ function buildMockData(): NamdWorkspaceData {
     regimen: 'Treat-and-Extend · Aflibercept',
   }
   const visits: NamdVisit[] = [
-    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
   ]
   const current = visits[visits.length - 1]!
   const prev = visits[visits.length - 2]!
@@ -159,6 +159,19 @@ function fluidJobToVisit(
 ): NamdVisit {
   const payload = detail?.outputPayload
   const biomarkers = isFluidPayload(payload) ? payload.biomarkers : null
+  // 2026-06-26 user-feedback round — surface the per-ETDRS-ring
+  // biomarker breakdown so the Flüssigkeitsverlauf chart's region
+  // filter (1 mm / 3 mm / 6 mm) can swap the polygon source values.
+  // Same mm³→nL conversion as the flat biomarkers above. Null when
+  // the source payload predates the etdrs_mm3 emission.
+  const etdrs = isFluidPayload(payload) ? payload.etdrs_mm3 : null
+  const fluidByRegion = etdrs
+    ? {
+        c1: { irf: mm3ToNl(etdrs.central_1mm.irf), srf: mm3ToNl(etdrs.central_1mm.srf), ped: mm3ToNl(etdrs.central_1mm.ped) },
+        c3: { irf: mm3ToNl(etdrs.central_3mm.irf), srf: mm3ToNl(etdrs.central_3mm.srf), ped: mm3ToNl(etdrs.central_3mm.ped) },
+        c6: { irf: mm3ToNl(etdrs.central_6mm.irf), srf: mm3ToNl(etdrs.central_6mm.srf), ped: mm3ToNl(etdrs.central_6mm.ped) },
+      }
+    : null
   // 2026-06-24 — pick the central-1mm CRT for the visit's eye. Each
   // eye's value is null until both the GA + BM jobs for that
   // (visit, eye) reach `done`; the chart renders 0 in that case.
@@ -210,6 +223,7 @@ function fluidJobToVisit(
     irf: mm3ToNl(biomarkers?.irf_mm3),
     srf: mm3ToNl(biomarkers?.srf_mm3),
     ped: mm3ToNl(biomarkers?.ped_mm3),
+    fluidByRegion,
     crt: crtMicrons,
     bcva: bcvaLetters,
     bcvaRaw,
@@ -225,15 +239,10 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   const error = ref<string | null>(null)
 
   /**
-   * 2026-06-24 user-feedback round — eye-switcher support.
-   *
-   * <p>The workspace is single-eye at render time, but a subject may
-   * have done fluid jobs for both OD and OS. {@link availableEyes}
-   * holds the set of eyes the subject has jobs for; the banner
-   * renders one pill per entry. {@link selectedEye} drives the
-   * filter applied to {@link allFluidDone} when assembling the
-   * visit timeline. {@link setEye} switches the active eye locally
-   * (no HTTP round-trip — we cached the summaries + details below).
+   * Eye-switcher: switch OD/OS from cache, no refetch. {@link availableEyes}
+   * = eyes the subject has jobs for; {@link selectedEye} filters
+   * {@link allFluidDone} when assembling the timeline; {@link setEye}
+   * switches locally (summaries + details cached below).
    */
   const availableEyes = ref<Laterality[]>([])
   const selectedEye = ref<Laterality>('OD')
@@ -430,19 +439,11 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   )
 
   // Reactive AI derivation — keeps the workspace's recommendation
-  // up-to-date if the data ref is later swapped (e.g. via {@code refresh()}).
+  // up-to-date if the data ref is later swapped (e.g. via refresh()).
   //
-  // 2026-06-24 user-feedback round — previously this re-assigned
-  // {@code data.value = { ...data.value, ai }} which spawned a new
-  // outer object identity on every aiRef tick. Vue's reactivity
-  // re-tracked the new proxy, App.vue's breadcrumb-consuming
-  // template re-ran, and (combined with the per-render array-literal
-  // identity from useViewBreadcrumb's source computed) tripped the
-  // "Maximum recursive updates exceeded" guard. Mutate the EXISTING
-  // {@code data.value.ai} field in place instead — same reactive
-  // outer object, only the nested property changes, so the
-  // breadcrumb computed isn't invalidated and the render loop stays
-  // bounded.
+  // Mutate data.value.ai in place — re-assigning the outer object broke its
+  // identity, which (via the breadcrumb computed) tripped Vue's "Maximum
+  // recursive updates exceeded" guard.
   const currentRef = computed(() => data.value?.current ?? null)
   const prevRef = computed(() => data.value?.prev ?? null)
   const aiRef = useNamdAiRecommendation({ current: currentRef, prev: prevRef })
