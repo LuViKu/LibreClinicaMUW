@@ -1876,6 +1876,22 @@ export interface paths {
         patch: operations["bindParkedJob"];
         trace?: never;
     };
+    "/api/v1/subjects/{subjectLabel}/retinal-jobs/{seq}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getJobBySubjectSeq"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects/{studySubjectOid}/preflightForSign": {
         parameters: {
             query?: never;
@@ -8217,6 +8233,29 @@ export interface operations {
                 "application/json": components["schemas"]["BindRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getJobBySubjectSeq: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectLabel: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
