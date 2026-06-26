@@ -221,8 +221,8 @@ function toggleSynced(): void {
     >
       <section
         v-for="side in [
-          { key: 'A', tag: t('studyModules.namd.compare.tagReference'), visit: aVisit, slice: leftSlice, setSlice: leftSetSlice, idBase: 'cmp-fs-a' },
-          { key: 'B', tag: t('studyModules.namd.compare.tagCurrent'),   visit: bVisit, slice: rightSlice, setSlice: rightSetSlice, idBase: 'cmp-fs-b' },
+          { key: 'A', tag: t('studyModules.namd.compare.tagReference'), visit: aVisit, other: bVisit, slice: leftSlice, setSlice: leftSetSlice, idBase: 'cmp-fs-a' },
+          { key: 'B', tag: t('studyModules.namd.compare.tagCurrent'),   visit: bVisit, other: aVisit, slice: rightSlice, setSlice: rightSetSlice, idBase: 'cmp-fs-b' },
         ]"
         :key="side.key"
         :data-testid="`namd-compare-fs-pane-${side.key}`"
@@ -239,6 +239,7 @@ function toggleSynced(): void {
         <NamdScanFrame
           v-if="side.visit"
           :visit="side.visit"
+          :prev-visit="side.other"
           :eye="props.data.patient.eye"
           :n-slices="nSlices"
           :slice="side.slice"
@@ -299,8 +300,8 @@ function toggleSynced(): void {
     <div v-if="!fsOpen" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <Card
         v-for="(side, i) in [
-          { tag: t('studyModules.namd.compare.tagReference'), id: aId, setId: (v: string) => (aId = v), visit: aVisit, slice: leftSlice, setSlice: leftSetSlice, excludeOther: bId, variant: 'A' as const, idBase: 'cmp-a' },
-          { tag: t('studyModules.namd.compare.tagCurrent'),   id: bId, setId: (v: string) => (bId = v), visit: bVisit, slice: rightSlice, setSlice: rightSetSlice, excludeOther: aId, variant: 'B' as const, idBase: 'cmp-b' },
+          { tag: t('studyModules.namd.compare.tagReference'), id: aId, setId: (v: string) => (aId = v), visit: aVisit, other: bVisit, slice: leftSlice, setSlice: leftSetSlice, excludeOther: bId, variant: 'A' as const, idBase: 'cmp-a' },
+          { tag: t('studyModules.namd.compare.tagCurrent'),   id: bId, setId: (v: string) => (bId = v), visit: bVisit, other: aVisit, slice: rightSlice, setSlice: rightSetSlice, excludeOther: aId, variant: 'B' as const, idBase: 'cmp-b' },
         ]"
         :key="i"
       >
@@ -321,6 +322,7 @@ function toggleSynced(): void {
         <NamdScanFrame
           v-if="side.visit"
           :visit="side.visit"
+          :prev-visit="side.other"
           :eye="props.data.patient.eye"
           :n-slices="nSlices"
           :slice="side.slice"

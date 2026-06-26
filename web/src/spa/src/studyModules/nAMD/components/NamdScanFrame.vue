@@ -25,6 +25,7 @@ import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue
 import { useI18n } from 'vue-i18n'
 import { artifactUrl } from '@/api/retinal'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import { useRetinalJobStore } from '@/stores/retinalJob'
 import { formatDate } from '@/lib/dateFormat'
 import NamdEnFaceLocator from './NamdEnFaceLocator.vue'
 import { I } from '../icons'
@@ -89,6 +90,29 @@ interface Props {
    *     the fullscreen affordance.
    */
   fillContainer?: boolean
+  /**
+   * 2026-06-26 user-feedback round (round 3) — comparison anchor
+   * for the activity heatmap's diverging colormap. When supplied,
+   * each B-scan bar's COLOR encodes
+   *   {@code current.per_bscan_mm2[i] − prev.per_bscan_mm2[i]}
+   * on a red-green diverging scale — red where this visit has
+   * MORE fluid at this slice than the reference (clinically bad),
+   * green where it has LESS (clinically good), grey near zero.
+   * Bar HEIGHT continues to encode the current visit's per-slice
+   * activity so taller bars still call attention to the
+   * fluid-heavy slices.
+   *
+   * <p>Wiring:
+   *   * OCT-Viewer tab passes {@code props.data.prev} so the
+   *     viewer shows change vs the previous chronological visit.
+   *   * Compare-tab panes pass each OTHER side's visit so the
+   *     two panes' bars read symmetrically opposite (red on one
+   *     = green on the other at the same slice).
+   *
+   * <p>Null / undefined falls back to the legacy coral / grey
+   * behaviour (active = coral, inactive = light grey).
+   */
+  prevVisit?: NamdVisit | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -97,6 +121,7 @@ const props = withDefaults(defineProps<Props>(), {
   enableFullscreen: true,
   sliderTone: 'navy',
   fillContainer: false,
+  prevVisit: null,
 })
 
 const emit = defineEmits<{
@@ -245,6 +270,131 @@ onBeforeUnmount(() => {
 })
 
 const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
+
+/* ── 2026-06-26 user-feedback round — per-slice Δ colormap ────── */
+
+const jobStore = useRetinalJobStore()
+
+// Ensure the prev-visit's job detail is loaded so we can read its
+// per_bscan_mm2 array. Cached by the store so a return-trip from
+// another tab is free; null prevVisit / null retinalJobId no-ops.
+watch(
+  () => props.prevVisit?.retinalJobId ?? null,
+  async (id) => {
+    if (id == null) return
+    if (jobStore.jobs[id] == null) await jobStore.loadJob(id)
+  },
+  { immediate: true },
+)
+watch(
+  () => props.visit.retinalJobId,
+  async (id) => {
+    if (id == null) return
+    if (jobStore.jobs[id] == null) await jobStore.loadJob(id)
+  },
+  { immediate: true },
+)
+
+/**
+ * Sum the three fluid biomarkers (irf + srf + ped) per B-scan
+ * from an output_payload's {@code per_bscan_mm2} array. Returns
+ * null when the payload isn't fluid-shaped or the arrays are
+ * missing — the colormap falls back to the legacy coral / grey
+ * scheme in that case.
+ */
+function perBscanFluidMm2(payload: unknown): number[] | null {
+  if (!payload || typeof payload !== 'object') return null
+  const per = (payload as { per_bscan_mm2?: unknown }).per_bscan_mm2
+  if (!per || typeof per !== 'object') return null
+  const { irf, srf, ped } = per as { irf?: unknown; srf?: unknown; ped?: unknown }
+  if (!Array.isArray(irf) || !Array.isArray(srf) || !Array.isArray(ped)) return null
+  const n = Math.min(irf.length, srf.length, ped.length)
+  const out = new Array<number>(n)
+  for (let i = 0; i < n; i++) {
+    const a = typeof irf[i] === 'number' ? (irf[i] as number) : 0
+    const b = typeof srf[i] === 'number' ? (srf[i] as number) : 0
+    const c = typeof ped[i] === 'number' ? (ped[i] as number) : 0
+    out[i] = a + b + c
+  }
+  return out
+}
+
+/**
+ * Per-slice Δ = current.per_bscan − prev.per_bscan (mm²). Null
+ * when either job's detail hasn't loaded yet OR the payloads
+ * lack the per_bscan_mm2 trace. The colormap reads the array
+ * and the maxAbsDelta normaliser; when null, every bar falls
+ * back to the legacy coral / grey scheme.
+ */
+const perSliceDeltaMm2 = computed<number[] | null>(() => {
+  if (props.prevVisit == null) return null
+  const curId = props.visit.retinalJobId
+  const prvId = props.prevVisit.retinalJobId
+  if (curId == null || prvId == null) return null
+  const curJob = jobStore.jobs[curId]
+  const prvJob = jobStore.jobs[prvId]
+  if (!curJob || !prvJob) return null
+  const cur = perBscanFluidMm2(curJob.outputPayload)
+  const prv = perBscanFluidMm2(prvJob.outputPayload)
+  if (!cur || !prv) return null
+  const n = Math.min(cur.length, prv.length)
+  if (n === 0) return null
+  const out = new Array<number>(n)
+  for (let i = 0; i < n; i++) out[i] = cur[i]! - prv[i]!
+  return out
+})
+
+/** Largest absolute Δ across all slices — colormap normaliser. */
+const maxAbsDeltaMm2 = computed<number>(() => {
+  const d = perSliceDeltaMm2.value
+  if (!d) return 0
+  let m = 0
+  for (const v of d) {
+    const a = Math.abs(v)
+    if (a > m) m = a
+  }
+  return m
+})
+
+/**
+ * Diverging red-green colormap for a per-slice Δ. Normalised
+ * against the visit's max absolute delta so the scale adapts
+ * to each comparison's range (a baseline-vs-active-week showdown
+ * doesn't drown a baseline-vs-baseline near-zero comparison).
+ *
+ * <ul>
+ *   <li>Δ > 0 (more fluid than reference) → red (clinically bad).</li>
+ *   <li>Δ < 0 (less fluid than reference) → emerald (clinically good).</li>
+ *   <li>|Δ| ≈ 0 → mid-saturation neutral grey.</li>
+ * </ul>
+ *
+ * <p>Alpha grows with magnitude so a major change pops while a
+ * tiny one stays muted, avoiding "everything is red / green"
+ * noise on borderline visits.
+ */
+function deltaColor(d: number): string {
+  const m = maxAbsDeltaMm2.value
+  if (m <= 0) return '#a8b1bf'
+  const t = Math.max(-1, Math.min(1, d / m))
+  if (Math.abs(t) < 0.05) return '#a8b1bf'
+  const alpha = 0.45 + 0.55 * Math.abs(t)
+  if (t > 0) return `rgba(220, 38, 38, ${alpha.toFixed(2)})` // red-600
+  return `rgba(16, 185, 129, ${alpha.toFixed(2)})`            // emerald-500
+}
+
+/**
+ * Resolve the activity bar's fill colour for index i.
+ * Precedence:
+ *   1. selected slice → navy (or white in fullscreen for contrast)
+ *   2. per-slice Δ colormap when {@link prevVisit} supplied + payloads loaded
+ *   3. legacy: coral when above the activity threshold, grey otherwise
+ */
+function barColor(i: number, a: number): string {
+  if (i === props.slice) return fillsParent.value ? '#5fb4e5' : '#111d4e'
+  const deltas = perSliceDeltaMm2.value
+  if (deltas && deltas[i] != null) return deltaColor(deltas[i]!)
+  return a > 0.25 ? 'rgba(217,97,74,0.55)' : '#d7dce6'
+}
 
 /**
  * 2026-06-26 user-feedback round — fullscreen state.
@@ -484,12 +634,7 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
             class="flex-1 rounded-[1px] cursor-pointer p-0 border-0 outline-none focus:ring-1 focus:ring-muw-sky"
             :style="{
               height: `${20 + a * 80}%`,
-              background:
-                i === slice
-                  ? '#111d4e'
-                  : a > 0.25
-                    ? 'rgba(217,97,74,0.55)'
-                    : '#d7dce6',
+              background: barColor(i, a),
             }"
             :aria-label="`B-Scan ${i + 1}`"
             @click="setSlice(i)"

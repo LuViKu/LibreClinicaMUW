@@ -269,6 +269,7 @@ function formatNumber(v: number): string {
         <NamdScanFrame
           v-if="props.data.current"
           :visit="props.data.current"
+          :prev-visit="props.data.prev"
           :eye="props.data.patient.eye"
           :n-slices="nSlices"
           :slice="slice"
