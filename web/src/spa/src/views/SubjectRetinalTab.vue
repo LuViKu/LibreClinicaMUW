@@ -103,6 +103,101 @@ function formatPrimary(job: RetinalJobSummary): string {
   const unit = job.primaryMetric.unit ?? ''
   return unit ? `${v} ${unit}` : String(v)
 }
+
+/* ── 2026-06-26 user-feedback round — sortable columns ── */
+
+/**
+ * Sort key. Each column header cycles between asc / desc on the same
+ * column, or sets a new column with the default direction below.
+ * Default = acquisitionDate desc (most recent scan first), which
+ * matches operator expectations from the timeline view.
+ */
+type SortKey = 'job' | 'acquired' | 'task' | 'eye' | 'status' | 'metric'
+type SortDir = 'asc' | 'desc'
+interface SortState { key: SortKey; dir: SortDir }
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  job: 'desc',
+  acquired: 'desc',
+  task: 'asc',
+  eye: 'asc',
+  status: 'asc',
+  metric: 'desc',
+}
+const sort = ref<SortState>({ key: 'acquired', dir: 'desc' })
+
+function toggleSort(key: SortKey): void {
+  if (sort.value.key === key) {
+    sort.value = { key, dir: sort.value.dir === 'asc' ? 'desc' : 'asc' }
+  } else {
+    sort.value = { key, dir: DEFAULT_DIR[key] }
+  }
+}
+
+/** Comparator value per column. Returns a tuple (primary, secondary)
+ *  so equal primary values fall back to a stable secondary (jobId)
+ *  for deterministic ordering on ties. */
+function sortValue(row: RetinalJobSummary, key: SortKey): [number | string, number] {
+  const sec = row.jobId
+  switch (key) {
+    case 'job':
+      return [row.subjectSeq ?? row.jobId, sec]
+    case 'acquired':
+      // Null acquisition dates sort to the END regardless of direction
+      // by mapping to the sentinel '' which compares LOW; the direction
+      // multiplier in compareTuple flips that. Operators consistently
+      // want "no data" rows at the bottom — having them mid-list
+      // when sorted ASC is more confusing than convenient.
+      return [row.acquisitionDate ?? '', sec]
+    case 'task':
+      return [row.task ?? '', sec]
+    case 'eye':
+      return [row.laterality ?? '', sec]
+    case 'status':
+      return [row.status ?? '', sec]
+    case 'metric':
+      return [row.primaryMetric?.value ?? Number.NEGATIVE_INFINITY, sec]
+  }
+}
+
+const sortedJobs = computed<RetinalJobSummary[]>(() => {
+  const arr = jobs.value.slice()
+  const { key, dir } = sort.value
+  const mul = dir === 'asc' ? 1 : -1
+  arr.sort((a, b) => {
+    const [av, asec] = sortValue(a, key)
+    const [bv, bsec] = sortValue(b, key)
+    // Acquisition-date sentinel handling — keep nulls always at the bottom
+    // regardless of dir, since "no data" rows mid-list are confusing.
+    if (key === 'acquired') {
+      const aMissing = av === ''
+      const bMissing = bv === ''
+      if (aMissing && !bMissing) return 1
+      if (!aMissing && bMissing) return -1
+    }
+    if (av < bv) return -1 * mul
+    if (av > bv) return 1 * mul
+    return asec - bsec
+  })
+  return arr
+})
+
+/** Arrow glyph for the column header (▲ asc, ▼ desc, dimmed for inactive). */
+function sortArrow(key: SortKey): string {
+  if (sort.value.key !== key) return ''
+  return sort.value.dir === 'asc' ? '▲' : '▼'
+}
+
+/** Sortable column definitions for the template v-for. The template
+ *  can't carry TS type casts (Vue's SFC compiler rejects `as`), so
+ *  declare the typed array here once and iterate it below. */
+const SORTABLE_COLS: { key: SortKey; label: string }[] = [
+  { key: 'job', label: 'colJob' },
+  { key: 'acquired', label: 'colAcquired' },
+  { key: 'task', label: 'colTask' },
+  { key: 'eye', label: 'colEye' },
+  { key: 'status', label: 'colStatus' },
+  { key: 'metric', label: 'colPrimaryMetric' },
+]
 </script>
 
 <template>
@@ -167,17 +262,30 @@ function formatPrimary(job: RetinalJobSummary): string {
       </p>
       <DenseTable v-else :bordered="false">
         <template #header>
+          <!-- 2026-06-26 — sortable column headers. Click cycles
+               asc/desc on the active column; clicking another
+               column resets it to that column's default direction
+               (see DEFAULT_DIR above). The arrow lives in a fixed-
+               width span so the layout doesn't shift when sorting. -->
           <tr class="border-b border-slate-200">
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colJob') }}</th>
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colAcquired') }}</th>
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colTask') }}</th>
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colEye') }}</th>
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colStatus') }}</th>
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colPrimaryMetric') }}</th>
+            <th
+              v-for="col in SORTABLE_COLS"
+              :key="col.key"
+              scope="col"
+              class="px-5 py-2 font-medium select-none cursor-pointer hover:text-muw-blue"
+              :data-testid="`subject-retinal-tab-sort-${col.key}`"
+              :aria-sort="sort.key === col.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'"
+              @click="toggleSort(col.key)"
+            >
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t(`retinal.trends.history.${col.label}`) }}</span>
+                <span class="w-2 text-[10px]" :class="sort.key === col.key ? 'text-muw-blue' : 'text-slate-300'">{{ sortArrow(col.key) }}</span>
+              </span>
+            </th>
             <th scope="col" class="px-5 py-2 font-medium w-20 text-right"></th>
           </tr>
         </template>
-        <tr v-for="row in jobs" :key="row.jobId" data-testid="subject-retinal-tab-history-row">
+        <tr v-for="row in sortedJobs" :key="row.jobId" data-testid="subject-retinal-tab-history-row">
           <td class="px-5 py-2.5 font-mono text-xs">#{{ row.subjectSeq ?? row.jobId }}</td>
           <td class="px-5 py-2.5 font-mono text-xs text-slate-600">{{ formatAcqDate(row.acquisitionDate) }}</td>
           <td class="px-5 py-2.5 text-xs uppercase">{{ row.task }}</td>
