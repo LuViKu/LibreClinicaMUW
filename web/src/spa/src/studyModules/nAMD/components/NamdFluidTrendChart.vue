@@ -339,9 +339,9 @@ function fmtDate(iso: string): string {
         <span class="w-2.5 h-2.5 rounded-full" :style="`background:${FLUID[k].color}`" />
         <span class="font-semibold tracking-tight">{{ k }}</span>
       </span>
-      <span class="inline-flex items-center gap-1.5" data-testid="namd-fluid-legend-chip-CRT">
+      <span class="inline-flex items-center gap-1.5" data-testid="namd-fluid-legend-chip-CST">
         <svg viewBox="0 0 14 6" class="w-4 h-2"><line x1="0" x2="14" y1="3" y2="3" stroke="#111d4e" stroke-width="2" /></svg>
-        <span class="font-semibold tracking-tight">CRT</span>
+        <span class="font-semibold tracking-tight">CST</span>
       </span>
       <span class="inline-flex items-center gap-1.5" data-testid="namd-fluid-legend-chip-INJ">
         <svg viewBox="0 0 14 14" class="w-3.5 h-3.5">
@@ -629,7 +629,7 @@ function fmtDate(iso: string): string {
           <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.PED.color}`" />PED
         </span>
         <span class="text-right font-medium">{{ hovered.ped }} nL</span>
-        <span class="text-slate-500">CRT</span>
+        <span class="text-slate-500">CST</span>
         <span class="text-right font-medium">{{ hovered.crt }} µm</span>
         <span class="text-slate-500">BCVA</span>
         <span class="text-right font-medium">

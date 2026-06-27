@@ -23,7 +23,7 @@ const props = defineProps<Props>()
 const { t } = useI18n()
 
 interface Cell {
-  key: 'IRF' | 'SRF' | 'PED' | 'CRT' | 'BCVA'
+  key: 'IRF' | 'SRF' | 'PED' | 'CST' | 'BCVA'
   unit: string
   direction: 'badUp' | 'goodUp'
   a: number | null
@@ -44,7 +44,7 @@ const cells = computed<Cell[]>(() => {
     { key: 'IRF', unit: ' nL', direction: 'badUp', ...pair((v) => v.irf) },
     { key: 'SRF', unit: ' nL', direction: 'badUp', ...pair((v) => v.srf) },
     { key: 'PED', unit: ' nL', direction: 'badUp', ...pair((v) => v.ped) },
-    { key: 'CRT', unit: ' µm', direction: 'badUp', ...pair((v) => v.crt) },
+    { key: 'CST', unit: ' µm', direction: 'badUp', ...pair((v) => v.crt) },
     { key: 'BCVA', unit: ' L', direction: 'goodUp', ...pair((v) => v.bcva) },
   ]
 })

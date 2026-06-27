@@ -1490,7 +1490,7 @@
       },
       "ophthExam": {
         "label": "[NEEDS_REVIEW] Ophthalmology bilateral examination",
-        "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CRT)."
+        "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CST)."
       },
       "bcva": {
         "label": "[NEEDS_REVIEW] BCVA (ETDRS letters)",
@@ -1521,10 +1521,10 @@
         }
       },
       "crt": {
-        "label": "[NEEDS_REVIEW] CRT (central 1 mm, µm)",
-        "description": "[NEEDS_REVIEW] Central retinal thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
+        "label": "[NEEDS_REVIEW] CST (central 1 mm, µm)",
+        "description": "[NEEDS_REVIEW] Central subfield thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
         "items": {
-          "crtMicrons": "[NEEDS_REVIEW] CRT (central 1 mm)",
+          "crtMicrons": "[NEEDS_REVIEW] CST (central 1 mm)",
           "crtValidation": "[NEEDS_REVIEW] Integer or decimal 0–1500 µm expected."
         }
       },
@@ -1673,7 +1673,7 @@
         "subFields": "four sub-fields per eye — inserted together"
       },
       "CCT": { "label": "Central corneal thickness" },
-      "CRT": { "label": "Central retinal thickness" },
+      "CRT": { "label": "Central subfield thickness (CST)" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundus photograph done" },
       "VISUAL_FIELD_DONE": { "label": "Visual field done" },
       "OCT_A_DONE": { "label": "OCT angiography done" },

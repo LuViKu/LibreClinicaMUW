@@ -1492,7 +1492,7 @@
       },
       "ophthExam": {
         "label": "Ophthalmologische bilaterale Untersuchung",
-        "description": "OD/OS-Paare für Standardmessungen (BCVA, IOP, CCT, CRT)."
+        "description": "OD/OS-Paare für Standardmessungen (BCVA, IOP, CCT, CST)."
       },
       "bcva": {
         "label": "BCVA (ETDRS-Buchstaben)",
@@ -1523,10 +1523,10 @@
         }
       },
       "crt": {
-        "label": "CRT (zentrale 1 mm, µm)",
-        "description": "Zentrale Netzhautdicke — gemittelter ILM↔BM-Abstand über die zentrale 1-mm-Scheibe. Wird automatisch aus dem GA-Job (ILM) und dem BM-Job derselben Visite pro Auge berechnet; manuelle Korrekturen überschreiben den AI-Wert.",
+        "label": "CST (zentrale 1 mm, µm)",
+        "description": "Zentrale Subfeld-Dicke (Central Subfield Thickness) — gemittelter ILM↔BM-Abstand über die zentrale 1-mm-Scheibe. Wird automatisch aus dem GA-Job (ILM) und dem BM-Job derselben Visite pro Auge berechnet; manuelle Korrekturen überschreiben den AI-Wert.",
         "items": {
-          "crtMicrons": "CRT (zentrale 1 mm)",
+          "crtMicrons": "CST (zentrale 1 mm)",
           "crtValidation": "Ganzzahl oder Dezimal 0–1500 µm erwartet."
         }
       },
@@ -1675,7 +1675,7 @@
         "subFields": "vier Unterfelder pro Auge — werden gemeinsam eingefügt"
       },
       "CCT": { "label": "Zentrale Hornhautdicke" },
-      "CRT": { "label": "Zentrale Netzhautdicke" },
+      "CRT": { "label": "Zentrale Subfeld-Dicke (CST)" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundusfotografie durchgeführt" },
       "VISUAL_FIELD_DONE": { "label": "Gesichtsfeld durchgeführt" },
       "OCT_A_DONE": { "label": "OCT-Angiographie durchgeführt" },
