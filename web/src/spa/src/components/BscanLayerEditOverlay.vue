@@ -107,6 +107,17 @@ const activeLayer = ref<number>(
  */
 const pendingEdits = ref(new Map<number, Map<number, PendingPerLayer>>())
 const selected = ref(new Set<ControlPoint>())
+/**
+ * 2026-06-27 — version counter bumped on every in-place point mutation
+ * (shift drag, free draw, move). Vue's deep reactivity on the
+ * pendingEdits Map fires for {@code set} / {@code delete} on the Map
+ * itself, but in-place {@code p.y = …} on a control point nested in
+ * an array doesn't reliably retrigger downstream computeds. The
+ * render-side computeds read this counter to force re-evaluation on
+ * every drag tick.
+ */
+const editVersion = ref(0)
+const bumpEditVersion = () => { editVersion.value++ }
 
 interface DragShift { type: 'shift'; startY: number; baseYs: number[] }
 interface DragFree { type: 'free'; stroke: ControlPoint[] }
@@ -190,6 +201,9 @@ function peekPending(z: number, s: number): ControlPoint[] | null {
 
 const z = computed(() => props.modelValue)
 const activePoints = computed<ControlPoint[]>(() => {
+  // Read editVersion so in-place mutations on individual control
+  // points retrigger this computed.
+  void editVersion.value
   return peekPending(z.value, activeLayer.value) ?? []
 })
 
@@ -390,8 +404,11 @@ function onMove(e: PointerEvent): void {
     const pts = peekPending(z.value, activeLayer.value)
     if (!pts) return
     pts.forEach((p, i) => { p.y = clampY((d.baseYs[i] ?? p.y) + dy) })
+    bumpEditVersion()
   } else if (d.type === 'free') {
     d.stroke.push(n)
+    // Live stroke render reads {@link ghostStrokeD} which depends on
+    // {@code drag} (already reactive), so no version bump needed.
   } else if (d.type === 'move') {
     const dx = n.x - d.start.x
     const dy = n.y - d.start.y
@@ -413,6 +430,7 @@ function onMove(e: PointerEvent): void {
         b.p.x = Math.max(lx + 1, Math.min(rx - 1, b.x + dx))
       }
     }
+    bumpEditVersion()
   } else if (d.type === 'band') {
     d.rect.x1 = n.x
     d.rect.y1 = n.y
@@ -431,7 +449,10 @@ function onMove(e: PointerEvent): void {
 function onUp(): void {
   const d = drag.value
   drag.value = null
-  if (d?.type === 'free') mergeStroke(d.stroke)
+  if (d?.type === 'free') {
+    mergeStroke(d.stroke)
+    bumpEditVersion()
+  }
 }
 
 function onDblClick(e: MouseEvent): void {
@@ -443,6 +464,7 @@ function onDblClick(e: MouseEvent): void {
   pts.push(p)
   pts.sort((a, b) => a.x - b.x)
   selected.value = new Set([p])
+  bumpEditVersion()
 }
 
 function onKey(e: KeyboardEvent): void {
@@ -461,6 +483,7 @@ function onKey(e: KeyboardEvent): void {
   pts.length = 0
   pts.push(...keep)
   selected.value = new Set()
+  bumpEditVersion()
 }
 
 /**
@@ -509,6 +532,8 @@ function mergeStroke(stroke: ControlPoint[]): void {
 /* ── render derived ── */
 
 const overlayPaths = computed(() => {
+  // Read editVersion to retrigger on in-place point mutations.
+  void editVersion.value
   // Render every CORRECTABLE surface for the current slice. The active
   // layer is full-opacity; others fade to a dashed dim line. Surfaces
   // that aren't correctable (e.g. NFL when only ILM + BM are edited)
@@ -654,7 +679,7 @@ const selectedCount = computed(() => selected.value.size)
       ref="svgEl"
       :viewBox="`0 0 ${cols} ${rows}`"
       :style="bboxStyle"
-      preserveAspectRatio="xMidYMid slice"
+      preserveAspectRatio="none"
       :class="canEdit && mode !== 'off' ? 'pointer-events-auto' : 'pointer-events-none'"
       @pointerdown="onDown"
       @pointermove="onMove"

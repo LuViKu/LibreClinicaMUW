@@ -807,7 +807,7 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
                 data-testid="namd-static-layers-overlay"
                 :viewBox="`0 0 ${siblingCols} ${slotRows(slotProps)}`"
                 :style="slotBbox(slotProps)"
-                preserveAspectRatio="xMidYMid slice"
+                preserveAspectRatio="none"
                 class="pointer-events-none"
               >
                 <template

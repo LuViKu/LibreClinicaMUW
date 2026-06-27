@@ -80,11 +80,21 @@ const cols = computed<number>(() => {
   // For onl/pr (2-rank): shape = [z, cols] → cols = shape[1].
   return env.shape.length === 3 ? (env.shape[2] ?? 0) : (env.shape[1] ?? 0)
 })
-const rows = computed<number>(() => {
-  // The seg-overlay canvas defaults to 496 (Heidelberg cube), the same
-  // assumption the editing overlay's SVG viewBox needs to match.
-  return 496
-})
+/**
+ * 2026-06-27 — image rows is read from BscanViewer's overlay slot
+ * via {@link slotRows} below; this stays as a safety fallback only
+ * (Heidelberg cube default) for any code path that needs a value
+ * before the slot binds.
+ */
+const rows = computed<number>(() => 496)
+function slotRows(slotProps: unknown): number {
+  const dims = (slotProps as { imageDims?: { rows?: number } | null })?.imageDims
+  return dims?.rows ?? rows.value
+}
+function slotBbox(slotProps: unknown): Record<string, string> {
+  const bbox = (slotProps as { bboxStyle?: Record<string, string> })?.bboxStyle
+  return bbox ?? {}
+}
 const nSurfaces = computed<number>(() => {
   const env = envelope.value
   if (!env) return 0
@@ -275,20 +285,20 @@ onBeforeUnmount(() => {
         class="h-full"
         @update:model-value="onUpdateSlice"
       >
-        <template #overlay="{ bboxStyle }">
+        <template #overlay="slotProps">
           <BscanLayerEditOverlay
             ref="overlayRef"
             :job-id="jobId"
             :n-bscans="nBscans"
             :cols="cols"
-            :rows="rows"
+            :rows="slotRows(slotProps)"
             :model-value="modelValue"
             :envelope-data="envelopeData"
             :n-surfaces="nSurfaces"
             :labels="labels"
             :correctable-layer-indices="correctableLayerIndices"
             :can-edit="canEdit"
-            :bbox-style="bboxStyle"
+            :bbox-style="slotBbox(slotProps)"
             @update:model-value="onUpdateSlice"
             @save="onOverlaySave"
             @pending-edit-count="(n) => pendingCount = n"
