@@ -665,6 +665,24 @@ const hintText = computed<string>(() => {
 })
 
 const selectedCount = computed(() => selected.value.size)
+
+/**
+ * 2026-06-27 — BscanViewer's {@code overlayBboxStyle} bakes
+ * {@code pointerEvents: 'none'} into the inline style so the seg-overlay
+ * canvas never intercepts wheel scrubs / cornerstone tool clicks. Inline
+ * style beats Tailwind's {@code pointer-events-auto} class, so the
+ * editing SVG would silently swallow nothing without this override.
+ * Re-merge the bbox-style with a pointer-events value driven by mode +
+ * canEdit so clicks reach the SVG only when an editing tool is active.
+ */
+const svgStyle = computed<Record<string, string>>(() => ({
+  ...props.bboxStyle,
+  pointerEvents: (props.canEdit && mode.value !== 'off') ? 'auto' : 'none',
+  // Tiny ergonomic tweak: hide native touch scroll on the SVG so
+  // pointer captures don't get hijacked by the page scroll on iPad/
+  // trackpad pinch.
+  touchAction: 'none',
+}))
 </script>
 
 <template>
@@ -678,9 +696,8 @@ const selectedCount = computed(() => selected.value.size)
     <svg
       ref="svgEl"
       :viewBox="`0 0 ${cols} ${rows}`"
-      :style="bboxStyle"
+      :style="svgStyle"
       preserveAspectRatio="none"
-      :class="canEdit && mode !== 'off' ? 'pointer-events-auto' : 'pointer-events-none'"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"
