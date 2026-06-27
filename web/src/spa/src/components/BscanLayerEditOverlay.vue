@@ -667,7 +667,42 @@ const hintText = computed<string>(() => {
 const selectedCount = computed(() => selected.value.size)
 
 /**
- * 2026-06-27 — BscanViewer's {@code overlayBboxStyle} bakes
+ * 2026-06-27 — The cornerstone-rendered B-scan is at the IMAGE'S
+ * PHYSICAL aspect ratio (~4.5:1 for Heidelberg cubes), not the pixel
+ * aspect (~1.55:1). Since the editing SVG uses
+ * {@code preserveAspectRatio="none"} to match the canvas's per-axis
+ * stretch, viewBox units are stretched UNEVENLY into screen space.
+ * Anything sized in viewBox units (stroke width, circle radius) renders
+ * as an ellipse / lopsided stroke unless we compensate. These computeds
+ * pull the bbox CSS dimensions, derive the per-axis scale factors, and
+ * expose viewBox-unit radii that result in a target screen-pixel radius
+ * regardless of stretch. Strokes use {@code vector-effect="non-scaling-stroke"}
+ * directly in the template; circles use the computed ellipse radii.
+ */
+function parsePx(v: string | undefined): number {
+  if (!v) return 0
+  const n = Number.parseFloat(v)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+const screenScale = computed<{ x: number; y: number }>(() => ({
+  x: (parsePx(props.bboxStyle.width) || props.cols) / Math.max(1, props.cols),
+  y: (parsePx(props.bboxStyle.height) || props.rows) / Math.max(1, props.rows),
+}))
+const POINT_R_SCREEN_PX = 5
+const POINT_R_SELECTED_PX = 6
+const pointRadii = computed<{ rx: number; ry: number; rxSel: number; rySel: number }>(() => {
+  const sx = screenScale.value.x || 1
+  const sy = screenScale.value.y || 1
+  return {
+    rx: POINT_R_SCREEN_PX / sx,
+    ry: POINT_R_SCREEN_PX / sy,
+    rxSel: POINT_R_SELECTED_PX / sx,
+    rySel: POINT_R_SELECTED_PX / sy,
+  }
+})
+
+/**
+ * BscanViewer's {@code overlayBboxStyle} bakes
  * {@code pointerEvents: 'none'} into the inline style so the seg-overlay
  * canvas never intercepts wheel scrubs / cornerstone tool clicks. Inline
  * style beats Tailwind's {@code pointer-events-auto} class, so the
@@ -704,7 +739,9 @@ const svgStyle = computed<Record<string, string>>(() => ({
       @pointercancel="onUp"
       @dblclick.prevent="onDblClick"
     >
-      <!-- Non-active layer guides -->
+      <!-- Non-active layer guides. vector-effect="non-scaling-stroke" so
+           the dashed line keeps a uniform thickness regardless of the
+           SVG's per-axis stretch (cf. screenScale + svgStyle above). -->
       <path
         v-for="path in overlayPaths.filter((p) => p.layerIdx !== activeLayer)"
         :key="`guide-${path.layerIdx}`"
@@ -714,35 +751,51 @@ const svgStyle = computed<Record<string, string>>(() => ({
         stroke-width="1.6"
         :stroke-opacity="path.opacity"
         stroke-dasharray="3 6"
+        vector-effect="non-scaling-stroke"
       />
       <!-- Active layer halo (dark) + colored line -->
       <template
         v-for="path in overlayPaths.filter((p) => p.layerIdx === activeLayer)"
         :key="`active-${path.layerIdx}`"
       >
-        <path :d="path.d" fill="none" stroke="#0b1220" stroke-width="4.5" stroke-opacity="0.5" />
-        <path :d="path.d" fill="none" :stroke="path.stroke" stroke-width="2.5" stroke-opacity="1" />
+        <path
+          :d="path.d" fill="none" stroke="#0b1220"
+          stroke-width="4.5" stroke-opacity="0.5"
+          vector-effect="non-scaling-stroke"
+        />
+        <path
+          :d="path.d" fill="none" :stroke="path.stroke"
+          stroke-width="2.5" stroke-opacity="1"
+          vector-effect="non-scaling-stroke"
+        />
       </template>
-      <!-- Control points (only in points mode) -->
+      <!-- Control points (only in points mode). Use <ellipse> with
+           per-axis radii so the dots stay ROUND in screen space — a
+           plain <circle r="5"> renders as a flat ellipse when the SVG
+           is non-uniformly stretched. -->
       <template v-if="mode === 'points'">
         <template v-for="(p, i) in sortedActive" :key="`pt-${i}-${p.x}-${p.y}`">
-          <circle
+          <ellipse
             v-if="selected.has(p)"
             :cx="p.x"
             :cy="p.y"
-            r="6"
+            :rx="pointRadii.rxSel"
+            :ry="pointRadii.rySel"
             fill="#ffffff"
             :stroke="IOWA_LAYER_COLORS[activeLayer % IOWA_LAYER_COLORS.length]"
             stroke-width="3"
+            vector-effect="non-scaling-stroke"
           />
-          <circle
+          <ellipse
             v-else
             :cx="p.x"
             :cy="p.y"
-            r="5"
+            :rx="pointRadii.rx"
+            :ry="pointRadii.ry"
             :fill="IOWA_LAYER_COLORS[activeLayer % IOWA_LAYER_COLORS.length]"
             stroke="#0b1220"
             stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
           />
         </template>
       </template>
@@ -755,6 +808,7 @@ const svgStyle = computed<Record<string, string>>(() => ({
         stroke-width="2.5"
         stroke-dasharray="6 6"
         stroke-opacity="0.95"
+        vector-effect="non-scaling-stroke"
       />
       <!-- Rubber-band selection rect -->
       <rect
@@ -767,6 +821,7 @@ const svgStyle = computed<Record<string, string>>(() => ({
         stroke="#60a5fa"
         stroke-width="1.4"
         stroke-dasharray="5 4"
+        vector-effect="non-scaling-stroke"
       />
     </svg>
 

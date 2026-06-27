@@ -814,8 +814,16 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
                   v-for="path in namdStaticOverlayPaths"
                   :key="`namd-layer-${path.idx}`"
                 >
-                  <path :d="path.d" fill="none" stroke="#0b1220" stroke-width="3" stroke-opacity="0.45" />
-                  <path :d="path.d" fill="none" :stroke="path.stroke" stroke-width="1.6" stroke-opacity="0.95" />
+                  <path
+                    :d="path.d" fill="none" stroke="#0b1220"
+                    stroke-width="3" stroke-opacity="0.45"
+                    vector-effect="non-scaling-stroke"
+                  />
+                  <path
+                    :d="path.d" fill="none" :stroke="path.stroke"
+                    stroke-width="1.6" stroke-opacity="0.95"
+                    vector-effect="non-scaling-stroke"
+                  />
                 </template>
               </svg>
             </template>
