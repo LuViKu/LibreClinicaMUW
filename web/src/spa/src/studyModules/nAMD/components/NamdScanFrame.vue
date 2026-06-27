@@ -180,6 +180,22 @@ const { siblingJobId, envelope: siblingEnvelope } = useSiblingLayersJob({
  */
 const correctionPendingCount = ref(0)
 const correctionSaving = ref(false)
+/**
+ * 2026-06-27 — Inline success pill for the layer-correction Save. The
+ * SPA has no toast store; routing a success message through the errors
+ * store makes it render as a red "Ein Fehler ist aufgetreten" toast.
+ * The pill clears after 3.5 s.
+ */
+const correctionSavedToast = ref<string>('')
+let correctionSavedTimer: ReturnType<typeof setTimeout> | null = null
+function showCorrectionSavedToast(text: string): void {
+  correctionSavedToast.value = text
+  if (correctionSavedTimer) clearTimeout(correctionSavedTimer)
+  correctionSavedTimer = setTimeout(() => {
+    correctionSavedToast.value = ''
+    correctionSavedTimer = null
+  }, 3500)
+}
 const correctionDiscardOpen = ref(false)
 const correctionOverlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
 
@@ -599,6 +615,9 @@ async function onCorrectionSaveClick(): Promise<void> {
     overlay.clearPending()
     correctionPendingCount.value = 0
     clearSegmentationEnvelopeCache(targetJobId)
+    showCorrectionSavedToast(
+      t('retinal.correction.savedToast', { layers: savedLayers, slices: savedSlices }),
+    )
     emit('correction-saved', { layers: savedLayers, slices: savedSlices })
   } catch (e) {
     emit('correction-error', e instanceof Error ? e.message : String(e))
@@ -637,6 +656,10 @@ onBeforeUnmount(() => {
   if (fsOpen.value && typeof document !== 'undefined') {
     document.removeEventListener('keydown', onKey)
     document.body.style.overflow = fsPrevOverflow
+  }
+  if (correctionSavedTimer) {
+    clearTimeout(correctionSavedTimer)
+    correctionSavedTimer = null
   }
 })
 
@@ -679,6 +702,26 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
         <span class="text-white/45 text-[12px] truncate">{{ fsTitle }}</span>
       </div>
       <div class="flex items-center gap-2.5">
+        <!-- 2026-06-27 — Inline success pill (not routed through the
+             errors store, which would render it red via
+             GlobalErrorToast). -->
+        <transition
+          enter-active-class="transition duration-150"
+          leave-active-class="transition duration-300"
+          enter-from-class="opacity-0 translate-y-1"
+          leave-to-class="opacity-0"
+        >
+          <span
+            v-if="correctionSavedToast"
+            data-testid="namd-scan-fs-saved-toast"
+            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/90 text-white shadow"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M5 12 L10 17 L20 7" />
+            </svg>
+            {{ correctionSavedToast }}
+          </span>
+        </transition>
         <!-- 2026-06-26 — Save button surfaces only when (sibling layers
              job exists, role gate open, edits pending). The badge
              shows the unsaved-edit count. -->

@@ -42,11 +42,11 @@ const canCorrectLayers = computed<boolean>(
     || auth.hasRole('Administrator'),
 )
 
-function onCorrectionSaved(info: { layers: number; slices: number }): void {
-  errors.push(
-    new Error(t('retinal.correction.savedToast', { layers: info.layers, slices: info.slices })),
-    'retinal.correction.saved',
-  )
+function onCorrectionSaved(_info: { layers: number; slices: number }): void {
+  // 2026-06-27 — success toast is rendered INSIDE NamdScanFrame's
+  // fullscreen masthead as a local emerald pill; routing through the
+  // errors store would render it red via GlobalErrorToast. No-op here
+  // (the parent gets the bubble so future side effects can hook in).
 }
 function onCorrectionError(message: string): void {
   errors.push(

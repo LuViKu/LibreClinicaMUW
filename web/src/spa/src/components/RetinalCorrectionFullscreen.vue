@@ -116,6 +116,24 @@ const pendingCount = ref(0)
 const saving = ref(false)
 const showDiscardConfirm = ref(false)
 
+/**
+ * 2026-06-27 — Inline success pill displayed in the fullscreen
+ * masthead after a save. The SPA has no toast store; routing this
+ * through useErrorsStore makes the green "saved" message render as a
+ * RED "Ein Fehler ist aufgetreten" pill via GlobalErrorToast. The pill
+ * auto-clears after 3.5 s.
+ */
+const savedToastText = ref<string>('')
+let savedToastTimer: ReturnType<typeof setTimeout> | null = null
+function showSavedToast(text: string): void {
+  savedToastText.value = text
+  if (savedToastTimer) clearTimeout(savedToastTimer)
+  savedToastTimer = setTimeout(() => {
+    savedToastText.value = ''
+    savedToastTimer = null
+  }, 3500)
+}
+
 function onUpdateSlice(z: number): void {
   emit('update:modelValue', z)
 }
@@ -155,6 +173,9 @@ async function onSaveClick(): Promise<void> {
     overlay.clearPending()
     pendingCount.value = 0
     clearSegmentationEnvelopeCache(props.jobId)
+    showSavedToast(
+      t('retinal.correction.savedToast', { layers: savedLayers, slices: savedSlices }),
+    )
     emit('save-success', { layers: savedLayers, slices: savedSlices })
   } catch (e) {
     emit('save-error', e instanceof Error ? e.message : String(e))
@@ -212,6 +233,10 @@ onBeforeUnmount(() => {
   if (typeof document === 'undefined') return
   document.removeEventListener('keydown', onKey)
   document.body.style.overflow = prevOverflow
+  if (savedToastTimer) {
+    clearTimeout(savedToastTimer)
+    savedToastTimer = null
+  }
 })
 </script>
 
@@ -242,6 +267,26 @@ onBeforeUnmount(() => {
             ? t('studyModules.namd.scanFrame.maskOn')
             : t('studyModules.namd.scanFrame.maskOff') }}
         </button>
+        <!-- 2026-06-27 — Inline success pill (replaces routing through
+             the errors store, which would render this green message as
+             a red "Ein Fehler ist aufgetreten" toast via GlobalErrorToast). -->
+        <transition
+          enter-active-class="transition duration-150"
+          leave-active-class="transition duration-300"
+          enter-from-class="opacity-0 translate-y-1"
+          leave-to-class="opacity-0"
+        >
+          <span
+            v-if="savedToastText"
+            data-testid="correction-fs-saved-toast"
+            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/90 text-white shadow"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M5 12 L10 17 L20 7" />
+            </svg>
+            {{ savedToastText }}
+          </span>
+        </transition>
         <!-- Save button (edit-gated) -->
         <button
           v-if="canEdit"

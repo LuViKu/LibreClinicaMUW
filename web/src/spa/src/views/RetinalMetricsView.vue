@@ -87,12 +87,13 @@ function openCorrectionFs(): void {
 function closeCorrectionFs(): void {
   correctionFsOpen.value = false
 }
-function onCorrectionSaved(info: { layers: number; slices: number }): void {
-  errors.push(
-    new Error(t('retinal.correction.savedToast', { layers: info.layers, slices: info.slices })),
-    'retinal.correction.saved',
-  )
-  // Re-fetch the job so the corrected envelope + downloads list refresh.
+function onCorrectionSaved(_info: { layers: number; slices: number }): void {
+  // 2026-06-27 — success toast is rendered INSIDE
+  // RetinalCorrectionFullscreen as a local pill; routing it through the
+  // errors store would render the green "saved" message as a red "Ein
+  // Fehler ist aufgetreten" toast via GlobalErrorToast. Re-fetch the
+  // job so the corrected envelope + downloads list refresh after the
+  // operator closes the fullscreen.
   void load()
 }
 function onCorrectionSaveError(message: string): void {
