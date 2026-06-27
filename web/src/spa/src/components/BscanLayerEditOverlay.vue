@@ -215,6 +215,27 @@ const isEndpoint = (p: ControlPoint): boolean => {
   return p === s[0] || p === s[s.length - 1]
 }
 
+/**
+ * 2026-06-27 — Renderable control points for the ACTIVE layer.
+ *
+ * <p>If the operator has already touched this (slice, layer), shows the
+ * pending control points (same ones {@link sortedActive} returns). If
+ * not, samples them from the envelope on the fly so the operator sees
+ * the dots immediately when they switch into points mode — without
+ * materialising a pendingEdits entry (which would inflate the unsaved
+ * Save badge to ≥1 just for previewing).
+ *
+ * <p>{@link onDown} still materialises pending on first hit, so dragging
+ * mutates the real pendingEdits state and the displayed dots stay
+ * aligned with what gets saved.
+ */
+const displayedSortedActive = computed<ControlPoint[]>(() => {
+  void editVersion.value
+  const peeked = peekPending(z.value, activeLayer.value)
+  const pts = peeked ?? sampleControlPoints(z.value, activeLayer.value)
+  return pts.slice().sort((a, b) => a.x - b.x)
+})
+
 watch(
   pendingEdits,
   () => {
@@ -772,9 +793,12 @@ const svgStyle = computed<Record<string, string>>(() => ({
       <!-- Control points (only in points mode). Use <ellipse> with
            per-axis radii so the dots stay ROUND in screen space — a
            plain <circle r="5"> renders as a flat ellipse when the SVG
-           is non-uniformly stretched. -->
+           is non-uniformly stretched. {@link displayedSortedActive}
+           shows points immediately on mode switch (sampled from the
+           envelope) without materialising pendingEdits until the first
+           drag. -->
       <template v-if="mode === 'points'">
-        <template v-for="(p, i) in sortedActive" :key="`pt-${i}-${p.x}-${p.y}`">
+        <template v-for="(p, i) in displayedSortedActive" :key="`pt-${i}-${p.x}-${p.y}`">
           <ellipse
             v-if="selected.has(p)"
             :cx="p.x"
