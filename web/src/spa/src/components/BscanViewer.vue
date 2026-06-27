@@ -77,12 +77,23 @@ interface Props {
    * canvas size automatically.
    */
   fillContainer?: boolean
+  /**
+   * 2026-06-27 — Surface indices to SKIP when painting a
+   * {@code surface_y} envelope. Used by BscanLayerEditOverlay to hide
+   * the surfaces it's already painting itself (active layer + any
+   * layer with pending edits). Without this, the canvas keeps drawing
+   * the original AI surface_y polyline at the AI's y values while
+   * the SVG draws the edited curve, leaving two parallel red lines.
+   * Defaults to empty.
+   */
+  suppressedSurfaceIndices?: readonly number[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showSegmentation: true,
   staticFrame: false,
   fillContainer: false,
+  suppressedSurfaceIndices: () => [],
 })
 const emit = defineEmits<{
   'update:modelValue': [z: number]
@@ -365,8 +376,13 @@ function paintOverlay(): void {
     const isLayers = env.task === 'layers'
     const palette = isLayers ? IOWA_LAYER_COLORS : SURFACE_PALETTE
     const focused = focusedLayer.value
+    // 2026-06-27 — suppression set lets BscanLayerEditOverlay hide the
+    // surfaces it's already painting itself so there's no overlap of
+    // the original AI line with the operator's edited line.
+    const suppressed = new Set(props.suppressedSurfaceIndices)
     for (let s = 0; s < nSurfaces; s++) {
       if (isLayers && !visibleLayers.value.has(s)) continue
+      if (suppressed.has(s)) continue
       ctx.strokeStyle = palette[s % palette.length] ?? palette[0]!
       ctx.lineWidth = 2
       ctx.globalAlpha = (isLayers && focused != null && focused !== s) ? 0.3 : 1.0
@@ -412,6 +428,7 @@ watch([
   () => props.showSegmentation,
   visibleLayers,
   focusedLayer,
+  () => props.suppressedSurfaceIndices,
 ], () => {
   paintOverlay()
 }, { flush: 'post' })

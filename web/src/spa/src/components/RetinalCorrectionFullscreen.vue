@@ -115,6 +115,14 @@ const overlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
 const pendingCount = ref(0)
 const saving = ref(false)
 const showDiscardConfirm = ref(false)
+/**
+ * 2026-06-27 — Surface indices the edit overlay is painting itself.
+ * Forwarded to BscanViewer's {@code suppressedSurfaceIndices} so the
+ * cornerstone canvas SKIPS those surfaces in its surface_y paint and
+ * doesn't double-render the original AI line under the operator's
+ * edited curve.
+ */
+const paintedSurfaces = ref<readonly number[]>([])
 
 /**
  * 2026-06-27 — Inline success pill displayed in the fullscreen
@@ -327,6 +335,7 @@ onBeforeUnmount(() => {
         :job-id="jobId"
         :show-segmentation="showSegmentation"
         :fill-container="true"
+        :suppressed-surface-indices="paintedSurfaces"
         class="h-full"
         @update:model-value="onUpdateSlice"
       >
@@ -347,6 +356,7 @@ onBeforeUnmount(() => {
             @update:model-value="onUpdateSlice"
             @save="onOverlaySave"
             @pending-edit-count="(n) => pendingCount = n"
+            @painted-surfaces="(s) => paintedSurfaces = s"
           />
         </template>
       </BscanViewer>

@@ -87,6 +87,15 @@ const emit = defineEmits<{
   discard: []
   /** {@code pendingEdits} count changed — parent uses it for the Save badge. */
   'pending-edit-count': [count: number]
+  /**
+   * 2026-06-27 — surfaces this overlay is now painting itself (active
+   * layer + any layer with a pending edit). The parent forwards this
+   * list to BscanViewer's {@code suppressedSurfaceIndices} so the
+   * native canvas SKIPS those surfaces — otherwise the original AI
+   * polyline keeps showing through after the operator drags the
+   * edited line elsewhere.
+   */
+  'painted-surfaces': [indices: number[]]
 }>()
 
 const { t } = useI18n()
@@ -244,6 +253,26 @@ watch(
     emit('pending-edit-count', count)
   },
   { deep: true },
+)
+
+/**
+ * 2026-06-27 — Emit the set of surfaces this overlay paints (active +
+ * pending) whenever it changes. The parent forwards it to BscanViewer
+ * so the cornerstone canvas suppresses those surfaces from its own
+ * surface_y paint. Computed-derived to coalesce duplicates.
+ */
+const paintedSurfaces = computed<number[]>(() => {
+  const set = new Set<number>()
+  set.add(activeLayer.value)
+  for (const perSlice of pendingEdits.value.values()) {
+    for (const idx of perSlice.keys()) set.add(idx)
+  }
+  return Array.from(set).sort((a, b) => a - b)
+})
+watch(
+  paintedSurfaces,
+  (v) => emit('painted-surfaces', v),
+  { immediate: true },
 )
 
 /* ── geometry helpers (image-pixel coords throughout) ── */
@@ -555,18 +584,29 @@ function mergeStroke(stroke: ControlPoint[]): void {
 const overlayPaths = computed(() => {
   // Read editVersion to retrigger on in-place point mutations.
   void editVersion.value
-  // Render every CORRECTABLE surface for the current slice. The active
-  // layer is full-opacity; others fade to a dashed dim line. Surfaces
-  // that aren't correctable (e.g. NFL when only ILM + BM are edited)
-  // are deliberately NOT painted here — the underlying canvas overlay
-  // still draws them.
+  // 2026-06-27 — render ONLY the active layer + any layer with a
+  // pending edit. Dashed guides for the other correctable layers
+  // duplicated the BscanViewer legend toggle (which already controls
+  // visibility of those layers on the underlying canvas) and added
+  // visual clutter the operator can't dismiss. The parent
+  // simultaneously asks BscanViewer to SUPPRESS the active surface
+  // from its native paint so the original AI line doesn't show
+  // through after the operator drags the edited line elsewhere.
   const paths: { d: string; stroke: string; opacity: number; dashed: boolean; layerIdx: number }[] = []
-  for (const idx of correctableSet.value) {
+  const surfacesToRender = new Set<number>()
+  surfacesToRender.add(activeLayer.value)
+  const perSlice = pendingEdits.value.get(z.value)
+  if (perSlice) {
+    for (const idx of perSlice.keys()) surfacesToRender.add(idx)
+  }
+  for (const idx of surfacesToRender) {
+    if (!correctableSet.value.has(idx)) continue
     let pts = peekPending(z.value, idx)
     if (!pts) {
-      // No pending edit → render the envelope's curve as a thin guide
-      // so the operator sees where the AI's surface sits before they
-      // start editing.
+      // Active layer with no pending edit → sample 17 points from the
+      // envelope and render as the operator's working curve. Once they
+      // drag, pendingEdits is materialised + this branch flips to
+      // peekPending above.
       const row = readEnvelopeRow(z.value, idx)
       if (!row) continue
       pts = []
@@ -579,7 +619,7 @@ const overlayPaths = computed(() => {
     paths.push({
       d: curvePath(pts.slice().sort((a, b) => a.x - b.x)),
       stroke: IOWA_LAYER_COLORS[idx % IOWA_LAYER_COLORS.length]!,
-      opacity: active ? 1 : 0.45,
+      opacity: 1,
       dashed: !active,
       layerIdx: idx,
     })
@@ -760,24 +800,15 @@ const svgStyle = computed<Record<string, string>>(() => ({
       @pointercancel="onUp"
       @dblclick.prevent="onDblClick"
     >
-      <!-- Non-active layer guides. vector-effect="non-scaling-stroke" so
-           the dashed line keeps a uniform thickness regardless of the
-           SVG's per-axis stretch (cf. screenScale + svgStyle above). -->
-      <path
-        v-for="path in overlayPaths.filter((p) => p.layerIdx !== activeLayer)"
-        :key="`guide-${path.layerIdx}`"
-        :d="path.d"
-        fill="none"
-        :stroke="path.stroke"
-        stroke-width="1.6"
-        :stroke-opacity="path.opacity"
-        stroke-dasharray="3 6"
-        vector-effect="non-scaling-stroke"
-      />
-      <!-- Active layer halo (dark) + colored line -->
+      <!-- Painted layers = active layer + any layer with a pending
+           edit. Inactive correctable layers and non-correctable layers
+           are NOT drawn here — the BscanViewer's native canvas handles
+           the legend-toggle visibility, and the active layer is
+           suppressed in the canvas while this overlay is mounted so
+           there's no double-rendering. -->
       <template
-        v-for="path in overlayPaths.filter((p) => p.layerIdx === activeLayer)"
-        :key="`active-${path.layerIdx}`"
+        v-for="path in overlayPaths"
+        :key="`layer-${path.layerIdx}`"
       >
         <path
           :d="path.d" fill="none" stroke="#0b1220"
@@ -786,7 +817,8 @@ const svgStyle = computed<Record<string, string>>(() => ({
         />
         <path
           :d="path.d" fill="none" :stroke="path.stroke"
-          stroke-width="2.5" stroke-opacity="1"
+          :stroke-width="path.layerIdx === activeLayer ? 2.5 : 1.8"
+          stroke-opacity="1"
           vector-effect="non-scaling-stroke"
         />
       </template>
