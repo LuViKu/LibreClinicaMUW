@@ -145,6 +145,8 @@ A breadcrumb trail at the top of each page shows where you are, e.g. *Study › 
 
 **Goal:** review the results of the automated OCT inference pipeline (fluid volumes, GA area, retinal thickness) for one scan.
 
+![Retinal scan metrics viewer — KPI tiles, en-face fundus with ETDRS-ring overlay, and the B-scan navigator with the segmentation overlay](screenshots/investigator/21-retinal-viewer.png)
+
 **Steps**
 
 1. Open a retinal job — from the **Retinal-Verlauf** section of a participant (§8) or directly at `/retinal-jobs/:id` (or the per-subject deep link `/subjects/:label/jobs/:seq`).
