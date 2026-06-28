@@ -770,18 +770,6 @@
 				<version>2.1.2</version>
 			</dependency>
 			<dependency>
-				<groupId>com.mockrunner.jdk15.jee5</groupId>
-				<artifactId>mockrunner</artifactId>
-				<version>0.4.2</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>com.mockrunner.jdk15.jee5</groupId>
-				<artifactId>mockrunner-servlet</artifactId>
-				<version>0.4.2</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
 				<groupId>httpunit</groupId>
 				<artifactId>httpunit</artifactId>
 				<version>1.6.1</version>
