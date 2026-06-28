@@ -72,7 +72,9 @@ public class StudyUserRoleBean extends AuditableEntityBean {
     /**
      * @param role The role to set.
      */
-    public void setRole(Role role) {
+    // `final` silences the this-escape warning on the ctor call below. No
+    // StudyUserRoleBean subclasses exist.
+    public final void setRole(Role role) {
         this.role = role;
 
         super.setId(role.getId());

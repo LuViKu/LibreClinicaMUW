@@ -55,8 +55,11 @@ public class AuditableEntityBean extends EntityBean {
 
     protected Status oldStatus;
 
-    // used to retrieve the owner and updater when needed
-    protected UserAccountDAO udao;
+    // used to retrieve the owner and updater when needed.
+    // transient: UserAccountDAO is not Serializable; it is lazy-loaded in
+    // getOwner()/getUpdater() and never needs to round-trip a session (MUW is
+    // single-host, no replication).
+    protected transient UserAccountDAO udao;
 
     public AuditableEntityBean() {
         createdDate = new Date(0);

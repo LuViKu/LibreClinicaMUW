@@ -107,6 +107,10 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     protected String oc_df_string = "";
     protected String local_df_string = "";
 
+    // this-escape: setDigesterName() is abstract; every concrete subclass overrides it,
+    // and the architecture relies on the override running before the digester lookup
+    // below. Refactoring out of the ctor would ripple through 36+ DAO subclasses.
+    @SuppressWarnings("this-escape")
     public EntityDAO(DataSource ds) {
         this.ds = ds;
         setDigesterName();

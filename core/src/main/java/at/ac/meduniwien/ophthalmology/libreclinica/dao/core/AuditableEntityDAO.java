@@ -67,11 +67,10 @@ public abstract class AuditableEntityDAO<T extends EntityBean> extends EntityDAO
 	private UserAccountDAO uadao;
 
     public AuditableEntityDAO(DataSource ds) {
+        // super(ds) already invokes the subclass setDigesterName() and resolves
+        // `digester` from SQLFactory; the redundant repeat below was a heritage
+        // belt-and-braces that also triggered the this-escape warning.
         super(ds);
-        setDigesterName();
-        // logger.info("digester name set to " + digesterName);
-        digester = SQLFactory.getInstance().getDigester(digesterName);
-        // logger.info("digester null? " + (digester == null));
     }
 
     /*

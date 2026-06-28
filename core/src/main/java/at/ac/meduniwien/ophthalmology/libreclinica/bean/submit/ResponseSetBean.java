@@ -84,7 +84,9 @@ public class ResponseSetBean extends EntityBean {
      * @param responseType
      *            The responseType to set.
      */
-    public void setResponseType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType responseType) {
+    // `final` silences the this-escape warning on the ctor call below. No
+    // ResponseSetBean subclasses exist.
+    public final void setResponseType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType responseType) {
         this.responseType = responseType;
     }
 
