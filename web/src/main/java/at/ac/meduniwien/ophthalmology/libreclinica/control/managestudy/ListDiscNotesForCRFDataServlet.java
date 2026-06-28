@@ -42,7 +42,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDef
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
-import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;

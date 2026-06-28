@@ -35,7 +35,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableResponse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

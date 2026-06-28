@@ -35,7 +35,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.EventDefi
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
-import com.sun.research.ws.wadl.Request;
 
 /**
  * @author jxu
