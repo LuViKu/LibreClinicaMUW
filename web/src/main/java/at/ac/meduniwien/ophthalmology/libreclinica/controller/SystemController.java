@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -1125,7 +1126,7 @@ public class SystemController {
         String url = "";
         URL pManageUrl = null;
         try {
-            pManageUrl = new URL(portalURL);
+            pManageUrl = URI.create(portalURL).toURL();
         } catch (MalformedURLException e) {
             logger.error("Portal Url is not correct: ", e);
         }
@@ -1152,7 +1153,7 @@ public class SystemController {
         String result = "";
         HttpURLConnection huc = null;
         try {
-            URL u = new URL(designerUrl);
+            URL u = URI.create(designerUrl).toURL();
             huc = (HttpURLConnection) u.openConnection();
             huc.setRequestMethod("HEAD");
             huc.connect();
@@ -1257,7 +1258,7 @@ public class SystemController {
         String result = "";
         HttpURLConnection huc = null;
         try {
-            URL u = new URL(webserviceUrl);
+            URL u = URI.create(webserviceUrl).toURL();
             huc = (HttpURLConnection) u.openConnection();
             huc.setRequestMethod("HEAD");
             huc.connect();
