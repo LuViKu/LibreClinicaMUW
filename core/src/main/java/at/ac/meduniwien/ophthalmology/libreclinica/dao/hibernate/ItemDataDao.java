@@ -21,7 +21,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
         return ItemData.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ItemData findByItemEventCrfOrdinal(Integer itemId, Integer eventCrfId, Integer ordinal) {
         String query = "from " + getDomainClassName()
                 + " item_data where item_data.item.itemId = :itemid and item_data.eventCrf.eventCrfId = :eventcrfid and item_data.ordinal = :ordinal";
@@ -32,7 +31,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
 	public List<ItemData> findAllByEventCrf(Integer eventCrfId) {
         String query = "select * from item_data where event_crf_id = " + eventCrfId;
@@ -42,7 +40,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
       
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
 	public List<ItemData> findByEventCrfGroup(Integer eventCrfId, Integer itemGroupId) {
         String query = "select id.* " + 
@@ -58,7 +55,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
       
     }
 
-    // TODO update to CriteriaQuery 
     public List<ItemData> findByEventCrfId(Integer eventCrfId) {
         String query = "from " + getDomainClassName() + " item_data where item_data.eventCrf.eventCrfId = :eventcrfid";
         Query<ItemData> q = getCurrentSession().createQuery(query, ItemData.class);
@@ -67,7 +63,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
       
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
     public int getMaxGroupRepeat(Integer eventCrfId, Integer itemId) {
         getCurrentSession().flush();

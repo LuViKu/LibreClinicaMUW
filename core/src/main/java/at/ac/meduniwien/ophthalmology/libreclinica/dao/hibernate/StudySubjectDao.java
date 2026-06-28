@@ -26,7 +26,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         return StudySubject.class;
     }
 
-    // TODO update to CriteriaQuery 
     public List<StudySubject> findAllByStudy(Integer studyId) {
         String query = "from " + getDomainClassName() + " do where do.study.studyId = :studyid";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
@@ -35,7 +34,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
       
     }
 
-    // TODO update to CriteriaQuery 
     public StudySubject findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
@@ -44,7 +42,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public StudySubject findByLabelAndStudy(String embeddedStudySubjectId, Study study) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.study.studyId = :studyid and do.label = :label";
@@ -54,7 +51,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public StudySubject findByLabelAndStudyOrParentStudy(String embeddedStudySubjectId, Study study) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where (do.study.studyId = :studyid or do.study.study.studyId = :studyid) and do.label = :label";
@@ -64,7 +60,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery
     public ArrayList<StudySubject> findByLabelAndParentStudy(String embeddedStudySubjectId, Study parentStudy) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.study.study.studyId = :studyid and do.label = :label";
@@ -128,7 +123,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         return q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public ArrayList<StudyEvent> fetchListSEs(String id) {
         String query = " from StudyEvent se where se.studySubject.ocOid = :id order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
@@ -158,7 +152,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         }
     }
 
-    // TODO update to CriteriaQuery 
     public int findTheGreatestLabelByStudy(Integer studyId) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where (do.study.studyId = :studyid or do.study.study.studyId = :studyid)";

@@ -25,7 +25,6 @@ public class ItemDao extends AbstractDomainDao<Item> {
         return Item.class;
     }
 
-    // TODO update to CriteriaQuery 
     public Item findByOcOID(String OCOID) {
         String query = "from " + getDomainClassName() + " item  where item.ocOid = :ocoid ";
         org.hibernate.query.Query<Item> q = getCurrentSession().createQuery(query, Item.class);
@@ -33,7 +32,6 @@ public class ItemDao extends AbstractDomainDao<Item> {
         return (Item) q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
     public Item findByNameCrfId(String name, Integer crfId) {
         String query = "select distinct i.* from item i, item_form_metadata ifm,crf_version cv " + "where i.name= '" + name + "' and i.item_id= ifm.item_id "
@@ -45,7 +43,6 @@ public class ItemDao extends AbstractDomainDao<Item> {
   public static final String findAllByCrfVersionIdQuery = "select distinct i.* from item i, item_form_metadata ifm " + "where i.item_id= ifm.item_id "
           + "and ifm.crf_version_id = :crfversionid";
 
-  // TODO update to CriteriaQuery 
   @SuppressWarnings({ "rawtypes", "unchecked", "deprecation" })
   public List<Item> findAllByCrfVersionId(Integer crfVersionId) {
       NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery).addEntity(Item.class);
@@ -53,7 +50,6 @@ public class ItemDao extends AbstractDomainDao<Item> {
       return (List<Item>) q.getResultList();
   }
 
-  // TODO update to CriteriaQuery 
   @SuppressWarnings("rawtypes")
     public int getItemDataTypeId(Item item) {
         String query = "select item_data_type_id from item where item_id = " + item.getItemId();

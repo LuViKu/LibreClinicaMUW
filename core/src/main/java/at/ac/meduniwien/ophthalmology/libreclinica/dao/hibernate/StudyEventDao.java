@@ -29,7 +29,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 		return StudyEvent.class;
 	}
 
-    // TODO update to CriteriaQuery 
 	public StudyEvent fetchByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
 		 Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
@@ -39,7 +38,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
          return q.getSingleResultOrNull();
 	}
 
-    // TODO update to CriteriaQuery 
 	@Transactional
 	public StudyEvent fetchByStudyEventDefOIDAndOrdinal(String oid,Integer ordinal,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -50,7 +48,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
          return q.getSingleResultOrNull();
 	}
 
-    // TODO update to CriteriaQuery 
     @Transactional(propagation = Propagation.NEVER)
     public StudyEvent fetchByStudyEventDefOIDAndOrdinalTransactional(String oid,Integer ordinal,Integer studySubjectId){
         String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -61,7 +58,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public Integer findMaxOrdinalByStudySubjectStudyEventDefinition(int studySubjectId, int studyEventDefinitionId) {
         String query = "select max(sample_ordinal) from study_event where study_subject_id = " + studySubjectId + " and study_event_definition_id = " + studyEventDefinitionId;
@@ -71,7 +67,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         else return result.intValue();
     }
 
-    // TODO update to CriteriaQuery 
     @Transactional
 	public List<StudyEvent> fetchListByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -101,7 +96,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
  this.eventPublisher = applicationEventPublisher;
 	}
 
-    // TODO update to CriteriaQuery 
 	@Transactional
     public StudyEvent findByStudyEventId(int studyEventId) {
         String query = "from " + getDomainClassName() + " study_event  where study_event.studyEventId = :studyeventid ";

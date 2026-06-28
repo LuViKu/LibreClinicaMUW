@@ -41,7 +41,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return RuleSetRuleBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ArrayList<RuleSetRuleBean> findByRuleSetBeanAndRuleBean(RuleSetBean ruleSetBean, RuleBean ruleBean) {
         String query = "from " + getDomainClassName() + " ruleSetRule  where ruleSetRule.ruleSetBean = :ruleSetBean" + " AND ruleSetRule.ruleBean = :ruleBean ";
         Query<RuleSetRuleBean> q = getCurrentSession().createQuery(query, RuleSetRuleBean.class);
@@ -56,7 +55,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
      * @param studyId
      * @return List of RuleSetRuleBeans 
      */
-    // TODO update to CriteriaQuery 
     @Transactional
     public ArrayList<RuleSetRuleBean> findByRuleSetStudyIdAndStatusAvail(Integer studyId) {
         String query = "from " + getDomainClassName() + " ruleSetRule  where ruleSetRule.ruleSetBean.studyId = :studyId and status = :status ";
@@ -102,7 +100,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return ruleSetRules;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public int getCountWithFilter(final ViewRuleAssignmentFilter filter) {
 
@@ -121,7 +118,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return ((Number) q.getSingleResultOrNull()).intValue();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
 	public ArrayList<RuleSetRuleBean> getWithFilterAndSort(final ViewRuleAssignmentFilter filter, final ViewRuleAssignmentSort sort, final int rowStart,
             final int rowEnd) {
@@ -145,7 +141,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return new ArrayList<RuleSetRuleBean>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     public int getCountByStudy(StudyBean study) {
         // Phase E.6 (2026-06-04): Hibernate 5.6 on jakarta-namespaced
         // jdbc returns COUNT(*) on Postgres as java.lang.Long — not

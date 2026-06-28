@@ -22,7 +22,6 @@ public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
         return DiscrepancyNote.class;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public List<DiscrepancyNote> findParentNotesByItemData(Integer itemDataId) {
         String query = "select dn.* from discrepancy_note dn, dn_item_data_map didm where didm.item_data_id=" + itemDataId + " AND dn.parent_dn_id isnull " + 
@@ -31,7 +30,6 @@ public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
         return (List<DiscrepancyNote>) q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public DiscrepancyNote findByDiscrepancyNoteId(int discrepancyNoteId) {
         String query = "from " + getDomainClassName() + " do where do.discrepancyNoteId = :discrepancynoteid ";
         Query<DiscrepancyNote> q = getCurrentSession().createQuery(query, DiscrepancyNote.class);

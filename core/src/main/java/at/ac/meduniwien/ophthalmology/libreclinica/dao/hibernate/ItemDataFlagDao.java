@@ -21,7 +21,6 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
         return ItemDataFlag.class;
     }
 
-    // TODO update to CriteriaQuery 
     public List<ItemDataFlag> findAllByEventCrfPath(int tag_id, String eventCrfPath) {
 
         String query = "from " + getDomainClassName() + " where " +
@@ -35,7 +34,6 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
         return q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public ItemDataFlag findByItemDataPath(int tag_id, String itemDataPath) {
 
         String query = "from " + getDomainClassName() + " where " +

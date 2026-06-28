@@ -105,7 +105,6 @@ private static RuleSetRuleDao ruleSetRuleDao;
             ruleSetDao.getSessionFactory().getCurrentSession().close();
             ruleSetRuleDao.getSessionFactory().getCurrentSession().setCacheMode(CacheMode.REFRESH);
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

@@ -34,7 +34,6 @@ public class UsageStatsServiceDAO extends AbstractDomainDao<LogUsageStatsBean> {
         return LogUsageStatsBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public LogUsageStatsBean findLatestUsageStatParamValue(String param_key) {
         // logger.debug("UsageStatsServiceDAO -> findLatestUsageStatParamValue");
 

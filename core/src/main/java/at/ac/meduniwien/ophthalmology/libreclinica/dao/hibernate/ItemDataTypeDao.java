@@ -20,7 +20,6 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
         return ItemDataType.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ItemDataType findByItemDataTypeCode(String item_data_type_code) {
         String query = "from " + getDomainClassName() + " item_data_type  where item_data_type.code = :itemdatatypecode ";
         Query<ItemDataType> q = getCurrentSession().createQuery(query, ItemDataType.class);
@@ -28,7 +27,6 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
         return (ItemDataType) q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public ItemDataType findByItemDataTypeId(int item_data_type_id) {
         String query = "from " + getDomainClassName() + " item_data_type  where item_data_type.itemDataTypeId = :item_data_type_id ";
         Query<ItemDataType> q = getCurrentSession().createQuery(query, ItemDataType.class);
@@ -37,7 +35,6 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
         return result;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
     public ItemDataType findByItemId(int item_id) {
         String query = "select idt.* from item_data_type idt join item i on idt.item_data_type_id=i.item_data_type_id where i.item_id = " + item_id;

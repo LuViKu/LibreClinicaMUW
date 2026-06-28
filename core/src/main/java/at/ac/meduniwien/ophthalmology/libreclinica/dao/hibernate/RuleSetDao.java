@@ -28,7 +28,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return RuleSetBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public RuleSetBean findById(Integer id, StudyBean study) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.id = :id and ruleSet.studyId = :studyId ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
@@ -37,7 +36,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public Long count(StudyBean study) {
         String query = "select count(*) from " + domainClass().getName() + " ruleSet where ruleSet.studyId = :studyId " + " AND ruleSet.status != :status ";
         Query<Long> q = getCurrentSession().createQuery(query, Long.class);
@@ -47,7 +45,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public int getCountWithFilter(final ViewRuleAssignmentFilter filter) {
 
@@ -84,7 +81,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     @Transactional
     public ArrayList<RuleSetBean> findByCrfVersionOrCrfAndStudyAndStudyEventDefinition(CRFVersionBean crfVersion, CRFBean crfBean, StudyBean currentStudy,
@@ -105,7 +101,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<RuleSetBean>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     public ArrayList<RuleSetBean> findAllByStudy(StudyBean currentStudy) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyId = :studyId  ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
@@ -113,7 +108,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     public ArrayList<RuleSetBean> findByCrf(CRFBean crfBean, StudyBean currentStudy) {
         String query =
@@ -127,7 +121,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public RuleSetBean findByExpression(RuleSetBean ruleSet) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value = :value AND ruleSet.originalTarget.context = :context ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
@@ -136,7 +129,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public RuleSetBean findByExpressionAndStudy(RuleSetBean ruleSet, Integer studyId) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value = :value " +
         		"AND ruleSet.originalTarget.context = :context " +
@@ -148,7 +140,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public Long getCountByStudy(StudyBean currentStudy) {
         String query = "select count(*) from " + getDomainClassName() + " ruleSet  where ruleSet.studyId = :studyId and ruleSet.status = :status ";
         Query<Long> q = getCurrentSession().createQuery(query, Long.class);
@@ -157,7 +148,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public ArrayList<RuleSetBean> findAllByStudyEventDef(StudyEventDefinitionBean sed){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyEventDefinitionId = :studyEventDefId  ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
@@ -165,7 +155,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
     
-    // TODO update to CriteriaQuery 
     public ArrayList<RuleSetBean> findAllEventActions(StudyBean currentStudy){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value LIKE '%.STARTDATE%' or ruleSet.originalTarget.value LIKE '%.STATUS%' and ruleSet.studyId = :studyId ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
@@ -173,7 +162,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     @Transactional
     public ArrayList<RuleSetBean> findAllRunOnSchedules(Boolean shedule){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.runSchedule = :shedule";
@@ -182,7 +170,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     @Transactional
     public ArrayList<RuleSetBean> findAllRunOnSchedulesPerSchema(Boolean shedule, String schema){
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.runSchedule = :shedule";
@@ -191,7 +178,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     @Transactional
     public ArrayList<RuleSetBean> findAllByStudyEventDefIdWhereItemIsNull(Integer studyEventDefId){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyEventDefinitionId = :studyEventDefId  and ruleSet.itemId is null";

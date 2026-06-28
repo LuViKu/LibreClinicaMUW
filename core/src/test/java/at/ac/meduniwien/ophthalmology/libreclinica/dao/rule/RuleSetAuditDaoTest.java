@@ -96,7 +96,6 @@ public class RuleSetAuditDaoTest extends HibernateOcDbTestCase {
             ruleSetAuditDao.getSessionFactory().getCurrentSession().close();
             ruleSetAuditDao.getSessionFactory().getCurrentSession().close();
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

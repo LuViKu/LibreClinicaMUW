@@ -23,7 +23,6 @@ public class StudyModuleStatusDao extends AbstractDomainDao<StudyModuleStatus> {
         return StudyModuleStatus.class;
     }
 
-    // TODO update to CriteriaQuery 
     public StudyModuleStatus findByStudyId(int studyId) {
         String query = "from " + getDomainClassName() + " sms  where sms.studyId = :studyId ";
         Query<StudyModuleStatus> q = getCurrentSession().createQuery(query, StudyModuleStatus.class);

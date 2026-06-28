@@ -97,7 +97,6 @@ public class AuthoritiesDaoTest extends HibernateOcDbTestCase {
            
             authoritiesDao.getSessionFactory().getCurrentSession().close();
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

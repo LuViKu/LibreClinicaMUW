@@ -363,7 +363,6 @@ public class ExampleSpringJob extends QuartzJobBean {
             // logger.debug("-- generated file: " + fileNameStr);
             // dataSource.
         } catch (Exception e) {
-            // TODO Auto-generated catch block -- ideally should generate a fail msg here, tbh 02/2009
             logger.debug("-- found exception: ", e);
         }
     }

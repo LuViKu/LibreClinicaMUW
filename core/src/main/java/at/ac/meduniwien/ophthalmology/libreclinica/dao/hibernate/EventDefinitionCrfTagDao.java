@@ -19,7 +19,6 @@ public class EventDefinitionCrfTagDao extends AbstractDomainDao<EventDefinitionC
         return EventDefinitionCrfTag.class;
     }
 
-    // TODO update to CriteriaQuery 
     public EventDefinitionCrfTag findByCrfPath(int tagId, String path, boolean active) {
         String query = "from " + getDomainClassName() + " where path = :path and tagId= :tagId and active= :active ";
         Query<EventDefinitionCrfTag> q = getCurrentSession().createQuery(query, EventDefinitionCrfTag.class);

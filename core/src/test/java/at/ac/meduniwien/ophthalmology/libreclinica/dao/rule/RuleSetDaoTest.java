@@ -214,7 +214,6 @@ public class RuleSetDaoTest extends HibernateOcDbTestCase {
         //    ruleDao.getSessionFactory().getCurrentSession().flush();
             ruleDao.getSessionFactory().getCurrentSession().close();
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

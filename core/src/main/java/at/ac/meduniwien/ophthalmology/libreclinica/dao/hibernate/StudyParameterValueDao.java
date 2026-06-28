@@ -20,7 +20,6 @@ public class StudyParameterValueDao extends AbstractDomainDao<StudyParameterValu
         return StudyParameterValue.class;
     }
 
-    // TODO update to CriteriaQuery 
 	public StudyParameterValue findByStudyIdParameter(int studyId, String parameter) {
         String query = "from " + getDomainClassName() + " study_parameter_value where study_parameter_value.study.studyId = :studyid and study_parameter_value.studyParameter = :parameter ";
         Query<StudyParameterValue> q = getCurrentSession().createQuery(query, StudyParameterValue.class);

@@ -85,7 +85,6 @@ public class MetaDataReportBean extends OdmXmlReportBean {
     }
 
     public MetaDataReportBean() {
-		// TODO Auto-generated constructor stub
 	}
 
 	private static String nls = System.getProperty("line.separator");

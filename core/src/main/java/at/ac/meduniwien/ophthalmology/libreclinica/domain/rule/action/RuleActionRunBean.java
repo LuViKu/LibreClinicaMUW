@@ -47,7 +47,6 @@ public class RuleActionRunBean extends AbstractMutableDomainObject implements Se
     Boolean stopped;
     
     public RuleActionRunBean() {
-        // TODO Auto-generated constructor stub
         this.administrativeDataEntry = true;
         this.initialDataEntry = true;
         this.doubleDataEntry = true;

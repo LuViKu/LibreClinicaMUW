@@ -22,7 +22,6 @@ public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
         return ResponseSet.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ResponseSet findByLabelVersion(String label, Integer version) {
         String query = "from " + getDomainClassName() + " response_set  where response_set.label = :label and response_set.versionId = :version ";
         Query<ResponseSet> q = getCurrentSession().createQuery(query, ResponseSet.class);
@@ -31,7 +30,6 @@ public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public List<ResponseSet> findAllByItemId(int itemId) {
         String query = "select rs.* from item_form_metadata ifm join response_set rs on ifm.response_set_id = rs.response_set_id " + "where ifm.item_id = "

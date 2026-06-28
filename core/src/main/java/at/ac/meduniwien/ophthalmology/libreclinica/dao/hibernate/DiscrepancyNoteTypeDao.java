@@ -19,7 +19,6 @@ public class DiscrepancyNoteTypeDao extends AbstractDomainDao<DiscrepancyNoteTyp
         return DiscrepancyNoteType.class;
     }
 
-    // TODO update to CriteriaQuery 
     public DiscrepancyNoteType findByDiscrepancyNoteTypeId(Integer discrepancyNoteTypeId) {
         String query = "from " + getDomainClassName() + " do  where do.discrepancyNoteTypeId = :discrepancynotetypeid";
         Query<DiscrepancyNoteType> q = getCurrentSession().createQuery(query, DiscrepancyNoteType.class);

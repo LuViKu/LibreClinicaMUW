@@ -18,7 +18,6 @@ public class UserAccountDao extends AbstractDomainDao<UserAccount> {
         return UserAccount.class;
     }
 
-    // TODO update to CriteriaQuery
     public UserAccount findByUserName(String userName) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.userName = :user_name";
