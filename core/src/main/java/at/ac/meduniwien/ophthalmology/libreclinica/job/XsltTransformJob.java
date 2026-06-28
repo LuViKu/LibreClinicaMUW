@@ -124,7 +124,7 @@ public class XsltTransformJob extends QuartzJobBean {
         initDependencies(context.getScheduler());
         // need to generate a Locale for emailing users with i18n
         // TODO make dynamic?
-        Locale locale = new Locale("en-US");
+        Locale locale = Locale.of("en-US");
         ResourceBundleProvider.updateLocale(locale);
         ResourceBundle pageMessages = ResourceBundleProvider.getPageMessagesBundle();
         List<File> markForDelete = new LinkedList<File>();

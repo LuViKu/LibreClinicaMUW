@@ -46,6 +46,6 @@ public class PatientDao extends AbstractDomainDao<Patient> {
                 + " p where p.patientUuid = :uuid";
         Query<Patient> q = getCurrentSession().createQuery(hql, Patient.class);
         q.setParameter("uuid", uuid);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

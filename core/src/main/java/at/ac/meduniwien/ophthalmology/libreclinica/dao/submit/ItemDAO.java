@@ -199,7 +199,6 @@ public class ItemDAO extends AuditableEntityDAO<ItemBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<ItemBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -426,14 +425,12 @@ public class ItemDAO extends AuditableEntityDAO<ItemBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<ItemBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<ItemBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");

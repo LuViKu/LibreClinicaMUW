@@ -34,7 +34,7 @@ public class HibernateUtil {
         //TODO - Doug - change return type to List<Long>
 
         // queryResult may contain Int, Long or BigDecimal
-        List<?> queryResult = query.list();
+        List<?> queryResult = query.getResultList();
 
         List<Integer> result = new ArrayList<Integer>(queryResult.size());
         for (Object o: queryResult) {

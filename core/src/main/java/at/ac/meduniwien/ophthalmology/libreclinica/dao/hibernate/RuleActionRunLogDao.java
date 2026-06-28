@@ -48,7 +48,7 @@ public class RuleActionRunLogDao extends AbstractDomainDao<RuleActionRunLogBean>
         q.setParameter("itemDataId", bean.getItemDataId());
         q.setParameter("value", bean.getValue());
         q.setParameter("ruleOid", bean.getRuleOid());
-        Long count = q.uniqueResult();
+        Long count = q.getSingleResultOrNull();
         return count == null ? 0 : count.intValue();
     }
 
@@ -91,6 +91,6 @@ public class RuleActionRunLogDao extends AbstractDomainDao<RuleActionRunLogBean>
         q.setParameterList("ruleOids", ruleOids);
         q.setMaxResults(limit);
         q.setFirstResult(offset);
-        return q.list();
+        return q.getResultList();
     }
 }

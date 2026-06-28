@@ -63,7 +63,7 @@ public class OpenClinicaSecurityContextLogoutHandler extends SecurityContextLogo
     }
 
     void auditLogout(String username) {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountBean userAccount = (UserAccountBean) getUserAccountDao().findByUserName(username);
         AuditUserLoginBean auditUserLogin = new AuditUserLoginBean();
         auditUserLogin.setUserName(username);

@@ -52,7 +52,7 @@ public class OpenClinicaSessionRegistryImpl extends SessionRegistryImpl {
     }
 
     void auditLogout(String username) {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountBean userAccount = (UserAccountBean) getUserAccountDao().findByUserName(username);
         crfLocker.unlockAllForUser(userAccount.getId());
 

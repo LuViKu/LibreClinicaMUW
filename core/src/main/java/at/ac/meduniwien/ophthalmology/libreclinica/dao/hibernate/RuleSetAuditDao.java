@@ -27,6 +27,6 @@ public class RuleSetAuditDao extends AbstractDomainDao<RuleSetAuditBean> {
         String query = "from " + getDomainClassName() + " ruleSetAudit  where ruleSetAudit.ruleSetBean = :ruleSet  ";
         Query<RuleSetAuditBean> q = getCurrentSession().createQuery(query, RuleSetAuditBean.class);
         q.setParameter("ruleSet", ruleSet);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 }

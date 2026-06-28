@@ -25,7 +25,7 @@ public class UserAccountDao extends AbstractDomainDao<UserAccount> {
         Query<UserAccount> q = getCurrentSession()
                 .createQuery(query, UserAccount.class)
                 .setParameter("user_name", userName);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public UserAccount findByUserId(Integer userId) {

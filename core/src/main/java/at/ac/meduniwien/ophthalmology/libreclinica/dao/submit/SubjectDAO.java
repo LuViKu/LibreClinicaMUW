@@ -282,7 +282,6 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<SubjectBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
@@ -395,14 +394,12 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<SubjectBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<SubjectBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");

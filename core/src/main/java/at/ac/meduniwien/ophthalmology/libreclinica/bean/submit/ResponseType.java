@@ -37,6 +37,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
  */
 
 // Internationalized description in Term.getDescription()
+@SuppressWarnings("deprecation")
 @Deprecated
 public class ResponseType extends Term {
     /**

@@ -27,7 +27,7 @@ public class ItemFormMetadataDao extends AbstractDomainDao<ItemFormMetadata> {
         String query = "SELECT distinct m.* " + " FROM item_form_metadata m" + " WHERE m.item_id= " + String.valueOf(itemId) + " AND m.crf_version_id= "
                 + String.valueOf(crfVersionId);
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemFormMetadata.class);
-        return (ItemFormMetadata) q.uniqueResult();
+        return (ItemFormMetadata) q.getSingleResultOrNull();
 
     }
 
@@ -38,7 +38,7 @@ public class ItemFormMetadataDao extends AbstractDomainDao<ItemFormMetadata> {
     public List<ItemFormMetadata> findAllByCrfVersion(int crf_version_id) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionQuery).addEntity(ItemFormMetadata.class);
         q.setParameter("crfversionid", crf_version_id);
-        return (List<ItemFormMetadata>) q.list();
+        return (List<ItemFormMetadata>) q.getResultList();
     }
 
 }

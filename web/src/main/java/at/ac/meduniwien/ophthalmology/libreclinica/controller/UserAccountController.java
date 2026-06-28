@@ -159,7 +159,7 @@ public class UserAccountController {
 		passwordHash = secm.encryptPassword(password, isSoap);
 
 		// Validate Entry Fields
-        request.getSession().setAttribute(LocaleResolver.getLocaleSessionAttributeName(), new Locale("en_US"));
+        request.getSession().setAttribute(LocaleResolver.getLocaleSessionAttributeName(), Locale.US);
 		Validator v = new Validator(request);
 		addValidationToFields(v, username);
 		HashMap<String, ArrayList<String>> errors = v.validate();

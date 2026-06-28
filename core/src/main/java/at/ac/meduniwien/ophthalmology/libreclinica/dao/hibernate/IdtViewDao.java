@@ -48,7 +48,7 @@ public class IdtViewDao extends AbstractDomainDao<IdtView> {
         Query<IdtView> q = getCurrentSession().createQuery(query, IdtView.class);
         q.setMaxResults(per_page); // limit
         q.setFirstResult((page - 1) * per_page); // offset
-        return q.list();
+        return q.getResultList();
     }
 
     

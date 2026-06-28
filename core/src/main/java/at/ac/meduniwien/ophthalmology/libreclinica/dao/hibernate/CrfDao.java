@@ -22,31 +22,28 @@ public class CrfDao extends AbstractDomainDao<CrfBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CrfBean findByName(String crfName) {
         String query = "from " + getDomainClassName() + " crf  where crf.name = :crfName ";
         Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
         q.setParameter("crfName", crfName);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CrfBean findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
         q.setParameter("OCOID", OCOID);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CrfBean findByCrfId(Integer crfId) {
         String query = "from " + getDomainClassName() + " crf  where crf.crfId = :crfId ";
         Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
         q.setParameter("crfId", crfId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
     
     private String getOid(CrfBean crf, String crfName) {

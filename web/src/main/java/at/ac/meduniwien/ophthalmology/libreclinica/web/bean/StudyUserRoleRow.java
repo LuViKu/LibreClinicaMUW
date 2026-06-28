@@ -16,8 +16,6 @@ import java.util.ArrayList;
 /**
  * @author jxu
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
 public class StudyUserRoleRow extends EntityBeanRow<StudyUserRoleBean, StudyUserRoleRow> {
     // columns:

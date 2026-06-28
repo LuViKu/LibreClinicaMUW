@@ -31,7 +31,7 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         q.setParameter("id", metadataBean.getId());
         q.setParameter("item_group_id", metadataBean.getItemGroupId());
         q.setParameter("event_crf_id", eventCrfBean.getId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -43,7 +43,7 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         q.setParameter("id", metadataBean.getId());
         q.setParameter("item_group_id", metadataBean.getItemGroupId());
         q.setParameter("event_crf_id", eventCrfBeanId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -63,7 +63,7 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         /* TODO use uniqueResult (or something similar), if the
          * query returns multiple (equivalent results) use distinct also
          */
-        return q.list() != null && q.list().size() > 0;
+        return q.getResultList() != null && q.getResultList().size() > 0;
     }
 
     @Transactional

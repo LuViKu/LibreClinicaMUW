@@ -582,7 +582,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
      */
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<UserAccountBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -998,7 +997,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<UserAccountBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -1006,7 +1004,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<UserAccountBean> findAllByPermission(Object objCurrentUser, int intActionType) {

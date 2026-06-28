@@ -36,7 +36,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
          q.setParameter("studySubjectId", studySubjectId);
          q.setParameter("oid", oid);
 
-         return q.uniqueResult();
+         return q.getSingleResultOrNull();
 	}
 
     // TODO update to CriteriaQuery 
@@ -47,7 +47,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
          q.setParameter("studySubjectId", studySubjectId);
          q.setParameter("oid", oid);
          q.setParameter("ordinal", ordinal);
-         return q.uniqueResult();
+         return q.getSingleResultOrNull();
 	}
 
     // TODO update to CriteriaQuery 
@@ -58,7 +58,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         q.setParameter("studySubjectId", studySubjectId);
         q.setParameter("oid", oid);
         q.setParameter("ordinal", ordinal);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -66,7 +66,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	public Integer findMaxOrdinalByStudySubjectStudyEventDefinition(int studySubjectId, int studyEventDefinitionId) {
         String query = "select max(sample_ordinal) from study_event where study_subject_id = " + studySubjectId + " and study_event_definition_id = " + studyEventDefinitionId;
         NativeQuery q = getCurrentSession().createNativeQuery(query);
-        Number result = (Number) q.uniqueResult();
+        Number result = (Number) q.getSingleResultOrNull();
         if (result == null) return 0;
         else return result.intValue();
     }
@@ -79,7 +79,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         q.setParameter("studySubjectId", studySubjectId);
         q.setParameter("oid", oid);
 
-        return q.list();
+        return q.getResultList();
 	}
 
 	@Transactional
@@ -107,6 +107,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         String query = "from " + getDomainClassName() + " study_event  where study_event.studyEventId = :studyeventid ";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
         q.setParameter("studyeventid", studyEventId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

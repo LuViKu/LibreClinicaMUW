@@ -21,21 +21,19 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemDataType findByItemDataTypeCode(String item_data_type_code) {
         String query = "from " + getDomainClassName() + " item_data_type  where item_data_type.code = :itemdatatypecode ";
         Query<ItemDataType> q = getCurrentSession().createQuery(query, ItemDataType.class);
         q.setParameter("itemdatatypecode", item_data_type_code);
-        return (ItemDataType) q.uniqueResult();
+        return (ItemDataType) q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemDataType findByItemDataTypeId(int item_data_type_id) {
         String query = "from " + getDomainClassName() + " item_data_type  where item_data_type.itemDataTypeId = :item_data_type_id ";
         Query<ItemDataType> q = getCurrentSession().createQuery(query, ItemDataType.class);
         q.setParameter("item_data_type_id", item_data_type_id);
-        ItemDataType result = (ItemDataType) q.uniqueResult();
+        ItemDataType result = (ItemDataType) q.getSingleResultOrNull();
         return result;
     }
 
@@ -44,7 +42,7 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
     public ItemDataType findByItemId(int item_id) {
         String query = "select idt.* from item_data_type idt join item i on idt.item_data_type_id=i.item_data_type_id where i.item_id = " + item_id;
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemDataType.class);
-        ItemDataType result = (ItemDataType) q.uniqueResult();
+        ItemDataType result = (ItemDataType) q.getSingleResultOrNull();
         return result;
     }
 }

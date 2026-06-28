@@ -21,12 +21,11 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ResponseType findByResponseTypeName(String name) {
         String query = "from " + getDomainClassName() + " response_type  where response_type.name = :name ";
         Query<ResponseType> q = getCurrentSession().createQuery(query, ResponseType.class);
         q.setParameter("name", name);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -35,7 +34,7 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
         String query = "select rt.* from response_type rt, response_set rs, item_form_metadata ifm where ifm.response_set_id=rs.response_set_id"
                 + " and rs.response_type_id=rt.response_type_id and ifm.item_form_metadata_id = " + String.valueOf(itemFormMetadataId);
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ResponseType.class);
-        return (ResponseType) q.uniqueResult();
+        return (ResponseType) q.getSingleResultOrNull();
     }
 
 }

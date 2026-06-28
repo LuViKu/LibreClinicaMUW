@@ -49,7 +49,7 @@ public class XalanTransformJob extends QuartzJobBean {
         // need to generate a Locale so that user beans and other things will
         // generate normally
         // TODO make dynamic?
-        Locale locale = new Locale("en-US");
+        Locale locale = Locale.of("en-US");
         ResourceBundleProvider.updateLocale(locale);
         JobDataMap dataMap = context.getMergedJobDataMap();
         // get the file information from the job

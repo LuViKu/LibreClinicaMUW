@@ -139,7 +139,7 @@ public class ImportSpringJob extends QuartzJobBean {
     }
 
     protected void executeInternalInTransaction(JobExecutionContext context) {
-        locale = new Locale("en-US");
+        locale = Locale.of("en-US");
         ResourceBundleProvider.updateLocale(locale);
         respage = ResourceBundleProvider.getPageMessagesBundle();
         resword = ResourceBundleProvider.getWordsBundle();
@@ -289,7 +289,7 @@ public class ImportSpringJob extends QuartzJobBean {
 
     private ImportCRFDataService getImportCRFDataService(DataSource dataSource) {
         // TODO dynamic locale?
-        // Locale locale = new Locale("en-US");
+        // Locale locale = Locale.of("en-US");
         dataService = this.dataService != null ? dataService : new ImportCRFDataService(dataSource, locale);
         return dataService;
     }
@@ -490,7 +490,7 @@ public class ImportSpringJob extends QuartzJobBean {
                 // here, tbh 05/2009
 
                 MockHttpServletRequest request = new MockHttpServletRequest();
-                // Locale locale = new Locale("en-US");
+                // Locale locale = Locale.of("en-US");
                 request.addPreferredLocale(locale);
                 try {
                     List<DisplayItemBeanWrapper> tempDisplayItemBeanWrappers = new ArrayList<DisplayItemBeanWrapper>();

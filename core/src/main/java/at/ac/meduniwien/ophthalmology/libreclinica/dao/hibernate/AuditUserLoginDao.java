@@ -39,7 +39,7 @@ public class AuditUserLoginDao extends AbstractDomainDao<AuditUserLoginBean> {
     public ArrayList<AuditUserLoginBean> findAll() {
         String hql = "from " + getDomainClassName() + " aul order by aul.loginAttemptDate desc";
         Query<AuditUserLoginBean> q = getCurrentSession().createQuery(hql, AuditUserLoginBean.class);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     public int getCountWithFilter(final AuditUserLoginFilter filter) {
@@ -67,6 +67,6 @@ public class AuditUserLoginDao extends AbstractDomainDao<AuditUserLoginBean> {
         Query<AuditUserLoginBean> q = session.createQuery(cq);
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 }

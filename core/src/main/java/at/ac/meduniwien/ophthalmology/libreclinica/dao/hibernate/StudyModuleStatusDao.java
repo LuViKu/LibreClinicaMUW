@@ -28,7 +28,7 @@ public class StudyModuleStatusDao extends AbstractDomainDao<StudyModuleStatus> {
         String query = "from " + getDomainClassName() + " sms  where sms.studyId = :studyId ";
         Query<StudyModuleStatus> q = getCurrentSession().createQuery(query, StudyModuleStatus.class);
         q.setParameter("studyId", studyId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

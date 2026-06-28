@@ -29,7 +29,7 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
             + "select ifm.item_form_metadata_id from item_form_metadata ifm where ifm.section_id = :sectionId)";
         NativeQuery q = this.getCurrentSession().createNativeQuery(query).addEntity(this.domainClass());
         q.setParameter("sectionId", sectionId);
-        return (ArrayList<SCDItemMetadataBean>) q.list();  
+        return (ArrayList<SCDItemMetadataBean>) q.getResultList();  
     }
 
     // TODO update to CriteriaQuery 
@@ -39,7 +39,7 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         + "select ifm.item_form_metadata_id from item_form_metadata ifm where ifm.section_id = :sectionId)";
         NativeQuery q = this.getCurrentSession().createNativeQuery(query);
         q.setParameter("sectionId", sectionId);
-        return q.list();
+        return q.getResultList();
     }
     
     // TODO update to CriteriaQuery 
@@ -48,6 +48,6 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         String query = "select scd.* from scd_item_metadata scd where scd.scd_item_form_metadata_id = :itemFormMetadataId)";
         NativeQuery q = this.getCurrentSession().createNativeQuery(query);
         q.setParameter("itemFormMetadataId", itemFormMetadataId);
-        return (ArrayList<SCDItemMetadataBean>) q.list();
+        return (ArrayList<SCDItemMetadataBean>) q.getResultList();
     }
 }

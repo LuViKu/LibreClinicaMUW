@@ -46,7 +46,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         q.setParameter("item_id", metadataBean.getItemId());
         q.setParameter("event_crf_id", eventCrfBean.getId());
         q.setParameter("item_data_id", itemDataBean.getId());
-        List<DynamicsItemFormMetadataBean> list = q.list();
+        List<DynamicsItemFormMetadataBean> list = q.getResultList();
         /* TODO use uniqueResult (or something similar), if the
          * query returns multiple (equivalent results) use distinct also
          */
@@ -66,7 +66,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         q.setParameter("item_id", itemId);
         q.setParameter("event_crf_id", eventCrfBean.getId());
 
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
 
@@ -76,7 +76,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);
 
         q.setParameter("item_data_id", itemDataBean.getId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
         

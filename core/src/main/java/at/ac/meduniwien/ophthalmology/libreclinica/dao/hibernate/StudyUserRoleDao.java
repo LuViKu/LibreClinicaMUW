@@ -30,7 +30,7 @@ public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole
         q.setParameter("username", userAccount.getUserName());
         q.setParameter("studyId", studyId);
         q.setParameter("parentStudyId", parentStudyId);
-        return new ArrayList<StudyUserRole>(q.list());
+        return new ArrayList<StudyUserRole>(q.getResultList());
     }
 
 }

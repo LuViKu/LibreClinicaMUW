@@ -60,7 +60,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         String query = "from " + getDomainClassName() + " do  where do.id = :id";
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("id", id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     @SuppressWarnings("unchecked")
@@ -69,7 +69,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do";
         Query<T> q = getCurrentSession().createQuery(query);
-        return new ArrayList<T>(q.list());
+        return new ArrayList<T>(q.getResultList());
     }
 
     @SuppressWarnings("unchecked")
@@ -78,7 +78,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
          String query = "from " + getDomainClassName() + " do  where do.oc_oid = :oc_oid";
          Query<T> q = getCurrentSession().createQuery(query);
          q.setParameter("oc_oid", OCOID);
-         return q.uniqueResult();
+         return q.getSingleResultOrNull();
     }
 
     @Transactional
@@ -103,7 +103,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         String query = "from " + getDomainClassName() + " do where do." + key + " = :key_value";
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("key_value", id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public Long count() {

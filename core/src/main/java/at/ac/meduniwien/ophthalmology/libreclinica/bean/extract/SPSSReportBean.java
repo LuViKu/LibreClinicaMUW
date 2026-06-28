@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
  * @author jxu
  * 
  */
+@SuppressWarnings("deprecation")
 @Deprecated
 public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
 

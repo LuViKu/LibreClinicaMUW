@@ -24,7 +24,7 @@ public class CompletionStatusDao extends AbstractDomainDao<CompletionStatus> {
         String query = "from " + getDomainClassName() + " completion_status  where completion_status.completionStatusId = :completionstatusid ";
         Query<CompletionStatus> q = getCurrentSession().createQuery(query, CompletionStatus.class);
         q.setParameter("completionstatusid", completion_status_id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 

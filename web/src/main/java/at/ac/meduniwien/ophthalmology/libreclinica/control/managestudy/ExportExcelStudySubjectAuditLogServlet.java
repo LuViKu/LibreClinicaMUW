@@ -218,7 +218,7 @@ public class ExportExcelStudySubjectAuditLogServlet extends SecureController {
         	    "attachment; filename=export.xls");
         
 		WorkbookSettings wbSettings = new WorkbookSettings();
-		wbSettings.setLocale(new Locale("en", "EN"));
+		wbSettings.setLocale(Locale.of("en", "EN"));
 		WritableWorkbook workbook = Workbook.createWorkbook(
 				response.getOutputStream(), wbSettings);
 		

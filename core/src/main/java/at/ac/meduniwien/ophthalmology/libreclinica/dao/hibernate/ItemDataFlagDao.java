@@ -32,7 +32,7 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
                 .setParameter("tag_id", tag_id)
                 .setParameter("eventCrfPath", eventCrfPath + ".%");
         
-        return q.list();
+        return q.getResultList();
     }
 
     // TODO update to CriteriaQuery 
@@ -46,7 +46,7 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
                 .setParameter("tag_id", tag_id)
                 .setParameter("itemDataPath", itemDataPath);
         
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
     
 }
