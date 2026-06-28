@@ -315,7 +315,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         this.executeUpdate(digester.getQuery("lockUser"), variables);
     }
 
-    @SuppressWarnings({"unlikely-arg-type"})
     @Override
     public UserAccountBean create(UserAccountBean uab) {
         HashMap<Integer, Object> variables = new HashMap<>();

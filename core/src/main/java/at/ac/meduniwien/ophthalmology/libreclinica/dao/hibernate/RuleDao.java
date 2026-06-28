@@ -20,7 +20,6 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleBean findByOid(RuleBean ruleBean) {
         String query = "from " + getDomainClassName() + " rule  where rule.oid = :oid and  rule.studyId = :studyId ";
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
@@ -30,7 +29,6 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleBean findByOid(String oid, Integer studyId) {
         String query = "from " + getDomainClassName() + " rule  where rule.oid = :oid and  rule.studyId = :studyId ";
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);

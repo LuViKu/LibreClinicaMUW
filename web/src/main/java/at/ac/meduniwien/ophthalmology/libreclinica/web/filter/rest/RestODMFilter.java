@@ -151,13 +151,11 @@ public class RestODMFilter implements ContainerRequestFilter,ResourceFilter {
 	}
 	@Override
 	public ContainerRequestFilter getRequestFilter() {
-		// TODO Auto-generated method stub
 		return this;
 	}
 
 	@Override
 	public ContainerResponseFilter getResponseFilter() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

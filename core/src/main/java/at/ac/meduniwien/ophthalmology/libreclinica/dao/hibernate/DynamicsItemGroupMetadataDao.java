@@ -23,7 +23,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemGroupMetadataBean findByMetadataBean(ItemGroupMetadataBean metadataBean, EventCRFBean eventCrfBean) {
         String query =
             "from " + getDomainClassName()
@@ -36,7 +35,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemGroupMetadataBean findByMetadataBean(ItemGroupMetadataBean metadataBean, int eventCrfBeanId) {
         String query =
             "from " + getDomainClassName()

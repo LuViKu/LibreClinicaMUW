@@ -39,13 +39,11 @@ public class StudyEventBeanContainer implements Listener{
 
 	@Override
 	public void setObserver(Observer o) {
-		// TODO Auto-generated method stub
 		
 	}
 
 	@Override
 	public Observer getObserver() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

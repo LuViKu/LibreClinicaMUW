@@ -239,7 +239,6 @@ public class MarkEventCRFCompleteServlet extends SecureController {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#mayProceed()
      */
-    @SuppressWarnings("unlikely-arg-type")
 	@Override
     protected void mayProceed() throws InsufficientPermissionException {
 

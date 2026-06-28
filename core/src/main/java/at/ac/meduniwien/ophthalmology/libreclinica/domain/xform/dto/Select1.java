@@ -83,7 +83,6 @@ public class Select1 implements UserControl {
 
     @Override
     public String getMediatype() {
-        // TODO Auto-generated method stub
         return null;
     }
 

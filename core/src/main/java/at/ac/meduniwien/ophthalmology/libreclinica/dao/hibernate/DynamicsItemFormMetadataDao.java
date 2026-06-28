@@ -35,7 +35,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemFormMetadataBean findByMetadataBean(ItemFormMetadataBean metadataBean, EventCRFBean eventCrfBean,
             ItemDataBean itemDataBean) {
 
@@ -56,7 +55,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
 
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList <DynamicsItemFormMetadataBean> findByItemAndEventCrfShown(EventCRFBean eventCrfBean,
             int itemId) {
 
@@ -73,7 +71,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
 
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemFormMetadataBean findByItemDataBean(ItemDataBean itemDataBean) {
         String query = "from " + getDomainClassName() + " metadata where metadata.itemDataId = :item_data_id ";
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);

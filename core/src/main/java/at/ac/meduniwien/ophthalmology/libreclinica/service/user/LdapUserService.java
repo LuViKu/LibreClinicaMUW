@@ -139,7 +139,6 @@ public class LdapUserService {
      * @param dn distinguished name
      * @return LdapUser object found for provided distinguished name
      */
-    @SuppressWarnings("unchecked")
     public LdapUser loadUser(String dn) {
         return ldapTemplate.lookup(dn, ldapUserAttributesMapper);
     }

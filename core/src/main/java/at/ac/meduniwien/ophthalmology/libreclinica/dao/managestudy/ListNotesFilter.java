@@ -54,7 +54,6 @@ public class ListNotesFilter implements CriteriaCommand {
 
     @Override
     public String execute(String criteria) {
-        // TODO Auto-generated method stub
         return null;
     }
 
@@ -111,7 +110,6 @@ public class ListNotesFilter implements CriteriaCommand {
                 try {
                     variables.put(variables.size() + 1, sdf.parse(value.toString()));
                 } catch (ParseException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
 

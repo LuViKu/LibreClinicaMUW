@@ -97,7 +97,6 @@ public class ListEventsForSubjectsDataServlet extends SecureController {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void processRequest() throws Exception {
         java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(locale);
         java.util.ResourceBundle resformat = ResourceBundleProvider.getFormatBundle(locale);

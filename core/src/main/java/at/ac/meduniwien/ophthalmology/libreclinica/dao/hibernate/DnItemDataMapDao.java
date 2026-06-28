@@ -22,7 +22,6 @@ public class DnItemDataMapDao extends AbstractDomainDao<DnItemDataMap> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public List<DnItemDataMap> findByItemData(Integer itemDataId) {
         String query = "from " + getDomainClassName() + " do where do.itemData.itemDataId = :itemdataid ";
         Query<DnItemDataMap> q = getCurrentSession().createQuery(query, DnItemDataMap.class);

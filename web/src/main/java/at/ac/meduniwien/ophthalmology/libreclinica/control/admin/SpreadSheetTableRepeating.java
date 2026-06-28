@@ -1652,7 +1652,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                         // igMeta.setRepeatArray(groupRepeatArray);
                         igMeta.setShowGroup(isShowGroup);
                         try {
-                            igMeta.setRepeatMax(new Integer(Integer.parseInt(groupRepeatMax)));
+                            igMeta.setRepeatMax(Integer.valueOf(Integer.parseInt(groupRepeatMax)));
                             //mantiss 13917
                             
                             if (igMeta.getRepeatMax() < 1){
@@ -1673,7 +1673,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             }
                         }
                         try {
-                            igMeta.setRepeatNum(new Integer(Integer.parseInt(groupRepeatNumber)));
+                            igMeta.setRepeatNum(Integer.valueOf(Integer.parseInt(groupRepeatNumber)));
                             if(igMeta.getRepeatNum() < 1){ //mantiss 13917
 	                            errors.add(resPageMsg.getString("the") + " "+resPageMsg.getString("GROUP_REPEAT_NUM_column")+" "
 	                                    + resPageMsg.getString("must_be_a_positive_integer_or_blank") + ". " + groupRepeatNumber + " "
@@ -2131,7 +2131,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             buf.append("<td class=\"table_cell\">" + cell.getNumericCellValue() + " " + error + "</td>");
                             break;
                         case STRING:
-                            @SuppressWarnings("deprecation")
                             String stringCellValue = cell.getStringCellValue();
 							buf.append("<td class=\"table_cell\">" + stringCellValue + " " + error + "</td>");
                             break;
@@ -2206,7 +2205,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
             // logger.debug("found a numeric cell after transfer: "+val);
             break;
         case STRING:
-            @SuppressWarnings("deprecation")
             String stringCellValue = cell.getStringCellValue();
 			val = stringCellValue;
             if (val.matches("'")) {
@@ -2271,7 +2269,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                         buf.append("<td>" + cell.getNumericCellValue() + "</td>");
                         break;
                     case STRING:
-                        @SuppressWarnings("deprecation")
                         String stringCellValue = cell.getStringCellValue();
 						buf.append("<td>" + stringCellValue + "</td>");
                         break;

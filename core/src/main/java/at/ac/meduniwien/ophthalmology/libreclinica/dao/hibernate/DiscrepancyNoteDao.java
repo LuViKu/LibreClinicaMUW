@@ -32,7 +32,6 @@ public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DiscrepancyNote findByDiscrepancyNoteId(int discrepancyNoteId) {
         String query = "from " + getDomainClassName() + " do where do.discrepancyNoteId = :discrepancynoteid ";
         Query<DiscrepancyNote> q = getCurrentSession().createQuery(query, DiscrepancyNote.class);

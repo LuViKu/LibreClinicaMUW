@@ -35,7 +35,6 @@ public class UsageStatsServiceDAO extends AbstractDomainDao<LogUsageStatsBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public LogUsageStatsBean findLatestUsageStatParamValue(String param_key) {
         // logger.debug("UsageStatsServiceDAO -> findLatestUsageStatParamValue");
 

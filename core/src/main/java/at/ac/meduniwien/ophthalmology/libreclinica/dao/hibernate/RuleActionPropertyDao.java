@@ -22,7 +22,6 @@ public class RuleActionPropertyDao extends AbstractDomainDao<PropertyBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList <PropertyBean> findByOid(String itemOid , String groupOid) {
         String query = "from " + getDomainClassName() +  "  where oc_oid = :itemOid OR oc_oid=:groupOid ";
         Query<PropertyBean> q = getCurrentSession().createQuery(query, PropertyBean.class);
@@ -32,7 +31,6 @@ public class RuleActionPropertyDao extends AbstractDomainDao<PropertyBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList <PropertyBean> findByOid(String Oid) {
         String query = "from " + getDomainClassName() +  "  where oc_oid=:Oid ";
         Query<PropertyBean> q = getCurrentSession().createQuery(query, PropertyBean.class);

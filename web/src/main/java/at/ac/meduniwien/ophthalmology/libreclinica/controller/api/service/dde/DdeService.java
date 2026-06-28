@@ -221,7 +221,6 @@ public class DdeService {
         // ask the DN DAO for the open FAILEDVAL note (if any). This is
         // O(N items) DB calls; acceptable for the modest CRF sizes
         // (MUW CRFs average <30 items). M2 of this cluster will batch.
-        @SuppressWarnings("unchecked")
         ArrayList<ItemDataBean> all = idDAO.findAllByEventCRFId(ecb.getId());
         if (all == null) return new DdeConflictsDto(
                 String.valueOf(ecb.getId()), ss.getLabel(), "", List.of());
@@ -386,7 +385,6 @@ public class DdeService {
     private DiscrepancyNoteBean findOpenFailedValForItemData(DiscrepancyNoteDAO dnDAO,
                                                               int itemDataId) {
         try {
-            @SuppressWarnings("unchecked")
             ArrayList<DiscrepancyNoteBean> notes =
                     dnDAO.findAllByEntityAndColumn("itemData", itemDataId, "value");
             if (notes == null) return null;

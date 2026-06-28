@@ -15,7 +15,6 @@ public class TagDao extends AbstractDomainDao<Tag> {
 
     @Override
     Class<Tag> domainClass() {
-        // TODO Auto-generated method stub
         return Tag.class;
     }
 

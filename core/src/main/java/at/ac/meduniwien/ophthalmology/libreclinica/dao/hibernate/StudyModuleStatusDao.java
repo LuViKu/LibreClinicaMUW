@@ -24,7 +24,6 @@ public class StudyModuleStatusDao extends AbstractDomainDao<StudyModuleStatus> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudyModuleStatus findByStudyId(int studyId) {
         String query = "from " + getDomainClassName() + " sms  where sms.studyId = :studyId ";
         Query<StudyModuleStatus> q = getCurrentSession().createQuery(query, StudyModuleStatus.class);

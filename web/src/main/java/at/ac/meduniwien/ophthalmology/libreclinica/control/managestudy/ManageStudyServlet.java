@@ -75,8 +75,8 @@ public class ManageStudyServlet extends SecureController {
             }
         }
         request.setAttribute("sites", sites);
-        request.setAttribute("sitesCount", new Integer(sites.size()));
-        request.setAttribute("allSitesCount", new Integer(allSites.size()));
+        request.setAttribute("sitesCount", Integer.valueOf(sites.size()));
+        request.setAttribute("allSitesCount", Integer.valueOf(allSites.size()));
         // BWP 3057: add study name to JSP
         if (currentStudy != null) {
             request.setAttribute("studyIdentifier", currentStudy.getIdentifier());
@@ -86,15 +86,15 @@ public class ManageStudyServlet extends SecureController {
         ArrayList<StudyEventDefinitionBean> seds = edao.findAllByStudyAndLimit(currentStudy.getId());
         ArrayList<StudyEventDefinitionBean> allSeds = edao.findAllByStudy(currentStudy);
         request.setAttribute("seds", seds);
-        request.setAttribute("sedsCount", new Integer(seds.size()));
-        request.setAttribute("allSedsCount", new Integer(allSeds.size()));
+        request.setAttribute("sedsCount", Integer.valueOf(seds.size()));
+        request.setAttribute("allSedsCount", Integer.valueOf(allSeds.size()));
 
         UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());
         ArrayList<StudyUserRoleBean> users = udao.findAllUsersByStudyIdAndLimit(currentStudy.getId(), true);
         ArrayList<StudyUserRoleBean> allUsers = udao.findAllUsersByStudy(currentStudy.getId());
         request.setAttribute("users", users);
-        request.setAttribute("usersCount", new Integer(users.size()));
-        request.setAttribute("allUsersCount", new Integer(allUsers.size()));
+        request.setAttribute("usersCount", Integer.valueOf(users.size()));
+        request.setAttribute("allUsersCount", Integer.valueOf(allUsers.size()));
 
         StudySubjectDAO ssdao = new StudySubjectDAO(sm.getDataSource());
         // ArrayList subjects = (ArrayList)
@@ -108,8 +108,8 @@ public class ManageStudyServlet extends SecureController {
             }
         }
         request.setAttribute("subs", subjects);
-        request.setAttribute("subsCount", new Integer(subjects.size()));
-        request.setAttribute("allSubsCount", new Integer(allSubjects.size()));
+        request.setAttribute("subsCount", Integer.valueOf(subjects.size()));
+        request.setAttribute("allSubsCount", Integer.valueOf(allSubjects.size()));
 
         // added tbh, 9-21-2005
         // AuditEventDAO aedao = new AuditEventDAO(sm.getDataSource());
@@ -119,16 +119,16 @@ public class ManageStudyServlet extends SecureController {
         resetPanel();
 
         if (allSubjects.size() > 0) {
-            setToPanel("Subjects", new Integer(allSubjects.size()).toString());
+            setToPanel("Subjects", Integer.valueOf(allSubjects.size()).toString());
         }
         if (allUsers.size() > 0) {
-            setToPanel("Users", new Integer(allUsers.size()).toString());
+            setToPanel("Users", Integer.valueOf(allUsers.size()).toString());
         }
         if (allSites.size() > 0) {
-            setToPanel("Sites", new Integer(allSites.size()).toString());
+            setToPanel("Sites", Integer.valueOf(allSites.size()).toString());
         }
         if (allSeds.size() > 0) {
-            setToPanel("Event Definitions", new Integer(allSeds.size()).toString());
+            setToPanel("Event Definitions", Integer.valueOf(allSeds.size()).toString());
         }
         String proto = request.getParameter("proto");
         if (proto == null || "".equalsIgnoreCase(proto)) {

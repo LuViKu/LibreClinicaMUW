@@ -115,7 +115,6 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
         return this.crfId;
     }
 
-    @SuppressWarnings("deprecation")
 	public NewCRFBean toNewCRF(javax.sql.DataSource ds, ResourceBundle resPageMsg) throws IOException, CRFReadingException {
 
         String dbName = SQLInitServlet.getDBName();
@@ -1351,7 +1350,6 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
         return val.trim();
     }
 
-    @SuppressWarnings("deprecation")
 	public String toHTML(int sheetIndex) throws IOException {
         StringBuffer buf = new StringBuffer();
         HSSFWorkbook wb = new HSSFWorkbook(fs);

@@ -105,7 +105,7 @@ public class GenerateExtractFileService {
         logger.info("created txt file");
         // return TXTFileName;
         HashMap<String, Integer> answerMap = new HashMap<>();
-        answerMap.put(TXTFileName, new Integer(fId));
+        answerMap.put(TXTFileName, Integer.valueOf(fId));
         return answerMap;
     }
 
@@ -243,7 +243,7 @@ public class GenerateExtractFileService {
         }
         // return DDLFileName;
         HashMap<String, Integer> answerMap = new HashMap<>();
-        answerMap.put(DDLFileName, new Integer(fId));
+        answerMap.put(DDLFileName, Integer.valueOf(fId));
         return answerMap;
     }
 
@@ -354,7 +354,6 @@ public class GenerateExtractFileService {
                 try {
                     w.close();
                 } catch (IOException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
         }
@@ -455,7 +454,6 @@ public class GenerateExtractFileService {
                 try {
                     w.close();
                 } catch (IOException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
         }

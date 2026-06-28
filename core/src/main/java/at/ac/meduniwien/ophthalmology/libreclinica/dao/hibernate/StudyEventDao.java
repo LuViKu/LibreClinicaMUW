@@ -30,7 +30,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	}
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation") 
 	public StudyEvent fetchByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
 		 Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
@@ -41,7 +40,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	}
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
 	@Transactional
 	public StudyEvent fetchByStudyEventDefOIDAndOrdinal(String oid,Integer ordinal,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -53,7 +51,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	}
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional(propagation = Propagation.NEVER)
     public StudyEvent fetchByStudyEventDefOIDAndOrdinalTransactional(String oid,Integer ordinal,Integer studySubjectId){
         String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -75,7 +72,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
 	public List<StudyEvent> fetchListByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -106,7 +102,6 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	}
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
 	@Transactional
     public StudyEvent findByStudyEventId(int studyEventId) {
         String query = "from " + getDomainClassName() + " study_event  where study_event.studyEventId = :studyeventid ";

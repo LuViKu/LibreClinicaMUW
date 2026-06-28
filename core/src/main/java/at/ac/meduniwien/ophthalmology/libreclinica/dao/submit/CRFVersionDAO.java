@@ -63,13 +63,13 @@ public class CRFVersionDAO extends AuditableEntityDAO<CRFVersionBean> {
         // DESCRIPTION=?,DATE_UPDATED=NOW(),UPDATE_ID=?,REVISION_NOTES =? WHERE
         // CRF_VERSION_ID=?
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(ib.getCrfId()));
-        variables.put(new Integer(2), new Integer(ib.getStatus().getId()));
-        variables.put(new Integer(3), ib.getName());
-        variables.put(new Integer(4), ib.getDescription());
-        variables.put(new Integer(5), new Integer(ib.getUpdater().getId()));
-        variables.put(new Integer(6), ib.getRevisionNotes());
-        variables.put(new Integer(7), new Integer(ib.getId()));
+        variables.put(Integer.valueOf(1), Integer.valueOf(ib.getCrfId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(ib.getStatus().getId()));
+        variables.put(Integer.valueOf(3), ib.getName());
+        variables.put(Integer.valueOf(4), ib.getDescription());
+        variables.put(Integer.valueOf(5), Integer.valueOf(ib.getUpdater().getId()));
+        variables.put(Integer.valueOf(6), ib.getRevisionNotes());
+        variables.put(Integer.valueOf(7), Integer.valueOf(ib.getId()));
         this.executeUpdate(digester.getQuery("update"), variables);
         return ib;
     }

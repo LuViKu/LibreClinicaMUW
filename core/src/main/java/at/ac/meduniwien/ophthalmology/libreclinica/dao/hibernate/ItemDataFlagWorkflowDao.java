@@ -15,7 +15,6 @@ public class ItemDataFlagWorkflowDao extends AbstractDomainDao<ItemDataFlagWorkf
 
     @Override
     Class<ItemDataFlagWorkflow> domainClass() {
-        // TODO Auto-generated method stub
         return ItemDataFlagWorkflow.class;
     }
 

@@ -26,7 +26,6 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemGroup findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
@@ -36,7 +35,6 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemGroup findByNameCrfId(String groupName, CrfBean crf) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.name = :groupName and do.crf = :crf";

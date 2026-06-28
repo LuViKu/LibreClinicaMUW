@@ -20,7 +20,6 @@ public class UserTypeDao extends AbstractDomainDao<UserType> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public UserType findByUserTypeId(Integer userTypeId) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.userTypeId = :user_type_id";

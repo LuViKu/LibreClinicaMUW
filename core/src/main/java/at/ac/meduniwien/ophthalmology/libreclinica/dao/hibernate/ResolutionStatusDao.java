@@ -20,7 +20,6 @@ public class ResolutionStatusDao extends AbstractDomainDao<ResolutionStatus> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ResolutionStatus findByResolutionStatusId(Integer resolutionStatusId) {
         String query = "from " + getDomainClassName() + " do  where do.resolutionStatusId = :resolutionstatusid";
         Query<ResolutionStatus> q = getCurrentSession().createQuery(query, ResolutionStatus.class);

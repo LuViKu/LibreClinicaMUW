@@ -142,7 +142,7 @@ public class AuditLogStudyServlet extends SecureController {
             // }
             eventsHashMap.put(Integer.valueOf(studySubject.getId()), events);
             // request.setAttribute("events"+ss, events);
-            // eventCRFAuditsHashMap.put(new Integer(studySubject.getId()),
+            // eventCRFAuditsHashMap.put(Integer.valueOf(studySubject.getId()),
             // eventCRFAudits);
             // request.setAttribute("eventCRFAudits"+ss, eventCRFAudits);
         }

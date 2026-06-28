@@ -112,7 +112,6 @@ public class SqlProcessingFunction extends ProcessingFunction implements Seriali
                 if (resultError != null)
                     return resultError;
             } catch (SQLException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
         }

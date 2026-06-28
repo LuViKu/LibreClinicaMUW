@@ -96,7 +96,6 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
      */
     @Override
     public RuleSetRuleBean update(RuleSetRuleBean eb) throws OpenClinicaException {
-        // TODO Auto-generated method stub
         return null;
     }
 
@@ -105,9 +104,9 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         RuleSetBean ruleSetBean = eb;
         HashMap<Integer, Object> variables = new HashMap<>();
 
-        variables.put(new Integer(1), ruleSetBean.getUpdaterId());
-        variables.put(new Integer(2), Status.DELETED.getId());
-        variables.put(new Integer(3), ruleSetBean.getId());
+        variables.put(Integer.valueOf(1), ruleSetBean.getUpdaterId());
+        variables.put(Integer.valueOf(2), Status.DELETED.getId());
+        variables.put(Integer.valueOf(3), ruleSetBean.getId());
         executeUpdate(digester.getQuery("updateStatusByRuleSet"), variables);
 
     }
@@ -117,10 +116,10 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         RuleSetBean ruleSetBean = eb;
         HashMap<Integer, Object> variables = new HashMap<>();
 
-        variables.put(new Integer(1), ruleSetBean.getUpdaterId());
-        variables.put(new Integer(2), Status.AUTO_DELETED.getId());
-        variables.put(new Integer(3), ruleSetBean.getId());
-        variables.put(new Integer(4), Status.AVAILABLE.getId());
+        variables.put(Integer.valueOf(1), ruleSetBean.getUpdaterId());
+        variables.put(Integer.valueOf(2), Status.AUTO_DELETED.getId());
+        variables.put(Integer.valueOf(3), ruleSetBean.getId());
+        variables.put(Integer.valueOf(4), Status.AVAILABLE.getId());
         executeUpdate(digester.getQuery("updateStatusByRuleSetAuto"), variables);
 
     }
@@ -130,10 +129,10 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         RuleSetBean ruleSetBean = eb;
         HashMap<Integer, Object> variables = new HashMap<>();
 
-        variables.put(new Integer(1), ub.getId());
-        variables.put(new Integer(2), Status.AVAILABLE.getId());
-        variables.put(new Integer(3), ruleSetBean.getId());
-        variables.put(new Integer(4), Status.AUTO_DELETED.getId());
+        variables.put(Integer.valueOf(1), ub.getId());
+        variables.put(Integer.valueOf(2), Status.AVAILABLE.getId());
+        variables.put(Integer.valueOf(3), ruleSetBean.getId());
+        variables.put(Integer.valueOf(4), Status.AUTO_DELETED.getId());
         executeUpdate(digester.getQuery("updateStatusByRuleSetAuto"), variables);
 
     }
@@ -143,9 +142,9 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         RuleSetRuleBean ruleSetRuleBean = eb;
         HashMap<Integer, Object> variables = new HashMap<>();
 
-        variables.put(new Integer(1), ub.getId());
-        variables.put(new Integer(2), Status.DELETED.getId());
-        variables.put(new Integer(3), ruleSetRuleBean.getId());
+        variables.put(Integer.valueOf(1), ub.getId());
+        variables.put(Integer.valueOf(2), Status.DELETED.getId());
+        variables.put(Integer.valueOf(3), ruleSetRuleBean.getId());
         executeUpdate(digester.getQuery("updateStatus"), variables);
         if (isQuerySuccessful()) {
             ruleSetRuleBean.setStatus(Status.DELETED);
@@ -159,9 +158,9 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         RuleSetRuleBean ruleSetRuleBean = eb;
         HashMap<Integer, Object> variables = new HashMap<>();
 
-        variables.put(new Integer(1), ub.getId());
-        variables.put(new Integer(2), Status.AVAILABLE.getId());
-        variables.put(new Integer(3), ruleSetRuleBean.getId());
+        variables.put(Integer.valueOf(1), ub.getId());
+        variables.put(Integer.valueOf(2), Status.AVAILABLE.getId());
+        variables.put(Integer.valueOf(3), ruleSetRuleBean.getId());
         executeUpdate(digester.getQuery("updateStatus"), variables);
 
         if (isQuerySuccessful()) {
@@ -182,10 +181,10 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         if (ruleSetRuleBean.getId() == 0) {
             HashMap<Integer, Object> variables = new HashMap<>();
             HashMap<Integer, Integer> nullVars = new HashMap<>();
-            variables.put(new Integer(1), ruleSetRuleBean.getRuleSetBean().getId());
-            variables.put(new Integer(2), getRuleDao().findByOid(ruleBean).getId());
-            variables.put(new Integer(3), new Integer(ruleSetRuleBean.getOwnerId()));
-            variables.put(new Integer(4), new Integer(Status.AVAILABLE.getId()));
+            variables.put(Integer.valueOf(1), ruleSetRuleBean.getRuleSetBean().getId());
+            variables.put(Integer.valueOf(2), getRuleDao().findByOid(ruleBean).getId());
+            variables.put(Integer.valueOf(3), Integer.valueOf(ruleSetRuleBean.getOwnerId()));
+            variables.put(Integer.valueOf(4), Integer.valueOf(Status.AVAILABLE.getId()));
 
             executeUpdateWithPK(digester.getQuery("create"), variables, nullVars);
             if (isQuerySuccessful()) {

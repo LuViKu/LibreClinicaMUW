@@ -105,7 +105,6 @@ public class FindSubjectsDataServlet extends SecureController {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     protected void processRequest() throws Exception {
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(sm.getDataSource());

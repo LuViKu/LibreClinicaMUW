@@ -332,7 +332,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    @SuppressWarnings("deprecation")
     private static RequestMatcher[] antPaths(String... patterns) {
         RequestMatcher[] matchers = new RequestMatcher[patterns.length];
         for (int i = 0; i < patterns.length; i++) {

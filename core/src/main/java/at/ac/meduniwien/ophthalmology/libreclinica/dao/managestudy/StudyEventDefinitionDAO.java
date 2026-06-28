@@ -123,17 +123,17 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
         sedb.setId(this.findNextKey());
         logger.debug("***id:" + sedb.getId());
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(sedb.getId()));
-        variables.put(new Integer(2), new Integer(sedb.getStudyId()));
-        variables.put(new Integer(3), sedb.getName());
-        variables.put(new Integer(4), sedb.getDescription());
-        variables.put(new Integer(5), new Boolean(sedb.isRepeating()));
-        variables.put(new Integer(6), sedb.getType());
-        variables.put(new Integer(7), sedb.getCategory());
-        variables.put(new Integer(8), new Integer(sedb.getOwnerId()));
-        variables.put(new Integer(9), new Integer(sedb.getStatus().getId()));
-        variables.put(new Integer(10), new Integer(sedb.getOrdinal()));
-        variables.put(new Integer(11), getValidOid(sedb));
+        variables.put(Integer.valueOf(1), Integer.valueOf(sedb.getId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(sedb.getStudyId()));
+        variables.put(Integer.valueOf(3), sedb.getName());
+        variables.put(Integer.valueOf(4), sedb.getDescription());
+        variables.put(Integer.valueOf(5), Boolean.valueOf(sedb.isRepeating()));
+        variables.put(Integer.valueOf(6), sedb.getType());
+        variables.put(Integer.valueOf(7), sedb.getCategory());
+        variables.put(Integer.valueOf(8), Integer.valueOf(sedb.getOwnerId()));
+        variables.put(Integer.valueOf(9), Integer.valueOf(sedb.getStatus().getId()));
+        variables.put(Integer.valueOf(10), Integer.valueOf(sedb.getOrdinal()));
+        variables.put(Integer.valueOf(11), getValidOid(sedb));
         this.executeUpdate(digester.getQuery("create"), variables);
 
         return sedb;
@@ -141,16 +141,16 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
 
     public StudyEventDefinitionBean update(StudyEventDefinitionBean sedb) {
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(sedb.getStudyId()));
-        variables.put(new Integer(2), sedb.getName());
-        variables.put(new Integer(3), sedb.getDescription());
-        variables.put(new Integer(4), new Boolean(sedb.isRepeating()));
-        variables.put(new Integer(5), sedb.getType());
-        variables.put(new Integer(6), sedb.getCategory());
-        variables.put(new Integer(7), new Integer(sedb.getStatus().getId()));
-        variables.put(new Integer(8), new Integer(sedb.getUpdaterId()));
-        variables.put(new Integer(9), new Integer(sedb.getOrdinal()));
-        variables.put(new Integer(10), new Integer(sedb.getId()));
+        variables.put(Integer.valueOf(1), Integer.valueOf(sedb.getStudyId()));
+        variables.put(Integer.valueOf(2), sedb.getName());
+        variables.put(Integer.valueOf(3), sedb.getDescription());
+        variables.put(Integer.valueOf(4), Boolean.valueOf(sedb.isRepeating()));
+        variables.put(Integer.valueOf(5), sedb.getType());
+        variables.put(Integer.valueOf(6), sedb.getCategory());
+        variables.put(Integer.valueOf(7), Integer.valueOf(sedb.getStatus().getId()));
+        variables.put(Integer.valueOf(8), Integer.valueOf(sedb.getUpdaterId()));
+        variables.put(Integer.valueOf(9), Integer.valueOf(sedb.getOrdinal()));
+        variables.put(Integer.valueOf(10), Integer.valueOf(sedb.getId()));
         this.executeUpdate(digester.getQuery("update"), variables);
         return sedb;
     }

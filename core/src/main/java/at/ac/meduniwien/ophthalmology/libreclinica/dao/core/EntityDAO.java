@@ -1430,14 +1430,12 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // crfversionstatusid
                 Integer vcrfversionstatusid = getAsInt(rs, "crfversionstatusid", null);
                 if (vcrfversionstatusid == null) {
-                    // TODO - what value default
                     // vcrfversionstatusid = Integer.valueOf(?);
                 }
 
                 // dateinterviewed
                 Date vdateinterviewed = rs.getDate("dateinterviewed");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // interviewername
@@ -1449,55 +1447,46 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // eventcrfdatecompleted
                 Timestamp veventcrfdatecompleted = rs.getTimestamp("eventcrfdatecompleted");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfdatevalidatecompleted
                 Timestamp veventcrfdatevalidatecompleted = rs.getTimestamp("eventcrfdatevalidatecompleted");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfcompletionstatusid
                 Integer veventcrfcompletionstatusid = rs.getInt("eventcrfcompletionstatusid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // repeat_number
                 Integer vrepeat_number = rs.getInt("repeat_number");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // crfid
                 Integer vcrfid = rs.getInt("crfid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // studysubjectid
                 Integer vstudysubjectid = rs.getInt("studysubjectid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfid
                 Integer veventcrfid = rs.getInt("eventcrfid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // itemid
                 Integer vitemid = rs.getInt("itemid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // crfversionid
                 Integer vcrfversionid = rs.getInt("crfversionid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 Integer eventcrfstatusid = rs.getInt("eventcrfstatusid");
@@ -1599,13 +1588,11 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // date_start
                 Timestamp vdate_start = rs.getTimestamp("date_start");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // date_end
                 Timestamp vdate_end = rs.getTimestamp("date_end");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // BADS FLAG
@@ -1623,7 +1610,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                     // column.equalsIgnoreCase("end_time_flag")) {
                     vstart_time_flag = Boolean.FALSE;
                     // } else {
-                    // hm.put(column, new Boolean(true));
+                    // hm.put(column, Boolean.valueOf(true));
                     // }
                     // bad idea? what to put, then?
                 }
@@ -1641,7 +1628,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                     // column.equalsIgnoreCase("end_time_flag")) {
                     vend_time_flag = Boolean.FALSE;
                     // } else {
-                    // hm.put(column, new Boolean(true));
+                    // hm.put(column, Boolean.valueOf(true));
                     // }
                     // bad idea? what to put, then?
                 }
@@ -1649,37 +1636,31 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // status_id
                 Integer vstatus_id = rs.getInt("status_id");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // subject_event_status_id
                 Integer vsubject_event_status_id = rs.getInt("subject_event_status_id");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // studyeventid
                 Integer vstudyeventid = rs.getInt("studyeventid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfid
                 Integer veventcrfid = rs.getInt("eventcrfid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // itemid
                 Integer vitemid = rs.getInt("itemid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // crfversionid
                 Integer vcrfversionid = rs.getInt("crfversionid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // add it to the HashMap

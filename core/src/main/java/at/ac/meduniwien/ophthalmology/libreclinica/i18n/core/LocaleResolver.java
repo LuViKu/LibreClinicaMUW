@@ -38,7 +38,7 @@ public final class LocaleResolver {
 	 */
 	public final static Locale resolveLocale(HttpServletRequest request) {
 		if(request != null) {
-			for(@SuppressWarnings("unchecked")
+			for(
 			Enumeration<Locale> locales = request.getLocales(); locales.hasMoreElements();) {
 				Locale locale = locales.nextElement();
 				ResourceBundleProvider.updateLocale(locale);

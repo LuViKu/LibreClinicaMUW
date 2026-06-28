@@ -90,7 +90,7 @@ public class TriggerService {
                 simpleSchedule()
                     .withRepeatCount(64000)
                     .withIntervalInSeconds(
-                        new Long(interval).intValue()
+                        Long.valueOf(interval).intValue()
                     )
                     .withMisfireHandlingInstructionNextWithExistingCount()
             )

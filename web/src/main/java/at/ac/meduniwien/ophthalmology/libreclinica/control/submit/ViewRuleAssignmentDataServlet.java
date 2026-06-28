@@ -81,7 +81,6 @@ public class ViewRuleAssignmentDataServlet extends SecureController {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void processRequest() throws Exception {
         try {
             doProcessRequest();
@@ -99,7 +98,6 @@ public class ViewRuleAssignmentDataServlet extends SecureController {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void doProcessRequest() throws Exception {
         java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(locale);
 

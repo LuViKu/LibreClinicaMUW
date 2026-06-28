@@ -138,7 +138,7 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
         variables.put(11, igMetaBean.getItemId());
         variables.put(12, igMetaBean.getOrdinal());
         variables.put(13, igMetaBean.getBorders());
-        variables.put(14, new Boolean(igMetaBean.isShowGroup()));
+        variables.put(14, Boolean.valueOf(igMetaBean.isShowGroup()));
 
         this.executeUpdate(digester.getQuery("create"), variables);
         if (isQuerySuccessful()) {

@@ -227,11 +227,11 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
         // audit_date, user_id, audit_table, entity_id, entity_name, old_value,
         // new_value)
         // VALUES (pk, ?, now(), NEW.update_id, ?, ?, ?, ?, ?);
-        variables.put(new Integer(1), sb.getAuditTable());
-        variables.put(new Integer(2), new Integer(sb.getUserId()));
-        variables.put(new Integer(3), new Integer(sb.getEntityId()));
-        variables.put(new Integer(4), sb.getReasonForChangeKey());
-        variables.put(new Integer(5), sb.getActionMessageKey());
+        variables.put(Integer.valueOf(1), sb.getAuditTable());
+        variables.put(Integer.valueOf(2), Integer.valueOf(sb.getUserId()));
+        variables.put(Integer.valueOf(3), Integer.valueOf(sb.getEntityId()));
+        variables.put(Integer.valueOf(4), sb.getReasonForChangeKey());
+        variables.put(Integer.valueOf(5), sb.getActionMessageKey());
 
         this.executeUpdate(digester.getQuery("create"), variables);
 
@@ -467,7 +467,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
         this.setTypeExpected(1, TypeNames.LONG);
         this.setTypeExpected(2, TypeNames.STRING);
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), tableName);
+        variables.put(Integer.valueOf(1), tableName);
 
         String sql = digester.getQuery("findAggregatesByTableName");
         logger.debug("sql is: " + sql);
@@ -598,7 +598,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
             // found in the context, tbh
             ebCheck = AuditEventHashMap.get(eb.getId());
             if (ebCheck == null) {
-                AuditEventHashMap.put(new Integer(eb.getId()), eb);
+                AuditEventHashMap.put(Integer.valueOf(eb.getId()), eb);
                 logger.warn("Put into hashmap: " + eb.getId());
                 al.add(eb);
             } else {

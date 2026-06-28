@@ -19,7 +19,6 @@ public class IdtViewDao extends AbstractDomainDao<IdtView> {
 
     @Override
     Class<IdtView> domainClass() {
-        // TODO Auto-generated method stub
         return IdtView.class;
     }
 

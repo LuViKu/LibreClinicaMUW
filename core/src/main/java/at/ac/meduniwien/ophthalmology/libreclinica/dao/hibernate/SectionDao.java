@@ -16,7 +16,6 @@ public class SectionDao extends AbstractDomainDao<Section> {
 
     @Override
     Class<Section> domainClass() {
-        // TODO Auto-generated method stub
         return Section.class;
     }
 

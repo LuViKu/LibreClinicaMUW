@@ -16,7 +16,6 @@ public class SubjectDao extends AbstractDomainDao<Subject> {
 
     @Override
     Class<Subject> domainClass() {
-        // TODO Auto-generated method stub
         return Subject.class;
     }
 

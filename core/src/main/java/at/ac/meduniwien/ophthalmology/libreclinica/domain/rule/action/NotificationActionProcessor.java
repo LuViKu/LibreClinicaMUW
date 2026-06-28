@@ -136,7 +136,6 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 	@Override
 	public RuleActionBean execute(RuleRunnerMode ruleRunnerMode, ExecutionMode executionMode, RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy,
 			UserAccountBean ub, Object... arguments) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -185,7 +184,6 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 		try {
 			hostname = participantPortalRegistrar.getStudyHost(studyBean.getOid());
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
