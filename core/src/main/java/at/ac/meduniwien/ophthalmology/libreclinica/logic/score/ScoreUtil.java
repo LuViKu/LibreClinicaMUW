@@ -91,12 +91,12 @@ public class ScoreUtil {
                     try {
                         token.setName(sign + evalFunc(expression, info, (Function) Class.forName(funcname).newInstance()));
                         token.setSymbol(ScoreSymbol.TERM_SYMBOL);
-                    } catch (InstantiationException e) {
-                        e.printStackTrace();
-                    } catch (ClassNotFoundException e) {
-                        e.printStackTrace();
-                    } catch (IllegalAccessException e) {
-                        e.printStackTrace();
+                    } catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
+                        // 2026-06-28 — heritage-debt audit (PR #262): never silently
+                        // swallow score-function load failures — an unscored CRF must
+                        // not be indistinguishable from a scored one.
+                        logger.error("eval: failed to load score function '{}'", funcname, e);
+                        throw new ScoreException("Failed to load score function '" + funcname + "': " + e.getMessage(), "5");
                     }
                     finalexp.add(token);
                     token = new ScoreToken();
@@ -225,15 +225,12 @@ public class ScoreUtil {
                         token.setSymbol(ScoreSymbol.TERM_SYMBOL);
                         currArg.add(token);
                         couldBeSign = false;
-                    } catch (InstantiationException e) {
-                        e.printStackTrace();
-                        return "";
-                    } catch (ClassNotFoundException e) {
-                        e.printStackTrace();
-                        return "";
-                    } catch (IllegalAccessException e) {
-                        e.printStackTrace();
-                        return "";
+                    } catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
+                        // 2026-06-28 — heritage-debt audit (PR #262): never silently
+                        // swallow score-function load failures — surface as a
+                        // ScoreException so the caller sees the partial computation.
+                        logger.error("evalFunc: failed to load score function '{}'", funcname, e);
+                        throw new ScoreException("Failed to load score function '" + funcname + "': " + e.getMessage(), "5");
                     }
                 }// if it is the start of an expression
                 else {
@@ -327,7 +324,10 @@ public class ScoreUtil {
                 try {
                     v = eval(arg);
                 } catch (ScoreException sc) {
-                    sc.printStackTrace();
+                    // 2026-06-28 — heritage-debt audit (PR #262): an unevaluable
+                    // sub-expression yields an empty value; log so operators
+                    // notice the partial score instead of silently substituting "".
+                    logger.error("evalArgument: failed to evaluate argument; returning empty value", sc);
                 }
             }
         }
@@ -430,7 +430,11 @@ public class ScoreUtil {
                             value = first / second;
                         }
                     } catch (Exception ee) {
-                        ee.printStackTrace();
+                        // 2026-06-28 — heritage-debt audit (PR #262): arithmetic
+                        // failure yields NaN so the score column shows as missing
+                        // rather than a stale partial; log so it does not pass
+                        // unnoticed.
+                        logger.error("evalSimple: arithmetic operator '{}' failed on operands {} and {}", s, first, second, ee);
                         value = Double.NaN;
                     }
                     st.push(value);
@@ -439,7 +443,10 @@ public class ScoreUtil {
                     try {
                         d = Double.valueOf(exp.get(i).getName());
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        // 2026-06-28 — heritage-debt audit (PR #262): non-numeric
+                        // operand falls through to string return; log so it shows
+                        // up in operator logs (e.g. decode-style functions).
+                        logger.error("evalSimple: non-numeric operand '{}' at index {}", exp.get(i).getName(), i, e);
                         return exp.get(i).getName();
                     }
                     st.push(d);

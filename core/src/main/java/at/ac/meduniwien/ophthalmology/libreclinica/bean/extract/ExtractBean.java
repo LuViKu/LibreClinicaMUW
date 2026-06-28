@@ -1790,15 +1790,19 @@ public class ExtractBean {
         // modified stage so that crfVersionStatus could be the same as what it
         // shows in subject matrix - as required.
         DataEntryStage stage = DataEntryStage.INVALID;
-        try {
+        // 2026-06-28 — heritage-debt audit (PR #262): replaced bare
+        // `catch (NullPointerException)` with an explicit null check on the
+        // only nullable source — eventCRF (null when seb.getEventCRFs() is
+        // empty). Defaults above (stage=INVALID, ecStatus=AVAILABLE,
+        // status=NOT_SCHEDULED, crfv=new bean with status AVAILABLE) stand in
+        // as before, but the intent is now visible.
+        if (eventCRF != null) {
             stage = eventCRF.getStage();
             ecStatus = eventCRF.getStatus();
-            status = seb.getSubjectEventStatus();// SubjectEventStatus.get(
-            // eventCRF
-            // .getCompletionStatusId());
+            status = seb.getSubjectEventStatus();
             crfv = eventCRF.getCrfVersion();
-        } catch (NullPointerException e) {
-            logger.info("exception hit, status set to not scheduled");
+        } else {
+            logger.info("getSEDCRFStatus: no event CRF for h={} sedInd={} crfInd={}; status set to not scheduled", h, sedInd, crfInd);
         }
         // currentCRF.getStatus().getName();
         //

@@ -1117,16 +1117,26 @@ public class OdmExtractDAO extends DatasetDAO {
                  * nullMap.get(cvId)); } else { codes = MetadataUnit.parseCode(rsText, rsValue); }
                  */
                 codes = MetadataUnit.parseCode(rsText, rsValue);
-                // no action has been taken if rsvalue/rstext go wrong,
-                // since they have been validated when uploading crf.
+                // 2026-06-28 — heritage-debt audit (PR #262): the historic
+                // comment claimed rsText/rsValue are pre-validated on CRF upload,
+                // but parseCode can still produce an empty map (e.g. blank text
+                // pair). Log WARN so operators notice option-code mappings
+                // silently lost in ODM export.
+                if (codes == null || codes.isEmpty()) {
+                    logger.warn("ODM export: empty code list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
+                            itOID, itName, rsId, rsText, rsValue);
+                }
             }
 
             boolean hasMultiSelect = MetadataUnit.needMultiSelectList(rsTypeId);
             LinkedHashMap<String, String> multi = new LinkedHashMap<String, String>();
             if (hasMultiSelect) {
                 multi = MetadataUnit.parseCode(rsText, rsValue);
-                // no action has been taken if rsvalue/rstext go wrong,
-                // since they have been validated when uploading crf.
+                // 2026-06-28 — heritage-debt audit (PR #262): see comment above.
+                if (multi == null || multi.isEmpty()) {
+                    logger.warn("ODM export: empty multi-select list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
+                            itOID, itName, rsId, rsText, rsValue);
+                }
             }
 
             String datatype = MetadataUnit.getOdmItemDataType(rsTypeId, dataTypeId, odmVersion);
@@ -1740,16 +1750,24 @@ public class OdmExtractDAO extends DatasetDAO {
                  * nullMap.get(cvId)); } else { codes = MetadataUnit.parseCode(rsText, rsValue); }
                 */
                 codes = MetadataUnit.parseCode(rsText, rsValue);
-                // no action has been taken if rsvalue/rstext go wrong,
-                // since they have been validated when uploading crf.
+                // 2026-06-28 — heritage-debt audit (PR #262): log WARN so empty
+                // option-code mappings stop being silently swallowed in OC 1.3
+                // ODM export (mirrors the OC 1.2 branch above).
+                if (codes == null || codes.isEmpty()) {
+                    logger.warn("ODM 1.3 export: empty code list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
+                            itOID, itName, rsId, rsText, rsValue);
+                }
             }
 
             boolean hasMultiSelect = MetadataUnit.needMultiSelectList(rsTypeId);
             LinkedHashMap<String, String> multi = new LinkedHashMap<>();
             if (hasMultiSelect) {
                 multi = MetadataUnit.parseCode(rsText, rsValue);
-                // no action has been taken if rsvalue/rstext go wrong,
-                // since they have been validated when uploading crf.
+                // 2026-06-28 — heritage-debt audit (PR #262): see comment above.
+                if (multi == null || multi.isEmpty()) {
+                    logger.warn("ODM 1.3 export: empty multi-select list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
+                            itOID, itName, rsId, rsText, rsValue);
+                }
             }
 
             String datatype = MetadataUnit.getOdmItemDataType(rsTypeId, dataTypeId, odmVersion);
