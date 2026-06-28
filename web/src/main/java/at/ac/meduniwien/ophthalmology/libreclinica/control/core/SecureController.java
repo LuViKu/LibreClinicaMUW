@@ -19,6 +19,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -286,7 +287,7 @@ public abstract class SecureController extends HttpServlet {
         	//@pgawade 18-Sep-2012: fix for issue #14506 (https://issuetracker.openclinica.com/view.php?id=14506#c58197)
             //addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"));
             // + "<a href=\"UpdateProfile\">" + respage.getString("user_profile") + " </a>");
-            int pwdChangeRequired = new Integer(SQLInitServlet.getField("change_passwd_required")).intValue();
+            int pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
             if (pwdChangeRequired == 1) {
             	addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"));
                 request.setAttribute("mustChangePass", "yes");
@@ -1164,7 +1165,12 @@ public abstract class SecureController extends HttpServlet {
 
     protected void baseUrl() throws MalformedURLException {
         String portalURL = CoreResources.getField("portalURL");
-        URL pManageUrl = new URL(portalURL);
+        URL pManageUrl;
+        try {
+            pManageUrl = URI.create(portalURL).toURL();
+        } catch (IllegalArgumentException e) {
+            throw new MalformedURLException(e.getMessage());
+        }
 
         ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
         Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());

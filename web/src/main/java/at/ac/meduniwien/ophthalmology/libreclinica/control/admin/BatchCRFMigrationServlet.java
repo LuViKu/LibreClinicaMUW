@@ -72,16 +72,16 @@ public class BatchCRFMigrationServlet extends SecureController {
         } else {
             CRFDAO cdao = new CRFDAO(sm.getDataSource());
             CRFVersionDAO vdao = new CRFVersionDAO(sm.getDataSource());
-            CRFBean crf = (CRFBean) cdao.findByPK(crfId);
+            CRFBean crf = cdao.findByPK(crfId);
             request.setAttribute("crfName", crf.getName());
-            ArrayList<CRFVersionBean> versions = (ArrayList<CRFVersionBean>) vdao.findAllByCRF(crfId);
+            ArrayList<CRFVersionBean> versions = vdao.findAllByCRF(crfId);
             crfVersionList = new ArrayList<CRFVersionBean>();
              for(CRFVersionBean version:versions){
                  if(version.getStatus().isAvailable())
                      crfVersionList.add(version);
              }                       
             crf.setVersions(crfVersionList);
-            ArrayList<StudyBean> listOfSites = (ArrayList<StudyBean>) sdao().findAllByParent(currentStudy.getId());
+            ArrayList<StudyBean> listOfSites = sdao().findAllByParent(currentStudy.getId());
             siteList = new ArrayList<StudyBean>();
             StudyBean studyBean = new StudyBean();
             studyBean.setOid(currentStudy.getOid()); 

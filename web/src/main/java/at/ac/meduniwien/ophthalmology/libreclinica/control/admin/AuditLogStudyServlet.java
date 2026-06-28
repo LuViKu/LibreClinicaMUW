@@ -90,14 +90,14 @@ public class AuditLogStudyServlet extends SecureController {
         for (int ss = 0; ss < studySubjects.size(); ss++) {
         	ArrayList<AuditBean> studySubjectAudits = new ArrayList<>();
 
-            StudySubjectBean studySubject = (StudySubjectBean) studySubjects.get(ss);
+            StudySubjectBean studySubject = studySubjects.get(ss);
             // request.setAttribute("studySub"+ss, studySubject);
-            SubjectBean subject = (SubjectBean) sdao.findByPK(studySubject.getSubjectId());
-            subjectHashMap.put(new Integer(studySubject.getId()), subject);
+            SubjectBean subject = sdao.findByPK(studySubject.getSubjectId());
+            subjectHashMap.put(Integer.valueOf(studySubject.getId()), subject);
             // logger.info("just set a subject with a status of
             // "+subject.getStatus().getName());
             // request.setAttribute("subject"+ss, subject);
-            StudyBean study = (StudyBean) studydao.findByPK(studySubject.getStudyId());
+            StudyBean study = studydao.findByPK(studySubject.getStudyId());
             request.setAttribute("study", study);
             // hmm, repetitive work?
 
@@ -111,7 +111,7 @@ public class AuditLogStudyServlet extends SecureController {
             // value
             // changed
 
-            studySubjectAuditsHashMap.put(new Integer(studySubject.getId()), studySubjectAudits);
+            studySubjectAuditsHashMap.put(Integer.valueOf(studySubject.getId()), studySubjectAudits);
             // request.setAttribute("studySubjectAudits"+ss,
             // studySubjectAudits);
 
@@ -119,8 +119,8 @@ public class AuditLogStudyServlet extends SecureController {
             ArrayList<StudyEventBean> events = sedao.findAllByStudySubject(studySubject);
             for (int i = 0; i < events.size(); i++) {
                 // Link study event definitions
-                StudyEventBean studyEvent = (StudyEventBean) events.get(i);
-                studyEvent.setStudyEventDefinition((StudyEventDefinitionBean) seddao.findByPK(studyEvent.getStudyEventDefinitionId()));
+                StudyEventBean studyEvent = events.get(i);
+                studyEvent.setStudyEventDefinition(seddao.findByPK(studyEvent.getStudyEventDefinitionId()));
 
                 // Link event CRFs
                 studyEvent.setEventCRFs(ecdao.findAllByStudyEvent(studyEvent));
@@ -140,7 +140,7 @@ public class AuditLogStudyServlet extends SecureController {
             // eventCRFAudits.addAll(adao.findEventCRFAuditEvents(eventCRF.getId()));
             // }
             // }
-            eventsHashMap.put(new Integer(studySubject.getId()), events);
+            eventsHashMap.put(Integer.valueOf(studySubject.getId()), events);
             // request.setAttribute("events"+ss, events);
             // eventCRFAuditsHashMap.put(new Integer(studySubject.getId()),
             // eventCRFAudits);
