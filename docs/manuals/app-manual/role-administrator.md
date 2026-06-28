@@ -261,3 +261,15 @@ System-administration screens not tied to a single study — *Systemstatus*, *Pa
 ![Subject detail](screenshots/administrator/20-subject-detail.png)
 
 **Notes:** Subject detail is open to Investigator and Administrator. Study creation, identity edit and parameters edit are **Administrator-only** and re-checked on the backend (403 on denial). Saving the study identity refreshes the breadcrumb if the edited study is the active one. Subject identity edits, eye transitions, event cancellations and signatures are all recorded in the audit trail.
+
+## 18. Parked Scans (cross-study retinal jobs)
+
+**Goal:** Review retinal inference jobs that were uploaded without a visit and are waiting to be assigned to a subject.
+
+**Steps:**
+1. Open **Geparkte Scans** (Parked Scans, `/retinal/parked`) — a sysadmin-only, cross-study overview.
+2. Each row shows the **Job**, **PatientId**, **Auge** (eye), **Task** and **Hochgeladen** (upload time). Select rows and use the row **Aktion** to assign (bind) a parked scan to a subject's visit, or **Neu laden** (Reload) to refresh.
+
+![Parked scans — the cross-study queue of unassigned retinal inference jobs](screenshots/administrator/22-parked-scans.png)
+
+**Notes:** Administrator-only. Parked jobs have no study-subject linkage yet, which is why they surface here rather than on a per-subject page.

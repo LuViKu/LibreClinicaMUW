@@ -27,12 +27,12 @@ accounts, showing real seeded data (subjects M-001…M-007, visit statuses,
 discrepancy queues, audit log, the filled Add-Subject form, the subject
 casebook, SDV, etc.).
 
-### Known gaps — regenerate when convenient
+All 51 figures are captured and every one is referenced from a role chapter
+(verified: refs ↔ files reconcile exactly). Re-running the harness overwrites
+them in place.
 
-- **Data Manager** `02-build-study`, `10-create-dataset`, `11-import-crf-data`
-  and **Administrator** `13-system-status` rendered blank on the final run
-  (the demo stack was under heavy load and these async views didn't paint in
-  time). Re-run the harness on a quiet stack to capture them.
+### Notes
+
 - **OCT / retinal metrics viewer** (`investigator/21-retinal-viewer`) **is
   captured** — for subject EIAMD150 (RIS — Retinal Imaging Study), whose jobs
   are bound to visits. Taken via the `capture: oct-viewer` test, logging in as a
