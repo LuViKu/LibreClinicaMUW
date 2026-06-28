@@ -24,6 +24,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
+import jakarta.persistence.Transient;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.DataMapDomainObject;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
@@ -190,6 +191,29 @@ public class EventCrf  extends DataMapDomainObject {
     }
 	public void setStatusId(Integer statusId) {
 		this.statusId = statusId;
+	}
+
+	/**
+	 * Typed companion to {@link #getStatusId()} — audit #262.
+	 *
+	 * <p>Delegates to {@link #getStatusId()} (which already falls back to
+	 * {@link Status#AVAILABLE} when the column is null) and resolves to a
+	 * {@link Status} enum value, giving callers a type-safe alternative to
+	 * comparing raw {@code Integer} codes.
+	 */
+	@Transient
+	public Status getStatus() {
+		return Status.getByCode(getStatusId());
+	}
+
+	/**
+	 * Typed companion to {@link #setStatusId(Integer)} — audit #262.
+	 *
+	 * <p>{@code null} {@link Status} clears the column; otherwise stores the
+	 * enum's {@code getCode()}.
+	 */
+	public void setStatus(Status status) {
+		setStatusId(status == null ? null : status.getCode());
 	}
 
 	@Temporal(TemporalType.DATE)
