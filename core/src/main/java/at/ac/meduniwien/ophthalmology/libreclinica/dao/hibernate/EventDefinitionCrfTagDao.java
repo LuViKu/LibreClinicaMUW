@@ -26,7 +26,7 @@ public class EventDefinitionCrfTagDao extends AbstractDomainDao<EventDefinitionC
         q.setParameter("tagId", tagId);
         q.setParameter("path", path);
         q.setParameter("active", active);
-        return (EventDefinitionCrfTag) q.uniqueResult();
+        return (EventDefinitionCrfTag) q.getSingleResultOrNull();
 
     }
 

@@ -25,7 +25,7 @@ public class UserTypeDao extends AbstractDomainDao<UserType> {
         String query = "from " + getDomainClassName() + " do  where do.userTypeId = :user_type_id";
         Query<UserType> q = getCurrentSession().createQuery(query, UserType.class);
         q.setParameter("user_type_id", userTypeId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

@@ -44,7 +44,7 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do";
         Query<T> q = getCurrentSession().createQuery(query);
-        return new ArrayList<T>(q.list());
+        return new ArrayList<T>(q.getResultList());
     }
 
     @Transactional
@@ -66,7 +66,7 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
         String query = "from " + getDomainClassName() + " do where do." + key + "= :id";
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("id", id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public Long count() {

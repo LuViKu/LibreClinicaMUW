@@ -31,7 +31,7 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<ItemGroup> q = getCurrentSession().createQuery(query, ItemGroup.class);
         q.setParameter("OCOID", OCOID);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -42,7 +42,7 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
         q.setParameter("groupName", groupName);
         // Hibernate 6: Query.setEntity is gone; setParameter handles entity binding too.
         q.setParameter("crf", crf);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public static final String findAllByCrfVersionIdQuery = "select distinct ig.* from item_group ig, item_group_metadata igm"
@@ -53,7 +53,7 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
     public ArrayList<ItemGroup> findByCrfVersionId(Integer crfVersionId) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery).addEntity(ItemGroup.class);
         q.setParameter("crfversionid", crfVersionId.intValue());
-        return (ArrayList<ItemGroup>) q.list();
+        return (ArrayList<ItemGroup>) q.getResultList();
     }
 
     public String getValidOid(ItemGroup itemGroup, String crfName, String itemGroupLabel, ArrayList<String> oidList) {

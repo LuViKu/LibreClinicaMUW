@@ -28,7 +28,7 @@ public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
         Query<ResponseSet> q = getCurrentSession().createQuery(query, ResponseSet.class);
         q.setParameter("label", label);
         q.setParameter("version", version);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -37,7 +37,7 @@ public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
         String query = "select rs.* from item_form_metadata ifm join response_set rs on ifm.response_set_id = rs.response_set_id " + "where ifm.item_id = "
                 + itemId;
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ResponseSet.class);
-        return (List<ResponseSet>) q.list();
+        return (List<ResponseSet>) q.getResultList();
     }
 
 }

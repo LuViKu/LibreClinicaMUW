@@ -24,7 +24,7 @@ public class ResolutionStatusDao extends AbstractDomainDao<ResolutionStatus> {
         String query = "from " + getDomainClassName() + " do  where do.resolutionStatusId = :resolutionstatusid";
         Query<ResolutionStatus> q = getCurrentSession().createQuery(query, ResolutionStatus.class);
         q.setParameter("resolutionstatusid", resolutionStatusId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

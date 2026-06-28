@@ -28,7 +28,7 @@ public class EventDefinitionCrfDao extends AbstractDomainDao<EventDefinitionCrf>
                 + " event_definition_crf where event_definition_crf.studyEventDefinition.studyEventDefinitionId = :studyeventdefinitionid";
         Query<EventDefinitionCrf> q = getCurrentSession().createQuery(query, EventDefinitionCrf.class);
         q.setParameter("studyeventdefinitionid", studyEventDefinitionId);
-        return q.list();
+        return q.getResultList();
     }
 
     // TODO update to CriteriaQuery 
@@ -38,7 +38,7 @@ public class EventDefinitionCrfDao extends AbstractDomainDao<EventDefinitionCrf>
         Query<EventDefinitionCrf> q = getCurrentSession().createQuery(query, EventDefinitionCrf.class);
         q.setParameter("studyeventdefid", studyEventDefinitionId);
         q.setParameter("studyid", studyId);
-        return q.list();
+        return q.getResultList();
         
     }
 
@@ -49,7 +49,7 @@ public class EventDefinitionCrfDao extends AbstractDomainDao<EventDefinitionCrf>
         Query<EventDefinitionCrf> q = getCurrentSession().createQuery(query, EventDefinitionCrf.class);
         q.setParameter("studyeventdefid", studyEventDefinitionId);
         q.setParameter("studyid", studyId);
-        return q.list();
+        return q.getResultList();
         
     }
 }

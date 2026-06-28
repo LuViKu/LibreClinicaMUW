@@ -24,7 +24,7 @@ public class DiscrepancyNoteTypeDao extends AbstractDomainDao<DiscrepancyNoteTyp
         String query = "from " + getDomainClassName() + " do  where do.discrepancyNoteTypeId = :discrepancynotetypeid";
         Query<DiscrepancyNoteType> q = getCurrentSession().createQuery(query, DiscrepancyNoteType.class);
         q.setParameter("discrepancynotetypeid", discrepancyNoteTypeId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

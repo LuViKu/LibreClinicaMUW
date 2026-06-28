@@ -26,6 +26,6 @@ public class StudyParameterValueDao extends AbstractDomainDao<StudyParameterValu
         Query<StudyParameterValue> q = getCurrentSession().createQuery(query, StudyParameterValue.class);
         q.setParameter("studyid", studyId);
         q.setParameter("parameter", parameter);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

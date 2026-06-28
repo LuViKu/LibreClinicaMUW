@@ -25,14 +25,14 @@ public class SectionDao extends AbstractDomainDao<Section> {
         // String query = "from " + getDomainClassName() + " section  where section.crfVersionId = :crfversionid ";
         // org.hibernate.query.Query q = getCurrentSession().createQuery(query);
         // q.set.setParameter("crfversionid", crf_version_id);
-        // return (Section) q.uniqueResult();
+        // return (Section) q.getSingleResultOrNull();
 
         String query = " select s.* from section s where s.crf_version_id = :crfVersionId and ordinal = :ordinal ";
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setParameter("crfVersionId", crfVersionId);
         q.setParameter("ordinal", ordinal);
         q.setCacheable(true);
-        return (Section) q.uniqueResult();
+        return (Section) q.getSingleResultOrNull();
     }
 
 }

@@ -30,7 +30,7 @@ public class ItemDao extends AbstractDomainDao<Item> {
         String query = "from " + getDomainClassName() + " item  where item.ocOid = :ocoid ";
         org.hibernate.query.Query<Item> q = getCurrentSession().createQuery(query, Item.class);
         q.setParameter("ocoid", OCOID);
-        return (Item) q.uniqueResult();
+        return (Item) q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -39,7 +39,7 @@ public class ItemDao extends AbstractDomainDao<Item> {
         String query = "select distinct i.* from item i, item_form_metadata ifm,crf_version cv " + "where i.name= '" + name + "' and i.item_id= ifm.item_id "
                 + "and ifm.crf_version_id=cv.crf_version_id " + "and cv.crf_id=" + crfId;
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(Item.class);
-        return ((Item) q.uniqueResult());
+        return ((Item) q.getSingleResultOrNull());
     }
     
   public static final String findAllByCrfVersionIdQuery = "select distinct i.* from item i, item_form_metadata ifm " + "where i.item_id= ifm.item_id "
@@ -50,7 +50,7 @@ public class ItemDao extends AbstractDomainDao<Item> {
   public List<Item> findAllByCrfVersionId(Integer crfVersionId) {
       NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery).addEntity(Item.class);
       q.setParameter("crfversionid", crfVersionId.intValue());
-      return (List<Item>) q.list();
+      return (List<Item>) q.getResultList();
   }
 
   // TODO update to CriteriaQuery 
@@ -58,7 +58,7 @@ public class ItemDao extends AbstractDomainDao<Item> {
     public int getItemDataTypeId(Item item) {
         String query = "select item_data_type_id from item where item_id = " + item.getItemId();
         Query q = getCurrentSession().createNativeQuery(query);
-        return ((Number) q.uniqueResult()).intValue();
+        return ((Number) q.getSingleResultOrNull()).intValue();
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -67,7 +67,7 @@ public class ItemDao extends AbstractDomainDao<Item> {
                 + " and fg.item_group_id=fgim.item_group_id and fgim.crf_version_id= " + String.valueOf(crfVersionId)
                 + " and fgim.item_id=i.item_id order by i.item_id";
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(Item.class);
-        return (ArrayList<Item>) q.list();
+        return (ArrayList<Item>) q.getResultList();
     }
 
     public String getValidOid(Item item, String crfName, String itemLabel, ArrayList<String> oidList) {

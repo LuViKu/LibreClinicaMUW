@@ -30,7 +30,7 @@ public class OpenClinicaVersionDAO extends AbstractDomainDao<OpenClinicaVersionB
     public OpenClinicaVersionBean findDefault() {
         String query = "from " + getDomainClassName() + " ocVersion";
         Query<OpenClinicaVersionBean> q = getCurrentSession().createQuery(query, OpenClinicaVersionBean.class);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     @Transactional

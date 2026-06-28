@@ -34,7 +34,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("id", id);
         q.setParameter("studyId", study.getId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -43,7 +43,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         Query<Long> q = getCurrentSession().createQuery(query, Long.class);
         q.setParameter("studyId", study.getId());
         q.setParameter("status", Status.DELETED);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
 
     }
 
@@ -62,7 +62,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
         query += filter.execute("");
         NativeQuery q = getCurrentSession().createNativeQuery(query);
-        return ((BigInteger) q.uniqueResult()).intValue();
+        return ((BigInteger) q.getSingleResultOrNull()).intValue();
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -81,7 +81,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
-        return (ArrayList<RuleSetBean>) q.list();
+        return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
     // TODO update to CriteriaQuery 
@@ -102,7 +102,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         q.setParameter("studyEventDefinitionId", sed.getId());
         q.setCacheable(true);
 
-        return new ArrayList<RuleSetBean>(q.list());
+        return new ArrayList<RuleSetBean>(q.getResultList());
     }
 
     // TODO update to CriteriaQuery 
@@ -110,7 +110,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyId = :studyId  ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("studyId", currentStudy.getId());
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     // TODO update to CriteriaQuery 
@@ -124,7 +124,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setParameter("crfId", crfBean.getId());
         q.setParameter("studyId", currentStudy.getId());
-        return (ArrayList<RuleSetBean>) q.list();
+        return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
     // TODO update to CriteriaQuery 
@@ -133,7 +133,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("value", ruleSet.getTarget().getValue());
         q.setParameter("context", ruleSet.getTarget().getContext());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -145,7 +145,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         q.setParameter("value", ruleSet.getTarget().getValue());
         q.setParameter("context", ruleSet.getTarget().getContext());
         q.setParameter("studyId", studyId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -154,7 +154,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         Query<Long> q = getCurrentSession().createQuery(query, Long.class);
         q.setParameter("studyId", currentStudy.getId());
         q.setParameter("status", at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -162,7 +162,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyEventDefinitionId = :studyEventDefId  ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("studyEventDefId", sed.getId());
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
     
     // TODO update to CriteriaQuery 
@@ -170,7 +170,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value LIKE '%.STARTDATE%' or ruleSet.originalTarget.value LIKE '%.STATUS%' and ruleSet.studyId = :studyId ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("studyId", currentStudy.getId());
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     // TODO update to CriteriaQuery 
@@ -179,7 +179,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.runSchedule = :shedule";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("shedule", shedule);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     // TODO update to CriteriaQuery 
@@ -188,7 +188,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.runSchedule = :shedule";
         Query<RuleSetBean> q = getCurrentSession(schema).createQuery(query, RuleSetBean.class);
         q.setParameter("shedule", shedule);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     // TODO update to CriteriaQuery 
@@ -197,6 +197,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyEventDefinitionId = :studyEventDefId  and ruleSet.itemId is null";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, domainClass());
         q.setParameter("studyEventDefId", studyEventDefId);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 }

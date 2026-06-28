@@ -26,7 +26,7 @@ public class EventCrfFlagDao extends AbstractDomainDao<EventCrfFlag> {
                 .setParameter("path", path)
                 .setParameter("tagId", tagId);
 
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

@@ -24,7 +24,7 @@ public class SubjectDao extends AbstractDomainDao<Subject> {
         String query = "from " + getDomainClassName() + " do  where do.subjectId = :subject_id ";
         Query<Subject> q = getCurrentSession().createQuery(query, Subject.class);
         q.setParameter("subject_id", subjectId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -32,6 +32,6 @@ public class SubjectDao extends AbstractDomainDao<Subject> {
         String query = "from " + getDomainClassName() + " do  where do.uniqueIdentifier = :unique_identifier ";
         Query<Subject> q = getCurrentSession().createQuery(query, Subject.class);
         q.setParameter("unique_identifier", uniqueIdentifier);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

@@ -49,6 +49,6 @@ public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
             q.setParameter("audit_table", auditLogEvent.getAuditTable());
             q.setParameter("anotherAuditTable", anotherAuditTable);
         }
-        return q.list();
+        return q.getResultList();
     }
 }

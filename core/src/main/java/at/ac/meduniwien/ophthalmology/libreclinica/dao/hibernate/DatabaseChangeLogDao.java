@@ -41,7 +41,7 @@ public class DatabaseChangeLogDao {
     public ArrayList<DatabaseChangeLogBean> findAll() {
         String query = "from " + getDomainClassName() + " dcl order by dcl.id desc ";
         Query<DatabaseChangeLogBean> q = getCurrentSession().createQuery(query, DatabaseChangeLogBean.class);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     public DatabaseChangeLogBean findById(String id, String author, String fileName) {
@@ -50,7 +50,7 @@ public class DatabaseChangeLogDao {
         q.setParameter("id", id);
         q.setParameter("author", author);
         q.setParameter("fileName", fileName);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public Long count() {

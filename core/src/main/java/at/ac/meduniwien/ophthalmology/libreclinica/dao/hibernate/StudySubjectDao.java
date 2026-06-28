@@ -31,7 +31,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         String query = "from " + getDomainClassName() + " do where do.study.studyId = :studyid";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", studyId);
-        return q.list();
+        return q.getResultList();
       
     }
 
@@ -41,7 +41,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("OCOID", OCOID);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -51,7 +51,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", study.getStudyId());
         q.setParameter("label", embeddedStudySubjectId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -61,7 +61,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", study.getStudyId());
         q.setParameter("label", embeddedStudySubjectId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery
@@ -71,7 +71,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", parentStudy.getStudyId());
         q.setParameter("label", embeddedStudySubjectId);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     /**
@@ -89,7 +89,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
                 + "   and do.status.id != 7";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("label", label);
-        return q.list();
+        return q.getResultList();
     }
 
     /**
@@ -125,7 +125,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         q.setParameter("firstName", firstName);
         q.setParameter("lastName", lastName);
         q.setParameter("dob", java.sql.Date.valueOf(dob));
-        return q.list();
+        return q.getResultList();
     }
 
     // TODO update to CriteriaQuery 
@@ -134,7 +134,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
         q.setParameter("id", id.toString());
 
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
 
     }
     public String getValidOid(StudySubject studySubject, ArrayList<String> oidList) {
@@ -165,7 +165,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
 
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", studyId);
-        List<StudySubject> allStudySubjects = q.list();
+        List<StudySubject> allStudySubjects = q.getResultList();
         
         int greatestLabel = 0;
         for (StudySubject subject:allStudySubjects) {

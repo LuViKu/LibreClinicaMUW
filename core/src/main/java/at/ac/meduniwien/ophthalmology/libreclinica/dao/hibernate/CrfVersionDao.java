@@ -27,7 +27,7 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
         String query = "from " + getDomainClassName() + " crf_version  where crf_version.crfVersionId = :crfversionid ";
         Query<CrfVersion> q = getCurrentSession().createQuery(query, CrfVersion.class);
         q.setParameter("crfversionid", crf_version_id);
-        return (CrfVersion) q.uniqueResult();
+        return (CrfVersion) q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -36,7 +36,7 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<CrfVersion> q = getCurrentSession().createQuery(query, CrfVersion.class);
         q.setParameter("OCOID", OCOID);
-        return (CrfVersion) q.uniqueResult();
+        return (CrfVersion) q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -45,7 +45,7 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
         String query = "select distinct cv.* from crf_version cv,crf c " + "where c.crf_id = " + crfId + " and cv.name = '" + name
                 + "' and cv.crf_id = c.crf_id";
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(CrfVersion.class);
-        return ((CrfVersion) q.uniqueResult());
+        return ((CrfVersion) q.getSingleResultOrNull());
     }
     
     private String getOid(CrfVersion crfVersion, String crfName, String crfVersionName) {

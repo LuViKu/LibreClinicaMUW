@@ -24,7 +24,7 @@ public class ItemReferenceTypeDao extends AbstractDomainDao<ItemReferenceType> {
         String query = "from " + getDomainClassName() + " item_reference_type  where item_reference_type.itemReferenceTypeId = :itemreferencetypeid ";
         Query<ItemReferenceType> q = getCurrentSession().createQuery(query, ItemReferenceType.class);
         q.setParameter("itemreferencetypeid", item_reference_type_id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

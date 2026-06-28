@@ -25,7 +25,7 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
         q.setParameter("oid", ruleBean.getOid());
         q.setParameter("studyId", ruleBean.getStudyId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -34,7 +34,7 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
         q.setParameter("oid", oid);
         q.setParameter("studyId", studyId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

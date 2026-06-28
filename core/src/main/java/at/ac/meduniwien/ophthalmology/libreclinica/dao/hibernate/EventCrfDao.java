@@ -30,7 +30,7 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         q.setParameter("studyeventid", study_event_id);
         q.setParameter("studysubjectid", study_subject_id);
         q.setParameter("crfversionid", crf_version_id);
-        return (EventCrf) q.uniqueResult();
+        return (EventCrf) q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -42,7 +42,7 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         q.setParameter("studyeventid", study_event_id);
         q.setParameter("studysubjectid", study_subject_id);
         q.setParameter("crfid", crf_id);
-        return (EventCrf) q.uniqueResult();
+        return (EventCrf) q.getSingleResultOrNull();
     }
 
     // TODO update to CriteriaQuery 
@@ -53,7 +53,7 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
         q.setParameter("studyeventid", studyEventId);
         q.setParameter("studysubjectoid", studySubjectOid);
-        return q.list();
+        return q.getResultList();
 	}
 
     // TODO update to CriteriaQuery 
@@ -64,7 +64,7 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
         q.setParameter("studyeventid", studyEventId);
         q.setParameter("statusid", statusCode);
-        return q.list();
+        return q.getResultList();
     }
     
         

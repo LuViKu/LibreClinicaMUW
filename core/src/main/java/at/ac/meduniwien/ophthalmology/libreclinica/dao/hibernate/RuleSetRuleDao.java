@@ -47,7 +47,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         Query<RuleSetRuleBean> q = getCurrentSession().createQuery(query, RuleSetRuleBean.class);
         q.setParameter("ruleSetBean", ruleSetBean);
         q.setParameter("ruleBean", ruleBean);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
     
     /**
@@ -77,7 +77,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         
  
         
-        ArrayList<RuleSetRuleBean> ruleSetRules = new ArrayList<>(q.list());
+        ArrayList<RuleSetRuleBean> ruleSetRules = new ArrayList<>(q.getResultList());
         // Forcing eager fetch of actions & their properties
         for (RuleSetRuleBean ruleSetRuleBean : ruleSetRules) {
             for (RuleActionBean action : ruleSetRuleBean.getActions()) {
@@ -118,7 +118,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         query += filter.execute("");
         NativeQuery q = getCurrentSession().createNativeQuery(query);
 
-        return ((Number) q.uniqueResult()).intValue();
+        return ((Number) q.getSingleResultOrNull()).intValue();
     }
 
     // TODO update to CriteriaQuery 
@@ -142,7 +142,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
-        return new ArrayList<RuleSetRuleBean>(q.list());
+        return new ArrayList<RuleSetRuleBean>(q.getResultList());
     }
 
     // TODO update to CriteriaQuery 
@@ -165,7 +165,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         // / Hibernate 5.6; BigInteger on older drivers). Both
         // implement Number, so the cast below works either way.
         NativeQuery<Object> q = getCurrentSession().createNativeQuery(query, Object.class);
-        Object result = q.uniqueResult();
+        Object result = q.getSingleResultOrNull();
         return result instanceof Number n ? n.intValue() : 0;
     }
 
