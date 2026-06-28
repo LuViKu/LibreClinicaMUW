@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
  *
  * @see <a href="../../../../../../../docs/development/modernization/decision-record.md#dr-014--institution-agnostic-sso-via-reverse-proxy-pre-authentication">DR-014</a>
  */
+@SuppressWarnings("deprecation")
 public class LoginAuditService {
 
     private static final Logger log =

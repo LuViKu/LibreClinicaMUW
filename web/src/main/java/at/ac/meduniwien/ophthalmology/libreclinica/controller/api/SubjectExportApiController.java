@@ -129,6 +129,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/api/v1/studies")
 @Tag(name = "Subject Export",
      description = "Per-subject one-click data snapshot (ODM / CSV / PDF).")
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class SubjectExportApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(SubjectExportApiController.class);

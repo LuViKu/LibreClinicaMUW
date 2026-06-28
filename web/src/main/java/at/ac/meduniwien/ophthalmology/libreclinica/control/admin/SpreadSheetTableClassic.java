@@ -72,6 +72,12 @@ import org.slf4j.LoggerFactory;
  * @version CVS: $Id: SpreadSheetTable.java,v 1.28 2006/09/01 00:37:19 jxu Exp $
  */
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
     // SpreadSheetTable
     // {

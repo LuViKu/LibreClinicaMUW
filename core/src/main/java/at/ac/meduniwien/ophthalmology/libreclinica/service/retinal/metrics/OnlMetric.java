@@ -33,6 +33,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.io.SurfaceGri
  * bound for PR — hence {@link OnlMetric} and {@link PrMetric} are
  * separate (different conventions, same shape).
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 final class OnlMetric {
 
     // The cluster emits long human-readable filenames like

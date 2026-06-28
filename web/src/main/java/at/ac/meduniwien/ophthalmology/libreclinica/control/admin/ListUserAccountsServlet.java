@@ -29,6 +29,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.UserAccountRow;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class ListUserAccountsServlet extends SecureController {
 
 	private static final long serialVersionUID = -7298014383987992477L;

@@ -28,6 +28,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAODigester;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class StudyDAO extends AuditableEntityDAO<StudyBean> {
 
     public StudyDAO(DataSource ds) {

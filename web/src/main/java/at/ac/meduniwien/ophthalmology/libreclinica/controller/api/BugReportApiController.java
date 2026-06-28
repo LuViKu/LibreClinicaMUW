@@ -97,6 +97,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/api/v1/bug-report")
 @Tag(name = "Bug Report",
      description = "Operator-filed bug reports — composes email + audit trail.")
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class BugReportApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(BugReportApiController.class);

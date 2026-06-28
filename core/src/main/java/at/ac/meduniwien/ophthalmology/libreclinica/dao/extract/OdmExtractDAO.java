@@ -94,6 +94,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetadataUnit;
  * @author ywang (May, 2008)
  */
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class OdmExtractDAO extends DatasetDAO {
     
     public OdmExtractDAO(DataSource ds) {

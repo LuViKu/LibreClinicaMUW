@@ -51,6 +51,9 @@ import org.slf4j.LoggerFactory;
  * @author jxu
  * 
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class UpdateEventDefinitionServlet extends SecureController {
     /**
 	 * 

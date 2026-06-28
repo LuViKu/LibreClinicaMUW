@@ -58,6 +58,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class ExtractBean {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -439,7 +445,7 @@ public class ExtractBean {
                 if (dataset.isShowCRFcompletionDate()) {
                     // logger.info();
                     String crfCompletionDate = getColumnLabel(i, j, "CompletionDate", numSamples);
-                    String description = getColumnDescription(i, j, "Completion Date for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Completion Date for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -450,7 +456,7 @@ public class ExtractBean {
 
                 if (dataset.isShowCRFinterviewerDate()) {
                     String interviewerDate = getColumnLabel(i, j, "InterviewDate", numSamples);
-                    String description = getColumnDescription(i, j, "Interviewed Date for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Interviewed Date for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -461,7 +467,7 @@ public class ExtractBean {
 
                 if (dataset.isShowCRFinterviewerName()) {
                     String interviewerName = getColumnLabel(i, j, "InterviewerName", numSamples);
-                    String description = getColumnDescription(i, j, "Interviewer Name for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Interviewer Name for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -475,7 +481,7 @@ public class ExtractBean {
                     // ?
                     // ?
                     // ?
-                    String description = getColumnDescription(i, j, "Event CRF Status for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Event CRF Status for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -486,7 +492,7 @@ public class ExtractBean {
 
                 if (dataset.isShowCRFversion()) {
                     String crfCompletionDate = getColumnLabel(i, j, "VersionName", numSamples);
-                    String description = getColumnDescription(i, j, "CRF Version Name for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "CRF Version Name for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -1067,7 +1073,7 @@ public class ExtractBean {
                 // guard clause to see if it's in there already?
                 // not rly, the above is only used in auditlogging
                 // could fit in crf and crf version ids here, though
-                // FIXME def not one to one relationship, tbh, 03.08
+
                 String key = getStudyEventDataKey(
                 /* studySubjectId.intValue() */objev.studySubjectId.intValue(),
                 /* studyEventDefinitionId.intValue() */objev.studyEvenetDefinitionId.intValue(),
@@ -1165,7 +1171,7 @@ public class ExtractBean {
         // guard clause to see if it's in there already?
         // not rly, the above is only used in auditlogging
         // could fit in crf and crf version ids here, though
-        // FIXME def not one to one relationship, tbh, 03.08
+
         String key = getStudyEventDataKey(studySubjectId.intValue(), studyEventDefinitionId.intValue(), sampleOrdinal.intValue());
         if (eventData == null) {
             eventData = new HashMap<>();

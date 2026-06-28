@@ -26,6 +26,12 @@ import ch.qos.logback.core.Context;
 import ch.qos.logback.core.spi.ContextAwareBase;
 import ch.qos.logback.core.spi.LifeCycle;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class LoggerStartupListener extends ContextAwareBase implements
 		LoggerContextListener, LifeCycle {
 

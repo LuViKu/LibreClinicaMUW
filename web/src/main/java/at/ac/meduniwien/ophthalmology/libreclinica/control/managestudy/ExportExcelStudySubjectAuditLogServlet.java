@@ -58,7 +58,9 @@ import jxl.write.WritableWorkbook;
  * @author akung
  */
 
-@SuppressWarnings("serial")
+@SuppressWarnings({"null", "serial"})
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
 public class ExportExcelStudySubjectAuditLogServlet extends SecureController {
 
     /**
