@@ -61,6 +61,14 @@ nb-configuration.xml
 .m2-cache-it/
 .m2-cache-*/
 
+# scripts/regenerate-phase-b5-manifest.sh build output (regenerated on demand).
+build-b5-manifest.log
+
+# scripts/strip_deprecation_suppressions.py leaves <file>.bak siblings until
+# restore_deprecation_suppressions.py puts them back. If Maven dies before the
+# restore runs, the .bak files survive — never commit them.
+*.java.bak
+
 # Test-run pollution: tests evaluate `filePath=${catalina.home}/...` outside Tomcat,
 # leaving a literal-named directory. See core/src/test/resources/datainfo.properties.
 catalina.home_IS_UNDEFINED/
