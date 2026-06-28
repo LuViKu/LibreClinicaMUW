@@ -27,6 +27,10 @@ import org.hibernate.annotations.Parameter;
 @Entity
 @Table(name = "openclinica_version")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "openclinica_version_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class OpenClinicaVersionBean extends AbstractMutableDomainObject {
 
     /**

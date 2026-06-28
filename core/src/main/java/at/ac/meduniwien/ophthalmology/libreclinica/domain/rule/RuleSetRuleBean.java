@@ -46,6 +46,10 @@ import org.hibernate.annotations.Parameter;
 @Entity
 @Table(name = "rule_set_rule")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_set_rule_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class RuleSetRuleBean extends AbstractAuditableMutableDomainObject implements Serializable {
 
     /**

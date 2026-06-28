@@ -43,6 +43,10 @@ import org.hibernate.annotations.Type;
 @Table(name = "crf_version", uniqueConstraints = @UniqueConstraint(columnNames = "oc_oid"))
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "crf_version_crf_version_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class CrfVersion extends DataMapDomainObject {
 
     /**

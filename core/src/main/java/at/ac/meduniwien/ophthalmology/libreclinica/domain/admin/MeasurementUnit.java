@@ -22,6 +22,10 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "measurement_unit")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "measurement_unit_measurement_unit_id") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class MeasurementUnit extends AbstractMutableDomainObject {
     /**
 	 * 

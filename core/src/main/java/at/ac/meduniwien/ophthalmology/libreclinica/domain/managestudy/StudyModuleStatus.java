@@ -27,6 +27,10 @@ import jakarta.persistence.Transient;
 @Entity
 @Table(name = "study_module_status")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "study_module_status_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class StudyModuleStatus extends AbstractAuditableMutableDomainObject {
     /**
 	 * 

@@ -25,6 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("deprecation")
 public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemFormMetadataBean> {
 
     protected static final Logger LOG = LoggerFactory.getLogger(DynamicsItemFormMetadataDao.class);
