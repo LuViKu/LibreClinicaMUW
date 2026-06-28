@@ -85,5 +85,6 @@
   <include  file="migration/lc-muw-2026-06-24-audit-event-type-bcva-entry-public.xml"/>
   <include  file="migration/lc-muw-2026-06-24-namd-visit-crt-items.xml"/>
   <include  file="migration/lc-muw-2026-06-24-event-def-retinal-tasks-layers.xml"/>
+  <include  file="migration/lc-muw-2026-06-28-seed-manual-accounts.xml"/>
 </databaseChangeLog>
 

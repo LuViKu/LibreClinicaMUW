@@ -33,17 +33,33 @@ repeatable Playwright harness, so the design agent can regenerate every figure
 
 Harness: [`web/src/spa/tests/manual/capture-manual.spec.ts`](../../../web/src/spa/tests/manual/capture-manual.spec.ts).
 
+**Dedicated manual accounts.** A `context="demo"` Liquibase seed
+([`lc-muw-2026-06-28-seed-manual-accounts.xml`](../../../core/src/main/resources/migration/lc-muw-2026-06-28-seed-manual-accounts.xml))
+creates one account per role on the Default Study, all with password `12345678`:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `manual_admin` | `12345678` | Administrator |
+| `manual_dm` | `12345678` | Data Manager |
+| `manual_monitor` | `12345678` | Monitor |
+| `manual_investigator` | `12345678` | Investigator |
+| `manual_crc` | `12345678` | CRC |
+
+These seed **only** when Liquibase runs with the `demo` context (dev / demo /
+capture environments) — never in production. After pulling this branch,
+restart the stack (or re-run Liquibase) so the accounts exist, then:
+
 ```sh
 cd web/src/spa
 pnpm dev          # serve the SPA at http://127.0.0.1:5173 (backend reachable via proxy, demo data seeded)
 
 # in another shell — credentials come from env, one real login per role:
 MANUAL_CAPTURE=1 \
-  MANUAL_ADMIN_USER=… MANUAL_ADMIN_PASS=… \
-  MANUAL_DM_USER=…    MANUAL_DM_PASS=… \
-  MANUAL_MONITOR_USER=… MANUAL_MONITOR_PASS=… \
-  MANUAL_INV_USER=…  MANUAL_INV_PASS=… \
-  MANUAL_CRC_USER=…  MANUAL_CRC_PASS=… \
+  MANUAL_ADMIN_USER=manual_admin     MANUAL_ADMIN_PASS=12345678 \
+  MANUAL_DM_USER=manual_dm           MANUAL_DM_PASS=12345678 \
+  MANUAL_MONITOR_USER=manual_monitor MANUAL_MONITOR_PASS=12345678 \
+  MANUAL_INV_USER=manual_investigator MANUAL_INV_PASS=12345678 \
+  MANUAL_CRC_USER=manual_crc         MANUAL_CRC_PASS=12345678 \
   pnpm exec playwright test tests/manual/capture-manual.spec.ts
 ```
 
