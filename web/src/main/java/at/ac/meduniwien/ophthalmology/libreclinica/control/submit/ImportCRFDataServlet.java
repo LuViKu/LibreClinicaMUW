@@ -175,7 +175,6 @@ public class ImportCRFDataServlet extends SecureController {
                 // different
                 // page if not working
 
-                // TODO this block of code needs the xerces serializer in order
                 // to
                 // work
 
@@ -229,7 +228,6 @@ public class ImportCRFDataServlet extends SecureController {
                     // in the next few parts of the code
                 }
             }
-            // TODO need to output further here
             // 2.a. is the study the same one that the user is in right now?
             // 3. validates against study metadata
             // 3.a. is that study subject in that study?
@@ -257,7 +255,6 @@ public class ImportCRFDataServlet extends SecureController {
 
             }
             logger.debug("passed error check");
-            // TODO ADD many validation steps before we get to the
             // session-setting below
             // 4. is the event in the correct status to accept data import?
             // -- scheduled, data entry started, completed
@@ -431,7 +428,6 @@ public class ImportCRFDataServlet extends SecureController {
                 Validator.addError(errors, "xml_file", "You have to provide an XML file!");
             } else if (f.getName().indexOf(".xml") < 0 && f.getName().indexOf(".XML") < 0) {
                 logger.info("file name:" + f.getName());
-                // TODO change the message below
                 addPageMessage(respage.getString("file_you_uploaded_not_seem_xml_file"));
                 f = null;
             }

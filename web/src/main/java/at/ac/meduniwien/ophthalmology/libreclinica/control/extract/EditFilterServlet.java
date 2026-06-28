@@ -70,7 +70,6 @@ public class EditFilterServlet extends SecureController {
                 setInputMessages(errors);
                 setPresetValues(fp.getPresetValues());
 
-                // TODO determine if this is necessary
                 int filterId = fp.getInt("filterId");
                 FilterDAO fDAO = new FilterDAO(sm.getDataSource());
                 FilterBean showFilter = (FilterBean) fDAO.findByPK(filterId);
@@ -90,7 +89,6 @@ public class EditFilterServlet extends SecureController {
                 addPageMessage(respage.getString("the_filter_was_succesfully_updated"));
 
                 // Collection filters = fDAO.findAll();
-                // TODO make findAllByProject?
                 // FormProcessor fp = new FormProcessor(request);
                 FilterDAO fdao = new FilterDAO(sm.getDataSource());
                 EntityBeanTable table = fp.getEntityBeanTable();

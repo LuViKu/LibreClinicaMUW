@@ -189,7 +189,6 @@ public abstract class CoreSecureController extends HttpServlet {
 
     @Override
     public void init() throws ServletException {
-    	// TODO empty method
     }
 
     /**

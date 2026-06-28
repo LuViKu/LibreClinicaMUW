@@ -495,7 +495,6 @@ public class ExpressionService {
             }
         } else {
             EventCRFBean theEventCrfBean;
-            // TODO: because of DAO refactoring we may need to check also eventCrf.isActive()
             if (eventCrf != null) {
                 theEventCrfBean = eventCrf;
             } else if (!itemData.isEmpty()) {
@@ -948,7 +947,6 @@ public class ExpressionService {
             StudyEventDefinitionBean studyEventDefinition = getStudyEventDefinitionDao().findByOidAndStudy(
                     studyEventDefinitionKey, studyId, studyId);
             // another way to get at the problem which I fix in the findByOidAndStudy method, tbh
-            // TODO: because of DAO refactoring we may need to check also studyEventDefinition.isActive()
             if (studyEventDefinition != null) {
                 studyEventDefinitions.put(studyEventDefinitionKey, studyEventDefinition);
                 return studyEventDefinition;
@@ -1008,7 +1006,6 @@ public class ExpressionService {
             StudyEventDefinitionBean studyEventDefinition = getStudyEventDefinitionDao().findByOid(
                     studyEventDefinitionKey);
             // another way to get at the problem which I fix in the findByOidAndStudy method, tbh
-            // TODO: because of DAO refactoring we may need to also check studyEventDefinition.isActive()
             if (studyEventDefinition != null && studyEventDefinitionKey.equals(studyEventDefinition.getOid())) {
                 studyEventDefinitions.put(studyEventDefinitionKey, studyEventDefinition);
                 return studyEventDefinition;
@@ -1281,7 +1278,6 @@ public class ExpressionService {
                     return oid;
                 }
 
-                // TODO: if this statement reached it will force to pass validity check, seems wierd...
                 return "OK";
             }
 

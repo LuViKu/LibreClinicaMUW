@@ -41,7 +41,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
  * resolution status.
  */
 public class DiscrepancyNoteUtil {
-    // TODO: initialize these static members from the database.
     public static final Map<String, Integer> TYPES = new HashMap<String, Integer>();
     static {
         TYPES.put("Annotation", 2);

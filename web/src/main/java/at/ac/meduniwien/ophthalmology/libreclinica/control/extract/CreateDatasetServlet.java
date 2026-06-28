@@ -237,7 +237,6 @@ public class CreateDatasetServlet extends SecureController {
                         }
                         session.setAttribute("allSelectedGroups", sgclasses);
                         request.setAttribute("allSelectedGroups", sgclasses);
-                        // TODO push out list of subject groups here???
                         // form submitted from "view selected item ' or
                         // attribute page, so
                         // forward back to "view selected item " page
@@ -320,7 +319,6 @@ public class CreateDatasetServlet extends SecureController {
                     if (fp.getString("submit").equals(resword.getString("continue_to_apply_filter"))) {
                         // FilterDAO fdao = new FilterDAO(sm.getDataSource());
                         // Collection filters = fdao.findAll();
-                        // TODO make findAllByProject
                         // request.setAttribute("filters",filters);
                         EntityBeanTable table = getFilterTable();
                         session.setAttribute("partOfCreateDataset", Integer.valueOf(1));
@@ -406,7 +404,6 @@ public class CreateDatasetServlet extends SecureController {
                     DatasetBean dsb = (DatasetBean) session.getAttribute("newDataset");
                     dsb.setSQLStatement(dsb.generateQuery());
 
-                    // TODO look for the filter here, re-create the sql
                     // statement
                     // and put it in here
                     // possibly done need to test, tbh 1/7/2005
@@ -823,7 +820,6 @@ public class CreateDatasetServlet extends SecureController {
         return summary;
     }
 
-    // TODO set up additional settings here, tbh
     //
     private void getSubAttr(FormProcessor fp, DatasetBean db) {
         String dob = fp.getString(DOB);

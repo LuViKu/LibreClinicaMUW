@@ -32,7 +32,6 @@ public class DefaultFormBuilder implements FormBuilder {
     }
 
     public DefaultFormBuilder(List<Object> displayItems) {
-    	// TODO displayItems not used
     }
 
     public String createMarkup() {

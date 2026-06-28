@@ -107,7 +107,6 @@ public class SubjectService implements SubjectServiceInterface {
     }
 
     public void validateSubjectTransfer(SubjectTransferBean subjectTransferBean) {
-        // TODO: Validate here
     }
 
     /**

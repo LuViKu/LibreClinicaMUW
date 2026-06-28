@@ -98,7 +98,6 @@ public class CreateJobExportServlet extends SecureController {
 
     private void setUpServlet() {
 
-        // TODO find all the form items and re-populate them if necessary
         FormProcessor fp2 = new FormProcessor(request);
         // Enumeration enumeration = request.getAttributeNames();
         // while (enumeration.hasMoreElements()) {
@@ -135,7 +134,6 @@ public class CreateJobExportServlet extends SecureController {
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO multi stage servlet which will create export jobs
         // will accept, create, and return the ViewJob servlet
         FormProcessor fp = new FormProcessor(request);
         scheduler = getScheduler();

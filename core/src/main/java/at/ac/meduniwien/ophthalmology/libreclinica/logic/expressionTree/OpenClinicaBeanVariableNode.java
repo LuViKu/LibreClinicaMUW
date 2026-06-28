@@ -62,7 +62,6 @@ public class OpenClinicaBeanVariableNode extends ExpressionNode {
     @Override
     String testCalculate() throws OpenClinicaSystemException {
 
-    	//TODO: do something
         return null;
 
     }
@@ -85,7 +84,6 @@ public class OpenClinicaBeanVariableNode extends ExpressionNode {
     }
 
     void validate() throws OpenClinicaSystemException {
-       // TODO: Create validation
     }
 
     private Object calculateStatus(){

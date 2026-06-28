@@ -58,7 +58,6 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
  * showing a stored dataset, or refresh the current one.
  * </P>
  *
- * TODO eventually allow for a thread to be split off, so that exporting can run
  * seperately from the servlet and be retrieved at a later time.
  *
  * @author thickerson
@@ -189,7 +188,6 @@ public class ExportDatasetServlet extends SecureController {
 
             // now display report according to format specified
 
-            // TODO revise final target to set to fileReference????
             long sysTimeBegin = System.currentTimeMillis();
             int fId = 0;
             if ("sas".equalsIgnoreCase(action)) {
@@ -300,7 +298,6 @@ public class ExportDatasetServlet extends SecureController {
                 // System.out.println("*** isShowCRFversion:
                 // "+db.isShowCRFversion());
 
-                // TODO in the spirit of DRY, if this works we need to remove
                 // lines 443-776 in this servlet, tbh 01/2009
                 String DDLFileName = "";
                 HashMap<String, Integer> answerMap = generateFileService.createSPSSFile(db, eb, currentStudy, parentStudy, sysTimeBegin, generalFileDir, answer, "", ub);
@@ -349,7 +346,6 @@ public class ExportDatasetServlet extends SecureController {
                 // ExtractBean.XLS_FORMAT,
                 // currentStudy,
                 // parentStudy);
-                // TODO this will change and point to a created excel
                 // spreadsheet, tbh
                 String excelFileName = db.getName() + "_excel.xls";
                 // fId = this.createFile(excelFileName,
@@ -370,7 +366,6 @@ public class ExportDatasetServlet extends SecureController {
                 logger.info("set 'generate' to :" + generalFileDir + excelFileName);
             }
             // request.setAttribute("generate",generateReport);
-            // TODO might not set the above to request and instead aim the
             // user directly to the generated file?
             // logger.info("*** just set generated report to request: "+action);
             // create the equivalent to:
@@ -380,7 +375,6 @@ public class ExportDatasetServlet extends SecureController {
                 // capture
                 // tbh, 4-18-05
                 // request.setAttribute("generate",finalTarget.getFileName());
-                // TODO changing path to show refresh page, then window with
                 // link to download file, tbh 06-08-05
                 // finalTarget.setFileName(
                 // "/WEB-INF/jsp/extract/generatedFileDataset.jsp");

@@ -173,7 +173,6 @@ public class VerifyImportedCRFDataServlet extends SecureController {
                 int eventCrfBeanId = -1;
                 EventCRFBean eventCrfBean = new EventCRFBean();
 
-                // TODO : tom , the wrapper object has all the necessary data -
                 // as you see we check the
                 // is to see if this data is Savable if it is then we go ahead
                 // and save it. if not we discard.

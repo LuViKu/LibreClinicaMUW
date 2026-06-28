@@ -255,7 +255,6 @@ public class MarkEventCRFCompleteServlet extends SecureController {
         fp = new FormProcessor(request);
 
         /*
-         *  TODO do not know what this comparison should look like exactly
          */
         if (currentRole.equals(Role.COORDINATOR) || currentRole.equals(Role.STUDYDIRECTOR)) {
             return;

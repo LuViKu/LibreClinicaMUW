@@ -309,7 +309,6 @@ public class StudyInfoPanel {
             } else if (page.equals(Page.VIEW_STUDY_SUBJECT) || page.equals(Page.LIST_EVENTS_FOR_SUBJECT)) {
                 // special case, unlocks study name, subject name, and
                 // visits
-                // TODO set all this up, tbh
                 /*
                  * set up the side info panel to create the following upon entry
                  * from the ViewStudyServlet Study X Subject Y StudyEventDef Z1
@@ -364,7 +363,6 @@ public class StudyInfoPanel {
                 /*
                  * pages designed to also follow the above format; check to see
                  * if they are in the session already, and does not refresh.
-                 * TODO refine and test
                  */
                 StudyBean study = (StudyBean) session.getAttribute("study");
                 StudySubjectBean studySubject = (StudySubjectBean) request.getAttribute("studySubject");

@@ -22,7 +22,6 @@ public class AuditEventRow extends EntityBeanRow<AuditEventBean, AuditEventRow> 
     public static final int AUDIT_ACTION = 1;
     public static final int AUDIT_ENTITY = 2;
     // public static final int AUDIT_STUDY = 3;
-    // TODO MAKE CUSTOMIZED ROWS FOR EACH ONE, TBH
     // this one will be for user, and therefore not have the user
     // column, tbh
     public static final int AUDIT_STUDY_NAME = 3;

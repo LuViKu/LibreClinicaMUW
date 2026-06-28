@@ -505,7 +505,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
 
         if (eventDefinitionCRFId <= 0) {
-            // TODO we have to get that id before we can continue
             EventDefinitionCRFBean edcBean = edcdao.findByStudyEventIdAndCRFVersionId(study, ecb.getStudyEventId(), ecb.getCRFVersionId());
             eventDefinitionCRFId = edcBean.getId();
         }
@@ -631,7 +630,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
         setPresetValues(fp.getPresetValues(), request);
         logMe("Entering Checks !submitted  "+System.currentTimeMillis());
         if (!isSubmitted) {
-            // TODO: prevent data enterer from seeing results of first round of
             // data
             // entry, if this is second round
 // FLAG--SLOW HERE WHEN LOADING
@@ -704,7 +702,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             // attribute indicating that default values for items shouldn't be
             // displayed
             // in the application UI that will subsequently be displayed
-            // TODO: find a better, less random place for this
             // session.setAttribute(HAS_DATA_FLAG, true);
 
             // section.setCheckInputs(fp.getBoolean(INPUT_CHECK_INPUTS));
@@ -741,7 +738,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                         // int manualGroups = getManualRows(dbGroups2);
                         // logger.debug("+++ found manual rows from db group 2: " + manualGroups);
                         LOGGER.debug("===IF VALIDATE NOT A SINGLE ITEM: got to this part in the validation loop: " + dgb.getGroupMetaBean().getName());
-                        // TODO next marker tbh 112007
                         // formGroups = validateDisplayItemGroupBean(v,
                         // dgb,dbGroups, formGroups,
                         // ruleValidator,groupOrdinalPLusItemOid);
@@ -1525,7 +1521,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                 LOGGER.debug("all items before saving into DB" + allItems.size());
                 this.output(allItems);
-//TODO:Seems longer here, check this
                 logMe("DisplayItemWithGroupBean allitems4 "+System.currentTimeMillis());
                 for (int i = 0; i < allItems.size(); i++) {
                     DisplayItemWithGroupBean diwb = allItems.get(i);
@@ -2501,7 +2496,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             
             if(firstLoopSkip) {
             	firstLoopBreak++;
-            	// TODO find a better solution then breaking after 14 empty oids
                 if (firstLoopBreak > 14) {
                     LOGGER.debug("break first loop");
                     break;
@@ -3439,7 +3433,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             DisplayItemBean dib = (DisplayItemBean) displayItems.get(i);
             dib.setChildren(getChildrenDisplayItems(dib, edcb, request));
 
-            // TODO use the setData command here to make sure we get a value?
             //On Submition of the Admin Editing form the loadDBValue does not required
             //
             if (ecb.getStage() == DataEntryStage.INITIAL_DATA_ENTRY_COMPLETE || ecb.getStage() == DataEntryStage.DOUBLE_DATA_ENTRY_COMPLETE) {
@@ -4113,7 +4106,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     }
    
    /*
-    *  TODO this method seems to be of no use
     *  remove it if it is not used for a kind of check (a error is thrown if something goes wrong) 
     */
     private void getEventCRFBean(HttpServletRequest request) {
@@ -4401,7 +4393,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     
     /*
-     *  TODO this method seems to be of no use
      *  remove it if it is not used for a kind of check (a error is thrown if something goes wrong) 
      */
     protected void getEventDefinitionCRFBean(HttpServletRequest request) {
@@ -4481,7 +4472,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 newOne =   buildMatrixForRepeatingGroups(newOne,itemGroup,ecb, sb,itBeans,dataMap, nullValuesList, isSubmitted);
 
              if (hasData) {
-                 //TODO: fix the group_has_data flag on bean not on session
                     session.setAttribute(GROUP_HAS_DATA, Boolean.TRUE);
 
                 }

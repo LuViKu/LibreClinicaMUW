@@ -374,9 +374,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
 
         for (StudyUserRoleBean studyRole : uab.getRoles()) {
 
-            // TODO: Role.ADMIN is an unlikely argument for equals, check this
-            // TODO: it should be probably studyRole.getRole()
-            // TODO: sys admin role is created in setSysAdminRole, that is why it should be skipped here
             if (studyRole.equals(Role.ADMIN)) {
                 continue;
             }
@@ -460,7 +457,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         return Privilege.get(privId);
     }
 
-    // TODO remove SuppressWarnings when a solution for the recursion problem with 'owner' and 'updater' is found
     @SuppressWarnings("deprecation")
     public UserAccountBean getEntityFromHashMap(HashMap<String, Object> hm, boolean findOwner) {
         UserAccountBean eb = new UserAccountBean();
@@ -518,7 +514,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         eb.setOwnerId(ownerId);
         eb.setUpdaterId(updateId);
 
-        //TODO: I think this is not necessary because owner and updater can be lazy loaded
         // below block is set up to avoid recursion, etc.
         if (findOwner && !userName.contains(".")) {
             UserAccountBean owner = this.findByPK(ownerId, false);

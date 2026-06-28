@@ -181,11 +181,8 @@ public class OpenRosaServices {
                 for (CRFVersionBean version : crfVersions) {
                     if (version.getCrfId() == crf.getId()) {
                         XForm form = new XForm(crf, version);
-                        // TODO: Need to generate hash based on contents of
                         // XForm. Will be done in a later story.
-                        // TODO: For now all XForms get a date based hash to
                         // trick Enketo into always downloading
-                        // TODO: them.
                         if (version.getXformName() != null){
                             form.setHash(DigestUtils.md5Hex(version.getXform()));
                         }else {

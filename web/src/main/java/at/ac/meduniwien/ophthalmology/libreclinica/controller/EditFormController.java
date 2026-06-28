@@ -237,7 +237,6 @@ public class EditFormController {
             // loop thru each repeat creating items in instance
             Boolean isrepeating = itemGroupMetadata.isRepeatingGroup();
 
-            // TODO: Test empty group here (no items). make sure doesn't get nullpointer exception
             for (int i = 0; i < maxGroupRepeat; i++) {
                 Element groupElement = null;
 

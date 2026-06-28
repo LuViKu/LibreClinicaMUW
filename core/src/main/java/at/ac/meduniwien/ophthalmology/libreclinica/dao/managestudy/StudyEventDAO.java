@@ -602,7 +602,6 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
             ArrayList<EntityBean> crfs = new ArrayList<>();
             if (this.findDouble(returnMe, event)) {// (returnMe.containsKey(event))
                 // {
-                // TODO create custom checker, this does not work
                 // logger.warn("putting a crf into an OLD event: " +
                 // crf.getName() + " into "
                 // + event.getName());
@@ -628,7 +627,6 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         return returnMe;
     }
     
-    // TODO: decide whether to use SQL below in place of other sql. they're
     // pretty
     // similar
     /*
@@ -676,7 +674,6 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         return crfs;
     }
 
-    // TODO make sure we are returning the correct boolean, tbh
     public boolean findDouble(HashMap<EntityBean, ArrayList<EntityBean>> hm, EntityBean event) {
         boolean returnMe = false;
         for(EntityBean eb : hm.keySet()) {
@@ -810,7 +807,6 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
     @Override
 	public Observer getObserver() {
     	if(this.observer == null) {
-        	// TODO check why always a new observer is created
     		// this if-statement is only here to suppress the 'field not used' warning
     	}
 

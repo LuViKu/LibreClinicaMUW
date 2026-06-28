@@ -71,7 +71,6 @@ public class EditSelectedServlet extends SecureController {
     }
 
     /*
-     * TODO this function exists in four different places... needs to be added to an additional superclass for Submit Data Control Servlets, tbh July 2007
      */
     public void setUpStudyGroups() {
         ArrayList<StudyGroupClassBean> sgclasses = asArrayList(session.getAttribute("allSelectedGroups"), StudyGroupClassBean.class);

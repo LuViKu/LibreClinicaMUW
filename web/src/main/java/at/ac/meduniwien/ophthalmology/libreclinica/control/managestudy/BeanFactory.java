@@ -406,7 +406,6 @@ public class BeanFactory {
         itemDesc = itemValuesMap.get("units");
         iBean.setUnits(itemDesc);
         itemDataType = itemValuesMap.get("data_type");
-        // TODO: solve the problem with the getByName method
         ItemDataType itemDT = ItemDataType.getByName(itemDataType);
         iBean.setItemDataTypeId(itemDT.getId());
         return iBean;
@@ -818,7 +817,6 @@ public class BeanFactory {
         return allDisplayItems;
     }
 
-    // TODO: Implement this method
     public static SectionBean createSectionBean(String secLabel) {
         return new SectionBean();
     }

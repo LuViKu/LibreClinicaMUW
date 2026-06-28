@@ -60,7 +60,6 @@ public class DatasetBean extends AuditableEntityBean {
     private boolean showSubjectDob = false;
     private boolean showSubjectGender = false;
     //
-    // TODO add new attributes to show/hide here, tbh 07/09/2007
     //
     private boolean showSubjectStatus = false;
     private boolean showSubjectUniqueIdentifier = false;

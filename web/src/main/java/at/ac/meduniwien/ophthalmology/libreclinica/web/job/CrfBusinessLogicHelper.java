@@ -57,7 +57,6 @@ public class CrfBusinessLogicHelper {
     private EventDefinitionCRFBean getEventDefinitionCrfByStudyEventAndCrfVersion(EventCRFBean eventCrf, StudyBean study) {
 
         EventDefinitionCRFDAO eventDefinitionCrfDao = new EventDefinitionCRFDAO(ds);
-        // TODO we have to get that id before we can continue
         eventDefinitionCrfDao = new EventDefinitionCRFDAO(ds);
         EventDefinitionCRFBean eventDefinitionCrf = eventDefinitionCrfDao.findByStudyEventIdAndCRFVersionId(study, eventCrf.getStudyEventId(),
                 eventCrf.getCRFVersionId());

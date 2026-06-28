@@ -539,7 +539,6 @@ public class RuleController {
         return rulesPostImportContainerService;
     }
 
-    // TODO: fix locale
     public RulesPostImportContainerService getRulePostImportContainerService(StudyBean currentStudy, UserAccountBean userAccount) {
         Locale l = Locale.US;
         this.rulesPostImportContainerService.setCurrentStudy(currentStudy);

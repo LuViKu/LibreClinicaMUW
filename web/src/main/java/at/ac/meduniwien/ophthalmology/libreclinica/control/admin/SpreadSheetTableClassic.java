@@ -1050,7 +1050,6 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                         }
                     }
 
-                    // TODO Why the following codes are commented out? -jxu
                     // try {
                     // CRFBean checkName = (CRFBean) cdao.findByPK(crfId);
                     // if (!checkName.getName().equals(crfName)) {

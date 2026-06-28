@@ -86,7 +86,6 @@ public class InsertActionValidator implements Validator {
                 targetCrf = getCrfDAO().findByItemOid(item.getOid());
 
             }
-            // TODO let the database calculate the 'intersection' this will be much faster and will consume less resources
             // Get All event definitions the selected CRF belongs to
             List<StudyEventDefinitionBean> destinationPropertyStudyEventDefinitions = getStudyEventDefinitionDAO().findAllByCrf(destinationPropertyOidCrf);
             List<StudyEventDefinitionBean> targetStudyEventDefinitions = getStudyEventDefinitionDAO().findAllByCrf(targetCrf);

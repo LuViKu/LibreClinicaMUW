@@ -146,7 +146,6 @@ public class AddNewSubjectServlet extends SecureController {
         FormDiscrepancyNotes discNotes;
 
         SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
-        // TODO l10n for dates? Note that in some places we hard-code the YOB by
         // using "01/01/"+yob,
         // not exactly supporting i18n...tbh
 

@@ -42,7 +42,6 @@ public class SessionManager {
 
     private DataSource ds;
 
-    //TODO: this is a hack needs to be refactored
     private static DataSource staticDataSource;
 
     /**

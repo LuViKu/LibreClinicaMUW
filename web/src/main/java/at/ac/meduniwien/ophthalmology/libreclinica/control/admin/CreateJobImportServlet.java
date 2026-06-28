@@ -128,7 +128,6 @@ public class CreateJobImportServlet extends SecureController {
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO multi stage servlet to generate import jobs
         // validate form, create job and return to view jobs servlet
         FormProcessor fp = new FormProcessor(request);
         TriggerService triggerService = new TriggerService();

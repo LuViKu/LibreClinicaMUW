@@ -76,7 +76,6 @@ public class CoreResources implements ResourceLoaderAware {
     }
 
     /**
-     * TODO: Delete me!
      * 
      * @param dataInfoProps data info properties
      * @throws IOException IOException
@@ -334,7 +333,6 @@ public class CoreResources implements ResourceLoaderAware {
         if (dataset_file_delete == null) {
             DATAINFO.setProperty("dataset_file_delete", "true");
         }
-        // TODO:Revisit me!
         String password_expiration_time = DATAINFO.getProperty("passwdExpirationTime");
         if (password_expiration_time != null) {
             DATAINFO.setProperty("passwd_expiration_time", password_expiration_time);
@@ -717,7 +715,6 @@ public class CoreResources implements ResourceLoaderAware {
                     epbean.setPostProcessing(function);
                     // System.out.println("found db password: " + function.getDatabasePassword());
                 } else if ("pdf".equals(whichFunction)) {
-                    // TODO add other functions here
                     epbean.setPostProcessing(new PdfProcessingFunction());
                 } else if ("sas".equals(whichFunction)) {
                     epbean.setPostProcessing(new SasProcessingFunction());
@@ -899,7 +896,6 @@ public class CoreResources implements ResourceLoaderAware {
         return value == null ? "" : value;
     }
 
-    // TODO internationalize
     public static String getExtractField(String key) {
         String value = EXTRACTINFO.getProperty(key);
         if (value != null) {

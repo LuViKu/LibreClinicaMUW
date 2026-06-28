@@ -51,7 +51,6 @@ public class RunRuleServlet extends SecureController {
         String versionId = request.getParameter("versionId");
 
         if (action == null || action.trim().isEmpty()) {
-            // TODO : if someone tampers with URL catch here and forwar to correct place
             forwardPage(Page.MENU_SERVLET);
         }
 
