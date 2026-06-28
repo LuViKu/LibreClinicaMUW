@@ -82,7 +82,7 @@ public class DiscrepancyNoteType extends Term {
         Iterator<Privilege> it = privileges.iterator();
 
         while (it.hasNext()) {
-            Privilege myPriv = (Privilege) it.next();
+            Privilege myPriv = it.next();
             if (myPriv.equals(p)) {
                 return true;
             }

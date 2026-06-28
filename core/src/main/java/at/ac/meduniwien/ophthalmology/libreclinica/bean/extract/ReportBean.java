@@ -68,7 +68,7 @@ public abstract class ReportBean<I> {
             ArrayList<String> row = data.get(rowNum);
 
             if (row != null && row.size() > col) {
-                String s = (String) row.get(col);
+                String s = row.get(col);
 
                 if (s != null) {
                     return s;
