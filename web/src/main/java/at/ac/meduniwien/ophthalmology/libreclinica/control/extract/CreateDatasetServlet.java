@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.HideCRFManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
 /**
