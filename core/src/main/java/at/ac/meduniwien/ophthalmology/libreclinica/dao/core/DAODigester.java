@@ -28,7 +28,6 @@ import java.util.HashMap;
  *
  * @author thickerson
  *
- * TODO
  */
 public class DAODigester {
 

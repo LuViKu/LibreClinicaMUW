@@ -40,7 +40,6 @@ import org.springframework.beans.factory.annotation.Autowired;
  *
  * @author thickerson
  *
- *         TODO
  *         <P>
  *         add functions for admin use cases such as assign user to study, remove user from study, etc.
  *         <P>

@@ -732,7 +732,6 @@ public class ViewSectionDataEntryServlet extends DataEntryServlet {
      * 
      * @author ywang 10-18-2007
      * @param request
-     *            TODO
      */
 
     private void setAttributeForInterviewerDNotes(List<DiscrepancyNoteBean> eventCrfNotes, HttpServletRequest request) {
