@@ -26,6 +26,24 @@ import org.slf4j.LoggerFactory;
 
 /*
  * @author Krikor Krumlian
+ *
+ * 2026-06-28 — heritage-debt audit (PR #262): the rule-evaluation surface in this
+ * class is a known dead stub. {@link #initializeRule(RuleBean)} short-circuits
+ * source/target evaluation to {@code true}, so the discrepancy-note arm never
+ * fires. Live rule evaluation runs through the Spring-managed
+ * {@code at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetService}
+ * /{@code RuleActionRunLogService} pipeline instead; this bean is kept only
+ * because {@link #runRule(int)} is still referenced from a handful of legacy
+ * call sites and removing it is out of scope for the P0 error-handling sweep.
+ *
+ * To make the method functional one would need to:
+ *   1. Resolve {@code sourceItemDataBean} / {@code targetItemDataBean} from
+ *      the rule's source/target expressions against the supplied event CRF.
+ *   2. Look up the corresponding {@code ItemFormMetadataBean} per side.
+ *   3. Reinstate the original {@code fireRule(itemData, value, metadata, operator)}
+ *      calls (commented out below) — they live on the heritage RuleDAO.
+ *
+ * Tracked in the B.5 follow-up backlog (see PR #262 description).
  */
 
 public class RuleExecutionBusinessObject {
@@ -41,6 +59,10 @@ public class RuleExecutionBusinessObject {
         this.ub = ub;
     }
 
+    /**
+     * @deprecated 2026-06-28 — heritage-debt audit (PR #262): dead stub — see class Javadoc.
+     */
+    @Deprecated
     public void runRule(int eventCrfId) {
         // int eventCrfId = 11;
         EventCRFBean eventCrfBean = getEventCRFBean(eventCrfId);
@@ -51,6 +73,13 @@ public class RuleExecutionBusinessObject {
         }
     }
 
+    /**
+     * @deprecated 2026-06-28 — heritage-debt audit (PR #262): the rule-eval body
+     *     short-circuits to {@code sourceResult = true; targetResult = true;},
+     *     so this method has no effect today. See the class Javadoc for the
+     *     wiring needed to make it functional.
+     */
+    @Deprecated
     public void initializeRule(RuleBean rule) {
         // source data
         // ItemDataBean sourceItemDataBean = rule.getSourceItemDataBean();
@@ -61,7 +90,10 @@ public class RuleExecutionBusinessObject {
         ItemDataBean targetItemDataBean = null;
 
         // fireRules on source & target
-        // TODO KK FIX HERE
+        // 2026-06-28 — heritage-debt audit (PR #262): preserved heritage no-op
+        // (replaces the original "KK FIX HERE" marker). The required wiring is
+        // documented in the class and method Javadoc above. Filling this in is
+        // deferred to B.5 follow-up.
         boolean sourceResult = true;// fireRule(sourceItemDataBean,rule.getSourceItemValue(),sourceItemFormMetadataBean,rule.getSourceOperator());
         boolean targetResult = true;// fireRule(targetItemDataBean,rule.getTargetItemValue(),targetItemFormMetadataBean,rule.getTargetOperator());
 

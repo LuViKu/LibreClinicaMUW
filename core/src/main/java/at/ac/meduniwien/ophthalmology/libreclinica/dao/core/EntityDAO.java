@@ -241,11 +241,15 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
 			}
         } catch (SQLException sqle) {
             signalFailure(sqle);
-            if (logger.isWarnEnabled()) {
-                logger.warn("Exception while executing query, EntityDAO.select: {}:message: {}", query, sqle.getMessage());
-                logger.error(sqle.getMessage(), sqle);
-            }
-            // TODO shouldn't it be better to throw an exception?
+            // 2026-06-28 — heritage-debt audit (PR #262): the heritage code
+            // returned an empty ArrayList on SQL failure, so callers could not
+            // distinguish "no rows" from "query exploded". Throwing a checked
+            // exception would change ~500 call sites; for now we (a) log ERROR
+            // unconditionally with the full query text and stack, and (b) keep
+            // the empty-list return so the surrounding contract is unchanged.
+            // Conversion to org.springframework.dao.DataAccessException is
+            // tracked in the B.5 follow-up backlog.
+            logger.error("EntityDAO.select: SQL failure for query [{}]: {}", query, sqle.getMessage(), sqle);
             results = new ArrayList<>();
         } finally {
             this.closeIfNecessary(connection, rs, ps);

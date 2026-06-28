@@ -24,6 +24,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyN
 import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNoteThread;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNoteUtil;
 import org.apache.commons.lang.StringEscapeUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.lowagie.text.BadElementException;
 import com.lowagie.text.Cell;
@@ -46,6 +48,10 @@ import com.lowagie.text.pdf.PdfWriter;
  *
  */
 public class DownloadDiscrepancyNote implements DownLoadBean{
+    // 2026-06-28 — heritage-debt audit (PR #262): added logger so regulatory
+    // discrepancy-note export failures are recorded instead of going to stdout.
+    private static final Logger LOG = LoggerFactory.getLogger(DownloadDiscrepancyNote.class);
+
     public static String CSV ="text/plain; charset=UTF-8";
     public static String PDF = "application/pdf";
     public static String COMMA = ",";
@@ -83,13 +89,18 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): regulatory export
+            // failure must surface to the operator, not stdout.
+            LOG.error("downLoad: IO failure writing discrepancy note (format={})", format, e);
+            throw new RuntimeException("Discrepancy-note download failed: " + e.getMessage(), e);
         } finally{
             if(servletStream != null){
                 try {
                     servletStream.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    // 2026-06-28 — heritage-debt audit (PR #262): log on close failure;
+                    // do not throw from finally so the primary exception is preserved.
+                    LOG.error("downLoad: IO failure closing servlet stream", e);
                 }
             }
         }
@@ -129,13 +140,15 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): see downLoad(EntityBean) above.
+            LOG.error("downLoad(list): IO failure writing discrepancy-note list (format={})", format, e);
+            throw new RuntimeException("Discrepancy-note list download failed: " + e.getMessage(), e);
         } finally{
             if(servletStream != null){
                 try {
                     servletStream.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LOG.error("downLoad(list): IO failure closing servlet stream", e);
                 }
             }
         }
@@ -361,7 +374,10 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
             pdfDoc.open();
             pdfDoc.add(new Paragraph(writer.toString()));
         } catch (DocumentException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): PDF build failure must
+            // surface to the regulatory-export caller.
+            LOG.error("serializeToPDF: failed to build discrepancy-note PDF", e);
+            throw new RuntimeException("PDF build failed: " + e.getMessage(), e);
         }
         pdfDoc.close();
 
@@ -379,7 +395,9 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
             pdfDoc.open();
             pdfDoc.add(new Paragraph(content));
         } catch (DocumentException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): see serializeToPDF above.
+            LOG.error("serializeListToPDF(content): failed to build discrepancy-note PDF", e);
+            throw new RuntimeException("PDF build failed: " + e.getMessage(), e);
         }
         pdfDoc.close();
 
@@ -413,7 +431,9 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
             }
             //pdfDoc.add(new Paragraph(content));
         } catch (DocumentException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): see serializeToPDF above.
+            LOG.error("serializeListToPDF(beans): failed to build discrepancy-note PDF (studyIdentifier={})", studyIdentifier, e);
+            throw new RuntimeException("PDF build failed: " + e.getMessage(), e);
         }
         pdfDoc.close();
 
@@ -454,7 +474,9 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
             }
             //pdfDoc.add(new Paragraph(content));
         } catch (DocumentException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): see serializeToPDF above.
+            LOG.error("serializeThreadsToPDF: failed to build discrepancy-note PDF (studyIdentifier={})", studyIdentifier, e);
+            throw new RuntimeException("PDF build failed: " + e.getMessage(), e);
         }
         pdfDoc.close();
 
@@ -497,13 +519,16 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): regulatory export
+            // failure must surface to the operator.
+            LOG.error("downLoadDiscBeans: IO failure (format={}, studyIdentifier={})", format, studyIdentifier, e);
+            throw new RuntimeException("Discrepancy-note download failed: " + e.getMessage(), e);
         } finally{
             if(servletStream != null){
                 try {
                     servletStream.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LOG.error("downLoadDiscBeans: IO failure closing servlet stream", e);
                 }
             }
         }
@@ -553,13 +578,16 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): regulatory export
+            // failure must surface to the operator.
+            LOG.error("downLoadThreadedDiscBeans: IO failure (format={}, studyIdentifier={})", format, studyIdentifier, e);
+            throw new RuntimeException("Discrepancy-note threaded download failed: " + e.getMessage(), e);
         } finally{
             if(servletStream != null){
                 try {
                     servletStream.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LOG.error("downLoadThreadedDiscBeans: IO failure closing servlet stream", e);
                 }
             }
         }

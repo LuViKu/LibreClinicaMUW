@@ -328,10 +328,9 @@ public class OpenRosaServices {
                 xform = generator.buildForm(formId);
             }
         } catch (Exception e) {
-        	System.out.println(e.getMessage());
-        	System.out.println(ExceptionUtils.getStackTrace(e));
-            LOGGER.error(e.getMessage());
-            LOGGER.error(ExceptionUtils.getStackTrace(e));
+            // 2026-06-28 — heritage-debt audit (PR #262): dropped duplicate
+            // stdout prints; LOGGER.error already captures message + stack.
+            LOGGER.error("xform build failed for crfOID={} formId={}", crfOID, formId, e);
             return "<error>" + e.getMessage() + "</error>";
         }
         response.setHeader("Content-Type", "text/xml; charset=UTF-8");
@@ -602,7 +601,11 @@ public class OpenRosaServices {
         transformer.transform(source, result);
         String modifiedXform = writer.toString();
         modifiedXform = applyXformAttributes(modifiedXform, attribs);
-        System.out.println("Finalized xform source: " + modifiedXform);
+        // 2026-06-28 — heritage-debt audit (PR #262): xform sources are large;
+        // log at DEBUG so they only appear when explicitly turned on.
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Finalized xform source: {}", modifiedXform);
+        }
     	return modifiedXform;
 	}
 
