@@ -33,6 +33,8 @@ individual CRF. The **breadcrumbs** at the top of each page show that trail
 Everything you do is scoped to the **study (and site)** you picked at login. If you
 work in more than one study, switch from the top bar.
 
+![The CRC home screen — today's tasks and quick links into your common workflows](screenshots/crc/00-home.png)
+
 ## 1. Find a subject (Subject Matrix)
 
 **Goal:** locate a subject and see, at a glance, which of their visits are open,
@@ -84,7 +86,9 @@ complete, or signed.
    - **Save & schedule** (primary) — saves and opens the new subject so you can
      schedule the first visit straight away.
 
-![Add Subject — enrolment form](screenshots/crc/02-add-subject.png)
+![Add Subject — the empty enrolment form](screenshots/crc/02-add-subject.png)
+
+![Add Subject — the enrolment form filled with sample data, before saving](screenshots/crc/02b-add-subject-filled.png)
 
 **Notes**
 

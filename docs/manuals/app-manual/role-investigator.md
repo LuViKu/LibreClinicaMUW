@@ -62,7 +62,9 @@ A breadcrumb trail at the top of each page shows where you are, e.g. *Study › 
    - **Speichern & Abschluss** (Save and Finish) — saves and returns to the Subject Matrix.
    - **Speichern & erste Visite planen** (Save and Schedule First Visit) — saves and opens the new participant's casebook so you can schedule a visit straight away.
 
-![Add Subject](screenshots/investigator/02-add-subject.png)
+![Add Subject — the empty enrolment form](screenshots/investigator/02-add-subject.png)
+
+![Add Subject — the enrolment form filled with sample data, before saving](screenshots/investigator/02b-add-subject-filled.png)
 
 **Notes**
 
