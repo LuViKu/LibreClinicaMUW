@@ -33,9 +33,10 @@ casebook, SDV, etc.).
   and **Administrator** `13-system-status` rendered blank on the final run
   (the demo stack was under heavy load and these async views didn't paint in
   time). Re-run the harness on a quiet stack to capture them.
-- **OCT / retinal metrics viewer** (`<role>/21-retinal-viewer`) is **not**
-  captured: every retinal job in the demo DB is *parked* (no subject binding),
-  so the per-job viewer has no subject context and renders blank. To capture
-  it, bind a completed job to a visible subject (the park-bind workflow, or a
-  fresh upload through the OCT portal), then re-run with
-  `MANUAL_RETINAL_JOB_ID=<that job>`. The harness already supports this.
+- **OCT / retinal metrics viewer** (`investigator/21-retinal-viewer`) **is
+  captured** — for subject EIAMD150 (RIS — Retinal Imaging Study), whose jobs
+  are bound to visits. Taken via the `capture: oct-viewer` test, logging in as a
+  user with a RIS grant and switching to that study:
+  `MANUAL_OCT_USER=… MANUAL_OCT_PASS=… MANUAL_OCT_STUDY=RIS MANUAL_RETINAL_JOB_ID=16`.
+  (The dedicated `manual_*` accounts are scoped to the Default Study, where the
+  retinal jobs are parked/unbound — hence the cross-study account here.)

@@ -280,3 +280,33 @@ for (const [role, cfg] of Object.entries(ROLES)) {
     expect(true).toBe(true)
   })
 }
+
+// Cross-study OCT / retinal metrics viewer. The per-role accounts are scoped to
+// the Default Study, but bound retinal results live in another study (e.g. RIS).
+// Log in as an account that HAS that study (MANUAL_OCT_USER/PASS), switch to it
+// (MANUAL_OCT_STUDY matched against the study-picker label), then open the job.
+test('capture: oct-viewer', async ({ page }) => {
+  test.skip(
+    !process.env.MANUAL_CAPTURE || !process.env.MANUAL_OCT_USER || !process.env.MANUAL_OCT_PASS || !process.env.MANUAL_RETINAL_JOB_ID,
+    'set MANUAL_CAPTURE, MANUAL_OCT_USER/PASS and MANUAL_RETINAL_JOB_ID',
+  )
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(20000)
+  await login(page, process.env.MANUAL_OCT_USER!, process.env.MANUAL_OCT_PASS!)
+
+  const want = process.env.MANUAL_OCT_STUDY
+  if (want) {
+    await page.goto(`${BASE}/pick-study`, { waitUntil: 'domcontentloaded' }).catch(() => {})
+    await settle(page)
+    const card = page.locator('ul button', { hasText: new RegExp(want, 'i') }).first()
+    if (await card.count()) {
+      await card.click({ timeout: 10000 }).catch(() => {})
+      await page.waitForTimeout(1500)
+    }
+  }
+
+  await page.goto(`${BASE}/retinal-jobs/${process.env.MANUAL_RETINAL_JOB_ID}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(4500) // fundus + B-scan canvas paint
+  await shot(page, 'investigator', '21-retinal-viewer', false) // viewport: canvas-heavy page
+  expect(true).toBe(true)
+})
