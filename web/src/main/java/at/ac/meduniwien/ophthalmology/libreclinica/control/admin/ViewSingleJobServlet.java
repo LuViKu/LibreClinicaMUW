@@ -49,7 +49,6 @@ public class ViewSingleJobServlet extends SecureController {
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
-        // TODO copied from CreateJobExport - DRY? tbh
         if (ub.isSysAdmin() || ub.isTechAdmin()) {
             return;
         }
@@ -59,7 +58,7 @@ public class ViewSingleJobServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
         // above copied from create dataset servlet, needs to be changed to
         // allow only admin-level users
 

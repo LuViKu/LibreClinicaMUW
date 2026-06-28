@@ -142,7 +142,6 @@ public class EditDatasetServlet extends SecureController {
         if (ub.isSysAdmin()) {
             return;
         }
-        // TODO add a limit so that the owner can edit, no one else?
         if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)
             || currentRole.getRole().equals(Role.INVESTIGATOR) || currentRole.getRole().equals(Role.MONITOR)) {
             return;

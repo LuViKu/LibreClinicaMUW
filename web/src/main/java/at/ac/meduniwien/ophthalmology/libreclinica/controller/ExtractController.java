@@ -210,8 +210,6 @@ public class ExtractController {
      *
      * for dateTimePattern, the directory structure is created. "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator,
      * to resolve location
-     * @param filePath TODO
-     * @param extractUtils TODO
      */
     private String getEndFilePath(String endFilePath,DatasetBean dsBean,SimpleDateFormat sdfDir, String filePath, ExtractUtils extractUtils){
     	return extractUtils.getEndFilePath(endFilePath, dsBean, sdfDir, filePath);
@@ -222,8 +220,6 @@ public class ExtractController {
      * @param endFilePath
      * @param dsBean
      * @param sdfDir
-     * @param filePath TODO
-     * @param extractUtils TODO
      * @return
      */
     private String resolveVars(String endFilePath,DatasetBean dsBean,SimpleDateFormat sdfDir, String filePath, ExtractUtils extractUtils){

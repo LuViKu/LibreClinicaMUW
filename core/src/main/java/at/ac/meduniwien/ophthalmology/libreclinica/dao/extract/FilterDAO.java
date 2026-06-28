@@ -39,7 +39,6 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
     protected void setQueryNames() {
         getCurrentPKName = "getCurrentPK";
         getNextPKName = "getNextPK";
-        // TODO figure out the error with current primary keys?
     }
 
     public FilterDAO(DataSource ds) {

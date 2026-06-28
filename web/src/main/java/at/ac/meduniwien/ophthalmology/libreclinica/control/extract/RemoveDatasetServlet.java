@@ -97,7 +97,6 @@ public class RemoveDatasetServlet extends SecureController {
         locale = LocaleResolver.getLocale(request);
 
         if (ub.isSysAdmin()) {
-            return;// TODO limit to owner only?
         }
         if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)
             ) {

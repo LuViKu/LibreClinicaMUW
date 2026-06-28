@@ -108,7 +108,6 @@ public class BeanPropertyRuleRunner extends RuleRunner{
 	                   // 	osa.printStackTrace();
                             logger.error("Rule Runner received exception: " + osa.getMessage());
                             logger.error(ExceptionUtils.getStackTrace(osa));
-	                        // TODO: report something useful
 	                    }
 	                }
 	            }

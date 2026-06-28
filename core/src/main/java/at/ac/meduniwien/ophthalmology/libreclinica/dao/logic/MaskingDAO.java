@@ -37,7 +37,6 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
 
     protected void setQueryNames() {
         getCurrentPKName = "getCurrentPK";
-        // TODO figure out the error with current primary keys?
     }
 
     public MaskingDAO(DataSource ds) {

@@ -325,7 +325,6 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
 
     public ArrayList<ItemFormMetadataBean> findAllByItemId(int itemId) {
 
-        // TODO place holder for returning here, tbh
         ArrayList<ItemFormMetadataBean> answer = new ArrayList<ItemFormMetadataBean>();
 
         this.setTypesExpected();
@@ -362,7 +361,6 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
 
     public ArrayList<ItemFormMetadataBean> findAllByItemIdAndHasValidations(int itemId) {
 
-        // TODO place holder for returning here, tbh
         ArrayList<ItemFormMetadataBean> answer = new ArrayList<ItemFormMetadataBean>();
 
         this.setTypesExpected();

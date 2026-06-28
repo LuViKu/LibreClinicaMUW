@@ -449,7 +449,6 @@ public class SignStudySubjectServlet extends SecureController {
                 ecb.setStage(DataEntryStage.LOCKED);
             }
             // above added 092007-102007 tbh
-            // TODO need to refactor since this is similar to other code, tbh
             if (edc != null) {
                 // System.out.println("edc is not null, need to set flags");
                 DisplayEventCRFBean dec = new DisplayEventCRFBean();
@@ -521,7 +520,6 @@ public class SignStudySubjectServlet extends SecureController {
             }
         }
 
-        // TODO possible relation to 1689 here, tbh
         for (i = 0; i < eventDefinitionCRFs.size(); i++) {
             DisplayEventDefinitionCRFBean dedc = new DisplayEventDefinitionCRFBean();
             EventDefinitionCRFBean edcrf = eventDefinitionCRFs.get(i);

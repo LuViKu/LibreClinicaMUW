@@ -459,7 +459,6 @@ public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServ
 
                 } else {
                     DisplayItemBean dib = diwb.getSingleItem();
-                    // TODO work on this line
 
                     String inputName = getInputName(dib);
                     AddNewSubjectServlet.saveFieldNotes(inputName, discNotes, dndao, dib.getData().getId(), DiscrepancyNoteBean.ITEM_DATA, currentStudy);

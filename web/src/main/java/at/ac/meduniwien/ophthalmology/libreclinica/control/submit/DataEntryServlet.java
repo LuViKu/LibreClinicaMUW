@@ -659,7 +659,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
             if(section.getSection().hasSCDItem()) {
                 /*
-                 *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
                  *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
                  */
                 section = SCDItemDisplayInfo.generateSCDDisplayInfo(section,this.getServletPage(request).equals(Page.INITIAL_DATA_ENTRY)
@@ -1640,7 +1639,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                     } else {
                         DisplayItemBean dib = diwb.getSingleItem();
-                        // TODO work on this line
 
                       //  this.addAttachedFilePath(dib, attachedFilePath);
                         String fileName= addAttachedFilePath(dib, attachedFilePath);
@@ -2088,7 +2086,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @param idb
      * @param formName
      * @param error
-     * @param request TODO
      */
     protected void setReasonForChangeError( EventCRFBean ecb, ItemBean item_bean, ItemDataBean idb, String formName, String error, HttpServletRequest request) {
           HttpSession session = request.getSession();
@@ -2117,7 +2114,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * Get the input beans - the EventCRFBean and the SectionBean. For both beans, look first in the request attributes to see if the bean has been stored
      * there. If not, look in the parameters for the bean id, and then retrieve the bean from the database. The beans are stored as protected class members.
-     * @param request TODO
      */
     protected void getInputBeans(HttpServletRequest request) throws InsufficientPermissionException {
 
@@ -2237,8 +2233,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Tries to check if a seciton has item groups
-     * @param fp TODO
-     * @param ecb TODO
      *
      * @return
      */
@@ -2270,8 +2264,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * Creates a new Event CRF or update the exsiting one, that is, an event CRF can be created but not item data yet, in this case, still consider it is not
      * started(called uncompleted before)
-     * @param request TODO
-     * @param fp TODO
      *
      * @return
      * @throws Exception
@@ -2427,7 +2419,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *
      * @param dib
      *            The DisplayItemBean to write data into.
-     * @param request TODO
      * @return The DisplayItemBean, with form data loaded.
      */
     protected DisplayItemBean loadFormValue(DisplayItemBean dib, HttpServletRequest request) {
@@ -2462,7 +2453,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The original array got from DB which contains multiple data rows
      * @param formGroups
      *            The new array got from front end which contains multiple data rows
-     * @param request TODO
      * @return new constructed formGroups, compare to dbGroups, some rows are update, some new ones are added and some are removed
      */
     protected List<DisplayItemGroupBean> loadFormValueForItemGroup(DisplayItemGroupBean digb, List<DisplayItemGroupBean> dbGroups,
@@ -2838,7 +2828,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The Validator to add validations to.
      * @param dib
      *            The DisplayItemBean to validate.
-     * @param request TODO
      * @return The DisplayItemBean which is validated and has form values loaded into it.
      */
     protected abstract DisplayItemBean validateDisplayItemBean(DiscrepancyValidator v, DisplayItemBean dib, String inputName, HttpServletRequest request);
@@ -2946,7 +2935,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The Validator to add validations to.
      * @param dib
      *            The DisplayItemBean to validate.
-     * @param request TODO
      * @return The DisplayItemBean which is validated.
      */
     protected DisplayItemBean validateDisplayItemBeanText(DiscrepancyValidator v, DisplayItemBean dib, String inputName, HttpServletRequest request) {
@@ -3163,7 +3151,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The DisplayItemBean from which to write data.
      * @param iddao
      *            The DAO to use to access the database.
-     * @param request TODO
      * @return <code>true</code> if the query succeeded, <code>false</code> otherwise.
      */
     @SuppressWarnings("unlikely-arg-type")
@@ -3175,7 +3162,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             getItemMetadataService().hideItem(dib.getMetadata(), ecb, idb);
         }else {
             /*
-             *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
              *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
              */
             if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3340,7 +3326,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Retrieve the status which should be assigned to ItemDataBeans which have non-blank values for this data entry servlet.
-     * @param request TODO
      */
     protected abstract Status getNonBlankItemStatus(HttpServletRequest request);
 
@@ -3348,20 +3333,16 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Get the eventCRF's annotations as appropriate for this data entry servlet.
-     * @param request TODO
      */
     protected abstract String getEventCRFAnnotations(HttpServletRequest request);
 
     /**
      * Set the eventCRF's annotations properties as appropriate for this data entry servlet.
-     * @param request TODO
      */
     protected abstract void setEventCRFAnnotations(String annotations, HttpServletRequest request);
 
     /**
      * Retrieve the DisplaySectionBean which will be used to display the Event CRF Section on the JSP, and also is used to controll processRequest.
-     * @param request TODO
-     * @param isSubmitted TODO
      */
     protected DisplaySectionBean getDisplayBean(boolean hasGroup, boolean includeUngroupedItems, HttpServletRequest request, boolean isSubmitted) throws Exception {
         DisplaySectionBean section = new DisplaySectionBean();
@@ -3483,7 +3464,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Retrieve the DisplaySectionBean which will be used to display the Event CRF Section on the JSP, and also is used to controll processRequest.
-     * @param request TODO
      */
     protected ArrayList<DisplaySectionBean> getAllDisplayBeans(HttpServletRequest request) throws Exception {
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
@@ -3561,7 +3541,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @param sb
      *            The section whose items we are retrieving.
      * @param hasUngroupedItems
-     * @param request TODO
      *
      * @return An array of DisplayItemBean objects, one per parent item in the section. Note that there is no guarantee on the ordering of the objects.
      * @throws Exception
@@ -3635,7 +3614,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 logMe("Entering thread before getting ItemMetadataService:::"+Thread.currentThread());
                boolean showItem = getItemMetadataService().isShown(ifmb.getItemId(), ecb, dib.getData());
                /*
-                *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
                 *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
                 */
                 if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3672,7 +3650,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *
      * @param parent
      *            The item whose children are to be retrieved.
-     * @param request TODO
      * @return An array of DisplayItemBean objects corresponding to the items which are children of parent, and are sorted by column number (ascending), then
      *         ordinal (ascending).
      */
@@ -3695,7 +3672,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             dib.setItem(child);
             // tbh
             /*
-             *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
              *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
              */
             if (!getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3706,7 +3682,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             dib.setDbData(data);
             boolean showItem = getItemMetadataService().isShown(metadata.getItemId(), ecb, data);
             /*
-             *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
              *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
              */
             if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3759,7 +3734,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     protected abstract Page getJSPPage();
 
     /**
-     * @param request TODO
      * @return The Page object which represents this servlet.
      */
     protected abstract String getServletPage(HttpServletRequest request);
@@ -3942,7 +3916,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * To set the totals of each resolution status on the DisplayItemBean for each item.
      * @param dib
          * @param notes
-         * @param ecbId TODO
      */
     private DisplayItemBean setTotals(DisplayItemBean dib,int itemDataId,ArrayList<DiscrepancyNoteBean> notes, int ecbId)
     {
@@ -4009,7 +3982,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * The following methods are for 'mark CRF complete'
-     * @param request TODO
      *
      * @return
      */
@@ -4232,7 +4204,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * 06/13/2007- jxu Since we don't require users to review each section before mark a CRF as complete, we need to create item data in the database because
      * items will not be created unless the section which contains the items is reviewed by users
-     * @param request TODO
      */
     private boolean saveItemsToMarkComplete(Status completeStatus, HttpServletRequest request) throws Exception {
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
@@ -4298,7 +4269,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * Checks if a section is reviewed at least once by user
      * updated tbh 03/2011, to fix duplicates issues
      * @param sb
-     * @param request TODO
      * @return
      */
     protected boolean isSectionReviewedOnce(SectionBean sb, HttpServletRequest request) {
@@ -4381,7 +4351,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * Checks if all the sections in an event crf are reviewed once
      * tbh updated to prevent duplicates, 03/2011
-     * @param request TODO
      *
      * @return
      */

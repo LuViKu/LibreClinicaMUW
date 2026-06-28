@@ -368,7 +368,6 @@ public class ExampleSpringJob extends QuartzJobBean {
     }
 
     /**
-     * TODO It looks like the fileName should contain at most one entry that maps a file name (String) to 
      * a file id (Integer). IMPLEMENT A BETTER WAY OF ACHIEVING THIS
      *  
      * @param fileName mapping of a file name to its file id
@@ -383,7 +382,6 @@ public class ExampleSpringJob extends QuartzJobBean {
     }
 
     /**
-     * TODO It looks like the fileName should contain at most one entry that maps a file name (String) to 
      * a file id (Integer). IMPLEMENT A BETTER WAY OF ACHIEVING THIS
      *  
      * @param fileName mapping of a file name to its file id

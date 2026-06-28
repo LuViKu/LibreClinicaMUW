@@ -669,7 +669,6 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         this.setNewCRFTypesExpected();
         HashMap<Integer, Object> variables = variables(sb.getId());
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findCRFsByStudy"), variables);
-        // TODO make sure this other statement for eliciting crfs works, tbh
         // switched from getEventAndCRFVersionInformation
         // to getEventsAndMultipleCRFVersionInformation
         // crfs = this.getEventAndCRFVersionInformation(alist);
@@ -784,7 +783,6 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         variables.put(5, Integer.valueOf(eventDefId));
         
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("getStudySubjectCRFDataDetails"), variables);
-        // TODO make sure this other statement for eliciting crfs works, tbh
         // switched from getEventAndCRFVersionInformation
         // to getEventsAndMultipleCRFVersionInformation
         // crfs = this.getEventAndCRFVersionInformation(alist);
