@@ -139,19 +139,34 @@ async function login(page: import('@playwright/test').Page, user: string, pass: 
   if (/errorLogin|errorLocked|2faOutdated/.test(result.url)) {
     throw new Error(`login failed for ${user}: ${result.url}`)
   }
+  // Bind a study so role-gated routes don't bounce to /pick-study.
+  await page.goto(`${BASE}/pick-study`, { waitUntil: 'domcontentloaded' }).catch(() => {})
+  await settle(page)
+  const studyBtn = page.locator('ul button').first()
+  if (await studyBtn.count()) {
+    await studyBtn.click().catch(() => {})
+    await page.waitForTimeout(1200)
+  }
 }
 
 /** Best-effort settle: SPA route transition + data fetch + fonts. */
 async function settle(page: import('@playwright/test').Page) {
-  await page.waitForLoadState('networkidle').catch(() => {})
-  await page.waitForTimeout(600)
+  // NB: the SPA holds a persistent job-status stream open, so 'networkidle'
+  // never fires — use 'load' + a fixed settle delay instead.
+  await page.waitForLoadState('load', { timeout: 8000 }).catch(() => {})
+  // Each full navigation re-bootstraps the SPA (auth /me + study + view data),
+  // so give async views time to paint before the shot. Generous on purpose —
+  // capture correctness beats speed.
+  await page.waitForTimeout(2800)
   await page.evaluate(() => (document as any).fonts?.ready).catch(() => {})
 }
 
-async function shot(page: import('@playwright/test').Page, dir: string, id: string) {
+async function shot(page: import('@playwright/test').Page, dir: string, id: string, fullPage = true) {
   const out = resolve(SHOT_ROOT, dir)
   mkdirSync(out, { recursive: true })
-  await page.screenshot({ path: resolve(out, `${id}.png`), fullPage: true })
+  // animations:'disabled' + a hard timeout so a continuously-repainting page
+  // (canvas viewer, live job stream) can't stall fullPage stabilization forever.
+  await page.screenshot({ path: resolve(out, `${id}.png`), fullPage, animations: 'disabled', timeout: 20000 })
 }
 
 test('capture: common (login & study picker)', async ({ page }) => {
@@ -181,6 +196,11 @@ for (const [role, cfg] of Object.entries(ROLES)) {
     const pass = process.env[cfg.passEnv]
     test.skip(!user || !pass, `no creds for ${role} (${cfg.userEnv}/${cfg.passEnv})`)
 
+    // Cap every implicit action/navigation wait so one non-actionable field or
+    // a slow detail page can't burn the default 30s and blow the test budget.
+    page.setDefaultTimeout(8000)
+    page.setDefaultNavigationTimeout(20000)
+
     await login(page, user!, pass!)
 
     const failures: string[] = []
@@ -194,19 +214,62 @@ for (const [role, cfg] of Object.entries(ROLES)) {
       }
     }
 
-    // Click-through detail captures (Investigator/CRC/Admin): first subject → its first event → first CRF.
+    // --- Detail + workflow captures (interactions, not just navigation) ---
+
+    // Subject casebook: open the first subject from the matrix (Investigator/CRC/Admin).
     if (['Investigator', 'CRC', 'Administrator'].includes(role)) {
       try {
         await page.goto(`${BASE}/subjects`, { waitUntil: 'domcontentloaded' })
         await settle(page)
-        const firstRow = page.locator('table tbody tr a, [data-testid="subject-row"] a').first()
-        if (await firstRow.count()) {
-          await firstRow.click()
+        const open = page.getByRole('link', { name: /Öffnen/ }).first()
+        const openBtn = (await open.count()) ? open : page.locator('text=/Öffnen/').first()
+        if (await openBtn.count()) {
+          await openBtn.click({ timeout: 10000 }).catch(() => {})
           await settle(page)
-          await shot(page, cfg.dir, '20-subject-detail')
+          await shot(page, cfg.dir, '20-subject-detail', false) // viewport: detail page streams/animates
         }
       } catch (e) {
-        failures.push(`subject-detail click-through: ${(e as Error).message}`)
+        failures.push(`subject-detail: ${(e as Error).message}`)
+      }
+    }
+
+    // Add-Subject form filled with sample data (Investigator/CRC) — shows intended input; not submitted.
+    if (['Investigator', 'CRC'].includes(role)) {
+      try {
+        await page.goto(`${BASE}/subjects/new`, { waitUntil: 'domcontentloaded' })
+        await settle(page)
+        await page.fill('#subject-id', 'DEMO-042').catch(() => {})
+        await page.locator('input[name="gender"]').first().check().catch(() => {})
+        await page.fill('#enrolled-on', '2026-06-20').catch(() => {})
+        await page.fill('#screening-date', '2026-06-15').catch(() => {})
+        await page.waitForTimeout(600)
+        await shot(page, cfg.dir, '02b-add-subject-filled')
+      } catch (e) {
+        failures.push(`add-subject fill: ${(e as Error).message}`)
+      }
+    }
+
+    // OCT / retinal metrics viewer (Investigator/Monitor/Admin) — needs a 'done'
+    // job BOUND to a subject the role can see (set MANUAL_RETINAL_JOB_ID). Parked
+    // (unbound) jobs render blank, so the capture is skipped unless a bound id is given.
+    if (['Investigator', 'Monitor', 'Administrator'].includes(role) && process.env.MANUAL_RETINAL_JOB_ID) {
+      try {
+        await page.goto(`${BASE}/retinal-jobs/${process.env.MANUAL_RETINAL_JOB_ID}`, { waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(3500) // canvas / cornerstone paint
+        await shot(page, cfg.dir, '21-retinal-viewer')
+      } catch (e) {
+        failures.push(`retinal viewer: ${(e as Error).message}`)
+      }
+    }
+
+    // Parked-scans admin queue (Administrator) — read-only retinal job queue.
+    if (role === 'Administrator') {
+      try {
+        await page.goto(`${BASE}/retinal/parked`, { waitUntil: 'domcontentloaded' })
+        await settle(page)
+        await shot(page, cfg.dir, '22-parked-scans')
+      } catch (e) {
+        failures.push(`parked-scans: ${(e as Error).message}`)
       }
     }
 
