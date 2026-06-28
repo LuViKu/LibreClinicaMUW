@@ -34,6 +34,14 @@ const router = createRouter({
       meta: { title: 'Home' },
     },
     {
+      // Application manual — open to every authenticated role; the view itself
+      // shows only the chapters relevant to the user's role(s).
+      path: '/manual',
+      name: 'manual',
+      component: () => import('@/views/ManualView.vue'),
+      meta: { title: 'Handbuch' },
+    },
+    {
       path: '/subjects',
       name: 'subject-matrix',
       component: () => import('@/views/SubjectMatrixView.vue'),
