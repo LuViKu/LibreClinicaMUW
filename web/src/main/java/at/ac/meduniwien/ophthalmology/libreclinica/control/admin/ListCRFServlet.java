@@ -156,7 +156,7 @@ public class ListCRFServlet extends SecureController {
         table.addLink(resword.getString("blank_CRF_template"), "DownloadVersionSpreadSheet?template=1");
         // YW << add "Enterprise CRF Catalog" link
         // YW >>
-        // TODO add i18n links to the above, tbh
+        // NOTE: add i18n links to the above, tbh
         table.addLink(resword.getString("create_a_new_CRF"), "CreateCRFVersion?module=" + module);
         table.setRows(allRows);
         table.computeDisplay();

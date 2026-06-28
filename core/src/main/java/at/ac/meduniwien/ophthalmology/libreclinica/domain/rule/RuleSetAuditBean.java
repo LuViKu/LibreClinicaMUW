@@ -44,7 +44,7 @@ public class RuleSetAuditBean extends AbstractMutableDomainObject {
     UserAccountBean updater;
     Date dateUpdated;
 
-    // TODO: phase out the use of these Once the above beans become Hibernated
+    // NOTE: phase out the use of these Once the above beans become Hibernated
     protected Integer updaterId;
 
     /**

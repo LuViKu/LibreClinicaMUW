@@ -315,7 +315,7 @@ public class EntityBeanTable {
 
        	for(String key : args.keySet()) {
             String value = args.get(key);
-            // TODO: provide URL Encoding!
+            // NOTE: provide URL Encoding!
             baseGetQuery += "&" + key + "=" + value;
         }
 

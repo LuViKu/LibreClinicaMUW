@@ -35,7 +35,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     protected UserAccountBean updater;
     protected Status status;
 
-    // TODO: phase out the use of these Once the above beans become Hibernated
+    // NOTE: phase out the use of these Once the above beans become Hibernated
     protected Integer ownerId;
     protected Integer updateId;
 

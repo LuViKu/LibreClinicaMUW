@@ -60,7 +60,7 @@ public class RuleBean extends AbstractAuditableMutableDomainObject implements Se
     private List<RuleSetRuleBean> ruleSetRules;
     private OidGenerator oidGenerator;
 
-    // TODO : Pending conversion of the objects below to use Hibernate
+    // NOTE: : Pending conversion of the objects below to use Hibernate
     private Integer studyId;
 
     public RuleBean() {
