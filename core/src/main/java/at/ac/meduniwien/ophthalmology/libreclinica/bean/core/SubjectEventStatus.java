@@ -190,7 +190,7 @@ public class SubjectEventStatus extends Term implements Comparable<SubjectEventS
 
     public static SubjectEventStatus getByName(String name) {
         for (int i = 0; i < list.size(); i++) {
-            SubjectEventStatus temp = (SubjectEventStatus) list.get(i);
+            SubjectEventStatus temp = list.get(i);
             if (temp.getName().equals(name)) {
                 return temp;
             }

@@ -96,7 +96,7 @@ public class Status extends Term implements Comparable<Status> {
     
     public static Status getByName(String name) {
         for (int i = 0; i < list.size(); i++) {
-            Status temp = (Status) list.get(i);
+            Status temp = list.get(i);
             if (temp.getName().equals(name)) {
                 return temp;
             }
@@ -130,9 +130,7 @@ public class Status extends Term implements Comparable<Status> {
      * @see java.lang.Comparable#compareTo(java.lang.Object)
      */
     public int compareTo(Status o) {
-        Status arg = (Status) o;
-
-        return name.compareTo(arg.getName());
+        return name.compareTo(o.getName());
     }
 
     public boolean isInvalid() {

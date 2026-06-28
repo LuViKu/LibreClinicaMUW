@@ -83,7 +83,7 @@ public class AuditableEntityBean extends EntityBean {
                 udao = new UserAccountDAO(SessionManager.getStaticDataSource());
             }
             if (owner == null || owner.getId() != ownerId) {
-                owner = (UserAccountBean) udao.findByPK(ownerId);
+                owner = udao.findByPK(ownerId);
             }
         } catch (Exception e) {
             owner = null;
@@ -139,7 +139,7 @@ public class AuditableEntityBean extends EntityBean {
                 udao = new UserAccountDAO(SessionManager.getStaticDataSource());
             }
             if (updater == null || updater.getId() != updaterId) {
-                updater = (UserAccountBean) udao.findByPK(updaterId);
+                updater = udao.findByPK(updaterId);
             }
 
         } catch (Exception e) {
