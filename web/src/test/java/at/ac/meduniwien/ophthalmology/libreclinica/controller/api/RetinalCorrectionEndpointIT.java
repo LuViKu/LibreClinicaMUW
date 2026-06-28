@@ -114,15 +114,20 @@ class RetinalCorrectionEndpointIT extends AbstractApiControllerDatabaseIT {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO retinal_inference_result ("
-                             + "job_id, output_payload, primary_metric_value, primary_metric_unit, "
+                             + "job_id, task, output_payload, primary_metric_value, primary_metric_unit, "
                              + "bscan_masks_dir, confidence) "
-                             + "VALUES (?, ?::jsonb, ?, ?, ?, ?)")) {
+                             + "VALUES (?, ?, ?::jsonb, ?, ?, ?, ?)")) {
+            // 2026-06-28 — `task` column on retinal_inference_result is
+            // NOT NULL (lc-muw-2026-06-10-retinal-inference-tables.xml:85);
+            // the IT had been skipping it and CI started rejecting every
+            // run. Pin to 'layers' to match the JOB_ID's task above.
             ps.setLong(1, JOB_ID);
-            ps.setString(2, "{}");
-            ps.setBigDecimal(3, new BigDecimal("0.00"));
-            ps.setString(4, "");
-            ps.setString(5, masksDir.toString());
-            ps.setDouble(6, 0.9);
+            ps.setString(2, "layers");
+            ps.setString(3, "{}");
+            ps.setBigDecimal(4, new BigDecimal("0.00"));
+            ps.setString(5, "");
+            ps.setString(6, masksDir.toString());
+            ps.setDouble(7, 0.9);
             ps.executeUpdate();
         }
     }
