@@ -21,7 +21,6 @@ public class CrfVersionMediaDao extends AbstractDomainDao<CrfVersionMedia> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList<CrfVersionMedia> findByCrfVersionId(int crf_version_id) {
         String query = "from " + getDomainClassName() + " crf_version_media  where crf_version_media.crfVersion.crfVersionId = :crfversionid ";
         Query<CrfVersionMedia> q = getCurrentSession().createQuery(query, CrfVersionMedia.class);

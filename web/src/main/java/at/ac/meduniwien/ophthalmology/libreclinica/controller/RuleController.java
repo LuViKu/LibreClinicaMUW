@@ -232,7 +232,7 @@ public class RuleController {
 
     @RequestMapping(value = "/studies/{study}/metadata", method = RequestMethod.GET)
     public ModelAndView studyMetadata(Model model, HttpSession session, @PathVariable("study") String studyOid, HttpServletResponse response) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
 
         StudyDAO studyDao = new StudyDAO(dataSource);
@@ -320,7 +320,7 @@ public class RuleController {
     public @ResponseBody
     org.openclinica.ns.response.v31.Response create(@RequestBody org.openclinica.ns.response.v31.Response responeType, Model model, HttpSession session,
             @PathVariable("study") String studyOid) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean currentStudy = studyDao.findByOid(studyOid);
 
@@ -341,7 +341,7 @@ public class RuleController {
     public @ResponseBody
     Response create(@RequestBody org.openclinica.ns.rules.v31.Rules rules, Model model, HttpSession session, @PathVariable("study") String studyOid)
             throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         RulesPostImportContainer rpic = mapRulesToRulesPostImportContainer(rules);
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean currentStudy = studyDao.findByOid(studyOid);
@@ -379,7 +379,7 @@ public class RuleController {
     public @ResponseBody
     Response validateAndSave(@RequestBody org.openclinica.ns.rules.v31.Rules rules, Model model, HttpSession session, @PathVariable("study") String studyOid,
             @RequestParam("ignoreDuplicates") Boolean ignoreDuplicates) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         RulesPostImportContainer rpic = mapRulesToRulesPostImportContainer(rules);
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean currentStudy = studyDao.findByOid(studyOid);
@@ -426,7 +426,7 @@ public class RuleController {
     public @ResponseBody
     org.openclinica.ns.rules_test.v31.RulesTest create(@RequestBody org.openclinica.ns.rules_test.v31.RulesTest ruleTest, Model model, HttpSession session,
             @PathVariable("study") String studyOid) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         RulesPostImportContainer rpic = mapRulesToRulesPostImportContainer(ruleTest.getRules());
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean currentStudy = studyDao.findByOid(studyOid);
@@ -541,7 +541,7 @@ public class RuleController {
 
     // TODO: fix locale
     public RulesPostImportContainerService getRulePostImportContainerService(StudyBean currentStudy, UserAccountBean userAccount) {
-        Locale l = new Locale("en_US");
+        Locale l = Locale.US;
         this.rulesPostImportContainerService.setCurrentStudy(currentStudy);
         this.rulesPostImportContainerService.setRespage(ResourceBundleProvider.getPageMessagesBundle(l));
         this.rulesPostImportContainerService.setUserAccount(userAccount);

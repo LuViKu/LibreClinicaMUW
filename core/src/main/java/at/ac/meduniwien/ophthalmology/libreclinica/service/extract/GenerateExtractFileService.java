@@ -74,7 +74,7 @@ public class GenerateExtractFileService {
         try {
             locale = request.getLocale();
         } catch (NullPointerException ne) {
-            locale = new Locale("en-US");
+            locale = Locale.of("en-US");
         }
 
         ResourceBundleProvider.updateLocale(locale);

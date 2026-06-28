@@ -40,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
  * @author Jun Xu
  * @deprecated
  */
+@SuppressWarnings("deprecation")
 @Deprecated
 public class DataType extends Term {
     /**

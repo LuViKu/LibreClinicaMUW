@@ -26,8 +26,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
 /**
  * @author thickerson
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
 public class ArchivedDatasetFileDAO extends AuditableEntityDAO<ArchivedDatasetFileBean> {
     private DAODigester digester;

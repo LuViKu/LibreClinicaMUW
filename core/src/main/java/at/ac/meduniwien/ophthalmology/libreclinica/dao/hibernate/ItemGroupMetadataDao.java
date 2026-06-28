@@ -33,7 +33,6 @@ public class ItemGroupMetadataDao extends AbstractDomainDao<ItemGroupMetadata> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemGroupMetadata findByItemCrfVersion(int item_id, int crf_version_id) {
         String query = "from " + getDomainClassName() + " do where do.item.itemId = :itemid and do.crfVersion.crfVersionId = :crfversionid";
         Query<ItemGroupMetadata> q = getCurrentSession().createQuery(query, ItemGroupMetadata.class);

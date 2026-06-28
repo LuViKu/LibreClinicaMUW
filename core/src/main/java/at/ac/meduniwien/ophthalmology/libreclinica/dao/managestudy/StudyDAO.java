@@ -686,7 +686,6 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudyBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -718,7 +717,6 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudyBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort,
@@ -727,7 +725,6 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudyBean> findAllByPermission(Object objCurrentUser, int intActionType) {

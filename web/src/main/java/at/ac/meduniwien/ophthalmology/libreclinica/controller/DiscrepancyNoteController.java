@@ -62,7 +62,7 @@ public class DiscrepancyNoteController {
 
 	@RequestMapping(value = "/dnote", method = RequestMethod.POST)
 	public ResponseEntity<?> buidDiscrepancyNote(@RequestBody HashMap<String, String> map, HttpServletRequest request) throws Exception {
-		ResourceBundleProvider.updateLocale(new Locale("en_US"));
+		ResourceBundleProvider.updateLocale(Locale.US);
 		logger.debug("I'm in EnketoForm DN Rest Method");
 		org.springframework.http.HttpStatus httpStatus = null;
 

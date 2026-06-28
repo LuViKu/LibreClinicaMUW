@@ -89,7 +89,7 @@ public class AnonymousFormControllerV2 {
 
     @RequestMapping(value = "/form", method = RequestMethod.POST)
     public ResponseEntity<AnonymousUrlResponse> getEnketoForm(@RequestBody HashMap<String, String> map) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         EventDefinitionCrfTagService tagService = (EventDefinitionCrfTagService) SpringServletAccess.getApplicationContext(context).getBean("eventDefinitionCrfTagService");
         String formUrl = null;
         String studyOid = map.get("studyOid");

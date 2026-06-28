@@ -21,7 +21,6 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ResponseType findByResponseTypeName(String name) {
         String query = "from " + getDomainClassName() + " response_type  where response_type.name = :name ";
         Query<ResponseType> q = getCurrentSession().createQuery(query, ResponseType.class);

@@ -26,7 +26,7 @@ import jakarta.servlet.http.HttpSession;
  */
 // @author ywang
 public final class LocaleResolver {
-	private final static Locale DEFAULT_LOCALE = new Locale("en");
+	private final static Locale DEFAULT_LOCALE = Locale.ENGLISH;
 	private final static String LOCALE_SESSION_ATTRIBUTE_NAME
 	    = SessionLocaleResolver.LOCALE_SESSION_ATTRIBUTE_NAME;
 

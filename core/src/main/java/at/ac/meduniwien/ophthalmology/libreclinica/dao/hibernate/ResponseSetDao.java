@@ -23,7 +23,6 @@ public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ResponseSet findByLabelVersion(String label, Integer version) {
         String query = "from " + getDomainClassName() + " response_set  where response_set.label = :label and response_set.versionId = :version ";
         Query<ResponseSet> q = getCurrentSession().createQuery(query, ResponseSet.class);

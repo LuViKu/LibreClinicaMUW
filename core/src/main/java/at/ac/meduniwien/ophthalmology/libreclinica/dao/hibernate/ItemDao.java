@@ -26,7 +26,6 @@ public class ItemDao extends AbstractDomainDao<Item> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public Item findByOcOID(String OCOID) {
         String query = "from " + getDomainClassName() + " item  where item.ocOid = :ocoid ";
         org.hibernate.query.Query<Item> q = getCurrentSession().createQuery(query, Item.class);

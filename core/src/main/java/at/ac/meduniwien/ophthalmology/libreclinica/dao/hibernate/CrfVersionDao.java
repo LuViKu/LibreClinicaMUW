@@ -23,7 +23,6 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CrfVersion findByCrfVersionId(int crf_version_id) {
         String query = "from " + getDomainClassName() + " crf_version  where crf_version.crfVersionId = :crfversionid ";
         Query<CrfVersion> q = getCurrentSession().createQuery(query, CrfVersion.class);
@@ -32,7 +31,6 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CrfVersion findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";

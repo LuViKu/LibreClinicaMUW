@@ -16,8 +16,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 /**
  * @author jxu
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
 public class SubjectRow extends EntityBeanRow<SubjectBean, SubjectRow> {
     // columns:

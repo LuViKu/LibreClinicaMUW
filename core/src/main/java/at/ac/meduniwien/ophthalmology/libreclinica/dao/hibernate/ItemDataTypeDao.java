@@ -21,7 +21,6 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemDataType findByItemDataTypeCode(String item_data_type_code) {
         String query = "from " + getDomainClassName() + " item_data_type  where item_data_type.code = :itemdatatypecode ";
         Query<ItemDataType> q = getCurrentSession().createQuery(query, ItemDataType.class);
@@ -30,7 +29,6 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemDataType findByItemDataTypeId(int item_data_type_id) {
         String query = "from " + getDomainClassName() + " item_data_type  where item_data_type.itemDataTypeId = :item_data_type_id ";
         Query<ItemDataType> q = getCurrentSession().createQuery(query, ItemDataType.class);
