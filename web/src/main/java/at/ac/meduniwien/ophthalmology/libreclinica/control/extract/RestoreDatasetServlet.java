@@ -80,7 +80,6 @@ public class RestoreDatasetServlet extends SecureController {
         // ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.words",locale);
 
         if (ub.isSysAdmin()) {
-            return;// TODO limit to owner only?
         }
         if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)
             || currentRole.getRole().equals(Role.INVESTIGATOR)) {

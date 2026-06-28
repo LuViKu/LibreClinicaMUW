@@ -138,7 +138,6 @@ public class DataEntryRuleRunner extends RuleRunner {
                                 new Object[] { ruleSet.getTarget().getValue(), rule.getName(), result, actionListBasedOnRuleExecutionResult.size(),
                                     executionMode.name() });
                     } catch (OpenClinicaSystemException osa) {
-                        // TODO: report something useful 
                     }
                 }
             }

@@ -1791,7 +1791,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
          */
 
         /*
-         * TODO: why date constraint has been hard-coded ???
          */
         return " SELECT  " + " itemdataid,  " + " studysubjectid, study_event.sample_ordinal,  " + " study_event.study_event_definition_id,   "
                 + " study_event_definition.name, study_event.location, study_event.date_start, study_event.date_end, "
@@ -1956,7 +1955,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
          */
 
         /*
-         * TODO: why date constraint has been hard-coded ???
          */
 
         return " SELECT  " + " itemdataid,  itemdataordinal,"

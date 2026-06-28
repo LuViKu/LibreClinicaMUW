@@ -80,7 +80,7 @@ public class UpdateJobExportServlet extends SecureController {
         // should it be only study directors and admins, not coordinators?
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
         // above copied from create dataset servlet, needs to be changed to
         // allow only admin-level users
 
@@ -96,7 +96,6 @@ public class UpdateJobExportServlet extends SecureController {
 
         DatasetDAO dsdao = new DatasetDAO(sm.getDataSource());
         ArrayList<DatasetBean> dsList = dsdao.findAllOrderByStudyIdAndName();
-        // TODO will have to dress this up to allow for sites then datasets
         request.setAttribute("datasets", dsList);
         request.setAttribute(CreateJobExportServlet.JOB_NAME, trigger.getKey().getName());
         request.setAttribute(CreateJobExportServlet.JOB_DESC, trigger.getDescription());
@@ -132,7 +131,6 @@ public class UpdateJobExportServlet extends SecureController {
         // request.setAttribute(DATE_START_JOB, fp2.getDateTime(DATE_START_JOB +
         // "Date"));
         // EMAIL, TAB, CDISC, SPSS, PERIOD, DATE_START_JOB
-        // TODO pick out the datasets and the date
     }
 
     @Override
@@ -277,7 +275,6 @@ public class UpdateJobExportServlet extends SecureController {
         v.addValidation(PERIOD, Validator.NO_BLANKS);
         v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
         // v.addValidation(DATE_START_JOB + "Date", new Date(), Validator.DATE_IS_AFTER_OR_EQUAL);
-        // TODO job names will have to be unique, tbh
 
         int formatId = fp.getInt(FORMAT_ID);
         Date jobDate = fp.getDateTime(DATE_START_JOB);

@@ -48,7 +48,6 @@ public class XalanTransformJob extends QuartzJobBean {
     protected void executeInternal(JobExecutionContext context) throws JobExecutionException {
         // need to generate a Locale so that user beans and other things will
         // generate normally
-        // TODO make dynamic?
         Locale locale = Locale.of("en-US");
         ResourceBundleProvider.updateLocale(locale);
         JobDataMap dataMap = context.getMergedJobDataMap();

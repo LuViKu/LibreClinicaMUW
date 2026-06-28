@@ -118,7 +118,6 @@ public class TriggerService {
         v.addValidation(PERIOD, Validator.NO_BLANKS);
         v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
         // v.addValidation(DATE_START_JOB + "Date", new Date(), Validator.DATE_IS_AFTER_OR_EQUAL);
-        // TODO job names will have to be unique, tbh
 
         String tab = fp.getString(TAB);
         String cdisc = fp.getString(CDISC);
@@ -301,7 +300,6 @@ public class TriggerService {
         // v.addValidation(DIRECTORY, Validator.NO_BLANKS);
         // v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
 
-        // TODO job names will have to be unique, tbh
 
         String hours = fp.getString("hours");
         String minutes = fp.getString("minutes");

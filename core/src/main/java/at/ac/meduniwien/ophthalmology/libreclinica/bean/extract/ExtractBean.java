@@ -2346,7 +2346,6 @@ public class ExtractBean {
                 peventCrfCompletionStatusId, pitemGroupRepeatNumber, pcrfId, pstudySubjectId, peventCrfId, pitemId, pcrfVersionId, eventcrfStatusId);
 
         hBASE_ITEMGROUPSIDE.add(obj);
-        // TODO - verify that the order is the same
 
     }// addEntryBASE_ITEMGROUPSIDE
 
@@ -2383,7 +2382,6 @@ public class ExtractBean {
                 pstudyEventSubjectEventStatusId, pitemId, pcrfVersionId, peventCrfId, pstudyEventId);
 
         hBASE_EVENTSIDE.add(obj);
-        // TODO - verify that the order is the same
 
     }// addEntryBASE_EVENTSIDE
 
@@ -2404,7 +2402,6 @@ public class ExtractBean {
      *
      */
     public class extractDataset_EVENTSIDE {
-        // TODO - could be made private and then get/set
 
         // "primary key"
         public Integer itemDataId;
@@ -2600,7 +2597,6 @@ public class ExtractBean {
      */
     public class extractDataset_ITEMGROUPSIDE {
 
-        // TODO - could be made private and then get/set
 
         // this is the key
         public Integer itemDataId;

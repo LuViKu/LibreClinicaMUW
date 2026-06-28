@@ -152,7 +152,6 @@ public class ImportDataRuleRunner extends RuleRunner {
                         logger.info("RuleSet with target  : {} , Ran Rule : {}  The Result was : {} , Based on that {} action will be executed. ",
                                 new Object[] { ruleSet.getTarget().getValue(), rule.getName(), result, actionListBasedOnRuleExecutionResult.size()});
                     } catch (OpenClinicaSystemException osa) {
-                        // TODO: report something useful
                     }
                 }
             }

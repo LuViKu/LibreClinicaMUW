@@ -122,8 +122,6 @@ public class GenerateExtractFileService {
     }
     /**
      * createODMfile, added by tbh, 01/2009
-     * @param deleteOld TODO
-     * @param odmType TODO
      * @deprecated Use {@link OdmFileCreation#createODMFile} instead
      */
     @Deprecated

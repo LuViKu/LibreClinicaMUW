@@ -137,7 +137,6 @@ public class EditFilterServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
-        // TODO add a limit so that the owner can edit, no one else?
     }
 
     private ArrayList<Status> getStatuses() {
