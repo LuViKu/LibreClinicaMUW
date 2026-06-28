@@ -10,6 +10,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
 
 import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -43,7 +44,7 @@ public class EnketoAPI {
     public String getOfflineFormURL(String crfOID) throws Exception {
         if (enketoURL == null)
             return "";
-        URL eURL = new URL(enketoURL + "/api/v2/survey/offline");
+        URL eURL = URI.create(enketoURL + "/api/v2/survey/offline").toURL();
         EnketoURLResponse response = getURL(eURL, crfOID);
         if (response != null) {
             String myUrl = response.getOffline_url();
@@ -58,7 +59,7 @@ public class EnketoAPI {
     public String getFormURL(String crfOID) throws Exception {
         if (enketoURL == null)
             return "";
-        URL eURL = new URL(enketoURL + "/api/v2/survey/iframe");
+        URL eURL = URI.create(enketoURL + "/api/v2/survey/iframe").toURL();
         EnketoURLResponse response = getURL(eURL, crfOID);
         if (response != null) {
             String myUrl = response.getIframe_url();
@@ -73,7 +74,7 @@ public class EnketoAPI {
     public String getFormPreviewURL(String crfOID) throws Exception {
         if (enketoURL == null)
             return "";
-        URL eURL = new URL(enketoURL + "/api/v1/survey/preview");
+        URL eURL = URI.create(enketoURL + "/api/v1/survey/preview").toURL();
         EnketoURLResponse response = getURL(eURL, crfOID);
         if (response != null)
             return response.getPreview_url();
@@ -120,7 +121,7 @@ public class EnketoAPI {
             // + Hex.encode drops the deprecation noise.
             String instanceId = sha256Hex(hashString);
 
-            URL eURL = new URL(enketoURL + "/api/v1/instance/iframe");
+            URL eURL = URI.create(enketoURL + "/api/v1/instance/iframe").toURL();
             String userPasswdCombo = new String(Base64.encodeBase64((token + ":").getBytes()));
 
             HttpHeaders headers = new HttpHeaders();

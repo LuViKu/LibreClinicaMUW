@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -191,7 +192,7 @@ public class EditFormController {
             ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
             Authorization pManageAuthorization = registrar.getAuthorization(studyOid);
             try {
-                URL pManageUrl = new URL(portalURL);
+                URL pManageUrl = URI.create(portalURL).toURL();
 
                 if (pManageAuthorization != null && pManageAuthorization.getStudy() != null && pManageAuthorization.getStudy().getHost() != null
                         && !pManageAuthorization.getStudy().getHost().equals("")) {
