@@ -20,7 +20,6 @@ public class CompletionStatusDao extends AbstractDomainDao<CompletionStatus> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CompletionStatus findByCompletionStatusId(int completion_status_id) {
         String query = "from " + getDomainClassName() + " completion_status  where completion_status.completionStatusId = :completionstatusid ";
         Query<CompletionStatus> q = getCurrentSession().createQuery(query, CompletionStatus.class);

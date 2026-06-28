@@ -57,7 +57,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
      * @return List of RuleSetRuleBeans 
      */
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
     public ArrayList<RuleSetRuleBean> findByRuleSetStudyIdAndStatusAvail(Integer studyId) {
         String query = "from " + getDomainClassName() + " ruleSetRule  where ruleSetRule.ruleSetBean.studyId = :studyId and status = :status ";

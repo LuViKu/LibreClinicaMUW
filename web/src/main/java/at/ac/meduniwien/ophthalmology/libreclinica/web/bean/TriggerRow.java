@@ -66,7 +66,6 @@ public class TriggerRow extends EntityBeanRow<TriggerBean, TriggerRow> {
 
 	@Override
 	public ArrayList<TriggerRow> generatRowsFromBeans(ArrayList<TriggerBean> beans) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

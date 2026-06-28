@@ -17,7 +17,6 @@ public class CrfVersionMediaDao extends AbstractDomainDao<CrfVersionMedia> {
 
     @Override
     Class<CrfVersionMedia> domainClass() {
-        // TODO Auto-generated method stub
         return CrfVersionMedia.class;
     }
 

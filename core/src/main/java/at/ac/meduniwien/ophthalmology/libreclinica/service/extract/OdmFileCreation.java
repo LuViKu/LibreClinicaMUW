@@ -290,7 +290,7 @@ public class OdmFileCreation {
 //
 //        }   // return ODMXMLFileName;
 
-        answerMap.put(ODMXMLFileName, new Integer(fId));
+        answerMap.put(ODMXMLFileName, Integer.valueOf(fId));
     //    if(deleteOld && files!=null &&oldFiles!=null) setOldFiles(oldFiles);
 
         return answerMap;
@@ -390,7 +390,6 @@ public class OdmFileCreation {
                 try {
                     w.close();
                 } catch (IOException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
         }

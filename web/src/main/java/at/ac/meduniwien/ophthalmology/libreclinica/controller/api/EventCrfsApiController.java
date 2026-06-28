@@ -1202,7 +1202,6 @@ public class EventCrfsApiController {
 
         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
         dnDao.setFetchMapping(true);
-        @SuppressWarnings("unchecked")
         List<DiscrepancyNoteBean> notes = dnDao.findAllParentItemNotesByEventCRF(eventCrfId);
         if (notes == null) notes = new ArrayList<>();
 
@@ -1292,7 +1291,6 @@ public class EventCrfsApiController {
 
         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
         dnDao.setFetchMapping(true);
-        @SuppressWarnings("unchecked")
         List<DiscrepancyNoteBean> notes = dnDao.findAllParentItemNotesByEventCRF(eventCrfId);
         if (notes == null) notes = new ArrayList<>();
         ItemDAO itemDAO = new ItemDAO(dataSource);
@@ -2302,12 +2300,10 @@ public class EventCrfsApiController {
     @SuppressWarnings("unused") // companion to the removed auto-cascade; retained for a future per-study opt-in
     private boolean allRequiredEventCrfsComplete(StudyEventBean ev) {
         EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
-        @SuppressWarnings("unchecked")
         List<EventDefinitionCRFBean> edcs =
                 edcDAO.findAllParentsByEventDefinitionId(ev.getStudyEventDefinitionId());
         if (edcs == null || edcs.isEmpty()) return false;
         EventCRFDAO ecDAO = new EventCRFDAO(dataSource);
-        @SuppressWarnings("unchecked")
         List<EventCRFBean> ecs = ecDAO.findAllByStudyEvent(ev);
         for (EventDefinitionCRFBean edc : edcs) {
             if (edc == null || !edc.isRequiredCRF()) continue;
@@ -2930,7 +2926,6 @@ public class EventCrfsApiController {
             CRFVersionBean cv = (CRFVersionBean) cvDAO.findByPK(ecb.getCRFVersionId());
             if (cv == null || cv.getId() == 0) return false;
             EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
-            @SuppressWarnings("unchecked")
             List<EventDefinitionCRFBean> edcs =
                     edcDAO.findAllParentsByEventDefinitionId(ev.getStudyEventDefinitionId());
             if (edcs == null) return false;

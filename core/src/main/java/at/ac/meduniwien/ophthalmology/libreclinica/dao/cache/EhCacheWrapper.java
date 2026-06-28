@@ -52,7 +52,6 @@ public class EhCacheWrapper<K, V> implements CacheWrapper<K, V> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public V get(final K key) {
         String dbType = CoreResources.getField("dbType");
         if (!"postgres".equalsIgnoreCase(dbType)) {

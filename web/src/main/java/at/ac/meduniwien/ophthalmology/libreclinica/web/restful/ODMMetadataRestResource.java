@@ -200,7 +200,6 @@ public void setMetadataCollectorResource(
       try {
 		getPrintServer(request, response, json, studyOID, eventOID, formVersionOID);
 	} catch (Exception e) {
-		// TODO Auto-generated catch block
 		e.printStackTrace();
 	}
     return jakarta.ws.rs.core.Response.ok().type("application/pdf").build();
@@ -215,7 +214,6 @@ public void setMetadataCollectorResource(
       try {
 		getPrintServer(request, response, json);
 	} catch (Exception e) {
-		// TODO Auto-generated catch block
 		e.printStackTrace();
 	}
       File file = new File("...");

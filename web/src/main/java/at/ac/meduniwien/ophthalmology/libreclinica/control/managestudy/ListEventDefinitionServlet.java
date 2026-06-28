@@ -154,7 +154,7 @@ public class ListEventDefinitionServlet extends SecureController {
         table.computeDisplay();
 
         request.setAttribute("table", table);
-        request.setAttribute("defSize", new Integer(seds.size()));
+        request.setAttribute("defSize", Integer.valueOf(seds.size()));
 
         if (request.getParameter("read") != null && request.getParameter("read").equals("true")) {
             request.setAttribute("readOnly", true);

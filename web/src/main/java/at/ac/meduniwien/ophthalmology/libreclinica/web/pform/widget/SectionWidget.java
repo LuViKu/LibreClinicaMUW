@@ -38,7 +38,6 @@ public class SectionWidget extends BaseWidget {
 
 	@Override
 	public UserControl getUserControl() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

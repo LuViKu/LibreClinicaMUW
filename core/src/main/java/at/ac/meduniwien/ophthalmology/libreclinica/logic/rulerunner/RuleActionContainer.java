@@ -62,7 +62,6 @@ public class RuleActionContainer implements Comparable<RuleActionBean> {
     }
 
     public int compareTo(RuleActionBean o) {
-        // TODO Auto-generated method stub
         return 0;
     }
 }

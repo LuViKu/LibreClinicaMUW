@@ -61,7 +61,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
  * @author ywang (May, 2008)
  */
 
-@SuppressWarnings("deprecation")
 public class MetaDataReportBean extends OdmXmlReportBean {
     private OdmStudyBean odmstudy;
     private LinkedHashMap<String, OdmStudyBean> odmStudyMap;

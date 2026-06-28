@@ -125,7 +125,7 @@ public final class SpreadsheetPreview implements Preview {
                     }
                     // item_name
 
-                    allRows.put(new Integer(j), rowCells);
+                    allRows.put(Integer.valueOf(j), rowCells);
                 }// end inner for loop
             }// end if
         }// end outer for
@@ -181,7 +181,7 @@ public final class SpreadsheetPreview implements Preview {
             return "";
         switch (cell.getCellType()) {
         case STRING:
-            @SuppressWarnings("deprecation") String stringCellValue = cell.getStringCellValue();
+             String stringCellValue = cell.getStringCellValue();
 			return stringCellValue;
         case NUMERIC:
             return Double.toString(cell.getNumericCellValue());
@@ -232,7 +232,7 @@ public final class SpreadsheetPreview implements Preview {
 
                         switch (cell.getCellType()) {
                         case STRING:
-                            @SuppressWarnings("deprecation") String stringCellValue = cell.getStringCellValue();
+                             String stringCellValue = cell.getStringCellValue();
 							val = stringCellValue;
                             break;
                         case NUMERIC:

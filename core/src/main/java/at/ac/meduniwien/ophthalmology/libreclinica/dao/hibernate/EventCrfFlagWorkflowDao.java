@@ -15,7 +15,6 @@ public class EventCrfFlagWorkflowDao extends AbstractDomainDao<EventCrfFlagWorkf
 
     @Override
     Class<EventCrfFlagWorkflow> domainClass() {
-        // TODO Auto-generated method stub
         return EventCrfFlagWorkflow.class;
     }
 

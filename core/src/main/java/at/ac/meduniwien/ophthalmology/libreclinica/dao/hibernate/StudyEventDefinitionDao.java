@@ -21,7 +21,6 @@ public class StudyEventDefinitionDao extends AbstractDomainDao<StudyEventDefinit
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudyEventDefinition findByStudyEventDefinitionId(int studyEventDefinitionId) {
         String query = "from " + getDomainClassName() + " study_event_definition  where study_event_definition.studyEventDefinitionId = :studyeventdefinitionid ";
         Query<StudyEventDefinition> q = getCurrentSession().createQuery(query, StudyEventDefinition.class);

@@ -22,7 +22,6 @@ public class ViewAllJobsServlet extends SecureController {
 
 	@Override
     protected void mayProceed() throws InsufficientPermissionException {
-        // TODO Auto-generated method stub
         if (ub.isSysAdmin() || ub.isTechAdmin()) {
             return;
         }
@@ -38,7 +37,6 @@ public class ViewAllJobsServlet extends SecureController {
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO Auto-generated method stub
         forwardPage(Page.VIEW_ALL_JOBS);
     }
 

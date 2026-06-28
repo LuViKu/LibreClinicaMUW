@@ -16,7 +16,6 @@ public class ItemReferenceTypeDao extends AbstractDomainDao<ItemReferenceType> {
 
     @Override
     Class<ItemReferenceType> domainClass() {
-        // TODO Auto-generated method stub
         return ItemReferenceType.class;
     }
 

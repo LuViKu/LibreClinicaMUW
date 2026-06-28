@@ -22,7 +22,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ItemData findByItemEventCrfOrdinal(Integer itemId, Integer eventCrfId, Integer ordinal) {
         String query = "from " + getDomainClassName()
                 + " item_data where item_data.item.itemId = :itemid and item_data.eventCrf.eventCrfId = :eventcrfid and item_data.ordinal = :ordinal";
@@ -60,7 +59,6 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public List<ItemData> findByEventCrfId(Integer eventCrfId) {
         String query = "from " + getDomainClassName() + " item_data where item_data.eventCrf.eventCrfId = :eventcrfid";
         Query<ItemData> q = getCurrentSession().createQuery(query, ItemData.class);

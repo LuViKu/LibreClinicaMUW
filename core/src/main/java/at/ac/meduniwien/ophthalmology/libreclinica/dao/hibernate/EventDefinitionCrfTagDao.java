@@ -16,7 +16,6 @@ public class EventDefinitionCrfTagDao extends AbstractDomainDao<EventDefinitionC
 
     @Override
     Class<EventDefinitionCrfTag> domainClass() {
-        // TODO Auto-generated method stub
         return EventDefinitionCrfTag.class;
     }
 

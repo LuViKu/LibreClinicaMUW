@@ -17,7 +17,6 @@ public class ItemDataTypeDao extends AbstractDomainDao<ItemDataType> {
 
     @Override
     Class<ItemDataType> domainClass() {
-        // TODO Auto-generated method stub
         return ItemDataType.class;
     }
 

@@ -164,7 +164,6 @@ public class RuleActionBean extends AbstractAuditableMutableDomainObject impleme
 
     @Transient
     public int compareTo(ActionType o) {
-        // TODO Auto-generated method stub
         return 0;
     }
 

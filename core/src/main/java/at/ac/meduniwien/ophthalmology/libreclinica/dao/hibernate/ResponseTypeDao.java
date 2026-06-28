@@ -17,7 +17,6 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
 
     @Override
     Class<ResponseType> domainClass() {
-        // TODO Auto-generated method stub
         return ResponseType.class;
     }
 

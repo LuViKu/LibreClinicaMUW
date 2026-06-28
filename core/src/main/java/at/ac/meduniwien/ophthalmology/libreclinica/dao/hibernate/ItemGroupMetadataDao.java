@@ -20,7 +20,6 @@ public class ItemGroupMetadataDao extends AbstractDomainDao<ItemGroupMetadata> {
 
     @Override
     Class<ItemGroupMetadata> domainClass() {
-        // TODO Auto-generated method stub
         return ItemGroupMetadata.class;
     }
 

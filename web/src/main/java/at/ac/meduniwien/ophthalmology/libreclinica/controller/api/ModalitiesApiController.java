@@ -375,7 +375,6 @@ public class ModalitiesApiController {
         String od = trim(itemOidOd);
         String os = trim(itemOidOs);
         if (!od.isEmpty()) {
-            @SuppressWarnings("rawtypes")
             ArrayList<ItemBean> matches = itemDAO.findByOid(od);
             if (matches == null || matches.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -383,7 +382,6 @@ public class ModalitiesApiController {
             }
         }
         if (!os.isEmpty()) {
-            @SuppressWarnings("rawtypes")
             ArrayList<ItemBean> matches = itemDAO.findByOid(os);
             if (matches == null || matches.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(

@@ -27,7 +27,6 @@ public class EventActionProcessor implements ActionProcessor {
 			ExecutionMode executionMode, RuleActionBean ruleAction,
 			ItemDataBean itemDataBean, String itemData, StudyBean currentStudy,
 			UserAccountBean ub, Object... arguments) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

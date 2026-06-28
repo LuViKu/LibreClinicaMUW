@@ -337,7 +337,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
         this.setTypeExpected(30, TypeNames.INT);// repeat_max
         this.setTypeExpected(31, TypeNames.STRING);// section_name
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(itemId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(itemId));
 
         String sql = digester.getQuery("findAllByItemId");
         // logger.info("<<<found SQL: "+sql);
@@ -347,7 +347,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
             String versionName = (String) hm.get("cvname");
             String groupLabel = (String) hm.get("group_label");
             String sectionName = (String) hm.get("section_name");
-            int repeatMax = new Integer((Integer) hm.get("repeat_max")).intValue();
+            int repeatMax = Integer.valueOf((Integer) hm.get("repeat_max")).intValue();
             ifmb.setCrfVersionName(versionName);
             ifmb.setGroupLabel(groupLabel);
             // logger.info(">>>added group name: "+groupLabel);
@@ -374,7 +374,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
         this.setTypeExpected(30, TypeNames.INT);// repeat_max
         this.setTypeExpected(31, TypeNames.STRING);// section_name
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(itemId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(itemId));
 
         String sql = digester.getQuery("findAllByItemIdAndHasValidations");
         // logger.info("<<<found SQL: "+sql);
@@ -384,7 +384,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
             String versionName = (String) hm.get("cvname");
             String groupLabel = (String) hm.get("group_label");
             String sectionName = (String) hm.get("section_name");
-            int repeatMax = new Integer((Integer) hm.get("repeat_max")).intValue();
+            int repeatMax = Integer.valueOf((Integer) hm.get("repeat_max")).intValue();
             ifmb.setCrfVersionName(versionName);
             ifmb.setGroupLabel(groupLabel);
             // logger.info(">>>added group name: "+groupLabel);
@@ -430,51 +430,51 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
 
         int ind = 0;
         int id = getNextPK();
-        variables.put(new Integer(ind), new Integer(id));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(id));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getItemId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getItemId()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getCrfVersionId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getCrfVersionId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getHeader());
+        variables.put(Integer.valueOf(ind), ifmb.getHeader());
         ind++;
-        variables.put(new Integer(ind), ifmb.getSubHeader());
+        variables.put(Integer.valueOf(ind), ifmb.getSubHeader());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getParentId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getParentId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getParentLabel());
+        variables.put(Integer.valueOf(ind), ifmb.getParentLabel());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getColumnNumber()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getColumnNumber()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getPageNumberLabel());
+        variables.put(Integer.valueOf(ind), ifmb.getPageNumberLabel());
         ind++;
-        variables.put(new Integer(ind), ifmb.getQuestionNumberLabel());
+        variables.put(Integer.valueOf(ind), ifmb.getQuestionNumberLabel());
         ind++;
-        variables.put(new Integer(ind), ifmb.getLeftItemText());
+        variables.put(Integer.valueOf(ind), ifmb.getLeftItemText());
         ind++;
-        variables.put(new Integer(ind), ifmb.getRightItemText());
+        variables.put(Integer.valueOf(ind), ifmb.getRightItemText());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getSectionId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getSectionId()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getDescisionConditionId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getDescisionConditionId()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getResponseSetId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getResponseSetId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getRegexp());
+        variables.put(Integer.valueOf(ind), ifmb.getRegexp());
         ind++;
-        variables.put(new Integer(ind), ifmb.getRegexpErrorMsg());
+        variables.put(Integer.valueOf(ind), ifmb.getRegexpErrorMsg());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getOrdinal()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getOrdinal()));
         ind++;
-        variables.put(new Integer(ind), new Boolean(ifmb.isRequired()));
+        variables.put(Integer.valueOf(ind), Boolean.valueOf(ifmb.isRequired()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getDefaultValue());
+        variables.put(Integer.valueOf(ind), ifmb.getDefaultValue());
         ind++;
-        variables.put(new Integer(ind), ifmb.getResponseLayout());
+        variables.put(Integer.valueOf(ind), ifmb.getResponseLayout());
         ind++;
-        variables.put(new Integer(ind), ifmb.getWidthDecimal());
+        variables.put(Integer.valueOf(ind), ifmb.getWidthDecimal());
         ind++;
-        variables.put(new Integer(ind), new Boolean(ifmb.isShowItem()));
+        variables.put(Integer.valueOf(ind), Boolean.valueOf(ifmb.isShowItem()));
 
         executeUpdate("create", variables);
 
@@ -495,53 +495,53 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
 
         int ind = 0;
 
-        variables.put(new Integer(ind), new Integer(ifmb.getItemId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getItemId()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getCrfVersionId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getCrfVersionId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getHeader());
+        variables.put(Integer.valueOf(ind), ifmb.getHeader());
         ind++;
-        variables.put(new Integer(ind), ifmb.getSubHeader());
+        variables.put(Integer.valueOf(ind), ifmb.getSubHeader());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getParentId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getParentId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getParentLabel());
+        variables.put(Integer.valueOf(ind), ifmb.getParentLabel());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getColumnNumber()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getColumnNumber()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getPageNumberLabel());
+        variables.put(Integer.valueOf(ind), ifmb.getPageNumberLabel());
         ind++;
-        variables.put(new Integer(ind), ifmb.getQuestionNumberLabel());
+        variables.put(Integer.valueOf(ind), ifmb.getQuestionNumberLabel());
         ind++;
-        variables.put(new Integer(ind), ifmb.getLeftItemText());
+        variables.put(Integer.valueOf(ind), ifmb.getLeftItemText());
         ind++;
-        variables.put(new Integer(ind), ifmb.getRightItemText());
+        variables.put(Integer.valueOf(ind), ifmb.getRightItemText());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getSectionId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getSectionId()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getDescisionConditionId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getDescisionConditionId()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getResponseSetId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getResponseSetId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getRegexp());
+        variables.put(Integer.valueOf(ind), ifmb.getRegexp());
         ind++;
-        variables.put(new Integer(ind), ifmb.getRegexpErrorMsg());
+        variables.put(Integer.valueOf(ind), ifmb.getRegexpErrorMsg());
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getOrdinal()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getOrdinal()));
         ind++;
-        variables.put(new Integer(ind), new Boolean(ifmb.isRequired()));
+        variables.put(Integer.valueOf(ind), Boolean.valueOf(ifmb.isRequired()));
         ind++;
-        variables.put(new Integer(ind), new Integer(ifmb.getId()));
+        variables.put(Integer.valueOf(ind), Integer.valueOf(ifmb.getId()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getDefaultValue());
+        variables.put(Integer.valueOf(ind), ifmb.getDefaultValue());
         ind++;
-        variables.put(new Integer(ind), ifmb.getResponseLayout());
+        variables.put(Integer.valueOf(ind), ifmb.getResponseLayout());
         ind++;
-        variables.put(new Integer(ind), ifmb.getWidthDecimal());
+        variables.put(Integer.valueOf(ind), ifmb.getWidthDecimal());
         ind++;
-        variables.put(new Integer(ind), new Boolean(ifmb.isShowItem()));
+        variables.put(Integer.valueOf(ind), Boolean.valueOf(ifmb.isShowItem()));
         ind++;
-        variables.put(new Integer(ind), ifmb.getId());
+        variables.put(Integer.valueOf(ind), ifmb.getId());
 
         executeUpdate("update", variables);
 
@@ -594,8 +594,8 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
 
         logMe("Current Thread:::"+Thread.currentThread()+"types Expected?");
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(itemId));
-        variables.put(new Integer(2), new Integer(crfVersionId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(itemId));
+        variables.put(Integer.valueOf(2), Integer.valueOf(crfVersionId));
 
 
         String sql = digester.getQuery("findByItemIdAndCRFVersionId");
@@ -622,7 +622,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
         Integer repeatMax = (Integer) hm.get("repeat_max");
         int repeatMaxInt = repeatMax != null ? repeatMax.intValue() : 0;
         // caught an NPE here, tbh 082007?
-        // new Integer((Integer)hm.get("repeat_max")).intValue();
+        // Integer.valueOf((Integer)hm.get("repeat_max")).intValue();
         ifmb.setCrfVersionName(versionName);
         ifmb.setGroupLabel(groupLabel);
         // logger.info(">>>added group name: "+groupLabel);
@@ -677,7 +677,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), sectionId);
+        variables.put(Integer.valueOf(1), sectionId);
         //String sql = "select ifm.item_form_metadata_id from item_form_metadata ifm, response_set rs"
         //    +" where rs.response_type_id = 10 and ifm.section_id = ? and ifm.response_set_id = rs.response_set_id limit 1";
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("instantTypeExistsInSection"), variables, true);
@@ -691,11 +691,11 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
         Map<Integer,List<InstantOnChangePairContainer>> pairs = new HashMap<Integer,List<InstantOnChangePairContainer>>();
         this.setInstantTypesExpected();
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), crfVersionId);
-        variables.put(new Integer(2), crfVersionId);
-        variables.put(new Integer(3), crfVersionId);
-        variables.put(new Integer(4), crfVersionId);
-        variables.put(new Integer(5), crfVersionId);
+        variables.put(Integer.valueOf(1), crfVersionId);
+        variables.put(Integer.valueOf(2), crfVersionId);
+        variables.put(Integer.valueOf(3), crfVersionId);
+        variables.put(Integer.valueOf(4), crfVersionId);
+        variables.put(Integer.valueOf(5), crfVersionId);
         String sql = digester.getQuery("findInstantItemsByCrfVersionId");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables, true);
         for(HashMap<String, Object> row : alist) {

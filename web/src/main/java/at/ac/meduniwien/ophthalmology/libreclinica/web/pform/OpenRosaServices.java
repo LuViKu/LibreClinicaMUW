@@ -682,7 +682,6 @@ public class OpenRosaServices {
 
         @Override
         public void write(OutputStream out) throws IOException, WebApplicationException {
-            // TODO Auto-generated method stub
             IOUtils.copy(in, out);
             in.close();
             out.close();

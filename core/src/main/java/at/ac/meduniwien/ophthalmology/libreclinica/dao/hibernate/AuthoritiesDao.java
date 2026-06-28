@@ -20,7 +20,6 @@ public class AuthoritiesDao extends AbstractDomainDao<AuthoritiesBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public AuthoritiesBean findByUsername(String username) {
         String query = "from " + getDomainClassName() + " authorities  where authorities.username = :username ";
         org.hibernate.query.Query<AuthoritiesBean> q = getCurrentSession().createQuery(query, AuthoritiesBean.class);

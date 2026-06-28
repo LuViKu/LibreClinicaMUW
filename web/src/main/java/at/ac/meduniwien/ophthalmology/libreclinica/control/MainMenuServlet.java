@@ -193,7 +193,7 @@ public class MainMenuServlet extends SecureController {
                 if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
                     //Shaoyu Su
                     //int nextLabel = this.getStudySubjectDAO().findTheGreatestLabel() + 1;
-                    //request.setAttribute("label", new Integer(nextLabel).toString());
+                    //request.setAttribute("label", Integer.valueOf(nextLabel).toString());
                     request.setAttribute("label", resword.getString("id_generated_Save_Add"));
                     //@pgawade 27-June-2012 fix for issue 13477: set label to "ID will be generated on Save or Add" in case of auto generated subject id
                     fp.addPresetValue("label", resword.getString("id_generated_Save_Add"));
@@ -302,7 +302,6 @@ public class MainMenuServlet extends SecureController {
         request.setAttribute("subjectEventStatusStatisticsRows", rows);
     }
 
-    @SuppressWarnings("unchecked")
     private void setupStudySiteStatisticsTable() {
         StudyDAO studyDao = getStudyDAO();
         StudySubjectDAO subjectDao = getStudySubjectDAO();

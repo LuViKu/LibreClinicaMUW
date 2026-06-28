@@ -123,7 +123,6 @@ public class CoreResources implements ResourceLoaderAware {
                 extractInfo = OC_dataExtractProperties;
 
         } catch (Exception e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
     }

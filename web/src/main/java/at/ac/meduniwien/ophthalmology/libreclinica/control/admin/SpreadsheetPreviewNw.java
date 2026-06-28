@@ -201,7 +201,6 @@ public final class SpreadsheetPreviewNw implements Preview {
         HSSFCell cell;
         sheet = workbook.getSheetAt(4);
         cell = sheet.getRow(1).getCell((short) 0);
-        @SuppressWarnings("deprecation")
 		String version = cell.getStringCellValue();
         // static group headers for a CRF; TODO: change these so they are not
         // static and hard-coded
@@ -252,7 +251,7 @@ public final class SpreadsheetPreviewNw implements Preview {
         // new SimpleDateFormat("yyyy-MM-dd").format(cell.getDateCellValue());
         switch (cell.getCellType()) {
         case STRING:
-            @SuppressWarnings("deprecation") String stringCellValue = cell.getStringCellValue();
+             String stringCellValue = cell.getStringCellValue();
 			return stringCellValue;
         case NUMERIC:
             val = Double.toString(cell.getNumericCellValue());
@@ -305,7 +304,7 @@ public final class SpreadsheetPreviewNw implements Preview {
 
                         switch (cell.getCellType()) {
                         case STRING:
-                            @SuppressWarnings("deprecation") String stringCellValue = cell.getStringCellValue();
+                             String stringCellValue = cell.getStringCellValue();
 							val = stringCellValue;
                             break;
                         case NUMERIC:

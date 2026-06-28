@@ -264,7 +264,7 @@ public class XsltTransformJob extends QuartzJobBean {
                 // logic to prevent deleting the file being created.
 
             }
-            final double done = setFormat(new Double(System.currentTimeMillis() - start)/1000);
+            final double done = setFormat(Double.valueOf(System.currentTimeMillis() - start)/1000);
             logger.info("--> job completed in " + done + " ms");
             // run post processing
 

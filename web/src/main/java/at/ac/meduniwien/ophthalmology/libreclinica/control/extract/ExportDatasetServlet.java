@@ -459,7 +459,7 @@ public class ExportDatasetServlet extends SecureController {
         }
         logger.info("Found file length: " + datasetFile.length());
         logger.info("Last Modified: " + datasetFile.lastModified());
-        adfb.setFileSize(new Long(datasetFile.length()).intValue());
+        adfb.setFileSize(Long.valueOf(datasetFile.length()).intValue());
         adfb.setExportFormatId(formatId);
         adfb.setWebPath(relativePath);
         adfb.setDateCreated(new java.util.Date(datasetFile.lastModified()));

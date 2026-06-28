@@ -22,7 +22,6 @@ public class ItemDao extends AbstractDomainDao<Item> {
 
     @Override
     Class<Item> domainClass() {
-        // TODO Auto-generated method stub
         return Item.class;
     }
 

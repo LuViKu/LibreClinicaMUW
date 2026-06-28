@@ -892,7 +892,7 @@ public class OdmExtractDAO extends DatasetDAO {
     	formDetails.setParentFormOid(crfBean.getOid());
     	
     	
-    setSectionBean(formDetails,new Integer(crfVBean.getId()));
+    setSectionBean(formDetails,Integer.valueOf(crfVBean.getId()));
     	
     formDef.setFormDetails(formDetails);
     	
@@ -2920,7 +2920,6 @@ public class OdmExtractDAO extends DatasetDAO {
                 stage = DataEntryStage.LOCKED;
             }
         } catch (NullPointerException e) {
-            // TODO Auto-generated catch block
 			logger.debug("caught NPE here");
         }
 

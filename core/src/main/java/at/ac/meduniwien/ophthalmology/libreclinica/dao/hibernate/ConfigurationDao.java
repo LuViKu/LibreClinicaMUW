@@ -29,7 +29,6 @@ public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
     public ConfigurationBean findByKey(String key) {
         String query = "from " + getDomainClassName() + " do where do.key = :key  ";

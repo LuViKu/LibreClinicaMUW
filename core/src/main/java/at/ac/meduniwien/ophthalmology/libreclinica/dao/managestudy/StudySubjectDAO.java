@@ -660,7 +660,7 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
             variables.put(ind++, enrollmentDate);
         }
         // date_updated is set to now()
-        // variables.put(new Integer(ind), new java.util.Date());
+        // variables.put(Integer.valueOf(ind), new java.util.Date());
         variables.put(ind++, sb.getUpdater().getId());
         variables.put(ind++, sb.getSecondaryLabel());
         if (sb.getTime_zone() == null || sb.getTime_zone().equals("")) {
