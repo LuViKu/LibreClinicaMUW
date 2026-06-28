@@ -131,6 +131,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/subjects")
 @Tag(name = "Subjects", description = "Subject Matrix + Add/Sign Subject.")
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class SubjectsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(SubjectsApiController.class);

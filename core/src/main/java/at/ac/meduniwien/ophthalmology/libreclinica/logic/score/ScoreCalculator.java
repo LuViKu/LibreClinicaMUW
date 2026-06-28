@@ -465,8 +465,8 @@ public class ScoreCalculator {
                 } else {
                     p = BigDecimal.valueOf(d).precision();
                 }
-                MathContext mc = new MathContext(p, RoundingMode.valueOf(BigDecimal.ROUND_HALF_UP));
-                value = (new BigDecimal(d, mc)).setScale(0, BigDecimal.ROUND_HALF_UP).toPlainString();
+                MathContext mc = new MathContext(p, RoundingMode.HALF_UP);
+                value = (new BigDecimal(d, mc)).setScale(0, RoundingMode.HALF_UP).toPlainString();
             } catch (ParseException e) {
                 logger.error("Number was expected in " + rob.getValue() + " : " + value);
                 String exp = rob.getValue();
@@ -483,8 +483,8 @@ public class ScoreCalculator {
                 int p = BigDecimal.valueOf(d).precision();
                 // set default scale as 4
                 int scale = decimal > 0 ? decimal : DEFAULT_DECIMAL;
-                MathContext mc = new MathContext(p, RoundingMode.valueOf(BigDecimal.ROUND_HALF_UP));
-                value = (new BigDecimal(d, mc)).setScale(scale, BigDecimal.ROUND_HALF_UP).toPlainString();
+                MathContext mc = new MathContext(p, RoundingMode.HALF_UP);
+                value = (new BigDecimal(d, mc)).setScale(scale, RoundingMode.HALF_UP).toPlainString();
             } catch (Exception ee) {
                 String exp = rob.getValue();
                 exp = exp.replace("##", ",");

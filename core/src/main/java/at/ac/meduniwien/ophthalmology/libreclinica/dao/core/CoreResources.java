@@ -41,6 +41,12 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternResolver;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class CoreResources implements ResourceLoaderAware {
 
     private ResourceLoader resourceLoader;

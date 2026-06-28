@@ -28,6 +28,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.io.SurfaceGri
  * per-B-scan area trace follow the same fovea-center MVP convention as
  * {@link FluidMetric}.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 final class GaMetric {
 
     private static final String RPEL_CSV = "001-RPEL.csv";

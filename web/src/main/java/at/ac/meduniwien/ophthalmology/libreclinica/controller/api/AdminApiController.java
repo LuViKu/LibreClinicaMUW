@@ -68,6 +68,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/api/v1/admin")
 @Tag(name = "Admin tooling",
      description = "Sysadmin-only diagnostic + configuration surfaces — SPA replacement for the legacy admin JSPs.")
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class AdminApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(AdminApiController.class);

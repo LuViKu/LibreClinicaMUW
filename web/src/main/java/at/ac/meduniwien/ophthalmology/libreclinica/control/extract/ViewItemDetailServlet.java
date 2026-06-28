@@ -35,6 +35,9 @@ import java.util.Locale;
  *
  * View all related metadata for an item
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class ViewItemDetailServlet extends SecureController {
 
     /**

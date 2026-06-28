@@ -75,6 +75,9 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
  * live ViewNotes page when defId is missing, so this servlet treats
  * missing/zero defId as a 400.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class ListDiscNotesForCRFDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

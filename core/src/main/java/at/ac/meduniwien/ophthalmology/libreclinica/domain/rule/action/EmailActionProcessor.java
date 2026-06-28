@@ -36,6 +36,8 @@ import javax.sql.DataSource;
 
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.*;
 
+@SuppressWarnings("deprecation")
+
 public class EmailActionProcessor implements ActionProcessor {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

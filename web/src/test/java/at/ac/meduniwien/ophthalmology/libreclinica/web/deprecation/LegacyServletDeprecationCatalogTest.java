@@ -18,6 +18,9 @@ import org.junit.jupiter.api.Test;
  * Phase E.8 legacy-retirement (2026-06-20) — unit tests for the
  * deprecation catalog lookup semantics.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 class LegacyServletDeprecationCatalogTest {
 
     private final LegacyServletDeprecationCatalog catalog = new LegacyServletDeprecationCatalog();

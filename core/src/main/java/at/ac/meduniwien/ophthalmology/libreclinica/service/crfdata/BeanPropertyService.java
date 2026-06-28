@@ -40,6 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.Expre
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("deprecation")
+
 public class BeanPropertyService{
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     private DynamicsItemFormMetadataDao dynamicsItemFormMetadataDao;

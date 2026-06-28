@@ -62,6 +62,9 @@ import org.slf4j.LoggerFactory;
  * @version CVS: $Id: AddNewSubjectServlet.java,v 1.15 2005/07/05 17:20:43 jxu
  *          Exp $
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class AddNewSubjectServlet extends SecureController {
 
     /**

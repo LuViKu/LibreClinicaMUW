@@ -44,6 +44,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.ImportDataRu
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.MessageContainer;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+@SuppressWarnings("deprecation")
+
 public interface RuleSetServiceInterface {
 
     /**

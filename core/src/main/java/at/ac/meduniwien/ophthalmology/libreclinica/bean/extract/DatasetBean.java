@@ -488,7 +488,7 @@ public class DatasetBean extends AuditableEntityBean {
 
     /*
      * public boolean isShowGroupInformation() { return showGroupInformation; }
-     * FIXME now change all the places where this is located... public void
+
      * setShowGroupInformation(boolean showGroupInformation) {
      * this.showGroupInformation = showGroupInformation; }
      */

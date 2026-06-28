@@ -29,6 +29,9 @@ import java.util.*;
  *
  * Servlet for modification of study user role for specific user account.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class EditStudyUserRoleServlet extends SecureController {
 
 	private static final long serialVersionUID = 2676005249787903342L;

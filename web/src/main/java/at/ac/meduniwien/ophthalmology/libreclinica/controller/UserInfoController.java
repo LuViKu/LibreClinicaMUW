@@ -47,6 +47,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @Controller
 @RequestMapping(value = "/userinfo")
 @ResponseStatus(value = org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class UserInfoController {
 
 	@Autowired

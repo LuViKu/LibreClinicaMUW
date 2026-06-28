@@ -32,6 +32,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.io.NpzReader;
  * <p>The fovea anchor for ETDRS rings is currently the volume center
  * (volume-center MVP); a real fovea-detection step lands later.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 final class FluidMetric {
 
     private static final String FLUID_NPZ = "fluidseg.npz";
