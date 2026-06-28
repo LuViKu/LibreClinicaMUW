@@ -231,7 +231,7 @@ public class StudyInfoPanel {
                 DatasetBean dsb = (DatasetBean) session.getAttribute("newDataset");
                 int ev_count = dsb.getItemIds().size();
 
-                this.setData(resword.getString("items_selected"), new Integer(ev_count).toString());
+                this.setData(resword.getString("items_selected"), String.valueOf(ev_count));
 
             } else if (page.equals(Page.CREATE_DATASET_4)) {
                 this.reset();
@@ -244,7 +244,7 @@ public class StudyInfoPanel {
                 this.removeData(resword.getString("ending_date"));
                 DatasetBean dsb = (DatasetBean) session.getAttribute("newDataset");
                 int ev_count = dsb.getItemIds().size();
-                this.setData(resword.getString("items_selected"), new Integer(ev_count).toString());
+                this.setData(resword.getString("items_selected"), String.valueOf(ev_count));
 
                 if ("01/01/1900".equals(english_sdf.format(dsb.getDateStart()))) {
                     this.setData(resword.getString("beginning_date"), resword.getString("not_specified"));
@@ -276,7 +276,7 @@ public class StudyInfoPanel {
                 this.setData(resword.getString("dataset_name"), dsb.getName());
                 this.setData(resword.getString("dataset_description"), dsb.getDescription());
                 int ev_count = dsb.getItemIds().size();
-                this.setData(resword.getString("items_selected"), new Integer(ev_count).toString());
+                this.setData(resword.getString("items_selected"), String.valueOf(ev_count));
 
                 if ("01/01/1900".equals(english_sdf.format(dsb.getDateStart()))) {
                     this.setData(resword.getString("beginning_date"), resword.getString("not_specified"));
@@ -299,7 +299,7 @@ public class StudyInfoPanel {
                 SectionBean secBean = (SectionBean) session.getAttribute("secBean");
                 this.setData(resword.getString("section_selected"), secBean.getName());
                 ArrayList<ItemFormMetadataBean> metadatas = getAttributeAsList(request, "metadatas", ItemFormMetadataBean.class);
-                this.setData(resword.getString("number_of_questions"), new Integer(metadatas.size()).toString());
+                this.setData(resword.getString("number_of_questions"), String.valueOf(metadatas.size()));
             } else if (page.equals(Page.CREATE_FILTER_SCREEN_4)) {
 
             } else if (page.equals(Page.CREATE_FILTER_SCREEN_5)) {
