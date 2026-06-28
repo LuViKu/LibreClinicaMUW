@@ -344,6 +344,21 @@ function onReportBugClick() {
             </button>
           </div>
 
+          <div class="border-t border-slate-200 mt-1 pt-1.5 px-2">
+            <RouterLink
+              to="/manual"
+              class="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center gap-2"
+              data-testid="topbar-manual-link"
+              @click="closePopover"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              {{ t('topBar.profile.manual') }}
+            </RouterLink>
+          </div>
+
           <div v-if="hasLogout" class="border-t border-slate-200 mt-1 pt-1.5 px-2">
             <button
               type="button"

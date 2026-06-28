@@ -30,6 +30,7 @@
     "profile": {
       "rolesLabel": "Rollen",
       "rolesAriaLabel": "Zugewiesene Rollen",
+      "manual": "Handbuch",
       "signOut": "Abmelden"
     },
     "error": {

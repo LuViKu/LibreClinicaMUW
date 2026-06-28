@@ -30,6 +30,7 @@
     "profile": {
       "rolesLabel": "Roles",
       "rolesAriaLabel": "Assigned roles",
+      "manual": "Manual",
       "signOut": "Sign out"
     },
     "error": {
