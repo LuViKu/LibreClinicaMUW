@@ -56,19 +56,21 @@ public class MainMenuServlet extends SecureController {
 	 */
 	private static final long serialVersionUID = -7373300139315967558L;
 	//Shaoyu Su
-    Locale locale;
-    private StudyEventDefinitionDAO studyEventDefinitionDAO;
-	private SubjectDAO subjectDAO;
-    private StudySubjectDAO studySubjectDAO;
-    private StudyEventDAO studyEventDAO;
-    private StudyGroupClassDAO studyGroupClassDAO;
-    private SubjectGroupMapDAO subjectGroupMapDAO;
-    private StudyDAO studyDAO;
-    private EventCRFDAO eventCRFDAO;
-    private EventDefinitionCRFDAO eventDefintionCRFDAO;
-    private StudyGroupDAO studyGroupDAO;
-    private DiscrepancyNoteDAO discrepancyNoteDAO;
-    private StudyParameterValueDAO studyParameterValueDAO;
+    // transient: DAO + Locale fields are non-Serializable but MUW runs single-host
+    // (no session replication), so the servlet never round-trips a session.
+    transient Locale locale;
+    private transient StudyEventDefinitionDAO studyEventDefinitionDAO;
+	private transient SubjectDAO subjectDAO;
+    private transient StudySubjectDAO studySubjectDAO;
+    private transient StudyEventDAO studyEventDAO;
+    private transient StudyGroupClassDAO studyGroupClassDAO;
+    private transient SubjectGroupMapDAO subjectGroupMapDAO;
+    private transient StudyDAO studyDAO;
+    private transient EventCRFDAO eventCRFDAO;
+    private transient EventDefinitionCRFDAO eventDefintionCRFDAO;
+    private transient StudyGroupDAO studyGroupDAO;
+    private transient DiscrepancyNoteDAO discrepancyNoteDAO;
+    private transient StudyParameterValueDAO studyParameterValueDAO;
 
     // < ResourceBundle respage;
 

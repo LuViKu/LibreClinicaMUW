@@ -55,7 +55,9 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         digesterName = SQLFactory.getInstance().DAO_USERACCOUNT;
     }
 
-    protected void setQueryNames() {
+    // `final` silences the this-escape warning on the ctors below. No UserAccountDAO
+    // subclasses exist.
+    protected final void setQueryNames() {
         getCurrentPKName = "getCurrentPK";
         getNextPKName = "getNextPK";
     }
