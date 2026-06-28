@@ -19,7 +19,6 @@ public class SectionDao extends AbstractDomainDao<Section> {
         return Section.class;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes" })
     public Section findByCrfVersionOrdinal(int crfVersionId, int ordinal) {
         // String query = "from " + getDomainClassName() + " section  where section.crfVersionId = :crfversionid ";

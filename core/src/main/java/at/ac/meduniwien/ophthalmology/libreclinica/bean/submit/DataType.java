@@ -47,17 +47,26 @@ public class DataType extends Term {
 	 * 
 	 */
 	private static final long serialVersionUID = 6282835406766655030L;
+	@Deprecated
 	public static final DataType INVALID = new DataType(0, "INVALID", null);
+    @Deprecated
     public static final DataType BN = new DataType(1, "BN", null);
+    @Deprecated
     public static final DataType ED = new DataType(2, "ED", null);
+    @Deprecated
     public static final DataType TEL = new DataType(3, "TEL", null);
+    @Deprecated
     public static final DataType ST = new DataType(4, "ST", null);
+    @Deprecated
     public static final DataType INT = new DataType(5, "INT", null);
+    @Deprecated
     public static final DataType REAL = new DataType(6, "REAL", null);
+    @Deprecated
     public static final DataType SET = new DataType(7, "SET", null);
 
     private static final DataType[] members = { BN, ED, TEL, ST, INT, REAL, SET };
 
+    @Deprecated
     public static final List<DataType> list = Arrays.asList(members);
 
     private DataType(int id, String name, Privilege[] myPrivs) {
@@ -67,15 +76,18 @@ public class DataType extends Term {
     private DataType() {
     }
 
+    @Deprecated
     public static boolean contains(int id) {
         return Term.contains(id, list);
     }
 
+    @Deprecated
     public static DataType get(int id) {
     	Optional<DataType> result = list.stream().filter(t -> new Term(id, "").equals(t)).findFirst();
     	return result.orElse(new DataType());
     }
 
+    @Deprecated
     public static DataType getByName(String name) {
         for (int i = 0; i < list.size(); i++) {
             DataType temp = (DataType) list.get(i);
@@ -86,6 +98,7 @@ public class DataType extends Term {
         return new DataType();
     }
 
+    @Deprecated
     public static boolean findByName(String name) {
         for (int i = 0; i < list.size(); i++) {
             DataType temp = (DataType) list.get(i);
@@ -96,11 +109,13 @@ public class DataType extends Term {
         return false;
     }
 
+    @Deprecated
     public static ArrayList<DataType> toArrayList() {
         return new ArrayList<DataType>(list);
     }
 
     @Override
+    @Deprecated
     public String getName() {
         return name;
     }

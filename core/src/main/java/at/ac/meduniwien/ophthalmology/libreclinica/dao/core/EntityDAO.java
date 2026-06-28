@@ -1564,7 +1564,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // sample_ordinal
                 Integer vsample_ordinal = rs.getInt("sample_ordinal");
                 if (rs.wasNull()) {
-                    // TODO
                 }
 
                 // study_event_definition_id

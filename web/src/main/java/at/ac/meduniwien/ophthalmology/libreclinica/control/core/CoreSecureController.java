@@ -196,9 +196,7 @@ public abstract class CoreSecureController extends HttpServlet {
      * Process request
      *
      * @param request
-     *            TODO
      * @param response
-     *            TODO
      *
      * @throws Exception
      */
@@ -526,9 +524,7 @@ public abstract class CoreSecureController extends HttpServlet {
      * @param checkTrail
      *            The command to check for, and set a trail in the session.
      * @param request
-     *            TODO
      * @param response
-     *            TODO
      */
     protected void forwardPage(Page jspPage, boolean checkTrail, HttpServletRequest request, HttpServletResponse response) {
         Page page1 = Page.valueOf(jspPage.name());

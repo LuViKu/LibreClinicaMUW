@@ -66,7 +66,7 @@ public class RuleSetRuleDaoTest extends HibernateOcDbTestCase {
 
         // Test RuleSetRule
         assertNotNull("RuleSet is null", ruleSetRuleBean);
-        assertEquals("The id of the retrieved RuleSet should be 1", new Integer(3), ruleSetRuleBean.getId());
+        assertEquals("The id of the retrieved RuleSet should be 1", Integer.valueOf(3), ruleSetRuleBean.getId());
 
     }
 
@@ -89,7 +89,7 @@ public class RuleSetRuleDaoTest extends HibernateOcDbTestCase {
         List<RuleSetRuleBean> ruleSetRules = ruleSetRuleDao.findByRuleSetBeanAndRuleBean(persistentRuleSetBean, persistentRuleBean);
 
         assertNotNull("RuleSetRules is null", ruleSetRules);
-        assertEquals("The size of RuleSetRules should be 1", new Integer(1), new Integer(ruleSetRules.size()));
+        assertEquals("The size of RuleSetRules should be 1", Integer.valueOf(1), Integer.valueOf(ruleSetRules.size()));
     }
     public void tearDown(){
         try {
@@ -98,7 +98,6 @@ public class RuleSetRuleDaoTest extends HibernateOcDbTestCase {
         //   ruleDao.getSessionFactory().getCurrentSession().flush();
             ruleSetRuleDao.getSessionFactory().getCurrentSession().close();
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

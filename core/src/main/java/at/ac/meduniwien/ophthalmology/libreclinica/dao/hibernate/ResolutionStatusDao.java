@@ -19,7 +19,6 @@ public class ResolutionStatusDao extends AbstractDomainDao<ResolutionStatus> {
         return ResolutionStatus.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ResolutionStatus findByResolutionStatusId(Integer resolutionStatusId) {
         String query = "from " + getDomainClassName() + " do  where do.resolutionStatusId = :resolutionstatusid";
         Query<ResolutionStatus> q = getCurrentSession().createQuery(query, ResolutionStatus.class);

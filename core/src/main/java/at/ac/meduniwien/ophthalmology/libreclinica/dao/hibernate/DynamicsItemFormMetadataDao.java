@@ -34,7 +34,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         return DynamicsItemFormMetadataBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public DynamicsItemFormMetadataBean findByMetadataBean(ItemFormMetadataBean metadataBean, EventCRFBean eventCrfBean,
             ItemDataBean itemDataBean) {
 
@@ -54,7 +53,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
     }
 
 
-    // TODO update to CriteriaQuery 
     public ArrayList <DynamicsItemFormMetadataBean> findByItemAndEventCrfShown(EventCRFBean eventCrfBean,
             int itemId) {
 
@@ -70,7 +68,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
     }
 
 
-    // TODO update to CriteriaQuery 
     public DynamicsItemFormMetadataBean findByItemDataBean(ItemDataBean itemDataBean) {
         String query = "from " + getDomainClassName() + " metadata where metadata.itemDataId = :item_data_id ";
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);
@@ -169,7 +166,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
      * @param crfVersionId crfVersionId
      * @return list of IDs
      */
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({"deprecation", "rawtypes"})
     protected List<Integer> queryForIDs(String postgresQuery, Integer groupId, Integer sectionId,
             Integer eventCrfId, Integer crfVersionId) {

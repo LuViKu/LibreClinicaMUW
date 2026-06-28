@@ -21,7 +21,6 @@ public class EventDefinitionCrfItemTagDao extends AbstractDomainDao<EventDefinit
         return EventDefinitionCrfItemTag.class;
     }
 
-    // TODO update to CriteriaQuery 
     public List<EventDefinitionCrfItemTag> findAllByCrfPath(int tag_id, String crfPath, boolean active) {
 
         String query = " from " + getDomainClassName() + "  where " + " tag_id= " + tag_id + " and active=" + active + " and path LIKE '" + crfPath + ".%'";
@@ -30,7 +29,6 @@ public class EventDefinitionCrfItemTagDao extends AbstractDomainDao<EventDefinit
         return q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public EventDefinitionCrfItemTag findByItemPath(int tag_id, boolean active, String itemPath) {
 
         String query = " from " + getDomainClassName() + "  where " + " tag_id= " + tag_id + " and active=" + active + " and path= '" + itemPath + "'";

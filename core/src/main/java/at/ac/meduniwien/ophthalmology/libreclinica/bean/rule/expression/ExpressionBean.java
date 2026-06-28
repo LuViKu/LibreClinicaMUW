@@ -29,7 +29,6 @@ public class ExpressionBean extends AuditableEntityBean {
     private String contextName;
 
     public ExpressionBean() {
-        // TODO Auto-generated constructor stub
     }
 
     public ExpressionBean(Context context, String value) {

@@ -28,7 +28,6 @@ public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     @Transactional
     public ConfigurationBean findByKey(String key) {
         String query = "from " + getDomainClassName() + " do where do.key = :key  ";

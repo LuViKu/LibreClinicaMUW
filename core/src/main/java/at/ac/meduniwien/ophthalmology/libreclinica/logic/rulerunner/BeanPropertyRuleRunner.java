@@ -50,7 +50,6 @@ public class BeanPropertyRuleRunner extends RuleRunner{
 	
 	public BeanPropertyRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {
 		super(ds, contextPath, contextPath, mailSender);
-		// TODO Auto-generated constructor stub
 	}
 
 	public void runRules(List<RuleSetBean> ruleSets, DataSource ds,

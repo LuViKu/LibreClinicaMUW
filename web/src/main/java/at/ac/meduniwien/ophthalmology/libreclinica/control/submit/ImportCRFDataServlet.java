@@ -134,7 +134,6 @@ public class ImportCRFDataServlet extends SecureController {
                 forwardPage(Page.IMPORT_CRF_DATA);
             }
 
-            // TODO
             // validation steps
             // 1. valid xml - validated by file uploader below
 

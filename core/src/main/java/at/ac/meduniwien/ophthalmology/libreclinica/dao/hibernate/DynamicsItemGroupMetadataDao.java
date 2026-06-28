@@ -22,7 +22,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         return DynamicsItemGroupMetadataBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public DynamicsItemGroupMetadataBean findByMetadataBean(ItemGroupMetadataBean metadataBean, EventCRFBean eventCrfBean) {
         String query =
             "from " + getDomainClassName()
@@ -34,7 +33,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public DynamicsItemGroupMetadataBean findByMetadataBean(ItemGroupMetadataBean metadataBean, int eventCrfBeanId) {
         String query =
             "from " + getDomainClassName()
@@ -46,7 +44,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes" })
     public Boolean hasShowingInSection(int sectionId, int crfVersionId, int eventCrfId) {
         String query = "select dg.item_group_id from dyn_item_group_metadata dg where dg.event_crf_id = :eventCrfId and dg.item_group_metadata_id in ("

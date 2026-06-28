@@ -23,7 +23,6 @@ public class ItemGroupMetadataDao extends AbstractDomainDao<ItemGroupMetadata> {
         return ItemGroupMetadata.class;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public ArrayList<ItemGroupMetadata> findByItemGroupCrfVersion(Integer itemGroupId, Integer crfVersionId) {
         String query = "select distinct igm.* from item_group_metadata igm, item_group ig where igm.crf_version_id = " + String.valueOf(crfVersionId)
@@ -32,7 +31,6 @@ public class ItemGroupMetadataDao extends AbstractDomainDao<ItemGroupMetadata> {
         return (ArrayList<ItemGroupMetadata>) q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public ItemGroupMetadata findByItemCrfVersion(int item_id, int crf_version_id) {
         String query = "from " + getDomainClassName() + " do where do.item.itemId = :itemid and do.crfVersion.crfVersionId = :crfversionid";
         Query<ItemGroupMetadata> q = getCurrentSession().createQuery(query, ItemGroupMetadata.class);
@@ -43,7 +41,6 @@ public class ItemGroupMetadataDao extends AbstractDomainDao<ItemGroupMetadata> {
 
     public static final String findAllByCrfVersionQuery = "select distinct * from item_group_metadata igm where igm.crf_version_id = :crfversionid";
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     public List<ItemGroupMetadata> findAllByCrfVersion(int crf_version_id) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionQuery).addEntity(ItemGroupMetadata.class);

@@ -18,7 +18,6 @@ public class OnStudyEventCreated extends OnStudyEventChanged {
 
 	public OnStudyEventCreated(StudyEventContainer container) {
 		super(container);
-		// TODO Auto-generated constructor stub
 	}
 
 }

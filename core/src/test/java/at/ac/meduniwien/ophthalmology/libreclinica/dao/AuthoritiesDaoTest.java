@@ -75,7 +75,7 @@ public class AuthoritiesDaoTest extends HibernateOcDbTestCase {
 
         // Test Authorities
         assertNotNull("RuleSet is null", authorities);
-        assertEquals("The id of the retrieved Domain Object should be -1", new Integer(-1), authorities.getId());
+        assertEquals("The id of the retrieved Domain Object should be -1", Integer.valueOf(-1), authorities.getId());
    }
     public void testFindByUsername() {
 
@@ -86,7 +86,7 @@ public class AuthoritiesDaoTest extends HibernateOcDbTestCase {
       
         // Test Authorities
         assertNotNull("RuleSet is null", authorities);
-        assertEquals("The id of the retrieved Domain Object should be -1", new Integer(-1), authorities.getId());
+        assertEquals("The id of the retrieved Domain Object should be -1", Integer.valueOf(-1), authorities.getId());
     }
     
     
@@ -97,7 +97,6 @@ public class AuthoritiesDaoTest extends HibernateOcDbTestCase {
            
             authoritiesDao.getSessionFactory().getCurrentSession().close();
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

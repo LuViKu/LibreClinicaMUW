@@ -22,7 +22,6 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         return SCDItemMetadataBean.class;
     }
     
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     public ArrayList<SCDItemMetadataBean> findAllBySectionId(Integer sectionId) {
         String query = "select scd.* from scd_item_metadata scd where scd.scd_item_form_metadata_id in ("
@@ -32,7 +31,6 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         return (ArrayList<SCDItemMetadataBean>) q.getResultList();  
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     public List<Integer> findAllSCDItemFormMetadataIdsBySectionId(Integer sectionId) {
         String query = "select scd.scd_item_form_metadata_id from scd_item_metadata scd where scd.scd_item_form_metadata_id in ("
@@ -42,7 +40,6 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         return q.getResultList();
     }
     
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     public ArrayList<SCDItemMetadataBean> findAllSCDByItemFormMetadataId(Integer itemFormMetadataId) {
         String query = "select scd.* from scd_item_metadata scd where scd.scd_item_form_metadata_id = :itemFormMetadataId)";

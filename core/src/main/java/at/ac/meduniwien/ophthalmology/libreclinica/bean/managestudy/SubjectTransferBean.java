@@ -36,7 +36,6 @@ public class SubjectTransferBean extends EntityBean {
     UserAccountBean owner;
 
     public SubjectTransferBean() {
-        // TODO Auto-generated constructor stub
     }
 
     public SubjectTransferBean(String personId, String studySubjectId, Date dateOfBirth, char gender, String studyOid) {

@@ -25,7 +25,6 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
         return ItemGroup.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ItemGroup findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
@@ -34,7 +33,6 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public ItemGroup findByNameCrfId(String groupName, CrfBean crf) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.name = :groupName and do.crf = :crf";
@@ -48,7 +46,6 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
     public static final String findAllByCrfVersionIdQuery = "select distinct ig.* from item_group ig, item_group_metadata igm"
             + " where igm.crf_version_id = :crfversionid and ig.item_group_id = igm.item_group_id";
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
     public ArrayList<ItemGroup> findByCrfVersionId(Integer crfVersionId) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery).addEntity(ItemGroup.class);

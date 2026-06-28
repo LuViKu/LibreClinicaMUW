@@ -132,9 +132,7 @@ public interface RuleSetServiceInterface {
      * @param ruleSets
      * @param studyEvent
      * @param crfVersion
-     *            TODO
      * @param studyEventDefinition
-     *            TODO
      * @return
      */
     public abstract List<RuleSetBean> filterRuleSetsByStudyEventOrdinal(List<RuleSetBean> ruleSets, StudyEventBean studyEvent, CRFVersionBean crfVersion,

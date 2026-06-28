@@ -20,7 +20,6 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
         return ResponseType.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ResponseType findByResponseTypeName(String name) {
         String query = "from " + getDomainClassName() + " response_type  where response_type.name = :name ";
         Query<ResponseType> q = getCurrentSession().createQuery(query, ResponseType.class);
@@ -28,7 +27,6 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
         return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
     public ResponseType findByItemFormMetaDataId(Integer itemFormMetadataId) {
         String query = "select rt.* from response_type rt, response_set rs, item_form_metadata ifm where ifm.response_set_id=rs.response_set_id"

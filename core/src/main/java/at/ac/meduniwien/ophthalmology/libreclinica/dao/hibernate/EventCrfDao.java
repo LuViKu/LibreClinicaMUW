@@ -21,7 +21,6 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         return EventCrf.class;
     }
 
-    // TODO update to CriteriaQuery 
     public EventCrf findByStudyEventIdStudySubjectIdCrfVersionId(int study_event_id, int study_subject_id, int crf_version_id) {
         String query = "from "
                 + getDomainClassName()
@@ -33,7 +32,6 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         return (EventCrf) q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     public EventCrf findByStudyEventIdStudySubjectIdCrfId(int study_event_id, int study_subject_id, int crf_id) {
         String query = "from "
                 + getDomainClassName()
@@ -45,7 +43,6 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         return (EventCrf) q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
 	public List<EventCrf> findByStudyEventIdStudySubjectId(Integer studyEventId, String studySubjectOid) {
         String query = "from "
                 + getDomainClassName()
@@ -56,7 +53,6 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         return q.getResultList();
 	}
 
-    // TODO update to CriteriaQuery 
     public List<EventCrf> findByStudyEventStatus(Integer studyEventId, Integer statusCode) {
         String query = "from "
                 + getDomainClassName()
