@@ -47,6 +47,10 @@ import org.hibernate.annotations.Parameter;
                       @Parameter(name = "sequence_name",
                                  value = "patient_patient_id_seq")
                   })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class Patient extends DataMapDomainObject {
 
     private static final long serialVersionUID = 1L;

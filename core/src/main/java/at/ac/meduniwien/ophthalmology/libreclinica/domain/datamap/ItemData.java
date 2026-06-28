@@ -44,6 +44,14 @@ import org.hibernate.annotations.Type;
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "item_data_item_data_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
 
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+
+// migration (deferred B.5 follow-up).
+
+@SuppressWarnings("deprecation")
+
 public class ItemData  extends DataMapDomainObject {
 
 	/**

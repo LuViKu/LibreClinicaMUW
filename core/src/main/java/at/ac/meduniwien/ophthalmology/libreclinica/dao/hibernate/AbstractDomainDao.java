@@ -40,6 +40,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The {@code getCurrentSession()} / {@code getSessionFactory()} accessor
  * surface is preserved so subclasses keep working without per-DAO edits.
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("deprecation")
 public abstract class AbstractDomainDao<T extends DomainObject> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

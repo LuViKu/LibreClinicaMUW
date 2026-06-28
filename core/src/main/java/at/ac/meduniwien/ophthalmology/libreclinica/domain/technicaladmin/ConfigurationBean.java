@@ -26,6 +26,10 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "configuration")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "configuration_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("deprecation")
 public class ConfigurationBean extends AbstractMutableDomainObject {
 
     /**
