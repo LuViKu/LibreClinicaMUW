@@ -58,7 +58,6 @@ public class UserController {
         userList.add("Tom");
 
 
-        //TODO: Get user from Hibernate DAO class
         //userList.add(userDao.loadUser(userId).getName())
         map.addAttribute(userList);
         return map;

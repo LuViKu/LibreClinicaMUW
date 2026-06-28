@@ -653,7 +653,6 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
         } else {
             userAccounts = udao.findAllUsersByStudyOrSite(studyId, 0, subjectId);
         }
-        // TODO it seems like there is no place where the attribute USER_ACCOUNT is read
         request.setAttribute(USER_ACCOUNTS, userAccounts);
         request.setAttribute(VIEW_DN_LINK, this.getPageServletFileName());
 

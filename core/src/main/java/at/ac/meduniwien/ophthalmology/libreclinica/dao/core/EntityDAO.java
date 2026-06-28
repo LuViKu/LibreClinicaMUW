@@ -309,7 +309,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
         
         String query = digester.getQuery(queryName);
         if (query == null || query.trim().isEmpty()) {
-        	// TODO for backwards compatibility here is no error thrown but this should be changed in the future
         	logger.error("No query with name '{}' found", queryName);
             return answer;
         }

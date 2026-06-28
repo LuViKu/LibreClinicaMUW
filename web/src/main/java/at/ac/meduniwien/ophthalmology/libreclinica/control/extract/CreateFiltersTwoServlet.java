@@ -145,7 +145,6 @@ public class CreateFiltersTwoServlet extends SecureController {
                 forwardPage(Page.CREATE_FILTER_SCREEN_3);
             }
         } else if ("sectionselected".equalsIgnoreCase(action)) {
-            // TODO set the crf and the section into session,
             // allow for the user to go back and forth,
             // set up the questions to be picked,
             // allow the user to move on to create_filter_screen_4
@@ -183,7 +182,6 @@ public class CreateFiltersTwoServlet extends SecureController {
         } else if ("questionsselected".equalsIgnoreCase(action)) {
             ArrayList<Integer> alist = this.extractIdsFromForm();
 
-            // TODO this is where we begin the 'specify criteria' phase
             // of the servlet; we grab the list of questions, get each
             // item form metadata bean, and stick them in a collection
             // and send the user to create_filter_screen_4
@@ -202,7 +200,6 @@ public class CreateFiltersTwoServlet extends SecureController {
             }
 
         } else if ("validatecriteria".equalsIgnoreCase(action)) {
-            // TODO look at the criteria and create a list of filterobjectdata
             // beans, so that we can create the SQL later on in
             // the process.
             // also, throw the user back to the process or throw
@@ -221,7 +218,6 @@ public class CreateFiltersTwoServlet extends SecureController {
                 String remString = "remove:" + ifmBean.getId();
                 if ("remove".equals(fp.getString(remString))) {
                     logger.info("found the string: " + remString);
-                    // TODO remove the question from from the list,
                     // redirect to that page again????? <--maybe not?
                     // questions.remove(arrCnt);
                     // shouldn't have to remove the above, just do nothing
@@ -257,7 +253,6 @@ public class CreateFiltersTwoServlet extends SecureController {
 
             }// end while
             session.setAttribute("questions", questions);
-            // TODO where does the connector come into play?
             // session.setAttribute("filterobjects",filterobjects);
             FilterDAO fDAO = new FilterDAO(sm.getDataSource());
             String newSQL = (String) session.getAttribute("newSQL");
@@ -338,7 +333,6 @@ public class CreateFiltersTwoServlet extends SecureController {
             if (title.startsWith("ID")) {
                 String newId = title.replaceAll("ID", "");
                 Integer ifmId = Integer.valueOf(newId);
-                // TODO throw an error here if it's not applicable?
                 retMe.add(ifmId);
             }
         }

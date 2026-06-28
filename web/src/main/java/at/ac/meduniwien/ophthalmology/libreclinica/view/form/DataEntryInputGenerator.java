@@ -672,7 +672,6 @@ public class DataEntryInputGenerator implements InputGenerator {
         String key = "input" + itemId;
         ArrayList<String> _messages = messages.get(key);
         String errMsg = "";
-        // TODO find a more elegant solution
         for (String msg : _messages) {
             errMsg = msg;
         }

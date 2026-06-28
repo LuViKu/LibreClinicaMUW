@@ -107,7 +107,6 @@ public class ExtractController {
         int  cnt = 0;
         JobDetailFactoryBean jobDetailBean = new JobDetailFactoryBean();
         SimpleTrigger simpleTrigger = null;
-        //TODO: if files and export names size is not same... throw an error
         dsBean.setName(dsBean.getName().replaceAll(" ", "_"));
     	String[] exportFiles= epBean.getExportFileName();
     	 String pattern = "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator + "HHmmssSSS" + File.separator;
@@ -125,7 +124,6 @@ public class ExtractController {
 
         XsltTriggerService xsltService = new XsltTriggerService();
 
-        // TODO get a user bean somehow?
         String generalFileDir = SQLInitServlet.getField("filePath");
 
         generalFileDir = generalFileDir + "datasets" + File.separator + dsBean.getId() + File.separator + sdfDir.format(new java.util.Date());
@@ -205,7 +203,6 @@ public class ExtractController {
 	}
 
 
-    //TODO: ${linkURL} needs to be added
     /**
      *
      * for dateTimePattern, the directory structure is created. "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator,

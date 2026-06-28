@@ -50,7 +50,6 @@ public class ExpressionBeanService {
 
     
     private void init(DataSource ds, ExpressionBeanObjectWrapper expressionBeanWrapper) {
-        //TODO add stuff here
         this.ds = ds;
         this.expressionBeanWrapper = expressionBeanWrapper;
 
@@ -70,7 +69,6 @@ public class ExpressionBeanService {
         String temp = null;
         String oid = null;
         int index = 0;
-        // TODO fix this
         logger.debug("Test :: {}", test);
 
         if(checkIfForScheduling(test)){

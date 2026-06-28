@@ -288,7 +288,6 @@ public class ImportSpringJob extends QuartzJobBean {
     }
 
     private ImportCRFDataService getImportCRFDataService(DataSource dataSource) {
-        // TODO dynamic locale?
         // Locale locale = Locale.of("en-US");
         dataService = this.dataService != null ? dataService : new ImportCRFDataService(dataSource, locale);
         return dataService;
@@ -341,7 +340,6 @@ public class ImportSpringJob extends QuartzJobBean {
             // wrap the below in a try-catch?
             BufferedWriter out = new BufferedWriter(new FileWriter(newFile));
 
-            // TODO add more info here, like a timestamp
 
             // << tbh 06/2010
             if (f != null) {

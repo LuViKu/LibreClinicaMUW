@@ -302,7 +302,6 @@ public class TestRuleServlet extends SecureController {
               if(entry.getKey().startsWith(ExpressionService.STUDY_EVENT_OID_START_KEY)&&(entry.getKey().endsWith(ExpressionService.STATUS)||entry.getKey().endsWith(ExpressionService.STARTDATE)))
               {
             	  if(entry.getKey().endsWith(ExpressionService.STATUS)){
-            		  //TODO add the logic for status
             	  }
             	  else if(entry.getKey().endsWith(ExpressionService.STARTDATE)){
             		  try {

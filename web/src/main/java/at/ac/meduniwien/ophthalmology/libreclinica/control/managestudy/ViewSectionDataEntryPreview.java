@@ -59,7 +59,6 @@ import org.slf4j.LoggerFactory;
  * preview of a crf before the crfversion is inserted into the database.
  */
 /**
- * TODO get rid  of this map casting nightmare
  */
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class ViewSectionDataEntryPreview extends DataEntryServlet {
@@ -296,7 +295,6 @@ public class ViewSectionDataEntryPreview extends DataEntryServlet {
         SectionBean aSecBean = new SectionBean();
 
         request.setAttribute(BEAN_DISPLAY, displaySection);
-        // TODO: verify these attributes, from the original servlet, are
         // necessary
         request.setAttribute("sec", aSecBean);
         request.setAttribute("EventCRFBean", ebean);

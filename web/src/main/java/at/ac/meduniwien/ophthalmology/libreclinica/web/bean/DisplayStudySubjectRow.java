@@ -212,7 +212,6 @@ public class DisplayStudySubjectRow extends EntityBeanRow<DisplayStudySubjectBea
         if (enrDate != null) {
             SimpleDateFormat sdf = new SimpleDateFormat(ResourceBundleProvider.getFormatBundle().getString("date_format_string"));
             toStr = sdf.format(enrDate);
-            // TODO l10n dates?
         }*/
         //BWP>>8/6/2008
         /*return thisStudy.getStudySubject().getLabel() + " "  + thisStudy.getStudySubject().getSecondaryLabel() +

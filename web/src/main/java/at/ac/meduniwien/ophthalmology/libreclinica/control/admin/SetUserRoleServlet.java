@@ -75,7 +75,6 @@ public class SetUserRoleServlet extends SecureController {
             for (int i = 0; i < studies.size(); i++) {
                 StudyBean study1 = (StudyBean) studies.get(i);
 
-                // TODO: implement equal() according to id
                 boolean hasStudy = false;
                 for (int j = 0; j < studiesHaveRole.size(); j++) {
                     StudyBean study2 = (StudyBean) studiesHaveRole.get(j);

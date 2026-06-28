@@ -31,7 +31,6 @@ public class HibernateUtil {
      * @throws IllegalArgumentException When query returns an object that is not a {@link Number}.
      */
     public static List<Integer> queryIDsList(Query<?> query) {
-        //TODO - Doug - change return type to List<Long>
 
         // queryResult may contain Int, Long or BigDecimal
         List<?> queryResult = query.getResultList();

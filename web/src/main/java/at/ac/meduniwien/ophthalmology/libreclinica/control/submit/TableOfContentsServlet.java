@@ -65,7 +65,6 @@ import org.slf4j.LoggerFactory;
  * @author ssachs
  */
 
-// TODO: make it possible to input an event crf bean to this servlet rather than
 // an int
 public class TableOfContentsServlet extends SecureController {
     /**

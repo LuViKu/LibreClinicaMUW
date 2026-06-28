@@ -485,7 +485,6 @@ public class GenerateExtractFileService {
 	            logger.info("created zip output stream...");
 	            // we write over the content no matter what
 	            // we then check to make sure there are no duplicates
-	            // TODO need to change the above -- save all content!
 	            // z.write(content);
 	            z.putNextEntry(new java.util.zip.ZipEntry(name));
 	            // int length = (int) newFile.length();
@@ -612,7 +611,6 @@ public class GenerateExtractFileService {
             logger.info("created zip output stream...");
             // we write over the content no matter what
             // we then check to make sure there are no duplicates
-            // TODO need to change the above -- save all content!
             // z.write(content);
             z.putNextEntry(new java.util.zip.ZipEntry(name));
             // int length = (int) newFile.length();

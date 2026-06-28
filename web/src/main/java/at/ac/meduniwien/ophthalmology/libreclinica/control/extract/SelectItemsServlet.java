@@ -144,7 +144,6 @@ public class SelectItemsServlet extends SecureController {
             } else if (CRFAttr > 0) {
                 forwardPage(Page.CREATE_DATASET_CRF_ATTR);
             } else if (groupAttr > 0) {
-                // TODO set up subject group classes here?
                 setUpStudyGroupPage();
                 forwardPage(Page.CREATE_DATASET_GROUP_ATTR);
             } // else if (discAttr > 0) {
@@ -181,7 +180,6 @@ public class SelectItemsServlet extends SecureController {
              * item.getItemMeta().getCrfVersionId());
              */
             ItemFormMetadataBean meta = imfdao.findByItemIdAndCRFVersionId(item.getId(), item.getItemMeta().getCrfVersionId());
-            // TODO change the above data access function, tbh
             // ArrayList metas = imfdao.findAllByItemId(item.getId());
             meta.setCrfVersionName(item.getItemMeta().getCrfVersionName());
             // logger.info("crf versionname" + meta.getCrfVersionName());

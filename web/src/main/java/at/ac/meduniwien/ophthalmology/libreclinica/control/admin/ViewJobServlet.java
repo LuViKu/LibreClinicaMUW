@@ -74,7 +74,6 @@ public class ViewJobServlet extends SecureController {
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO single stage servlet where we get the list of jobs
         // and push them out to the JSP page
         // related classes will be required to generate the table rows
         // and eventually links to view and edit the jobs as well

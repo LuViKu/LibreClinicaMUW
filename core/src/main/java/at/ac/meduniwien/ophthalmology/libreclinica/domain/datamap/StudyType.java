@@ -85,7 +85,6 @@ public class StudyType  extends DataMapDomainObject {
 	}
 
 	/*
-	 * TODO the property 'studyType' for class 'Study' is commented
 	 * so this mapping does not work
 	 */
 	@OneToMany(fetch = FetchType.LAZY, mappedBy = "studyType")

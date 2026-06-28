@@ -176,7 +176,6 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return executeFindAllQuery(queryName, variables);
     }
 
-    // TODO: remove unused parameter 'currentStudy'
     public ArrayList<SubjectBean> getWithFilterAndSort(StudyBean currentStudy, ListSubjectFilter filter, ListSubjectSort sort, int rowStart, int rowEnd) {
         setTypesExpected();
 
@@ -195,7 +194,6 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return subjects;
     }
 
-    // TODO: remove unused parameter 'currentStudy'
     public Integer getCountWithFilter(ListSubjectFilter filter, StudyBean currentStudy) {
         String query = digester.getQuery("getCountWithFilter");
         query += filter.execute("");

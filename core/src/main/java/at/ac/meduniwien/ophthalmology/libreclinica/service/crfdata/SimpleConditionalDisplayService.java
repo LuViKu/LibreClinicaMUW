@@ -212,7 +212,6 @@ public class SimpleConditionalDisplayService {
                     }
                 }
             } else {
-                //TODO: commented this out because it has no effect anyway, candidate for removal or fix
                 //chosenOption.replaceAll("##", "\\,");
                 return chosenOption.equalsIgnoreCase(cd.getOptionValue());
             }

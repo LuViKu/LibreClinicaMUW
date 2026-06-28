@@ -103,7 +103,6 @@ public class ImportDataHelper {
             + " study bean name " + studyBean.getName());
 
         StudyEventBean studyEventBean = (StudyEventBean) studyEventDao.findByPK(studyEventId);
-        // TODO need to replace, can't really replace
 
         logger.info("found study event status: " + studyEventBean.getStatus().getName());
 
@@ -131,7 +130,6 @@ public class ImportDataHelper {
 
         // >> tbh repeating items:
         ArrayList<EventCRFBean> eventCrfBeans = eventCrfDao.findByEventSubjectVersion(studyEventBean, studySubjectBean, crfVersion);
-        // TODO repeating items here? not yet
         if (eventCrfBeans.size() > 1) {
             logger.info("found more than one");
         }
@@ -152,7 +150,6 @@ public class ImportDataHelper {
             }
 
             AuditableEntityBean studyEvent = studyEventDao.findByPKAndStudy(studyEventId, studyWithSED);
-            // TODO need to replace
 
             if (studyEvent.getId() <= 0) {
                 logger.info("Hello Exception");
@@ -199,7 +196,6 @@ public class ImportDataHelper {
 
                 try {
                     eventCrfBean = (EventCRFBean) eventCrfDao.create(eventCrfBean);
-                    // TODO review
                     // eventCrfBean.setCrfVersion((CRFVersionBean)crfVersion);
                     // eventCrfBean.setCrf((CRFBean)crf);
                 } catch (Exception ee) {
@@ -234,7 +230,6 @@ public class ImportDataHelper {
             if (eventCrfBean.getId() <= 0) {
                 logger.info("error");
             } else {
-                // TODO change status here, tbh
                 // 2/08 this part seems to work, tbh
                 studyEventBean.setSubjectEventStatus(SubjectEventStatus.DATA_ENTRY_STARTED);
                 studyEventBean.setUpdater(ub);

@@ -351,8 +351,6 @@ import org.slf4j.LoggerFactory;
  *
  */
 
-// TODO: add ability to halt at a given validation
-// TODO: work on making this class extensible. this is probably best achieved by
 // subclassing the Validation class
 // and making it more beefy (ie adding a checkIfValidated() type method to that
 // class,
@@ -525,7 +523,6 @@ public class Validator {
      * use for: IS_IN_RANGE
      */
     public void addValidation(String fieldName, int type, int start, int end) {
-        // TODO: assert type == is in range
         // For finding out if a number is in a range
 
         Validation v = new Validation(type);
@@ -539,7 +536,6 @@ public class Validator {
      * use for: CHECK_SAME, IS_A_FILE
      */
     public void addValidation(String fieldName, int type, String dir) {
-        // TODO: assert type = IS_OF_FILE_TYPE or CHECK_SAME or
         // DATE_IS_AFTER_OR_EQUAL
 
         // for checking to see if there is a file present in the system or not
@@ -555,7 +551,6 @@ public class Validator {
      * use for: LENGHT_NUMERIC_COMPARISON, COMPARES_TO_STATIC_VALUE
      */
     public void addValidation(String fieldName, int type, NumericComparisonOperator operator, int compareTo) {
-        // TODO: assert type = COMPARE_TO_STATIC_VALUE or
         // LENGHT_NUMERIC_COMPARISON
 
         Validation v = new Validation(type);
@@ -588,13 +583,11 @@ public class Validator {
         addValidation(fieldName, v);
     }
 
-    // TODO: add is_of_file_type addValidation method
 
     /*
      * use for: IS_IN_SET and IS_VALID_WIDTH_DECIMAL
      */
     public void addValidation(String fieldName, int type, ArrayList<?> set) {
-        // TODO: assert type == is_in_set
 
         Validation v = new Validation(type);
         v.addArgument(set);
@@ -1432,7 +1425,6 @@ break;
         }
     }
 
-    // TODO: entity exists method
 
     protected boolean isInteger(String fieldName) {
         String fieldValue = getFieldValue(fieldName);
@@ -1455,7 +1447,6 @@ break;
         return true;
     }
 
-    // TODO: is_a_file, IS_OF_FILE_TYPE methods
 
     protected boolean isInSet(String fieldName, ArrayList<String> set) {
         String fieldValue = getFieldValue(fieldName);

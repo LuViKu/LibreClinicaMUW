@@ -47,7 +47,6 @@ import org.slf4j.LoggerFactory;
  * <li> do we look in an HttpServletRequest, or a MultipartRequest?</li>
  * </ul>
  *
- * TODO handle MultiPartRequests - is this a priority, since we don't have many
  * file uploads?
  */
 

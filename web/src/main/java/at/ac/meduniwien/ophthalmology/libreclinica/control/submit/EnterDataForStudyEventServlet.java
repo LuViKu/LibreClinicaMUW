@@ -439,7 +439,6 @@ public class EnterDataForStudyEventServlet extends SecureController {
         ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(studyEvent);
         ArrayList<EventDefinitionCRFBean> eventDefinitionCRFs = edcdao.findAllByEventDefinitionId(studyEvent.getStudyEventDefinitionId());
 
-        // TODO: map this out to another function
         ArrayList<CRFVersionBean> crfVersions = crfvdao.findAll();
         HashMap<Integer, Integer> crfIdByCRFVersionId = new HashMap<>();
         for (CRFVersionBean cvb : crfVersions) {
@@ -482,7 +481,6 @@ public class EnterDataForStudyEventServlet extends SecureController {
             answer.set(i, decb);
         }
 
-        // TODO: attach crf versions to the DisplayEventCRFs
 
         return answer;
     }

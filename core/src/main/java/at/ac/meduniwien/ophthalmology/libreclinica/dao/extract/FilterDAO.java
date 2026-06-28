@@ -204,7 +204,6 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
                 tailEnd = tailEnd + " " + connector + " ";// fob.getOperand();
             }
             count++;
-            // TODO add this to create like operators, maybe move this to else
             // where?
             if (fob.getOperand().equals(" like ") || fob.getOperand().equals(" not like ")) {
                 fob.setValue("%" + fob.getValue() + "%");

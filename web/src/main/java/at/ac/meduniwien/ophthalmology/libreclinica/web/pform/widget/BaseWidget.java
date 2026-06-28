@@ -37,7 +37,6 @@ public abstract class BaseWidget implements Widget {
 		case "date": return "date";
 		case "real": return "float";
 		case "bl": return "boolean";
-		//TODO: "BN","ED","TEL",FILE"
 		case "pdate":
 		default: 
 			log.debug("Unsupported item data type encountered: {}. Returning null.", type);

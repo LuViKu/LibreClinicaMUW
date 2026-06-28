@@ -47,7 +47,6 @@ import org.apache.commons.lang.StringUtils;
  * 
  * @author thickerson
  * 
- *         TODO test create and update first thing
  */
 public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
     private void setQueryNames() {
@@ -409,7 +408,6 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return executeFindAllQuery("findByEventSubjectVersion", variables);
     }
 
-    // TODO: to get rid of warning refactor executeFindAllQuery method in
     // superclass
     public EventCRFBean findByEventCrfVersion(StudyEventBean studyEvent, CRFVersionBean crfVersion) {
         EventCRFBean eventCrfBean = null;

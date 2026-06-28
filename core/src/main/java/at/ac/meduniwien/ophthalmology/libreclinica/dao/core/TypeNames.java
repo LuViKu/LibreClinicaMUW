@@ -18,7 +18,6 @@ import java.sql.Date;
  *
  * Constant values are matched with java.sql.Types constant field values
  * 
- * TODO convert to enum
  */
 public interface TypeNames {
     // YW 04-2007 << With following match, JDBC driver could know datatype >> YW

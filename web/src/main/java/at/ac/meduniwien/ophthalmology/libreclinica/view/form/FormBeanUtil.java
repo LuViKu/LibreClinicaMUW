@@ -1310,7 +1310,6 @@ public class FormBeanUtil {
                 ItemGroupMetadataBean meta = metadata.get(0);
                 itemGroup.setMeta(meta);
             }
-            // TODO: the last arg is a list of null value strings
             displayItems = getDisplayBeansFromItems(itBeans, sm.getDataSource(), eventCrfBean, sectionBean.getId(), null, context);
             displayFormGBean = this.createDisplayFormGroup(displayItems, itemGroup);
             displayFormBeans.add(displayFormGBean);

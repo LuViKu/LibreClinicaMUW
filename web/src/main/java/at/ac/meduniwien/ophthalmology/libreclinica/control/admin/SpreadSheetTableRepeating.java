@@ -1429,9 +1429,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                     // Groups
                     // tbh, 5/14/2007
                     // DONE -- add sql insert queries below
-                    // TODO review html error creation in table at end of file
-                    // TODO find out where to add the form group beans
-                    // TODO find out where to add the map beans
 
                     // we need to make sure groups sql are executed first,
                     // because item_group_id is
@@ -1845,7 +1842,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             errors.add(resPageMsg.getString("section_instruction_length_error"));
                         }
 
-                        // TODO: Deprecated - not existing in eCRF definition spreadsheet template
                         // PAGE_NUMBER column
                         cell = sheet.getRow(k).getCell((short) 4);
                         String pageNumber = getValue(cell);
@@ -1854,7 +1850,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             errors.add(resPageMsg.getString("section_page_number_length_error"));
                         }
 
-                        // TODO: Deprecated - not existing in eCRF definition spreadsheet template
                         // PARENT_SECTION column
                         cell = sheet.getRow(k).getCell((short) 5);
                         String parentSection = getValue(cell);
@@ -1868,7 +1863,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             }
                         }
 
-                        // TODO: Deprecated - not existing in eCRF definition spreadsheet template
                         // BORDERS column
                         cell = sheet.getRow(k).getCell((short) 6);
                         String strBorder = getValue(cell);

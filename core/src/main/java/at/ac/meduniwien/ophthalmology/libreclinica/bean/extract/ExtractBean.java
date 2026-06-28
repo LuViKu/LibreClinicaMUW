@@ -223,7 +223,6 @@ public class ExtractBean {
     public ExtractBean(DataSource ds, SimpleDateFormat sdf, SimpleDateFormat long_sdf) {
         this.sdf = sdf;
         this.long_sdf = long_sdf;
-        // TODO need to refactor the below
         this.ds = ds;
         study = new StudyBean();
         parentStudy = new StudyBean();
@@ -265,7 +264,6 @@ public class ExtractBean {
     }
 
     //
-    // TODO place to add additional metadata, tbh
     //
     public void computeReportMetadata(ReportBean<?> answer) {
         // ///////////////////
@@ -350,13 +348,11 @@ public class ExtractBean {
         if (dataset.isShowSubjectGender()) {
             answer.nextCell("Gender");
         }
-        // TODO add additional labels here
         if (dataset.isShowSubjectStatus()) {
             answer.nextCell("SubjectStatus");
             eventDescriptions.put("SubjectStatus", "Subject Status");
         }
 
-        // TODO set datainfo-settable code here, tbh
         if (dataset.isShowSubjectUniqueIdentifier() && "1".equals(showUniqueId)) {
             answer.nextCell("UniqueID");
             eventDescriptions.put("UniqueID", "Unique ID");
@@ -579,7 +575,6 @@ public class ExtractBean {
                 didb.setSubjectGender(gender);
             }
 
-            // TODO column headers above, column values here, tbh
             if (dataset.isShowSubjectStatus()) {
                 String status = getSubjectStatusName(h);
                 answer.nextCell(status);
@@ -1022,7 +1017,6 @@ public class ExtractBean {
                 // (
                 // )
                 // below needs to be added, tbh
-                // TODO - @vbc - validate this
                 event.setStatus(Status.get(objev.studyEventStatusId.intValue())); // se
                 // .
                 // getStatus
@@ -1323,7 +1317,6 @@ public class ExtractBean {
                      *      item_data_ordinal which is the item_data table. Here
                      *      we retrieve the item_group_metadata.repeat_number
                      *
-                     *      TODO - validate the logic
                      */
                     String key = getDataKey(objev.studySubjectId.intValue(),
                     objev.studyEvenetDefinitionId.intValue(),
@@ -1343,7 +1336,6 @@ public class ExtractBean {
                     selectedSEDCRFs.put(objev.studyEvenetDefinitionId.intValue() + "_" + objgrp.crfid.intValue(), Boolean.TRUE);
                     selectedSEDs.put(objev.studyEvenetDefinitionId, Boolean.TRUE);
 
-                    // TODO - see comment above
                     if ( /* itemDataOrdinal.intValue() */objgrp.itemGroupRepeatNumber.intValue() > getMaxItemDataBeanOrdinal()) {
                         setMaxItemDataBeanOrdinal(objgrp.itemGroupRepeatNumber.intValue()/*
                                                                                           * itemDataOrdinal.
@@ -1934,7 +1926,6 @@ public class ExtractBean {
          * @vbc 08/06/2008 NEW EXTRACT DATA IMPLEMENTATION change it into a
          *      simple HashMap
          *
-         *      TODO - verify if the itemOrdinalItem is required - in the
          *      previous code is set to 1 !?!!?
          */
         String key = currentDef.getId() + "_" + sampleOrdinal + "_" + currentCRF.getId() + "_" + currentItem.getId() + "_" + groupName;

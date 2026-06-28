@@ -326,7 +326,6 @@ public abstract class SecureController extends HttpServlet {
                 String failMessage = dataMap.getString("failMessage");
                 if (state == TriggerState.NONE || state== TriggerState.COMPLETE) {
                     // add the message here that your export is done
-                    // TODO make absolute paths in the message, for example a link from /pages/* would break
                     // TODO i18n
                     if (failMessage != null) {
                         // The extract data job failed with the message:

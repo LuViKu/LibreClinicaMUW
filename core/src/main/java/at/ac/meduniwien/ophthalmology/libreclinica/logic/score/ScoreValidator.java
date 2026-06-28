@@ -410,7 +410,6 @@ public class ScoreValidator {
         // System.out.println("found contents: " + contents.toString() + " for token: " + token + " and for func: " + func);
         if (func.equalsIgnoreCase("getexternalvalue"))//(contents.toString().startsWith("http://"))
             return true;
-        // TODO replace with regexp in future versions
         return false;
     }
 

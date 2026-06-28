@@ -26,7 +26,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
 
 /*
- * TODO this class also exist in web and ws
  */
 public class OpenClinicaJdbcService extends JdbcDaoImpl {
 

@@ -199,7 +199,6 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
             }
 
             // Manually Checking if the user is locked which should be thrown by authenticate. Mantis Issue: 9016
-            // TODO: somebody should find why getAuthenticationManager().authenticate is not working!
             if (userAccountBean.getStatus().isLocked()) {
                 throw new LockedException("locked");
             }

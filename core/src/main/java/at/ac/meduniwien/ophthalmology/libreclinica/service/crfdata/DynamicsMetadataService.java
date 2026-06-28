@@ -71,7 +71,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
     }
 
     public boolean hide(Object metadataBean, EventCRFBean eventCrfBean) {
-        // TODO -- interesting problem, where is the SpringServletAccess object going to live now? tbh 03/2010
         ItemFormMetadataBean itemFormMetadataBean = (ItemFormMetadataBean) metadataBean;
         itemFormMetadataBean.setShowItem(false);
         // DynamicsItemFormMetadataDao dynamicsMetadataDao = (DynamicsItemFormMetadataDao) metadataDao;
@@ -82,7 +81,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return true;
     }
 
-    // TODO: deprecated? probably not because it is still in use
     public boolean isShown(Object metadataBean, EventCRFBean eventCrfBean) {
         ItemFormMetadataBean itemFormMetadataBean = (ItemFormMetadataBean) metadataBean;
         DynamicsItemFormMetadataBean dynamicsMetadataBean = getDynamicsItemFormMetadataBean(itemFormMetadataBean, eventCrfBean, null);
@@ -103,7 +101,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return dynamicsMetadataBean.getPassedDde() > 0;
     }
 
-    // TODO: deprecated? is not used
     public boolean isShown(Integer itemId, EventCRFBean eventCrfBean) {
         // do we check against the database, or just against the object? prob against the db
         // ItemFormMetadataBean itemFormMetadataBean = (ItemFormMetadataBean) metadataBean;
@@ -167,7 +164,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
     }
 
     /**
-     * TODO: remove the @deprecated call. The reason it is there now is to accommodate the call being made from the DataEntryServlet
      *
      * @param itemFormMetadataBean item form metadata
      * @param eventCrfBean event crf
@@ -712,7 +708,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                             } else if (!dynamicsGroupBean.isShowGroup()) {
                                 dynamicsGroupBean.setShowGroup(false);
                                 getDynamicsItemGroupMetadataDao().saveOrUpdate(dynamicsGroupBean);
-                                // TODO is below required in hide?
                             } else if (eventCrfBeanA.getStage().equals(DataEntryStage.DOUBLE_DATA_ENTRY)) {
                                 dynamicsGroupBean.setPassedDde(1);//setVersion(1); // version 1 = passed DDE
                                 getDynamicsItemGroupMetadataDao().saveOrUpdate(dynamicsGroupBean);

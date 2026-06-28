@@ -113,7 +113,6 @@ public class UserProcessor implements Processor, Ordered {
                         createdUser.getUserName());
                 StudyUserRole studyUserRole = new StudyUserRole(studyUserRoleId);
                 studyUserRoleDao.saveOrUpdate(studyUserRole);
-                //TODO: StudyUserRole object had to be heavily modified.  May need fixing.  Also roleName specified
                 // doesn't exist in role table.  May need to fix that.
                 // This table should also foreign key to user_account but doesn't.
             }
