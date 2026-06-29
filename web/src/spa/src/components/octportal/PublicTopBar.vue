@@ -32,8 +32,9 @@ const { t } = useI18n()
         stroke-linejoin="round"
         aria-hidden="true"
       >
-        <circle cx="16" cy="16" r="14" stroke-width="1.4" />
-        <path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75" />
+        <path d="M2.6 16 C9 8.2 23 8.2 29.4 16 C23 23.8 9 23.8 2.6 16 Z" stroke-width="2.2" />
+            <circle cx="16" cy="16" r="5" stroke-width="2.2" />
+            <circle cx="16" cy="16" r="1.9" fill="#d96849" stroke="none" />
       </svg>
       <span
         class="muw-display font-semibold text-muw-blue tracking-tight text-[17px]"
