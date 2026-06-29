@@ -3120,6 +3120,8 @@
       },
       "selectedPoints": "{n} Punkt(e) ausgewählt",
       "resetLayer": "Auf KI-Ergebnis zurücksetzen",
+      "undo": "Rückgängig (Ctrl/⌘+Z)",
+      "etdrsToggle": "ETDRS-Ringe (1 / 3 / 6 mm) ein-/ausblenden",
       "prevSlice": "Vorheriger Schnitt",
       "nextSlice": "Nächster Schnitt",
       "save": "Korrektur speichern",

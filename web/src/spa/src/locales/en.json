@@ -3115,6 +3115,8 @@
       },
       "selectedPoints": "[NEEDS_REVIEW] {n} point(s) selected",
       "resetLayer": "[NEEDS_REVIEW] Reset to AI output",
+      "undo": "[NEEDS_REVIEW] Undo (Ctrl/⌘+Z)",
+      "etdrsToggle": "[NEEDS_REVIEW] Toggle ETDRS rings (1 / 3 / 6 mm)",
       "prevSlice": "[NEEDS_REVIEW] Previous slice",
       "nextSlice": "[NEEDS_REVIEW] Next slice",
       "save": "[NEEDS_REVIEW] Save correction",

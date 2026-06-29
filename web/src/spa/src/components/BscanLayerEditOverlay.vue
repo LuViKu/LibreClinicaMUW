@@ -128,6 +128,57 @@ const selected = ref(new Set<ControlPoint>())
 const editVersion = ref(0)
 const bumpEditVersion = () => { editVersion.value++ }
 
+/**
+ * 2026-06-29 — Undo stack. Each entry is a deep snapshot of
+ * {@link pendingEdits} captured BEFORE an edit operation begins
+ * (shift drag, points move, freehand draw, dblclick-add, delete,
+ * arrow-key shift). Ctrl+Z (and the toolbar's undo button) pops the
+ * top and restores it. We cap the stack at 50 entries — operators
+ * rarely need deeper history and unbounded growth would leak
+ * memory on heavy editing sessions.
+ */
+type EditSnapshot = Map<number, Map<number, ControlPoint[]>>
+const undoStack = ref<EditSnapshot[]>([])
+const UNDO_LIMIT = 50
+
+function snapshotPendingEdits(): EditSnapshot {
+  const out: EditSnapshot = new Map()
+  for (const [z, perSlice] of pendingEdits.value) {
+    const cloned = new Map<number, ControlPoint[]>()
+    for (const [s, entry] of perSlice) {
+      cloned.set(s, entry.points.map((p) => ({ x: p.x, y: p.y })))
+    }
+    out.set(z, cloned)
+  }
+  return out
+}
+
+function pushUndo(): void {
+  const snap = snapshotPendingEdits()
+  undoStack.value.push(snap)
+  if (undoStack.value.length > UNDO_LIMIT) {
+    undoStack.value.shift()
+  }
+}
+
+function undo(): void {
+  const snap = undoStack.value.pop()
+  if (!snap) return
+  const next = new Map<number, Map<number, PendingPerLayer>>()
+  for (const [z, perSlice] of snap) {
+    const restored = new Map<number, PendingPerLayer>()
+    for (const [s, pts] of perSlice) {
+      restored.set(s, { points: pts.map((p) => ({ x: p.x, y: p.y })) })
+    }
+    next.set(z, restored)
+  }
+  pendingEdits.value = next
+  selected.value = new Set()
+  bumpEditVersion()
+}
+
+const canUndo = computed(() => undoStack.value.length > 0)
+
 interface DragShift { type: 'shift'; startY: number; baseYs: number[] }
 interface DragFree { type: 'free'; stroke: ControlPoint[] }
 interface DragMove { type: 'move'; start: ControlPoint; base: { p: ControlPoint; x: number; y: number }[] }
@@ -401,12 +452,14 @@ function onDown(e: PointerEvent): void {
   const pts = getOrCreatePending(z.value, activeLayer.value)
 
   if (mode.value === 'shift') {
+    pushUndo()
     drag.value = {
       type: 'shift',
       startY: n.y,
       baseYs: pts.map((p) => p.y),
     }
   } else if (mode.value === 'free') {
+    pushUndo()
     drag.value = { type: 'free', stroke: [n] }
   } else if (mode.value === 'points') {
     const hit = hitPoint(n)
@@ -420,6 +473,8 @@ function onDown(e: PointerEvent): void {
         sel.add(hit)
       }
       selected.value = sel
+      // Snapshot before the move drag starts mutating point coords.
+      pushUndo()
       drag.value = {
         type: 'move',
         start: n,
@@ -509,6 +564,7 @@ function onDblClick(e: MouseEvent): void {
   if (!props.canEdit || mode.value !== 'points') return
   const n = toImageCoords(e)
   if (!n) return
+  pushUndo()
   const pts = getOrCreatePending(z.value, activeLayer.value)
   const p: ControlPoint = { x: clampX(n.x), y: clampY(n.y) }
   pts.push(p)
@@ -519,6 +575,32 @@ function onDblClick(e: MouseEvent): void {
 
 function onKey(e: KeyboardEvent): void {
   if (!props.canEdit) return
+
+  // 2026-06-29 — Ctrl+Z / ⌘+Z undo. Works in every mode + when no
+  // selection / no active drag. The undo stack is shared across modes
+  // so an operator who switched from shift to points can still roll
+  // back the last shift drag.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    if (!canUndo.value) return
+    e.preventDefault()
+    undo()
+    return
+  }
+
+  // 2026-06-29 — Arrow up/down in shift mode shifts the whole active
+  // layer by 1 image-pixel per press (Shift+Arrow steps by 5 px for
+  // coarser adjustments). Each press is one undo entry.
+  if (mode.value === 'shift' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault()
+    const step = e.shiftKey ? 5 : 1
+    const dy = e.key === 'ArrowUp' ? -step : step
+    pushUndo()
+    const pts = getOrCreatePending(z.value, activeLayer.value)
+    pts.forEach((p) => { p.y = clampY(p.y + dy) })
+    bumpEditVersion()
+    return
+  }
+
   if (mode.value !== 'points') return
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
   if (selected.value.size === 0) return
@@ -529,6 +611,7 @@ function onKey(e: KeyboardEvent): void {
   const ends = new Set([sorted[0]!, sorted[sorted.length - 1]!])
   const keep = pts.filter((p) => !selected.value.has(p) || ends.has(p))
   if (keep.length < 2) return
+  pushUndo()
   // Mutate in place to preserve the pendingEdits map entry reference.
   pts.length = 0
   pts.push(...keep)
@@ -831,24 +914,15 @@ const svgStyle = computed<Record<string, string>>(() => ({
            drag. -->
       <template v-if="mode === 'points'">
         <template v-for="(p, i) in displayedSortedActive" :key="`pt-${i}-${p.x}-${p.y}`">
+          <!-- 2026-06-29 — selected vs unselected differ ONLY in fill
+               colour; radius + stroke-width stay identical so the visual
+               anchor doesn't move when the operator clicks. -->
           <ellipse
-            v-if="selected.has(p)"
-            :cx="p.x"
-            :cy="p.y"
-            :rx="pointRadii.rxSel"
-            :ry="pointRadii.rySel"
-            fill="#ffffff"
-            :stroke="IOWA_LAYER_COLORS[activeLayer % IOWA_LAYER_COLORS.length]"
-            stroke-width="3"
-            vector-effect="non-scaling-stroke"
-          />
-          <ellipse
-            v-else
             :cx="p.x"
             :cy="p.y"
             :rx="pointRadii.rx"
             :ry="pointRadii.ry"
-            :fill="IOWA_LAYER_COLORS[activeLayer % IOWA_LAYER_COLORS.length]"
+            :fill="selected.has(p) ? '#60a5fa' : IOWA_LAYER_COLORS[activeLayer % IOWA_LAYER_COLORS.length]"
             stroke="#0b1220"
             stroke-width="1.5"
             vector-effect="non-scaling-stroke"
@@ -921,6 +995,21 @@ const svgStyle = computed<Record<string, string>>(() => ({
         </svg>
       </button>
       <div class="h-px bg-white/15 mx-1 my-0.5" />
+      <!-- Undo (Ctrl/⌘+Z mirror) — disabled when stack is empty. -->
+      <button
+        type="button"
+        data-testid="bscan-layer-undo"
+        :title="t('retinal.correction.undo')"
+        :disabled="!canUndo"
+        class="w-9 h-9 rounded-lg inline-flex items-center justify-center transition"
+        :class="canUndo ? 'text-white/70 hover:bg-white/15' : 'text-white/25 cursor-not-allowed'"
+        @click="undo"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M9 14 L4 9 L9 4" />
+          <path d="M4 9 H14 a6 6 0 0 1 6 6 v0 a6 6 0 0 1 -6 6 H9" />
+        </svg>
+      </button>
       <button
         type="button"
         data-testid="bscan-layer-reset"
