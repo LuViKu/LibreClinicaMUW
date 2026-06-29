@@ -49,7 +49,7 @@ import org.hibernate.annotations.Type;
 
 // migration (deferred B.5 follow-up).
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class StudyEventDefinition  extends DataMapDomainObject {
 

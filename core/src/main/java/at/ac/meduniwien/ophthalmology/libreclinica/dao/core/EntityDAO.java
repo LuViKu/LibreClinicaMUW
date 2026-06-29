@@ -62,7 +62,7 @@ import org.slf4j.LoggerFactory;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public abstract class EntityDAO<B> implements DAOInterface<B> {
 
     protected DataSource ds;

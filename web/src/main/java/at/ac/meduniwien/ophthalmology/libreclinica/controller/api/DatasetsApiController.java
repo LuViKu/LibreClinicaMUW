@@ -131,6 +131,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/v1")
 @Tag(name = "Data Export", description = "SPA-facing dataset list, export run, and file download.")
+@SuppressWarnings("null")
 public class DatasetsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(DatasetsApiController.class);

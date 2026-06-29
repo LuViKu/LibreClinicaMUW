@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-StudyParameterListRef")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyParameterListRef {
 
     @XmlAttribute(name = "StudyParameterListID", required = true)

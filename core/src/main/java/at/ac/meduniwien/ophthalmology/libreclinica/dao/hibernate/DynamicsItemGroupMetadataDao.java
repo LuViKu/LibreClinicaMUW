@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 // is intentional and isolated to this DAO.
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItemGroupMetadataBean>{
 

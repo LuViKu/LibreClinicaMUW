@@ -41,6 +41,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * scope. Seeds item_data rows on top of the demo-data fixtures and
  * asserts the earliest-observation date + value bubble up correctly.
  */
+@SuppressWarnings("null")
 class ModalityBaselinesApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mockMvc() {

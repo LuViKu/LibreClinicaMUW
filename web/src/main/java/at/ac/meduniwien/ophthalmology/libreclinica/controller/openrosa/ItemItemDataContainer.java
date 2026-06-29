@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.openrosa;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemData;
 
+@SuppressWarnings("all")
+
 public class ItemItemDataContainer {
     private Item item;
     private ItemData itemData;

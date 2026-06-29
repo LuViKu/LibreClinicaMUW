@@ -55,6 +55,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectF
  * rows cleans up after itself so sibling tests still see the seeded
  * state.
  */
+@SuppressWarnings("null")
 class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Per-class on-disk upload root; mirrors the production e2eUploadsPath. */

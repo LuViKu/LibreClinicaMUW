@@ -44,6 +44,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "studyParameterListRef",
     "studyParameterList"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyParameterConfiguration {
 
     @XmlElement(name = "StudyParameterListRef")

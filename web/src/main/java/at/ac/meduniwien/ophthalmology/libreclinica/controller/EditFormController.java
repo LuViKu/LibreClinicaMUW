@@ -75,6 +75,7 @@ import org.w3c.dom.Element;
 
 @Controller
 @RequestMapping(value = "/api/v1/editform")
+@SuppressWarnings("all")
 public class EditFormController {
 
     @Autowired

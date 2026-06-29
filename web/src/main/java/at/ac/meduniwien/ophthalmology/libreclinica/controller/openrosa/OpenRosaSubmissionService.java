@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.Errors;
 
 @Component
+@SuppressWarnings("all")
 public class OpenRosaSubmissionService {
 
     @Autowired

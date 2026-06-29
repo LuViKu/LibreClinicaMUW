@@ -96,6 +96,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/studies/{studyOid}/parameters")
 @Tag(name = "StudyParameters",
      description = "Read/write study_parameter_value handles for a study.")
+@SuppressWarnings("null")
 public class StudyParametersApiController {
 
     private static final Logger LOG =

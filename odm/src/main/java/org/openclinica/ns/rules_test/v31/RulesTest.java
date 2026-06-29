@@ -48,6 +48,7 @@ import org.openclinica.ns.rules.v31.Rules;
     "rulesTestMessages"
 })
 @XmlRootElement(name = "RulesTest")
+@SuppressWarnings("all")
 public class RulesTest {
 
     @XmlElement(name = "Rules", namespace = "http://www.openclinica.org/ns/rules/v3.1", required = true)

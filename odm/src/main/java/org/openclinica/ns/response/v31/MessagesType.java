@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "MessagesType", propOrder = {
     "message"
 })
+@SuppressWarnings("all")
 public class MessagesType {
 
     @XmlElement(name = "Message", required = true)

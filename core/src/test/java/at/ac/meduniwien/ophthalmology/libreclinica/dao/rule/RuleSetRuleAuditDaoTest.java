@@ -19,6 +19,8 @@ import org.hibernate.CacheMode;
 import org.hibernate.HibernateException;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class RuleSetRuleAuditDaoTest extends HibernateOcDbTestCase {
 private static RuleSetDao ruleSetDao;
 private static  RuleSetRuleAuditDao ruleSetRuleAuditDao;

@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 // is intentional and isolated to this DAO.
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements ApplicationEventPublisherAware{
 

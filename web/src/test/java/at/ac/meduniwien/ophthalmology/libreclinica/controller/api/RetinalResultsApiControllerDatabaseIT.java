@@ -62,6 +62,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * companion files (bscan.dcm/fundus.png/geometry.json) where the
  * resolver expects them.
  */
+@SuppressWarnings("null")
 class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Stable seg-dir + bscan-dir roots created per test method. */

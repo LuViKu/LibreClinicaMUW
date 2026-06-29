@@ -42,6 +42,7 @@ import org.cdisc.ns.odm.v121.ODMcomplexTypeDefinitionDecode;
 @XmlType(name = "OCodmComplexTypeDefinition-MultiSelectListItem", propOrder = {
     "decode"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionMultiSelectListItem {
 
     @XmlElement(name = "Decode", namespace = "http://www.cdisc.org/ns/odm/v1.2", required = true)

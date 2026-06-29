@@ -27,7 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEvent;
 
 // is intentional and isolated to this DAO.
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
 

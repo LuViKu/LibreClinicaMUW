@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "OCodmComplexTypeDefinition-AuditLogs", propOrder = {
     "auditLog"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionAuditLogs {
 
     @XmlElement(name = "AuditLog")

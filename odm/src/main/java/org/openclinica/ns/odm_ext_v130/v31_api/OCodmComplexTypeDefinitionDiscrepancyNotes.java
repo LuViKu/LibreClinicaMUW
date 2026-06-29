@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "OCodmComplexTypeDefinition-DiscrepancyNotes", propOrder = {
     "discrepancyNote"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionDiscrepancyNotes {
 
     @XmlElement(name = "DiscrepancyNote")

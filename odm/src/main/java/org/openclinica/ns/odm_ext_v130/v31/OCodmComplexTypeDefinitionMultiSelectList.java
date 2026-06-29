@@ -44,6 +44,7 @@ import org.cdisc.ns.odm.v130.DataType;
 @XmlType(name = "OCodmComplexTypeDefinition-MultiSelectList", propOrder = {
     "multiSelectListItem"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionMultiSelectList {
 
     @XmlElement(name = "MultiSelectListItem")

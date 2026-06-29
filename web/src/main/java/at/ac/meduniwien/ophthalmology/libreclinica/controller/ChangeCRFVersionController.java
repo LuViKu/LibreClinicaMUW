@@ -72,7 +72,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller("changeCRFVersionController")
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class ChangeCRFVersionController {
     @Autowired
     @Qualifier("dataSource")

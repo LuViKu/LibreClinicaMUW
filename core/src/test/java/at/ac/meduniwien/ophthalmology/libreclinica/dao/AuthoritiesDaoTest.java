@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthoritiesBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCase;
 import org.hibernate.HibernateException;
 
+@SuppressWarnings("all")
+
 public class AuthoritiesDaoTest extends HibernateOcDbTestCase {
     private static AuthoritiesDao authoritiesDao;
    /* 

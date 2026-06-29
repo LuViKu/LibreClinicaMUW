@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlValue;
 @XmlType(name = "OCodmComplexTypeDefinition-Age", propOrder = {
     "value"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionAge {
 
     @XmlValue

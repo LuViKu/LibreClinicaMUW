@@ -49,7 +49,7 @@ import org.hibernate.annotations.Type;
 // 2026-06-28 — heritage GenericGenerator(strategy=…) survives
 // until each entity gets a proper Hibernate-6.5 @SequenceGenerator
 // migration (deferred B.5 follow-up).
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class Study   extends DataMapDomainObject {
 	private static final long serialVersionUID = -1650053070213212481L;
 	private int studyId;

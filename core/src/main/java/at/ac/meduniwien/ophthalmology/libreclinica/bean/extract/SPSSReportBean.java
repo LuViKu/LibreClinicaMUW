@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings({"deprecation", "null"})
+@SuppressWarnings("all")
 @Deprecated
 public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
 

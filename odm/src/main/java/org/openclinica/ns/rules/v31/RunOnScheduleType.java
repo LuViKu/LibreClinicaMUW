@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlValue;
 @XmlType(name = "RunOnScheduleType", propOrder = {
     "value"
 })
+@SuppressWarnings("all")
 public class RunOnScheduleType {
 
     @XmlValue

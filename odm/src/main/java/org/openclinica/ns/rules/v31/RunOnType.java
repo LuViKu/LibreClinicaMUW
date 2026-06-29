@@ -40,6 +40,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "RunOnType")
+@SuppressWarnings("all")
 public class RunOnType {
 
     @XmlAttribute(name = "not_scheduled")

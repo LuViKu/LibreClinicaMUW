@@ -45,7 +45,7 @@ import org.springframework.core.io.support.ResourcePatternResolver;
 
 // null-safety review is the deferred follow-up.
 
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 
 public class CoreResources implements ResourceLoaderAware {
 

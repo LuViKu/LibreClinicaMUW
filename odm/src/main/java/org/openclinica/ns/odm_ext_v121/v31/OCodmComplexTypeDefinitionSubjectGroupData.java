@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-SubjectGroupData")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionSubjectGroupData {
 
     @XmlAttribute(name = "StudyGroupClassID", required = true)

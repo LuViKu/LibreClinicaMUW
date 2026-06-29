@@ -135,6 +135,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/rule-sets")
 @Tag(name = "Rules", description = "Read-only view of the rule_set graph on the active study.")
+@SuppressWarnings("null")
 public class RulesApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(RulesApiController.class);

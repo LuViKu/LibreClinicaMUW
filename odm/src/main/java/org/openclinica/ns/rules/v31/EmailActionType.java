@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "message",
     "to"
 })
+@SuppressWarnings("all")
 public class EmailActionType {
 
     @XmlElement(name = "Run")

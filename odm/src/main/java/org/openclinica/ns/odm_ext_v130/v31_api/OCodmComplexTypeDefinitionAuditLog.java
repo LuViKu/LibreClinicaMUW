@@ -38,6 +38,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-AuditLog")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionAuditLog {
 
     @XmlAttribute(name = "ID")

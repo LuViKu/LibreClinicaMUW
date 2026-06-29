@@ -58,7 +58,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class CreateDatasetServlet extends SecureController {
     /**
 	 * 

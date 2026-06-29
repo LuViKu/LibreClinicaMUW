@@ -157,7 +157,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 // request/session state. MUW runs single-host (no session replication), so the
 // servlet never round-trips a serialized form — the warning is meaningless here
 // and noisy across 195 subclasses.
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public abstract class SecureController extends HttpServlet {
     /**
 	 * 

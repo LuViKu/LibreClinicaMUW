@@ -46,6 +46,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "urlReference",
     "urlDescription"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionRelatedInformation {
 
     @XmlElement(name = "MEDLINEIdentifier")

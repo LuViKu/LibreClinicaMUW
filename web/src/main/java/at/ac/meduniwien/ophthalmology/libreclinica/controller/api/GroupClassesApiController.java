@@ -86,6 +86,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/studies/{studyOid}/group-classes")
 @Tag(name = "GroupClasses", description = "Subject group class CRUD (Arms, families, demographic strata).")
+@SuppressWarnings("null")
 public class GroupClassesApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(GroupClassesApiController.class);

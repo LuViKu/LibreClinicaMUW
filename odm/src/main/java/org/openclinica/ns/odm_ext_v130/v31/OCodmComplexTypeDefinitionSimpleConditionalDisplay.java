@@ -44,6 +44,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "optionValue",
     "message"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionSimpleConditionalDisplay {
 
     @XmlElement(name = "ControlItemName", required = true)

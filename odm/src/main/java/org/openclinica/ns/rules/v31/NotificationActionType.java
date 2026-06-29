@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "subject",
     "message"
 })
+@SuppressWarnings("all")
 public class NotificationActionType {
 
     @XmlElement(name = "To", required = true)

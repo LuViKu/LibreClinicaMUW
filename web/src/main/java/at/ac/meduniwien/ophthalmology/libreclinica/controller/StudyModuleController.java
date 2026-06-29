@@ -68,6 +68,7 @@ import org.springframework.web.bind.support.SessionStatus;
 @Controller("studyModuleController")
 @RequestMapping("/studymodule")
 @SessionAttributes("studyModuleStatus")
+@SuppressWarnings("all")
 public class StudyModuleController {
     @Autowired
     @Qualifier("sidebarInit")

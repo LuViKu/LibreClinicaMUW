@@ -81,6 +81,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Verification. This is an autowired, multiaction Controller.
  */
 @Controller("sdvController")
+@SuppressWarnings("all")
 public class SDVController {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

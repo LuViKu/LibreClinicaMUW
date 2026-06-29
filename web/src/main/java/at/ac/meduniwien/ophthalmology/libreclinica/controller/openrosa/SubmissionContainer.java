@@ -22,6 +22,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import org.springframework.validation.Errors;
 
+@SuppressWarnings("all")
+
 public class SubmissionContainer {
     private String requestBody = null;
     private HashMap<String, String> subjectContext = null;

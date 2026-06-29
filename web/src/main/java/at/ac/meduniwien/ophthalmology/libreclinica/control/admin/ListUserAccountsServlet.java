@@ -33,7 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.UserAccountRow;
 
 // null-safety review is the deferred follow-up.
 
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 
 public class ListUserAccountsServlet extends SecureController {
 

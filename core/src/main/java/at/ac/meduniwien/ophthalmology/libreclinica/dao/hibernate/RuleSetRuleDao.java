@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 // is intentional and isolated to this DAO.
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 

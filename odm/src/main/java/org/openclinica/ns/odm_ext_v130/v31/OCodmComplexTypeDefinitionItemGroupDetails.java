@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "OCodmComplexTypeDefinition-ItemGroupDetails", propOrder = {
     "presentInForm"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionItemGroupDetails {
 
     @XmlElement(name = "PresentInForm", required = true)

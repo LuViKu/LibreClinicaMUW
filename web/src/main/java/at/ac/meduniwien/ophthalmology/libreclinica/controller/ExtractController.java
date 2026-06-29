@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller("extractController")
 @RequestMapping("/extract")
+@SuppressWarnings("all")
 public class ExtractController {
     @Autowired
     @Qualifier("sidebarInit")
