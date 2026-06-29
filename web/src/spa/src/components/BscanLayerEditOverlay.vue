@@ -751,10 +751,6 @@ function resetActiveLayer(): void {
   selected.value = new Set()
 }
 
-function bumpSlice(d: number): void {
-  emit('update:modelValue', Math.max(0, Math.min(props.nBscans - 1, props.modelValue + d)))
-}
-
 /**
  * Public — parent calls this when the operator clicks Save in the
  * masthead. We emit one map entry per surface index containing the
@@ -809,6 +805,33 @@ const hintText = computed<string>(() => {
 })
 
 const selectedCount = computed(() => selected.value.size)
+
+/**
+ * 2026-06-29 — Layer bar collapse state. When the bar is centred over
+ * the B-scan it can occlude the ETDRS-ring labels on the very top edge
+ * of the canvas; the operator can collapse it to the left edge with
+ * only the active layer chip + the expand arrow visible. Persisted in
+ * localStorage so the choice survives reloads.
+ */
+function readLocalFlag(key: string): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+const layerBarCollapsed = ref<boolean>(readLocalFlag('retinal.correction.layerBarCollapsed'))
+function toggleLayerBarCollapsed(): void {
+  layerBarCollapsed.value = !layerBarCollapsed.value
+  try {
+    localStorage.setItem('retinal.correction.layerBarCollapsed', layerBarCollapsed.value ? '1' : '0')
+  } catch {
+    /* sandboxed / private mode */
+  }
+}
+const activeLayerLabel = computed<string>(() =>
+  props.labels[activeLayer.value] ?? IOWA_LAYER_LABELS[activeLayer.value] ?? `L${activeLayer.value}`,
+)
 
 /**
  * 2026-06-27 — The cornerstone-rendered B-scan is at the IMAGE'S
@@ -1024,9 +1047,13 @@ const svgStyle = computed<Record<string, string>>(() => ({
       </button>
     </div>
 
-    <!-- Layer bar (top center) — select active layer + contextual hint -->
+    <!-- Layer bar — expanded variant centred over the B-scan with all
+         layer chips + contextual hint. The collapsed variant docks to
+         the left edge and shows only the active-layer chip + an
+         expand arrow so the ETDRS markers + B-scan top edge stay
+         visible. -->
     <div
-      v-if="canEdit"
+      v-if="canEdit && !layerBarCollapsed"
       data-testid="bscan-layer-bar"
       class="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex items-center gap-3 rounded-xl bg-slate-900/85 backdrop-blur-sm ring-1 ring-white/15 px-3 py-1.5"
     >
@@ -1050,24 +1077,6 @@ const svgStyle = computed<Record<string, string>>(() => ({
           <span>{{ labels[idx] ?? IOWA_LAYER_LABELS[idx] ?? `L${idx}` }}</span>
         </button>
       </div>
-      <!-- Prev / next slice nav so the operator can scrub via the bar
-           without leaving the editing context. -->
-      <span class="w-px h-4 bg-white/15" />
-      <button
-        type="button"
-        data-testid="bscan-layer-prev-slice"
-        :title="t('retinal.correction.prevSlice')"
-        class="px-1.5 py-0.5 rounded text-[11px] text-white/60 hover:text-white"
-        @click="bumpSlice(-1)"
-      >‹</button>
-      <span class="tabular-nums text-[11px] text-white/70">{{ modelValue + 1 }} / {{ nBscans }}</span>
-      <button
-        type="button"
-        data-testid="bscan-layer-next-slice"
-        :title="t('retinal.correction.nextSlice')"
-        class="px-1.5 py-0.5 rounded text-[11px] text-white/60 hover:text-white"
-        @click="bumpSlice(1)"
-      >›</button>
       <!-- Hint / selection-count -->
       <span class="w-px h-4 bg-white/15" />
       <span
@@ -1075,6 +1084,47 @@ const svgStyle = computed<Record<string, string>>(() => ({
         class="text-[11px] text-white/85 font-medium"
       >{{ t('retinal.correction.selectedPoints', { n: selectedCount }) }}</span>
       <span v-else class="text-[11px] text-white/45 min-w-[260px]">{{ hintText }}</span>
+      <!-- Collapse to the left edge -->
+      <button
+        type="button"
+        data-testid="bscan-layer-bar-collapse"
+        :title="t('retinal.correction.layerBarCollapse')"
+        class="ml-1 w-6 h-6 rounded inline-flex items-center justify-center text-white/55 hover:text-white hover:bg-white/10"
+        @click="toggleLayerBarCollapsed"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 6 L8 12 L14 18" />
+          <path d="M19 6 L13 12 L19 18" />
+        </svg>
+      </button>
+    </div>
+    <!-- Collapsed variant: docked left, only active layer chip + expand. -->
+    <div
+      v-if="canEdit && layerBarCollapsed"
+      data-testid="bscan-layer-bar-collapsed"
+      class="absolute top-4 left-3 z-20 pointer-events-auto flex items-center gap-2 rounded-xl bg-slate-900/85 backdrop-blur-sm ring-1 ring-white/15 px-2 py-1.5"
+    >
+      <span
+        class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/15 text-white text-[11px] font-semibold"
+      >
+        <span
+          class="w-2 h-2 rounded-[2px]"
+          :style="{ background: IOWA_LAYER_COLORS[activeLayer % IOWA_LAYER_COLORS.length] }"
+        />
+        {{ activeLayerLabel }}
+      </span>
+      <button
+        type="button"
+        data-testid="bscan-layer-bar-expand"
+        :title="t('retinal.correction.layerBarExpand')"
+        class="w-6 h-6 rounded inline-flex items-center justify-center text-white/55 hover:text-white hover:bg-white/10"
+        @click="toggleLayerBarCollapsed"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 6 L16 12 L10 18" />
+          <path d="M5 6 L11 12 L5 18" />
+        </svg>
+      </button>
     </div>
   </div>
 </template>

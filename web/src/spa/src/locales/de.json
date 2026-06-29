@@ -3122,6 +3122,8 @@
       "resetLayer": "Auf KI-Ergebnis zurücksetzen",
       "undo": "Rückgängig (Ctrl/⌘+Z)",
       "etdrsToggle": "ETDRS-Ringe (1 / 3 / 6 mm) ein-/ausblenden",
+      "layerBarCollapse": "Schichtenleiste einklappen",
+      "layerBarExpand": "Schichtenleiste ausklappen",
       "prevSlice": "Vorheriger Schnitt",
       "nextSlice": "Nächster Schnitt",
       "save": "Korrektur speichern",

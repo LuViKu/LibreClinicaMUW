@@ -76,11 +76,17 @@ describe('BscanLayerEditOverlay', () => {
     expect(wrapper.find('[data-testid="bscan-layer-bar"]').exists()).toBe(false)
   })
 
-  it('emits update:modelValue when the layer bar advances the slice', async () => {
-    const wrapper = mountOverlay({ modelValue: 1 })
-    await wrapper.find('[data-testid="bscan-layer-next-slice"]').trigger('click')
-    const events = wrapper.emitted('update:modelValue')
-    expect(events?.[0]).toEqual([2])
+  it('collapses + re-expands the layer bar via the chevron buttons', async () => {
+    const wrapper = mountOverlay()
+    // Starts expanded — full bar visible, collapsed sibling absent.
+    expect(wrapper.find('[data-testid="bscan-layer-bar"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="bscan-layer-bar-collapsed"]').exists()).toBe(false)
+    await wrapper.find('[data-testid="bscan-layer-bar-collapse"]').trigger('click')
+    expect(wrapper.find('[data-testid="bscan-layer-bar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bscan-layer-bar-collapsed"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="bscan-layer-bar-expand"]').trigger('click')
+    expect(wrapper.find('[data-testid="bscan-layer-bar"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="bscan-layer-bar-collapsed"]').exists()).toBe(false)
   })
 
   it('does not emit pending-edit-count before any edit', () => {

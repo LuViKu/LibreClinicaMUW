@@ -32,6 +32,7 @@ import { useRetinalJobStore } from '@/stores/retinalJob'
 import { formatDate } from '@/lib/dateFormat'
 import { IOWA_LAYER_COLORS, IOWA_LAYER_LABELS } from '@/components/retinalPalette'
 import BscanLayerEditOverlay from '@/components/BscanLayerEditOverlay.vue'
+import EtdrsRingsBscanIndicator from '@/components/EtdrsRingsBscanIndicator.vue'
 import NamdEnFaceLocator from './NamdEnFaceLocator.vue'
 import { useSiblingLayersJob } from '../composables/useSiblingLayersJob'
 import { I } from '../icons'
@@ -123,6 +124,13 @@ interface Props {
    * Monitor / CRC role.
    */
   canCorrectLayers?: boolean
+  /**
+   * 2026-06-29 — externally-controlled ETDRS-rings visibility (used by
+   * the Compare-tab masthead so both panes toggle together). When
+   * undefined the frame falls back to its own localStorage-backed
+   * toggle (the per-pane fullscreen masthead).
+   */
+  etdrsRings?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -134,6 +142,7 @@ const props = withDefaults(defineProps<Props>(), {
   prevVisit: null,
   studySubjectId: null,
   canCorrectLayers: false,
+  etdrsRings: undefined,
 })
 
 const emit = defineEmits<{
@@ -198,6 +207,40 @@ function showCorrectionSavedToast(text: string): void {
 }
 const correctionDiscardOpen = ref(false)
 const correctionOverlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
+
+/**
+ * 2026-06-29 — ETDRS-ring eccentricity indicator toggle. Local state
+ * backs the per-pane fullscreen masthead toggle; when the consumer
+ * passes the {@code etdrsRings} prop (Compare-tab), that wins so both
+ * panes stay in sync. Default off; persisted in localStorage so the
+ * choice survives across sessions.
+ *
+ * <p>The indicator only renders in FULLSCREEN modes (per-pane fs OR
+ * compare-tab fillContainer) — inline non-fs viewers stay uncluttered.
+ */
+const localEtdrsRings = ref<boolean>(
+  typeof localStorage !== 'undefined'
+    && localStorage.getItem('retinal.correction.etdrsRings') === '1',
+)
+const showEtdrsRings = computed<boolean>(() =>
+  props.etdrsRings !== undefined ? props.etdrsRings : localEtdrsRings.value,
+)
+function toggleEtdrsRings(): void {
+  localEtdrsRings.value = !localEtdrsRings.value
+  try {
+    localStorage.setItem('retinal.correction.etdrsRings', localEtdrsRings.value ? '1' : '0')
+  } catch {
+    /* sandboxed / private mode — preference doesn't persist */
+  }
+}
+function slotImageDims(slotProps: unknown): { rows: number; cols: number } | null {
+  const d = (slotProps as { imageDims?: { rows: number; cols: number } | null })?.imageDims
+  return d ?? null
+}
+function slotPixelSpacing(slotProps: unknown): { axialMm: number; lateralMm: number } | null {
+  const sp = (slotProps as { pixelSpacing?: { axialMm: number; lateralMm: number } | null })?.pixelSpacing
+  return sp ?? null
+}
 
 const FLUID_LABELS = new Set([1, 2, 3]) // IRF=1, SRF=2, PED=3
 
@@ -722,6 +765,22 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
             {{ correctionSavedToast }}
           </span>
         </transition>
+        <!-- 2026-06-29 — ETDRS-rings toggle on the fullscreen masthead. -->
+        <button
+          type="button"
+          data-testid="namd-scan-fs-etdrs"
+          :title="t('retinal.correction.etdrsToggle')"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          :class="showEtdrsRings ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-white/85 hover:bg-white/20'"
+          @click="toggleEtdrsRings"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="12" cy="12" r="7" />
+            <circle cx="12" cy="12" r="11" />
+          </svg>
+          ETDRS
+        </button>
         <!-- 2026-06-26 — Save button surfaces only when (sibling layers
              job exists, role gate open, edits pending). The badge
              shows the unsaved-edit count. -->
@@ -821,54 +880,64 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
                  (a) a sibling layers/bm job exists and (b) the role
                  gate is open. The slot is conditional so non-editing
                  BscanViewer mounts keep the cheap no-op default. -->
-            <template
-              v-if="mask && siblingEnvelopeData && namdStaticOverlayPaths.length > 0"
-              #overlay="slotProps"
-            >
-              <BscanLayerEditOverlay
-                v-if="fsOpen && siblingJobId != null"
-                ref="correctionOverlayRef"
-                :job-id="siblingJobId"
-                :n-bscans="nSlices"
-                :cols="siblingCols"
-                :rows="slotRows(slotProps)"
-                :model-value="slice"
-                :envelope-data="siblingEnvelopeData"
-                :n-surfaces="siblingNSurfaces"
-                :labels="siblingLabels"
-                :correctable-layer-indices="namdCorrectableLayerIndices"
-                :can-edit="canCorrectLayers"
-                :bbox-style="slotBbox(slotProps)"
-                @update:model-value="(z) => emit('update:slice', z)"
-                @save="onCorrectionOverlaySave"
-                @pending-edit-count="(n) => correctionPendingCount = n"
-              />
-              <!-- Read-only inline polylines when not in fullscreen.
-                   No event handlers; pointer-events: none. -->
-              <svg
-                v-else
-                data-testid="namd-static-layers-overlay"
-                :viewBox="`0 0 ${siblingCols} ${slotRows(slotProps)}`"
-                :style="slotBbox(slotProps)"
-                preserveAspectRatio="none"
-                class="pointer-events-none"
-              >
-                <template
-                  v-for="path in namdStaticOverlayPaths"
-                  :key="`namd-layer-${path.idx}`"
+            <template #overlay="slotProps">
+              <!-- Sibling-layers overlay (existing) -->
+              <template v-if="mask && siblingEnvelopeData && namdStaticOverlayPaths.length > 0">
+                <BscanLayerEditOverlay
+                  v-if="fsOpen && siblingJobId != null"
+                  ref="correctionOverlayRef"
+                  :job-id="siblingJobId"
+                  :n-bscans="nSlices"
+                  :cols="siblingCols"
+                  :rows="slotRows(slotProps)"
+                  :model-value="slice"
+                  :envelope-data="siblingEnvelopeData"
+                  :n-surfaces="siblingNSurfaces"
+                  :labels="siblingLabels"
+                  :correctable-layer-indices="namdCorrectableLayerIndices"
+                  :can-edit="canCorrectLayers"
+                  :bbox-style="slotBbox(slotProps)"
+                  @update:model-value="(z) => emit('update:slice', z)"
+                  @save="onCorrectionOverlaySave"
+                  @pending-edit-count="(n) => correctionPendingCount = n"
+                />
+                <svg
+                  v-else
+                  data-testid="namd-static-layers-overlay"
+                  :viewBox="`0 0 ${siblingCols} ${slotRows(slotProps)}`"
+                  :style="slotBbox(slotProps)"
+                  preserveAspectRatio="none"
+                  class="pointer-events-none"
                 >
-                  <path
-                    :d="path.d" fill="none" stroke="#0b1220"
-                    stroke-width="3" stroke-opacity="0.45"
-                    vector-effect="non-scaling-stroke"
-                  />
-                  <path
-                    :d="path.d" fill="none" :stroke="path.stroke"
-                    stroke-width="1.6" stroke-opacity="0.95"
-                    vector-effect="non-scaling-stroke"
-                  />
-                </template>
-              </svg>
+                  <template
+                    v-for="path in namdStaticOverlayPaths"
+                    :key="`namd-layer-${path.idx}`"
+                  >
+                    <path
+                      :d="path.d" fill="none" stroke="#0b1220"
+                      stroke-width="3" stroke-opacity="0.45"
+                      vector-effect="non-scaling-stroke"
+                    />
+                    <path
+                      :d="path.d" fill="none" :stroke="path.stroke"
+                      stroke-width="1.6" stroke-opacity="0.95"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  </template>
+                </svg>
+              </template>
+              <!-- ETDRS rings — only in fullscreen contexts (per-pane fs
+                   OR compare-tab fillContainer). Inline non-fs viewers
+                   stay uncluttered. -->
+              <EtdrsRingsBscanIndicator
+                v-if="fsOpen || fillContainer"
+                :n-bscans="nSlices"
+                :current-z="slice"
+                :image-dims="slotImageDims(slotProps)"
+                :pixel-spacing="slotPixelSpacing(slotProps)"
+                :bbox-style="slotBbox(slotProps)"
+                :visible="showEtdrsRings"
+              />
             </template>
           </BscanViewer>
         </div>
