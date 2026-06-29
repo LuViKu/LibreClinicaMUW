@@ -26,7 +26,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayEventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
@@ -51,8 +50,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu
  * 
- *         TODO To change the template for this generated type comment go to Window - Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class DeleteEventCRFServlet extends SecureController {
 	/**
 	 * 
@@ -98,7 +97,7 @@ public class DeleteEventCRFServlet extends SecureController {
 
 		if (eventCRFId == 0) {
 			addPageMessage(respage.getString("please_choose_an_event_CRF_to_delete"));
-			request.setAttribute("id", new Integer(studySubId).toString());
+			request.setAttribute("id", Integer.valueOf(studySubId).toString());
 			forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
 		} else {
 			EventCRFBean eventCRF = (EventCRFBean) ecdao.findByPK(eventCRFId);
@@ -221,7 +220,7 @@ public class DeleteEventCRFServlet extends SecureController {
 
 				addPageMessage(emailBody);
 				// sendEmail(emailBody);
-				request.setAttribute("id", new Integer(studySubId).toString());
+				request.setAttribute("id", Integer.valueOf(studySubId).toString());
 				forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
 			}
 

@@ -36,6 +36,7 @@ import org.apache.commons.lang.StringUtils;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class UpdateProfileServlet extends SecureController {
 
 	private static final long serialVersionUID = -2519124535258437372L;

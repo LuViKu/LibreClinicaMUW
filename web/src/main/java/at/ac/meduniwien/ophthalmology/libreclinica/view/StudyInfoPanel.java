@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class StudyInfoPanel {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -231,7 +232,7 @@ public class StudyInfoPanel {
                 DatasetBean dsb = (DatasetBean) session.getAttribute("newDataset");
                 int ev_count = dsb.getItemIds().size();
 
-                this.setData(resword.getString("items_selected"), new Integer(ev_count).toString());
+                this.setData(resword.getString("items_selected"), String.valueOf(ev_count));
 
             } else if (page.equals(Page.CREATE_DATASET_4)) {
                 this.reset();
@@ -244,7 +245,7 @@ public class StudyInfoPanel {
                 this.removeData(resword.getString("ending_date"));
                 DatasetBean dsb = (DatasetBean) session.getAttribute("newDataset");
                 int ev_count = dsb.getItemIds().size();
-                this.setData(resword.getString("items_selected"), new Integer(ev_count).toString());
+                this.setData(resword.getString("items_selected"), String.valueOf(ev_count));
 
                 if ("01/01/1900".equals(english_sdf.format(dsb.getDateStart()))) {
                     this.setData(resword.getString("beginning_date"), resword.getString("not_specified"));
@@ -276,7 +277,7 @@ public class StudyInfoPanel {
                 this.setData(resword.getString("dataset_name"), dsb.getName());
                 this.setData(resword.getString("dataset_description"), dsb.getDescription());
                 int ev_count = dsb.getItemIds().size();
-                this.setData(resword.getString("items_selected"), new Integer(ev_count).toString());
+                this.setData(resword.getString("items_selected"), String.valueOf(ev_count));
 
                 if ("01/01/1900".equals(english_sdf.format(dsb.getDateStart()))) {
                     this.setData(resword.getString("beginning_date"), resword.getString("not_specified"));
@@ -299,7 +300,7 @@ public class StudyInfoPanel {
                 SectionBean secBean = (SectionBean) session.getAttribute("secBean");
                 this.setData(resword.getString("section_selected"), secBean.getName());
                 ArrayList<ItemFormMetadataBean> metadatas = getAttributeAsList(request, "metadatas", ItemFormMetadataBean.class);
-                this.setData(resword.getString("number_of_questions"), new Integer(metadatas.size()).toString());
+                this.setData(resword.getString("number_of_questions"), String.valueOf(metadatas.size()));
             } else if (page.equals(Page.CREATE_FILTER_SCREEN_4)) {
 
             } else if (page.equals(Page.CREATE_FILTER_SCREEN_5)) {
@@ -309,7 +310,6 @@ public class StudyInfoPanel {
             } else if (page.equals(Page.VIEW_STUDY_SUBJECT) || page.equals(Page.LIST_EVENTS_FOR_SUBJECT)) {
                 // special case, unlocks study name, subject name, and
                 // visits
-                // TODO set all this up, tbh
                 /*
                  * set up the side info panel to create the following upon entry
                  * from the ViewStudyServlet Study X Subject Y StudyEventDef Z1
@@ -364,7 +364,6 @@ public class StudyInfoPanel {
                 /*
                  * pages designed to also follow the above format; check to see
                  * if they are in the session already, and does not refresh.
-                 * TODO refine and test
                  */
                 StudyBean study = (StudyBean) session.getAttribute("study");
                 StudySubjectBean studySubject = (StudySubjectBean) request.getAttribute("studySubject");

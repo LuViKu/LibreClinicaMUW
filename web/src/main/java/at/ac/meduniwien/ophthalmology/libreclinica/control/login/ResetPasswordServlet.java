@@ -40,6 +40,7 @@ import java.sql.SQLException;
  *
  * @author ywang
  */
+@SuppressWarnings("all")
 public class ResetPasswordServlet extends SecureController {
 
 	private static final long serialVersionUID = -5259201015824317949L;

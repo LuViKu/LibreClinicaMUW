@@ -176,7 +176,6 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return executeFindAllQuery(queryName, variables);
     }
 
-    // TODO: remove unused parameter 'currentStudy'
     public ArrayList<SubjectBean> getWithFilterAndSort(StudyBean currentStudy, ListSubjectFilter filter, ListSubjectSort sort, int rowStart, int rowEnd) {
         setTypesExpected();
 
@@ -195,7 +194,6 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return subjects;
     }
 
-    // TODO: remove unused parameter 'currentStudy'
     public Integer getCountWithFilter(ListSubjectFilter filter, StudyBean currentStudy) {
         String query = digester.getQuery("getCountWithFilter");
         query += filter.execute("");
@@ -282,7 +280,6 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<SubjectBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
@@ -383,7 +380,7 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         }
         variables.put(ind++, sb.getUniqueIdentifier());
         // date_updated is set to now()
-        //    variables.put(new Integer(ind++), new java.util.Date());
+        //    variables.put(Integer.valueOf(ind++), new java.util.Date());
         variables.put(ind++, sb.getUpdater().getId());
         variables.put(ind++, sb.isDobCollected());
         variables.put(ind++, sb.getId());
@@ -395,14 +392,12 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<SubjectBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     public ArrayList<SubjectBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");

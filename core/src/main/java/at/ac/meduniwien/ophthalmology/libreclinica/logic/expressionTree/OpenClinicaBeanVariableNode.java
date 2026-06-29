@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.Expre
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class OpenClinicaBeanVariableNode extends ExpressionNode {
     String number;
     ExpressionBeanService expressionBeanService;
@@ -62,7 +63,6 @@ public class OpenClinicaBeanVariableNode extends ExpressionNode {
     @Override
     String testCalculate() throws OpenClinicaSystemException {
 
-    	//TODO: do something
         return null;
 
     }
@@ -85,7 +85,6 @@ public class OpenClinicaBeanVariableNode extends ExpressionNode {
     }
 
     void validate() throws OpenClinicaSystemException {
-       // TODO: Create validation
     }
 
     private Object calculateStatus(){

@@ -303,4 +303,19 @@ public final class AuditTypeIds {
      * deep-link either artifact.
      */
     public static final int RETINAL_CRT_AUTOPOPULATE        = 122;
+
+    /**
+     * 2026-06-26 — operator hand-correction of an AI-produced layer
+     * surface (ILM / RPE / BM / IOWA surfaces 0..10) on a
+     * retinal_inference_job. Writer is
+     * {@code RetinalResultsApiController.saveCorrection}; audit_table =
+     * {@code retinal_inference_correction}, entity_id = correction_id;
+     * column_name = {@code csv_relpath}; old_value = previous file's
+     * relpath (empty on first correction for the layer); new_value =
+     * newly-written relpath under {@code <bscan_masks_dir>/corrections/}.
+     * The action_message packs the layer_label + edited_slice_count so
+     * the audit timeline reads "Layer correction: ILM (12 slices)".
+     * Visible in the operator-facing /api/v1/audit feed.
+     */
+    public static final int RETINAL_SEGMENTATION_CORRECTED  = 123;
 }

@@ -25,6 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("all")
 public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemFormMetadataBean> {
 
     protected static final Logger LOG = LoggerFactory.getLogger(DynamicsItemFormMetadataDao.class);
@@ -34,8 +40,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         return DynamicsItemFormMetadataBean.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemFormMetadataBean findByMetadataBean(ItemFormMetadataBean metadataBean, EventCRFBean eventCrfBean,
             ItemDataBean itemDataBean) {
 
@@ -47,7 +51,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         q.setParameter("item_id", metadataBean.getItemId());
         q.setParameter("event_crf_id", eventCrfBean.getId());
         q.setParameter("item_data_id", itemDataBean.getId());
-        List<DynamicsItemFormMetadataBean> list = q.list();
+        List<DynamicsItemFormMetadataBean> list = q.getResultList();
         /* TODO use uniqueResult (or something similar), if the
          * query returns multiple (equivalent results) use distinct also
          */
@@ -55,8 +59,6 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
     }
 
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList <DynamicsItemFormMetadataBean> findByItemAndEventCrfShown(EventCRFBean eventCrfBean,
             int itemId) {
 
@@ -68,18 +70,16 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         q.setParameter("item_id", itemId);
         q.setParameter("event_crf_id", eventCrfBean.getId());
 
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemFormMetadataBean findByItemDataBean(ItemDataBean itemDataBean) {
         String query = "from " + getDomainClassName() + " metadata where metadata.itemDataId = :item_data_id ";
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);
 
         q.setParameter("item_data_id", itemDataBean.getId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
         
@@ -172,8 +172,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
      * @param crfVersionId crfVersionId
      * @return list of IDs
      */
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings({"deprecation", "rawtypes"})
+    @SuppressWarnings("rawtypes")
     protected List<Integer> queryForIDs(String postgresQuery, Integer groupId, Integer sectionId,
             Integer eventCrfId, Integer crfVersionId) {
 

@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.CodedEnum;
 
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public enum DataEntryPhase implements CodedEnum {
 
     ADMIN_EDITING(1, "Administrative Editing"), INITIAL_DATA_ENTRY(2, "Initial Data Entry"), DOUBLE_DATA_ENTRY(3, "Double Data Entry"), IMPORT(4, "Import");

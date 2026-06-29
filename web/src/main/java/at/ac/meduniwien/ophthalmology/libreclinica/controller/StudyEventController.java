@@ -48,6 +48,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
 @RequestMapping(value = "/auth/api/v1/studyevent")
+@SuppressWarnings("all")
 public class StudyEventController {
 
 	@Autowired

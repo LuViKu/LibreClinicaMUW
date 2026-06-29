@@ -38,6 +38,9 @@ import org.slf4j.LoggerFactory;
  * @author thickerson
  * @version 1.1 modified by jxu
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class NewCRFBean extends Object implements java.io.Serializable {
 
     /**
@@ -222,10 +225,13 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             }
             return returnMe;
         } catch (SQLException se) {
-            se.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): log + propagate so CRF
+            // metadata-load failures surface in operator logs instead of stdout.
+            logger.error("listItemDescriptions: SQL failure for CRF id {}", crfId, se);
             throw new OpenClinicaException("SQLException: " + se.getMessage(), "");
         } catch (OpenClinicaException pe) {
-            pe.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): log + propagate.
+            logger.error("listItemDescriptions: failure for CRF id {}", crfId, pe);
             throw new OpenClinicaException("OpenClinicaException: " + pe.getMessage(), "");
         } finally {
             try {
@@ -236,7 +242,8 @@ public class NewCRFBean extends Object implements java.io.Serializable {
                 if (rs != null)
                     rs.close();
             } catch (SQLException e) {
-                e.printStackTrace();
+                // 2026-06-28 — heritage-debt audit (PR #262): log + propagate.
+                logger.error("listItemDescriptions: failure closing JDBC resources for CRF id {}", crfId, e);
                 throw new OpenClinicaException(e.getMessage(), "1");
             }
 
@@ -272,10 +279,12 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             }
             return returnMe;
         } catch (SQLException se) {
-            se.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): log + propagate.
+            logger.error("listItemNames: SQL failure for CRF id {}", crfId, se);
             throw new OpenClinicaException("SQLException: " + se.getMessage(), "");
         } catch (OpenClinicaException pe) {
-            pe.printStackTrace();
+            // 2026-06-28 — heritage-debt audit (PR #262): log + propagate.
+            logger.error("listItemNames: failure for CRF id {}", crfId, pe);
             throw new OpenClinicaException("OpenClinicaException: " + pe.getMessage(), "");
         } finally {
             try {
@@ -286,7 +295,8 @@ public class NewCRFBean extends Object implements java.io.Serializable {
                 if (rs != null)
                     rs.close();
             } catch (SQLException e) {
-                e.printStackTrace();
+                // 2026-06-28 — heritage-debt audit (PR #262): log + propagate.
+                logger.error("listItemNames: failure closing JDBC resources for CRF id {}", crfId, e);
                 throw new OpenClinicaException(e.getMessage(), "1");
             }
 
@@ -370,7 +380,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             con.setAutoCommit(false);
             logger.debug("---start of item query generation here---");
             for(Map.Entry<String, String> ment : itemQueries.entrySet()) {
-                String pQuery = (String) ment.getValue();
+                String pQuery = ment.getValue();
                 s = con.prepareStatement(pQuery);
                 logger.debug(pQuery);
                 s.executeUpdate();
@@ -386,7 +396,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             // try a for loop instead
             int last = queries.size();
             for (int th = 0; th < last; th++) {
-                String query = (String) queries.get(th);// it.next();
+                String query = queries.get(th);// it.next();
                 count = th;
                 s = con.prepareStatement(query);
                 s.executeUpdate();

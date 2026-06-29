@@ -23,6 +23,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class ViewUserAccountServlet extends SecureController {
 
 	private static final long serialVersionUID = 2096237550544873731L;

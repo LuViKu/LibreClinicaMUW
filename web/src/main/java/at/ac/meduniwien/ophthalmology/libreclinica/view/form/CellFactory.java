@@ -24,6 +24,7 @@ import org.jdom.Element;
  * HorizontalFormBuilder uses this class to help build an HTML form, for
  * instance.
  */
+@SuppressWarnings("all")
 public class CellFactory {
     // The object to which this class delegates the creation of
     // input elements or tags.

@@ -22,6 +22,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewUserAccount
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class UserAccountTable extends Table {
     public UserAccountTable() {
         columns.add("Username");

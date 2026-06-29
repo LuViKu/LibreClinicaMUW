@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author Krikor Krumlian
  *
  */
+@SuppressWarnings("all")
 public class RemoveRuleSetServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;
@@ -121,7 +122,7 @@ public class RemoveRuleSetServlet extends SecureController {
         ruleSetService =
             this.ruleSetService != null ? ruleSetService : (RuleSetServiceInterface) SpringServletAccess.getApplicationContext(context).getBean(
                     "ruleSetService");
-        // TODO: Add getRequestURLMinusServletPath(),getContextPath()
+        // NOTE: Add getRequestURLMinusServletPath(),getContextPath()
         return ruleSetService;
     }
 

@@ -17,6 +17,7 @@ import java.util.Date;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class SubjectTransferBean extends EntityBean {
 
     private static final long serialVersionUID = 2270466335721404526L;
@@ -36,7 +37,6 @@ public class SubjectTransferBean extends EntityBean {
     UserAccountBean owner;
 
     public SubjectTransferBean() {
-        // TODO Auto-generated constructor stub
     }
 
     public SubjectTransferBean(String personId, String studySubjectId, Date dateOfBirth, char gender, String studyOid) {

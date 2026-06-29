@@ -32,6 +32,7 @@ import javax.xml.transform.Result;
  * This class generates a horizontal HTML table with multiple columns and
  * headers.
  */
+@SuppressWarnings("all")
 public class HorizontalFormBuilder extends DefaultFormBuilder {
 
     private static final Logger logger= LoggerFactory.getLogger(HorizontalFormBuilder.class);

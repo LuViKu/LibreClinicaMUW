@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.Configu
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class PasswordRequirementsDao {
 	public static final String
 	    PWD_CHARS_MIN = "pwd.chars.min",

@@ -213,8 +213,9 @@ function onReportBugClick() {
     <div class="max-w-7xl mx-auto px-4 h-14 flex items-center">
       <RouterLink to="/" class="flex items-center gap-2.5 mr-6">
         <svg class="w-7 h-7 text-muw-blue" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="16" cy="16" r="14" stroke-width="1.4" />
-          <path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75" />
+          <path d="M2.6 16 C9 8.2 23 8.2 29.4 16 C23 23.8 9 23.8 2.6 16 Z" stroke-width="2.2" />
+            <circle cx="16" cy="16" r="5" stroke-width="2.2" />
+            <circle cx="16" cy="16" r="1.9" fill="#d96849" stroke="none" />
         </svg>
         <span class="muw-display font-semibold text-muw-blue tracking-tight whitespace-nowrap">
           LibreClinica<em class="not-italic font-medium text-muw-coral-700 text-[0.7em] uppercase tracking-[0.08em] ml-1.5 align-middle">MUW</em>
@@ -342,6 +343,21 @@ function onReportBugClick() {
               </svg>
               {{ t('bugReport.title') }}
             </button>
+          </div>
+
+          <div class="border-t border-slate-200 mt-1 pt-1.5 px-2">
+            <RouterLink
+              to="/manual"
+              class="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center gap-2"
+              data-testid="topbar-manual-link"
+              @click="closePopover"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              {{ t('topBar.profile.manual') }}
+            </RouterLink>
           </div>
 
           <div v-if="hasLogout" class="border-t border-slate-200 mt-1 pt-1.5 px-2">

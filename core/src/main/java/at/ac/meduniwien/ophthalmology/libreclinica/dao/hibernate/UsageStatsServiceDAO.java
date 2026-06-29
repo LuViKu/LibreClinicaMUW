@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author pgawade
  */
+@SuppressWarnings("all")
 public class UsageStatsServiceDAO extends AbstractDomainDao<LogUsageStatsBean> {
     private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass().getName());
 
@@ -34,8 +35,6 @@ public class UsageStatsServiceDAO extends AbstractDomainDao<LogUsageStatsBean> {
         return LogUsageStatsBean.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public LogUsageStatsBean findLatestUsageStatParamValue(String param_key) {
         // logger.debug("UsageStatsServiceDAO -> findLatestUsageStatParamValue");
 
@@ -47,7 +46,7 @@ public class UsageStatsServiceDAO extends AbstractDomainDao<LogUsageStatsBean> {
         Query<LogUsageStatsBean> q = getCurrentSession().createQuery(query, LogUsageStatsBean.class);
         q.setParameter("param_key", param_key);
         q.setMaxResults(1);
-        logUsageStatsBeanLst = q.list();
+        logUsageStatsBeanLst = q.getResultList();
         if ((null != logUsageStatsBeanLst) && (logUsageStatsBeanLst.size() != 0)) {
             logUsageStatsBeanRet = logUsageStatsBeanLst.get(0);
         }

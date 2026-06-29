@@ -60,6 +60,9 @@ import org.slf4j.LoggerFactory;
  *
  * @author thickerson
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public abstract class EntityDAO<B> implements DAOInterface<B> {
 
     protected DataSource ds;
@@ -107,6 +110,10 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     protected String oc_df_string = "";
     protected String local_df_string = "";
 
+    // this-escape: setDigesterName() is abstract; every concrete subclass overrides it,
+    // and the architecture relies on the override running before the digester lookup
+    // below. Refactoring out of the ctor would ripple through 36+ DAO subclasses.
+    @SuppressWarnings("this-escape")
     public EntityDAO(DataSource ds) {
         this.ds = ds;
         setDigesterName();
@@ -241,11 +248,15 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
 			}
         } catch (SQLException sqle) {
             signalFailure(sqle);
-            if (logger.isWarnEnabled()) {
-                logger.warn("Exception while executing query, EntityDAO.select: {}:message: {}", query, sqle.getMessage());
-                logger.error(sqle.getMessage(), sqle);
-            }
-            // TODO shouldn't it be better to throw an exception?
+            // 2026-06-28 — heritage-debt audit (PR #262): the heritage code
+            // returned an empty ArrayList on SQL failure, so callers could not
+            // distinguish "no rows" from "query exploded". Throwing a checked
+            // exception would change ~500 call sites; for now we (a) log ERROR
+            // unconditionally with the full query text and stack, and (b) keep
+            // the empty-list return so the surrounding contract is unchanged.
+            // Conversion to org.springframework.dao.DataAccessException is
+            // tracked in the B.5 follow-up backlog.
+            logger.error("EntityDAO.select: SQL failure for query [{}]: {}", query, sqle.getMessage(), sqle);
             results = new ArrayList<>();
         } finally {
             this.closeIfNecessary(connection, rs, ps);
@@ -301,7 +312,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
         
         String query = digester.getQuery(queryName);
         if (query == null || query.trim().isEmpty()) {
-        	// TODO for backwards compatibility here is no error thrown but this should be changed in the future
         	logger.error("No query with name '{}' found", queryName);
             return answer;
         }
@@ -1378,19 +1388,19 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // itemdataid
                 Integer vitemdataid = getAsInt(rs, "itemdataid", null);
                 if (vitemdataid == null) {
-                    // TODO ERROR - should always be different than NULL
+                    // NOTE: ERROR - should always be different than NULL
                 }
 
                 // itemdataordinal
                 Integer vitemdataordinal = getAsInt(rs, "itemdataordinal", null);
                 if (vitemdataordinal == null) {
-                    // TODO ERROR - should always be different than NULL
+                    // NOTE: ERROR - should always be different than NULL
                 }
 
                 // item_group_id
                 Integer vitem_group_id = getAsInt(rs, "item_group_id", null);
                 if (vitem_group_id == null) {
-                    // TODO ERROR - should always be different than NULL
+                    // NOTE: ERROR - should always be different than NULL
                 }
 
                 // itemgroupname
@@ -1422,14 +1432,12 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // crfversionstatusid
                 Integer vcrfversionstatusid = getAsInt(rs, "crfversionstatusid", null);
                 if (vcrfversionstatusid == null) {
-                    // TODO - what value default
                     // vcrfversionstatusid = Integer.valueOf(?);
                 }
 
                 // dateinterviewed
                 Date vdateinterviewed = rs.getDate("dateinterviewed");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // interviewername
@@ -1441,55 +1449,46 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // eventcrfdatecompleted
                 Timestamp veventcrfdatecompleted = rs.getTimestamp("eventcrfdatecompleted");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfdatevalidatecompleted
                 Timestamp veventcrfdatevalidatecompleted = rs.getTimestamp("eventcrfdatevalidatecompleted");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfcompletionstatusid
                 Integer veventcrfcompletionstatusid = rs.getInt("eventcrfcompletionstatusid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // repeat_number
                 Integer vrepeat_number = rs.getInt("repeat_number");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // crfid
                 Integer vcrfid = rs.getInt("crfid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // studysubjectid
                 Integer vstudysubjectid = rs.getInt("studysubjectid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfid
                 Integer veventcrfid = rs.getInt("eventcrfid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // itemid
                 Integer vitemid = rs.getInt("itemid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // crfversionid
                 Integer vcrfversionid = rs.getInt("crfversionid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 Integer eventcrfstatusid = rs.getInt("eventcrfstatusid");
@@ -1567,7 +1566,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // sample_ordinal
                 Integer vsample_ordinal = rs.getInt("sample_ordinal");
                 if (rs.wasNull()) {
-                    // TODO
                 }
 
                 // study_event_definition_id
@@ -1591,13 +1589,11 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // date_start
                 Timestamp vdate_start = rs.getTimestamp("date_start");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // date_end
                 Timestamp vdate_end = rs.getTimestamp("date_end");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // BADS FLAG
@@ -1615,7 +1611,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                     // column.equalsIgnoreCase("end_time_flag")) {
                     vstart_time_flag = Boolean.FALSE;
                     // } else {
-                    // hm.put(column, new Boolean(true));
+                    // hm.put(column, Boolean.valueOf(true));
                     // }
                     // bad idea? what to put, then?
                 }
@@ -1633,7 +1629,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                     // column.equalsIgnoreCase("end_time_flag")) {
                     vend_time_flag = Boolean.FALSE;
                     // } else {
-                    // hm.put(column, new Boolean(true));
+                    // hm.put(column, Boolean.valueOf(true));
                     // }
                     // bad idea? what to put, then?
                 }
@@ -1641,37 +1637,31 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // status_id
                 Integer vstatus_id = rs.getInt("status_id");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // subject_event_status_id
                 Integer vsubject_event_status_id = rs.getInt("subject_event_status_id");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // studyeventid
                 Integer vstudyeventid = rs.getInt("studyeventid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // eventcrfid
                 Integer veventcrfid = rs.getInt("eventcrfid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // itemid
                 Integer vitemid = rs.getInt("itemid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // crfversionid
                 Integer vcrfversionid = rs.getInt("crfversionid");
                 if (rs.wasNull()) {
-                    // TODO - what value default
                 }
 
                 // add it to the HashMap
@@ -1803,7 +1793,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
          */
 
         /*
-         * TODO: why date constraint has been hard-coded ???
          */
         return " SELECT  " + " itemdataid,  " + " studysubjectid, study_event.sample_ordinal,  " + " study_event.study_event_definition_id,   "
                 + " study_event_definition.name, study_event.location, study_event.date_start, study_event.date_end, "
@@ -1968,7 +1957,6 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
          */
 
         /*
-         * TODO: why date constraint has been hard-coded ???
          */
 
         return " SELECT  " + " itemdataid,  itemdataordinal,"

@@ -57,6 +57,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * same Tomcat worker thread. The {@code finally} block removes the key
  * unconditionally.
  */
+@SuppressWarnings("all")
 public final class RequestIdFilter implements Filter {
 
     /** MDC key surfaced in {@code logback.xml} as {@code %X{reqId:-}}. */

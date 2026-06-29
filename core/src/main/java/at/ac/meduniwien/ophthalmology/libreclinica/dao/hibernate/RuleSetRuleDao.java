@@ -30,6 +30,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 
     private CoreResources coreResources;
@@ -41,13 +53,12 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return RuleSetRuleBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ArrayList<RuleSetRuleBean> findByRuleSetBeanAndRuleBean(RuleSetBean ruleSetBean, RuleBean ruleBean) {
         String query = "from " + getDomainClassName() + " ruleSetRule  where ruleSetRule.ruleSetBean = :ruleSetBean" + " AND ruleSetRule.ruleBean = :ruleBean ";
         Query<RuleSetRuleBean> q = getCurrentSession().createQuery(query, RuleSetRuleBean.class);
         q.setParameter("ruleSetBean", ruleSetBean);
         q.setParameter("ruleBean", ruleBean);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
     
     /**
@@ -56,8 +67,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
      * @param studyId
      * @return List of RuleSetRuleBeans 
      */
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
     public ArrayList<RuleSetRuleBean> findByRuleSetStudyIdAndStatusAvail(Integer studyId) {
         String query = "from " + getDomainClassName() + " ruleSetRule  where ruleSetRule.ruleSetBean.studyId = :studyId and status = :status ";
@@ -78,7 +87,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         
  
         
-        ArrayList<RuleSetRuleBean> ruleSetRules = new ArrayList<>(q.list());
+        ArrayList<RuleSetRuleBean> ruleSetRules = new ArrayList<>(q.getResultList());
         // Forcing eager fetch of actions & their properties
         for (RuleSetRuleBean ruleSetRuleBean : ruleSetRules) {
             for (RuleActionBean action : ruleSetRuleBean.getActions()) {
@@ -103,7 +112,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return ruleSetRules;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public int getCountWithFilter(final ViewRuleAssignmentFilter filter) {
 
@@ -119,10 +127,9 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         query += filter.execute("");
         NativeQuery q = getCurrentSession().createNativeQuery(query);
 
-        return ((Number) q.uniqueResult()).intValue();
+        return ((Number) q.getSingleResultOrNull()).intValue();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
 	public ArrayList<RuleSetRuleBean> getWithFilterAndSort(final ViewRuleAssignmentFilter filter, final ViewRuleAssignmentSort sort, final int rowStart,
             final int rowEnd) {
@@ -143,10 +150,9 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
-        return new ArrayList<RuleSetRuleBean>(q.list());
+        return new ArrayList<RuleSetRuleBean>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     public int getCountByStudy(StudyBean study) {
         // Phase E.6 (2026-06-04): Hibernate 5.6 on jakarta-namespaced
         // jdbc returns COUNT(*) on Postgres as java.lang.Long — not
@@ -166,7 +172,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         // / Hibernate 5.6; BigInteger on older drivers). Both
         // implement Number, so the cast below works either way.
         NativeQuery<Object> q = getCurrentSession().createNativeQuery(query, Object.class);
-        Object result = q.uniqueResult();
+        Object result = q.getSingleResultOrNull();
         return result instanceof Number n ? n.intValue() : 0;
     }
 

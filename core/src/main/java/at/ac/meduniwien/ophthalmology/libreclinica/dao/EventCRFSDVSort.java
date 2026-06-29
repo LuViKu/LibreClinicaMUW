@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class EventCRFSDVSort implements CriteriaCommand {
     List<Sort> sorts = new ArrayList<Sort>();
     HashMap<String, String> columnMapping = new HashMap<String, String>();

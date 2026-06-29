@@ -20,6 +20,7 @@ import java.util.Optional;
  */
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class DiscrepancyNoteType extends Term {
 
     /**
@@ -82,7 +83,7 @@ public class DiscrepancyNoteType extends Term {
         Iterator<Privilege> it = privileges.iterator();
 
         while (it.hasNext()) {
-            Privilege myPriv = (Privilege) it.next();
+            Privilege myPriv = it.next();
             if (myPriv.equals(p)) {
                 return true;
             }

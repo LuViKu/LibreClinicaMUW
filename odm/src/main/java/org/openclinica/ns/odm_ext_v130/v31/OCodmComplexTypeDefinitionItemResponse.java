@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-ItemResponse")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionItemResponse {
 
     @XmlAttribute(name = "ResponseType", required = true)

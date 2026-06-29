@@ -14,6 +14,8 @@ import java.util.Locale;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.OdmClinicalDataBean;
 
+@SuppressWarnings("all")
+
 public interface GenerateClinicalDataService {
 
 	

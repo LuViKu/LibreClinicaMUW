@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import org.quartz.SimpleTrigger;
 import org.quartz.impl.triggers.SimpleTriggerImpl;
 
+@SuppressWarnings("all")
+
 public class XsltTriggerService {
     public XsltTriggerService() {
 
@@ -116,19 +118,19 @@ public class XsltTriggerService {
     }
 
     public static int getIntervalTimeInSeconds(String period) {
-        Integer interval = new Integer("0");
+        Integer interval = Integer.valueOf("0");
         if ("monthly".equalsIgnoreCase(period)) {
-            interval = new Integer("2419200"); // how many
+            interval = Integer.valueOf("2419200"); // how many
             // milliseconds in
             // a month? should
             // be 24192000000
         } else if ("weekly".equalsIgnoreCase(period)) {
-            interval = new Integer("604800"); // how many
+            interval = Integer.valueOf("604800"); // how many
             // milliseconds in
             // a week? should
             // be 6048000000
         } else { // daily
-            interval = new Integer("86400");// how many
+            interval = Integer.valueOf("86400");// how many
             // milliseconds in a
             // day?
         }

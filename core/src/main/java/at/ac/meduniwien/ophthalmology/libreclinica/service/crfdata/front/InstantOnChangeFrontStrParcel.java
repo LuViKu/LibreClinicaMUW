@@ -16,6 +16,7 @@ import java.util.Map;
  * Collection of InstantOnChangeFrontStrGroup in a crf section.
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class InstantOnChangeFrontStrParcel implements Serializable{
     private static final long serialVersionUID = -2240052862489035165L;
 

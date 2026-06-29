@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  2026-06-29 — MUW-branded login lockup. Replaces images/login_logo.png.
+  Loaded via the #logo background-image in includes/NewLoginStyles.css +
+  includes/styles.css. The wordmark falls back through system fonts
+  (Newsreader → Georgia, Inter → Helvetica/Arial) when the page doesn't
+  load Google Fonts.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="428" height="112" viewBox="0 0 428 112" role="img" aria-label="LibreClinica MUW — Augenheilkunde, Medizinische Universität Wien">
+  <g transform="translate(8 24)" fill="none" stroke="#111d4e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.6 16 C9 8.2 23 8.2 29.4 16 C23 23.8 9 23.8 2.6 16 Z" transform="scale(1.5)"/>
+    <circle cx="16" cy="16" r="5" transform="scale(1.5)"/>
+    <circle cx="16" cy="16" r="1.9" fill="#d96849" stroke="none" transform="scale(1.5)"/>
+  </g>
+  <text x="74" y="52" font-family="'Newsreader', Georgia, 'Times New Roman', serif" font-size="34" font-weight="600" fill="#111d4e" letter-spacing="-0.5">LibreClinica</text>
+  <text x="74" y="72" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#c2553a" letter-spacing="1.8">MUW</text>
+  <text x="74" y="94" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#6b7088" letter-spacing="0.2">Augenheilkunde · Medizinische Universität Wien</text>
+</svg>

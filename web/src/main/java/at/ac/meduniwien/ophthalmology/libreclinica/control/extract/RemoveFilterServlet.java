@@ -32,12 +32,12 @@ import java.util.Locale;
  * 'available' to 'unavailable' so that it cannot be accessed.
  *
  * <P>
- * TODO define who can or can't remove a filter; creator only? anyone in the
  * project?
  *
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class RemoveFilterServlet extends SecureController {
 
     /**
@@ -114,7 +114,6 @@ public class RemoveFilterServlet extends SecureController {
         EntityBeanTable table = fp.getEntityBeanTable();
 
         ArrayList<FilterBean> filters = fdao.findAll();
-        // TODO make findAllByProject
         ArrayList<FilterRow> filterRows = FilterRow.generateRowsFromBeans(filters);
 
         String[] columns =

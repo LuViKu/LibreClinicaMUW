@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
  * directly by the runner via {@code new …Materializer()} when no
  * managed bean is present).
  */
+@SuppressWarnings("all")
 public class PlaceholderExportFileMaterializer implements ExportFileMaterializer {
 
     @Override

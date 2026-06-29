@@ -18,6 +18,8 @@ import java.util.ArrayList;
  * @author ywang (Nov, 2008)
  */
 
+@SuppressWarnings("all")
+
 public class ExportStudyEventDataBean extends StudyEventDataBean {
     private String location;
     private String startDate;

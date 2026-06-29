@@ -40,6 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.expressionTree.OpenClinicaExpressionParser;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+@SuppressWarnings("all")
+
 public class DataEntryRuleRunner extends RuleRunner {
     
     EventCRFBean ecb;
@@ -138,7 +140,6 @@ public class DataEntryRuleRunner extends RuleRunner {
                                 new Object[] { ruleSet.getTarget().getValue(), rule.getName(), result, actionListBasedOnRuleExecutionResult.size(),
                                     executionMode.name() });
                     } catch (OpenClinicaSystemException osa) {
-                        // TODO: report something useful 
                     }
                 }
             }

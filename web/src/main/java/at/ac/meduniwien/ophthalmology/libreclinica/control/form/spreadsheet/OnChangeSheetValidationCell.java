@@ -17,6 +17,7 @@ import java.util.Arrays;
  * arguments[1] is optionValue.</p>
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class OnChangeSheetValidationCell {
 
     private final OnChangeSheetValidationType type;

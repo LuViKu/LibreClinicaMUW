@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
  * designed to determine whether a user has viewed a certain section, to
  * determine, among other reasons, whether default values should be displayed.
  */
+@SuppressWarnings("all")
 public class SectionVisit {
     private int eventCRFId;
     private boolean visitedOnce;

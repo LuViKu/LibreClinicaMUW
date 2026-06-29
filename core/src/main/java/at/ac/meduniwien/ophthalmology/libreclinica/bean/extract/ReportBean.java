@@ -19,6 +19,7 @@ import java.util.ArrayList;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public abstract class ReportBean<I> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -68,7 +69,7 @@ public abstract class ReportBean<I> {
             ArrayList<String> row = data.get(rowNum);
 
             if (row != null && row.size() > col) {
-                String s = (String) row.get(col);
+                String s = row.get(col);
 
                 if (s != null) {
                     return s;

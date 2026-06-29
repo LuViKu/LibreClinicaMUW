@@ -42,6 +42,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleAction
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface;
 import org.springframework.transaction.annotation.Transactional;
 
+@SuppressWarnings("all")
+
 public class ImportDataRuleRunnerContainer {
     /**
      * Key is target itemOID

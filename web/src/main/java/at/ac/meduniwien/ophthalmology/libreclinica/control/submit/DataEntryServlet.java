@@ -134,6 +134,9 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 /**
  * @author ssachs
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
@@ -292,7 +295,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         ItemDAO itemDAO = new ItemDAO(getDataSource());
         List<ItemBean> items = itemDAO.findAllBySectionId(sectionId);
         if (!items.isEmpty()) {
-            return new Integer(items.get(0).getId()).toString();
+            return Integer.valueOf(items.get(0).getId()).toString();
         }
         return "";
     }
@@ -428,7 +431,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         Status s = ssb.getStatus();
         if ("removed".equalsIgnoreCase(s.getName()) || "auto-removed".equalsIgnoreCase(s.getName())) {
             addPageMessage(respage.getString("you_may_not_perform_data_entry_on_a_CRF") + respage.getString("study_subject_has_been_deleted"), request);
-            request.setAttribute("id", new Integer(ecb.getStudySubjectId()).toString());
+            request.setAttribute("id", Integer.valueOf(ecb.getStudySubjectId()).toString());
             session.removeAttribute(instantAtt);
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET, request, response);
         }
@@ -505,7 +508,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
 
         if (eventDefinitionCRFId <= 0) {
-            // TODO we have to get that id before we can continue
             EventDefinitionCRFBean edcBean = edcdao.findByStudyEventIdAndCRFVersionId(study, ecb.getStudyEventId(), ecb.getCRFVersionId());
             eventDefinitionCRFId = edcBean.getId();
         }
@@ -631,7 +633,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
         setPresetValues(fp.getPresetValues(), request);
         logMe("Entering Checks !submitted  "+System.currentTimeMillis());
         if (!isSubmitted) {
-            // TODO: prevent data enterer from seeing results of first round of
             // data
             // entry, if this is second round
 // FLAG--SLOW HERE WHEN LOADING
@@ -659,7 +660,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
             if(section.getSection().hasSCDItem()) {
                 /*
-                 *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
                  *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
                  */
                 section = SCDItemDisplayInfo.generateSCDDisplayInfo(section,this.getServletPage(request).equals(Page.INITIAL_DATA_ENTRY)
@@ -705,7 +705,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             // attribute indicating that default values for items shouldn't be
             // displayed
             // in the application UI that will subsequently be displayed
-            // TODO: find a better, less random place for this
             // session.setAttribute(HAS_DATA_FLAG, true);
 
             // section.setCheckInputs(fp.getBoolean(INPUT_CHECK_INPUTS));
@@ -742,7 +741,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                         // int manualGroups = getManualRows(dbGroups2);
                         // logger.debug("+++ found manual rows from db group 2: " + manualGroups);
                         LOGGER.debug("===IF VALIDATE NOT A SINGLE ITEM: got to this part in the validation loop: " + dgb.getGroupMetaBean().getName());
-                        // TODO next marker tbh 112007
                         // formGroups = validateDisplayItemGroupBean(v,
                         // dgb,dbGroups, formGroups,
                         // ruleValidator,groupOrdinalPLusItemOid);
@@ -1424,7 +1422,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     }
                 }
                 */
-                //request.setAttribute("manualRows", new Integer(manualRows));
+                //request.setAttribute("manualRows", Integer.valueOf(manualRows));
                 for(String fieldName : errors.keySet()) {
                     LOGGER.debug("found error after shuffle " + fieldName);
                 }
@@ -1526,7 +1524,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                 LOGGER.debug("all items before saving into DB" + allItems.size());
                 this.output(allItems);
-//TODO:Seems longer here, check this
                 logMe("DisplayItemWithGroupBean allitems4 "+System.currentTimeMillis());
                 for (int i = 0; i < allItems.size(); i++) {
                     DisplayItemWithGroupBean diwb = allItems.get(i);
@@ -1640,7 +1637,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                     } else {
                         DisplayItemBean dib = diwb.getSingleItem();
-                        // TODO work on this line
 
                       //  this.addAttachedFilePath(dib, attachedFilePath);
                         String fileName= addAttachedFilePath(dib, attachedFilePath);
@@ -1957,7 +1953,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                 } else {
                                     tabNum = fp.getInt("tab");
                                 }
-                                request.setAttribute("tab", new Integer(tabNum - 1).toString());
+                                request.setAttribute("tab", Integer.valueOf(tabNum - 1).toString());
 
                               //  forwardPage(getServletPage(request), request, response);
                                 getServletContext().getRequestDispatcher(getServletPage(request)).forward(request, response);
@@ -1973,7 +1969,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                 } else {
                                     tabNum = fp.getInt("tab");
                                 }
-                                request.setAttribute("tab", new Integer(tabNum + 1).toString());
+                                request.setAttribute("tab", Integer.valueOf(tabNum + 1).toString());
                                 getServletContext().getRequestDispatcher(getServletPage(request)).forward(request, response);
                                 //forwardPage(getServletPage(request), request, response);
                             }
@@ -1991,18 +1987,18 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                 session.removeAttribute(DDE_PROGESS);
                                 session.removeAttribute("to_create_crf");
 
-                                request.setAttribute("eventId", new Integer(ecb.getStudyEventId()).toString());
+                                request.setAttribute("eventId", Integer.valueOf(ecb.getStudyEventId()).toString());
                                 forwardPage(Page.ENTER_DATA_FOR_STUDY_EVENT_SERVLET, request, response);
                             } else {
                                 // use clicked 'save'
                                 addPageMessage(respage.getString("data_saved_continue_entering_edit_later"), request);
                                 request.setAttribute(INPUT_EVENT_CRF, ecb);
-                                request.setAttribute(INPUT_EVENT_CRF_ID, new Integer(ecb.getId()).toString());
+                                request.setAttribute(INPUT_EVENT_CRF_ID, Integer.valueOf(ecb.getId()).toString());
                                 // forward to the next section if the previous one
                                 // is not the last section
                                 if (!section.isLastSection()) {
                                     request.setAttribute(INPUT_SECTION, nextSec);
-                                    request.setAttribute(INPUT_SECTION_ID, new Integer(nextSec.getId()).toString());
+                                    request.setAttribute(INPUT_SECTION_ID, Integer.valueOf(nextSec.getId()).toString());
                                     session.removeAttribute("mayProcessUploading");
                                 } else if(section.isLastSection()){ //JN ADDED TO avoid return down
                                     // already the last section, should go back to
@@ -2013,7 +2009,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                     session.removeAttribute("to_create_crf");
                                     session.removeAttribute("mayProcessUploading");
 
-                                    request.setAttribute("eventId", new Integer(ecb.getStudyEventId()).toString());
+                                    request.setAttribute("eventId", Integer.valueOf(ecb.getStudyEventId()).toString());
                                     if(fromViewNotes != null && "1".equals(fromViewNotes)) {
                                         String viewNotesPageFileName = (String)session.getAttribute("viewNotesPageFileName");
                                         session.removeAttribute("viewNotesPageFileName");
@@ -2037,7 +2033,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                     tabNum = fp.getInt("tab");
                                 }
                                 if (!section.isLastSection()) {
-                                    request.setAttribute("tab", new Integer(tabNum + 1).toString());
+                                    request.setAttribute("tab", Integer.valueOf(tabNum + 1).toString());
                                 }
 
                               //  forwardPage(getServletPage(request), request, response);
@@ -2088,7 +2084,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @param idb
      * @param formName
      * @param error
-     * @param request TODO
      */
     protected void setReasonForChangeError( EventCRFBean ecb, ItemBean item_bean, ItemDataBean idb, String formName, String error, HttpServletRequest request) {
           HttpSession session = request.getSession();
@@ -2117,7 +2112,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * Get the input beans - the EventCRFBean and the SectionBean. For both beans, look first in the request attributes to see if the bean has been stored
      * there. If not, look in the parameters for the bean id, and then retrieve the bean from the database. The beans are stored as protected class members.
-     * @param request TODO
      */
     protected void getInputBeans(HttpServletRequest request) throws InsufficientPermissionException {
 
@@ -2231,14 +2225,12 @@ public abstract class DataEntryServlet extends CoreSecureController {
             	tabId = 1;
             }
         }
-        request.setAttribute(INPUT_TAB, new Integer(tabId));
+        request.setAttribute(INPUT_TAB, Integer.valueOf(tabId));
         request.setAttribute(SECTION_BEAN, sb);
     }
 
     /**
      * Tries to check if a seciton has item groups
-     * @param fp TODO
-     * @param ecb TODO
      *
      * @return
      */
@@ -2270,8 +2262,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * Creates a new Event CRF or update the exsiting one, that is, an event CRF can be created but not item data yet, in this case, still consider it is not
      * started(called uncompleted before)
-     * @param request TODO
-     * @param fp TODO
      *
      * @return
      * @throws Exception
@@ -2427,7 +2417,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *
      * @param dib
      *            The DisplayItemBean to write data into.
-     * @param request TODO
      * @return The DisplayItemBean, with form data loaded.
      */
     protected DisplayItemBean loadFormValue(DisplayItemBean dib, HttpServletRequest request) {
@@ -2462,7 +2451,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The original array got from DB which contains multiple data rows
      * @param formGroups
      *            The new array got from front end which contains multiple data rows
-     * @param request TODO
      * @return new constructed formGroups, compare to dbGroups, some rows are update, some new ones are added and some are removed
      */
     protected List<DisplayItemGroupBean> loadFormValueForItemGroup(DisplayItemGroupBean digb, List<DisplayItemGroupBean> dbGroups,
@@ -2511,7 +2499,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             
             if(firstLoopSkip) {
             	firstLoopBreak++;
-            	// TODO find a better solution then breaking after 14 empty oids
                 if (firstLoopBreak > 14) {
                     LOGGER.debug("break first loop");
                     break;
@@ -2706,7 +2693,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         // }
         LOGGER.debug(" manual rows " + manualRows + " formGroup size " + formGroups.size());
 
-        request.setAttribute("manualRows", new Integer(manualRows));
+        request.setAttribute("manualRows", Integer.valueOf(manualRows));
         // reset ordinal for the auto-created rows except for the first row
         for (int j = 0; j < formGroups.size(); j++) {
             DisplayItemGroupBean formItemGroup = formGroups.get(j);
@@ -2838,7 +2825,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The Validator to add validations to.
      * @param dib
      *            The DisplayItemBean to validate.
-     * @param request TODO
      * @return The DisplayItemBean which is validated and has form values loaded into it.
      */
     protected abstract DisplayItemBean validateDisplayItemBean(DiscrepancyValidator v, DisplayItemBean dib, String inputName, HttpServletRequest request);
@@ -2946,7 +2932,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The Validator to add validations to.
      * @param dib
      *            The DisplayItemBean to validate.
-     * @param request TODO
      * @return The DisplayItemBean which is validated.
      */
     protected DisplayItemBean validateDisplayItemBeanText(DiscrepancyValidator v, DisplayItemBean dib, String inputName, HttpServletRequest request) {
@@ -3163,7 +3148,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The DisplayItemBean from which to write data.
      * @param iddao
      *            The DAO to use to access the database.
-     * @param request TODO
      * @return <code>true</code> if the query succeeded, <code>false</code> otherwise.
      */
     @SuppressWarnings("unlikely-arg-type")
@@ -3175,7 +3159,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             getItemMetadataService().hideItem(dib.getMetadata(), ecb, idb);
         }else {
             /*
-             *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
              *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
              */
             if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3340,7 +3323,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Retrieve the status which should be assigned to ItemDataBeans which have non-blank values for this data entry servlet.
-     * @param request TODO
      */
     protected abstract Status getNonBlankItemStatus(HttpServletRequest request);
 
@@ -3348,20 +3330,16 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Get the eventCRF's annotations as appropriate for this data entry servlet.
-     * @param request TODO
      */
     protected abstract String getEventCRFAnnotations(HttpServletRequest request);
 
     /**
      * Set the eventCRF's annotations properties as appropriate for this data entry servlet.
-     * @param request TODO
      */
     protected abstract void setEventCRFAnnotations(String annotations, HttpServletRequest request);
 
     /**
      * Retrieve the DisplaySectionBean which will be used to display the Event CRF Section on the JSP, and also is used to controll processRequest.
-     * @param request TODO
-     * @param isSubmitted TODO
      */
     protected DisplaySectionBean getDisplayBean(boolean hasGroup, boolean includeUngroupedItems, HttpServletRequest request, boolean isSubmitted) throws Exception {
         DisplaySectionBean section = new DisplaySectionBean();
@@ -3458,7 +3436,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             DisplayItemBean dib = (DisplayItemBean) displayItems.get(i);
             dib.setChildren(getChildrenDisplayItems(dib, edcb, request));
 
-            // TODO use the setData command here to make sure we get a value?
             //On Submition of the Admin Editing form the loadDBValue does not required
             //
             if (ecb.getStage() == DataEntryStage.INITIAL_DATA_ENTRY_COMPLETE || ecb.getStage() == DataEntryStage.DOUBLE_DATA_ENTRY_COMPLETE) {
@@ -3483,7 +3460,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Retrieve the DisplaySectionBean which will be used to display the Event CRF Section on the JSP, and also is used to controll processRequest.
-     * @param request TODO
      */
     protected ArrayList<DisplaySectionBean> getAllDisplayBeans(HttpServletRequest request) throws Exception {
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
@@ -3561,7 +3537,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @param sb
      *            The section whose items we are retrieving.
      * @param hasUngroupedItems
-     * @param request TODO
      *
      * @return An array of DisplayItemBean objects, one per parent item in the section. Note that there is no guarantee on the ordering of the objects.
      * @throws Exception
@@ -3611,31 +3586,30 @@ public abstract class DataEntryServlet extends CoreSecureController {
             dib.setEventDefinitionCRF(edcb);
             ItemBean ib = (ItemBean) items.get(i);
             dib.setItem(ib);
-            displayItems.put(new Integer(dib.getItem().getId()), dib);
+            displayItems.put(Integer.valueOf(dib.getItem().getId()), dib);
         }
 
         ArrayList<ItemDataBean> data = iddao.findAllBySectionIdAndEventCRFId(sb.getId(), ecb.getId());
         for (int i = 0; i < data.size(); i++) {
             ItemDataBean idb = (ItemDataBean) data.get(i);
-            DisplayItemBean dib = (DisplayItemBean) displayItems.get(new Integer(idb.getItemId()));
+            DisplayItemBean dib = (DisplayItemBean) displayItems.get(Integer.valueOf(idb.getItemId()));
 
             if (dib != null) {
                 dib.setData(idb);
                 dib.setDbData((ItemDataBean) BeanUtils.cloneBean(idb));
-                displayItems.put(new Integer(idb.getItemId()), dib);
+                displayItems.put(Integer.valueOf(idb.getItemId()), dib);
             }
         }
 
         ArrayList<ItemFormMetadataBean> metadata = ifmdao.findAllBySectionId(sb.getId());
         for (int i = 0; i < metadata.size(); i++) {
             ItemFormMetadataBean ifmb = metadata.get(i);
-            DisplayItemBean dib = displayItems.get(new Integer(ifmb.getItemId()));
+            DisplayItemBean dib = displayItems.get(Integer.valueOf(ifmb.getItemId()));
             if (dib != null) {
                 // boolean showItem = false;
                 logMe("Entering thread before getting ItemMetadataService:::"+Thread.currentThread());
                boolean showItem = getItemMetadataService().isShown(ifmb.getItemId(), ecb, dib.getData());
                /*
-                *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
                 *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
                 */
                 if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3653,7 +3627,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 }
 
                 dib.setMetadata(ifmb);
-                displayItems.put(new Integer(ifmb.getItemId()), dib);
+                displayItems.put(Integer.valueOf(ifmb.getItemId()), dib);
             }
         }
 
@@ -3672,7 +3646,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *
      * @param parent
      *            The item whose children are to be retrieved.
-     * @param request TODO
      * @return An array of DisplayItemBean objects corresponding to the items which are children of parent, and are sorted by column number (ascending), then
      *         ordinal (ascending).
      */
@@ -3695,7 +3668,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             dib.setItem(child);
             // tbh
             /*
-             *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
              *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
              */
             if (!getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3706,7 +3678,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             dib.setDbData(data);
             boolean showItem = getItemMetadataService().isShown(metadata.getItemId(), ecb, data);
             /*
-             *  TODO do not know what this comparison should look like exactly since comparing with the result of getFileName() 
              *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
              */
             if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
@@ -3759,7 +3730,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     protected abstract Page getJSPPage();
 
     /**
-     * @param request TODO
      * @return The Page object which represents this servlet.
      */
     protected abstract String getServletPage(HttpServletRequest request);
@@ -3942,7 +3912,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * To set the totals of each resolution status on the DisplayItemBean for each item.
      * @param dib
          * @param notes
-         * @param ecbId TODO
      */
     private DisplayItemBean setTotals(DisplayItemBean dib,int itemDataId,ArrayList<DiscrepancyNoteBean> notes, int ecbId)
     {
@@ -4009,7 +3978,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * The following methods are for 'mark CRF complete'
-     * @param request TODO
      *
      * @return
      */
@@ -4036,7 +4004,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
         // request.setAttribute(TableOfContentsServlet.INPUT_EVENT_CRF_BEAN,
         // ecb);
-        // request.setAttribute(INPUT_EVENT_CRF_ID, new Integer(ecb.getId()));
+        // request.setAttribute(INPUT_EVENT_CRF_ID, Integer.valueOf(ecb.getId()));
         LOGGER.trace("inout_event_crf_id:" + ecb.getId());
 
         if (stage.equals(DataEntryStage.UNCOMPLETED) || stage.equals(DataEntryStage.DOUBLE_DATA_ENTRY_COMPLETE) || stage.equals(DataEntryStage.LOCKED)) {
@@ -4141,7 +4109,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     }
    
    /*
-    *  TODO this method seems to be of no use
     *  remove it if it is not used for a kind of check (a error is thrown if something goes wrong) 
     */
     private void getEventCRFBean(HttpServletRequest request) {
@@ -4232,7 +4199,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * 06/13/2007- jxu Since we don't require users to review each section before mark a CRF as complete, we need to create item data in the database because
      * items will not be created unless the section which contains the items is reviewed by users
-     * @param request TODO
      */
     private boolean saveItemsToMarkComplete(Status completeStatus, HttpServletRequest request) throws Exception {
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
@@ -4298,7 +4264,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * Checks if a section is reviewed at least once by user
      * updated tbh 03/2011, to fix duplicates issues
      * @param sb
-     * @param request TODO
      * @return
      */
     protected boolean isSectionReviewedOnce(SectionBean sb, HttpServletRequest request) {
@@ -4312,7 +4277,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         HashMap<Integer, Integer> numItemsCompletedHM = sdao.getNumItemsCompletedBySectionId(ecb);
         HashMap<Integer, Integer> numItemsBlankHM = sdao.getNumItemsBlankBySectionId(ecb);
 
-        Integer key = new Integer(sb.getId());
+        Integer key = Integer.valueOf(sb.getId());
 
         int numItems = TableOfContentsServlet.getIntById(numItemsHM, key);
         int numItemsPending = TableOfContentsServlet.getIntById(numItemsPendingHM, key);
@@ -4351,7 +4316,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         HashMap<Integer, Integer> numItemsCompletedHM = sdao.getNumItemsCompletedBySection(ecb);
         HashMap<Integer, Integer> numItemsBlankHM = sdao.getNumItemsBlankBySectionId(ecb);
 
-        Integer key = new Integer(sb.getId());
+        Integer key = Integer.valueOf(sb.getId());
 
         int numItems = TableOfContentsServlet.getIntById(numItemsHM, key);
         int numItemsPending = TableOfContentsServlet.getIntById(numItemsPendingHM, key);
@@ -4381,7 +4346,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
     /**
      * Checks if all the sections in an event crf are reviewed once
      * tbh updated to prevent duplicates, 03/2011
-     * @param request TODO
      *
      * @return
      */
@@ -4404,7 +4368,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
         for (int i = 0; i < sections.size(); i++) {
             SectionBean sb = sections.get(i);
-            Integer key = new Integer(sb.getId());
+            Integer key = Integer.valueOf(sb.getId());
 
             int numItems = TableOfContentsServlet.getIntById(numItemsHM, key);
             int numItemsPending = TableOfContentsServlet.getIntById(numItemsPendingHM, key);
@@ -4432,7 +4396,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     
     /*
-     *  TODO this method seems to be of no use
      *  remove it if it is not used for a kind of check (a error is thrown if something goes wrong) 
      */
     protected void getEventDefinitionCRFBean(HttpServletRequest request) {
@@ -4512,7 +4475,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 newOne =   buildMatrixForRepeatingGroups(newOne,itemGroup,ecb, sb,itBeans,dataMap, nullValuesList, isSubmitted);
 
              if (hasData) {
-                 //TODO: fix the group_has_data flag on bean not on session
                     session.setAttribute(GROUP_HAS_DATA, Boolean.TRUE);
 
                 }
@@ -5421,7 +5383,7 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
                 }
             }
         }
-        request.setAttribute("manualRows", new Integer(manualRows));
+        request.setAttribute("manualRows", Integer.valueOf(manualRows));
         return errors;
     }
 

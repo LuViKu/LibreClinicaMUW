@@ -1010,7 +1010,7 @@ div.login_BG {
 }
 
 #logo { 
-	background: url(../images/login_logo.png) no-repeat top left; 
+	background: url(../images/login_logo.svg) no-repeat top left; 
 	width: 428px; 
 	height: 112px;
 }

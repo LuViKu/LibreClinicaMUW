@@ -49,6 +49,7 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class CreateJobExportServlet extends SecureController {
     /**
 	 * 
@@ -85,7 +86,7 @@ public class CreateJobExportServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
         // above copied from create dataset servlet, needs to be changed to
         // allow only admin-level users
 
@@ -98,7 +99,6 @@ public class CreateJobExportServlet extends SecureController {
 
     private void setUpServlet() {
 
-        // TODO find all the form items and re-populate them if necessary
         FormProcessor fp2 = new FormProcessor(request);
         // Enumeration enumeration = request.getAttributeNames();
         // while (enumeration.hasMoreElements()) {
@@ -110,7 +110,6 @@ public class CreateJobExportServlet extends SecureController {
         // }
         DatasetDAO dsdao = new DatasetDAO(sm.getDataSource());
         ArrayList<DatasetBean> dsList = dsdao.findAllOrderByStudyIdAndName();
-        // TODO will have to dress this up to allow for sites then datasets
         request.setAttribute("datasets", dsList);
         request.setAttribute(JOB_NAME, fp2.getString(JOB_NAME));
         request.setAttribute(JOB_DESC, fp2.getString(JOB_DESC));
@@ -132,12 +131,10 @@ public class CreateJobExportServlet extends SecureController {
         setPresetValues(fp2.getPresetValues());
         request.setAttribute(DATE_START_JOB, fp2.getDateTime(DATE_START_JOB + "Date"));
         // EMAIL, TAB, CDISC, SPSS, PERIOD, DATE_START_JOB
-        // TODO pick out the datasets and the date
     }
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO multi stage servlet which will create export jobs
         // will accept, create, and return the ViewJob servlet
         FormProcessor fp = new FormProcessor(request);
         scheduler = getScheduler();
@@ -181,7 +178,7 @@ public class CreateJobExportServlet extends SecureController {
                 Integer exportFormatId = fp.getInt(FORMAT_ID);
 
                 ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(exportFormatId, "" + datasetId);
-                DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(new Integer(datasetId).intValue());
+                DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(Integer.valueOf(datasetId).intValue());
 
                 // set the job in motion
                 String[] files = epBean.getFileName();
@@ -298,7 +295,6 @@ public class CreateJobExportServlet extends SecureController {
         v.addValidation(PERIOD, Validator.NO_BLANKS);
         v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
         // v.addValidation(DATE_START_JOB + "Date", new Date(), Validator.DATE_IS_AFTER_OR_EQUAL);
-        // TODO job names will have to be unique, tbh
 
         int formatId = fp.getInt(FORMAT_ID);
         Date jobDate = fp.getDateTime(DATE_START_JOB);

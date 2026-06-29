@@ -72,6 +72,7 @@ import org.testcontainers.utility.DockerImageName;
  * every test in the class — a 10-method IT class still pays only one
  * 7-second migration tax.
  */
+@SuppressWarnings("null")
 public abstract class AbstractApiControllerDatabaseIT {
 
     /** Single container per IT-class lifetime. */

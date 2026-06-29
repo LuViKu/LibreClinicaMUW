@@ -32,6 +32,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 19, 2007
  */
+@SuppressWarnings("all")
 public class FormServlet extends HttpServlet {
 
     /**

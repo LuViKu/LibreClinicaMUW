@@ -23,6 +23,7 @@ import java.util.HashMap;
  *
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ExtractStudySubjectBean extends EntityBean {
     /**
 	 * 
@@ -115,10 +116,10 @@ public class ExtractStudySubjectBean extends EntityBean {
 
         if (!sampleNumByStudyEventDefinitionAndDBOrdinal.containsKey(key)) {
             int numSamples = getNumSamples(studyEventDefinitionId);
-            sampleNum = new Integer(numSamples + 1);
+            sampleNum = Integer.valueOf(numSamples + 1);
             sampleNumByStudyEventDefinitionAndDBOrdinal.put(key, sampleNum);
 
-            Integer numSamplesKey = new Integer(studyEventDefinitionId);
+            Integer numSamplesKey = Integer.valueOf(studyEventDefinitionId);
             numSamplesByStudyEventDefinition.put(numSamplesKey, sampleNum);
         } else {
             sampleNum = (Integer) sampleNumByStudyEventDefinitionAndDBOrdinal.get(key);
@@ -204,7 +205,7 @@ public class ExtractStudySubjectBean extends EntityBean {
     }
 
     public int getNumSamples(int studyEventDefinitionId) {
-        Integer key = new Integer(studyEventDefinitionId);
+        Integer key = Integer.valueOf(studyEventDefinitionId);
 
         if (numSamplesByStudyEventDefinition.containsKey(key)) {
             Integer numSamples = (Integer) numSamplesByStudyEventDefinition.get(key);

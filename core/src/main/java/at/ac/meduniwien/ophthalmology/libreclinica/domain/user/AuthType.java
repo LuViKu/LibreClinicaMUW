@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.user;
  * 
  * @author thillger
  */
+@SuppressWarnings("all")
 public enum AuthType {
 	/**
 	 * The standard way doing normal user authentication (username, password).

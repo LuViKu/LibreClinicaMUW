@@ -26,18 +26,17 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  *
  *
  */
+@SuppressWarnings("all")
 public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
     private DAODigester digester;
 
     @Override
     protected void setDigesterName() {
         digesterName = SQLFactory.getInstance().DAO_MASKING;
-        // TODO work on new instance
     }
 
     protected void setQueryNames() {
         getCurrentPKName = "getCurrentPK";
-        // TODO figure out the error with current primary keys?
     }
 
     public MaskingDAO(DataSource ds) {
@@ -74,7 +73,6 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
         this.setEntityAuditInformation(mb, hm);
         mb.setName((String) hm.get("name"));
         mb.setId(((Integer) hm.get("mask_id")).intValue());
-        // TODO set other variables here, tbh
         return mb;
     }
 

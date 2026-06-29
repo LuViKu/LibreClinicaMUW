@@ -53,6 +53,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "eventAction",
     "notificationAction"
 })
+@SuppressWarnings("all")
 public class RuleRefType {
 
     @XmlElement(name = "DiscrepancyNoteAction")

@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.form.spreadsheet;
  * One spreadsheet cell to be validated upon CRF spreadsheet loading.
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class SheetCell {
     /*
      * YW: created file at Aug., 2011 with OnChangeSheetValidator

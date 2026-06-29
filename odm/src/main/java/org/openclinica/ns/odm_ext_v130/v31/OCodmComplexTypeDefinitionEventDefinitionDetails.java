@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "description",
     "category"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionEventDefinitionDetails {
 
     @XmlElement(name = "Description")

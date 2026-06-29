@@ -20,6 +20,7 @@ import java.util.ArrayList;
  *
  *
  */
+@SuppressWarnings("all")
 public class DatasetRow extends EntityBeanRow<DatasetBean, DatasetRow> {
 
     public static final int COL_DATASETNAME = 0;
@@ -29,7 +30,6 @@ public class DatasetRow extends EntityBeanRow<DatasetBean, DatasetRow> {
     public static final int COL_STATUS = 4;
     public SimpleDateFormat sdf = new SimpleDateFormat(ResourceBundleProvider.getFormatBundle().getString("date_format_string"));
 
-    // TODO l10n dates, tbh
     @Override
     protected int compareColumn(DatasetRow row, int sortingColumn) {
         if (!row.getClass().equals(DatasetRow.class)) {

@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author ywang (May, 2010)
  *
  */
+@SuppressWarnings("all")
 public class AuditLogsBean {
     private String entityID;
     private ArrayList<AuditLogBean> auditLogs = new ArrayList<AuditLogBean>();

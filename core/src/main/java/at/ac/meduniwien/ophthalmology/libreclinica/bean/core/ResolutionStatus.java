@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class ResolutionStatus extends Term {
 
     /**
@@ -114,7 +115,7 @@ public class ResolutionStatus extends Term {
         Iterator<Privilege> it = privileges.iterator();
 
         while (it.hasNext()) {
-            Privilege myPriv = (Privilege) it.next();
+            Privilege myPriv = it.next();
             if (myPriv.equals(p)) {
                 return true;
             }

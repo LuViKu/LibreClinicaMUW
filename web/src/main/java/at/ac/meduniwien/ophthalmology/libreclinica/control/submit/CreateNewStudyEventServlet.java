@@ -9,7 +9,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 
-// TODO: support YYYY-MM-DD HH:MM time formats
+// NOTE: support YYYY-MM-DD HH:MM time formats
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asArrayList;
 
 import java.net.URLEncoder;
@@ -43,6 +43,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+@SuppressWarnings("all")
 
 public class CreateNewStudyEventServlet extends SecureController {
 
@@ -104,7 +106,7 @@ public class CreateNewStudyEventServlet extends SecureController {
         // input from manage subject matrix, user has specified definition id
         int studyEventDefinitionId = fp.getInt(INPUT_STUDY_EVENT_DEFINITION);
 
-        // TODO: make this sensitive to permissions
+        // NOTE: make this sensitive to permissions
         StudySubjectDAO sdao = new StudySubjectDAO(sm.getDataSource());
         StudySubjectBean ssb;
         if (studySubjectId <= 0) {
@@ -117,7 +119,7 @@ public class CreateNewStudyEventServlet extends SecureController {
             if ("removed".equalsIgnoreCase(s.getName()) || "auto-removed".equalsIgnoreCase(s.getName())) {
                 addPageMessage(resword.getString("study_event") + resterm.getString("could_not_be") + resterm.getString("added") + "."
                     + respage.getString("study_subject_has_been_deleted"));
-                request.setAttribute("id", new Integer(studySubjectId).toString());
+                request.setAttribute("id", Integer.valueOf(studySubjectId).toString());
                 forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
             }
             // YW >>
@@ -128,7 +130,7 @@ public class CreateNewStudyEventServlet extends SecureController {
         // or remove it altogether tbh 10/2009
         // ArrayList subjects = sdao.findAllActiveByStudyOrderByLabel(currentStudy);
 
-        // TODO: make this sensitive to permissions
+        // NOTE: make this sensitive to permissions
         StudyEventDefinitionDAO seddao = new StudyEventDefinitionDAO(sm.getDataSource());
 
         StudyBean studyWithEventDefinitions = currentStudy;
@@ -145,18 +147,18 @@ public class CreateNewStudyEventServlet extends SecureController {
 
         if (!fp.isSubmitted()) {
             HashMap<String, Object> presetValues = new HashMap<>();
-            presetValues.put(INPUT_STARTDATE_PREFIX + "Hour", new Integer(-1));
-            presetValues.put(INPUT_STARTDATE_PREFIX + "Minute", new Integer(-1));
+            presetValues.put(INPUT_STARTDATE_PREFIX + "Hour", Integer.valueOf(-1));
+            presetValues.put(INPUT_STARTDATE_PREFIX + "Minute", Integer.valueOf(-1));
             presetValues.put(INPUT_STARTDATE_PREFIX + "Half", new String(""));
-            presetValues.put(INPUT_ENDDATE_PREFIX + "Hour", new Integer(-1));
-            presetValues.put(INPUT_ENDDATE_PREFIX + "Minute", new Integer(-1));
+            presetValues.put(INPUT_ENDDATE_PREFIX + "Hour", Integer.valueOf(-1));
+            presetValues.put(INPUT_ENDDATE_PREFIX + "Minute", Integer.valueOf(-1));
             presetValues.put(INPUT_ENDDATE_PREFIX + "Half", new String(""));
             for (int i = 0; i < ADDITIONAL_SCHEDULED_NUM; ++i) {
-                presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Hour", new Integer(-1));
-                presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Minute", new Integer(-1));
+                presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Hour", Integer.valueOf(-1));
+                presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Minute", Integer.valueOf(-1));
                 presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Half", new String(""));
-                presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Hour", new Integer(-1));
-                presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Minute", new Integer(-1));
+                presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Hour", Integer.valueOf(-1));
+                presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Minute", Integer.valueOf(-1));
                 presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Half", new String(""));
             }
 

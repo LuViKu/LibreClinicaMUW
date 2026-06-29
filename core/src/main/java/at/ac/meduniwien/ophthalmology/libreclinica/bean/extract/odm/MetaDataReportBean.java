@@ -50,7 +50,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.TranslatedTextB
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.StudyParameterConfig;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RulesPostImportContainer;
-import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetadataUnit;
 import org.apache.commons.lang.StringEscapeUtils;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
@@ -61,7 +60,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
  * @author ywang (May, 2008)
  */
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
+
 public class MetaDataReportBean extends OdmXmlReportBean {
     private OdmStudyBean odmstudy;
     private LinkedHashMap<String, OdmStudyBean> odmStudyMap;
@@ -86,7 +86,6 @@ public class MetaDataReportBean extends OdmXmlReportBean {
     }
 
     public MetaDataReportBean() {
-		// TODO Auto-generated constructor stub
 	}
 
 	private static String nls = System.getProperty("line.separator");

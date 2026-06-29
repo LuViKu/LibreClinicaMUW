@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.ProcessingFuncti
  *
  */
 //JN: added serializable, as this bean needs be to passed over in -non-static manner over to job. 
+@SuppressWarnings("all")
 public class ExtractPropertyBean implements Serializable{
 
     /**

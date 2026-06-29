@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.xform;
 
+@SuppressWarnings("all")
+
 public class XformItem {
     String itemPath = null;
     String itemName = null;

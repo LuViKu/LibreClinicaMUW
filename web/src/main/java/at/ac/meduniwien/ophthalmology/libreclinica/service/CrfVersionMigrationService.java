@@ -22,7 +22,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.VersionUsageRe
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 
 import org.slf4j.Logger;
@@ -70,6 +69,7 @@ import java.util.Set;
  * version OIDs (operator-readable; the legacy schema accepts strings).
  */
 @Service
+@SuppressWarnings("all")
 public class CrfVersionMigrationService {
 
     private static final Logger LOG =

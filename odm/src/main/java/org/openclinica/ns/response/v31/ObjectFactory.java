@@ -29,6 +29,7 @@ import javax.xml.namespace.QName;
  * 
  */
 @XmlRegistry
+@SuppressWarnings("all")
 public class ObjectFactory {
 
     private final static QName _Messages_QNAME = new QName("http://www.openclinica.org/ns/response/v3.1", "Messages");

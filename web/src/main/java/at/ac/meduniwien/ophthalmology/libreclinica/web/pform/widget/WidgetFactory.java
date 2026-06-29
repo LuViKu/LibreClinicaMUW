@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class WidgetFactory {
 
 	public static final int TYPE_TEXT = 1;

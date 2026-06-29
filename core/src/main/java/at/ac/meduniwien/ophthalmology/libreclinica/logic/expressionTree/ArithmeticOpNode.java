@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class ArithmeticOpNode extends ExpressionNode {
     Operator op;
     ExpressionNode left;

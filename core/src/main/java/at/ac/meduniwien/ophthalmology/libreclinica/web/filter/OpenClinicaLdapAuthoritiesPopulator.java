@@ -22,6 +22,7 @@ import org.springframework.security.ldap.userdetails.LdapAuthoritiesPopulator;
  *
  * @author Doug Rodrigues (drodrigues@openclinica.com)
  */
+@SuppressWarnings("all")
 public class OpenClinicaLdapAuthoritiesPopulator implements LdapAuthoritiesPopulator {
 
     public Collection<GrantedAuthority> getGrantedAuthorities(DirContextOperations userData, String username) {

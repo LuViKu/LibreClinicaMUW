@@ -31,6 +31,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 /**
  * Utility class with method for retrieving the metadata for a CRFVersion.
  */
+@SuppressWarnings("all")
 public class CRFVersionMetadataUtil {
 
 	private DataSource dataSource = null;
@@ -56,7 +57,7 @@ public class CRFVersionMetadataUtil {
             for (int i = 0; i < sections.size(); i++) {
                 SectionBean section = sections.get(i);
                 ArrayList<ItemBean> items = asArrayList(section.getItems(), ItemBean.class);
-				versionMap.put(new Integer(section.getId()), items);
+				versionMap.put(Integer.valueOf(section.getId()), items);
                 // YW 08-21-2007, add group metadata
                 ArrayList<ItemGroupBean> igs = (ArrayList<ItemGroupBean>) igdao.findGroupBySectionId(section.getId());
                 for (int j = 0; j < igs.size(); ++j) {

@@ -16,6 +16,7 @@ import java.util.Optional;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ResponseType extends Term {
     /**
 	 * 
@@ -68,13 +69,13 @@ public class ResponseType extends Term {
         if (!t.isActive()) {
             return TEXT;
         } else {
-            return (ResponseType) t;
+            return t;
         }
     }
 
     public static boolean findByName(String name) {
         for (int i = 0; i < list.size(); i++) {
-            ResponseType temp = (ResponseType) list.get(i);
+            ResponseType temp = list.get(i);
             if (temp.getName().equals(name)) {
                 return true;
             }
@@ -93,7 +94,7 @@ public class ResponseType extends Term {
         }
         name = name.trim();
         for (int i = 0; i < list.size(); i++) {
-            ResponseType temp = (ResponseType) list.get(i);
+            ResponseType temp = list.get(i);
             if (temp.getName().equalsIgnoreCase(name)) {
                 return temp;
             }

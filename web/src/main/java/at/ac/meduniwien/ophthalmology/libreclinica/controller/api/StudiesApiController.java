@@ -66,6 +66,7 @@ import java.sql.SQLException;
 @RestController
 @RequestMapping("/api/v1/studies")
 @Tag(name = "Studies", description = "User's available studies.")
+@SuppressWarnings("null")
 public class StudiesApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(StudiesApiController.class);

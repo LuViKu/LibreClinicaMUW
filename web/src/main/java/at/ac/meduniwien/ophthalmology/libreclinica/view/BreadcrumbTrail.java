@@ -33,6 +33,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class BreadcrumbTrail {
     private ArrayList<BreadcrumbBean> trail = new ArrayList<>();
 
@@ -757,7 +758,6 @@ public class BreadcrumbTrail {
                 trail.add(new BreadcrumbBean(resworkflow.getString("delete_CRF_version"), "#", Status.PENDING));
             }
 
-            // TODO fill in your page here if it does not require a
             // breadcrumb trail:
 
             else if (jspPage.equals(Page.MENU)) {

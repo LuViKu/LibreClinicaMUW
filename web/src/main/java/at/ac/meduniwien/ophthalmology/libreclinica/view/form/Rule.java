@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view.form;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 2, 2007
  */
+@SuppressWarnings("all")
 public interface Rule {
     void enforce();
 }

@@ -42,7 +42,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDef
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
-import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
@@ -76,6 +75,9 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
  * live ViewNotes page when defId is missing, so this servlet treats
  * missing/zero defId as a 400.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class ListDiscNotesForCRFDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;
@@ -94,7 +96,6 @@ public class ListDiscNotesForCRFDataServlet extends SecureController {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void processRequest() throws Exception {
         java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(locale);
         java.util.ResourceBundle resformat = ResourceBundleProvider.getFormatBundle(locale);

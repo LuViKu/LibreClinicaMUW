@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class DiscrepancyNotesSummary implements Serializable {
 
     private static final long serialVersionUID = 3456220240618564309L;

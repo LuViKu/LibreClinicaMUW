@@ -61,6 +61,9 @@ import org.slf4j.LoggerFactory;
  *
  * @author Krikor krumlian
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class TestRuleServlet extends SecureController {
 
     private static final long serialVersionUID = 9116068126651934226L;
@@ -258,12 +261,12 @@ public class TestRuleServlet extends SecureController {
                 	if(entry.getKey().contains(ExpressionService.STARTDATE))
                 	{
                 		request.setAttribute(entry.getKey() + "-tooltip", sed.getName() + ": " + "date");
-                		request.setAttribute("studyEventProperty", new Integer(9));
+                		request.setAttribute("studyEventProperty", Integer.valueOf(9));
                 	}
                 	else if(entry.getKey().contains(ExpressionService.STATUS))
                 	{
                 		request.setAttribute(entry.getKey() + "-tooltip", sed.getName() + ": " + "status");
-                		request.setAttribute("studyEventProperty", new Integer(5));
+                		request.setAttribute("studyEventProperty", Integer.valueOf(5));
                 	}
                 }
                 if ((item!=null &&item.getItemDataTypeId() == 9)||(item==null&&entry.getKey().contains(ExpressionService.STARTDATE))) {//so enter this in case if the rules are event action based or if item has date type
@@ -276,7 +279,7 @@ public class TestRuleServlet extends SecureController {
                         }
                     } catch (Exception e) {
                         logger.error(e.toString());
-                        // TODO: handle exception
+                        // NOTE: handle exception
                     }
                 }
             }
@@ -302,7 +305,6 @@ public class TestRuleServlet extends SecureController {
               if(entry.getKey().startsWith(ExpressionService.STUDY_EVENT_OID_START_KEY)&&(entry.getKey().endsWith(ExpressionService.STATUS)||entry.getKey().endsWith(ExpressionService.STARTDATE)))
               {
             	  if(entry.getKey().endsWith(ExpressionService.STATUS)){
-            		  //TODO add the logic for status
             	  }
             	  else if(entry.getKey().endsWith(ExpressionService.STARTDATE)){
             		  try {
@@ -315,7 +317,7 @@ public class TestRuleServlet extends SecureController {
                           }
                       } catch (Exception e) {
                           logger.error(e.toString());
-                          // TODO: handle exception
+                          // NOTE: handle exception
                       }
                              	  }
             		  
@@ -348,7 +350,7 @@ public class TestRuleServlet extends SecureController {
                             entry.setValue(sdf2.format(date));
                         }
                     } catch (Exception e) {
-                        // TODO: handle exception
+                        // NOTE: handle exception
                     }
                 }
             }

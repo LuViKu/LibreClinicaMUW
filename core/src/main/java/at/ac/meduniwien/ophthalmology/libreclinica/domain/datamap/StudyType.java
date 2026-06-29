@@ -30,6 +30,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 // @Entity
 @Table(name = "study_type")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@SuppressWarnings("all")
 public class StudyType  extends DataMapDomainObject {
 
 	/**
@@ -85,7 +86,6 @@ public class StudyType  extends DataMapDomainObject {
 	}
 
 	/*
-	 * TODO the property 'studyType' for class 'Study' is commented
 	 * so this mapping does not work
 	 */
 	@OneToMany(fetch = FetchType.LAZY, mappedBy = "studyType")

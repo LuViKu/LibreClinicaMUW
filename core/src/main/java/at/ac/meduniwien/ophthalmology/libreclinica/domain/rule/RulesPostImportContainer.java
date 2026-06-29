@@ -42,6 +42,7 @@ import jakarta.xml.bind.annotation.XmlTransient;
  */
 @XmlRootElement(name = "RuleImport")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class RulesPostImportContainer {
 
     private ArrayList<RuleSetBean> ruleSets;

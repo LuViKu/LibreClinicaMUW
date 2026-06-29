@@ -34,6 +34,7 @@ import java.util.Locale;
  * @author thickerson
  * Created on Jun 9, 2005
  */
+@SuppressWarnings("all")
 public class ShowFileServlet extends SecureController {
 
     /**

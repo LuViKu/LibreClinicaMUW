@@ -18,6 +18,8 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
 
 import jakarta.servlet.ServletContext;
 
+@SuppressWarnings("all")
+
 public class SpringServletAccess {
 
     public static ApplicationContext getApplicationContext(ServletContext servletContext) {

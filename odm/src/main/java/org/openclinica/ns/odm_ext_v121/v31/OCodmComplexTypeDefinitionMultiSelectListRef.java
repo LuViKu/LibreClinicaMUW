@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-MultiSelectListRef")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionMultiSelectListRef {
 
     @XmlAttribute(name = "MultiSelectListID", required = true)

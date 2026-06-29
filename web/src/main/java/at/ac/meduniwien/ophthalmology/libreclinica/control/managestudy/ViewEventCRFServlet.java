@@ -36,6 +36,7 @@ import java.util.ArrayList;
  *
  * Views the detail of an event CRF
  */
+@SuppressWarnings("all")
 public class ViewEventCRFServlet extends SecureController {
     /**
 	 * 
@@ -97,7 +98,7 @@ public class ViewEventCRFServlet extends SecureController {
             }
 
             request.setAttribute("sections", sections);
-            request.setAttribute("studySubId", new Integer(studySubId).toString());
+            request.setAttribute("studySubId", Integer.valueOf(studySubId).toString());
             forwardPage(Page.VIEW_EVENT_CRF);
         }
     }

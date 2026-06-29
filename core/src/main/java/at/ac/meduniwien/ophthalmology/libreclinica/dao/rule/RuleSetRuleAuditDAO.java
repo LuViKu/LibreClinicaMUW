@@ -26,6 +26,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException;
 
+@SuppressWarnings("all")
+
 public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
 
     RuleSetDAO ruleSetDao;

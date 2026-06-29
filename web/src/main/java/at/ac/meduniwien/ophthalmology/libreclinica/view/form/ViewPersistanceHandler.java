@@ -25,6 +25,7 @@ import java.util.TreeMap;
  * A class that handles persistent values that must appear in forms when they
  * are generated.
  */
+@SuppressWarnings("all")
 public class ViewPersistanceHandler {
     private List<ItemDataBean> itemDataBeans;
     private ViewBuilderUtil viewBuilderUtil;

@@ -38,6 +38,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class ImportCRFInfoContainer {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
@@ -127,7 +129,7 @@ public class ImportCRFInfoContainer {
                             String crfStatus = formDataBean.getEventCRFStatus();
                             if (crfStatus != null && crfStatus.equals(DataEntryStage.INITIAL_DATA_ENTRY.getName()))
                                 importCrfInfo.setPostImportStage(DataEntryStage.INITIAL_DATA_ENTRY);
-                            importCrfInfo.setEventCRFID(new Integer(ecb.getId()));
+                            importCrfInfo.setEventCRFID(Integer.valueOf(ecb.getId()));
                             if (!(ecb.getStage().equals(DataEntryStage.INITIAL_DATA_ENTRY) && upsert.isDataEntryStarted())
                                     && !(ecb.getStage().equals(DataEntryStage.DOUBLE_DATA_ENTRY_COMPLETE) && upsert.isDataEntryComplete()))
                                 importCrfInfo.setProcessImport(false);

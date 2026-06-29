@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
 
+@SuppressWarnings("all")
+
 public class PformValidator implements Validator {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

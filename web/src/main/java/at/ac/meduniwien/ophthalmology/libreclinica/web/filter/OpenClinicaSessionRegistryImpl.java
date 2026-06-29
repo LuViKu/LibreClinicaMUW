@@ -26,6 +26,8 @@ import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.ldap.userdetails.LdapUserDetails;
 
+@SuppressWarnings("all")
+
 public class OpenClinicaSessionRegistryImpl extends SessionRegistryImpl {
 
     AuditUserLoginDao auditUserLoginDao;
@@ -52,7 +54,7 @@ public class OpenClinicaSessionRegistryImpl extends SessionRegistryImpl {
     }
 
     void auditLogout(String username) {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountBean userAccount = (UserAccountBean) getUserAccountDao().findByUserName(username);
         crfLocker.unlockAllForUser(userAccount.getId());
 

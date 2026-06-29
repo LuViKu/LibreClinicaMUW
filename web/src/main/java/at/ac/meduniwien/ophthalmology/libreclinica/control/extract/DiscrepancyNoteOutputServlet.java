@@ -66,6 +66,7 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
  * @see ChooseDownloadFormat
  * @see at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DownloadDiscrepancyNote
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteOutputServlet extends SecureController {
     /**
 	 * 

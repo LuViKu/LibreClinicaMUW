@@ -1,0 +1,236 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-06-28: dedicated demo accounts for the application manual
+        (docs/manuals/app-manual). One account per SPA UserRole so the
+        screenshot harness (web/src/spa/tests/manual/capture-manual.spec.ts)
+        can log in as each role with documented credentials.
+
+          Username              Password    study_user_role  user_type  SPA role
+          ....................  ..........  ...............  .........  .............
+          manual_admin          12345678    admin            1 (sys)    Administrator
+          manual_dm             12345678    director         2          Data Manager
+          manual_monitor        12345678    monitor          2          Monitor
+          manual_investigator   12345678    Investigator     2          Investigator
+          manual_crc            12345678    coordinator      2          CRC
+
+        role_name strings are Role.java's per-instance `name` (Role.java:
+        admin/coordinator/director/Investigator/monitor); RoleMapper.toSpaRole()
+        projects them to the SPA's 5-value UserRole union. All bind to the
+        Default Study (study_id=1, status_id=1 AVAILABLE), owner_id=1 (root),
+        password reusing root's bcrypt hash for "12345678" (same as the
+        physician/monitor/datamanager demo seed).
+
+        SAFETY: context="demo" — these known-password accounts are seeded ONLY
+        when Liquibase runs with the demo context active (dev/demo/manual
+        capture). Production deploys (context != demo) never create them. Do
+        NOT remove the context guard.
+
+        Idempotent: each changeset is skipped (MARK_RAN) when the username
+        already exists. user_id is COALESCE(MAX(user_id),0)+1 to avoid PK
+        collisions with sequence-assigned, app-created users; the final
+        changeset realigns user_account_user_id_seq.
+    -->
+
+    <changeSet id="2026-06-28-seed-manual-admin"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'manual_admin';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO user_account
+              (user_id, user_name, passwd, first_name, last_name, email, active_study,
+               institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp,
+               user_type_id, enabled, account_non_locked, lock_counter, run_webservices,
+               authtype, enable_api_key)
+            SELECT COALESCE(MAX(user_id), 0) + 1, 'manual_admin',
+              '{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG',
+              'Manual', 'Administrator', 'manual_admin@example.invalid', 1,
+              'MUW Ophthalmology (manual)', 1, 1, '2026-06-28', '2026-06-28',
+              1, true, true, 0, false, 'STANDARD', false
+            FROM user_account;
+        </sql>
+        <insert tableName="authorities">
+            <column name="username" value="manual_admin"/>
+            <column name="authority" value="ROLE_USER"/>
+            <column name="version" valueNumeric="1"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="admin"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-28"/>
+            <column name="user_name" value="manual_admin"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2026-06-28-seed-manual-dm"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'manual_dm';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO user_account
+              (user_id, user_name, passwd, first_name, last_name, email, active_study,
+               institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp,
+               user_type_id, enabled, account_non_locked, lock_counter, run_webservices,
+               authtype, enable_api_key)
+            SELECT COALESCE(MAX(user_id), 0) + 1, 'manual_dm',
+              '{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG',
+              'Manual', 'DataManager', 'manual_dm@example.invalid', 1,
+              'MUW Ophthalmology (manual)', 1, 1, '2026-06-28', '2026-06-28',
+              2, true, true, 0, false, 'STANDARD', false
+            FROM user_account;
+        </sql>
+        <insert tableName="authorities">
+            <column name="username" value="manual_dm"/>
+            <column name="authority" value="ROLE_USER"/>
+            <column name="version" valueNumeric="1"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="director"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-28"/>
+            <column name="user_name" value="manual_dm"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2026-06-28-seed-manual-monitor"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'manual_monitor';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO user_account
+              (user_id, user_name, passwd, first_name, last_name, email, active_study,
+               institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp,
+               user_type_id, enabled, account_non_locked, lock_counter, run_webservices,
+               authtype, enable_api_key)
+            SELECT COALESCE(MAX(user_id), 0) + 1, 'manual_monitor',
+              '{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG',
+              'Manual', 'Monitor', 'manual_monitor@example.invalid', 1,
+              'MUW Ophthalmology (manual)', 1, 1, '2026-06-28', '2026-06-28',
+              2, true, true, 0, false, 'STANDARD', false
+            FROM user_account;
+        </sql>
+        <insert tableName="authorities">
+            <column name="username" value="manual_monitor"/>
+            <column name="authority" value="ROLE_USER"/>
+            <column name="version" valueNumeric="1"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="monitor"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-28"/>
+            <column name="user_name" value="manual_monitor"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2026-06-28-seed-manual-investigator"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'manual_investigator';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO user_account
+              (user_id, user_name, passwd, first_name, last_name, email, active_study,
+               institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp,
+               user_type_id, enabled, account_non_locked, lock_counter, run_webservices,
+               authtype, enable_api_key)
+            SELECT COALESCE(MAX(user_id), 0) + 1, 'manual_investigator',
+              '{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG',
+              'Manual', 'Investigator', 'manual_investigator@example.invalid', 1,
+              'MUW Ophthalmology (manual)', 1, 1, '2026-06-28', '2026-06-28',
+              2, true, true, 0, false, 'STANDARD', false
+            FROM user_account;
+        </sql>
+        <insert tableName="authorities">
+            <column name="username" value="manual_investigator"/>
+            <column name="authority" value="ROLE_USER"/>
+            <column name="version" valueNumeric="1"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="Investigator"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-28"/>
+            <column name="user_name" value="manual_investigator"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2026-06-28-seed-manual-crc"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'manual_crc';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO user_account
+              (user_id, user_name, passwd, first_name, last_name, email, active_study,
+               institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp,
+               user_type_id, enabled, account_non_locked, lock_counter, run_webservices,
+               authtype, enable_api_key)
+            SELECT COALESCE(MAX(user_id), 0) + 1, 'manual_crc',
+              '{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG',
+              'Manual', 'Coordinator', 'manual_crc@example.invalid', 1,
+              'MUW Ophthalmology (manual)', 1, 1, '2026-06-28', '2026-06-28',
+              2, true, true, 0, false, 'STANDARD', false
+            FROM user_account;
+        </sql>
+        <insert tableName="authorities">
+            <column name="username" value="manual_crc"/>
+            <column name="authority" value="ROLE_USER"/>
+            <column name="version" valueNumeric="1"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="coordinator"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-28"/>
+            <column name="user_name" value="manual_crc"/>
+        </insert>
+    </changeSet>
+
+    <!--
+        Realign the user_account sequence to MAX(user_id) so the next
+        app-created user does not collide with the ids assigned above.
+        Mirrors lc-muw-2026-06-05-bump-seeded-sequences.xml.
+    -->
+    <changeSet id="2026-06-28-bump-user-account-seq"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo"
+               dbms="postgresql">
+        <sql>
+            SELECT setval('user_account_user_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(user_id), 0), 1) FROM user_account));
+        </sql>
+        <rollback/>
+    </changeSet>
+
+</databaseChangeLog>

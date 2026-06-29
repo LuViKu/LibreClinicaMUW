@@ -23,6 +23,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.util.CrfTemplateColumnNa
 import at.ac.meduniwien.ophthalmology.libreclinica.core.util.ItemGroupCrvVersionUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 
+@SuppressWarnings("all")
+
 public class SpreadSheetItemUtil {
 	
 	private String itemName;//1
@@ -435,7 +437,6 @@ public class SpreadSheetItemUtil {
 		
 	}
 	
-	//TODO if we ever go to normal OO parsing of spreadsheet this method should be moved to 
 	//SpredSheetGroupUtil
 	//the problem here that Group now can be ungrouped group
 	public static void verifySectionGroupPlacementForItems(ArrayList< SpreadSheetItemUtil> row_items,
@@ -608,7 +609,6 @@ public class SpreadSheetItemUtil {
             	 this.setDefaultValue( new SimpleDateFormat(ApplicationConstants.getDateFormatInItemData()).format(this.getDefaultValue()));
              } catch (Exception e) {
             	 this.setDefaultValue("");
-            	 //TODO raise exception
              }
          }
          if (this.getDefaultValue().length() > 0) {
@@ -647,7 +647,6 @@ public class SpreadSheetItemUtil {
              }
              else if(this.getResponseTypeId() == ResponseType.CHECKBOX.getId()||
             		 this.getResponseTypeId() == ResponseType.SELECTMULTI.getId()){
-            	 //TODO : see previous comment 
              }
            
          }

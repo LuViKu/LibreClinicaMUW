@@ -27,6 +27,7 @@ import jakarta.persistence.Transient;
 
 @Entity
 @DiscriminatorValue("4")
+@SuppressWarnings("all")
 public class InsertActionBean extends RuleActionBean {
 
     /**

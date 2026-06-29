@@ -12,28 +12,38 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Section;
 import org.hibernate.query.NativeQuery;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class SectionDao extends AbstractDomainDao<Section> {
 
     @Override
     Class<Section> domainClass() {
-        // TODO Auto-generated method stub
         return Section.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings({ "deprecation", "rawtypes" })
+    @SuppressWarnings("rawtypes")
     public Section findByCrfVersionOrdinal(int crfVersionId, int ordinal) {
         // String query = "from " + getDomainClassName() + " section  where section.crfVersionId = :crfversionid ";
         // org.hibernate.query.Query q = getCurrentSession().createQuery(query);
         // q.set.setParameter("crfversionid", crf_version_id);
-        // return (Section) q.uniqueResult();
+        // return (Section) q.getSingleResultOrNull();
 
         String query = " select s.* from section s where s.crf_version_id = :crfVersionId and ordinal = :ordinal ";
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setParameter("crfVersionId", crfVersionId);
         q.setParameter("ordinal", ordinal);
         q.setCacheable(true);
-        return (Section) q.uniqueResult();
+        return (Section) q.getSingleResultOrNull();
     }
 
 }

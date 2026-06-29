@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class ExpressionBean extends AuditableEntityBean {
 
     /**
@@ -29,7 +30,6 @@ public class ExpressionBean extends AuditableEntityBean {
     private String contextName;
 
     public ExpressionBean() {
-        // TODO Auto-generated constructor stub
     }
 
     public ExpressionBean(Context context, String value) {

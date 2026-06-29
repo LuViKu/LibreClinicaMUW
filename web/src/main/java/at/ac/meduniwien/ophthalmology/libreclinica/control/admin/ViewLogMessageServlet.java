@@ -26,6 +26,7 @@ import java.io.FileReader;
  * @author thickerson, purpose is to be able to show an external file in a log to a user
  * 
  */
+@SuppressWarnings("all")
 public class ViewLogMessageServlet extends SecureController {
 
     /**
@@ -49,7 +50,7 @@ public class ViewLogMessageServlet extends SecureController {
         }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
         // allow only admin-level users, currently
 
@@ -86,7 +87,6 @@ public class ViewLogMessageServlet extends SecureController {
             // http://localhost:8081/OpenClinica-3.0-SNAPSHOT/ViewSingleJob?tname=test%20job%2001&gname=1
             forwardPage(Page.VIEW_LOG_MESSAGE);
         } catch (Exception e) {
-            // TODO Auto-generated catch block
             logger.error("found IO exception: " + e.getMessage());
             addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
             // throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");

@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.table.sdv.SDVUtil;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class MainMenuServlet extends SecureController {
 
     /**
@@ -56,19 +57,21 @@ public class MainMenuServlet extends SecureController {
 	 */
 	private static final long serialVersionUID = -7373300139315967558L;
 	//Shaoyu Su
-    Locale locale;
-    private StudyEventDefinitionDAO studyEventDefinitionDAO;
-	private SubjectDAO subjectDAO;
-    private StudySubjectDAO studySubjectDAO;
-    private StudyEventDAO studyEventDAO;
-    private StudyGroupClassDAO studyGroupClassDAO;
-    private SubjectGroupMapDAO subjectGroupMapDAO;
-    private StudyDAO studyDAO;
-    private EventCRFDAO eventCRFDAO;
-    private EventDefinitionCRFDAO eventDefintionCRFDAO;
-    private StudyGroupDAO studyGroupDAO;
-    private DiscrepancyNoteDAO discrepancyNoteDAO;
-    private StudyParameterValueDAO studyParameterValueDAO;
+    // transient: DAO + Locale fields are non-Serializable but MUW runs single-host
+    // (no session replication), so the servlet never round-trips a session.
+    transient Locale locale;
+    private transient StudyEventDefinitionDAO studyEventDefinitionDAO;
+	private transient SubjectDAO subjectDAO;
+    private transient StudySubjectDAO studySubjectDAO;
+    private transient StudyEventDAO studyEventDAO;
+    private transient StudyGroupClassDAO studyGroupClassDAO;
+    private transient SubjectGroupMapDAO subjectGroupMapDAO;
+    private transient StudyDAO studyDAO;
+    private transient EventCRFDAO eventCRFDAO;
+    private transient EventDefinitionCRFDAO eventDefintionCRFDAO;
+    private transient StudyGroupDAO studyGroupDAO;
+    private transient DiscrepancyNoteDAO discrepancyNoteDAO;
+    private transient StudyParameterValueDAO studyParameterValueDAO;
 
     // < ResourceBundle respage;
 
@@ -97,12 +100,12 @@ public class MainMenuServlet extends SecureController {
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
         ArrayList<StudyBean> studies = null;
 
-        long pwdExpireDay = new Long(SQLInitServlet.getField("passwd_expiration_time")).longValue();
+        long pwdExpireDay = Long.parseLong(SQLInitServlet.getField("passwd_expiration_time"));
         Date lastPwdChangeDate = ub.getPasswdTimestamp();
 
         // a flag tells whether users are required to change pwd upon the first
         // time log in or pwd expired
-        int pwdChangeRequired = new Integer(SQLInitServlet.getField("change_passwd_required")).intValue();
+        int pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
         // update last visit date to current date
         UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());
         UserAccountBean ub1 = (UserAccountBean) udao.findByPK(ub.getId());
@@ -191,7 +194,7 @@ public class MainMenuServlet extends SecureController {
                 if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
                     //Shaoyu Su
                     //int nextLabel = this.getStudySubjectDAO().findTheGreatestLabel() + 1;
-                    //request.setAttribute("label", new Integer(nextLabel).toString());
+                    //request.setAttribute("label", Integer.valueOf(nextLabel).toString());
                     request.setAttribute("label", resword.getString("id_generated_Save_Add"));
                     //@pgawade 27-June-2012 fix for issue 13477: set label to "ID will be generated on Save or Add" in case of auto generated subject id
                     fp.addPresetValue("label", resword.getString("id_generated_Save_Add"));
@@ -300,7 +303,6 @@ public class MainMenuServlet extends SecureController {
         request.setAttribute("subjectEventStatusStatisticsRows", rows);
     }
 
-    @SuppressWarnings("unchecked")
     private void setupStudySiteStatisticsTable() {
         StudyDAO studyDao = getStudyDAO();
         StudySubjectDAO subjectDao = getStudySubjectDAO();

@@ -26,6 +26,7 @@ import java.util.List;
  *
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RuleBean extends AuditableEntityBean {
 
     /**

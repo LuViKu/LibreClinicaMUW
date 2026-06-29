@@ -54,6 +54,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "itemResponse",
     "simpleConditionalDisplay"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionItemPresentInForm {
 
     @XmlElement(name = "LeftItemText")

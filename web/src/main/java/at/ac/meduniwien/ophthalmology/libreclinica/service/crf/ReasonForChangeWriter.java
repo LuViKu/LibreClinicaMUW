@@ -48,6 +48,7 @@ import org.slf4j.LoggerFactory;
  * controller (cheap, mirrors the DAO-per-request pattern the existing
  * controllers already use).
  */
+@SuppressWarnings("all")
 public class ReasonForChangeWriter {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReasonForChangeWriter.class);

@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class DoubleDataEntryServlet extends DataEntryServlet {
 
     /**
@@ -277,7 +278,6 @@ public class DoubleDataEntryServlet extends DataEntryServlet {
                 // ResponseSetBean rsBean = ifmdb.getResponseSet();
                 // logger.info("### found a response set count of "+inputName+"
                 // "+rsBean.getOptions().size());
-                // TODO sees it at this end tbh 1878
 
                 if (validationCount == null || validationCount.intValue() == 0) {
                     v.addValidation(inputName, Validator.MATCHES_INITIAL_DATA_ENTRY_VALUE, valueToCompare, false);
@@ -380,7 +380,6 @@ public class DoubleDataEntryServlet extends DataEntryServlet {
             if (validationCount == null || validationCount.intValue() == 0) {
                 if (i == 0 && formGroups.size() != digbs.size()) {
                     v.addValidation(inputName + "group", Validator.DIFFERENT_NUMBER_OF_GROUPS_IN_DDE);
-                    // TODO internationalize this string, tbh
                     v.setErrorMessage("There are additional values here that were not present in the initial data entry. You have entered a different number of groups"
                                 + " for the item groups containing " + inputName);
 

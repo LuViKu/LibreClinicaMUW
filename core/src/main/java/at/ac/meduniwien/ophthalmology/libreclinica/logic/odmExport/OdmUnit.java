@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
  * @author ywang (May, 2009)
  */
 
+@SuppressWarnings("all")
+
 public class OdmUnit {
     protected DataSource ds;
     protected DatasetBean dataset;

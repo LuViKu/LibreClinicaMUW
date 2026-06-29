@@ -44,7 +44,6 @@ public class MetadataCollectorResource {
 	private RuleSetRuleDao ruleSetRuleDao;
 	private CoreResources coreResources;
 
-	// TODO: remove me - Testing purposes
 	private StudyDao studyDaoHib;
 
 	public StudyDao getStudyDaoHib() {

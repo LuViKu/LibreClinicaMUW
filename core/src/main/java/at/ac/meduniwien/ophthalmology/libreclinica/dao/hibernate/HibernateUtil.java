@@ -20,6 +20,7 @@ import org.hibernate.query.Query;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class HibernateUtil {
 
     /**
@@ -31,10 +32,9 @@ public class HibernateUtil {
      * @throws IllegalArgumentException When query returns an object that is not a {@link Number}.
      */
     public static List<Integer> queryIDsList(Query<?> query) {
-        //TODO - Doug - change return type to List<Long>
 
         // queryResult may contain Int, Long or BigDecimal
-        List<?> queryResult = query.list();
+        List<?> queryResult = query.getResultList();
 
         List<Integer> result = new ArrayList<Integer>(queryResult.size());
         for (Object o: queryResult) {

@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
  * so the {@code @PostConstruct} fires once the {@code OpenClinicaSchedulerFactoryBean}
  * has already started the scheduler.
  */
+@SuppressWarnings("all")
 public class ArchivedFileRetentionScheduler {
 
     private static final Logger LOG = LoggerFactory.getLogger(ArchivedFileRetentionScheduler.class);

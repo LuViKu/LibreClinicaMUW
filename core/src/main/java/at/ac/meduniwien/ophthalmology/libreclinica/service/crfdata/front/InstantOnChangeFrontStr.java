@@ -18,6 +18,7 @@ import java.io.Serializable;
  * Three elements are chained up by INNER FrontStrDelimiter, so do sets.
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class InstantOnChangeFrontStr extends AbstractFrontStr implements Serializable{
 
     private static final long serialVersionUID = -1799222257393501943L;

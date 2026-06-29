@@ -22,6 +22,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDa
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCase;
 
+@SuppressWarnings("all")
+
 public class ConfigurationDaoTest extends HibernateOcDbTestCase {
 
     public ConfigurationDaoTest() {

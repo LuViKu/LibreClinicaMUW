@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+@SuppressWarnings("all")
 public class EnketoURLResponse {
     private String url = null;
     private String preview_url = null;

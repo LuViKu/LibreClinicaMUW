@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * The data access object that users will access the database for study group
  * class objects
  */
+@SuppressWarnings("all")
 public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> {
     protected void setQueryNames() {
         findAllByStudyName = "findAllByStudy";
@@ -181,14 +182,14 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
         // (NAME,STUDY_ID,OWNER_ID,DATE_CREATED, GROUP_CLASS_TYPE_ID,
         // STATUS_ID,subject_assignment)
         // VALUES (?,?,?,NOW(),?,?,?)
-        variables.put(new Integer(1), new Integer(id));
-        variables.put(new Integer(2), sb.getName());
-        variables.put(new Integer(3), new Integer(sb.getStudyId()));
-        variables.put(new Integer(4), new Integer(sb.getOwner().getId()));
-        variables.put(new Integer(5), new Integer(sb.getGroupClassTypeId()));
+        variables.put(Integer.valueOf(1), Integer.valueOf(id));
+        variables.put(Integer.valueOf(2), sb.getName());
+        variables.put(Integer.valueOf(3), Integer.valueOf(sb.getStudyId()));
+        variables.put(Integer.valueOf(4), Integer.valueOf(sb.getOwner().getId()));
+        variables.put(Integer.valueOf(5), Integer.valueOf(sb.getGroupClassTypeId()));
         // Date_created is now()
-        variables.put(new Integer(6), new Integer(sb.getStatus().getId()));
-        variables.put(new Integer(7), sb.getSubjectAssignment());
+        variables.put(Integer.valueOf(6), Integer.valueOf(sb.getStatus().getId()));
+        variables.put(Integer.valueOf(7), sb.getSubjectAssignment());
         this.executeUpdate(digester.getQuery("create"), variables);
         if (isQuerySuccessful()) {
             sb.setId(id);
@@ -207,15 +208,15 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
         // GROUP_class_TYPE_ID=?,
         // STATUS_ID=?, DATE_UPDATED=?,UPDATE_ID=?,
         // subject_assignment=? WHERE STUDY_GROUP_class_ID=?
-        variables.put(new Integer(1), sb.getName());
-        variables.put(new Integer(2), new Integer(sb.getStudyId()));
-        variables.put(new Integer(3), new Integer(sb.getGroupClassTypeId()));
+        variables.put(Integer.valueOf(1), sb.getName());
+        variables.put(Integer.valueOf(2), Integer.valueOf(sb.getStudyId()));
+        variables.put(Integer.valueOf(3), Integer.valueOf(sb.getGroupClassTypeId()));
 
-        variables.put(new Integer(4), new Integer(sb.getStatus().getId()));
-        variables.put(new Integer(5), new java.util.Date());
-        variables.put(new Integer(6), new Integer(sb.getUpdater().getId()));
-        variables.put(new Integer(7), sb.getSubjectAssignment());
-        variables.put(new Integer(8), new Integer(sb.getId()));
+        variables.put(Integer.valueOf(4), Integer.valueOf(sb.getStatus().getId()));
+        variables.put(Integer.valueOf(5), new java.util.Date());
+        variables.put(Integer.valueOf(6), Integer.valueOf(sb.getUpdater().getId()));
+        variables.put(Integer.valueOf(7), sb.getSubjectAssignment());
+        variables.put(Integer.valueOf(8), Integer.valueOf(sb.getId()));
 
         String sql = digester.getQuery("update");
         this.executeUpdate(sql, variables);

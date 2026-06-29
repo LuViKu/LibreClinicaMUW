@@ -20,6 +20,7 @@ import java.util.List;
  * represent the content for table cells or TD tags, which are implemented as
  * JDOM Elements. Created by IntelliJ IDEA. User: bruceperry Date: May 17, 2007
  */
+@SuppressWarnings("all")
 public interface InputGenerator {
     Element createTextInputTag(Element tdCell, Integer itemId, Integer tabNumber, String defaultValue, boolean isDateType, String dbValue, boolean hasSavedData);
 

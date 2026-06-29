@@ -15,6 +15,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.service;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class SasProcessingFunction extends ProcessingFunction {
 
     /**

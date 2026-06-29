@@ -35,6 +35,9 @@ import java.util.Locale;
  *
  * View all related metadata for an item
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class ViewItemDetailServlet extends SecureController {
 
     /**
@@ -61,7 +64,7 @@ public class ViewItemDetailServlet extends SecureController {
             return;
         }
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
     }
 

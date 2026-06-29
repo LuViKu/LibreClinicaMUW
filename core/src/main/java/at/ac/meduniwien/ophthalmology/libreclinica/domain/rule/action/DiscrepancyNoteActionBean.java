@@ -18,6 +18,7 @@ import jakarta.persistence.Transient;
 
 @Entity
 @DiscriminatorValue("1")
+@SuppressWarnings("all")
 public class DiscrepancyNoteActionBean extends RuleActionBean {
 
     /**

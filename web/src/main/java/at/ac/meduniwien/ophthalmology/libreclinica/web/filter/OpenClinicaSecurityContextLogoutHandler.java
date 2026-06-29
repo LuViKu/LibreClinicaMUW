@@ -36,6 +36,7 @@ import org.springframework.security.web.authentication.logout.SecurityContextLog
  * 
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class OpenClinicaSecurityContextLogoutHandler extends SecurityContextLogoutHandler implements LogoutSuccessHandler {
 
     AuditUserLoginDao auditUserLoginDao;
@@ -63,7 +64,7 @@ public class OpenClinicaSecurityContextLogoutHandler extends SecurityContextLogo
     }
 
     void auditLogout(String username) {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountBean userAccount = (UserAccountBean) getUserAccountDao().findByUserName(username);
         AuditUserLoginBean auditUserLogin = new AuditUserLoginBean();
         auditUserLogin.setUserName(username);

@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean
  *
  */
 
+@SuppressWarnings("all")
+
 public class FilterBean extends AuditableEntityBean {
     /**
 	 * 

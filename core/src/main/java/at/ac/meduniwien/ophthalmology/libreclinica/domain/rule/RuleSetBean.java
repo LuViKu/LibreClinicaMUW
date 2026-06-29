@@ -45,6 +45,10 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "rule_set")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_set_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.TRANSACTIONAL)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class RuleSetBean extends AbstractAuditableMutableDomainObject implements Serializable{
 
     /**
@@ -69,7 +73,7 @@ public class RuleSetBean extends AbstractAuditableMutableDomainObject implements
     private List<ExpressionBean> expressions; // itemGroup & item populated when RuleSets are retrieved
     private ItemGroupBean itemGroup;
 
-    // TODO : Pending conversion of the objects below to use Hibernate
+    // NOTE: : Pending conversion of the objects below to use Hibernate
     private Integer studyEventDefinitionId;
     private Integer studyId;
     private Integer crfId;

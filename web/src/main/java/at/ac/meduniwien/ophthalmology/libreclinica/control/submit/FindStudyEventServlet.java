@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * chooses a subject or study event definition whose study events he wants to
  * see Step 3 - the user chooses the study event he wants to add data to
  */
+@SuppressWarnings("all")
 public class FindStudyEventServlet extends SecureController {
 
     /**
@@ -112,7 +113,7 @@ public class FindStudyEventServlet extends SecureController {
 
             request.setAttribute(INPUT_BROWSEBY, browseBy);
             request.setAttribute(BEAN_DISPLAY_ENTITIES, displayEntities);
-            request.setAttribute(INPUT_PAGENUM, new Integer(pageNum));
+            request.setAttribute(INPUT_PAGENUM, Integer.valueOf(pageNum));
             forwardPage(Page.FIND_STUDY_EVENTS_STEP2);
         }
 

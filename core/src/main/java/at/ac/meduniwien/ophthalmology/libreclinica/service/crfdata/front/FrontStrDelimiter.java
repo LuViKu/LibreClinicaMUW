@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.front;
  * <P>For chain up elements so string could be passed to the front-end</P>
  * ywang (Aug, 2011)
  */
+@SuppressWarnings("all")
 public enum FrontStrDelimiter {
     NONE(""), INNER("---");
 

@@ -25,8 +25,9 @@ import jakarta.servlet.http.HttpSession;
  * @since Jan. 2012
  */
 // @author ywang
+@SuppressWarnings("all")
 public final class LocaleResolver {
-	private final static Locale DEFAULT_LOCALE = new Locale("en");
+	private final static Locale DEFAULT_LOCALE = Locale.ENGLISH;
 	private final static String LOCALE_SESSION_ATTRIBUTE_NAME
 	    = SessionLocaleResolver.LOCALE_SESSION_ATTRIBUTE_NAME;
 
@@ -38,7 +39,7 @@ public final class LocaleResolver {
 	 */
 	public final static Locale resolveLocale(HttpServletRequest request) {
 		if(request != null) {
-			for(@SuppressWarnings("unchecked")
+			for(
 			Enumeration<Locale> locales = request.getLocales(); locales.hasMoreElements();) {
 				Locale locale = locales.nextElement();
 				ResourceBundleProvider.updateLocale(locale);

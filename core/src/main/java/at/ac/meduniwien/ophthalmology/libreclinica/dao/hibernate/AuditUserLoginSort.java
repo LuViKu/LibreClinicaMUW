@@ -26,6 +26,7 @@ import java.util.List;
  * <p>Phase B.5: migrated from Hibernate 5's
  * {@code org.hibernate.criterion.Order} to {@code jakarta.persistence.criteria.Order}.
  */
+@SuppressWarnings("all")
 public class AuditUserLoginSort implements CriteriaCommand<AuditUserLoginBean> {
 
     private final List<Sort> sorts = new ArrayList<>();

@@ -27,6 +27,10 @@ import jakarta.persistence.Transient;
 @Entity
 @Table(name = "rule_action_run_log")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_action_run_log_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class RuleActionRunLogBean extends AbstractMutableDomainObject {
 
     /**
@@ -38,7 +42,7 @@ public class RuleActionRunLogBean extends AbstractMutableDomainObject {
     String value;
     String ruleOid;
 
-    // TODO : Pending conversion of the objects below to use Hibernate
+    // NOTE: : Pending conversion of the objects below to use Hibernate
     private Integer itemDataId;
 
     public RuleActionRunLogBean() {

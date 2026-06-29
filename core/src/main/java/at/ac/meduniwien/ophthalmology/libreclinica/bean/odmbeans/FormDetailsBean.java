@@ -14,6 +14,10 @@ import java.util.List;
 
 
 
+@SuppressWarnings("all")
+
+
+
 public class FormDetailsBean extends ElementDefBean {
     //attributes
     private String parentFormOid;

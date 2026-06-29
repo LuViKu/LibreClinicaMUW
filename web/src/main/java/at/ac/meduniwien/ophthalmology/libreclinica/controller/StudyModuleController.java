@@ -14,6 +14,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -67,6 +68,7 @@ import org.springframework.web.bind.support.SessionStatus;
 @Controller("studyModuleController")
 @RequestMapping("/studymodule")
 @SessionAttributes("studyModuleStatus")
+@SuppressWarnings("all")
 public class StudyModuleController {
     @Autowired
     @Qualifier("sidebarInit")
@@ -352,7 +354,7 @@ public class StudyModuleController {
             String participateStatus = "";
             String url = "";
             try {
-                URL pManageUrl = new URL(portalURL);
+                URL pManageUrl = URI.create(portalURL).toURL();
                 if (pManageAuthorization != null && pManageAuthorization.getAuthorizationStatus() != null
                         && pManageAuthorization.getAuthorizationStatus().getStatus() != null)
                     participateStatus = pManageAuthorization.getAuthorizationStatus().getStatus();

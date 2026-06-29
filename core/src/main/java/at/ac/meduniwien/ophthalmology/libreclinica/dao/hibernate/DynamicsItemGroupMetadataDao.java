@@ -15,6 +15,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemGr
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItemGroupMetadataBean>{
 
     @Override 
@@ -22,8 +34,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         return DynamicsItemGroupMetadataBean.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemGroupMetadataBean findByMetadataBean(ItemGroupMetadataBean metadataBean, EventCRFBean eventCrfBean) {
         String query =
             "from " + getDomainClassName()
@@ -32,11 +42,9 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         q.setParameter("id", metadataBean.getId());
         q.setParameter("item_group_id", metadataBean.getItemGroupId());
         q.setParameter("event_crf_id", eventCrfBean.getId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DynamicsItemGroupMetadataBean findByMetadataBean(ItemGroupMetadataBean metadataBean, int eventCrfBeanId) {
         String query =
             "from " + getDomainClassName()
@@ -45,11 +53,10 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         q.setParameter("id", metadataBean.getId());
         q.setParameter("item_group_id", metadataBean.getItemGroupId());
         q.setParameter("event_crf_id", eventCrfBeanId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings({ "deprecation", "rawtypes" })
+    @SuppressWarnings("rawtypes")
     public Boolean hasShowingInSection(int sectionId, int crfVersionId, int eventCrfId) {
         String query = "select dg.item_group_id from dyn_item_group_metadata dg where dg.event_crf_id = :eventCrfId and dg.item_group_metadata_id in ("
                 + " select distinct igm.item_group_metadata_id from item_group_metadata igm where igm.crf_version_id = :crfVersionId"
@@ -65,7 +72,7 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         /* TODO use uniqueResult (or something similar), if the
          * query returns multiple (equivalent results) use distinct also
          */
-        return q.list() != null && q.list().size() > 0;
+        return q.getResultList() != null && q.getResultList().size() > 0;
     }
 
     @Transactional

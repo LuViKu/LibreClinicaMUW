@@ -72,6 +72,8 @@ import org.slf4j.LoggerFactory;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataService {
 	protected final static Logger LOGGER = LoggerFactory
 			.getLogger("at.ac.meduniwien.ophthalmology.libreclinica.service.extract.GenerateClinicalDataServiceImpl");
@@ -773,7 +775,7 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 	
 		if(isCollectAudits()){
 		AuditLogEvent auditLog = new AuditLogEvent();
-		auditLog.setEntityId(new Integer(entityID));
+		auditLog.setEntityId(Integer.valueOf(entityID));
 		auditLog.setAuditTable(itemDataAuditTable);
 		auditLogsBean.setEntityID(entityValue);
 		ArrayList<AuditLogEvent> auditLogEvent = new ArrayList<AuditLogEvent>(getAuditEventDAO().findByParam(auditLog, anotherAuditLog));
@@ -945,7 +947,7 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 		if(idx>0)
 			{
 			studyEventOID=  studyEventOID.substring(0,idx);
-			seOrdinal = new Integer(temp.substring(idx+1, temp.indexOf(CLOSE_ORDINAL_DELIMITER))).intValue();
+			seOrdinal = Integer.valueOf(temp.substring(idx+1, temp.indexOf(CLOSE_ORDINAL_DELIMITER))).intValue();
 			}
 		sed = getStudyEventDefDao().findByColumnName(studyEventOID, "oc_oid");
 		LOGGER.info("study event ordinal.."+seOrdinal);

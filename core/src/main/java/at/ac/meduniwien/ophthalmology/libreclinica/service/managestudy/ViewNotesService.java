@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNotesSumma
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public interface ViewNotesService {
 
     List<DiscrepancyNoteBean> listNotes(StudyBean currentStudy, ViewNotesFilterCriteria filter,

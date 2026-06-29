@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author ssachs
  * Created on Sep 22, 2005
  */
+@SuppressWarnings("all")
 public class ResolveDiscrepancyServlet extends SecureController {
 
     /**

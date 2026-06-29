@@ -154,6 +154,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
  * existing name so the parser's name-match invariant passes.
  */
 @Service
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings({"null", "resource"})
 public class CrfJsonToWorkbookAdapter {
 
     private static final Logger LOG = LoggerFactory.getLogger(CrfJsonToWorkbookAdapter.class);

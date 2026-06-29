@@ -37,6 +37,7 @@ import java.util.List;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class EditFilterServlet extends SecureController {
 
     /**
@@ -70,7 +71,6 @@ public class EditFilterServlet extends SecureController {
                 setInputMessages(errors);
                 setPresetValues(fp.getPresetValues());
 
-                // TODO determine if this is necessary
                 int filterId = fp.getInt("filterId");
                 FilterDAO fDAO = new FilterDAO(sm.getDataSource());
                 FilterBean showFilter = (FilterBean) fDAO.findByPK(filterId);
@@ -90,7 +90,6 @@ public class EditFilterServlet extends SecureController {
                 addPageMessage(respage.getString("the_filter_was_succesfully_updated"));
 
                 // Collection filters = fDAO.findAll();
-                // TODO make findAllByProject?
                 // FormProcessor fp = new FormProcessor(request);
                 FilterDAO fdao = new FilterDAO(sm.getDataSource());
                 EntityBeanTable table = fp.getEntityBeanTable();
@@ -137,7 +136,6 @@ public class EditFilterServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
-        // TODO add a limit so that the owner can edit, no one else?
     }
 
     private ArrayList<Status> getStatuses() {

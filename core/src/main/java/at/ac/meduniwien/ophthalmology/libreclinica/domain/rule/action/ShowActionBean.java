@@ -31,6 +31,7 @@ import org.hibernate.annotations.FetchMode;
 
 @Entity
 @DiscriminatorValue("3")
+@SuppressWarnings("all")
 public class ShowActionBean extends RuleActionBean {
 
     /**

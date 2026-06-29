@@ -39,6 +39,7 @@ import java.util.Optional;
  */
 
 // Internationalized description in Term.getDescription()
+@SuppressWarnings("all")
 public class ItemDataType extends Term {
     /**
 	 * 
@@ -86,7 +87,7 @@ public class ItemDataType extends Term {
 
     public static ItemDataType getByName(String name) {
         for (int i = 0; i < list.size(); i++) {
-            ItemDataType temp = (ItemDataType) list.get(i);
+            ItemDataType temp = list.get(i);
             if (temp.getName().equalsIgnoreCase(name)) {
                 return temp;
             }
@@ -96,7 +97,7 @@ public class ItemDataType extends Term {
 
     public static boolean findByName(String name) {
         for (int i = 0; i < list.size(); i++) {
-            ItemDataType temp = (ItemDataType) list.get(i);
+            ItemDataType temp = list.get(i);
             if (temp.getName().equals(name)) {
                 return true;
             }

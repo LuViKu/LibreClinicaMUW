@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
  * one filter + one mapping row. Callers in the controller treat it
  * as a value-object operation; persistence is per-DTO.
  */
+@SuppressWarnings("all")
 public class DatasetFilterDAO {
 
     private final DataSource ds;

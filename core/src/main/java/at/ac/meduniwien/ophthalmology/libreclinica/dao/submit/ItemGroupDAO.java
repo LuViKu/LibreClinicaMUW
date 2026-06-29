@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 8, 2007
  */
+@SuppressWarnings("all")
 public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
 
     public ItemGroupDAO(DataSource ds) {
@@ -84,7 +85,7 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
          * owner_id numeric, update_id numeric,
          */
         variables.put(1, formGroupBean.getName());
-        variables.put(2, new Integer(formGroupBean.getCrfId()));
+        variables.put(2, Integer.valueOf(formGroupBean.getCrfId()));
         variables.put(3, formGroupBean.getStatus().getId());
         variables.put(4, formGroupBean.getUpdater().getId());
         variables.put(5, formGroupBean.getId());
@@ -140,7 +141,7 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
         variables.put(1, id);
         variables.put(2, formGroupBean.getName());
         variables.put(3, formGroupBean.getCrfId());
-        variables.put(4, new Integer(formGroupBean.getStatus().getId()));
+        variables.put(4, Integer.valueOf(formGroupBean.getStatus().getId()));
         variables.put(5, formGroupBean.getOwner().getId());
 
         this.executeUpdate(digester.getQuery("create"), variables);

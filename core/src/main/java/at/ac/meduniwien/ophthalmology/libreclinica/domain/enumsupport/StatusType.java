@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
  * mapping in {@code typedefs.hbm.xml}) with class-based
  * {@code @Type(StatusType.class)}.
  */
+@SuppressWarnings("all")
 public class StatusType extends CodedEnumType {
     public StatusType() {
         setEnumClass(Status.class);

@@ -16,6 +16,7 @@ import java.util.Date;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class ChildNoteBean extends ElementOIDBean {
     private String status;
     private Date dateCreated;

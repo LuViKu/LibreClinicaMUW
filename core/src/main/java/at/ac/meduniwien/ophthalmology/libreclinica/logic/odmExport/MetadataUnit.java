@@ -41,6 +41,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterVal
  * @author ywang (May, 2009)
  */
 
+@SuppressWarnings("all")
+
 public class MetadataUnit extends OdmUnit {
     private OdmStudyBean odmStudy;
   

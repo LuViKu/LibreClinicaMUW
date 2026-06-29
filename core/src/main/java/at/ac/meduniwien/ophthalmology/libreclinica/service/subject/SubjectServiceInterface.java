@@ -16,6 +16,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import java.util.Date;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public interface SubjectServiceInterface {
 
     public abstract String createSubject(SubjectBean subjectBean, StudyBean studyBean, Date enrollmentDate, String secondaryId);

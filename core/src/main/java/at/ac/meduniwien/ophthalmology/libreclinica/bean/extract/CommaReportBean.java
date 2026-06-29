@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class CommaReportBean extends TextReportBean {
     public CommaReportBean() {
         end = "\n";// ending character

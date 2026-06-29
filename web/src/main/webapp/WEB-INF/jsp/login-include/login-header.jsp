@@ -61,7 +61,7 @@
                         <div class="disabled_header"><img src="${pageContext.request.contextPath}/images/spacer.gif"/></div>
                         <!-- Logo -->
                         <div class="logo">
-                            <img src="${pageContext.request.contextPath}/images/Logo.gif" alt="LibreClinica" />
+                            <jsp:include page="/WEB-INF/jsp/include/brand-lockup-header.jsp"/>
                             <div class="muw-strapline" style="font-size:13px; color:#444; padding-top:6px;">
                                 Department of Ophthalmology and Optometry &middot; Medical University of Vienna
                             </div>

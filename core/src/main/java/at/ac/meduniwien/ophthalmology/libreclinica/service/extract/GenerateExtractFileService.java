@@ -49,7 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class GenerateExtractFileService {
 
     private static final Logger logger = LoggerFactory.getLogger(GenerateExtractFileService.class);
@@ -74,7 +74,7 @@ public class GenerateExtractFileService {
         try {
             locale = request.getLocale();
         } catch (NullPointerException ne) {
-            locale = new Locale("en-US");
+            locale = Locale.of("en-US");
         }
 
         ResourceBundleProvider.updateLocale(locale);
@@ -105,7 +105,7 @@ public class GenerateExtractFileService {
         logger.info("created txt file");
         // return TXTFileName;
         HashMap<String, Integer> answerMap = new HashMap<>();
-        answerMap.put(TXTFileName, new Integer(fId));
+        answerMap.put(TXTFileName, Integer.valueOf(fId));
         return answerMap;
     }
 
@@ -122,8 +122,6 @@ public class GenerateExtractFileService {
     }
     /**
      * createODMfile, added by tbh, 01/2009
-     * @param deleteOld TODO
-     * @param odmType TODO
      * @deprecated Use {@link OdmFileCreation#createODMFile} instead
      */
     @Deprecated
@@ -243,7 +241,7 @@ public class GenerateExtractFileService {
         }
         // return DDLFileName;
         HashMap<String, Integer> answerMap = new HashMap<>();
-        answerMap.put(DDLFileName, new Integer(fId));
+        answerMap.put(DDLFileName, Integer.valueOf(fId));
         return answerMap;
     }
 
@@ -354,7 +352,6 @@ public class GenerateExtractFileService {
                 try {
                     w.close();
                 } catch (IOException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
         }
@@ -455,7 +452,6 @@ public class GenerateExtractFileService {
                 try {
                     w.close();
                 } catch (IOException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
         }
@@ -489,7 +485,6 @@ public class GenerateExtractFileService {
 	            logger.info("created zip output stream...");
 	            // we write over the content no matter what
 	            // we then check to make sure there are no duplicates
-	            // TODO need to change the above -- save all content!
 	            // z.write(content);
 	            z.putNextEntry(new java.util.zip.ZipEntry(name));
 	            // int length = (int) newFile.length();
@@ -616,7 +611,6 @@ public class GenerateExtractFileService {
             logger.info("created zip output stream...");
             // we write over the content no matter what
             // we then check to make sure there are no duplicates
-            // TODO need to change the above -- save all content!
             // z.write(content);
             z.putNextEntry(new java.util.zip.ZipEntry(name));
             // int length = (int) newFile.length();

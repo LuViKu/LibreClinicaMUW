@@ -11,11 +11,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Tag;
 
+@SuppressWarnings("all")
+
 public class TagDao extends AbstractDomainDao<Tag> {
 
     @Override
     Class<Tag> domainClass() {
-        // TODO Auto-generated method stub
         return Tag.class;
     }
 

@@ -20,6 +20,7 @@ import org.jdom.Element;
  * Using the Decorator design pattern, this class adds functionality to
  * DataEntryInputGenerator. The functionality is necessary for printing CRFs.
  */
+@SuppressWarnings("all")
 public class DataEntryDecorator {
     private final DataEntryInputGenerator inputGenerator = new DataEntryInputGenerator();
 

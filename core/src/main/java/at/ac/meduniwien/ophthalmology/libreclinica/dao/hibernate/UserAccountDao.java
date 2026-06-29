@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class UserAccountDao extends AbstractDomainDao<UserAccount> {
 
     @Override
@@ -18,14 +20,13 @@ public class UserAccountDao extends AbstractDomainDao<UserAccount> {
         return UserAccount.class;
     }
 
-    // TODO update to CriteriaQuery
     public UserAccount findByUserName(String userName) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.userName = :user_name";
         Query<UserAccount> q = getCurrentSession()
                 .createQuery(query, UserAccount.class)
                 .setParameter("user_name", userName);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public UserAccount findByUserId(Integer userId) {

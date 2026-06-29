@@ -23,6 +23,8 @@ import java.util.LinkedHashMap;
  * @author ywang (May, 2008)
  */
 
+@SuppressWarnings("all")
+
 public class FullReportBean extends OdmXmlReportBean {
     private LinkedHashMap<String, OdmStudyBean> odmStudyMap;
     private LinkedHashMap<String, OdmClinicalDataBean> clinicalDataMap;

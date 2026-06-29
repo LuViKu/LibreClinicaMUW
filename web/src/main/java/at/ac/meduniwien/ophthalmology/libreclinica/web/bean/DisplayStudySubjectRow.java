@@ -19,9 +19,8 @@ import java.util.ArrayList;
 /**
  * @author jxu
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class DisplayStudySubjectRow extends EntityBeanRow<DisplayStudySubjectBean, DisplayStudySubjectRow> {
 
     // columns:
@@ -214,7 +213,6 @@ public class DisplayStudySubjectRow extends EntityBeanRow<DisplayStudySubjectBea
         if (enrDate != null) {
             SimpleDateFormat sdf = new SimpleDateFormat(ResourceBundleProvider.getFormatBundle().getString("date_format_string"));
             toStr = sdf.format(enrDate);
-            // TODO l10n dates?
         }*/
         //BWP>>8/6/2008
         /*return thisStudy.getStudySubject().getLabel() + " "  + thisStudy.getStudySubject().getSecondaryLabel() +

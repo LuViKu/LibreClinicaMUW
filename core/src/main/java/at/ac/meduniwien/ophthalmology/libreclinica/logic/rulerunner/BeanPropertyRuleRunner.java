@@ -44,13 +44,13 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class BeanPropertyRuleRunner extends RuleRunner{
 	NotificationActionProcessor notificationActionProcessor;
 	StudyEventDAO studyEventDAO;
 	
 	public BeanPropertyRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {
 		super(ds, contextPath, contextPath, mailSender);
-		// TODO Auto-generated constructor stub
 	}
 
 	public void runRules(List<RuleSetBean> ruleSets, DataSource ds,
@@ -109,7 +109,6 @@ public class BeanPropertyRuleRunner extends RuleRunner{
 	                   // 	osa.printStackTrace();
                             logger.error("Rule Runner received exception: " + osa.getMessage());
                             logger.error(ExceptionUtils.getStackTrace(osa));
-	                        // TODO: report something useful
 	                    }
 	                }
 	            }

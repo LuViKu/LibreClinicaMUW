@@ -28,6 +28,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
  */
 @XmlRootElement(name = "ODM", namespace = "http://www.cdisc.org/ns/odm/v1.3")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class ODMContainer {
 
     @XmlElement(name = "ClinicalData", namespace = "http://www.cdisc.org/ns/odm/v1.3")

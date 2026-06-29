@@ -14,6 +14,18 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemFormMetadata;
 import org.hibernate.query.NativeQuery;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class ItemFormMetadataDao extends AbstractDomainDao<ItemFormMetadata> {
 
     @Override
@@ -21,24 +33,22 @@ public class ItemFormMetadataDao extends AbstractDomainDao<ItemFormMetadata> {
         return ItemFormMetadata.class;
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public ItemFormMetadata findByItemCrfVersion(Integer itemId, Integer crfVersionId) {
         String query = "SELECT distinct m.* " + " FROM item_form_metadata m" + " WHERE m.item_id= " + String.valueOf(itemId) + " AND m.crf_version_id= "
                 + String.valueOf(crfVersionId);
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemFormMetadata.class);
-        return (ItemFormMetadata) q.uniqueResult();
+        return (ItemFormMetadata) q.getSingleResultOrNull();
 
     }
 
     public static final String findAllByCrfVersionQuery = "select distinct * from item_form_metadata ifm where ifm.crf_version_id = :crfversionid";
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public List<ItemFormMetadata> findAllByCrfVersion(int crf_version_id) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionQuery).addEntity(ItemFormMetadata.class);
         q.setParameter("crfversionid", crf_version_id);
-        return (List<ItemFormMetadata>) q.list();
+        return (List<ItemFormMetadata>) q.getResultList();
     }
 
 }

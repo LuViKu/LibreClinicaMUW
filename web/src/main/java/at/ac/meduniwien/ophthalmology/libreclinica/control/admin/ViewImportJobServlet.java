@@ -35,6 +35,7 @@ import org.quartz.impl.matchers.GroupMatcher;
  * @author thickerson purpose: to serve as the main UI for listing
  *         ImportSpringJob.java
  */
+@SuppressWarnings("all")
 public class ViewImportJobServlet extends SecureController {
 
     /**
@@ -57,7 +58,7 @@ public class ViewImportJobServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
         // changed to
         // allow only admin-level users
     }

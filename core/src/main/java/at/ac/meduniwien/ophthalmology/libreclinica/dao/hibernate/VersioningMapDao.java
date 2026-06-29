@@ -11,11 +11,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMap;
 
+@SuppressWarnings("all")
+
 public class VersioningMapDao extends AbstractDomainDao<VersioningMap> {
 
     @Override
     Class<VersioningMap> domainClass() {
-        // TODO Auto-generated method stub
         return VersioningMap.class;
     }
 

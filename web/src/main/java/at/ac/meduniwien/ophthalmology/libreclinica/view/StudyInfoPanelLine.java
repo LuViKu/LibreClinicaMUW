@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class StudyInfoPanelLine {
     protected String title;
     protected String info;

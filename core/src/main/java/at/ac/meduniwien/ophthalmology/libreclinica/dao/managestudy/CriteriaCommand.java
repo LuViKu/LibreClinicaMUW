@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy;
 
+@SuppressWarnings("all")
+
 public interface CriteriaCommand {
 
     public String execute(String criteria);

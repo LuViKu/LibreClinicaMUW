@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ViewRuleSetServlet extends SecureController {
 
     /**
@@ -132,7 +133,7 @@ public class ViewRuleSetServlet extends SecureController {
         ruleSetService =
             this.ruleSetService != null ? ruleSetService : (RuleSetServiceInterface) SpringServletAccess.getApplicationContext(context).getBean(
                     "ruleSetService");
-        // TODO: Add getRequestURLMinusServletPath(),getContextPath()
+        // NOTE: Add getRequestURLMinusServletPath(),getContextPath()
         return ruleSetService;
     }
 

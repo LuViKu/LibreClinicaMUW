@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Restores a removed subject to a study
  */
+@SuppressWarnings("all")
 public class RestoreStudySubjectServlet extends SecureController {
     /**
 	 * 

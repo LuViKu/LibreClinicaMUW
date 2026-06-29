@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.openrosa.processo
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.openrosa.SubmissionContainer;
 
+@SuppressWarnings("all")
+
 public interface Processor {
 
     public void process(SubmissionContainer container) throws Exception;

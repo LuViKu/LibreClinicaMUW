@@ -68,6 +68,7 @@ import org.slf4j.LoggerFactory;
  *         <p/>
  *         View a CRF version section data entry
  */
+@SuppressWarnings("all")
 public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServlet {
 
     /**
@@ -94,7 +95,7 @@ public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServ
         Integer sectionId = (Integer) request.getAttribute("sectionId");
         if(sectionId==null || sectionId == 0)
         {
-        	sectionId = new Integer(1);
+        	sectionId = Integer.valueOf(1);
         }
         int eventCRFId = fp.getInt(EVENT_CRF_ID, true);
         int studySubjectId = fp.getInt("studySubjectId", true);
@@ -459,7 +460,6 @@ public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServ
 
                 } else {
                     DisplayItemBean dib = diwb.getSingleItem();
-                    // TODO work on this line
 
                     String inputName = getInputName(dib);
                     AddNewSubjectServlet.saveFieldNotes(inputName, discNotes, dndao, dib.getData().getId(), DiscrepancyNoteBean.ITEM_DATA, currentStudy);
@@ -492,7 +492,7 @@ public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServ
             } else {
                 tabNum = fp.getInt("tabId");
             }
-            request.setAttribute("tabId", new Integer(tabNum).toString());
+            request.setAttribute("tabId", Integer.valueOf(tabNum).toString());
 
             // 2808: Signal interviewer.jsp that the containing page is
             // viewSectionData,
@@ -514,7 +514,6 @@ public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServ
      * 
      * @author ywang 10-18-2007
      * @param request
-     *            TODO
      */
 
     private void setAttributeForInterviewerDNotes(List<DiscrepancyNoteBean> eventCrfNotes, HttpServletRequest request) {

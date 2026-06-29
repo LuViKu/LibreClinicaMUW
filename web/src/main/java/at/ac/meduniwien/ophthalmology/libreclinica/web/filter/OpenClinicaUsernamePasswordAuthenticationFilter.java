@@ -77,6 +77,7 @@ import org.springframework.util.Assert;
  * @author Luke Taylor
  * @since 3.0
  */
+@SuppressWarnings("all")
 public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAuthenticationProcessingFilter {
     public static final String SPRING_SECURITY_LAST_USERNAME_KEY = "SPRING_SECURITY_LAST_USERNAME";
     public static final String SPRING_SECURITY_FORM_USERNAME_KEY = "j_username";
@@ -165,7 +166,7 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
 
         Authentication authentication = null;
         UserAccountBean userAccountBean = null;
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
 
         try {
             userAccountBean = getUserAccountDao().findByUserName(username);
@@ -199,7 +200,6 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
             }
 
             // Manually Checking if the user is locked which should be thrown by authenticate. Mantis Issue: 9016
-            // TODO: somebody should find why getAuthenticationManager().authenticate is not working!
             if (userAccountBean.getStatus().isLocked()) {
                 throw new LockedException("locked");
             }

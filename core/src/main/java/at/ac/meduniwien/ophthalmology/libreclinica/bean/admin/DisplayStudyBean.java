@@ -21,6 +21,7 @@ import java.util.ArrayList;
  * A class for display study list properly, group studies by parent and child
  * relationship
  */
+@SuppressWarnings("all")
 public class DisplayStudyBean extends AuditableEntityBean {
     /**
 	 * 

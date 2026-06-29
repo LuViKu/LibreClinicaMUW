@@ -15,6 +15,8 @@ import org.quartz.UnableToInterruptJobException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class XsltStatefulJob extends XsltTransformJob implements InterruptableJob {
 
     private static final Logger LOG = LoggerFactory.getLogger(XsltStatefulJob.class);

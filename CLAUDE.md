@@ -4,7 +4,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 
 ## What this repo is
 
-**LibreClinicaMUW** — institutional fork of [LibreClinica](https://libreclinica.org) (community successor of OpenClinica 3.14) maintained by the Department of Ophthalmology and Optometry, Medical University of Vienna, for in-house clinical-trial eCRF use.
+**LibreClinicaMUW** — institutional fork of [LibreClinica](https://libreclinica.org) (community successor of OpenClinica 3.14) maintained by the Department of Ophthalmology and Optometry, Medical University of Vienna, for in-house clinical-trial eCRF use. As of 2026-06-26 it is a **released, independent fork**: it no longer syncs (merges or cherry-picks) from upstream LibreClinica. Authored/maintained by Lukas Kuchernig; LGPL v3.
 
 **Currently undergoing a planned multi-phase backend modernization.** Read [MIGRATION.md](MIGRATION.md) before suggesting structural changes. Strategic decisions live in [docs/development/modernization/decision-record.md](docs/development/modernization/decision-record.md).
 
@@ -94,7 +94,7 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 
 - **Test suite is thin** — 21 unit tests, default-skipped. Don't assume code is well-tested. Phase 0 work in progress to flip the default + add critical-path integration tests.
 - **Database migrations are versioned** — every change adds a new Liquibase changeset under `core/src/main/resources/migration/`, never edit existing changesets. Institutional changes go in `migration/lc-muw-<yyyy-mm-dd>-<topic>.xml`.
-- **Hard fork from upstream** — for context on why and how cherry-picks work, see [decision record DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica).
+- **Released, independent fork** — since 2026-06-26 the project no longer syncs from upstream LibreClinica (no cherry-picks; don't suggest pulling upstream changes). See [DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica) for the original fork rationale; the cherry-pick workflow it describes is now historical.
 - **Clinical-data system** — don't ship unverified changes. Bump dependency versions one batch at a time, verify with `mvn compile` (or `mvn test` post Phase 0).
 - **`docs/manuals/`** is for end-user documentation; **`docs/development/`** is for developers; **`MIGRATION.md`** is the modernization spine.
 - **Retinal-inference can run remotely on a GPU host** — see [DR-022](docs/development/modernization/decision-record.md#dr-022--remote-stateless-gpu-sidecar-for-retinal-inference) + the [runbook](docs/development/modernization/retinal-inference-remote-deployment.md). Single-host dev compose keeps working when `core.retinalInference.remotePushUrl` is blank.

@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
  * state transition is observable end-to-end (and the unit test on
  * the runner stays decoupled from the heavy extract pipeline).
  */
+@SuppressWarnings("all")
 public interface ExportFileMaterializer {
 
     /**

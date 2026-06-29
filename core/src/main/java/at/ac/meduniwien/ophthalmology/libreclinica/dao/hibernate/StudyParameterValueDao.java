@@ -13,6 +13,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameter
 import org.hibernate.query.Query;
 
 
+@SuppressWarnings("all")
+
+
 public class StudyParameterValueDao extends AbstractDomainDao<StudyParameterValue> {
 	
     @Override
@@ -20,13 +23,11 @@ public class StudyParameterValueDao extends AbstractDomainDao<StudyParameterValu
         return StudyParameterValue.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
 	public StudyParameterValue findByStudyIdParameter(int studyId, String parameter) {
         String query = "from " + getDomainClassName() + " study_parameter_value where study_parameter_value.study.studyId = :studyid and study_parameter_value.studyParameter = :parameter ";
         Query<StudyParameterValue> q = getCurrentSession().createQuery(query, StudyParameterValue.class);
         q.setParameter("studyid", studyId);
         q.setParameter("parameter", parameter);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

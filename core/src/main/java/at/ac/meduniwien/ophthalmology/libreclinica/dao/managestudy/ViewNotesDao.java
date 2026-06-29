@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotes
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public interface ViewNotesDao {
 
     List<DiscrepancyNoteBean> findAllDiscrepancyNotes(StudyBean currentStudy, ViewNotesFilterCriteria filter,

@@ -8,7 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import static org.hamcrest.Matchers.greaterThan;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -51,6 +50,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * + an {@code update} on the DAO, both of which round-trip through the
  * digester query catalog.
  */
+@SuppressWarnings("null")
 class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /**

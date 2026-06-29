@@ -28,8 +28,8 @@ import java.util.Date;
  *
  * @author thickerson
  *
- * TODO sync up fields with the table, eventually
  */
+@SuppressWarnings("all")
 public class ArchivedDatasetFileBean extends EntityBean {
 
     /**

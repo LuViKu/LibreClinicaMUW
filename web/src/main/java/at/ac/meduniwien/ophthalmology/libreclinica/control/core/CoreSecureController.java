@@ -77,6 +77,7 @@ import org.springframework.security.core.userdetails.UserDetails;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public abstract class CoreSecureController extends HttpServlet {
 
 
@@ -189,16 +190,13 @@ public abstract class CoreSecureController extends HttpServlet {
 
     @Override
     public void init() throws ServletException {
-    	// TODO empty method
     }
 
     /**
      * Process request
      *
      * @param request
-     *            TODO
      * @param response
-     *            TODO
      *
      * @throws Exception
      */
@@ -214,7 +212,7 @@ public abstract class CoreSecureController extends HttpServlet {
             addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"), request);
             // + "<a href=\"UpdateProfile\">" +
             // respage.getString("user_profile") + " </a>");
-            int pwdChangeRequired = new Integer(SQLInitServlet.getField("change_passwd_required")).intValue();
+            int pwdChangeRequired = Integer.valueOf(SQLInitServlet.getField("change_passwd_required")).intValue();
             if (pwdChangeRequired == 1) {
                 request.setAttribute("mustChangePass", "yes");
                 forwardPage(Page.RESET_PASSWORD, request, response);
@@ -526,9 +524,7 @@ public abstract class CoreSecureController extends HttpServlet {
      * @param checkTrail
      *            The command to check for, and set a trail in the session.
      * @param request
-     *            TODO
      * @param response
-     *            TODO
      */
     protected void forwardPage(Page jspPage, boolean checkTrail, HttpServletRequest request, HttpServletResponse response) {
         Page page1 = Page.valueOf(jspPage.name());
@@ -589,17 +585,14 @@ public abstract class CoreSecureController extends HttpServlet {
                         try {
 							getServletContext().getRequestDispatcher(viewNotesURL).forward(request, response);
 						} catch (ServletException e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 						} catch (IOException e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
                     } else if (p <= 0) {
                         try {
 							forwardPage(Page.VIEW_DISCREPANCY_NOTES_IN_STUDY, request, response);
 						} catch (Exception e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
                     }

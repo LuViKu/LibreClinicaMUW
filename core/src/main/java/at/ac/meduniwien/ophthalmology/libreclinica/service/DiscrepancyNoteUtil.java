@@ -40,8 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
  * such as getting all notes for a study, or filtering them by subject or
  * resolution status.
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteUtil {
-    // TODO: initialize these static members from the database.
     public static final Map<String, Integer> TYPES = new HashMap<String, Integer>();
     static {
         TYPES.put("Annotation", 2);

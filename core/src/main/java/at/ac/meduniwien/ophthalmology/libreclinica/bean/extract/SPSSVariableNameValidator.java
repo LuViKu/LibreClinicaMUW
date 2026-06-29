@@ -48,6 +48,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
  *
  * @auther ywang
  */
+@SuppressWarnings("all")
 @Deprecated
 public class SPSSVariableNameValidator extends NameValidator {
     private final String[] reservedKeywords = { "all", "and", "by", "eq", "ge", "gt", "le", "lt", "ne", "not", "or", "to", "with" };
@@ -64,6 +65,7 @@ public class SPSSVariableNameValidator extends NameValidator {
      * @return String
      */
     @Override
+    @Deprecated
     public String getValidName(String variableName) {
         int maxValue = this.computeMaxValue(variableName.length());
         
@@ -133,6 +135,7 @@ public class SPSSVariableNameValidator extends NameValidator {
     }
 
     @Override
+    @Deprecated
     protected boolean isValid(char c) {
         return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '.' || c == '@' || c == '#' || c == '_' || c == '$';
     }
@@ -142,6 +145,7 @@ public class SPSSVariableNameValidator extends NameValidator {
      * @return String
      */
     @Override
+    @Deprecated
     public String getNextSequentialString(int maxValue) {
         if(this.sequential>=maxValue) {
         	 System.exit(1);
@@ -179,31 +183,38 @@ public class SPSSVariableNameValidator extends NameValidator {
     
 
     @Override
+    @Deprecated
     public char getReplacingChar() {
         return replacingChar;
     }
 
     @Override
+    @Deprecated
     public void setReplacingChar(char replacingChar) {
         this.replacingChar = replacingChar;
     }
 
+    @Deprecated
     public int getNameMaxLength() {
         return nameMaxLength;
     }
 
+    @Deprecated
     public void setNameMaxLength(int nameMaxLength) {
         this.nameMaxLength = nameMaxLength;
     }
 
+    @Deprecated
     public String[] getReservedKeywords() {
         return reservedKeywords;
     }
 
+    @Deprecated
     public void setReplacingFirstChar(char fc) {
         this.replacingFirstChar = fc;
     }
 
+    @Deprecated
     public char getReplacingFirstChar() {
         return this.replacingFirstChar;
     }

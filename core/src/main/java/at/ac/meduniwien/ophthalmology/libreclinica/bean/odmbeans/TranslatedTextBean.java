@@ -15,6 +15,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class TranslatedTextBean {
     private String text;
     private String xml_lang;

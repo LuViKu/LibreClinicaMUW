@@ -16,6 +16,7 @@ import java.util.List;
  * For displaying simple conditional display items.
  * @author ywang
  */
+@SuppressWarnings("all")
 public class SCDItemDisplayInfo {
     private int rowDisplayStatus = SCDRowDisplayStatus.SHOW_UNCHANGABLE.getCode();  //0;
     /**

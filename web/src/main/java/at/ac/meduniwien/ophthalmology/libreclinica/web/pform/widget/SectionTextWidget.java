@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Input;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Label;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 
+@SuppressWarnings("all")
+
 public class SectionTextWidget implements Widget {
 
 	private String versionOid = null;

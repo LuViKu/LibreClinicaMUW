@@ -30,6 +30,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
  * @author ywang (March, 2010)
  */
 
+@SuppressWarnings("all")
+
 public class AdminDataCollector extends OdmDataCollector {
     private LinkedHashMap<String, OdmAdminDataBean> odmAdminDataMap;
 

@@ -351,12 +351,11 @@ import org.slf4j.LoggerFactory;
  *
  */
 
-// TODO: add ability to halt at a given validation
-// TODO: work on making this class extensible. this is probably best achieved by
 // subclassing the Validation class
 // and making it more beefy (ie adding a checkIfValidated() type method to that
 // class,
 // so that the work is done there and not in this class)
+@SuppressWarnings("all")
 public class Validator {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -525,7 +524,6 @@ public class Validator {
      * use for: IS_IN_RANGE
      */
     public void addValidation(String fieldName, int type, int start, int end) {
-        // TODO: assert type == is in range
         // For finding out if a number is in a range
 
         Validation v = new Validation(type);
@@ -539,7 +537,6 @@ public class Validator {
      * use for: CHECK_SAME, IS_A_FILE
      */
     public void addValidation(String fieldName, int type, String dir) {
-        // TODO: assert type = IS_OF_FILE_TYPE or CHECK_SAME or
         // DATE_IS_AFTER_OR_EQUAL
 
         // for checking to see if there is a file present in the system or not
@@ -555,7 +552,6 @@ public class Validator {
      * use for: LENGHT_NUMERIC_COMPARISON, COMPARES_TO_STATIC_VALUE
      */
     public void addValidation(String fieldName, int type, NumericComparisonOperator operator, int compareTo) {
-        // TODO: assert type = COMPARE_TO_STATIC_VALUE or
         // LENGHT_NUMERIC_COMPARISON
 
         Validation v = new Validation(type);
@@ -588,13 +584,11 @@ public class Validator {
         addValidation(fieldName, v);
     }
 
-    // TODO: add is_of_file_type addValidation method
 
     /*
      * use for: IS_IN_SET and IS_VALID_WIDTH_DECIMAL
      */
     public void addValidation(String fieldName, int type, ArrayList<?> set) {
-        // TODO: assert type == is_in_set
 
         Validation v = new Validation(type);
         v.addArgument(set);
@@ -716,9 +710,9 @@ public class Validator {
                 float lowerBound = v.getFloat(0);
                 float upperBound = v.getFloat(1);
                 errorMessage =
-                    resexception.getString("input_should_be_between") + new Float(lowerBound).intValue() + " " + resword.getString("and")
+                    resexception.getString("input_should_be_between") + Float.valueOf(lowerBound).intValue() + " " + resword.getString("and")
  + " "
-                        + new Float(upperBound).intValue() + ".";
+                        + Float.valueOf(upperBound).intValue() + ".";
                 break;
             case IS_A_DATE:
                 errorMessage = resexception.getString("input_not_valid_date") + getDateRegEx().getDescription() + " " + resexception.getString("format1") + ".";
@@ -765,7 +759,7 @@ public class Validator {
             case COMPARES_TO_STATIC_VALUE:
                 NumericComparisonOperator operator = (NumericComparisonOperator) v.getArg(0);
                 float compareTo = v.getFloat(1);
-                errorMessage = resexception.getString("input_provided_is_not") + operator.getDescription() + " " + new Float(compareTo).intValue() + ".";
+                errorMessage = resexception.getString("input_provided_is_not") + operator.getDescription() + " " + Float.valueOf(compareTo).intValue() + ".";
                 break;
             case LENGTH_NUMERIC_COMPARISON:
                 NumericComparisonOperator operator2 = (NumericComparisonOperator) v.getArg(0);
@@ -1432,7 +1426,6 @@ break;
         }
     }
 
-    // TODO: entity exists method
 
     protected boolean isInteger(String fieldName) {
         String fieldValue = getFieldValue(fieldName);
@@ -1455,7 +1448,6 @@ break;
         return true;
     }
 
-    // TODO: is_a_file, IS_OF_FILE_TYPE methods
 
     protected boolean isInSet(String fieldName, ArrayList<String> set) {
         String fieldValue = getFieldValue(fieldName);
@@ -1881,23 +1873,23 @@ break;
         ArrayList<String> args;
 
         HashMap<String, Integer> numArgsByFunction = new HashMap<>();
-        numArgsByFunction.put("range", new Integer(2));
-        numArgsByFunction.put("gt", new Integer(1));
-        numArgsByFunction.put("lt", new Integer(1));
-        numArgsByFunction.put("gte", new Integer(1));
-        numArgsByFunction.put("lte", new Integer(1));
-        numArgsByFunction.put("ne", new Integer(1));
-        numArgsByFunction.put("eq", new Integer(1));
-        numArgsByFunction.put("getExternalValue", new Integer(3));
+        numArgsByFunction.put("range", Integer.valueOf(2));
+        numArgsByFunction.put("gt", Integer.valueOf(1));
+        numArgsByFunction.put("lt", Integer.valueOf(1));
+        numArgsByFunction.put("gte", Integer.valueOf(1));
+        numArgsByFunction.put("lte", Integer.valueOf(1));
+        numArgsByFunction.put("ne", Integer.valueOf(1));
+        numArgsByFunction.put("eq", Integer.valueOf(1));
+        numArgsByFunction.put("getExternalValue", Integer.valueOf(3));
 
         HashMap<String, Integer> valTypeByFunction = new HashMap<>();
-        valTypeByFunction.put("range", new Integer(Validator.IS_IN_RANGE));
-        valTypeByFunction.put("gt", new Integer(Validator.COMPARES_TO_STATIC_VALUE));
-        valTypeByFunction.put("lt", new Integer(Validator.COMPARES_TO_STATIC_VALUE));
-        valTypeByFunction.put("gte", new Integer(Validator.COMPARES_TO_STATIC_VALUE));
-        valTypeByFunction.put("lte", new Integer(Validator.COMPARES_TO_STATIC_VALUE));
-        valTypeByFunction.put("ne", new Integer(Validator.COMPARES_TO_STATIC_VALUE));
-        valTypeByFunction.put("eq", new Integer(Validator.COMPARES_TO_STATIC_VALUE));
+        valTypeByFunction.put("range", Integer.valueOf(Validator.IS_IN_RANGE));
+        valTypeByFunction.put("gt", Integer.valueOf(Validator.COMPARES_TO_STATIC_VALUE));
+        valTypeByFunction.put("lt", Integer.valueOf(Validator.COMPARES_TO_STATIC_VALUE));
+        valTypeByFunction.put("gte", Integer.valueOf(Validator.COMPARES_TO_STATIC_VALUE));
+        valTypeByFunction.put("lte", Integer.valueOf(Validator.COMPARES_TO_STATIC_VALUE));
+        valTypeByFunction.put("ne", Integer.valueOf(Validator.COMPARES_TO_STATIC_VALUE));
+        valTypeByFunction.put("eq", Integer.valueOf(Validator.COMPARES_TO_STATIC_VALUE));
 
         HashMap<String, NumericComparisonOperator> compareOpByFunction = new HashMap<>();
         compareOpByFunction.put("gt", NumericComparisonOperator.GREATER_THAN);

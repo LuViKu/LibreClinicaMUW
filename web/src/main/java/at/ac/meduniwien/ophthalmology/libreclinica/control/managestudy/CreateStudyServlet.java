@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *          thickerson $
  *
  */
+@SuppressWarnings("all")
 public class CreateStudyServlet extends SecureController {
     /**
 	 * 
@@ -184,7 +185,6 @@ public class CreateStudyServlet extends SecureController {
         timingMap.put("retrospective", resadmin.getString("retrospective"));
         timingMap.put("prospective", resadmin.getString("prospective"));
         // } catch (NullPointerException e) {
-        // TODO Auto-generated catch block
         // e.printStackTrace();
         // }
     }
@@ -521,7 +521,7 @@ public class CreateStudyServlet extends SecureController {
 
         errors = v.validate();
         boolean isInterventional = updateStudy2();
-        session.setAttribute("isInterventionalFlag", new Boolean(isInterventional));
+        session.setAttribute("isInterventionalFlag", Boolean.valueOf(isInterventional));
 
         if (errors.isEmpty()) {
             logger.info("no errors");

@@ -33,6 +33,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ImportCRFInfo;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ImportCRFInfoContainer;
 import org.quartz.SimpleTrigger;
 
+@SuppressWarnings("all")
+
 public class TriggerService {
 
     public TriggerService() {
@@ -90,7 +92,7 @@ public class TriggerService {
                 simpleSchedule()
                     .withRepeatCount(64000)
                     .withIntervalInSeconds(
-                        new Long(interval).intValue()
+                        Long.valueOf(interval).intValue()
                     )
                     .withMisfireHandlingInstructionNextWithExistingCount()
             )
@@ -118,7 +120,6 @@ public class TriggerService {
         v.addValidation(PERIOD, Validator.NO_BLANKS);
         v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
         // v.addValidation(DATE_START_JOB + "Date", new Date(), Validator.DATE_IS_AFTER_OR_EQUAL);
-        // TODO job names will have to be unique, tbh
 
         String tab = fp.getString(TAB);
         String cdisc = fp.getString(CDISC);
@@ -145,7 +146,7 @@ public class TriggerService {
     }
 
     public String generateSummaryStatsMessage(SummaryStatsBean ssBean, ResourceBundle respage) {
-        // TODO i18n
+        // NOTE: i18n
         StringBuffer sb = new StringBuffer();
         sb.append("<table border=\'0\' cellpadding=\'0\' cellspacing=\'0\' width=\'100%\'>");
         sb.append("<tr valign=\'top\'> <td class=\'table_header_row\'>Summary Statistics:</td> </tr> <tr valign=\'top\'>");
@@ -171,7 +172,7 @@ public class TriggerService {
     }
 
     public String generateSkippedCRFMessage(ImportCRFInfoContainer importCRFList, ResourceBundle resword) {
-        // TODO i18n
+        // NOTE: i18n
         StringBuffer sb = new StringBuffer();
         sb.append("Skipped CRFs (due to import rules):<br/>");
         sb.append("<table border=\'0\' cellpadding=\'0\' cellspacing=\'0\' width=\'100%\'>");
@@ -301,7 +302,6 @@ public class TriggerService {
         // v.addValidation(DIRECTORY, Validator.NO_BLANKS);
         // v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
 
-        // TODO job names will have to be unique, tbh
 
         String hours = fp.getString("hours");
         String minutes = fp.getString("minutes");

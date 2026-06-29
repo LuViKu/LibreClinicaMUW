@@ -10,12 +10,10 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -30,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * shape, audit rows, reorder mechanics) needs Testcontainers Postgres
  * — deferred to the IT infra slice.
  */
+@SuppressWarnings("null")
 class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {

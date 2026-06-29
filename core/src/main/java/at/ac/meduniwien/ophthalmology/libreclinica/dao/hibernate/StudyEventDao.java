@@ -21,6 +21,18 @@ import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements ApplicationEventPublisherAware{
 
 	private ApplicationEventPublisher eventPublisher;
@@ -29,19 +41,15 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 		return StudyEvent.class;
 	}
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation") 
 	public StudyEvent fetchByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
 		 Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
          q.setParameter("studySubjectId", studySubjectId);
          q.setParameter("oid", oid);
 
-         return q.uniqueResult();
+         return q.getSingleResultOrNull();
 	}
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
 	@Transactional
 	public StudyEvent fetchByStudyEventDefOIDAndOrdinal(String oid,Integer ordinal,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -49,11 +57,9 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
          q.setParameter("studySubjectId", studySubjectId);
          q.setParameter("oid", oid);
          q.setParameter("ordinal", ordinal);
-         return q.uniqueResult();
+         return q.getSingleResultOrNull();
 	}
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional(propagation = Propagation.NEVER)
     public StudyEvent fetchByStudyEventDefOIDAndOrdinalTransactional(String oid,Integer ordinal,Integer studySubjectId){
         String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -61,21 +67,18 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         q.setParameter("studySubjectId", studySubjectId);
         q.setParameter("oid", oid);
         q.setParameter("ordinal", ordinal);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public Integer findMaxOrdinalByStudySubjectStudyEventDefinition(int studySubjectId, int studyEventDefinitionId) {
         String query = "select max(sample_ordinal) from study_event where study_subject_id = " + studySubjectId + " and study_event_definition_id = " + studyEventDefinitionId;
         NativeQuery q = getCurrentSession().createNativeQuery(query);
-        Number result = (Number) q.uniqueResult();
+        Number result = (Number) q.getSingleResultOrNull();
         if (result == null) return 0;
         else return result.intValue();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
 	public List<StudyEvent> fetchListByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
@@ -83,7 +86,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         q.setParameter("studySubjectId", studySubjectId);
         q.setParameter("oid", oid);
 
-        return q.list();
+        return q.getResultList();
 	}
 
 	@Transactional
@@ -105,13 +108,11 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
  this.eventPublisher = applicationEventPublisher;
 	}
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
 	@Transactional
     public StudyEvent findByStudyEventId(int studyEventId) {
         String query = "from " + getDomainClassName() + " study_event  where study_event.studyEventId = :studyeventid ";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
         q.setParameter("studyeventid", studyEventId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

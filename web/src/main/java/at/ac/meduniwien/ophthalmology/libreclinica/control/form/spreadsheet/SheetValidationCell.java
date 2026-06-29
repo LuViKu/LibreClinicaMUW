@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.form.spreadsheet;
  * <p>Class contains final SheetValidationType initialized with Constructor.</p>
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class SheetValidationCell {
     private final SheetValidationType type;
     private SheetArgumentCell sheetArgumentCell;

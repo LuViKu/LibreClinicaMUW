@@ -29,6 +29,7 @@ import javax.xml.namespace.QName;
  * 
  */
 @XmlRegistry
+@SuppressWarnings("all")
 public class ObjectFactory {
 
     private final static QName _MultiSelectListRef_QNAME = new QName("http://www.openclinica.org/ns/odm_ext_v121/v3.1", "MultiSelectListRef");

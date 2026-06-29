@@ -17,6 +17,7 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.Version;
 
 @MappedSuperclass
+@SuppressWarnings("all")
 public abstract class AbstractMutableDomainObject implements MutableDomainObject, Serializable {
     /**
 	 * 

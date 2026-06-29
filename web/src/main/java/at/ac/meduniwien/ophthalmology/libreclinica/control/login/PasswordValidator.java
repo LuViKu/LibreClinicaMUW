@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class PasswordValidator {
     private static boolean hasLowerCaseChars(String str) {
     	int len = str.length();

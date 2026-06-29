@@ -14,6 +14,8 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlag;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
 
     @Override
@@ -21,7 +23,6 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
         return ItemDataFlag.class;
     }
 
-    // TODO update to CriteriaQuery 
     public List<ItemDataFlag> findAllByEventCrfPath(int tag_id, String eventCrfPath) {
 
         String query = "from " + getDomainClassName() + " where " +
@@ -32,10 +33,9 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
                 .setParameter("tag_id", tag_id)
                 .setParameter("eventCrfPath", eventCrfPath + ".%");
         
-        return q.list();
+        return q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
     public ItemDataFlag findByItemDataPath(int tag_id, String itemDataPath) {
 
         String query = "from " + getDomainClassName() + " where " +
@@ -46,7 +46,7 @@ public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
                 .setParameter("tag_id", tag_id)
                 .setParameter("itemDataPath", itemDataPath);
         
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
     
 }

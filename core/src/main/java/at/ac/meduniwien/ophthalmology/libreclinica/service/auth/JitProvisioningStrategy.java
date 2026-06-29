@@ -52,6 +52,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
  *       new account.</li>
  * </ol>
  */
+@SuppressWarnings("all")
 public class JitProvisioningStrategy implements UserProvisioningStrategy {
 
     private static final Logger log =

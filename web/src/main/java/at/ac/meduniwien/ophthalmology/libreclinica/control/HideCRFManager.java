@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayEventCRFBe
  * Time: 3:13:24 PM
  * To change this template use File | Settings | File Templates.
  */
+@SuppressWarnings("all")
 public class HideCRFManager {
 
     private HideCRFManager() {

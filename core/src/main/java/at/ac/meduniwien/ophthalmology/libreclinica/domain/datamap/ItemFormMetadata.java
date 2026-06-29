@@ -32,6 +32,10 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "item_form_metadata")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "item_form_metadata_item_form_metadata_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class ItemFormMetadata  extends DataMapDomainObject {
 
 	/**

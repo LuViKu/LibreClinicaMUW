@@ -47,13 +47,13 @@ import org.slf4j.LoggerFactory;
  * <li> do we look in an HttpServletRequest, or a MultipartRequest?</li>
  * </ul>
  *
- * TODO handle MultiPartRequests - is this a priority, since we don't have many
  * file uploads?
  */
 
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class FormProcessor {
     private HttpServletRequest request;
     private final Locale locale;
@@ -393,17 +393,17 @@ public class FormProcessor {
     }
 
     public void addPresetValue(String fieldName, int value) {
-        Integer fieldValue = new Integer(value);
+        Integer fieldValue = Integer.valueOf(value);
         presetValues.put(fieldName, fieldValue);
     }
 
     public void addPresetValue(String fieldName, float value) {
-        Float fieldValue = new Float(value);
+        Float fieldValue = Float.valueOf(value);
         presetValues.put(fieldName, fieldValue);
     }
 
     public void addPresetValue(String fieldName, boolean value) {
-        Boolean fieldValue = new Boolean(value);
+        Boolean fieldValue = Boolean.valueOf(value);
         presetValues.put(fieldName, fieldValue);
     }
 

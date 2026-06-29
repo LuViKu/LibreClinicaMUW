@@ -22,6 +22,7 @@ import org.quartz.spi.ThreadPool;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class OpenClinicaStdSchedulerFactory extends StdSchedulerFactory {
 
     @Override

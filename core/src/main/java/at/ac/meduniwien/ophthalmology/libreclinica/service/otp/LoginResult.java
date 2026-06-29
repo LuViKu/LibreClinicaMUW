@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.otp;
  * 
  * @author thillger
  */
+@SuppressWarnings("all")
 public enum LoginResult {
     SUCCESSFUL_LOGIN {
 

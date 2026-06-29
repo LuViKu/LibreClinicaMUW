@@ -21,6 +21,8 @@ import java.util.ResourceBundle;
  *
  */
 
+@SuppressWarnings("all")
+
 public enum LoginStatus implements CodedEnum {
 
     SUCCESSFUL_LOGIN(1, "successful_login"),

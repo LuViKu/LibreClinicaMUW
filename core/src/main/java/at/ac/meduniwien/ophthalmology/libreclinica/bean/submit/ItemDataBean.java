@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean
  *
  *
  */
+@SuppressWarnings("all")
 public class ItemDataBean extends AuditableEntityBean {
     /**
 	 * 

@@ -29,7 +29,6 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.export.CsvWriter;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -118,6 +117,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/discrepancies")
 @Tag(name = "Discrepancy", description = "Queries & discrepancy notes.")
+@SuppressWarnings("null")
 public class DiscrepancyApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(DiscrepancyApiController.class);

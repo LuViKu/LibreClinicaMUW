@@ -22,6 +22,7 @@ import java.util.ArrayList;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class ItemBean extends AuditableEntityBean implements Comparable<ItemBean> {
     /**
 	 * 
@@ -342,14 +343,14 @@ public class ItemBean extends AuditableEntityBean implements Comparable<ItemBean
 
     public int compareTo(ItemBean o) {
         if (!getItemMetas().isEmpty() && !o.getItemMetas().isEmpty()) {
-            ItemFormMetadataBean m1 = (ItemFormMetadataBean) getItemMetas().get(0);
-            ItemFormMetadataBean m2 = (ItemFormMetadataBean) o.getItemMetas().get(0);
+            ItemFormMetadataBean m1 = getItemMetas().get(0);
+            ItemFormMetadataBean m2 = o.getItemMetas().get(0);
             return m1.getOrdinal() - m2.getOrdinal();
         }
-        //fix here 
+        //fix here
         else if (!itemDataElements.isEmpty() && !o.getItemDataElements().isEmpty()) {
-            ItemDataBean m1 = (ItemDataBean) getItemDataElements().get(0);
-            ItemDataBean m2 = (ItemDataBean) o.getItemDataElements().get(0);
+            ItemDataBean m1 = getItemDataElements().get(0);
+            ItemDataBean m2 = o.getItemDataElements().get(0);
             return m1.getOrdinal() - m2.getOrdinal();
         }
         

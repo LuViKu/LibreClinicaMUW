@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @MappedSuperclass
+@SuppressWarnings("all")
 public abstract class AbstractAuditableMutableDomainObject extends AbstractMutableDomainObject implements MutableDomainObject, AuditableMutableDomainObject, Serializable {
 
     /**
@@ -35,7 +36,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     protected UserAccountBean updater;
     protected Status status;
 
-    // TODO: phase out the use of these Once the above beans become Hibernated
+    // NOTE: phase out the use of these Once the above beans become Hibernated
     protected Integer ownerId;
     protected Integer updateId;
 

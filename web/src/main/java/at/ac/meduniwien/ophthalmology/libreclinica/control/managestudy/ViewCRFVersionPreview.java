@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author Bruce Perry 3/8/2007
  *
  */
+@SuppressWarnings("all")
 public class ViewCRFVersionPreview extends SecureController {
     /**
 	 * 

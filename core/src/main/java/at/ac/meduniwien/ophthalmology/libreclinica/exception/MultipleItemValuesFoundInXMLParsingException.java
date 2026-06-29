@@ -18,6 +18,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.exception;
  * @author ywang
  */
 
+@SuppressWarnings("all")
+
 public class MultipleItemValuesFoundInXMLParsingException extends Exception {
     /**
 	 * 

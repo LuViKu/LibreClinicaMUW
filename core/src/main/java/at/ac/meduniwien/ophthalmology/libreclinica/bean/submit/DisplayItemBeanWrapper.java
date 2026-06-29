@@ -22,6 +22,7 @@ import java.util.List;
  * @author kkrumlian, thickerson
  * 
  */
+@SuppressWarnings("all")
 public class DisplayItemBeanWrapper {
     boolean isOverwrite = false;
     boolean isSavable = false;

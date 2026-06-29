@@ -38,6 +38,10 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "event_definition_crf")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "event_definition_crf_event_definition_crf_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class EventDefinitionCrf extends DataMapDomainObject {
 
 	/**

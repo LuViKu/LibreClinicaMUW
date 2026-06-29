@@ -23,11 +23,18 @@
  */
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { artifactUrl } from '@/api/retinal'
-import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import { artifactUrl, saveLayerCorrection } from '@/api/retinal'
+import {
+  clearSegmentationEnvelopeCache,
+  useSegmentationEnvelope,
+} from '@/composables/useSegmentationEnvelope'
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import { formatDate } from '@/lib/dateFormat'
+import { IOWA_LAYER_COLORS, IOWA_LAYER_LABELS } from '@/components/retinalPalette'
+import BscanLayerEditOverlay from '@/components/BscanLayerEditOverlay.vue'
+import EtdrsRingsBscanIndicator from '@/components/EtdrsRingsBscanIndicator.vue'
 import NamdEnFaceLocator from './NamdEnFaceLocator.vue'
+import { useSiblingLayersJob } from '../composables/useSiblingLayersJob'
 import { I } from '../icons'
 import type { NamdVisit, Laterality } from '../types'
 
@@ -98,6 +105,32 @@ interface Props {
    * behaviour (active = coral, inactive = light grey).
    */
   prevVisit?: NamdVisit | null
+  /**
+   * 2026-06-26 — study subject id (numeric), threaded so the frame
+   * can resolve the SIBLING `layers` / `bm` job for the same
+   * (event, eye). When present:
+   *   * Always-on: paints ILM + BM polylines on top of the fluid
+   *     mask whenever a `done` sibling job exists.
+   *   * Fullscreen: mounts the {@link BscanLayerEditOverlay} so
+   *     operators with the role gate can correct ILM + BM.
+   * Compare-tab panes pass null because the comparison ergonomics
+   * are read-only by design.
+   */
+  studySubjectId?: number | null
+  /**
+   * Role gate for the layer-correction UI. False renders the
+   * fullscreen overlay read-only (no tools, no save). Defaults to
+   * false so the editing UI never accidentally surfaces to a
+   * Monitor / CRC role.
+   */
+  canCorrectLayers?: boolean
+  /**
+   * 2026-06-29 — externally-controlled ETDRS-rings visibility (used by
+   * the Compare-tab masthead so both panes toggle together). When
+   * undefined the frame falls back to its own localStorage-backed
+   * toggle (the per-pane fullscreen masthead).
+   */
+  etdrsRings?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -107,11 +140,18 @@ const props = withDefaults(defineProps<Props>(), {
   sliderTone: 'navy',
   fillContainer: false,
   prevVisit: null,
+  studySubjectId: null,
+  canCorrectLayers: false,
+  etdrsRings: undefined,
 })
 
 const emit = defineEmits<{
   'update:slice': [z: number]
   'update:mask': [m: boolean]
+  /** Bubbled after a save POST succeeds — parent renders the toast. */
+  'correction-saved': [info: { layers: number; slices: number }]
+  /** Bubbled when a save POST throws — parent renders the toast. */
+  'correction-error': [message: string]
 }>()
 
 const { t } = useI18n()
@@ -129,6 +169,78 @@ const bscanDcmUrl = computed(() =>
 // call resolves from the same promise — only one HTTP fetch per
 // job total.
 const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
+
+/**
+ * 2026-06-26 — Sibling `layers` / `bm` job for the same (subject, event,
+ * eye). Resolves to null when no done sibling exists; otherwise the
+ * frame paints ILM + BM polylines on top of the fluid mask AND mounts
+ * the editing overlay in fullscreen.
+ */
+const studySubjectIdRef = computed<number | null>(() => props.studySubjectId)
+const { siblingJobId, envelope: siblingEnvelope } = useSiblingLayersJob({
+  studySubjectId: studySubjectIdRef,
+  currentJobId: jobIdRef,
+})
+
+/**
+ * Layer-correction state. The frame owns the unsaved-changes count
+ * (the overlay emits it via {@code pending-edit-count}) so the fs
+ * masthead's Save button can show the diff badge.
+ */
+const correctionPendingCount = ref(0)
+const correctionSaving = ref(false)
+/**
+ * 2026-06-27 — Inline success pill for the layer-correction Save. The
+ * SPA has no toast store; routing a success message through the errors
+ * store makes it render as a red "Ein Fehler ist aufgetreten" toast.
+ * The pill clears after 3.5 s.
+ */
+const correctionSavedToast = ref<string>('')
+let correctionSavedTimer: ReturnType<typeof setTimeout> | null = null
+function showCorrectionSavedToast(text: string): void {
+  correctionSavedToast.value = text
+  if (correctionSavedTimer) clearTimeout(correctionSavedTimer)
+  correctionSavedTimer = setTimeout(() => {
+    correctionSavedToast.value = ''
+    correctionSavedTimer = null
+  }, 3500)
+}
+const correctionDiscardOpen = ref(false)
+const correctionOverlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
+
+/**
+ * 2026-06-29 — ETDRS-ring eccentricity indicator toggle. Local state
+ * backs the per-pane fullscreen masthead toggle; when the consumer
+ * passes the {@code etdrsRings} prop (Compare-tab), that wins so both
+ * panes stay in sync. Default off; persisted in localStorage so the
+ * choice survives across sessions.
+ *
+ * <p>The indicator only renders in FULLSCREEN modes (per-pane fs OR
+ * compare-tab fillContainer) — inline non-fs viewers stay uncluttered.
+ */
+const localEtdrsRings = ref<boolean>(
+  typeof localStorage !== 'undefined'
+    && localStorage.getItem('retinal.correction.etdrsRings') === '1',
+)
+const showEtdrsRings = computed<boolean>(() =>
+  props.etdrsRings !== undefined ? props.etdrsRings : localEtdrsRings.value,
+)
+function toggleEtdrsRings(): void {
+  localEtdrsRings.value = !localEtdrsRings.value
+  try {
+    localStorage.setItem('retinal.correction.etdrsRings', localEtdrsRings.value ? '1' : '0')
+  } catch {
+    /* sandboxed / private mode — preference doesn't persist */
+  }
+}
+function slotImageDims(slotProps: unknown): { rows: number; cols: number } | null {
+  const d = (slotProps as { imageDims?: { rows: number; cols: number } | null })?.imageDims
+  return d ?? null
+}
+function slotPixelSpacing(slotProps: unknown): { axialMm: number; lateralMm: number } | null {
+  const sp = (slotProps as { pixelSpacing?: { axialMm: number; lateralMm: number } | null })?.pixelSpacing
+  return sp ?? null
+}
 
 const FLUID_LABELS = new Set([1, 2, 3]) // IRF=1, SRF=2, PED=3
 
@@ -406,7 +518,155 @@ function openFullscreen(): void {
 }
 
 function closeFullscreen(): void {
+  if (correctionPendingCount.value > 0) {
+    correctionDiscardOpen.value = true
+    return
+  }
   fsOpen.value = false
+}
+
+function confirmDiscardCorrection(): void {
+  correctionOverlayRef.value?.clearPending()
+  correctionPendingCount.value = 0
+  correctionDiscardOpen.value = false
+  fsOpen.value = false
+}
+
+/* ── Sibling-envelope derived values ── */
+
+const siblingCols = computed<number>(() => {
+  const env = siblingEnvelope.value
+  if (!env || env.shape.length < 2) return 0
+  return env.shape.length === 3 ? (env.shape[2] ?? 0) : (env.shape[1] ?? 0)
+})
+const siblingNSurfaces = computed<number>(() => {
+  const env = siblingEnvelope.value
+  if (!env) return 0
+  return env.shape.length === 3 ? (env.shape[0] ?? 0) : 1
+})
+const siblingEnvelopeData = computed<Float32Array | null>(() => {
+  const env = siblingEnvelope.value
+  if (!env || env.dtype !== 'float32') return null
+  return env.data as Float32Array
+})
+const siblingLabels = computed<readonly string[]>(() => {
+  const env = siblingEnvelope.value
+  if (env?.labels?.length) return env.labels
+  return IOWA_LAYER_LABELS
+})
+
+/**
+ * nAMD viewer restricts corrections to ILM (idx 0) + BM (last). Both
+ * surfaces are always-on visible whenever the sibling envelope exists;
+ * the rest of the IOWA stack stays hidden to keep the fluid + layers
+ * read uncluttered.
+ */
+const namdCorrectableLayerIndices = computed<readonly number[]>(() => {
+  const n = siblingNSurfaces.value
+  if (n <= 0) return []
+  if (n === 1) return [0]
+  return [0, n - 1]
+})
+
+/**
+ * Static ILM + BM polyline paths (per current slice), used in the
+ * non-fullscreen (read-only) view. Same Catmull-Rom-free flat polyline
+ * the BscanViewer's surface_y branch draws — cheaper than mounting the
+ * full editing overlay for the inline path. Empty when no sibling
+ * envelope or no `done` layers job.
+ */
+const namdStaticOverlayPaths = computed<{ d: string; stroke: string; idx: number }[]>(() => {
+  const data = siblingEnvelopeData.value
+  if (!data) return []
+  const cols = siblingCols.value
+  const n = siblingNSurfaces.value
+  if (!cols || n <= 0) return []
+  const surfaceStride = props.nSlices * cols
+  const z = Math.max(0, Math.min(props.nSlices - 1, props.slice))
+  const out: { d: string; stroke: string; idx: number }[] = []
+  for (const idx of namdCorrectableLayerIndices.value) {
+    const sliceOffset = idx * surfaceStride + z * cols
+    const seg: string[] = []
+    let drawing = false
+    for (let x = 0; x < cols; x++) {
+      const y = data[sliceOffset + x] ?? 0
+      if (y <= 0) { drawing = false; continue }
+      seg.push(`${drawing ? 'L' : 'M'} ${x} ${y.toFixed(1)}`)
+      drawing = true
+    }
+    if (seg.length > 0) {
+      out.push({
+        d: seg.join(' '),
+        stroke: IOWA_LAYER_COLORS[idx % IOWA_LAYER_COLORS.length]!,
+        idx,
+      })
+    }
+  }
+  return out
+})
+
+/**
+ * Slot scope unpacker — BscanViewer's overlay slot exposes
+ * { bboxStyle, imageDims, envelope }. The template needs to type-narrow
+ * these values; doing it via tiny helpers avoids inline `as` casts which
+ * the SFC's TS-in-template parser rejects (`<{ … }>` reads as a tag).
+ */
+function slotRows(slotProps: unknown): number {
+  const dims = (slotProps as { imageDims?: { rows?: number } | null })?.imageDims
+  return dims?.rows ?? 496
+}
+function slotBbox(slotProps: unknown): Record<string, string> {
+  const bbox = (slotProps as { bboxStyle?: Record<string, string> })?.bboxStyle
+  return bbox ?? {}
+}
+
+/* ── Layer-correction save flow ── */
+
+let correctionSaveResolver: ((p: Map<number, Map<number, number[]>>) => void) | null = null
+function onCorrectionOverlaySave(payload: Map<number, Map<number, number[]>>): void {
+  if (correctionSaveResolver) {
+    correctionSaveResolver(payload)
+    correctionSaveResolver = null
+  }
+}
+
+async function onCorrectionSaveClick(): Promise<void> {
+  const overlay = correctionOverlayRef.value
+  const targetJobId = siblingJobId.value
+  if (!overlay || targetJobId == null) return
+  if (correctionSaving.value || correctionPendingCount.value === 0) return
+  correctionSaving.value = true
+  try {
+    const payload = await new Promise<Map<number, Map<number, number[]>>>((resolve) => {
+      correctionSaveResolver = resolve
+      overlay.emitSave()
+    })
+    let savedLayers = 0
+    let savedSlices = 0
+    await Promise.all(Array.from(payload.entries()).map(async ([layerIdx, perSlice]) => {
+      const layerLabel = siblingLabels.value[layerIdx]
+        ?? IOWA_LAYER_LABELS[layerIdx]
+        ?? `L${layerIdx}`
+      const rowsByZ: Record<string, number[]> = {}
+      for (const [z, row] of perSlice) {
+        rowsByZ[String(z)] = row
+        savedSlices++
+      }
+      await saveLayerCorrection(targetJobId, layerIdx, layerLabel, rowsByZ)
+      savedLayers++
+    }))
+    overlay.clearPending()
+    correctionPendingCount.value = 0
+    clearSegmentationEnvelopeCache(targetJobId)
+    showCorrectionSavedToast(
+      t('retinal.correction.savedToast', { layers: savedLayers, slices: savedSlices }),
+    )
+    emit('correction-saved', { layers: savedLayers, slices: savedSlices })
+  } catch (e) {
+    emit('correction-error', e instanceof Error ? e.message : String(e))
+  } finally {
+    correctionSaving.value = false
+  }
 }
 
 function onKey(e: KeyboardEvent): void {
@@ -439,6 +699,10 @@ onBeforeUnmount(() => {
   if (fsOpen.value && typeof document !== 'undefined') {
     document.removeEventListener('keydown', onKey)
     document.body.style.overflow = fsPrevOverflow
+  }
+  if (correctionSavedTimer) {
+    clearTimeout(correctionSavedTimer)
+    correctionSavedTimer = null
   }
 })
 
@@ -480,16 +744,101 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
         </span>
         <span class="text-white/45 text-[12px] truncate">{{ fsTitle }}</span>
       </div>
-      <button
-        type="button"
-        data-testid="namd-scan-fs-close"
-        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-white/10 text-white hover:bg-white/20 transition"
-        @click="closeFullscreen"
-      >
-        <span class="inline-block w-3.5 h-3.5" v-html="I.close" />
-        {{ t('studyModules.namd.scanFrame.fsClose') }}
-      </button>
+      <div class="flex items-center gap-2.5">
+        <!-- 2026-06-27 — Inline success pill (not routed through the
+             errors store, which would render it red via
+             GlobalErrorToast). -->
+        <transition
+          enter-active-class="transition duration-150"
+          leave-active-class="transition duration-300"
+          enter-from-class="opacity-0 translate-y-1"
+          leave-to-class="opacity-0"
+        >
+          <span
+            v-if="correctionSavedToast"
+            data-testid="namd-scan-fs-saved-toast"
+            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/90 text-white shadow"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M5 12 L10 17 L20 7" />
+            </svg>
+            {{ correctionSavedToast }}
+          </span>
+        </transition>
+        <!-- 2026-06-29 — ETDRS-rings toggle on the fullscreen masthead. -->
+        <button
+          type="button"
+          data-testid="namd-scan-fs-etdrs"
+          :title="t('retinal.correction.etdrsToggle')"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          :class="showEtdrsRings ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-white/85 hover:bg-white/20'"
+          @click="toggleEtdrsRings"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="12" cy="12" r="7" />
+            <circle cx="12" cy="12" r="11" />
+          </svg>
+          ETDRS
+        </button>
+        <!-- 2026-06-26 — Save button surfaces only when (sibling layers
+             job exists, role gate open, edits pending). The badge
+             shows the unsaved-edit count. -->
+        <button
+          v-if="siblingJobId != null && canCorrectLayers"
+          type="button"
+          data-testid="namd-scan-fs-save"
+          :disabled="correctionPendingCount === 0 || correctionSaving"
+          class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition"
+          :class="correctionPendingCount > 0 && !correctionSaving
+            ? 'bg-muw-teal text-white hover:bg-muw-teal-700'
+            : 'bg-white/10 text-white/40'"
+          @click="onCorrectionSaveClick"
+        >
+          {{ correctionSaving ? '…' : t('retinal.correction.save') }}
+          <span
+            v-if="correctionPendingCount > 0"
+            class="ml-1 px-1.5 py-0.5 rounded-full bg-white/25 text-[10px]"
+          >{{ t('retinal.correction.saveBadge', { n: correctionPendingCount }) }}</span>
+        </button>
+        <button
+          type="button"
+          data-testid="namd-scan-fs-close"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-white/10 text-white hover:bg-white/20 transition"
+          @click="closeFullscreen"
+        >
+          <span class="inline-block w-3.5 h-3.5" v-html="I.close" />
+          {{ t('studyModules.namd.scanFrame.fsClose') }}
+        </button>
+      </div>
     </header>
+
+    <!-- 2026-06-26 — Discard-correction confirm. Mounted at the root
+         so it overlays the fullscreen masthead + scan box. -->
+    <div
+      v-if="correctionDiscardOpen"
+      data-testid="namd-scan-fs-discard-confirm"
+      class="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center"
+      @click.self="correctionDiscardOpen = false"
+    >
+      <div class="bg-white rounded-2xl shadow-xl max-w-md mx-auto p-6">
+        <p class="text-[14px] font-semibold text-slate-900 mb-4">
+          {{ t('retinal.correction.discardConfirm') }}
+        </p>
+        <div class="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            class="px-3.5 py-1.5 rounded-lg border border-slate-200 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+            @click="correctionDiscardOpen = false"
+          >{{ t('retinal.correction.discardCancel') }}</button>
+          <button
+            type="button"
+            class="px-3.5 py-1.5 rounded-lg bg-rose-600 text-white text-[12px] font-semibold hover:bg-rose-700"
+            @click="confirmDiscardCorrection"
+          >{{ t('retinal.correction.discardYes') }}</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Scan frame: black background, rounded corners, the
          BscanViewer fills the entire aspect-[16/9] box (or h-full
@@ -523,7 +872,74 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
             :show-segmentation="mask"
             :static-frame="true"
             :fill-container="fillsParent"
-          />
+          >
+            <!-- 2026-06-26 — Sibling ILM + BM overlay. Inline path uses
+                 a tiny SVG (read-only polylines) so we don't ship the
+                 editing component on every nAMD viewer mount. In fs
+                 mode, the BscanLayerEditOverlay replaces it when
+                 (a) a sibling layers/bm job exists and (b) the role
+                 gate is open. The slot is conditional so non-editing
+                 BscanViewer mounts keep the cheap no-op default. -->
+            <template #overlay="slotProps">
+              <!-- Sibling-layers overlay (existing) -->
+              <template v-if="mask && siblingEnvelopeData && namdStaticOverlayPaths.length > 0">
+                <BscanLayerEditOverlay
+                  v-if="fsOpen && siblingJobId != null"
+                  ref="correctionOverlayRef"
+                  :job-id="siblingJobId"
+                  :n-bscans="nSlices"
+                  :cols="siblingCols"
+                  :rows="slotRows(slotProps)"
+                  :model-value="slice"
+                  :envelope-data="siblingEnvelopeData"
+                  :n-surfaces="siblingNSurfaces"
+                  :labels="siblingLabels"
+                  :correctable-layer-indices="namdCorrectableLayerIndices"
+                  :can-edit="canCorrectLayers"
+                  :bbox-style="slotBbox(slotProps)"
+                  @update:model-value="(z) => emit('update:slice', z)"
+                  @save="onCorrectionOverlaySave"
+                  @pending-edit-count="(n) => correctionPendingCount = n"
+                />
+                <svg
+                  v-else
+                  data-testid="namd-static-layers-overlay"
+                  :viewBox="`0 0 ${siblingCols} ${slotRows(slotProps)}`"
+                  :style="slotBbox(slotProps)"
+                  preserveAspectRatio="none"
+                  class="pointer-events-none"
+                >
+                  <template
+                    v-for="path in namdStaticOverlayPaths"
+                    :key="`namd-layer-${path.idx}`"
+                  >
+                    <path
+                      :d="path.d" fill="none" stroke="#0b1220"
+                      stroke-width="3" stroke-opacity="0.45"
+                      vector-effect="non-scaling-stroke"
+                    />
+                    <path
+                      :d="path.d" fill="none" :stroke="path.stroke"
+                      stroke-width="1.6" stroke-opacity="0.95"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  </template>
+                </svg>
+              </template>
+              <!-- ETDRS rings — only in fullscreen contexts (per-pane fs
+                   OR compare-tab fillContainer). Inline non-fs viewers
+                   stay uncluttered. -->
+              <EtdrsRingsBscanIndicator
+                v-if="fsOpen || fillContainer"
+                :n-bscans="nSlices"
+                :current-z="slice"
+                :image-dims="slotImageDims(slotProps)"
+                :pixel-spacing="slotPixelSpacing(slotProps)"
+                :bbox-style="slotBbox(slotProps)"
+                :visible="showEtdrsRings"
+              />
+            </template>
+          </BscanViewer>
         </div>
         <div
           v-else

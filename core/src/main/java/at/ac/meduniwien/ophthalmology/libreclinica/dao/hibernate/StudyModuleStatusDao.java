@@ -17,19 +17,18 @@ import org.hibernate.query.Query;
  * Date: Feb 18, 2009
  * Time: 8:01:42 PM
  */
+@SuppressWarnings("all")
 public class StudyModuleStatusDao extends AbstractDomainDao<StudyModuleStatus> {
     @Override
     Class<StudyModuleStatus> domainClass() {
         return StudyModuleStatus.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudyModuleStatus findByStudyId(int studyId) {
         String query = "from " + getDomainClassName() + " sms  where sms.studyId = :studyId ";
         Query<StudyModuleStatus> q = getCurrentSession().createQuery(query, StudyModuleStatus.class);
         q.setParameter("studyId", studyId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

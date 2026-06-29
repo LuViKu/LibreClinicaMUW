@@ -35,6 +35,8 @@ import org.apache.commons.lang.StringEscapeUtils;
  * @author ywang (May, 2008)
  */
 
+@SuppressWarnings("all")
+
 public class ClinicalDataReportBean extends OdmXmlReportBean {
     private OdmClinicalDataBean clinicalData;
 

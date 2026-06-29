@@ -135,6 +135,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/rule-sets")
 @Tag(name = "Rules", description = "Read-only view of the rule_set graph on the active study.")
+@SuppressWarnings("null")
 public class RulesApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(RulesApiController.class);
@@ -1885,7 +1886,7 @@ public class RulesApiController {
         // own legacy DAOs so we don't depend on lazy-loading their
         // associations from Hibernate (the legacy beans are messy
         // about lazy fetch).
-        StudyDAO studyDao = new StudyDAO(dataSource);
+        new StudyDAO(dataSource);
         // Already in the active study scope (findAllByStudy scoped
         // the read); studyDao is held for symmetry with other
         // controllers but not strictly needed here.

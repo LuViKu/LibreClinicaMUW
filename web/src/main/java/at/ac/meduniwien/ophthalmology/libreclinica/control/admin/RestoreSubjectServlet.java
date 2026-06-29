@@ -33,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Restores a subject to system, also restore all the related data
  */
+@SuppressWarnings("all")
 public class RestoreSubjectServlet extends SecureController {
     /**
 	 * 

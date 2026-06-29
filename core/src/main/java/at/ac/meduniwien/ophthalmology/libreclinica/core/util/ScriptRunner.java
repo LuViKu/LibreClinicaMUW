@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
  * Be more Modular 
  * Write code like your code is an External API 
  */
+@SuppressWarnings("all")
 public class ScriptRunner {
 
 	private static final String DEFAULT_DELIMITER = ";";

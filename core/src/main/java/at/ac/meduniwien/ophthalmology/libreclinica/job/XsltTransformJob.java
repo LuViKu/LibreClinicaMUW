@@ -79,6 +79,7 @@ import org.springframework.scheduling.quartz.QuartzJobBean;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class XsltTransformJob extends QuartzJobBean {
 
     private static final Logger logger = LoggerFactory.getLogger(XsltTransformJob.class);
@@ -123,8 +124,7 @@ public class XsltTransformJob extends QuartzJobBean {
         logger.info("Job " + context.getJobDetail().getDescription() + " started.");
         initDependencies(context.getScheduler());
         // need to generate a Locale for emailing users with i18n
-        // TODO make dynamic?
-        Locale locale = new Locale("en-US");
+        Locale locale = Locale.of("en-US");
         ResourceBundleProvider.updateLocale(locale);
         ResourceBundle pageMessages = ResourceBundleProvider.getPageMessagesBundle();
         List<File> markForDelete = new LinkedList<File>();
@@ -264,7 +264,7 @@ public class XsltTransformJob extends QuartzJobBean {
                 // logic to prevent deleting the file being created.
 
             }
-            final double done = setFormat(new Double(System.currentTimeMillis() - start)/1000);
+            final double done = setFormat(Double.valueOf(System.currentTimeMillis() - start)/1000);
             logger.info("--> job completed in " + done + " ms");
             // run post processing
 

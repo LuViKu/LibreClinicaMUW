@@ -38,6 +38,7 @@ import org.apache.commons.lang.StringUtils;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
 
     public void setQueryNames() {
@@ -234,7 +235,6 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudySubjectBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -660,7 +660,7 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
             variables.put(ind++, enrollmentDate);
         }
         // date_updated is set to now()
-        // variables.put(new Integer(ind), new java.util.Date());
+        // variables.put(Integer.valueOf(ind), new java.util.Date());
         variables.put(ind++, sb.getUpdater().getId());
         variables.put(ind++, sb.getSecondaryLabel());
         if (sb.getTime_zone() == null || sb.getTime_zone().equals("")) {
@@ -699,7 +699,6 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudySubjectBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -707,7 +706,6 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudySubjectBean> findAllByPermission(Object objCurrentUser, int intActionType) {

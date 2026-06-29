@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Assigns a study subject to another study
  */
+@SuppressWarnings("all")
 public class ReassignStudySubjectServlet extends SecureController {
     /**
 	 * 

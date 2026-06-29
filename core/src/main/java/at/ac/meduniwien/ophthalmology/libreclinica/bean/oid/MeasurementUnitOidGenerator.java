@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.oid;
 /**
  * Maximum length of measurement_unit_oid is 40.
  */
+@SuppressWarnings("all")
 public class MeasurementUnitOidGenerator extends OidGenerator {
 
     private final int argumentLength = 1;

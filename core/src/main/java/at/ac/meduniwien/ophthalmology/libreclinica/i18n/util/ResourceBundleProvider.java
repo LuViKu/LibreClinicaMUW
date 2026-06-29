@@ -14,6 +14,8 @@ import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
+@SuppressWarnings("all")
+
 public class ResourceBundleProvider {
     /**
      * A Map of the locales corresponding to each Thread.

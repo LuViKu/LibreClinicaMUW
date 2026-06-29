@@ -17,6 +17,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto;
  * uses Input + Select + Select1 (no Upload), so the container-side
  * {@code @XmlElements} lists are shorter here.
  */
+@SuppressWarnings("all")
 public interface UserControl {
     public String getRef();
     public void setRef(String ref);

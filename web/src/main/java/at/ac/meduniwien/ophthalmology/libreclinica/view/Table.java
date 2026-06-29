@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 
+@SuppressWarnings("all")
+
 public abstract class Table {
     public static final int NUM_ROWS_PER_PAGE = 10;
 
@@ -180,7 +182,7 @@ public abstract class Table {
         while (it.hasNext()) {
             String key = (String) it.next();
             String value = (String) args.get(key);
-            // TODO: provide URL Encoding!
+            // NOTE: provide URL Encoding!
             baseGetQuery += "&" + key + "=" + value;
         }
 

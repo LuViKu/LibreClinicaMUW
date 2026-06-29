@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.cache;
 
+@SuppressWarnings("all")
+
 public class StringStatement <PreparedStatement> {
 
 }

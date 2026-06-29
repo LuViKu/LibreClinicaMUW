@@ -70,7 +70,7 @@ public class OdmStudySubjectController {
 	@RequestMapping(value = "/study/{studyOid}/crc/{crcUserName}/studysubject/{studySubjectId}", method = RequestMethod.GET)
 	public @ResponseBody ODM getSubjectODM(@PathVariable("studyOid") String studyOid, @PathVariable("crcUserName") String crcUserName, @PathVariable("studySubjectId") String studySubjectLabel)
 			throws Exception {
-		ResourceBundleProvider.updateLocale(new Locale("en_US"));
+		ResourceBundleProvider.updateLocale(Locale.US);
 
 		return getODM(studyOid, studySubjectLabel, crcUserName);
 	}

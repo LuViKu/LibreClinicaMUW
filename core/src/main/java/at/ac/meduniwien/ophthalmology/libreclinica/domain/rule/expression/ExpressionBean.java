@@ -32,6 +32,10 @@ import org.hibernate.annotations.Type;
 @Table(name = "rule_expression")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_expression_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class ExpressionBean extends AbstractAuditableMutableDomainObject implements Serializable {
 
     /**

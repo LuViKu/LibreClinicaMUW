@@ -17,6 +17,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "input")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Input implements UserControl {
     @XmlAttribute(name = "ref")
     private String ref;
@@ -61,7 +62,6 @@ public class Input implements UserControl {
 
     @Override
     public String getMediatype() {
-        // TODO Auto-generated method stub
         return null;
     }
 

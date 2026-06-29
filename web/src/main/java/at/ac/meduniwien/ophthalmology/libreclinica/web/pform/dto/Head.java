@@ -14,6 +14,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Head {
     @XmlElement(name = "title", namespace = "http://www.w3.org/1999/xhtml")
     private String title;

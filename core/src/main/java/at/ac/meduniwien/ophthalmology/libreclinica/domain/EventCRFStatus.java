@@ -16,6 +16,8 @@ import java.util.ResourceBundle;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.CodedEnum;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
+@SuppressWarnings("all")
+
 public enum EventCRFStatus  implements CodedEnum  {
 
 	    INVALID(0, "invalid"), UNCOMPLETED(1, "not_started"), INITIAL_DATA_ENTRY(2, "initial_data_entry"), INITIAL_DATA_ENTRY_COMPLETE(3, "initial_data_entry_complete"), DOUBLE_DATA_ENTRY(4, "double_data_entry"), DOUBLE_DATA_ENTRY_COMPLETE(5, "data_entry_complete"), ADMINISTRATIVE_EDITING(

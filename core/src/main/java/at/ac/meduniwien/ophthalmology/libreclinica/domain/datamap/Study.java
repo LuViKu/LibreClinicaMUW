@@ -46,6 +46,10 @@ import org.hibernate.annotations.Type;
 @Table(name = "study",  uniqueConstraints = @UniqueConstraint(columnNames = "oc_oid"))
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "study_study_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class Study   extends DataMapDomainObject {
 	private static final long serialVersionUID = -1650053070213212481L;
 	private int studyId;

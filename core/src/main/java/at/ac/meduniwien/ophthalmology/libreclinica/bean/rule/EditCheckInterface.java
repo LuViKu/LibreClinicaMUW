@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule;
 
+@SuppressWarnings("all")
+
 public interface EditCheckInterface {
 
     public boolean check();

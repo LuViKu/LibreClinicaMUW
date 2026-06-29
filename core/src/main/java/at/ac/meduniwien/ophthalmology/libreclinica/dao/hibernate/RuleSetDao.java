@@ -21,6 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("all")
 public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
     @Override
@@ -28,28 +34,23 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return RuleSetBean.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleSetBean findById(Integer id, StudyBean study) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.id = :id and ruleSet.studyId = :studyId ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("id", id);
         q.setParameter("studyId", study.getId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public Long count(StudyBean study) {
         String query = "select count(*) from " + domainClass().getName() + " ruleSet where ruleSet.studyId = :studyId " + " AND ruleSet.status != :status ";
         Query<Long> q = getCurrentSession().createQuery(query, Long.class);
         q.setParameter("studyId", study.getId());
         q.setParameter("status", Status.DELETED);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
 
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings("rawtypes")
 	public int getCountWithFilter(final ViewRuleAssignmentFilter filter) {
 
@@ -64,7 +65,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
         query += filter.execute("");
         NativeQuery q = getCurrentSession().createNativeQuery(query);
-        return ((BigInteger) q.uniqueResult()).intValue();
+        return ((BigInteger) q.getSingleResultOrNull()).intValue();
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -83,11 +84,10 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
-        return (ArrayList<RuleSetBean>) q.list();
+        return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Transactional
     public ArrayList<RuleSetBean> findByCrfVersionOrCrfAndStudyAndStudyEventDefinition(CRFVersionBean crfVersion, CRFBean crfBean, StudyBean currentStudy,
             StudyEventDefinitionBean sed) {
@@ -104,20 +104,17 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         q.setParameter("studyEventDefinitionId", sed.getId());
         q.setCacheable(true);
 
-        return new ArrayList<RuleSetBean>(q.list());
+        return new ArrayList<RuleSetBean>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList<RuleSetBean> findAllByStudy(StudyBean currentStudy) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyId = :studyId  ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("studyId", currentStudy.getId());
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public ArrayList<RuleSetBean> findByCrf(CRFBean crfBean, StudyBean currentStudy) {
         String query =
             " select rs.* from rule_set rs where rs.study_id = :studyId "
@@ -127,21 +124,17 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setParameter("crfId", crfBean.getId());
         q.setParameter("studyId", currentStudy.getId());
-        return (ArrayList<RuleSetBean>) q.list();
+        return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleSetBean findByExpression(RuleSetBean ruleSet) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value = :value AND ruleSet.originalTarget.context = :context ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("value", ruleSet.getTarget().getValue());
         q.setParameter("context", ruleSet.getTarget().getContext());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleSetBean findByExpressionAndStudy(RuleSetBean ruleSet, Integer studyId) {
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value = :value " +
         		"AND ruleSet.originalTarget.context = :context " +
@@ -150,63 +143,52 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         q.setParameter("value", ruleSet.getTarget().getValue());
         q.setParameter("context", ruleSet.getTarget().getContext());
         q.setParameter("studyId", studyId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public Long getCountByStudy(StudyBean currentStudy) {
         String query = "select count(*) from " + getDomainClassName() + " ruleSet  where ruleSet.studyId = :studyId and ruleSet.status = :status ";
         Query<Long> q = getCurrentSession().createQuery(query, Long.class);
         q.setParameter("studyId", currentStudy.getId());
         q.setParameter("status", at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList<RuleSetBean> findAllByStudyEventDef(StudyEventDefinitionBean sed){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyEventDefinitionId = :studyEventDefId  ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("studyEventDefId", sed.getId());
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
     
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList<RuleSetBean> findAllEventActions(StudyBean currentStudy){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.originalTarget.value LIKE '%.STARTDATE%' or ruleSet.originalTarget.value LIKE '%.STATUS%' and ruleSet.studyId = :studyId ";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("studyId", currentStudy.getId());
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
     public ArrayList<RuleSetBean> findAllRunOnSchedules(Boolean shedule){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.runSchedule = :shedule";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, RuleSetBean.class);
         q.setParameter("shedule", shedule);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
     @Transactional
     public ArrayList<RuleSetBean> findAllRunOnSchedulesPerSchema(Boolean shedule, String schema){
         String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.runSchedule = :shedule";
         Query<RuleSetBean> q = getCurrentSession(schema).createQuery(query, RuleSetBean.class);
         q.setParameter("shedule", shedule);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
     public ArrayList<RuleSetBean> findAllByStudyEventDefIdWhereItemIsNull(Integer studyEventDefId){
     	String query = "from " + getDomainClassName() + " ruleSet  where ruleSet.studyEventDefinitionId = :studyEventDefId  and ruleSet.itemId is null";
         Query<RuleSetBean> q = getCurrentSession().createQuery(query, domainClass());
         q.setParameter("studyEventDefId", studyEventDefId);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 }

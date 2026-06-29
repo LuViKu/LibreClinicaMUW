@@ -72,6 +72,7 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
  * Processes 'view subject' request
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ViewStudySubjectServlet extends SecureController {
 
 	private static final long serialVersionUID = 3682444868708787558L;
@@ -267,7 +268,7 @@ public class ViewStudySubjectServlet extends SecureController {
                     Calendar cal = Calendar.getInstance();
                     cal.setTime(dob);
                     int year = cal.get(Calendar.YEAR);
-                    request.setAttribute("yearOfBirth", new Integer(year));
+                    request.setAttribute("yearOfBirth", Integer.valueOf(year));
                 } else {
                     request.setAttribute("yearOfBirth", "");
                 }
@@ -341,7 +342,7 @@ public class ViewStudySubjectServlet extends SecureController {
             }
             // YW >>
             HashMap<String, Object> args = new HashMap<>();
-            args.put("id", new Integer(studySubId).toString());
+            args.put("id", Integer.valueOf(studySubId).toString());
             table.setQuery("ViewStudySubject", args);
             table.setRows(allEventRows);
             table.computeDisplay();
@@ -370,12 +371,12 @@ public class ViewStudySubjectServlet extends SecureController {
                 String old = avb.getOldValue().trim();
                 try {
                     if (!(old == null || old.trim().isEmpty())) {
-                        SubjectEventStatus oldStatus = SubjectEventStatus.get(new Integer(old).intValue());
+                        SubjectEventStatus oldStatus = SubjectEventStatus.get(Integer.valueOf(old).intValue());
                         sea.setOldSubjectEventStatus(oldStatus);
                     }
                     String newValue = avb.getNewValue().trim();
                     if (!(newValue == null || newValue.trim().isEmpty())) {
-                        SubjectEventStatus newStatus = SubjectEventStatus.get(new Integer(newValue).intValue());
+                        SubjectEventStatus newStatus = SubjectEventStatus.get(Integer.valueOf(newValue).intValue());
                         sea.setNewSubjectEventStatus(newStatus);
                     }
                 } catch (NumberFormatException e) {
@@ -444,7 +445,7 @@ public class ViewStudySubjectServlet extends SecureController {
             int studyEventDefinitionId = sedao.getDefinitionIdFromStudyEventId(studyEventId);
 
             // EventDefinitionCRFBean edc = (EventDefinitionCRFBean)
-            // definitionsById.get(new Integer(
+            // definitionsById.get(Integer.valueOf(
             // studyEventDefinitionId));
             // fix problem of the above code(commented out), find the correct
             // edc, note that on definitionId can be related to multiple
@@ -468,7 +469,6 @@ public class ViewStudySubjectServlet extends SecureController {
                 ecb.setStage(DataEntryStage.LOCKED);
             }
             // above added 092007-102007 tbh
-            // TODO need to refactor since this is similar to other code, tbh
             if (edc != null) {
                 // System.out.println("edc is not null, need to set flags");
                 DisplayEventCRFBean dec = new DisplayEventCRFBean();
@@ -514,8 +514,8 @@ public class ViewStudySubjectServlet extends SecureController {
          */
 
         for (EventDefinitionCRFBean edcrf : eventDefinitionCRFs) {
-            completed.put(new Integer(edcrf.getCrfId()), Boolean.FALSE);
-            startedButIncompleted.put(new Integer(edcrf.getCrfId()), new EventCRFBean());
+            completed.put(Integer.valueOf(edcrf.getCrfId()), Boolean.FALSE);
+            startedButIncompleted.put(Integer.valueOf(edcrf.getCrfId()), new EventCRFBean());
         }
 
         CRFVersionDAO cvdao = new CRFVersionDAO(ds);
@@ -525,14 +525,13 @@ public class ViewStudySubjectServlet extends SecureController {
             int crfId = cvdao.getCRFIdFromCRFVersionId(ecrf.getCRFVersionId());
             ArrayList<ItemDataBean> idata = iddao.findAllByEventCRFId(ecrf.getId());
             if (!idata.isEmpty()) { // this crf has data already
-                completed.put(new Integer(crfId), Boolean.TRUE);
+                completed.put(Integer.valueOf(crfId), Boolean.TRUE);
             } else { // event crf got created, but no data entered
                 // System.out.println("added one into startedButIncompleted" + ecrf.getId());
-                startedButIncompleted.put(new Integer(crfId), ecrf);
+                startedButIncompleted.put(Integer.valueOf(crfId), ecrf);
             }
         }
 
-        // TODO possible relation to 1689 here, tbh
         for (EventDefinitionCRFBean edcrf : eventDefinitionCRFs) {
             DisplayEventDefinitionCRFBean dedc = new DisplayEventDefinitionCRFBean();
 
@@ -543,8 +542,8 @@ public class ViewStudySubjectServlet extends SecureController {
             if (status.equals(SubjectEventStatus.LOCKED)) {
                 dedc.setStatus(Status.LOCKED);
             }
-            Boolean b = completed.get(new Integer(edcrf.getCrfId()));
-            EventCRFBean ev = startedButIncompleted.get(new Integer(edcrf.getCrfId()));
+            Boolean b = completed.get(Integer.valueOf(edcrf.getCrfId()));
+            EventCRFBean ev = startedButIncompleted.get(Integer.valueOf(edcrf.getCrfId()));
             if (b == null || !b.booleanValue()) {
 
                 // System.out.println("entered boolean loop with ev "+ev.getId()+" crf version id "+ ev.getCRFVersionId());
@@ -620,7 +619,7 @@ public class ViewStudySubjectServlet extends SecureController {
      * eventCRF.setCrf(crf); eventCRF.setCrfVersion(cVersion);
      * evs.add(eventCRF);
      *
-     * if (crfIdMap.containsKey(new Integer(crf.getId()))) { crfIdMap.put(new
+     * if (crfIdMap.containsKey(Integer.valueOf(crf.getId()))) { crfIdMap.put(new
      * Integer(crf.getId()), Boolean.TRUE);//already has // entry for this //
      * crf } }//for
      *

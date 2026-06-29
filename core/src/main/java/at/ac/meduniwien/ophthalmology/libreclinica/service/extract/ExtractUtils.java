@@ -14,6 +14,8 @@ import java.text.SimpleDateFormat;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExtractPropertyBean;
 
+@SuppressWarnings("all")
+
 public class ExtractUtils {
 
     /**
@@ -67,12 +69,10 @@ public class ExtractUtils {
                   sdfDir = new SimpleDateFormat(dateFilePattern);
              endFilePath = endFilePath.replace("${date}",sdfDir.format(new java.util.Date()) );
             }
-            //TODO change to dateTime
           
         return endFilePath;
        }
 
-    //TODO: ${linkURL} needs to be added
     /**
      *
      * for dateTimePattern, the directory structure is created. "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator,
@@ -102,7 +102,6 @@ public class ExtractUtils {
                 {
             endFilePath = endFilePath.replace("${datasetName}", dsBean.getName());
                 }
-        //TODO change to dateTime
        
         if(endFilePath.contains("$dateTime")) {
            endFilePath = endFilePath.replace("$dateTime",  sdfDir.format(new java.util.Date()));

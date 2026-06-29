@@ -20,8 +20,9 @@ import java.util.Locale;
  * @since Jan. 2012
  */
 // @author ywang
+@SuppressWarnings("all")
 public class I18nFormatUtil {
-    private final static Locale DEFAULT_LOCALE = new Locale("en");
+    private final static Locale DEFAULT_LOCALE = Locale.ENGLISH;
     private final static String YEAR_FORMAT_STRING = "yyyy";
 
     private I18nFormatUtil() {}

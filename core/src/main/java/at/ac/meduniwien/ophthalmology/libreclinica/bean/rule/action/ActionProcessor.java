@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.action;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 
+@SuppressWarnings("all")
+
 public interface ActionProcessor {
 
     public void execute(RuleActionBean ruleAction, int itemDataBeanId, String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments);

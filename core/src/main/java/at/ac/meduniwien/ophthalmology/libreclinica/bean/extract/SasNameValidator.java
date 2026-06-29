@@ -38,6 +38,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
  * 
  * @auther ywang
  */
+@SuppressWarnings("all")
 @Deprecated
 public class SasNameValidator extends NameValidator {
     private int nameMaxLength = 8; // 8;// 32;
@@ -50,6 +51,7 @@ public class SasNameValidator extends NameValidator {
      * @return String
      */
     @Override
+    @Deprecated
     public String getValidName(String variableName) {
         int maxValue = this.computeMaxValue(36, this.digitSize);
         // if variableName is null, automatically generate
@@ -103,6 +105,7 @@ public class SasNameValidator extends NameValidator {
 
     // only alphabets, digits, and _ are valid
     @Override
+    @Deprecated
     protected boolean isValid(char c) {
         return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
     }
@@ -113,6 +116,7 @@ public class SasNameValidator extends NameValidator {
      * @return String
      */
     @Override
+    @Deprecated
     public String getNextSequentialString(int maxValue) {
         if(this.sequential>=maxValue) {
             System.exit(1);
@@ -132,10 +136,12 @@ public class SasNameValidator extends NameValidator {
         return (int) Math.pow(base, digitSize);
     }
 
+    @Deprecated
     public int getNameMaxLength() {
         return nameMaxLength;
     }
 
+    @Deprecated
     public void setNameMaxLength(int nameMaxLength) {
         this.nameMaxLength = nameMaxLength;
     }

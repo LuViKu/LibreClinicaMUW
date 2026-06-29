@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
  * ({@code FormBeanParser}, {@code WidgetFactory}, etc.) does not need to
  * know about the JAXB context bean.
  */
+@SuppressWarnings("all")
 public class XformParser {
     private DataSource dataSource = null;
     protected final Logger log = LoggerFactory.getLogger(XformParser.class);

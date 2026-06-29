@@ -25,6 +25,7 @@ import java.util.ResourceBundle;
  * @author thickerson
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class StudyUserRoleBean extends AuditableEntityBean {
 
 	private static final long serialVersionUID = -6618017307375291254L;
@@ -72,7 +73,9 @@ public class StudyUserRoleBean extends AuditableEntityBean {
     /**
      * @param role The role to set.
      */
-    public void setRole(Role role) {
+    // `final` silences the this-escape warning on the ctor call below. No
+    // StudyUserRoleBean subclasses exist.
+    public final void setRole(Role role) {
         this.role = role;
 
         super.setId(role.getId());

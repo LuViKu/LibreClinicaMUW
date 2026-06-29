@@ -38,6 +38,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-ItemGroupRepeat")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionItemGroupRepeat {
 
     @XmlAttribute(name = "RepeatNumber")

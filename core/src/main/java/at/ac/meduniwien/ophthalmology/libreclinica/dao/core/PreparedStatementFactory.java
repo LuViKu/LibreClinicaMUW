@@ -24,6 +24,7 @@ import java.util.Set;
  * Created on Aug 26, 2004
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class PreparedStatementFactory {
     private HashMap<Integer, Object> variables = new HashMap<>();              
     private HashMap<Integer, Integer> nullVars = new HashMap<>();// to handle null

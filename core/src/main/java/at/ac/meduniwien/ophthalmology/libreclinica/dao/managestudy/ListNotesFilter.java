@@ -17,6 +17,8 @@ import java.util.List;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
+@SuppressWarnings("all")
+
 public class ListNotesFilter implements CriteriaCommand {
 
     List<Filter> filters = new ArrayList<Filter>();
@@ -54,7 +56,6 @@ public class ListNotesFilter implements CriteriaCommand {
 
     @Override
     public String execute(String criteria) {
-        // TODO Auto-generated method stub
         return null;
     }
 
@@ -111,7 +112,6 @@ public class ListNotesFilter implements CriteriaCommand {
                 try {
                     variables.put(variables.size() + 1, sdf.parse(value.toString()));
                 } catch (ParseException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
 

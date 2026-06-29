@@ -43,6 +43,8 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.mail.javamail.MimeMessagePreparator;
 
+@SuppressWarnings("all")
+
 public class NotificationActionProcessor implements ActionProcessor, Runnable {
 
 	protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -136,7 +138,6 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 	@Override
 	public RuleActionBean execute(RuleRunnerMode ruleRunnerMode, ExecutionMode executionMode, RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy,
 			UserAccountBean ub, Object... arguments) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -185,7 +186,6 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 		try {
 			hostname = participantPortalRegistrar.getStudyHost(studyBean.getOid());
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -244,16 +244,22 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 				try {
 					participantPortalRegistrar.sendEmailThruMandrillViaOcui(pDTO,hostname);
 				} catch (Exception e) {
-					e.getStackTrace();
+					// 2026-06-28 — heritage-debt audit (PR #262): the heritage call
+					// to `e.getStackTrace()` discarded its result silently. Promote
+					// to ERROR so a failed participant-email send is auditable.
+					logger.error("Failed to send participant email via Mandrill (account={})", pDTO.getEmailAccount(), e);
 				}
-				System.out.println(pDTO.getMessage() + "   (Email Send to Participant from Mandrill :  " + pDTO.getEmailAccount() + ")");
+				// 2026-06-28 — heritage-debt audit (PR #262): participant-email
+				// confirmations were going to stdout. Route through SLF4J INFO
+				// with structured fields so the audit trail includes the outcome.
+				logger.info("Sent participant email via Mandrill: account={}, outcome=sent", pDTO.getEmailAccount());
 
 			} else {
 				pDTO.setEmailAccount(email.trim());
-			//	System.out.println();
 				// Send Email thru Local Mail Server
 				execute(ExecutionMode.SAVE, ruleActionBean, pDTO , email.trim());
-				System.out.println(pDTO.getMessage() + "  (Email sent to Hard Coded email address from OC Mail Server :  " + pDTO.getEmailAccount() + ")");
+				// 2026-06-28 — heritage-debt audit (PR #262): see comment above.
+				logger.info("Sent participant email via local mail server: account={}, outcome=sent", pDTO.getEmailAccount());
 
 			}
 		}

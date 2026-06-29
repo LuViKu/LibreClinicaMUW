@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.RuleRunner.R
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class EventActionProcessor implements ActionProcessor {
 
 	@Override
@@ -27,7 +28,6 @@ public class EventActionProcessor implements ActionProcessor {
 			ExecutionMode executionMode, RuleActionBean ruleAction,
 			ItemDataBean itemDataBean, String itemData, StudyBean currentStudy,
 			UserAccountBean ub, Object... arguments) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Pair;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class ViewNotesSortCriteria {
 
     private static final Map<String, String> SORT_BY_TABLE_COLUMN = new HashMap<String, String>();

@@ -47,6 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.table.sdv.SDVUtil;
  *
  * Processes the request of changing current study
  */
+@SuppressWarnings("all")
 public class ChangeStudyServlet extends SecureController {
     /**
 	 * 
@@ -141,7 +142,7 @@ public class ChangeStudyServlet extends SecureController {
             logger.info("new study id:" + studyId);
             for (StudyUserRoleBean studyWithRole : studies) {
                 if (studyWithRole.getStudyId() == studyId) {
-                    request.setAttribute("studyId", new Integer(studyId));
+                    request.setAttribute("studyId", Integer.valueOf(studyId));
                     session.setAttribute("studyWithRole", studyWithRole);
                     request.setAttribute("currentStudy", currentStudy);
                     forwardPage(Page.CHANGE_STUDY_CONFIRM);
@@ -174,7 +175,7 @@ public class ChangeStudyServlet extends SecureController {
         String idSetting = current.getStudyParameterConfig().getSubjectIdGeneration();
         if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
             int nextLabel = this.getStudySubjectDAO().findTheGreatestLabel() + 1;
-            request.setAttribute("label", new Integer(nextLabel).toString());
+            request.setAttribute("label", Integer.valueOf(nextLabel).toString());
         }
 
         StudyConfigService scs = new StudyConfigService(sm.getDataSource());
@@ -360,7 +361,6 @@ public class ChangeStudyServlet extends SecureController {
         request.setAttribute("subjectEventStatusStatisticsRows", rows);
     }
 
-    @SuppressWarnings("unchecked")
     private void setupStudySiteStatisticsTable() {
         StudyDAO studyDao = getStudyDAO();
         StudySubjectDAO subjectDao = getStudySubjectDAO();

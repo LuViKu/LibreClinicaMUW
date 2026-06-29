@@ -44,6 +44,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "runOnStatus",
     "eventDestination"
 })
+@SuppressWarnings("all")
 public class EventActionType {
 
     @XmlElement(name = "RunOnStatus")

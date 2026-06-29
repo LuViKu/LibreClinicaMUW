@@ -64,6 +64,7 @@ import org.springframework.validation.DataBinder;
 import org.springframework.validation.Errors;
 
 @Service
+@SuppressWarnings("all")
 public class XformMetaDataService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -126,7 +127,6 @@ public class XformMetaDataService {
                     submittedRevisionNotes, submittedXformText, formItems, errors);
         } catch (Exception e) {
             // Transaction has been rolled back due to an exception.
-            // TODO: Should we add an error message here?
             logger.error("Error encountered while saving CRF: " + e.getMessage());
             logger.error(ExceptionUtils.getStackTrace(e));
         }

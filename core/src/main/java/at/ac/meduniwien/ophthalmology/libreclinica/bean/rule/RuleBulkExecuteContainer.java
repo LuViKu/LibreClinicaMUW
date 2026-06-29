@@ -17,6 +17,8 @@ import java.util.List;
  * @author Krikor Krumlian
  */
 
+@SuppressWarnings("all")
+
 public class RuleBulkExecuteContainer {
 
     String crfVersion;

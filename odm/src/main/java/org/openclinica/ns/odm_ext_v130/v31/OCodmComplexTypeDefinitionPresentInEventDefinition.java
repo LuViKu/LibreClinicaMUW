@@ -37,6 +37,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OCodmComplexTypeDefinition-PresentInEventDefinition")
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionPresentInEventDefinition {
 
     @XmlAttribute(name = "StudyEventOID", required = true)

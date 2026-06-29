@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNoteType;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class DiscrepancyNoteTypeDao extends AbstractDomainDao<DiscrepancyNoteType> {
 
     @Override
@@ -19,13 +21,11 @@ public class DiscrepancyNoteTypeDao extends AbstractDomainDao<DiscrepancyNoteTyp
         return DiscrepancyNoteType.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public DiscrepancyNoteType findByDiscrepancyNoteTypeId(Integer discrepancyNoteTypeId) {
         String query = "from " + getDomainClassName() + " do  where do.discrepancyNoteTypeId = :discrepancynotetypeid";
         Query<DiscrepancyNoteType> q = getCurrentSession().createQuery(query, DiscrepancyNoteType.class);
         q.setParameter("discrepancynotetypeid", discrepancyNoteTypeId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

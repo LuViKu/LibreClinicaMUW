@@ -26,6 +26,7 @@ import org.jdom.Element;
  * This is a Decorator design pattern for the ViewBuilderUtil Class. It adds
  * printing related functionality to that class.
  */
+@SuppressWarnings("all")
 public class ViewBuilderPrintDecorator {
     private final ViewBuilderUtil viewBuilderUtil;
 

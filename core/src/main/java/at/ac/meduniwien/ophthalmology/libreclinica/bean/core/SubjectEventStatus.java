@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class SubjectEventStatus extends Term implements Comparable<SubjectEventStatus> {
     /**
 	 * 
@@ -190,7 +191,7 @@ public class SubjectEventStatus extends Term implements Comparable<SubjectEventS
 
     public static SubjectEventStatus getByName(String name) {
         for (int i = 0; i < list.size(); i++) {
-            SubjectEventStatus temp = (SubjectEventStatus) list.get(i);
+            SubjectEventStatus temp = list.get(i);
             if (temp.getName().equals(name)) {
                 return temp;
             }

@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.HideCRFManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
 /**
@@ -57,6 +56,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
  * @author thickerson
  *
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class CreateDatasetServlet extends SecureController {
     /**
 	 * 
@@ -112,7 +114,7 @@ public class CreateDatasetServlet extends SecureController {
         }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
     }
 
@@ -237,7 +239,6 @@ public class CreateDatasetServlet extends SecureController {
                         }
                         session.setAttribute("allSelectedGroups", sgclasses);
                         request.setAttribute("allSelectedGroups", sgclasses);
-                        // TODO push out list of subject groups here???
                         // form submitted from "view selected item ' or
                         // attribute page, so
                         // forward back to "view selected item " page
@@ -320,10 +321,9 @@ public class CreateDatasetServlet extends SecureController {
                     if (fp.getString("submit").equals(resword.getString("continue_to_apply_filter"))) {
                         // FilterDAO fdao = new FilterDAO(sm.getDataSource());
                         // Collection filters = fdao.findAll();
-                        // TODO make findAllByProject
                         // request.setAttribute("filters",filters);
                         EntityBeanTable table = getFilterTable();
-                        session.setAttribute("partOfCreateDataset", new Integer(1));
+                        session.setAttribute("partOfCreateDataset", Integer.valueOf(1));
                         // to be used in createFiltersThree servlet, tbh
                         request.setAttribute("table", table);
                         forwardPage(Page.APPLY_FILTER);
@@ -406,7 +406,6 @@ public class CreateDatasetServlet extends SecureController {
                     DatasetBean dsb = (DatasetBean) session.getAttribute("newDataset");
                     dsb.setSQLStatement(dsb.generateQuery());
 
-                    // TODO look for the filter here, re-create the sql
                     // statement
                     // and put it in here
                     // possibly done need to test, tbh 1/7/2005
@@ -518,8 +517,8 @@ public class CreateDatasetServlet extends SecureController {
         // we decide not to touch groups here, except in call from 'view
         // selected'
         ArrayList<ItemBean> allItems = asArrayList(session.getAttribute("allItems"), ItemBean.class);
-        if (defId > 0 && !db.getEventIds().contains(new Integer(defId))) {
-            db.getEventIds().add(new Integer(defId));
+        if (defId > 0 && !db.getEventIds().contains(Integer.valueOf(defId))) {
+            db.getEventIds().add(Integer.valueOf(defId));
         }
 
         StudyEventDefinitionDAO seddao = new StudyEventDefinitionDAO(sm.getDataSource());
@@ -539,7 +538,7 @@ public class CreateDatasetServlet extends SecureController {
                 ItemBean item = (ItemBean) allItems.get(i);
                 item.setSelected(false);
                 if (db.getItemMap().containsKey(defId + "_" + item.getId())) {
-                    db.getItemIds().remove(new Integer(item.getId()));
+                    db.getItemIds().remove(Integer.valueOf(item.getId()));
                     db.getItemMap().remove(defId + "_" + item.getId());
                     for (int j = 0; j < db.getItemDefCrf().size(); ++j) {
                         ItemBean ib = (ItemBean) db.getItemDefCrf().get(j);
@@ -579,7 +578,7 @@ public class CreateDatasetServlet extends SecureController {
                     if (!db.getItemMap().containsKey(selectedItem.getDatasetItemMapKey())) {
                         // logger.info("one item selected");
                         logger.info("one item selected");
-                        db.getItemIds().add(new Integer(selectedItem.getId()));
+                        db.getItemIds().add(Integer.valueOf(selectedItem.getId()));
                         if (selectedItem.getDefId() == 0) {
                             db.getItemMap().put(defId + "_" + selectedItem.getId(), selectedItem);
                         } else {
@@ -597,7 +596,7 @@ public class CreateDatasetServlet extends SecureController {
                                     db.getItemDefCrf().remove(j);
                                 }
                             }
-                            db.getItemIds().remove(new Integer(selectedItem.getId()));
+                            db.getItemIds().remove(Integer.valueOf(selectedItem.getId()));
                             db.getItemMap().remove(selectedItem.getDatasetItemMapKey());
                 		}
                 	}
@@ -823,7 +822,6 @@ public class CreateDatasetServlet extends SecureController {
         return summary;
     }
 
-    // TODO set up additional settings here, tbh
     //
     private void getSubAttr(FormProcessor fp, DatasetBean db) {
         String dob = fp.getString(DOB);
@@ -930,7 +928,7 @@ public class CreateDatasetServlet extends SecureController {
                 // YW, 2-26-2008 << let subjectGroupIds contain only selected
                 // StudyGroupClass_id <<
                 if (db.getSubjectGroupIds() != null && !db.getSubjectGroupIds().contains(sgclass.getId())) {
-                    db.getSubjectGroupIds().add(new Integer(sgclass.getId()));
+                    db.getSubjectGroupIds().add(Integer.valueOf(sgclass.getId()));
                 }
                 // YW >>
             } else {
@@ -939,12 +937,12 @@ public class CreateDatasetServlet extends SecureController {
                 // YW, 2-26-2008 << delete StudyGroupClass_id from
                 // subjectGroupIds if appliable<<
                 if (db.getSubjectGroupIds() != null && db.getSubjectGroupIds().contains(sgclass.getId())) {
-                    db.getSubjectGroupIds().remove(new Integer(sgclass.getId()));
+                    db.getSubjectGroupIds().remove(Integer.valueOf(sgclass.getId()));
                 }
                 // YW >>
             }
             allSelectedGroups.add(sgclass);
-            // db.getSubjectGroupIds().add(new Integer(sgclass.getId()));
+            // db.getSubjectGroupIds().add(Integer.valueOf(sgclass.getId()));
             logger.info("just added subject group ids: " + sgclass.getId());
         }
         session.setAttribute("allSelectedGroups", allSelectedGroups);

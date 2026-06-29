@@ -60,6 +60,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @Controller
 @RequestMapping(value = "/accounts")
 @ResponseStatus(value = org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+@SuppressWarnings("all")
 public class AccountController {
 
     @Autowired
@@ -129,7 +130,7 @@ public class AccountController {
             return new ResponseEntity<HashMap<?, ?>>(new HashMap<>(), org.springframework.http.HttpStatus.UNAUTHORIZED);
         }
 
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountDAO userAccountDAO = new UserAccountDAO(dataSource);
         StudyDAO studyDAO = new StudyDAO(dataSource);
         HashMap<String, Object> userDTO = new HashMap<String, Object>();
@@ -190,7 +191,7 @@ public class AccountController {
 
     @RequestMapping(value = "/study/{studyOid}/crc/{crcUserName}", method = RequestMethod.GET)
     public ResponseEntity<UserDTO> getAccount1(@PathVariable("studyOid") String studyOid, @PathVariable("crcUserName") String crcUserName) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountDAO udao = new UserAccountDAO(dataSource);
         uDTO = null;
 
@@ -257,7 +258,7 @@ public class AccountController {
 
     @RequestMapping(value = "/study/{studyOid}/accesscode/{accessCode}", method = RequestMethod.GET)
     public ResponseEntity<UserDTO> getAccount2(@PathVariable("studyOid") String studyOid, @PathVariable("accessCode") String accessCode) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         uDTO = null;
 
         accessCode = URLDecoder.decode(accessCode, "UTF-8");
@@ -332,7 +333,7 @@ public class AccountController {
     @RequestMapping(value = "/study/{studyOid}/studysubject/{studySubjectId}", method = RequestMethod.GET)
     public ResponseEntity<UserDTO> getAccount3(@PathVariable("studyOid") String studyOid, @PathVariable("studySubjectId") String studySubjectId)
             throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         uDTO = null;
 
         StudyBean parentStudy = getParentStudy(studyOid);
@@ -461,7 +462,7 @@ public class AccountController {
         String crcUserName = map.get("crcUserName");
         String email = map.get("email");
 
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
 
         UserAccountBean uBean = null;
 
@@ -552,7 +553,7 @@ public class AccountController {
         String studySubjectId = map.get("studySubjectId");
         String timeZone = map.get("timeZone");
 
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountDAO udao = new UserAccountDAO(dataSource);
 
         StudySubjectBean studySubjectBean = getStudySubjectByOidAndStudy(studySubjectId, parentStudy.getId());
@@ -906,7 +907,7 @@ public class AccountController {
 
     @RequestMapping(value = "/study/{studyOid}", method = RequestMethod.GET)
     public ResponseEntity<ArrayList<UserDTO>> getAllParticipantPerStudy(@PathVariable("studyOid") String studyOid) throws Exception {
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
         UserAccountDAO udao = new UserAccountDAO(dataSource);
         ArrayList<UserDTO> uDTOs = null;
 
@@ -960,7 +961,7 @@ public class AccountController {
         String crcUserName = map.get("crcUserName");
         String email = map.get("email");
 
-        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+        ResourceBundleProvider.updateLocale(Locale.US);
 
         UserAccountBean uBean = null;
 

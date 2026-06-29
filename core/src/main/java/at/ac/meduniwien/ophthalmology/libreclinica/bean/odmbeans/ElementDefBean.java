@@ -15,6 +15,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class ElementDefBean extends ElementOIDBean {
     private String name;
     private String repeating;

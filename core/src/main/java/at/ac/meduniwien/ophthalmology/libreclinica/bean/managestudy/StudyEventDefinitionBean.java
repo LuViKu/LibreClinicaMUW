@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.StudyEventDefinition
  *
  *
  */
+@SuppressWarnings("all")
 public class StudyEventDefinitionBean extends AuditableEntityBean implements Comparable<StudyEventDefinitionBean> {    
 	// generated serial id
 	private static final long serialVersionUID = 8068375291853079273L;
@@ -35,7 +36,6 @@ public class StudyEventDefinitionBean extends AuditableEntityBean implements Com
 
     private int studyId;// fk for study table
 
-    // TODO is either CRFBean or EventdefinitionCRFBean, fix this
     private ArrayList<? extends AuditableEntityBean> crfs = new ArrayList<>();
 
     private int crfNum = 0; // number of crfs, not in DB

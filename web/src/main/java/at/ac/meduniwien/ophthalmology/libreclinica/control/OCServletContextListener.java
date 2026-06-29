@@ -26,6 +26,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.usageStats.LogUsageSt
  *
  * @author jnyayapathi, pgawade
  */
+@SuppressWarnings("all")
 public class OCServletContextListener implements ServletContextListener {
     private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass().getName());
 

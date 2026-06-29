@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlag;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class EventCrfFlagDao extends AbstractDomainDao<EventCrfFlag> {
 
     @Override
@@ -26,7 +28,7 @@ public class EventCrfFlagDao extends AbstractDomainDao<EventCrfFlag> {
                 .setParameter("path", path)
                 .setParameter("tagId", tagId);
 
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

@@ -18,6 +18,7 @@ import org.jdom.Element;
  * Specifically, all input types other than input text and textarea have to be
  * converted to checkbox, before the table cells are generated.
  */
+@SuppressWarnings("all")
 public class CellFactoryPrintDecorator {
     // Delegate to this object the actual generation of the input and TD
     // elements

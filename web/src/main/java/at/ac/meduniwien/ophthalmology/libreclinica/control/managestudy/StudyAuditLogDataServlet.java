@@ -35,7 +35,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableResponse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -53,6 +52,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * JSP shell + sidebar + sysadmin/director-coordinator-monitor access
  * gate). Both extend {@link SecureController}.
  */
+@SuppressWarnings("all")
 public class StudyAuditLogDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller("extractController")
 @RequestMapping("/extract")
+@SuppressWarnings("all")
 public class ExtractController {
     @Autowired
     @Qualifier("sidebarInit")
@@ -98,16 +99,15 @@ public class ExtractController {
         UserAccountBean userBean = (UserAccountBean) request.getSession().getAttribute("userBean");
         CoreResources cr =  new CoreResources();
 
-        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(new Integer(id).intValue(),datasetId);
+        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(Integer.valueOf(id).intValue(),datasetId);
 
-        DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(new Integer(datasetId).intValue());
+        DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(Integer.valueOf(datasetId).intValue());
         // set the job in motion
         String[] files = epBean.getFileName();
         String exportFileName;
         int  cnt = 0;
         JobDetailFactoryBean jobDetailBean = new JobDetailFactoryBean();
         SimpleTrigger simpleTrigger = null;
-        //TODO: if files and export names size is not same... throw an error
         dsBean.setName(dsBean.getName().replaceAll(" ", "_"));
     	String[] exportFiles= epBean.getExportFileName();
     	 String pattern = "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator + "HHmmssSSS" + File.separator;
@@ -125,7 +125,6 @@ public class ExtractController {
 
         XsltTriggerService xsltService = new XsltTriggerService();
 
-        // TODO get a user bean somehow?
         String generalFileDir = SQLInitServlet.getField("filePath");
 
         generalFileDir = generalFileDir + "datasets" + File.separator + dsBean.getId() + File.separator + sdfDir.format(new java.util.Date());
@@ -191,7 +190,7 @@ public class ExtractController {
         if(simpleTrigger!= null)
         request.getSession().setAttribute("groupName", TRIGGER_GROUP_NAME);
 
-        request.getSession().setAttribute("datasetId", new Integer(dsBean.getId()));
+        request.getSession().setAttribute("datasetId", Integer.valueOf(dsBean.getId()));
         return map;
     }
 
@@ -205,13 +204,10 @@ public class ExtractController {
 	}
 
 
-    //TODO: ${linkURL} needs to be added
     /**
      *
      * for dateTimePattern, the directory structure is created. "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator,
      * to resolve location
-     * @param filePath TODO
-     * @param extractUtils TODO
      */
     private String getEndFilePath(String endFilePath,DatasetBean dsBean,SimpleDateFormat sdfDir, String filePath, ExtractUtils extractUtils){
     	return extractUtils.getEndFilePath(endFilePath, dsBean, sdfDir, filePath);
@@ -222,8 +218,6 @@ public class ExtractController {
      * @param endFilePath
      * @param dsBean
      * @param sdfDir
-     * @param filePath TODO
-     * @param extractUtils TODO
      * @return
      */
     private String resolveVars(String endFilePath,DatasetBean dsBean,SimpleDateFormat sdfDir, String filePath, ExtractUtils extractUtils){

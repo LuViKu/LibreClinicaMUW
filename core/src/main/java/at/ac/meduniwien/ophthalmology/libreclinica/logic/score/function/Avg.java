@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
 import org.apache.commons.math.stat.StatUtils;
 
+@SuppressWarnings("all")
+
 public class Avg extends AbstractFunction {
 
     public Avg() {
@@ -31,7 +33,7 @@ public class Avg extends AbstractFunction {
             try {
                 values[i] = Double.parseDouble(arg);
             } catch (Exception e) {
-                errors.put(new Integer(errorCount++), "Unparseable number:" + " " + arg + " " + "in evaluation of" + " Avg(); ");
+                errors.put(Integer.valueOf(errorCount++), "Unparseable number:" + " " + arg + " " + "in evaluation of" + " Avg(); ");
             }
         }
         if (errors.size() > 0) {

@@ -21,6 +21,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
  */
 @Embeddable
 @Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
+@SuppressWarnings("all")
 public class StudyParameterValueId  extends AbstractMutableDomainObject {
 
 	/**

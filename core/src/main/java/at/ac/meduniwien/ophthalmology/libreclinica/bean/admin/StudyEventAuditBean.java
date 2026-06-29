@@ -16,9 +16,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 /**
  * @author Jun Xu
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class StudyEventAuditBean {
     private StudyEventDefinitionBean definition;
     private SubjectEventStatus oldSubjectEventStatus;

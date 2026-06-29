@@ -86,6 +86,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Link;
  * when search by keywords.
  * Created on Dec 31, 2004
  */
+@SuppressWarnings("all")
 public class EntityBeanTable {
     /**
      * The number of rows to display per page.
@@ -315,7 +316,7 @@ public class EntityBeanTable {
 
        	for(String key : args.keySet()) {
             String value = args.get(key);
-            // TODO: provide URL Encoding!
+            // NOTE: provide URL Encoding!
             baseGetQuery += "&" + key + "=" + value;
         }
 

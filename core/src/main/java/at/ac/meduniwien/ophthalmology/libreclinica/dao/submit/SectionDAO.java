@@ -33,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  *
  *
  */
+@SuppressWarnings("all")
 public class SectionDAO extends AuditableEntityDAO<SectionBean> {
 
     // private DAODigester digester;
@@ -83,17 +84,17 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
     @Override
     public SectionBean update(SectionBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(sb.getCRFVersionId()));
-        variables.put(new Integer(2), new Integer(sb.getStatus().getId()));
-        variables.put(new Integer(3), sb.getLabel());
-        variables.put(new Integer(4), sb.getTitle());
-        variables.put(new Integer(5), sb.getInstructions());
-        variables.put(new Integer(6), sb.getSubtitle());
-        variables.put(new Integer(7), sb.getPageNumberLabel());
-        variables.put(new Integer(8), new Integer(sb.getOrdinal()));
-        variables.put(new Integer(9), new Integer(sb.getUpdaterId()));
-        variables.put(new Integer(10), new Integer(sb.getBorders()));
-        variables.put(new Integer(11), new Integer(sb.getId()));
+        variables.put(Integer.valueOf(1), Integer.valueOf(sb.getCRFVersionId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(sb.getStatus().getId()));
+        variables.put(Integer.valueOf(3), sb.getLabel());
+        variables.put(Integer.valueOf(4), sb.getTitle());
+        variables.put(Integer.valueOf(5), sb.getInstructions());
+        variables.put(Integer.valueOf(6), sb.getSubtitle());
+        variables.put(Integer.valueOf(7), sb.getPageNumberLabel());
+        variables.put(Integer.valueOf(8), Integer.valueOf(sb.getOrdinal()));
+        variables.put(Integer.valueOf(9), Integer.valueOf(sb.getUpdaterId()));
+        variables.put(Integer.valueOf(10), Integer.valueOf(sb.getBorders()));
+        variables.put(Integer.valueOf(11), Integer.valueOf(sb.getId()));
         this.executeUpdate(digester.getQuery("update"), variables);
         return sb;
     }
@@ -102,17 +103,17 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
     public SectionBean create(SectionBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
 
-        variables.put(new Integer(1), new Integer(sb.getCRFVersionId()));
-        variables.put(new Integer(2), new Integer(sb.getStatus().getId()));
-        variables.put(new Integer(3), sb.getLabel());
-        variables.put(new Integer(4), sb.getTitle());
-        variables.put(new Integer(5), sb.getInstructions());
-        variables.put(new Integer(6), sb.getSubtitle());
-        variables.put(new Integer(7), sb.getPageNumberLabel());
-        variables.put(new Integer(8), new Integer(sb.getOrdinal()));
-        variables.put(new Integer(9), new Integer(sb.getParentId()));
-        variables.put(new Integer(10), new Integer(sb.getOwnerId()));
-        variables.put(new Integer(11), new Integer(sb.getBorders()));
+        variables.put(Integer.valueOf(1), Integer.valueOf(sb.getCRFVersionId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(sb.getStatus().getId()));
+        variables.put(Integer.valueOf(3), sb.getLabel());
+        variables.put(Integer.valueOf(4), sb.getTitle());
+        variables.put(Integer.valueOf(5), sb.getInstructions());
+        variables.put(Integer.valueOf(6), sb.getSubtitle());
+        variables.put(Integer.valueOf(7), sb.getPageNumberLabel());
+        variables.put(Integer.valueOf(8), Integer.valueOf(sb.getOrdinal()));
+        variables.put(Integer.valueOf(9), Integer.valueOf(sb.getParentId()));
+        variables.put(Integer.valueOf(10), Integer.valueOf(sb.getOwnerId()));
+        variables.put(Integer.valueOf(11), Integer.valueOf(sb.getBorders()));
         this.executeUpdate(digester.getQuery("create"), variables);
         return sb;
     }
@@ -339,11 +340,11 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
         this.setTypeExpected(1, TypeNames.INT); //item_id
         
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), sectionId);
-        variables.put(new Integer(2), crfVersionId);
-        variables.put(new Integer(3), crfVersionId);
-        variables.put(new Integer(4), sectionId);
-        variables.put(new Integer(5), crfVersionId);
+        variables.put(Integer.valueOf(1), sectionId);
+        variables.put(Integer.valueOf(2), crfVersionId);
+        variables.put(Integer.valueOf(3), crfVersionId);
+        variables.put(Integer.valueOf(4), sectionId);
+        variables.put(Integer.valueOf(5), crfVersionId);
         
         ArrayList<HashMap<String, Object>> rows = this.select(digester.getQuery("containNormalItem"), variables);
         if(rows.size()>0) {

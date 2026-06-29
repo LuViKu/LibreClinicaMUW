@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy;
 /**
  * @author jxu Intervention object
  */
+@SuppressWarnings("all")
 public class InterventionBean {
     private int id;
     private String name;

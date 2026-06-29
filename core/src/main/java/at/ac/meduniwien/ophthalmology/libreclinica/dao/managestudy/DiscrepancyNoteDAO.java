@@ -27,7 +27,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.AuditableEntityDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAODigester;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
@@ -39,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> {
 
     // if true, we fetch the mapping along with the bean
@@ -1165,7 +1165,6 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
     }
 
      /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<DiscrepancyNoteBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -1374,7 +1373,6 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<DiscrepancyNoteBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -1382,7 +1380,6 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<DiscrepancyNoteBean> findAllByPermission(Object objCurrentUser, int intActionType) {

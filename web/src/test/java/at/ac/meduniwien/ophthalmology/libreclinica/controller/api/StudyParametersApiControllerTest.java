@@ -8,7 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -43,6 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *       SPA store maps onto {@code fieldErrors[handle]}.</li>
  * </ul>
  */
+@SuppressWarnings("null")
 class StudyParametersApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {

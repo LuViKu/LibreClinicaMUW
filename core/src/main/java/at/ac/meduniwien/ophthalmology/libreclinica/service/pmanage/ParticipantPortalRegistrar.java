@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage;
 import java.net.MalformedURLException;
 import java.net.URL;
 
+import java.net.URI;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.ParticipantDTO;
@@ -21,6 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
+
+@SuppressWarnings("all")
 
 public class ParticipantPortalRegistrar {
 
@@ -107,7 +110,7 @@ public class ParticipantPortalRegistrar {
         if (hostName.contains("."))
             return false;
         try {
-            URL baseUrl = new URL(pManageBaseUrl);
+            URL baseUrl = URI.create(pManageBaseUrl).toURL();
             String port = "";
             if (baseUrl.getPort() > 0)
                 port = ":" + String.valueOf(baseUrl.getPort());
@@ -185,7 +188,7 @@ public class ParticipantPortalRegistrar {
             Authorization[] response = rest.getForObject(pManageUrlFull, Authorization[].class);
             if (response.length > 0 && response[0].getStudy() != null && response[0].getStudy().getHost() != null
                     && !response[0].getStudy().getHost().equals("")) {
-                URL url = new URL(pManageUrl);
+                URL url = URI.create(pManageUrl).toURL();
                 String port = "";
                 if (url.getPort() > 0)
                     port = ":" + String.valueOf(url.getPort());

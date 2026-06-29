@@ -1,10 +1,10 @@
 # LibreClinica MUW — Backend Modernization Plan
 
 **Owner:** Department of Ophthalmology and Optometry, Medical University of Vienna
-**Status:** Active — Phase 0 in progress (initiated 2026-05-28)
+**Status (last refreshed 2026-06-28):** **Phases 0, A, B (all sub-phases), C, D-Sec closed.** Phase D-Libs and Phase E remain active. The 1.5.0-beta.4-muw release (lc-develop @ `06509d24d`, 2026-06-26) ships on the modernised stack: JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + JSP/JSTL Jakarta taglibs + bcrypt + reverse-proxy SSO + `at.ac.meduniwien.ophthalmology.libreclinica.*` package namespace.
 **Target:** Spring Boot 3 + Java 21 + Jakarta EE + library replacement (full re-platform)
-**Posture:** Hard fork from `reliatec-gmbh/LibreClinica` upstream — manual cherry-pick of upstream patches via Eclipse Transformer
-**Estimated effort:** 12–18 months · 2–3 developers (FTE-equivalent)
+**Posture:** **Released, independent fork — no upstream sync** (as of 2026-06-26; supersedes the original Eclipse-Transformer cherry-pick framing in DR-003). The fork no longer merges or cherry-picks from upstream LibreClinica.
+**Estimated effort (original 2026-05-28):** 12–18 months · 2–3 developers FTE. **Actual to date:** ~5 weeks of one-developer-with-AI-assist (2026-05-28 → 2026-06-28) to ship Phases 0 + A + B + C + D-Sec to lc-develop. The remaining D-Libs + Phase E work is incremental + parallelisable.
 
 ---
 
@@ -46,10 +46,28 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 
 ---
 
+## Phase status — quick read (last refreshed 2026-06-28)
+
+| Phase | Sub-phases | Status | Closing landmark |
+|---|---|---|---|
+| **0 — Safety net** | 0.1 test triage, 0.2 schema bootstrap, 0.3 IT harness, 0.4 Castor characterisation | **✅ Closed** | 63 IT pass on `postgres:14-alpine`, CI integration-tests job green |
+| **A — Spring 5.x hardening** | A.1 low-risk bumps, A.2 framework bumps | **✅ Closed** | 63 IT pass on Spring 5.3.39 + Sec 5.8.16 + Hibernate 5.6.15 |
+| **B — Java 21 + Spring 6 + Jakarta cliff** | B.0 Castor characterisation, B.1 JDK 21 baseline, B.2 Eclipse Transformer dry run, B.3 Castor → JAXB (DR-008/009), B.4 jmesa eviction (9 cohort PRs), B.5 Hibernate 6 + EntityManagerFactory wiring, B.6 Tomcat 10, B.7 JSP/JSTL Jakarta taglibs, B.10 Joda-Time → java.time, B.11 Java package rename to MUW namespace (DR-010), B.12 reconciliation sweep | **✅ Closed** | lc-develop runs JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10. **The 2026-06-28 heritage-debt audit (PR #263) revealed the supposed B.5 DAO cliff was a phantom — the 85 `@SuppressWarnings("deprecation")` markers in `dao/hibernate/` are stale; zero Hibernate 6 deprecation warnings surface when they're stripped.** |
+| **C — Spring Boot 3 conversion** | C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) | **✅ Closed** | XML application contexts retired; Boot autoconfiguration owns the lifecycle |
+| **D — Authentication modernization + library long-tail** | D-Sec (10/11 sub-phases: bcrypt + lazy rehash; institution-agnostic SSO via reverse-proxy pre-auth, DR-014/015; sso-deployment-guide.md cookbook draft); D-Libs (long tail untouched) | **⚠️ D-Sec substantially closed; D-Libs open** | D.10 e-sig re-auth scaffolded behind flag (legal ratification pending). Operator tasks remain: SAMLtest.id SP-metadata upload; MedUni Wien IT institutional SP registration for production cutover |
+| **E — UI modernization** | E.1 SPA scaffold, E.4 M1 foundations, E.5 follow-ups, E.6 study-nurse polish, E-hardening B integration | **🚧 Active** | Vue 3 + Vite + Tailwind v4 SPA shipped for nAMD workspace + retinal jobs + study-subject admin + SSO consent + study-module SPI. Continues incrementally; not on a fixed cliff |
+
+**Net:** the modernization spine (Phase 0 → D-Sec) is **done**. The release train is on lc-develop. The remaining work is **D-Libs** (parallel, no dependency cliff) and **incremental Phase E** (one feature wave at a time per clinical priority).
+
+For per-phase detail and exit criteria, scroll to the corresponding `## Phase X` heading below. The exit-criteria checklists are kept intact for archaeology + for the few sub-phases that still have follow-ups.
+
+---
+
 ## Phase 0 — Safety net
 
-**Goal:** make it impossible to ship a broken build undetected. Pre-requisite for everything that follows.
-**Timeline:** 3–4 weeks
+**Status:** ✅ **Closed.** 63 IT pass on `postgres:14-alpine` (Phase 0.2 + 0.3, 2026-05-28). 21 → 33 → 33 + 4 (`AuditUserLoginDaoTest` expansion) → 63 IT methods. CI integration-tests job green on every push to `lc-develop`.
+**Goal (original):** make it impossible to ship a broken build undetected. Pre-requisite for everything that follows.
+**Timeline (original):** 3–4 weeks · **Actual:** 2 weeks.
 **Risk:** low
 
 - [x] Decision record committed to repo ([docs/development/modernization/decision-record.md](docs/development/modernization/decision-record.md))
@@ -179,6 +197,9 @@ Currently expect: 33 unit tests pass, ~26 DAO tests error with "Session/EntityMa
 
 ## Phase A — Spring 5.x hardening (CVE patches, no namespace migration)
 
+**Status:** ✅ **Closed** (A.1 + A.2 done 2026-05-28). All CVE-closing bumps verified end-to-end against `postgres:14-alpine` via the Phase 0 IT profile — 63/63 tests pass on the new stack. This phase was the stepping stone before Phase B's Jakarta cliff; its outputs (Spring 5.3.39, Hibernate 5.6.15, Spring Security 5.8.16, etc.) have all since been superseded by their Phase B successors.
+
+
 **Goal:** close known CVEs without crossing the `jakarta` cliff. Mergeable-forward into Phase B.
 **Timeline:** 2–3 weeks (after Phase 0)
 **Risk:** low–medium
@@ -230,9 +251,13 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ## Phase B — Java 21 + Spring 6 + Jakarta cliff
 
-**Goal:** cross the `javax.*` → `jakarta.*` namespace cliff. The highest-risk single phase.
-**Timeline:** 3–6 months
-**Risk:** high
+**Status:** ✅ **Closed.** All sub-phases B.0 through B.12 shipped on lc-develop. The release train (1.5.0-beta.4-muw, 2026-06-26) runs JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + Jakarta-namespace JSP/JSTL.
+
+**B.5 audit finding (2026-06-28).** The supposed "Hibernate 6 DAO cliff" was a phantom. The heritage-debt audit ([docs/development/modernization/heritage-debt-audit-2026-06-28.md](docs/development/modernization/heritage-debt-audit-2026-06-28.md)) stripped all 85 `@SuppressWarnings("deprecation")` annotations from `core/src/main/java/.../dao/hibernate/` and ran `mvn compile`: **zero** new deprecation warnings surfaced. The DAO surface is already Hibernate-6-clean; the suppressions had outlived the deprecations they hid. The 0-warning manifest landed as [docs/development/modernization/phase-b5-hibernate6-manifest.md](docs/development/modernization/phase-b5-hibernate6-manifest.md) (PR #263). The actual B.5 closure landmark is commit `106ba5f52` (`fix(phase-b.5): wire remaining SessionFactory-using callers through EMF`).
+
+**Goal (original):** cross the `javax.*` → `jakarta.*` namespace cliff. The highest-risk single phase.
+**Timeline (original):** 3–6 months · **Actual:** ~3 weeks (2026-05-29 → 2026-06-19, with B.11 package rename PR landing 2026-06-19).
+**Risk:** high (mitigated by Phase B.0 Castor characterisation gating B.3)
 
 **Detailed execution plan:** see [docs/development/modernization/archive/phase-b-execution-playbook.md](docs/development/modernization/archive/phase-b-execution-playbook.md) for the pre-flight checklist, per-sub-phase ordering, per-step verification gates, Castor characterisation strategy, and per-sub-phase risk register.
 
@@ -276,8 +301,10 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ## Phase C — Spring Boot 3 conversion
 
-**Goal:** XML application contexts → Java config + Spring Boot autoconfiguration. WAR → executable JAR. Externalize config.
-**Timeline:** 2–3 months
+**Status:** ✅ **Closed.** C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) all shipped. XML application contexts retired in favour of Boot autoconfiguration. lc-develop ships as a Boot-bootable application (WAR delivery retained for Tomcat 10 compatibility; executable-JAR follow-up is optional).
+
+**Goal (original):** XML application contexts → Java config + Spring Boot autoconfiguration. WAR → executable JAR. Externalize config.
+**Timeline (original):** 2–3 months · **Actual:** ~2 weeks (2026-06-19 → 2026-06-26).
 **Risk:** medium
 
 - [ ] New `application.yml` ladder: `application.yml` (defaults) + `application-{dev,test,prod}.yml` + env-var overrides
@@ -301,7 +328,11 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ## Phase D — Authentication modernization + library long-tail
 
-**Status (2026-05-30 evening):** **D-Sec substantially complete** — 10 of 11 sub-phases shipped on `lc-develop @ 63ebc5009`. Institution-agnostic SSO works end-to-end (DR-014), bcrypt + lazy rehash live (DR-015), SSO audit codes 6+7 verified, login JSP institutional button wired, e-sig re-auth scaffolded behind flag, Apache+mod_shib sidecar opt-in compose overlay ready. Operator tasks remain: SAMLtest.id SP-metadata upload, MedUni Wien IT institutional SP registration for production cutover, full sso-deployment-guide.md cookbook. D-Libs untouched (long tail of abandoned libraries). Full closure block in [phase-d-execution-playbook.md § Exit criteria](docs/development/modernization/phase-d-execution-playbook.md#exit-criteria-for-phase-d-sec).
+**Status (refreshed 2026-06-28):** **D-Sec substantially closed** — 10 of 11 sub-phases shipped on `lc-develop`. Institution-agnostic SSO works end-to-end (DR-014), bcrypt + lazy rehash live (DR-015), SSO audit codes 6+7 verified, login JSP institutional button wired, e-sig re-auth scaffolded behind flag, Apache+mod_shib sidecar opt-in compose overlay ready, sso-deployment-guide.md cookbook drafted. **Operator tasks remain (deployment-time, not code):** SAMLtest.id SP-metadata upload, MedUni Wien IT institutional SP registration for production cutover. D.10 e-sig re-auth stays flag-off pending legal ratification.
+
+**D-Libs (open):** long tail of abandoned-or-stale libraries — see the D-Libs subsection + the 2026-06-28 heritage-debt audit (#262) for a re-evaluated punch list. Notable retire-candidates: log4jdbc4 (replace with p6spy or remove); ehcache 2.10; dom4j 1.6.1; freemarker 2.3.x. PR #264 already retired mockrunner. No dependency cliff — schedule per CVE pressure or per touch.
+
+Full closure block in [phase-d-execution-playbook.md § Exit criteria](docs/development/modernization/phase-d-execution-playbook.md#exit-criteria-for-phase-d-sec).
 
 **Goal:** finish the security work the modernization started (MD5/SHA-1 → bcrypt; institution-agnostic SSO) and retire the abandoned-library long tail.
 
@@ -354,7 +385,11 @@ Independent of D-Sec; one PR per library. Pick up opportunistically.
 
 ## Phase E — UI modernization
 
-**Status:** deferred until Phase D ships. See [`docs/development/modernization/ui-modernization-plan.md`](docs/development/modernization/ui-modernization-plan.md) (TODO: copy from memory).
+**Status (refreshed 2026-06-28):** 🚧 **Active.** Vue 3 + Vite + Tailwind v4 SPA scaffold landed; nAMD workspace, retinal-jobs admin, study-subject admin, SSO consent screens, study-module SPI, role-gated SPA application manual, and the IOWA layer-segmentation correction UI (PR #261) are all in production on lc-develop. Continues incrementally per clinical priority — no fixed exit cliff. See [`docs/development/modernization/ui-modernization-plan.md`](docs/development/modernization/ui-modernization-plan.md) for the longer roadmap (jmesa eviction is done — Phase B.4 took care of it; the listing-page SPA conversion is the next wave).
+
+**Shipped sub-phases:** E.1 SPA scaffold, E.4 M1 foundations (Liquibase demo seed + /me + /studies + /me/activeStudy + SPA LoginView + study-picker), E.5 follow-ups (test infra + per-site auth + audit polish + new endpoint + codegen), E.6 study-nurse polish (PR #159 — modality CRUD + per-eye baselines + cross-study patient overview + Chart.js + reverse-transition IT), E-hardening B integration.
+
+**Open:** the listing-page wave (Subjects table, CRF datatables, dataset listings) — currently still JSP + DataTables.net post Phase B.4. SPA conversion is per-table, parallel-friendly, no shared cliff.
 
 Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (data entry, dashboards, subject/study lists, discrepancy review), JSP retained for admin/low-frequency screens.
 

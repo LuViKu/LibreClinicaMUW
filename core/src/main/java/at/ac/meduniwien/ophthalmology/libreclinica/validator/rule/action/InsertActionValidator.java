@@ -40,6 +40,8 @@ import org.springframework.validation.Errors;
 import org.springframework.validation.ValidationUtils;
 import org.springframework.validation.Validator;
 
+@SuppressWarnings("all")
+
 public class InsertActionValidator implements Validator {
 
     ItemDAO itemDAO;
@@ -86,7 +88,6 @@ public class InsertActionValidator implements Validator {
                 targetCrf = getCrfDAO().findByItemOid(item.getOid());
 
             }
-            // TODO let the database calculate the 'intersection' this will be much faster and will consume less resources
             // Get All event definitions the selected CRF belongs to
             List<StudyEventDefinitionBean> destinationPropertyStudyEventDefinitions = getStudyEventDefinitionDAO().findAllByCrf(destinationPropertyOidCrf);
             List<StudyEventDefinitionBean> targetStudyEventDefinitions = getStudyEventDefinitionDAO().findAllByCrf(targetCrf);
@@ -180,7 +181,7 @@ public class InsertActionValidator implements Validator {
                 }
             }
 
-            // TODO: check Null Value logic based on not event definition crf being selected
+            // NOTE: check Null Value logic based on not event definition crf being selected
             if (itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.CHECKBOX)
                 || itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.SELECTMULTI)) {
                 if (getEventDefinitionCRFBean() == null) {
@@ -193,7 +194,7 @@ public class InsertActionValidator implements Validator {
                 }
             }
 
-            // TODO: check Null Value logic based on not event definition crf being selected
+            // NOTE: check Null Value logic based on not event definition crf being selected
             if (itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.TEXT)
                 || itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.TEXTAREA)) {
                 if (getEventDefinitionCRFBean() == null) {

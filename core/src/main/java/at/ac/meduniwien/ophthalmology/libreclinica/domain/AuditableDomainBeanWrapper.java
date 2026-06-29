@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class AuditableDomainBeanWrapper<T extends AbstractAuditableMutableDomainObject> {
     private T auditableBean;
     private boolean isSavable;

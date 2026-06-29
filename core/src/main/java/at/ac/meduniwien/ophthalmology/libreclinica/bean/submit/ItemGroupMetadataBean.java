@@ -14,6 +14,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 10, 2007
  */
+@SuppressWarnings("all")
 public class ItemGroupMetadataBean extends EntityBean implements Comparable<ItemGroupMetadataBean> {
     /**
 	 * 

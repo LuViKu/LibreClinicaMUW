@@ -21,6 +21,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 
 // allows both deletion and restoration of a study user role
 
+@SuppressWarnings("all")
+
 public class DeleteStudyUserRoleServlet extends SecureController {
     /**
 	 * 

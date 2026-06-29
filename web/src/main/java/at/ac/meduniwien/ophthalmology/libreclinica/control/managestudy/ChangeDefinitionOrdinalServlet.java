@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDef
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ChangeDefinitionOrdinalServlet extends ChangeOrdinalServlet {
 
     /**

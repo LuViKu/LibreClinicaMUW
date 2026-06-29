@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
  * @author jsampson
  *
  */
+@SuppressWarnings("all")
 public class AuditDAO extends EntityDAO<AuditBean> {
     // private DAODigester digester;
     // YW 12-06-2007 <<!!! Be careful when there is item with data-type as
@@ -183,7 +184,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(studySubjectId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(studySubjectId));
 
         String sql = digester.getQuery("findStudySubjectAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -204,7 +205,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(subjectId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(subjectId));
 
         String sql = digester.getQuery("findSubjectAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -225,7 +226,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(eventCRFId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(eventCRFId));
 
         String sql = digester.getQuery("findEventCRFAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -242,7 +243,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpectedWithItemDataType();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(eventCRFId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(eventCRFId));
 
         String sql = digester.getQuery("findEventCRFAuditEventsWithItemDataType");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -263,7 +264,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpectedWithItemDataType();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(eventCRFId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(eventCRFId));
 
         String sql = digester.getQuery("findEventCrfAuditLog");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -280,7 +281,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpectedWithItemDataType();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(studyEventId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(studyEventId));
 
         String sql = digester.getQuery("findAllEventCRFAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -297,7 +298,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpectedWithItemDataType();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(studyEventId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(studyEventId));
 
         String sql = digester.getQuery("findAllEventCRFAuditEventsWithItemDataType");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -320,7 +321,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(studyEventId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(studyEventId));
 
         String sql = digester.getQuery("findStudyEventAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -348,10 +349,10 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypeExpected(6, TypeNames.INT); // delete date
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(13)); // audit_log_event_type_id
+        variables.put(Integer.valueOf(1), Integer.valueOf(13)); // audit_log_event_type_id
         // 13 means deleted
         // items
-        variables.put(new Integer(2), new Integer(studyEventId));
+        variables.put(Integer.valueOf(2), Integer.valueOf(studyEventId));
 
         String sql = digester.getQuery("findDeletedEventCRFsFromAuditEvent");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -383,10 +384,10 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypeExpected(6, TypeNames.INT); // delete date
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(40)); // audit_log_event_type_id Event_crf status = deleted
+        variables.put(Integer.valueOf(1), Integer.valueOf(40)); // audit_log_event_type_id Event_crf status = deleted
         // 40 means deleted
         // items
-        variables.put(new Integer(2), new Integer(studyEventId));
+        variables.put(Integer.valueOf(2), Integer.valueOf(studyEventId));
 
         String sql = digester.getQuery("findDeletedEventCRFsFromAuditEventByEventCRFStatus");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -409,7 +410,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
 
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: This method not fully implemented
+    // NOTE: This method not fully implemented
     // //////////////////////////////////////////////////////////////////////////////////////////////////
     // /
     /**
@@ -420,7 +421,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     }
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: This method not fully implemented
+    // NOTE: This method not fully implemented
     // ///////////////////////////////////////////////////////////////////////////////////////////////////
     /**
      * NOT IMPLEMENTED
@@ -430,7 +431,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     }
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: This method not fully implemented
+    // NOTE: This method not fully implemented
     // //////////////////////////////////////////////////////////////////////////////////////////////////
     // /v
     public ArrayList<AuditBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -438,7 +439,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     }
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: This method not fully implemented
+    // NOTE: This method not fully implemented
     // Audit events should not be writable
     // //////////////////////////////////////////////////////////////////////////////////////////////////
     // /
@@ -450,7 +451,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     }
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: This method not fully implemented
+    // NOTE: This method not fully implemented
     // Audit events should not be created in code, they are only created by
     // database triggers
     // //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -470,7 +471,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(studySubjectId));
+        variables.put(Integer.valueOf(1), Integer.valueOf(studySubjectId));
 
         String sql = digester.getQuery("findStudySubjectGroupAssignmentAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -491,8 +492,8 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(entityId));
-        variables.put(new Integer(2), auditTable);
+        variables.put(Integer.valueOf(1), Integer.valueOf(entityId));
+        variables.put(Integer.valueOf(2), auditTable);
 
         String sql = digester.getQuery("findSingleItemAuditEvents");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -501,8 +502,8 @@ public class AuditDAO extends EntityDAO<AuditBean> {
             AuditBean eb = (AuditBean) this.getEntityFromHashMap(hm);
             //3 6 12 32
             if(eb.getAuditEventTypeId()==3 || eb.getAuditEventTypeId()==6 || eb.getAuditEventTypeId()==12 ){
-                eb.setOldValue(Status.get(new Integer(eb.getOldValue())).getName());
-                eb.setNewValue(Status.get(new Integer(eb.getNewValue())).getName());
+                eb.setOldValue(Status.get(Integer.valueOf(eb.getOldValue())).getName());
+                eb.setNewValue(Status.get(Integer.valueOf(eb.getNewValue())).getName());
             }
 
             al.add(eb);
@@ -529,9 +530,9 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         this.setTypeExpected(14, TypeNames.STRING); // item_data_repeat_key
         
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(new Integer(1), new Integer(itemId));
-        variables.put(new Integer(2), auditTable);
-        variables.put(new Integer(3), ecbId);
+        variables.put(Integer.valueOf(1), Integer.valueOf(itemId));
+        variables.put(Integer.valueOf(2), auditTable);
+        variables.put(Integer.valueOf(3), ecbId);
 
         String sql = digester.getQuery("checkItemAuditEventsExist");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
@@ -539,8 +540,8 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         for(HashMap<String, Object> hm : alist) {
             AuditBean eb = (AuditBean) this.getEntityFromHashMap(hm);
             if(eb.getAuditEventTypeId()==3 || eb.getAuditEventTypeId()==6 || eb.getAuditEventTypeId()==12){
-                eb.setOldValue(Status.get(new Integer(eb.getOldValue())).getName());
-                eb.setNewValue(Status.get(new Integer(eb.getNewValue())).getName());
+                eb.setOldValue(Status.get(Integer.valueOf(eb.getOldValue())).getName());
+                eb.setNewValue(Status.get(Integer.valueOf(eb.getNewValue())).getName());
             }
             al.add(eb);
         }

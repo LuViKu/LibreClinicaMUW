@@ -34,6 +34,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
  *
  * @author Krikor krumlian
  */
+@SuppressWarnings("all")
 public class RunRuleServlet extends SecureController {
     private static final long serialVersionUID = 9116068126651934226L;
     protected final Logger log = LoggerFactory.getLogger(RunRuleServlet.class);
@@ -51,7 +52,6 @@ public class RunRuleServlet extends SecureController {
         String versionId = request.getParameter("versionId");
 
         if (action == null || action.trim().isEmpty()) {
-            // TODO : if someone tampers with URL catch here and forwar to correct place
             forwardPage(Page.MENU_SERVLET);
         }
 

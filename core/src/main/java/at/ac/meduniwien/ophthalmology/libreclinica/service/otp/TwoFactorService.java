@@ -48,6 +48,9 @@ import rst.pdfbox.layout.elements.Paragraph;
  * @author thillger
  */
 @Component("factorService")
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class TwoFactorService {
     private static final String FAR_FUTURE_ACTIVATION_DUE_DATE_AS_FALLBACK = "2050-01-01";
     private static final String FALSE_STRING = "false";

@@ -26,14 +26,14 @@ import org.slf4j.LoggerFactory;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.servlet.ServletOutputStream;
+
+@SuppressWarnings("all")
 
 public class DownloadRuleSetXmlServlet extends SecureController {
 
@@ -150,7 +150,7 @@ public class DownloadRuleSetXmlServlet extends SecureController {
         ruleSetService =
             this.ruleSetService != null ? ruleSetService : (RuleSetServiceInterface) SpringServletAccess.getApplicationContext(context).getBean(
                     "ruleSetService");
-        // TODO: Add getRequestURLMinusServletPath(),getContextPath()
+        // NOTE: Add getRequestURLMinusServletPath(),getContextPath()
         return ruleSetService;
     }
 

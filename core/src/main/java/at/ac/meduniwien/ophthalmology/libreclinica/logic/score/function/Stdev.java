@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
 import org.apache.commons.math.stat.descriptive.moment.StandardDeviation;
 
+@SuppressWarnings("all")
+
 public class Stdev extends AbstractFunction {
     public Stdev() {
         super();
@@ -35,7 +37,7 @@ public class Stdev extends AbstractFunction {
             try {
                 values[i] = Double.parseDouble(arg);
             } catch (Exception e) {
-                errors.put(new Integer(errorCount++), "Unparseable number:" + " " + arg + " " + "in evaluation of" + " Stdev(); ");
+                errors.put(Integer.valueOf(errorCount++), "Unparseable number:" + " " + arg + " " + "in evaluation of" + " Stdev(); ");
             }
         }
         if (errors.size() > 0) {

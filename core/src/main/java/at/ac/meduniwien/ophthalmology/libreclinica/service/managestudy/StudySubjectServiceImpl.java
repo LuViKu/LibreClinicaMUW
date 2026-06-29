@@ -47,6 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  * 
  */
+@SuppressWarnings("all")
 public class StudySubjectServiceImpl implements StudySubjectService {
 
     private DataSource dataSource;
@@ -166,7 +167,6 @@ public class StudySubjectServiceImpl implements StudySubjectService {
                 ecb.setStage(DataEntryStage.LOCKED);
             }
             // above added 092007-102007 tbh
-            // TODO need to refactor since this is similar to other code, tbh
             if (edc != null) {
                 // System.out.println("edc is not null, need to set flags");
                 DisplayEventCRFBean dec = new DisplayEventCRFBean();
@@ -214,8 +214,8 @@ public class StudySubjectServiceImpl implements StudySubjectService {
 
         for (i = 0; i < eventDefinitionCRFs.size(); i++) {
             EventDefinitionCRFBean edcrf = eventDefinitionCRFs.get(i);
-            completed.put(new Integer(edcrf.getCrfId()), Boolean.FALSE);
-            startedButIncompleted.put(new Integer(edcrf.getCrfId()), new EventCRFBean());
+            completed.put(Integer.valueOf(edcrf.getCrfId()), Boolean.FALSE);
+            startedButIncompleted.put(Integer.valueOf(edcrf.getCrfId()), new EventCRFBean());
         }
 
         for (i = 0; i < eventCRFs.size(); i++) {
@@ -226,13 +226,12 @@ public class StudySubjectServiceImpl implements StudySubjectService {
             int crfId = crfVersionById.get(ecrf.getCRFVersionId()).getCrfId();
             if (nonEmptyEventCrf.contains(ecrf.getId())) {// this crf has data
                                                           // already
-                completed.put(new Integer(crfId), Boolean.TRUE);
+                completed.put(Integer.valueOf(crfId), Boolean.TRUE);
             } else {// event crf got created, but no data entered
-                startedButIncompleted.put(new Integer(crfId), ecrf);
+                startedButIncompleted.put(Integer.valueOf(crfId), ecrf);
             }
         }
 
-        // TODO possible relation to 1689 here, tbh
         for (i = 0; i < eventDefinitionCRFs.size(); i++) {
             DisplayEventDefinitionCRFBean dedc = new DisplayEventDefinitionCRFBean();
             EventDefinitionCRFBean edcrf = (EventDefinitionCRFBean) eventDefinitionCRFs.get(i);
@@ -245,8 +244,8 @@ public class StudySubjectServiceImpl implements StudySubjectService {
                 if (status.equals(SubjectEventStatus.LOCKED)) {
                     dedc.setStatus(Status.LOCKED);
                 }
-                Boolean b = completed.get(new Integer(edcrf.getCrfId()));
-                EventCRFBean ev = startedButIncompleted.get(new Integer(edcrf.getCrfId()));
+                Boolean b = completed.get(Integer.valueOf(edcrf.getCrfId()));
+                EventCRFBean ev = startedButIncompleted.get(Integer.valueOf(edcrf.getCrfId()));
                 if (b == null || !b.booleanValue()) {
                     dedc.setEventCRF(ev);
                     answer.add(dedc);

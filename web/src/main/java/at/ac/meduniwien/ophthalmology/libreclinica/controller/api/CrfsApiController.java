@@ -113,6 +113,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/v1/crfs")
 @Tag(name = "CRFs", description = "CRF library + version upload (build-study surface).")
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("null")
 public class CrfsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(CrfsApiController.class);

@@ -50,9 +50,10 @@ import org.slf4j.LoggerFactory;
 /**
  * @author jxu
  * 
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class UpdateEventDefinitionServlet extends SecureController {
     /**
 	 * 

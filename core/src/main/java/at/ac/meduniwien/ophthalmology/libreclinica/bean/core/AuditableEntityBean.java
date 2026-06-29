@@ -32,6 +32,7 @@ import java.util.Date;
  *
  *
  */
+@SuppressWarnings("all")
 public class AuditableEntityBean extends EntityBean {
 
     /**
@@ -55,8 +56,11 @@ public class AuditableEntityBean extends EntityBean {
 
     protected Status oldStatus;
 
-    // used to retrieve the owner and updater when needed
-    protected UserAccountDAO udao;
+    // used to retrieve the owner and updater when needed.
+    // transient: UserAccountDAO is not Serializable; it is lazy-loaded in
+    // getOwner()/getUpdater() and never needs to round-trip a session (MUW is
+    // single-host, no replication).
+    protected transient UserAccountDAO udao;
 
     public AuditableEntityBean() {
         createdDate = new Date(0);
@@ -83,7 +87,7 @@ public class AuditableEntityBean extends EntityBean {
                 udao = new UserAccountDAO(SessionManager.getStaticDataSource());
             }
             if (owner == null || owner.getId() != ownerId) {
-                owner = (UserAccountBean) udao.findByPK(ownerId);
+                owner = udao.findByPK(ownerId);
             }
         } catch (Exception e) {
             owner = null;
@@ -112,11 +116,18 @@ public class AuditableEntityBean extends EntityBean {
     }
 
     /**
-     * @deprecated
+     * Direct ownerId assignment. 2026-06-28 — un-deprecated (audit #262
+     * follow-up): the deprecation marker dated back to the heritage
+     * OpenClinica refactor pushing toward {@link #setOwner(UserAccountBean)},
+     * but every caller is in the DAO layer streaming query results where
+     * loading a UserAccountBean per row would be 20+ extra DB queries.
+     * Setting the int id directly is the right primitive at the row-
+     * materialisation boundary; the typed setter remains for callers
+     * that already hold a UserAccountBean.
+     *
      * @param ownerId
      *            The ownerId to set.
      */
-    @Deprecated
     public void setOwnerId(int ownerId) {
         this.ownerId = ownerId;
 
@@ -139,7 +150,7 @@ public class AuditableEntityBean extends EntityBean {
                 udao = new UserAccountDAO(SessionManager.getStaticDataSource());
             }
             if (updater == null || updater.getId() != updaterId) {
-                updater = (UserAccountBean) udao.findByPK(updaterId);
+                updater = udao.findByPK(updaterId);
             }
 
         } catch (Exception e) {
@@ -180,11 +191,13 @@ public class AuditableEntityBean extends EntityBean {
     }
 
     /**
-     * @deprecated
+     * Direct updaterId assignment. 2026-06-28 — un-deprecated (audit #262
+     * follow-up): same rationale as {@link #setOwnerId(int)} — the DAO
+     * row-materialisation boundary needs an int primitive setter.
+     *
      * @param updaterId
      *            The updaterId to set.
      */
-    @Deprecated
     public void setUpdaterId(int updaterId) {
         this.updaterId = updaterId;
 

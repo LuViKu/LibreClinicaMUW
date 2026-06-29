@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 10, 2007
  */
+@SuppressWarnings("all")
 public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
     public ItemGroupMetadataDAO(DataSource ds) {
         super(ds);
@@ -138,7 +139,7 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
         variables.put(11, igMetaBean.getItemId());
         variables.put(12, igMetaBean.getOrdinal());
         variables.put(13, igMetaBean.getBorders());
-        variables.put(14, new Boolean(igMetaBean.isShowGroup()));
+        variables.put(14, Boolean.valueOf(igMetaBean.isShowGroup()));
 
         this.executeUpdate(digester.getQuery("create"), variables);
         if (isQuerySuccessful()) {

@@ -68,7 +68,7 @@ function sendToPage() {
 
 <!-- Logo -->
 
-	<div class="logo"><img src="images/Logo.gif"></div>
+	<div class="logo"><jsp:include page="/WEB-INF/jsp/include/brand-lockup-header.jsp"/></div>
 
 <!-- Main Navigation -->
 

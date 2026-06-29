@@ -40,6 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.Expre
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class BeanPropertyService{
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     private DynamicsItemFormMetadataDao dynamicsItemFormMetadataDao;
@@ -165,7 +167,7 @@ public class BeanPropertyService{
             	studyEvent.setStudySubject(ss);
             	studyEvent.setStatusId(1);
             	studyEvent.setSampleOrdinal(getNewEventOrdinal(eventOID,eow.getStudySubjectBeanId(), sed));
-            	studyEvent.setSubjectEventStatusId(new Integer(1));//The status is changed to started when it doesnt exist. In other cases, the status remains the same. The case of Signed and locked are prevented from validator and are not again checked here.
+            	studyEvent.setSubjectEventStatusId(Integer.valueOf(1));//The status is changed to started when it doesnt exist. In other cases, the status remains the same. The case of Signed and locked are prevented from validator and are not again checked here.
             	studyEvent.setStartTimeFlag(false);
             	studyEvent.setEndTimeFlag(false);
                 studyEvent.setDateCreated(new Date());

@@ -12,6 +12,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthoritiesBean;
 
 
+@SuppressWarnings("all")
+
+
 public class AuthoritiesDao extends AbstractDomainDao<AuthoritiesBean> {
 
     @Override
@@ -19,12 +22,10 @@ public class AuthoritiesDao extends AbstractDomainDao<AuthoritiesBean> {
         return AuthoritiesBean.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public AuthoritiesBean findByUsername(String username) {
         String query = "from " + getDomainClassName() + " authorities  where authorities.username = :username ";
         org.hibernate.query.Query<AuthoritiesBean> q = getCurrentSession().createQuery(query, AuthoritiesBean.class);
         q.setParameter("username", username);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

@@ -11,11 +11,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlagWorkflow;
 
+@SuppressWarnings("all")
+
 public class EventCrfFlagWorkflowDao extends AbstractDomainDao<EventCrfFlagWorkflow> {
 
     @Override
     Class<EventCrfFlagWorkflow> domainClass() {
-        // TODO Auto-generated method stub
         return EventCrfFlagWorkflow.class;
     }
 

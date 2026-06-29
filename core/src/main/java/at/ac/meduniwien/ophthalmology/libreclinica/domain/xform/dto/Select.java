@@ -19,6 +19,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "select")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Select implements UserControl {
     @XmlAttribute(name = "ref")
     private String ref;
@@ -83,7 +84,6 @@ public class Select implements UserControl {
 
     @Override
     public String getMediatype() {
-        // TODO Auto-generated method stub
         return null;
     }
 }

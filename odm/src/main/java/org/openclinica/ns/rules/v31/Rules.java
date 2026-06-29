@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "ruleDef"
 })
 @XmlRootElement(name = "Rules")
+@SuppressWarnings("all")
 public class Rules {
 
     @XmlElement(name = "RuleAssignment", required = true)

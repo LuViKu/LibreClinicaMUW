@@ -45,6 +45,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "message",
     "destinationProperty"
 })
+@SuppressWarnings("all")
 public class ShowActionType {
 
     @XmlElement(name = "Run")

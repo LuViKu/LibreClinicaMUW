@@ -54,6 +54,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *         Modified by ywang: [10-10-2007], enable setting overidable study
  *         parameters of a sub study.
  */
+@SuppressWarnings("all")
 public class CreateSubStudyServlet extends SecureController {
     /**
 	 * 

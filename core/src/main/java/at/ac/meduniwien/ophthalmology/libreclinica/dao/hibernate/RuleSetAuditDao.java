@@ -15,6 +15,8 @@ import org.hibernate.query.Query;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class RuleSetAuditDao extends AbstractDomainDao<RuleSetAuditBean> {
 
     @Override
@@ -22,11 +24,10 @@ public class RuleSetAuditDao extends AbstractDomainDao<RuleSetAuditBean> {
         return RuleSetAuditBean.class;
     }
 
-    // TODO update to CriteriaQuery 
     public ArrayList<RuleSetAuditBean> findAllByRuleSet(RuleSetBean ruleSet) {
         String query = "from " + getDomainClassName() + " ruleSetAudit  where ruleSetAudit.ruleSetBean = :ruleSet  ";
         Query<RuleSetAuditBean> q = getCurrentSession().createQuery(query, RuleSetAuditBean.class);
         q.setParameter("ruleSet", ruleSet);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 }

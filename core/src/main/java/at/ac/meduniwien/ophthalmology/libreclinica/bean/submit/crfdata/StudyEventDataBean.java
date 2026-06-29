@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.DiscrepancyNote
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEventDefinition;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class StudyEventDataBean {
     @XmlElement(name = "FormData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<FormDataBean> formData;

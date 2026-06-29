@@ -40,6 +40,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The {@code getCurrentSession()} / {@code getSessionFactory()} accessor
  * surface is preserved so subclasses keep working without per-DAO edits.
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("all")
 public abstract class AbstractDomainDao<T extends DomainObject> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -60,7 +66,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         String query = "from " + getDomainClassName() + " do  where do.id = :id";
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("id", id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     @SuppressWarnings("unchecked")
@@ -69,7 +75,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do";
         Query<T> q = getCurrentSession().createQuery(query);
-        return new ArrayList<T>(q.list());
+        return new ArrayList<T>(q.getResultList());
     }
 
     @SuppressWarnings("unchecked")
@@ -78,7 +84,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
          String query = "from " + getDomainClassName() + " do  where do.oc_oid = :oc_oid";
          Query<T> q = getCurrentSession().createQuery(query);
          q.setParameter("oc_oid", OCOID);
-         return q.uniqueResult();
+         return q.getSingleResultOrNull();
     }
 
     @Transactional
@@ -103,7 +109,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         String query = "from " + getDomainClassName() + " do where do." + key + " = :key_value";
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("key_value", id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public Long count() {

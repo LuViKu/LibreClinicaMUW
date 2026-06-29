@@ -18,6 +18,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 
 // allows both deletion and restoration of a study user role
 
+@SuppressWarnings("all")
+
 public class SystemStatusServlet extends SecureController {
 
     private static final long serialVersionUID = 1722670001851393612L;

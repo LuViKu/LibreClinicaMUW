@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResolutionStatus;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class ResolutionStatusDao extends AbstractDomainDao<ResolutionStatus> {
 
     @Override
@@ -19,13 +21,11 @@ public class ResolutionStatusDao extends AbstractDomainDao<ResolutionStatus> {
         return ResolutionStatus.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ResolutionStatus findByResolutionStatusId(Integer resolutionStatusId) {
         String query = "from " + getDomainClassName() + " do  where do.resolutionStatusId = :resolutionstatusid";
         Query<ResolutionStatus> q = getCurrentSession().createQuery(query, ResolutionStatus.class);
         q.setParameter("resolutionstatusid", resolutionStatusId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

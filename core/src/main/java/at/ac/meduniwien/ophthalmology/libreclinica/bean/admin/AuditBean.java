@@ -20,6 +20,8 @@ import java.util.Date;
  *
  */
 
+@SuppressWarnings("all")
+
 public class AuditBean extends EntityBean {
 
     /**

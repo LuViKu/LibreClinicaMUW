@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Krikor krumlian
  */
+@SuppressWarnings("all")
 public class ImportRuleServlet extends SecureController {
     private static final long serialVersionUID = 9116068126651934226L;
     protected final Logger log = LoggerFactory.getLogger(ImportRuleServlet.class);

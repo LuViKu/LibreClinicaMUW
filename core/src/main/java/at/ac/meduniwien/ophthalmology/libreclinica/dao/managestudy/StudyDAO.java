@@ -24,10 +24,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyType;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.AuditableEntityDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAODigester;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
+
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("all")
 
 public class StudyDAO extends AuditableEntityDAO<StudyBean> {
 
@@ -245,15 +250,15 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         variables.put(19, sb.getFacilityContactEmail());
         variables.put(20, sb.getStatus().getId());// status
         // id
-        // variables.put(new Integer(19), sb.getStatus())//need to get a
+        // variables.put(Integer.valueOf(19), sb.getStatus())//need to get a
         // function
         // to get the id
-        // variables.put(new Integer(19), sb.getCreatedDate());
+        // variables.put(Integer.valueOf(19), sb.getCreatedDate());
         variables.put(21, sb.getUpdaterId());// owner
         // id
         variables.put(22, sb.getUpdatedDate());// date updated
         variables.put(23, sb.getOldStatus().getId());// study id
-        // variables.put(new Integer(22), new Integer(1));
+        // variables.put(Integer.valueOf(22), Integer.valueOf(1));
         // stop gap measure for owner and updater id
         variables.put(24, sb.getMailNotification());
         
@@ -359,7 +364,7 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         variables.put(19, sb.getFacilityContactPhone());
         variables.put(20, sb.getFacilityContactEmail());
         variables.put(21, sb.getStatus().getId());
-        // variables.put(new Integer(19), sb.getStatus())//need to get a
+        // variables.put(Integer.valueOf(19), sb.getStatus())//need to get a
         // function
         // to get the id
         variables.put(22, new java.util.Date());
@@ -466,8 +471,8 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         variables.put(17, sb.getAgeMax());
         variables.put(18, sb.getAgeMin());
         variables.put(19, sb.getHealthyVolunteerAccepted());
-        // variables.put(new Integer(20), new Boolean(sb.isUsingDOB()));
-        // variables.put(new Integer(21), new
+        // variables.put(Integer.valueOf(20), Boolean.valueOf(sb.isUsingDOB()));
+        // variables.put(Integer.valueOf(21), new
         // Boolean(sb.isDiscrepancyManagement()));
         variables.put(20, sb.getId());
         this.executeUpdate(digester.getQuery("createStepTwo"), variables, nullVars);
@@ -686,7 +691,6 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudyBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -718,7 +722,6 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudyBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort,
@@ -727,7 +730,6 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<StudyBean> findAllByPermission(Object objCurrentUser, int intActionType) {

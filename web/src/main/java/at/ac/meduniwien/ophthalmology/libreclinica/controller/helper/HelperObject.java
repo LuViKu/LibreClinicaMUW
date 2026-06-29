@@ -49,7 +49,6 @@ public class HelperObject {
     Session session;
 
     public HelperObject() {
-        // TODO Auto-generated constructor stub
     }
 
     public CRFVersionBean getSourceCrfVersionBean() {

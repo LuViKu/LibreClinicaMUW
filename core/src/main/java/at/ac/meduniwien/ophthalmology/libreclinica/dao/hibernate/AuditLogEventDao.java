@@ -17,6 +17,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEvent;
 // overload infers the type from the value, so the explicit Type argument is
 // no longer needed.
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
 
     @Override
@@ -49,6 +61,6 @@ public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
             q.setParameter("audit_table", auditLogEvent.getAuditTable());
             q.setParameter("anotherAuditTable", anotherAuditTable);
         }
-        return q.list();
+        return q.getResultList();
     }
 }

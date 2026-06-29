@@ -28,9 +28,8 @@ import java.util.Locale;
 /**
  * @author ssachs
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class AdminSystemServlet extends SecureController {
 
     /**
@@ -53,40 +52,40 @@ public class AdminSystemServlet extends SecureController {
         ArrayList<StudyBean> studies = sdao.findAllByLimit(true);
         request.setAttribute("studies", studies);
         ArrayList<StudyBean> allStudies = sdao.findAll();
-        request.setAttribute("allStudyNumber", new Integer(allStudies.size()));
+        request.setAttribute("allStudyNumber", Integer.valueOf(allStudies.size()));
 
         UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());
         ArrayList<UserAccountBean> users = udao.findAllByLimit(true);
         request.setAttribute("users", users);
         ArrayList<UserAccountBean> allUsers = udao.findAll();
-        request.setAttribute("allUserNumber", new Integer(allUsers.size()));
+        request.setAttribute("allUserNumber", Integer.valueOf(allUsers.size()));
 
         SubjectDAO subdao = new SubjectDAO(sm.getDataSource());
         ArrayList<SubjectBean> subjects = subdao.findAllByLimit(true);
         request.setAttribute("subjects", subjects);
         ArrayList<SubjectBean> allSubjects = subdao.findAll();
-        request.setAttribute("allSubjectNumber", new Integer(allSubjects.size()));
+        request.setAttribute("allSubjectNumber", Integer.valueOf(allSubjects.size()));
 
         CRFDAO cdao = new CRFDAO(sm.getDataSource());
         ArrayList<CRFBean> crfs = cdao.findAllByLimit(true);
         request.setAttribute("crfs", crfs);
         ArrayList<CRFBean> allCrfs = cdao.findAll();
-        request.setAttribute("allCrfNumber", new Integer(allCrfs.size()));
+        request.setAttribute("allCrfNumber", Integer.valueOf(allCrfs.size()));
 
         resetPanel();
         panel.setOrderedData(true);
         setToPanel(resword.getString("in_the_application"), "");
         if (allSubjects.size() > 0) {
-            setToPanel(resword.getString("subjects"), new Integer(allSubjects.size()).toString());
+            setToPanel(resword.getString("subjects"), String.valueOf(allSubjects.size()));
         }
         if (allUsers.size() > 0) {
-            setToPanel(resword.getString("users"), new Integer(allUsers.size()).toString());
+            setToPanel(resword.getString("users"), String.valueOf(allUsers.size()));
         }
         if (allStudies.size() > 0) {
-            setToPanel(resword.getString("studies"), new Integer(allStudies.size()).toString());
+            setToPanel(resword.getString("studies"), String.valueOf(allStudies.size()));
         }
         if (allCrfs.size() > 0) {
-            setToPanel(resword.getString("CRFs"), new Integer(allCrfs.size()).toString());
+            setToPanel(resword.getString("CRFs"), String.valueOf(allCrfs.size()));
         }
 
         panel.setStudyInfoShown(false);

@@ -62,6 +62,9 @@ import org.slf4j.LoggerFactory;
  * @version CVS: $Id: AddNewSubjectServlet.java,v 1.15 2005/07/05 17:20:43 jxu
  *          Exp $
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class AddNewSubjectServlet extends SecureController {
 
     /**
@@ -146,7 +149,6 @@ public class AddNewSubjectServlet extends SecureController {
         FormDiscrepancyNotes discNotes;
 
         SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
-        // TODO l10n for dates? Note that in some places we hard-code the YOB by
         // using "01/01/"+yob,
         // not exactly supporting i18n...tbh
 
@@ -198,7 +200,7 @@ public class AddNewSubjectServlet extends SecureController {
                 if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
                     //Shaoyu Su
                     // int nextLabel = ssd.findTheGreatestLabel() + 1;
-                    // fp.addPresetValue(INPUT_LABEL, new Integer(nextLabel).toString());
+                    // fp.addPresetValue(INPUT_LABEL, Integer.valueOf(nextLabel).toString());
                     fp.addPresetValue(INPUT_LABEL, resword.getString("id_generated_Save_Add"));
                 }
 
@@ -823,7 +825,7 @@ public class AddNewSubjectServlet extends SecureController {
                     if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
                         //Shaoyu Su
                         //int nextLabel = ssd.findTheGreatestLabel() + 1;
-                        //fp.addPresetValue(INPUT_LABEL, new Integer(nextLabel).toString());
+                        //fp.addPresetValue(INPUT_LABEL, Integer.valueOf(nextLabel).toString());
                         fp.addPresetValue(INPUT_LABEL, resword.getString("id_generated_Save_Add"));
                     }
 

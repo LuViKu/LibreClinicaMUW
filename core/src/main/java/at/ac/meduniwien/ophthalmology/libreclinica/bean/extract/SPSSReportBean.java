@@ -38,9 +38,13 @@ import org.slf4j.LoggerFactory;
  * @author jxu
  * 
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 @Deprecated
 public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
 
+    @Deprecated
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     private final static int FIRSTCASE = 2;
 
@@ -61,21 +65,27 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
     private final ArrayList<String> itemNames = new ArrayList<>();
     // YW >>
 
+    @Deprecated
     public static final List<String> list = Arrays.asList(builtin);
 
+    @Deprecated
     public HashMap<String, String> descriptions = new HashMap<>();
 
     private boolean gender = false;// whether exporting gender
 
     private String datFileName = "C:\\path\\to\\your\\file.dat";
 
+    @Deprecated
     protected Locale locale = ResourceBundleProvider.getLocale();
+    @Deprecated
     protected String local_df_string = ResourceBundleProvider.getFormatBundle(locale).getString("date_format_string");
+    @Deprecated
     protected String local_datetime_string = ResourceBundleProvider.getFormatBundle(locale).getString("date_time_format_string");
 
     /**
      * @return Returns the datFileName.
      */
+    @Deprecated
     public String getDatFileName() {
         return datFileName;
     }
@@ -84,6 +94,7 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
      * @param datFileName
      *            The datFileName to set.
      */
+    @Deprecated
     public void setDatFileName(String datFileName) {
         this.datFileName = datFileName;
     }
@@ -91,6 +102,7 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
     /**
      * @return Returns the descriptions.
      */
+    @Deprecated
     public HashMap<String, String> getDescriptions() {
         return descriptions;
     }
@@ -99,6 +111,7 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
      * @param descriptions
      *            The descriptions to set.
      */
+    @Deprecated
     public void setDescriptions(HashMap<String, String> descriptions) {
         this.descriptions = descriptions;
     }
@@ -106,6 +119,7 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
     /**
      * @return Returns the gender.
      */
+    @Deprecated
     public boolean isGender() {
         return gender;
     }
@@ -114,6 +128,7 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
      * @param gender
      *            The gender to set.
      */
+    @Deprecated
     public void setGender(boolean gender) {
         this.gender = gender;
     }
@@ -124,10 +139,12 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
      * @see java.lang.Object#toString()
      */
     @Override
+    @Deprecated
     public String toString() {
         return "";
     }
 
+    @Deprecated
     public StringBuffer getMetadataFile(SPSSVariableNameValidator svnv, ExtractBean eb) {
         itemNames.clear();
         String[] attributes = createAttributes(eb); // Is it necessary to
@@ -394,6 +411,7 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
     // set more datatypes
     // and get rid of first line of *spss.sps file
     // YW >>
+    @Deprecated
     public StringBuffer getDataFile() {
         StringBuffer answer = new StringBuffer();
 

@@ -23,12 +23,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  * @author thillger
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class PrintoutCertificateServlet extends SecureController {
 
     @Override
     public void processRequest() throws Exception {
-        // TODO: integrate fail fast? How?
         Optional<String> optUserId = Optional.ofNullable(request.getParameter("userId"));
 
 		response.setHeader("Content-Disposition", "attachment; filename=\"certificate.pdf\"");

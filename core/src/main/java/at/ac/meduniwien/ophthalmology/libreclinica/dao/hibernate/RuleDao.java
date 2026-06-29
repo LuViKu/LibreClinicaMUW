@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class RuleDao extends AbstractDomainDao<RuleBean> {
 
     @Override
@@ -19,24 +21,20 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
         return RuleBean.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleBean findByOid(RuleBean ruleBean) {
         String query = "from " + getDomainClassName() + " rule  where rule.oid = :oid and  rule.studyId = :studyId ";
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
         q.setParameter("oid", ruleBean.getOid());
         q.setParameter("studyId", ruleBean.getStudyId());
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public RuleBean findByOid(String oid, Integer studyId) {
         String query = "from " + getDomainClassName() + " rule  where rule.oid = :oid and  rule.studyId = :studyId ";
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
         q.setParameter("oid", oid);
         q.setParameter("studyId", studyId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

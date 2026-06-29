@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.core.util;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class ItemGroupCrvVersionUtil {
 
 	private String itemName;

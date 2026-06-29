@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.login;
 
+@SuppressWarnings("all")
+
 public class UserRole {
 private String username;
 private String role;

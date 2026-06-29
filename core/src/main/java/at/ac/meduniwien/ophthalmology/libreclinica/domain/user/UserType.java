@@ -30,6 +30,14 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "user_type")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "user_type_user_type_id_seq") })
 
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+
+// migration (deferred B.5 follow-up).
+
+@SuppressWarnings("all")
+
 public class UserType  extends DataMapDomainObject implements java.io.Serializable {
 
 	/**

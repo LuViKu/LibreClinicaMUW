@@ -25,6 +25,7 @@ import java.util.ResourceBundle;
 /**
  * @author Jun Xu
  */
+@SuppressWarnings("all")
 public class AuditEventBean extends AuditableEntityBean {
     // AUDIT_ID AUDIT_DATE AUDIT_TABLE USER_ID
     // ENTITY_ID REASON_FOR_CHANGE ACTION_MESSAGE
@@ -47,11 +48,20 @@ public class AuditEventBean extends AuditableEntityBean {
     private String subjectName = "NULL";
     private int studyId = 0;
     private int subjectId = 0;
-    private ResourceBundle resaudit;
+    // transient: ResourceBundle isn't Serializable across all impls; it's a thread-
+    // local lookup and the bean must round-trip strings, not bundles.
+    private transient ResourceBundle resaudit;
 
     public AuditEventBean() {
         super();
         this.resaudit = ResourceBundleProvider.getAuditEventsBundle();
+    }
+
+    private ResourceBundle resaudit() {
+        if (resaudit == null) {
+            resaudit = ResourceBundleProvider.getAuditEventsBundle();
+        }
+        return resaudit;
     }
 
     /**
@@ -150,7 +160,7 @@ public class AuditEventBean extends AuditableEntityBean {
     public String getReasonForChange() {
         String rfc;
         try {
-            rfc = resaudit.getString(reasonForChange);
+            rfc = resaudit().getString(reasonForChange);
         } catch (MissingResourceException mre) {
             rfc = reasonForChange;
         }
@@ -209,7 +219,7 @@ public class AuditEventBean extends AuditableEntityBean {
     public String getActionMessage() {
         String am;
         try {
-            am = resaudit.getString(actionMessage);
+            am = resaudit().getString(actionMessage);
         } catch (MissingResourceException mre) {
             am = actionMessage;
         }

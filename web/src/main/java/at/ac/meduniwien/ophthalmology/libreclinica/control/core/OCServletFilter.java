@@ -26,6 +26,7 @@ import org.slf4j.MDC;
 /**
  * @author pgawade
  */
+@SuppressWarnings("all")
 public class OCServletFilter implements jakarta.servlet.Filter {
 
     public static final String USER_BEAN_NAME = "userBean";

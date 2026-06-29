@@ -17,6 +17,8 @@ import java.util.HashMap;
  *
  */
 
+@SuppressWarnings("all")
+
 public enum ActionType {
 
     FILE_DISCREPANCY_NOTE(1), EMAIL(2) , NOTIFICATION(3);

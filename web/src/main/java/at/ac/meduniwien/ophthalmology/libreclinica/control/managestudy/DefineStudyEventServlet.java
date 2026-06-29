@@ -51,6 +51,7 @@ import org.apache.commons.lang.StringUtils;
  * 
  * Defines a new study event
  */
+@SuppressWarnings("all")
 public class DefineStudyEventServlet extends SecureController {
     /**
 	 * 
@@ -236,7 +237,7 @@ public class DefineStudyEventServlet extends SecureController {
             args.put("actionName", "next");
             args.put("pageNum", "1");
             args.put("name", URLEncoder.encode(def1.getName(),"UTF-8"));
-            args.put("repeating", new Boolean(def1.isRepeating()).toString());
+            args.put("repeating", Boolean.valueOf(def1.isRepeating()).toString());
             args.put("category", def1.getCategory());
             args.put("description", URLEncoder.encode(def1.getDescription(),"UTF-8"));
             args.put("type", def1.getType());

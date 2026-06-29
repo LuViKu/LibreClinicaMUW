@@ -20,6 +20,7 @@ import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Component;
 
 @Component
+@SuppressWarnings("all")
 public class SubmissionProcessorChain {
     
     @Autowired

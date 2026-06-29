@@ -39,6 +39,7 @@ import org.quartz.impl.matchers.GroupMatcher;
  * 
  * @author thickerson purpose: to generate the list of jobs and allow us to view them
  */
+@SuppressWarnings("all")
 public class ViewJobServlet extends SecureController {
 
    
@@ -52,7 +53,6 @@ public class ViewJobServlet extends SecureController {
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
-        // TODO copied from CreateJobExport - DRY? tbh
         if (ub.isSysAdmin() || ub.isTechAdmin()) {
             return;
         }
@@ -62,7 +62,7 @@ public class ViewJobServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
         // above copied from create dataset servlet, needs to be changed to
         // allow only admin-level users
 
@@ -75,7 +75,6 @@ public class ViewJobServlet extends SecureController {
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO single stage servlet where we get the list of jobs
         // and push them out to the JSP page
         // related classes will be required to generate the table rows
         // and eventually links to view and edit the jobs as well

@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.web.bean;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class EntityBeanColumn {
     private String name;
     private boolean showLink;

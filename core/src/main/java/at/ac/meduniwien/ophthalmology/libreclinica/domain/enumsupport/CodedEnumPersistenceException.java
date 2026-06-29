@@ -9,7 +9,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport;
 
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class CodedEnumPersistenceException extends RuntimeException {
 
     public CodedEnumPersistenceException(String message, Object... messageFormats) {

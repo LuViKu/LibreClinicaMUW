@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
  * @author Doug Rodrigues (drodrigues@openclinica.com)
  */
 @Service
+@SuppressWarnings("all")
 public class LdapUserService {
 
     @Autowired
@@ -139,7 +140,6 @@ public class LdapUserService {
      * @param dn distinguished name
      * @return LdapUser object found for provided distinguished name
      */
-    @SuppressWarnings("unchecked")
     public LdapUser loadUser(String dn) {
         return ldapTemplate.lookup(dn, ldapUserAttributesMapper);
     }

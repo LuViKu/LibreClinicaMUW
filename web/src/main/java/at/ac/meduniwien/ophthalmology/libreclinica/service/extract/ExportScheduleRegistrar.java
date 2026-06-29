@@ -71,6 +71,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO
  * </ul>
  */
 @Component
+@SuppressWarnings("all")
 public class ExportScheduleRegistrar implements ApplicationListener<ContextRefreshedEvent> {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExportScheduleRegistrar.class);

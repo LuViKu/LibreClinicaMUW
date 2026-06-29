@@ -23,6 +23,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.OdmExtractDAO;
  * @author ywang (March, 2010)
  */
 
+@SuppressWarnings("all")
+
 public class AdminDataUnit extends OdmUnit {
     private OdmAdminDataBean odmAdminData;
     

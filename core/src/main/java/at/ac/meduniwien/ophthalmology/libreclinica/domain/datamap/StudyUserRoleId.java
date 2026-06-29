@@ -20,6 +20,7 @@ import jakarta.persistence.Embeddable;
  * Generated Jul 31, 2013 2:03:33 PM by Hibernate Tools 3.4.0.CR1
  */
 @Embeddable
+@SuppressWarnings("all")
 public class StudyUserRoleId implements Serializable {
 
 	/**

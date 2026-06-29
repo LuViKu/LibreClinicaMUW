@@ -87,6 +87,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author krikor
  */
+@SuppressWarnings("all")
 public class RuleSetService implements RuleSetServiceInterface {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -331,7 +332,6 @@ public class RuleSetService implements RuleSetServiceInterface {
         dynamicsMetadataService.setExpressionService(getExpressionService());
         ruleRunner.setDynamicsMetadataService(dynamicsMetadataService);
         ruleRunner.setRuleActionRunLogDao(ruleActionRunLogDao);
-        // TODO: KK return the new object && Pass in the Execution Mode
         ExecutionMode executionMode = dryRun ? ExecutionMode.DRY_RUN : ExecutionMode.SAVE;
         return ruleRunner.runRules(ruleSets, executionMode, currentStudy, variableAndValue, ub, phase, request);
         // return new HashMap<String, ArrayList<String>>();
@@ -403,7 +403,6 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSets;
     }
 
-    // TODO: why are we including study but not using it in query
     /*
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetById(at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, java.lang.String)
@@ -462,7 +461,6 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSetBean;
     }
 
-    // TODO: look into the commented line make sure logic doesn't break
     private RuleSetBean getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(String ruleSetRuleId, String crfVersionId, StudyBean currentStudy) {
         RuleSetBean ruleSetBean = null;
         if (ruleSetRuleId != null && crfVersionId != null && ruleSetRuleId.length() > 0 && crfVersionId.length() > 0) {

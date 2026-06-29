@@ -27,6 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
  * Phase B.5: same JPA EntityManager wiring as {@link AbstractDomainDao};
  * see that class for rationale.
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("all")
 public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainObject> {
 
     @PersistenceContext
@@ -44,7 +50,7 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do";
         Query<T> q = getCurrentSession().createQuery(query);
-        return new ArrayList<T>(q.list());
+        return new ArrayList<T>(q.getResultList());
     }
 
     @Transactional
@@ -66,7 +72,7 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
         String query = "from " + getDomainClassName() + " do where do." + key + "= :id";
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("id", id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public Long count() {

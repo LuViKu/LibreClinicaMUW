@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Krikor krumlian
  */
+@SuppressWarnings("all")
 public class ViewRuleAssignmentNewServlet extends SecureController {
 
     private static final long serialVersionUID = 9116068126651934226L;
@@ -174,7 +175,7 @@ public class ViewRuleAssignmentNewServlet extends SecureController {
         ruleSetService =
             this.ruleSetService != null ? ruleSetService : (RuleSetServiceInterface) SpringServletAccess.getApplicationContext(context).getBean(
                     "ruleSetService");
-        // TODO: Add getRequestURLMinusServletPath(),getContextPath()
+        // NOTE: Add getRequestURLMinusServletPath(),getContextPath()
         return ruleSetService;
     }
 

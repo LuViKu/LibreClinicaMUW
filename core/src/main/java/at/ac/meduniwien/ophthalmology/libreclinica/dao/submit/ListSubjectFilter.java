@@ -22,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 
+@SuppressWarnings("all")
+
 public class ListSubjectFilter implements CriteriaCommand {
 
     List<Filter> filters = new ArrayList<Filter>();

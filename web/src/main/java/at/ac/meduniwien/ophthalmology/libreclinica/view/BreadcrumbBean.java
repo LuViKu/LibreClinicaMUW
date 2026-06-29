@@ -18,13 +18,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
  * <P>
  * A bean to be used in a BreadcrumbTrail.
  * <P>
- * TODO make sure that Page does not lead to the JSP directly, but back to the
  * servlet; ie, "EditDataset?datasetId=9" instead of "editDataset.jsp", since
  * the link will break if it's just the JSP.
  *
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class BreadcrumbBean extends EntityBean {
 
     /**

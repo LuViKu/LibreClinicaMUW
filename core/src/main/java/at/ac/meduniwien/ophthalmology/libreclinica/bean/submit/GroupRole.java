@@ -20,17 +20,21 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
  * @author jxu
  * @deprecated
  */
+@SuppressWarnings("all")
 @Deprecated
 public class GroupRole extends Term {
     /**
 	 * 
 	 */
 	private static final long serialVersionUID = -8639072725087871745L;
+	@Deprecated
 	public static final GroupRole INVALID = new GroupRole(0, "invalid");
+    @Deprecated
     public static final GroupRole PROBAND = new GroupRole(1, "proband");
 
     private static final GroupRole[] members = { PROBAND };
 
+    @Deprecated
     public static final List<GroupRole> list = Arrays.asList(members);
 
     private GroupRole(int id, String name) {
@@ -40,20 +44,24 @@ public class GroupRole extends Term {
     private GroupRole() {
     }
 
+    @Deprecated
     public static boolean contains(int id) {
         return Term.contains(id, list);
     }
 
+    @Deprecated
     public static GroupRole get(int id) {
     	Optional<GroupRole> o = list.stream().filter(r -> r.getId() == id).findFirst();
     	return o.orElse(new GroupRole());
     }
 
+    @Deprecated
     public static ArrayList<GroupRole> toArrayList() {
         return new ArrayList<>(list);
     }
 
     @Override
+    @Deprecated
     public String getName() {
         return name;
     }

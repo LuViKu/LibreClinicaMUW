@@ -31,6 +31,8 @@ import java.util.List;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class SubjectService implements SubjectServiceInterface {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -107,7 +109,6 @@ public class SubjectService implements SubjectServiceInterface {
     }
 
     public void validateSubjectTransfer(SubjectTransferBean subjectTransferBean) {
-        // TODO: Validate here
     }
 
     /**

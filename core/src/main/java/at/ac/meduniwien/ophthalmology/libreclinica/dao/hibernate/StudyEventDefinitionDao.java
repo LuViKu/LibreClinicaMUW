@@ -13,6 +13,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEventDefi
 import org.hibernate.query.Query;
 
 
+@SuppressWarnings("all")
+
+
 public class StudyEventDefinitionDao extends AbstractDomainDao<StudyEventDefinition> {
 	
     @Override
@@ -20,12 +23,10 @@ public class StudyEventDefinitionDao extends AbstractDomainDao<StudyEventDefinit
         return StudyEventDefinition.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudyEventDefinition findByStudyEventDefinitionId(int studyEventDefinitionId) {
         String query = "from " + getDomainClassName() + " study_event_definition  where study_event_definition.studyEventDefinitionId = :studyeventdefinitionid ";
         Query<StudyEventDefinition> q = getCurrentSession().createQuery(query, StudyEventDefinition.class);
         q.setParameter("studyeventdefinitionid", studyEventDefinitionId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 }

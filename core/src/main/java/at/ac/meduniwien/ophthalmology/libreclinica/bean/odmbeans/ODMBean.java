@@ -19,6 +19,8 @@ import java.util.ArrayList;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class ODMBean {
     private String description;
     private String fileType;

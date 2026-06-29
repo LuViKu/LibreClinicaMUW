@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
 
     @Override
@@ -25,17 +27,15 @@ public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
     public ArrayList<ConfigurationBean> findAll() {
         String query = "from " + getDomainClassName();
         Query<ConfigurationBean> q = getCurrentSession().createQuery(query, ConfigurationBean.class);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     @Transactional
     public ConfigurationBean findByKey(String key) {
         String query = "from " + getDomainClassName() + " do where do.key = :key  ";
         Query<ConfigurationBean> q = getCurrentSession().createQuery(query, ConfigurationBean.class);
         q.setParameter("key", key);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 }

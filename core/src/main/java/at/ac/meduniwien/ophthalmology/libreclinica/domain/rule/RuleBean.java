@@ -39,6 +39,10 @@ import org.hibernate.annotations.Parameter;
 @Entity
 @Table(name = "rule")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class RuleBean extends AbstractAuditableMutableDomainObject implements Serializable{
 
     /**
@@ -56,7 +60,7 @@ public class RuleBean extends AbstractAuditableMutableDomainObject implements Se
     private List<RuleSetRuleBean> ruleSetRules;
     private OidGenerator oidGenerator;
 
-    // TODO : Pending conversion of the objects below to use Hibernate
+    // NOTE: : Pending conversion of the objects below to use Hibernate
     private Integer studyId;
 
     public RuleBean() {

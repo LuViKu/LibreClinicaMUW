@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.AuditLogsBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.DiscrepancyNotesBean;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class FormDataBean {
     @XmlElement(name = "ItemGroupData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<ImportItemGroupDataBean> itemGroupData;

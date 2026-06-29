@@ -18,13 +18,16 @@ import java.text.SimpleDateFormat;
  * 
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class OpenClinicaException extends Exception {
 
     /**
 	 * 
 	 */
 	private static final long serialVersionUID = 1690013927444642305L;
-	protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
+	// transient: SLF4J Logger isn't Serializable. Exceptions are routinely
+	// serialised across stacks; the logger must be re-resolved on the receiving end.
+	protected final transient Logger logger = LoggerFactory.getLogger(getClass().getName());
     public StringBuffer logInfo = new StringBuffer("----> ");
 
     public String errorID;

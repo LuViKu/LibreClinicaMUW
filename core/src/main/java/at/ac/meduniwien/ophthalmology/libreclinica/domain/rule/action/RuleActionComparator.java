@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action;
 import java.util.Comparator;
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public class RuleActionComparator implements Comparator<RuleActionBean> {
 
     HashMap<ActionType, String> order = new HashMap<ActionType, String>();

@@ -13,20 +13,19 @@ import java.util.ArrayList;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersionMedia;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class CrfVersionMediaDao extends AbstractDomainDao<CrfVersionMedia> {
 
     @Override
     Class<CrfVersionMedia> domainClass() {
-        // TODO Auto-generated method stub
         return CrfVersionMedia.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList<CrfVersionMedia> findByCrfVersionId(int crf_version_id) {
         String query = "from " + getDomainClassName() + " crf_version_media  where crf_version_media.crfVersion.crfVersionId = :crfversionid ";
         Query<CrfVersionMedia> q = getCurrentSession().createQuery(query, CrfVersionMedia.class);
         q.setParameter("crfversionid", crf_version_id);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 }

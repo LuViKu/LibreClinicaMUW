@@ -17,12 +17,11 @@ import java.util.Optional;
 /**
  * @author ssachs
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
 
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class Privilege extends Term {
     /**
 	 * 

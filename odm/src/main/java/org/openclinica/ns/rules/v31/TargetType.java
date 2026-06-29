@@ -36,6 +36,7 @@ import jakarta.xml.bind.annotation.XmlValue;
 @XmlType(name = "TargetType", propOrder = {
     "value"
 })
+@SuppressWarnings("all")
 public class TargetType {
 
     @XmlValue

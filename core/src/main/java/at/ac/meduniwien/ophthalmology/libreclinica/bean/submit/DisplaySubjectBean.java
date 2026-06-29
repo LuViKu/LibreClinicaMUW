@@ -14,9 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
 /**
  * @author jxu
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class DisplaySubjectBean extends EntityBean {
     /**
 	 * 

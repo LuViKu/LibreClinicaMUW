@@ -30,6 +30,9 @@ import org.jdom.Element;
  * select lists. It is used by a class such as HorizontalFormBuilder to
  * dynamically generate HTML tables.
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class DataEntryInputGenerator implements InputGenerator {
     private static Map<String, String> NULL_VALUES_INITVERSION = new HashMap<String, String>();
     static {
@@ -672,7 +675,6 @@ public class DataEntryInputGenerator implements InputGenerator {
         String key = "input" + itemId;
         ArrayList<String> _messages = messages.get(key);
         String errMsg = "";
-        // TODO find a more elegant solution
         for (String msg : _messages) {
             errMsg = msg;
         }

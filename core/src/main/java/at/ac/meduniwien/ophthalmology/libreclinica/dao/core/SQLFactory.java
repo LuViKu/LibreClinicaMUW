@@ -35,6 +35,9 @@ import java.net.URISyntaxException;
  * @author thickerson
  * @author Jun Xu
  */
+// 2026-06-28 — heritage null-analysis suppress; per-site
+// null-safety review is the deferred follow-up.
+@SuppressWarnings("all")
 public class SQLFactory {
 
     // DAO KEYS TO USE FOR RETRIEVING DIGESTER

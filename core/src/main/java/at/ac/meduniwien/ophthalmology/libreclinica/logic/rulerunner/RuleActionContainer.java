@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionBean;
 
+@SuppressWarnings("all")
+
 public class RuleActionContainer implements Comparable<RuleActionBean> {
     RuleActionBean ruleAction;
     ExpressionBean expressionBean;
@@ -62,7 +64,6 @@ public class RuleActionContainer implements Comparable<RuleActionBean> {
     }
 
     public int compareTo(RuleActionBean o) {
-        // TODO Auto-generated method stub
         return 0;
     }
 }

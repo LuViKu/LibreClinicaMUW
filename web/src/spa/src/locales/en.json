@@ -30,6 +30,7 @@
     "profile": {
       "rolesLabel": "Roles",
       "rolesAriaLabel": "Assigned roles",
+      "manual": "Manual",
       "signOut": "Sign out"
     },
     "error": {
@@ -1489,7 +1490,7 @@
       },
       "ophthExam": {
         "label": "[NEEDS_REVIEW] Ophthalmology bilateral examination",
-        "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CRT)."
+        "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CST)."
       },
       "bcva": {
         "label": "[NEEDS_REVIEW] BCVA (ETDRS letters)",
@@ -1520,10 +1521,10 @@
         }
       },
       "crt": {
-        "label": "[NEEDS_REVIEW] CRT (central 1 mm, µm)",
-        "description": "[NEEDS_REVIEW] Central retinal thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
+        "label": "[NEEDS_REVIEW] CST (central 1 mm, µm)",
+        "description": "[NEEDS_REVIEW] Central subfield thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
         "items": {
-          "crtMicrons": "[NEEDS_REVIEW] CRT (central 1 mm)",
+          "crtMicrons": "[NEEDS_REVIEW] CST (central 1 mm)",
           "crtValidation": "[NEEDS_REVIEW] Integer or decimal 0–1500 µm expected."
         }
       },
@@ -1672,7 +1673,7 @@
         "subFields": "four sub-fields per eye — inserted together"
       },
       "CCT": { "label": "Central corneal thickness" },
-      "CRT": { "label": "Central retinal thickness" },
+      "CRT": { "label": "Central subfield thickness (CST)" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundus photograph done" },
       "VISUAL_FIELD_DONE": { "label": "Visual field done" },
       "OCT_A_DONE": { "label": "OCT angiography done" },
@@ -3098,6 +3099,38 @@
       "legendTitle": "[NEEDS_REVIEW] Retinal layers",
       "allOn": "[NEEDS_REVIEW] All on",
       "allOff": "[NEEDS_REVIEW] All off"
+    },
+    "correction": {
+      "tools": {
+        "off": "[NEEDS_REVIEW] View",
+        "shift": "[NEEDS_REVIEW] Shift whole layer",
+        "free": "[NEEDS_REVIEW] Freehand draw",
+        "points": "[NEEDS_REVIEW] Edit control points"
+      },
+      "hint": {
+        "off": "[NEEDS_REVIEW] Pick a tool to correct the AI segmentation",
+        "shift": "[NEEDS_REVIEW] Drag to shift the whole layer up or down",
+        "free": "[NEEDS_REVIEW] Draw over the scan to correct the curve",
+        "points": "[NEEDS_REVIEW] Drag a point · Double-click to add · Rectangle to select · Del to remove"
+      },
+      "selectedPoints": "[NEEDS_REVIEW] {n} point(s) selected",
+      "resetLayer": "[NEEDS_REVIEW] Reset to AI output",
+      "undo": "[NEEDS_REVIEW] Undo (Ctrl/⌘+Z)",
+      "etdrsToggle": "[NEEDS_REVIEW] Toggle ETDRS rings (1 / 3 / 6 mm)",
+      "layerBarCollapse": "[NEEDS_REVIEW] Collapse layer bar",
+      "layerBarExpand": "[NEEDS_REVIEW] Expand layer bar",
+      "prevSlice": "[NEEDS_REVIEW] Previous slice",
+      "nextSlice": "[NEEDS_REVIEW] Next slice",
+      "save": "[NEEDS_REVIEW] Save correction",
+      "saveBadge": "[NEEDS_REVIEW] {n} edit(s)",
+      "savedToast": "[NEEDS_REVIEW] Correction saved · {layers} layer(s) · {slices} slice(s)",
+      "discardConfirm": "[NEEDS_REVIEW] Discard unsaved corrections?",
+      "discardYes": "[NEEDS_REVIEW] Discard",
+      "discardCancel": "[NEEDS_REVIEW] Cancel",
+      "correctedBadge": "[NEEDS_REVIEW] corrected",
+      "saveFailed": "[NEEDS_REVIEW] Failed to save correction: {message}",
+      "noChanges": "[NEEDS_REVIEW] No changes to save",
+      "roleRequired": "[NEEDS_REVIEW] Corrections require Investigator or Data-Manager role"
     },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",

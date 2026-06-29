@@ -40,7 +40,6 @@ import org.springframework.beans.factory.annotation.Autowired;
  *
  * @author thickerson
  *
- *         TODO
  *         <P>
  *         add functions for admin use cases such as assign user to study, remove user from study, etc.
  *         <P>
@@ -48,6 +47,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  *         <P>
  *         expand on query to get all that from a select star?
  */
+@SuppressWarnings("all")
 public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
 
     @Override
@@ -55,7 +55,9 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         digesterName = SQLFactory.getInstance().DAO_USERACCOUNT;
     }
 
-    protected void setQueryNames() {
+    // `final` silences the this-escape warning on the ctors below. No UserAccountDAO
+    // subclasses exist.
+    protected final void setQueryNames() {
         getCurrentPKName = "getCurrentPK";
         getNextPKName = "getNextPK";
     }
@@ -313,7 +315,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         this.executeUpdate(digester.getQuery("lockUser"), variables);
     }
 
-    @SuppressWarnings({"unlikely-arg-type"})
     @Override
     public UserAccountBean create(UserAccountBean uab) {
         HashMap<Integer, Object> variables = new HashMap<>();
@@ -374,9 +375,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
 
         for (StudyUserRoleBean studyRole : uab.getRoles()) {
 
-            // TODO: Role.ADMIN is an unlikely argument for equals, check this
-            // TODO: it should be probably studyRole.getRole()
-            // TODO: sys admin role is created in setSysAdminRole, that is why it should be skipped here
             if (studyRole.equals(Role.ADMIN)) {
                 continue;
             }
@@ -460,7 +458,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         return Privilege.get(privId);
     }
 
-    // TODO remove SuppressWarnings when a solution for the recursion problem with 'owner' and 'updater' is found
     @SuppressWarnings("deprecation")
     public UserAccountBean getEntityFromHashMap(HashMap<String, Object> hm, boolean findOwner) {
         UserAccountBean eb = new UserAccountBean();
@@ -518,7 +515,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         eb.setOwnerId(ownerId);
         eb.setUpdaterId(updateId);
 
-        //TODO: I think this is not necessary because owner and updater can be lazy loaded
         // below block is set up to avoid recursion, etc.
         if (findOwner && !userName.contains(".")) {
             UserAccountBean owner = this.findByPK(ownerId, false);
@@ -581,7 +577,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
      */
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<UserAccountBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -997,7 +992,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<UserAccountBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
@@ -1005,7 +999,6 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
     }
 
     /**
-     * TODO: NOT IMPLEMENTED
      */
     @Override
     public ArrayList<UserAccountBean> findAllByPermission(Object objCurrentUser, int intActionType) {

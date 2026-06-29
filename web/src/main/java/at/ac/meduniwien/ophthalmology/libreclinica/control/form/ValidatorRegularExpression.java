@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.form;
 
+@SuppressWarnings("all")
+
 public class ValidatorRegularExpression {
     private String description;
     private String regularExpression;

@@ -53,6 +53,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @Controller
 @RequestMapping(value = "/auth/api/v1")
 @ResponseStatus(value = org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+@SuppressWarnings("all")
 public class UserAccountController {
 
 	@Autowired
@@ -117,8 +118,11 @@ public class UserAccountController {
 
 	@RequestMapping(value = "/createuseraccount", method = RequestMethod.POST)
 	public ResponseEntity<HashMap<String, Object>> createOrUpdateAccount(HttpServletRequest request, @RequestBody HashMap<String, String> map) throws Exception {
+		// 2026-06-28 — heritage-debt audit (PR #262): replaced 7× stdout prints
+		// in this method with SLF4J (the matching logger.info calls were already
+		// present). Account creation is an audit-critical path; stdout would not
+		// reach the operator log.
 		logger.info("I'm in createUserAccount");
-		System.out.println("I'm in createUserAccount");
 		uBean = null;
 
 		String username = map.get("username");
@@ -143,7 +147,6 @@ public class UserAccountController {
 		UserAccountBean ownerUserAccount = (UserAccountBean) request.getSession().getAttribute("userBean");
 		if (!ownerUserAccount.isActive() && (!ownerUserAccount.isTechAdmin() || !ownerUserAccount.isSysAdmin())) {
 			logger.info("The Owner User Account is not Valid Account or Does not have Admin user type");
-			System.out.println("The Owner User Account is not Valid Account or Does not have Admin user type");
 			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(), org.springframework.http.HttpStatus.BAD_REQUEST);
 		}
 
@@ -157,20 +160,18 @@ public class UserAccountController {
 		passwordHash = secm.encryptPassword(password, isSoap);
 
 		// Validate Entry Fields
-        request.getSession().setAttribute(LocaleResolver.getLocaleSessionAttributeName(), new Locale("en_US"));
+        request.getSession().setAttribute(LocaleResolver.getLocaleSessionAttributeName(), Locale.US);
 		Validator v = new Validator(request);
 		addValidationToFields(v, username);
 		HashMap<String, ArrayList<String>> errors = v.validate();
 		if (!errors.isEmpty()) {
 			logger.info("Validation Error: " + errors.toString());
-			System.out.println("Validation Error: " + errors.toString());
 			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(), org.springframework.http.HttpStatus.BAD_REQUEST);
 		}
 
 		StudyBean study = getStudyByName(studyName);
 		if (!study.isActive()) {
 			logger.info("The Study Name is not Valid");
-			System.out.println("The Study Name is not Valid");
 			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(), org.springframework.http.HttpStatus.BAD_REQUEST);
 		}
 
@@ -190,7 +191,6 @@ public class UserAccountController {
 
 		if (!found) {
 			logger.info("The Role is not a Valid Role for the Study or Site");
-			System.out.println("The Role is not a Valid Role for the Study or Site");
 			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(), org.springframework.http.HttpStatus.BAD_REQUEST);
 		}
 
@@ -209,7 +209,6 @@ public class UserAccountController {
 
 		if (!found) {
 			logger.info("The Type is not a Valid User Type");
-			System.out.println("The Type is not a Valid User Type");
 
 			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(), org.springframework.http.HttpStatus.BAD_REQUEST);
 		}
@@ -223,7 +222,6 @@ public class UserAccountController {
 			uBean.setUpdater(uBean.getOwner());
 			updateUserAccount(uBean);
 			logger.info("***New User Account is created***");
-			System.out.println("***New User Account is created***");
 			uBean.setPasswd(password);
 
 			userDTO = new HashMap<String, Object>();

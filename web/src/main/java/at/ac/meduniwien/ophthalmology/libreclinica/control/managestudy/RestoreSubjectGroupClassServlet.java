@@ -29,6 +29,7 @@ import java.util.ArrayList;
  *
  * Restores a removed subject group class
  */
+@SuppressWarnings("all")
 public class RestoreSubjectGroupClassServlet extends SecureController {
     /**
 	 * 

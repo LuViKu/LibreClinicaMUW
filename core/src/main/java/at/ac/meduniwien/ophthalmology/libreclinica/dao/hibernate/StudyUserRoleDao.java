@@ -15,6 +15,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRole;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import org.hibernate.query.Query;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole> {
 
     @Override
@@ -30,7 +42,7 @@ public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole
         q.setParameter("username", userAccount.getUserName());
         q.setParameter("studyId", studyId);
         q.setParameter("parentStudyId", parentStudyId);
-        return new ArrayList<StudyUserRole>(q.list());
+        return new ArrayList<StudyUserRole>(q.getResultList());
     }
 
 }

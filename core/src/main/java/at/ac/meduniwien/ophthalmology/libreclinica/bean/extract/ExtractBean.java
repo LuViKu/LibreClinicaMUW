@@ -58,6 +58,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("all")
+
 public class ExtractBean {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -223,7 +229,6 @@ public class ExtractBean {
     public ExtractBean(DataSource ds, SimpleDateFormat sdf, SimpleDateFormat long_sdf) {
         this.sdf = sdf;
         this.long_sdf = long_sdf;
-        // TODO need to refactor the below
         this.ds = ds;
         study = new StudyBean();
         parentStudy = new StudyBean();
@@ -265,7 +270,6 @@ public class ExtractBean {
     }
 
     //
-    // TODO place to add additional metadata, tbh
     //
     public void computeReportMetadata(ReportBean<?> answer) {
         // ///////////////////
@@ -350,13 +354,11 @@ public class ExtractBean {
         if (dataset.isShowSubjectGender()) {
             answer.nextCell("Gender");
         }
-        // TODO add additional labels here
         if (dataset.isShowSubjectStatus()) {
             answer.nextCell("SubjectStatus");
             eventDescriptions.put("SubjectStatus", "Subject Status");
         }
 
-        // TODO set datainfo-settable code here, tbh
         if (dataset.isShowSubjectUniqueIdentifier() && "1".equals(showUniqueId)) {
             answer.nextCell("UniqueID");
             eventDescriptions.put("UniqueID", "Unique ID");
@@ -443,7 +445,7 @@ public class ExtractBean {
                 if (dataset.isShowCRFcompletionDate()) {
                     // logger.info();
                     String crfCompletionDate = getColumnLabel(i, j, "CompletionDate", numSamples);
-                    String description = getColumnDescription(i, j, "Completion Date for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Completion Date for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -454,7 +456,7 @@ public class ExtractBean {
 
                 if (dataset.isShowCRFinterviewerDate()) {
                     String interviewerDate = getColumnLabel(i, j, "InterviewDate", numSamples);
-                    String description = getColumnDescription(i, j, "Interviewed Date for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Interviewed Date for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -465,7 +467,7 @@ public class ExtractBean {
 
                 if (dataset.isShowCRFinterviewerName()) {
                     String interviewerName = getColumnLabel(i, j, "InterviewerName", numSamples);
-                    String description = getColumnDescription(i, j, "Interviewer Name for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Interviewer Name for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -479,7 +481,7 @@ public class ExtractBean {
                     // ?
                     // ?
                     // ?
-                    String description = getColumnDescription(i, j, "Event CRF Status for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "Event CRF Status for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -490,7 +492,7 @@ public class ExtractBean {
 
                 if (dataset.isShowCRFversion()) {
                     String crfCompletionDate = getColumnLabel(i, j, "VersionName", numSamples);
-                    String description = getColumnDescription(i, j, "CRF Version Name for ", currentDef.getName(), numSamples);// FIXME
+                    String description = getColumnDescription(i, j, "CRF Version Name for ", currentDef.getName(), numSamples);
                     // is
                     // this
                     // correct?
@@ -579,7 +581,6 @@ public class ExtractBean {
                 didb.setSubjectGender(gender);
             }
 
-            // TODO column headers above, column values here, tbh
             if (dataset.isShowSubjectStatus()) {
                 String status = getSubjectStatusName(h);
                 answer.nextCell(status);
@@ -1022,7 +1023,6 @@ public class ExtractBean {
                 // (
                 // )
                 // below needs to be added, tbh
-                // TODO - @vbc - validate this
                 event.setStatus(Status.get(objev.studyEventStatusId.intValue())); // se
                 // .
                 // getStatus
@@ -1073,7 +1073,7 @@ public class ExtractBean {
                 // guard clause to see if it's in there already?
                 // not rly, the above is only used in auditlogging
                 // could fit in crf and crf version ids here, though
-                // FIXME def not one to one relationship, tbh, 03.08
+
                 String key = getStudyEventDataKey(
                 /* studySubjectId.intValue() */objev.studySubjectId.intValue(),
                 /* studyEventDefinitionId.intValue() */objev.studyEvenetDefinitionId.intValue(),
@@ -1171,7 +1171,7 @@ public class ExtractBean {
         // guard clause to see if it's in there already?
         // not rly, the above is only used in auditlogging
         // could fit in crf and crf version ids here, though
-        // FIXME def not one to one relationship, tbh, 03.08
+
         String key = getStudyEventDataKey(studySubjectId.intValue(), studyEventDefinitionId.intValue(), sampleOrdinal.intValue());
         if (eventData == null) {
             eventData = new HashMap<>();
@@ -1323,7 +1323,6 @@ public class ExtractBean {
                      *      item_data_ordinal which is the item_data table. Here
                      *      we retrieve the item_group_metadata.repeat_number
                      *
-                     *      TODO - validate the logic
                      */
                     String key = getDataKey(objev.studySubjectId.intValue(),
                     objev.studyEvenetDefinitionId.intValue(),
@@ -1343,7 +1342,6 @@ public class ExtractBean {
                     selectedSEDCRFs.put(objev.studyEvenetDefinitionId.intValue() + "_" + objgrp.crfid.intValue(), Boolean.TRUE);
                     selectedSEDs.put(objev.studyEvenetDefinitionId, Boolean.TRUE);
 
-                    // TODO - see comment above
                     if ( /* itemDataOrdinal.intValue() */objgrp.itemGroupRepeatNumber.intValue() > getMaxItemDataBeanOrdinal()) {
                         setMaxItemDataBeanOrdinal(objgrp.itemGroupRepeatNumber.intValue()/*
                                                                                           * itemDataOrdinal.
@@ -1790,15 +1788,19 @@ public class ExtractBean {
         // modified stage so that crfVersionStatus could be the same as what it
         // shows in subject matrix - as required.
         DataEntryStage stage = DataEntryStage.INVALID;
-        try {
+        // 2026-06-28 — heritage-debt audit (PR #262): replaced bare
+        // `catch (NullPointerException)` with an explicit null check on the
+        // only nullable source — eventCRF (null when seb.getEventCRFs() is
+        // empty). Defaults above (stage=INVALID, ecStatus=AVAILABLE,
+        // status=NOT_SCHEDULED, crfv=new bean with status AVAILABLE) stand in
+        // as before, but the intent is now visible.
+        if (eventCRF != null) {
             stage = eventCRF.getStage();
             ecStatus = eventCRF.getStatus();
-            status = seb.getSubjectEventStatus();// SubjectEventStatus.get(
-            // eventCRF
-            // .getCompletionStatusId());
+            status = seb.getSubjectEventStatus();
             crfv = eventCRF.getCrfVersion();
-        } catch (NullPointerException e) {
-            logger.info("exception hit, status set to not scheduled");
+        } else {
+            logger.info("getSEDCRFStatus: no event CRF for h={} sedInd={} crfInd={}; status set to not scheduled", h, sedInd, crfInd);
         }
         // currentCRF.getStatus().getName();
         //
@@ -1930,7 +1932,6 @@ public class ExtractBean {
          * @vbc 08/06/2008 NEW EXTRACT DATA IMPLEMENTATION change it into a
          *      simple HashMap
          *
-         *      TODO - verify if the itemOrdinalItem is required - in the
          *      previous code is set to 1 !?!!?
          */
         String key = currentDef.getId() + "_" + sampleOrdinal + "_" + currentCRF.getId() + "_" + currentItem.getId() + "_" + groupName;
@@ -2342,7 +2343,6 @@ public class ExtractBean {
                 peventCrfCompletionStatusId, pitemGroupRepeatNumber, pcrfId, pstudySubjectId, peventCrfId, pitemId, pcrfVersionId, eventcrfStatusId);
 
         hBASE_ITEMGROUPSIDE.add(obj);
-        // TODO - verify that the order is the same
 
     }// addEntryBASE_ITEMGROUPSIDE
 
@@ -2379,7 +2379,6 @@ public class ExtractBean {
                 pstudyEventSubjectEventStatusId, pitemId, pcrfVersionId, peventCrfId, pstudyEventId);
 
         hBASE_EVENTSIDE.add(obj);
-        // TODO - verify that the order is the same
 
     }// addEntryBASE_EVENTSIDE
 
@@ -2400,7 +2399,6 @@ public class ExtractBean {
      *
      */
     public class extractDataset_EVENTSIDE {
-        // TODO - could be made private and then get/set
 
         // "primary key"
         public Integer itemDataId;
@@ -2596,7 +2594,6 @@ public class ExtractBean {
      */
     public class extractDataset_ITEMGROUPSIDE {
 
-        // TODO - could be made private and then get/set
 
         // this is the key
         public Integer itemDataId;

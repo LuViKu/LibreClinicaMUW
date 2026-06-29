@@ -26,6 +26,12 @@ import ch.qos.logback.core.Context;
 import ch.qos.logback.core.spi.ContextAwareBase;
 import ch.qos.logback.core.spi.LifeCycle;
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("null")
+
 public class LoggerStartupListener extends ContextAwareBase implements
 		LoggerContextListener, LifeCycle {
 
@@ -48,14 +54,12 @@ public class LoggerStartupListener extends ContextAwareBase implements
 		try {
 			webapp = getWebAppName(resourceLoader.getResource("/").getURI().getPath());
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
 		try {
 			DATAINFO = loadProperties("datainfo.properties");
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -103,7 +107,6 @@ public class LoggerStartupListener extends ContextAwareBase implements
 
 	@Override
 	public void onLevelChange(Logger arg0, Level arg1) {
-		// TODO Auto-generated method stub
 
 	}
 
@@ -178,7 +181,6 @@ public class LoggerStartupListener extends ContextAwareBase implements
 				DATAINFO = OC_dataDataInfoPropertiesConfig;
 
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}

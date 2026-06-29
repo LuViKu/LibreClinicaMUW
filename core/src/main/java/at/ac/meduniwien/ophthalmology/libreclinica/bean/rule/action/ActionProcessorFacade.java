@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class ActionProcessorFacade {
 
     public static ActionProcessor getActionProcessor(ActionType actionType, DataSource ds) throws OpenClinicaSystemException {

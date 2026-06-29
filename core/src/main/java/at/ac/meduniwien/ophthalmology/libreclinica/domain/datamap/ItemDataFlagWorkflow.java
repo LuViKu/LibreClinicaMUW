@@ -30,6 +30,10 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "item_data_flag_workflow")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "item_data_flag_workflow_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class ItemDataFlagWorkflow extends DataMapDomainObject {
 
     /**

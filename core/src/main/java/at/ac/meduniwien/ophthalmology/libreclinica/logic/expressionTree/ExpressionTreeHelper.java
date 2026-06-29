@@ -21,6 +21,7 @@ import java.util.Date;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class ExpressionTreeHelper {
 
     protected static final Logger logger = LoggerFactory.getLogger(ExpressionTreeHelper.class.getName());

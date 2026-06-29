@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.ListCRFRow;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ListCRFServlet extends SecureController {
     /**
 	 * 
@@ -156,7 +157,7 @@ public class ListCRFServlet extends SecureController {
         table.addLink(resword.getString("blank_CRF_template"), "DownloadVersionSpreadSheet?template=1");
         // YW << add "Enterprise CRF Catalog" link
         // YW >>
-        // TODO add i18n links to the above, tbh
+        // NOTE: add i18n links to the above, tbh
         table.addLink(resword.getString("create_a_new_CRF"), "CreateCRFVersion?module=" + module);
         table.setRows(allRows);
         table.computeDisplay();
@@ -172,7 +173,7 @@ public class ListCRFServlet extends SecureController {
         panel.setCreateDataset(false);
 
         if (crfs.size() > 0) {
-            setToPanel("CRFs", new Integer(crfs.size()).toString());
+            setToPanel("CRFs", Integer.valueOf(crfs.size()).toString());
         }
 
         setToPanel(resword.getString("create_CRF"), respage.getString("br_create_new_CRF_entering"));

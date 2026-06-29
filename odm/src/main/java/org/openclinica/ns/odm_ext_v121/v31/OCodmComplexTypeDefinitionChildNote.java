@@ -49,6 +49,7 @@ import org.cdisc.ns.odm.v121.ODMcomplexTypeDefinitionUserRef;
     "detailedNote",
     "userRef"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionChildNote {
 
     @XmlElement(name = "Description")

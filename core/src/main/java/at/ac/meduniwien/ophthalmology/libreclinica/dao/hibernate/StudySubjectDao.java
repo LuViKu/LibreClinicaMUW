@@ -19,65 +19,56 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEvent;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
 
     @Override
     Class<StudySubject> domainClass() {
-        // TODO Auto-generated method stub
         return StudySubject.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public List<StudySubject> findAllByStudy(Integer studyId) {
         String query = "from " + getDomainClassName() + " do where do.study.studyId = :studyid";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", studyId);
-        return q.list();
+        return q.getResultList();
       
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudySubject findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("OCOID", OCOID);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudySubject findByLabelAndStudy(String embeddedStudySubjectId, Study study) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.study.studyId = :studyid and do.label = :label";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", study.getStudyId());
         q.setParameter("label", embeddedStudySubjectId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public StudySubject findByLabelAndStudyOrParentStudy(String embeddedStudySubjectId, Study study) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where (do.study.studyId = :studyid or do.study.study.studyId = :studyid) and do.label = :label";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", study.getStudyId());
         q.setParameter("label", embeddedStudySubjectId);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery
-    @SuppressWarnings("deprecation")
     public ArrayList<StudySubject> findByLabelAndParentStudy(String embeddedStudySubjectId, Study parentStudy) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.study.study.studyId = :studyid and do.label = :label";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", parentStudy.getStudyId());
         q.setParameter("label", embeddedStudySubjectId);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     /**
@@ -86,7 +77,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
      * are excluded (they shadow legitimate re-enrolments); removed rows ({@code status_id = 5})
      * are NOT excluded so the dedup-preflight can surface them.
      */
-    @SuppressWarnings("deprecation")
     public List<StudySubject> findByLabelAcrossAllStudies(String label) {
         if (label == null || label.isBlank()) {
             return new ArrayList<>();
@@ -96,7 +86,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
                 + "   and do.status.id != 7";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("label", label);
-        return q.list();
+        return q.getResultList();
     }
 
     /**
@@ -106,7 +96,6 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
      * {@link #findByLabelAcrossAllStudies(String)}). Mirrors the dedup index on
      * {@code subject(LOWER(first_name), LOWER(last_name), date_of_birth)}.
      */
-    @SuppressWarnings("deprecation")
     public List<StudySubject> findByPhiTripleAcrossAllStudies(String firstName,
                                                               String lastName,
                                                               java.time.LocalDate dob) {
@@ -128,23 +117,20 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
                 + "   AND LOWER(s.last_name)  = LOWER(:lastName) "
                 + "   AND s.date_of_birth     = :dob "
                 + "   AND ss.status_id       != 7";
-        @SuppressWarnings("unchecked")
         Query<StudySubject> q = getCurrentSession()
                 .createNativeQuery(sql, StudySubject.class);
         q.setParameter("firstName", firstName);
         q.setParameter("lastName", lastName);
         q.setParameter("dob", java.sql.Date.valueOf(dob));
-        return q.list();
+        return q.getResultList();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ArrayList<StudyEvent> fetchListSEs(String id) {
         String query = " from StudyEvent se where se.studySubject.ocOid = :id order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
         q.setParameter("id", id.toString());
 
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
 
     }
     public String getValidOid(StudySubject studySubject, ArrayList<String> oidList) {
@@ -168,15 +154,13 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         }
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public int findTheGreatestLabelByStudy(Integer studyId) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where (do.study.studyId = :studyid or do.study.study.studyId = :studyid)";
 
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
         q.setParameter("studyid", studyId);
-        List<StudySubject> allStudySubjects = q.list();
+        List<StudySubject> allStudySubjects = q.getResultList();
         
         int greatestLabel = 0;
         for (StudySubject subject:allStudySubjects) {

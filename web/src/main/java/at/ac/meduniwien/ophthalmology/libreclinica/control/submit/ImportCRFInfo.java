@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
 
+@SuppressWarnings("all")
+
 public class ImportCRFInfo {
     private String studyOID;
     private String studySubjectOID;

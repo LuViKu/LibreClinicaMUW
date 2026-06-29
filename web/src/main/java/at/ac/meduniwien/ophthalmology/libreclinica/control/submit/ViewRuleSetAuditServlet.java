@@ -28,6 +28,7 @@ import java.util.List;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ViewRuleSetAuditServlet extends SecureController {
 
     /**

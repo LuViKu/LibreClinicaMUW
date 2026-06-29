@@ -24,6 +24,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
+import jakarta.persistence.Transient;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.DataMapDomainObject;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
@@ -41,6 +42,14 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "study_event")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "study_event_study_event_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+
+// migration (deferred B.5 follow-up).
+
+@SuppressWarnings("all")
 
 public class StudyEvent extends DataMapDomainObject  {
 
@@ -315,6 +324,30 @@ public class StudyEvent extends DataMapDomainObject  {
 
 	public void setStatusId(Integer statusId) {
 		this.statusId = statusId;
+	}
+
+	/**
+	 * Typed companion to {@link #getStatusId()} — audit #262.
+	 *
+	 * <p>Resolves the raw {@code status_id} column to a {@link Status} enum
+	 * value so callers can compare against {@code Status.AVAILABLE} etc.
+	 * instead of magic-number {@code Integer} codes. Returns {@code null}
+	 * when {@link #getStatusId()} is {@code null}.
+	 */
+	@Transient
+	public Status getStatus() {
+		Integer code = getStatusId();
+		return code == null ? null : Status.getByCode(code);
+	}
+
+	/**
+	 * Typed companion to {@link #setStatusId(Integer)} — audit #262.
+	 *
+	 * <p>{@code null} {@link Status} clears the column; otherwise stores the
+	 * enum's {@code getCode()}.
+	 */
+	public void setStatus(Status status) {
+		setStatusId(status == null ? null : status.getCode());
 	}
 
 

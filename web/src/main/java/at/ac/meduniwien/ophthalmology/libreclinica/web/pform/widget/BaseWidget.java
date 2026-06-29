@@ -16,6 +16,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public abstract class BaseWidget implements Widget {
 
     protected final Logger log = LoggerFactory.getLogger(BaseWidget.class);
@@ -37,7 +39,6 @@ public abstract class BaseWidget implements Widget {
 		case "date": return "date";
 		case "real": return "float";
 		case "bl": return "boolean";
-		//TODO: "BN","ED","TEL",FILE"
 		case "pdate":
 		default: 
 			log.debug("Unsupported item data type encountered: {}. Returning null.", type);

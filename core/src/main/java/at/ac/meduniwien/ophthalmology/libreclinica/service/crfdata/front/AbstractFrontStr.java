@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.front;
  * By Default, both delimiter and frontStr are empty.
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public abstract class AbstractFrontStr {
     FrontStrDelimiter frontStrDelimiter;
     StringBuffer frontStr;

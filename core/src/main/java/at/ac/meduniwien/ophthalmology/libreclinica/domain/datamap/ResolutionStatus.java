@@ -33,6 +33,10 @@ import org.hibernate.annotations.Parameter;
 @Table(name = "resolution_status")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "resolution_status_resolution_status_id_seq") })
 @Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class ResolutionStatus  extends DataMapDomainObject {
 
 	/**

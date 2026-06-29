@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
  * @version CVS: $Id: UpdateSubStudyServlet.java,v 1.7 2005/07/05 21:55:58 jxu
  *          Exp $
  */
+@SuppressWarnings("all")
 public class UpdateSubStudyServlet extends SecureController {
     /**
 	 * 

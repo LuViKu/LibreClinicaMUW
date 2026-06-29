@@ -37,8 +37,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu
  *
- *         TODO To change the template for this generated type comment go to Window - Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class EditSelectedServlet extends SecureController {
 
     /**
@@ -72,7 +72,6 @@ public class EditSelectedServlet extends SecureController {
     }
 
     /*
-     * TODO this function exists in four different places... needs to be added to an additional superclass for Submit Data Control Servlets, tbh July 2007
      */
     public void setUpStudyGroups() {
         ArrayList<StudyGroupClassBean> sgclasses = asArrayList(session.getAttribute("allSelectedGroups"), StudyGroupClassBean.class);
@@ -177,7 +176,7 @@ public class EditSelectedServlet extends SecureController {
         }
         ArrayList<ItemBean> allSelectItems = selectAll ? selectAll(events, crfdao, idao) : ViewSelectedServlet.getAllSelected(db, idao, imfdao);
         // >> tbh
-        session.setAttribute("numberOfStudyItems", new Integer(ids.size()).toString());
+        session.setAttribute("numberOfStudyItems", Integer.valueOf(ids.size()).toString());
         // << tbh 11/2009
         session.setAttribute("allSelectedItems", allSelectItems);
         setUpStudyGroups();
@@ -197,8 +196,8 @@ public class EditSelectedServlet extends SecureController {
         CRFDAO crfdao = new CRFDAO(sm.getDataSource());
         ArrayList<ItemBean> allItems = selectAll(events, crfdao, idao);
         for(StudyEventDefinitionBean sed : events.keySet()) {
-            if (!db.getEventIds().contains(new Integer(sed.getId()))) {
-                db.getEventIds().add(new Integer(sed.getId()));
+            if (!db.getEventIds().contains(Integer.valueOf(sed.getId()))) {
+                db.getEventIds().add(Integer.valueOf(sed.getId()));
             }
         }
 
@@ -206,7 +205,7 @@ public class EditSelectedServlet extends SecureController {
         // ItemBean item = (ItemBean) allItems.get(j);
         // ArrayList ids = db.getItemIds();
         // ArrayList itemDefCrfs = db.getItemDefCrf();
-        // Integer itemId = new Integer(item.getId());
+        // Integer itemId = Integer.valueOf(item.getId());
         // if (!ids.contains(itemId)) {
         // ids.add(itemId);
         // itemDefCrfs.add(item);

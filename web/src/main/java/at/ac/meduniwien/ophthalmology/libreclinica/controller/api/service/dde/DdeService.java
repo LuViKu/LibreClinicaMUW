@@ -14,7 +14,6 @@ import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -32,7 +31,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.CrfEntryDto;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeCommitResponse;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeConflictsDto;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeReconcileRequest;
@@ -88,6 +86,7 @@ import org.slf4j.LoggerFactory;
  *       lands the export endpoint.</li>
  * </ul>
  */
+@SuppressWarnings("null")
 public class DdeService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DdeService.class);
@@ -221,7 +220,6 @@ public class DdeService {
         // ask the DN DAO for the open FAILEDVAL note (if any). This is
         // O(N items) DB calls; acceptable for the modest CRF sizes
         // (MUW CRFs average <30 items). M2 of this cluster will batch.
-        @SuppressWarnings("unchecked")
         ArrayList<ItemDataBean> all = idDAO.findAllByEventCRFId(ecb.getId());
         if (all == null) return new DdeConflictsDto(
                 String.valueOf(ecb.getId()), ss.getLabel(), "", List.of());
@@ -386,7 +384,6 @@ public class DdeService {
     private DiscrepancyNoteBean findOpenFailedValForItemData(DiscrepancyNoteDAO dnDAO,
                                                               int itemDataId) {
         try {
-            @SuppressWarnings("unchecked")
             ArrayList<DiscrepancyNoteBean> notes =
                     dnDAO.findAllByEntityAndColumn("itemData", itemDataId, "value");
             if (notes == null) return null;

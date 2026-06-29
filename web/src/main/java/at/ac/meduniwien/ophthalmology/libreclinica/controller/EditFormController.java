@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -74,6 +75,7 @@ import org.w3c.dom.Element;
 
 @Controller
 @RequestMapping(value = "/api/v1/editform")
+@SuppressWarnings("all")
 public class EditFormController {
 
     @Autowired
@@ -191,7 +193,7 @@ public class EditFormController {
             ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
             Authorization pManageAuthorization = registrar.getAuthorization(studyOid);
             try {
-                URL pManageUrl = new URL(portalURL);
+                URL pManageUrl = URI.create(portalURL).toURL();
 
                 if (pManageAuthorization != null && pManageAuthorization.getStudy() != null && pManageAuthorization.getStudy().getHost() != null
                         && !pManageAuthorization.getStudy().getHost().equals("")) {
@@ -236,7 +238,6 @@ public class EditFormController {
             // loop thru each repeat creating items in instance
             Boolean isrepeating = itemGroupMetadata.isRepeatingGroup();
 
-            // TODO: Test empty group here (no items). make sure doesn't get nullpointer exception
             for (int i = 0; i < maxGroupRepeat; i++) {
                 Element groupElement = null;
 

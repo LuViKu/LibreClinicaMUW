@@ -15,6 +15,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * @author ywang (May, 2009)
  * 
  */
+@SuppressWarnings("all")
 public class MeasurementUnitBean extends ElementOIDBean {
     private String name;
     private SymbolBean symbol;

@@ -23,6 +23,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import java.util.ArrayList;
 
 
+@SuppressWarnings("all")
+
+
 public class DownloadStudyMetadataServlet extends SecureController {
     /**
 	 * 

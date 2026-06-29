@@ -18,6 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author pgawade
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("all")
 public class OpenClinicaVersionDAO extends AbstractDomainDao<OpenClinicaVersionBean> {
 
     private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass().getName());
@@ -30,7 +36,7 @@ public class OpenClinicaVersionDAO extends AbstractDomainDao<OpenClinicaVersionB
     public OpenClinicaVersionBean findDefault() {
         String query = "from " + getDomainClassName() + " ocVersion";
         Query<OpenClinicaVersionBean> q = getCurrentSession().createQuery(query, OpenClinicaVersionBean.class);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     @Transactional

@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CompletionStatus;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class CompletionStatusDao extends AbstractDomainDao<CompletionStatus> {
 
     @Override
@@ -19,13 +21,11 @@ public class CompletionStatusDao extends AbstractDomainDao<CompletionStatus> {
         return CompletionStatus.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public CompletionStatus findByCompletionStatusId(int completion_status_id) {
         String query = "from " + getDomainClassName() + " completion_status  where completion_status.completionStatusId = :completionstatusid ";
         Query<CompletionStatus> q = getCurrentSession().createQuery(query, CompletionStatus.class);
         q.setParameter("completionstatusid", completion_status_id);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
 

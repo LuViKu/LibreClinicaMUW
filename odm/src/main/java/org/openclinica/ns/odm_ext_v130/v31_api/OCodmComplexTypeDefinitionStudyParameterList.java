@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "OCodmComplexTypeDefinition-StudyParameterList", propOrder = {
     "studyParameterListItem"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyParameterList {
 
     @XmlElement(name = "StudyParameterListItem")

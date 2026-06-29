@@ -16,6 +16,7 @@ import java.util.Date;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class SubjectBean extends AuditableEntityBean {
     /**
 	 * 

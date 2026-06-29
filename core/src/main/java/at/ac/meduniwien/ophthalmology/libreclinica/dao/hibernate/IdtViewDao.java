@@ -15,11 +15,12 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.IdtView;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class IdtViewDao extends AbstractDomainDao<IdtView> {
 
     @Override
     Class<IdtView> domainClass() {
-        // TODO Auto-generated method stub
         return IdtView.class;
     }
 
@@ -49,7 +50,7 @@ public class IdtViewDao extends AbstractDomainDao<IdtView> {
         Query<IdtView> q = getCurrentSession().createQuery(query, IdtView.class);
         q.setMaxResults(per_page); // limit
         q.setFirstResult((page - 1) * per_page); // offset
-        return q.list();
+        return q.getResultList();
     }
 
     

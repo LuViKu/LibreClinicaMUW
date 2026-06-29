@@ -47,6 +47,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "revisionNotes",
     "presentInEventDefinition"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionFormDetails {
 
     @XmlElement(name = "VersionDescription")

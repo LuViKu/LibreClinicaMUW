@@ -22,6 +22,7 @@ import java.util.HashMap;
 /**
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class DatasetBean extends AuditableEntityBean {
 
     /**
@@ -60,7 +61,6 @@ public class DatasetBean extends AuditableEntityBean {
     private boolean showSubjectDob = false;
     private boolean showSubjectGender = false;
     //
-    // TODO add new attributes to show/hide here, tbh 07/09/2007
     //
     private boolean showSubjectStatus = false;
     private boolean showSubjectUniqueIdentifier = false;
@@ -489,7 +489,7 @@ public class DatasetBean extends AuditableEntityBean {
 
     /*
      * public boolean isShowGroupInformation() { return showGroupInformation; }
-     * FIXME now change all the places where this is located... public void
+
      * setShowGroupInformation(boolean showGroupInformation) {
      * this.showGroupInformation = showGroupInformation; }
      */

@@ -39,6 +39,7 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
  * @author thickerson Purpose: to create jobs in the 'importTrigger' group,
  *         which will be meant to run the ImportStatefulJob.
  */
+@SuppressWarnings("all")
 public class CreateJobImportServlet extends SecureController {
 
     /**
@@ -75,7 +76,7 @@ public class CreateJobImportServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
         // allow only admin-level users
 
@@ -121,14 +122,13 @@ public class CreateJobImportServlet extends SecureController {
         request.setAttribute(JOB_NAME, fp2.getString(JOB_NAME));
         request.setAttribute(JOB_DESC, fp2.getString(JOB_DESC));
         request.setAttribute(EMAIL, fp2.getString(EMAIL));
-        request.setAttribute(HOURS, new Integer(fp2.getInt(HOURS)).toString());
-        request.setAttribute(MINUTES, new Integer(fp2.getInt(MINUTES)).toString());
+        request.setAttribute(HOURS, Integer.valueOf(fp2.getInt(HOURS)).toString());
+        request.setAttribute(MINUTES, Integer.valueOf(fp2.getInt(MINUTES)).toString());
 
     }
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO multi stage servlet to generate import jobs
         // validate form, create job and return to view jobs servlet
         FormProcessor fp = new FormProcessor(request);
         TriggerService triggerService = new TriggerService();

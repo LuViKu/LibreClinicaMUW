@@ -35,7 +35,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.EventDefi
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
-import com.sun.research.ws.wadl.Request;
 
 /**
  * @author jxu
@@ -43,6 +42,7 @@ import com.sun.research.ws.wadl.Request;
  * @version CVS: $Id: InitUpdateSubStudyServlet.java 9834 2007-09-05 22:28:31Z
  *          jxu $
  */
+@SuppressWarnings("all")
 public class InitUpdateSubStudyServlet extends SecureController {
 	/**
 	 * 

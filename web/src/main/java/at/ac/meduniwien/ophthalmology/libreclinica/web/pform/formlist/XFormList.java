@@ -19,6 +19,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "xforms")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class XFormList {
 	@XmlElement(name = "xform")
 	private List<XForm> xforms = null;

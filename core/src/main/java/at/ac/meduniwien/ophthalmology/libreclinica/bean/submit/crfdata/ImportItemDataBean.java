@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.DiscrepancyNote
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.ElementRefBean;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class ImportItemDataBean {
     @XmlAttribute(name = "ItemOID")
     private String itemOID;

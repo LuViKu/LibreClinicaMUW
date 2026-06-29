@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "runOnSchedule",
     "ruleRef"
 })
+@SuppressWarnings("all")
 public class RuleAssignmentType {
 
     @XmlElement(name = "Target", required = true)

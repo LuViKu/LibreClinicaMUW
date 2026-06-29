@@ -233,4 +233,61 @@ public class SegmentationEnvelopeLoaderTest {
         assertNotNull(env);
         assertEquals(List.of("OPL-HFL", "IS#OSJ"), env.labels());
     }
+
+    @Test
+    public void testLoadLayersStack_prefersCorrectionsSubfolder() throws Exception {
+        // 2026-06-26 — operator-corrected ILM CSV under corrections/
+        // overrides the original AI output, while RPE + the other
+        // surfaces keep streaming from the originals. The envelope's
+        // correctedSurfaceIndices list reports exactly which slots
+        // were served from corrections so the controller can set
+        // X-MUW-Seg-Corrected.
+        Path dir = tmp.getRoot().toPath();
+        int z = 2;
+        int cols = 3;
+        for (int i = 0; i < IOWA_FILES.length; i++) {
+            double base = (i + 1) * 100.0;
+            double[][] rows = new double[z][cols];
+            for (int r = 0; r < z; r++) {
+                for (int c = 0; c < cols; c++) {
+                    rows[r][c] = base + r * 10 + c;
+                }
+            }
+            writeCsv(dir, IOWA_FILES[i][0], rows);
+        }
+        // Drop a corrected ILM file with distinguishable values.
+        Path corrDir = dir.resolve("corrections");
+        Files.createDirectories(corrDir);
+        writeCsv(corrDir, IOWA_FILES[0][0], new double[][]{
+                {9.5, 9.5, 9.5},
+                {8.5, 8.5, 8.5}
+        });
+
+        SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
+
+        assertNotNull(env);
+        assertEquals("only ILM was corrected", List.of(0), env.correctedSurfaceIndices());
+        // ILM (surface 0) reads the corrected values.
+        ByteBuffer bb = ByteBuffer.wrap(env.data()).order(ByteOrder.LITTLE_ENDIAN);
+        // Surface 0, row 0, col 0
+        assertEquals(9.5f, bb.getFloat(), 1e-6f);
+        // skip to surface 1, row 0, col 0 — should still match the original RNFL-GCL
+        bb.position(1 * z * cols * 4);
+        assertEquals(200.0f, bb.getFloat(), 1e-6f);
+    }
+
+    @Test
+    public void testLoadLayersStack_emptyCorrectedListWhenNoCorrectionsDir() throws Exception {
+        // No corrections/ subfolder → envelope's correctedSurfaceIndices
+        // is an empty list (not null) so the controller can set the
+        // header to an empty value rather than omitting it.
+        Path dir = tmp.getRoot().toPath();
+        for (String[] iowa : IOWA_FILES) {
+            writeCsv(dir, iowa[0], new double[][]{{1.0, 2.0}, {3.0, 4.0}});
+        }
+        SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
+        assertNotNull(env);
+        assertNotNull(env.correctedSurfaceIndices());
+        assertEquals(0, env.correctedSurfaceIndices().size());
+    }
 }

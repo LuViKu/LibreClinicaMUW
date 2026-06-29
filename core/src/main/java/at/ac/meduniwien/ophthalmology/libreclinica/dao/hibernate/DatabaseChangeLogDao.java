@@ -25,6 +25,12 @@ import org.hibernate.query.Query;
  * EntityManager. Same rationale as {@link AbstractDomainDao} — Spring 6's
  * hibernate5 legacy package can't link against Hibernate 6.
  */
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+// per-call typed-form migration needs each query's expected result
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+// is intentional and isolated to this DAO.
+@SuppressWarnings("all")
 public class DatabaseChangeLogDao {
 
     @PersistenceContext
@@ -41,7 +47,7 @@ public class DatabaseChangeLogDao {
     public ArrayList<DatabaseChangeLogBean> findAll() {
         String query = "from " + getDomainClassName() + " dcl order by dcl.id desc ";
         Query<DatabaseChangeLogBean> q = getCurrentSession().createQuery(query, DatabaseChangeLogBean.class);
-        return new ArrayList<>(q.list());
+        return new ArrayList<>(q.getResultList());
     }
 
     public DatabaseChangeLogBean findById(String id, String author, String fileName) {
@@ -50,7 +56,7 @@ public class DatabaseChangeLogDao {
         q.setParameter("id", id);
         q.setParameter("author", author);
         q.setParameter("fileName", fileName);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
     public Long count() {

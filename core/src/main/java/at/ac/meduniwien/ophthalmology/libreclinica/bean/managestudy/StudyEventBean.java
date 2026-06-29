@@ -24,6 +24,7 @@ import java.util.Date;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyEventBean extends AuditableEntityBean implements Listener {
     /**
 	 * 
@@ -371,13 +372,11 @@ public class StudyEventBean extends AuditableEntityBean implements Listener {
 
 	@Override
 	public void setObserver(Observer o) {
-		// TODO Auto-generated method stub
 		
 	}
 
 	@Override
 	public Observer getObserver() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 }

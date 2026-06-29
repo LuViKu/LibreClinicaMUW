@@ -58,6 +58,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author Krikor Krumlian 10/26/2006
  */
+@SuppressWarnings("all")
 public class PrintDataEntryServlet extends DataEntryServlet {
 
     /**

@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class SetStudyUserRoleServlet extends SecureController {
 
 	private static final long serialVersionUID = 7607566814278848612L;
@@ -88,7 +89,6 @@ public class SetStudyUserRoleServlet extends SecureController {
                 } else if (studyBean.getParentStudyId() > 0) {
                     roles.remove(Role.COORDINATOR);
                     roles.remove(Role.STUDYDIRECTOR);
-                    // TODO: redo this fix
                     Role r = Role.RESEARCHASSISTANT;
                     r.setDescription("site_Data_Entry_Person");
                     roles.remove(Role.RESEARCHASSISTANT);

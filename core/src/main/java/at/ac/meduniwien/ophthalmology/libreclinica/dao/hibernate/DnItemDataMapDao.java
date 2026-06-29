@@ -14,6 +14,8 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnItemDataMap;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class DnItemDataMapDao extends AbstractDomainDao<DnItemDataMap> {
 
     @Override
@@ -21,12 +23,10 @@ public class DnItemDataMapDao extends AbstractDomainDao<DnItemDataMap> {
         return DnItemDataMap.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public List<DnItemDataMap> findByItemData(Integer itemDataId) {
         String query = "from " + getDomainClassName() + " do where do.itemData.itemDataId = :itemdataid ";
         Query<DnItemDataMap> q = getCurrentSession().createQuery(query, DnItemDataMap.class);
         q.setParameter("itemdataid", itemDataId);
-        return q.list();
+        return q.getResultList();
     }
 }

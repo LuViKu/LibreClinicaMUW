@@ -68,6 +68,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
  * `running` forever — a follow-up retention sweep (Phase 6) should
  * scavenge those.
  */
+@SuppressWarnings("all")
 public class ExportJobRunner implements Job {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExportJobRunner.class);

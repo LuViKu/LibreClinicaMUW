@@ -33,6 +33,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 @Entity
 @Table(name = "dn_study_event_map")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@SuppressWarnings("all")
 public class DnStudyEventMap implements MutableDomainObject,Serializable{
 
 	/**
@@ -92,27 +93,23 @@ public class DnStudyEventMap implements MutableDomainObject,Serializable{
 
 	@Override
 	public void setId(Integer id) {
-		// TODO Auto-generated method stub
 		
 	}
 
 	@Override
 	@Transient
 	public Integer getVersion() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public void setVersion(Integer version) {
-		// TODO Auto-generated method stub
 		
 	}
 
 	@Override
 	@Transient
 	public Integer getId() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

@@ -38,6 +38,8 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class RuleSetBulkRuleRunner extends RuleRunner {
 
     public RuleSetBulkRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {

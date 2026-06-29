@@ -44,6 +44,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.ImportDataRu
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.MessageContainer;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+@SuppressWarnings("all")
+
 public interface RuleSetServiceInterface {
 
     /**
@@ -132,9 +134,7 @@ public interface RuleSetServiceInterface {
      * @param ruleSets
      * @param studyEvent
      * @param crfVersion
-     *            TODO
      * @param studyEventDefinition
-     *            TODO
      * @return
      */
     public abstract List<RuleSetBean> filterRuleSetsByStudyEventOrdinal(List<RuleSetBean> ruleSets, StudyEventBean studyEvent, CRFVersionBean crfVersion,

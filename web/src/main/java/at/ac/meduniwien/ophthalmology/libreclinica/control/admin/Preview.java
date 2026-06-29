@@ -17,6 +17,7 @@ import java.util.Map;
  * Created by IntelliJ IDEA. User: bruceperry Date: Jun 15, 2007
  *
  */
+@SuppressWarnings("all")
 public interface Preview {
 	@SuppressWarnings("rawtypes")
 	Map<String, Map> createCrfMetaObject(HSSFWorkbook workbook);

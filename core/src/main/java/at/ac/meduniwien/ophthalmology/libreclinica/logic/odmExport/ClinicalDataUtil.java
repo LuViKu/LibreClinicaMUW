@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport;
 
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public class ClinicalDataUtil {
     /**
      * Return true if itValue contains at least one nullValue.

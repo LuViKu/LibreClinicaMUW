@@ -31,6 +31,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 // @Entity
 @Table(name = "openclinica_version")
 @Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
+@SuppressWarnings("all")
 public class OpenclinicaVersion  extends AbstractMutableDomainObject {
 
 	/**

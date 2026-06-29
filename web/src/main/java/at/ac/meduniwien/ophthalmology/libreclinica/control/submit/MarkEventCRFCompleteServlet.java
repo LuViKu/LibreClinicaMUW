@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class MarkEventCRFCompleteServlet extends SecureController {
 
     /**
@@ -239,7 +240,6 @@ public class MarkEventCRFCompleteServlet extends SecureController {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#mayProceed()
      */
-    @SuppressWarnings("unlikely-arg-type")
 	@Override
     protected void mayProceed() throws InsufficientPermissionException {
 
@@ -256,7 +256,6 @@ public class MarkEventCRFCompleteServlet extends SecureController {
         fp = new FormProcessor(request);
 
         /*
-         *  TODO do not know what this comparison should look like exactly
          */
         if (currentRole.equals(Role.COORDINATOR) || currentRole.equals(Role.STUDYDIRECTOR)) {
             return;

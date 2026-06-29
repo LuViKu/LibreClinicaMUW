@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCa
 import org.hibernate.HibernateException;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class RuleSetAuditDaoTest extends HibernateOcDbTestCase {
     private static RuleSetAuditDao ruleSetAuditDao;
     private static RuleSetDao ruleSetDao;
@@ -66,7 +68,7 @@ public class RuleSetAuditDaoTest extends HibernateOcDbTestCase {
         List<RuleSetAuditBean> ruleSetAudits = ruleSetAuditDao.findAllByRuleSet(ruleSet);
 
         assertNotNull("ruleSetAudits is null", ruleSetAudits);
-        assertEquals("The size of the ruleSetAudits is not 2", new Integer(2), Integer.valueOf(ruleSetAudits.size()));
+        assertEquals("The size of the ruleSetAudits is not 2", Integer.valueOf(2), Integer.valueOf(ruleSetAudits.size()));
 
     }
 
@@ -76,7 +78,7 @@ public class RuleSetAuditDaoTest extends HibernateOcDbTestCase {
         RuleSetAuditBean ruleSetAuditBean = ruleSetAuditDao.findById(-1);
 
         assertNotNull("ruleSetRuleAuditBean is null", ruleSetAuditBean);
-        assertEquals("The ruleSetRuleAuditBean.getRuleSetRule.getId should be 3", new Integer(-1), Integer.valueOf(ruleSetAuditBean.getRuleSetBean().getId()));
+        assertEquals("The ruleSetRuleAuditBean.getRuleSetRule.getId should be 3", Integer.valueOf(-1), Integer.valueOf(ruleSetAuditBean.getRuleSetBean().getId()));
 
     }
 
@@ -96,7 +98,6 @@ public class RuleSetAuditDaoTest extends HibernateOcDbTestCase {
             ruleSetAuditDao.getSessionFactory().getCurrentSession().close();
             ruleSetAuditDao.getSessionFactory().getCurrentSession().close();
         } catch (HibernateException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         super.tearDown();

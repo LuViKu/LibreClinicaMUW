@@ -19,6 +19,7 @@ import java.util.ResourceBundle;
  *
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class Term extends EntityBean {
 
 	private static final long serialVersionUID = 4380127915595883173L;
@@ -31,15 +32,21 @@ public class Term extends EntityBean {
     }
 
     public Term(int id, String name) {
-        setId(id);
-        setName(name);
-        setDescription("");
+        this(id, name, "");
     }
 
     public Term(int id, String name, String description) {
-        setId(id);
-        setName(name);
-        setDescription(description);
+        // Direct field assignment to avoid this-escape warnings (javac since Java 21):
+        // calling overridable setters from a constructor lets a subclass observe a
+        // partially-constructed Term. EntityBean#name and Term#description are plain
+        // fields; EntityBean#setId additionally flips `active` when id > 0, so we
+        // replicate that here rather than calling the setter.
+        this.id = id;
+        if (id > 0) {
+            this.active = true;
+        }
+        this.name = name;
+        this.description = description;
     }
 
     public static Term get(int id, List<Term> list) {
@@ -64,7 +71,7 @@ public class Term extends EntityBean {
         return resterm.getString(this.name).trim();
     }
 
-    // TODO: localised name resolve
+    // NOTE: localised name resolve
     /*
      * public String getLocalizedName() {
      * locale = LocaleProvider.getLocale();

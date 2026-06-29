@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class OdmFileCreation {
 
     private static final Logger LOG = LoggerFactory.getLogger(OdmFileCreation.class);
@@ -290,7 +291,7 @@ public class OdmFileCreation {
 //
 //        }   // return ODMXMLFileName;
 
-        answerMap.put(ODMXMLFileName, new Integer(fId));
+        answerMap.put(ODMXMLFileName, Integer.valueOf(fId));
     //    if(deleteOld && files!=null &&oldFiles!=null) setOldFiles(oldFiles);
 
         return answerMap;
@@ -390,7 +391,6 @@ public class OdmFileCreation {
                 try {
                     w.close();
                 } catch (IOException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
         }

@@ -16,6 +16,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.exception;
  * @author ywang (Mar. 2008)
  *
  */
+@SuppressWarnings("all")
 public class ScoreException extends OpenClinicaException {
     /**
 	 * 

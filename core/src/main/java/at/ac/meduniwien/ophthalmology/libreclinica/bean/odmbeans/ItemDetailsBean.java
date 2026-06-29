@@ -19,6 +19,8 @@ import java.util.List;
  *
  */
 
+@SuppressWarnings("all")
+
 public class ItemDetailsBean extends ElementOIDBean {
     private List<ItemPresentInFormBean> itemPresentInForms = new ArrayList<ItemPresentInFormBean>();
 

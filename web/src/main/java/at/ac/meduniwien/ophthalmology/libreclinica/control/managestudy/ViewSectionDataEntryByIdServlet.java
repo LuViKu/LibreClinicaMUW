@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ViewSectionDataEntryByIdServlet extends ViewSectionDataEntryServlet {
 
     private static final long serialVersionUID = 1L;

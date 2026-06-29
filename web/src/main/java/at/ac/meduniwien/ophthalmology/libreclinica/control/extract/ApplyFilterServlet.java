@@ -40,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class ApplyFilterServlet extends SecureController {
 
     /**
@@ -102,7 +103,6 @@ public class ApplyFilterServlet extends SecureController {
 
             } else if (fp.getString("submit").equalsIgnoreCase(resword.getString("skip_apply_filter_and_save"))) {
                 // send back to creating a dataset:
-                // TODO set the longitudinal dates?
                 // or back a screen before/after that?
                 String fieldNames[] = { "firstmonth", "firstyear", "lastmonth", "lastyear" };
                 fp.setCurrentIntValuesAsPreset(fieldNames);
@@ -118,7 +118,6 @@ public class ApplyFilterServlet extends SecureController {
             }
 
         } else if ("return".equalsIgnoreCase(action)) {
-            // TODO figure out if we need this? tbh
         } else if ("details".equalsIgnoreCase(action)) {
             FormProcessor fp = new FormProcessor(request);
             int filterId = fp.getInt("filterId");
@@ -142,7 +141,7 @@ public class ApplyFilterServlet extends SecureController {
         }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
     }
 
@@ -198,7 +197,6 @@ public class ApplyFilterServlet extends SecureController {
         } else {
             filters = fdao.findAll();
         }
-        // TODO make findAllByProject????
         ArrayList<FilterRow> filterRows = FilterRow.generateRowsFromBeans(filters);
 
         String[] columns =

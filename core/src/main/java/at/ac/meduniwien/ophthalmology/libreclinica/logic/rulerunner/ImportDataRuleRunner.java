@@ -39,6 +39,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.MessageConta
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.transaction.annotation.Transactional;
 
+@SuppressWarnings("all")
+
 public class ImportDataRuleRunner extends RuleRunner {
 
     public ImportDataRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {
@@ -152,7 +154,6 @@ public class ImportDataRuleRunner extends RuleRunner {
                         logger.info("RuleSet with target  : {} , Ran Rule : {}  The Result was : {} , Based on that {} action will be executed. ",
                                 new Object[] { ruleSet.getTarget().getValue(), rule.getName(), result, actionListBasedOnRuleExecutionResult.size()});
                     } catch (OpenClinicaSystemException osa) {
-                        // TODO: report something useful
                     }
                 }
             }

@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 15, 2007
  */
+@SuppressWarnings("all")
 public class DefaultFormBuilder implements FormBuilder {
     private Logger logger= LoggerFactory.getLogger(getClass().getName());
 
@@ -32,7 +33,6 @@ public class DefaultFormBuilder implements FormBuilder {
     }
 
     public DefaultFormBuilder(List<Object> displayItems) {
-    	// TODO displayItems not used
     }
 
     public String createMarkup() {

@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class AuditableBeanWrapper<T extends AuditableEntityBean> {
     private T auditableBean;
     private boolean isSavable;

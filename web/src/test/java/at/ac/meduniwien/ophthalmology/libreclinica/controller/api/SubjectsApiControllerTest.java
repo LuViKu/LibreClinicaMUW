@@ -15,7 +15,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.Set;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
@@ -52,6 +51,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
  *       when validation fails — without reaching the DAO.</li>
  * </ul>
  */
+@SuppressWarnings("null")
 class SubjectsApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {

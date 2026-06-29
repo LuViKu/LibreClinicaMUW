@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean
  *
  *
  */
+@SuppressWarnings("all")
 public class SectionBean extends AuditableEntityBean {
     /**
 	 * 
@@ -52,7 +53,6 @@ public class SectionBean extends AuditableEntityBean {
      */
     private int numItems = 0;
 
-    // TODO this is either ItemBean or DisplayItemBean, try to fix this
     private ArrayList<?> items;// no in DB
 
     private ArrayList<ItemGroupBean> groups; // YW, 08-21-2007, not in DB

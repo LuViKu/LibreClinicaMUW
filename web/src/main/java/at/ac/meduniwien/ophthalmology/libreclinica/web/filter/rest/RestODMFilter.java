@@ -36,6 +36,10 @@ import com.sun.jersey.spi.container.ResourceFilter;
 
 
 
+@SuppressWarnings("all")
+
+
+
 public class RestODMFilter implements ContainerRequestFilter,ResourceFilter {
 
 	@Context
@@ -151,13 +155,11 @@ public class RestODMFilter implements ContainerRequestFilter,ResourceFilter {
 	}
 	@Override
 	public ContainerRequestFilter getRequestFilter() {
-		// TODO Auto-generated method stub
 		return this;
 	}
 
 	@Override
 	public ContainerResponseFilter getResponseFilter() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

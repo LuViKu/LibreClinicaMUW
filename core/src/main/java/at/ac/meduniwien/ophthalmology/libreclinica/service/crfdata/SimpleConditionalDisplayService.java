@@ -28,6 +28,7 @@ import javax.sql.DataSource;
  * Service handling the simple conditional display logic
  * @author ywang
  */
+@SuppressWarnings("all")
 public class SimpleConditionalDisplayService {
     
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -212,7 +213,6 @@ public class SimpleConditionalDisplayService {
                     }
                 }
             } else {
-                //TODO: commented this out because it has no effect anyway, candidate for removal or fix
                 //chosenOption.replaceAll("##", "\\,");
                 return chosenOption.equalsIgnoreCase(cd.getOptionValue());
             }

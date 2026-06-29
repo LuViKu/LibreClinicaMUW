@@ -56,6 +56,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * the rule is AVAILABLE; restore only when DELETED; extract/test
  * always).
  */
+@SuppressWarnings("all")
 public class ViewRuleAssignmentDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;
@@ -81,7 +82,6 @@ public class ViewRuleAssignmentDataServlet extends SecureController {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void processRequest() throws Exception {
         try {
             doProcessRequest();
@@ -99,7 +99,6 @@ public class ViewRuleAssignmentDataServlet extends SecureController {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void doProcessRequest() throws Exception {
         java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(locale);
 

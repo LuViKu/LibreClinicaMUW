@@ -16,7 +16,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Types;
 import java.util.Locale;
 
@@ -41,6 +40,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * scope. Seeds item_data rows on top of the demo-data fixtures and
  * asserts the earliest-observation date + value bubble up correctly.
  */
+@SuppressWarnings("null")
 class ModalityBaselinesApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mockMvc() {
@@ -103,8 +103,8 @@ class ModalityBaselinesApiControllerDatabaseIT extends AbstractApiControllerData
         // and event_crf #5 (study_subject 2) — different dates.
         // Use item I_IOP_OD (item_id=10).
         clearItemDataForItem(10, 2);
-        int idA = seedItemData(/* event_crf_id */ 4, /* item_id */ 10, "14.5");
-        int idB = seedItemData(/* event_crf_id */ 5, /* item_id */ 10, "16.0");
+        seedItemData(/* event_crf_id */ 4, /* item_id */ 10, "14.5");
+        seedItemData(/* event_crf_id */ 5, /* item_id */ 10, "16.0");
         // event_crf 4 has date_completed 2020-10-09, event_crf 5 has 2020-11-08
         // (per the demo seed), so 14.5 / 2020-10-09 is the earliest.
 
@@ -139,14 +139,14 @@ class ModalityBaselinesApiControllerDatabaseIT extends AbstractApiControllerData
 
         // Seed a measurement on the SOURCE side (study #1).
         clearItemDataForItem(10, 4);
-        int sourceObsId = seedItemData(9, 10, "12.0");
+        seedItemData(9, 10, "12.0");
         // event_crf 9 has study_subject_id=4 + date_completed=null (per seed),
         // so the date will be null. Let's instead update its date_completed.
         setEventCrfDateCompleted(9, "2019-05-01");
         // Seed a measurement on the TARGET side via a fresh event_crf row.
         int targetEventId = insertStudyEvent(targetSsId);
         int targetEventCrfId = insertEventCrf(targetEventId, targetSsId, "2024-08-15");
-        int targetObsId = seedItemData(targetEventCrfId, 10, "22.0");
+        seedItemData(targetEventCrfId, 10, "22.0");
 
         // Persist the eye_cohort_transition row (source row already has OD,
         // we lock-in the transition for the OD eye).

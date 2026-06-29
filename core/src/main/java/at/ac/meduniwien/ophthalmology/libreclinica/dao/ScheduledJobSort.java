@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.CriteriaComma
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class ScheduledJobSort implements CriteriaCommand {
     HashMap<String, String> columnMapping = new HashMap<String, String>();
     List<Sort> sorts = new ArrayList<Sort>();

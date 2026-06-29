@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.action;
 
+@SuppressWarnings("all")
+
 public class EmailActionBean extends RuleActionBean {
 
     private static final long serialVersionUID = 690522285231875517L;

@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.patterns.ocobserver;
 
+@SuppressWarnings("all")
+
 public class OnStudyEventCreated extends OnStudyEventChanged {
 
 	/**
@@ -18,7 +20,6 @@ public class OnStudyEventCreated extends OnStudyEventChanged {
 
 	public OnStudyEventCreated(StudyEventContainer container) {
 		super(container);
-		// TODO Auto-generated constructor stub
 	}
 
 }

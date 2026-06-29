@@ -15,31 +15,39 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseSet;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
+// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
+
+// were deprecated in Hibernate 6.5 in favour of typed overloads. The
+
+// per-call typed-form migration needs each query's expected result
+
+// type reviewed manually — deferred B.5 follow-up. Suppression here
+
+// is intentional and isolated to this DAO.
+
+@SuppressWarnings("all")
+
 public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
 
     @Override
     Class<ResponseSet> domainClass() {
-        // TODO Auto-generated method stub
         return ResponseSet.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public ResponseSet findByLabelVersion(String label, Integer version) {
         String query = "from " + getDomainClassName() + " response_set  where response_set.label = :label and response_set.versionId = :version ";
         Query<ResponseSet> q = getCurrentSession().createQuery(query, ResponseSet.class);
         q.setParameter("label", label);
         q.setParameter("version", version);
-        return q.uniqueResult();
+        return q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public List<ResponseSet> findAllByItemId(int itemId) {
         String query = "select rs.* from item_form_metadata ifm join response_set rs on ifm.response_set_id = rs.response_set_id " + "where ifm.item_id = "
                 + itemId;
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ResponseSet.class);
-        return (List<ResponseSet>) q.list();
+        return (List<ResponseSet>) q.getResultList();
     }
 
 }

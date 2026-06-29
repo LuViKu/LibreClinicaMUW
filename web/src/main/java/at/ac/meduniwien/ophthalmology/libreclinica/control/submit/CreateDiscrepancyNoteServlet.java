@@ -69,6 +69,7 @@ import org.apache.commons.lang.StringUtils;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class CreateDiscrepancyNoteServlet extends SecureController {
 
 	private static final long serialVersionUID = 4691058657903088336L;
@@ -155,7 +156,7 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
         int parentId = fp.getInt(PARENT_ID);
         // Patch for repeating groups and RFC on empty fields
         int isGroup = fp.getInt(IS_GROUP_ITEM);
-        // request.setAttribute(IS_GROUP_ITEM, new Integer(isGroup));
+        // request.setAttribute(IS_GROUP_ITEM, Integer.valueOf(isGroup));
         int eventCRFId = fp.getInt(EVENT_CRF_ID);
         request.setAttribute(EVENT_CRF_ID, eventCRFId);
         int rowCount = fp.getInt(PARENT_ROW_COUNT);
@@ -163,7 +164,7 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
         // Run only once: try to recalculate writeToDB
 	    if (!StringUtils.isBlank(entityType) && "itemData".equalsIgnoreCase(entityType) &&
             isGroup !=0 && eventCRFId != 0) {
-	        // request.setAttribute(PARENT_ROW_COUNT, new Integer(eventCRFId));
+	        // request.setAttribute(PARENT_ROW_COUNT, Integer.valueOf(eventCRFId));
 	        int ordinal_for_repeating_group_field = calculateOrdinal(isGroup, field, eventCRFId, rowCount);
 	        int writeToDBStatus = isWriteToDB(isGroup, field, entityId, itemId, ordinal_for_repeating_group_field, eventCRFId);
 	        writeToDB = (writeToDBStatus == -1) ? false : ((writeToDBStatus == 1) ? true : writeToDB);

@@ -20,6 +20,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import static org.mockito.Mockito.*;
 import junit.framework.TestCase;
 
+@SuppressWarnings("all")
+
 public class ListDiscNotesForCRFServletTest extends TestCase {
 
     public ListDiscNotesForCRFServletTest() {

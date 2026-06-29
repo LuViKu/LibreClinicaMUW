@@ -23,7 +23,6 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -62,6 +61,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * companion files (bscan.dcm/fundus.png/geometry.json) where the
  * resolver expects them.
  */
+@SuppressWarnings("null")
 class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Stable seg-dir + bscan-dir roots created per test method. */

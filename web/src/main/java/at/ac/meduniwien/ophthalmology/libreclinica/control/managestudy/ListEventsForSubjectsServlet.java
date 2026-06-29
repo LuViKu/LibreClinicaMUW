@@ -35,6 +35,7 @@ import java.util.Locale;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ListEventsForSubjectsServlet extends SecureController {
 
     // Shaoyu Su
@@ -88,7 +89,7 @@ public class ListEventsForSubjectsServlet extends SecureController {
         if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
             //Shaoyu Su
             //int nextLabel = getStudySubjectDAO().findTheGreatestLabel() + 1;
-            //request.setAttribute("label", new Integer(nextLabel).toString());
+            //request.setAttribute("label", Integer.valueOf(nextLabel).toString());
             request.setAttribute("label", resword.getString("id_generated_Save_Add"));
         }
 

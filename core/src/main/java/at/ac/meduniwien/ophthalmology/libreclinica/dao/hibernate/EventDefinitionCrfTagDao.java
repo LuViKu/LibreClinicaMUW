@@ -12,23 +12,22 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrfTag;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class EventDefinitionCrfTagDao extends AbstractDomainDao<EventDefinitionCrfTag> {
 
     @Override
     Class<EventDefinitionCrfTag> domainClass() {
-        // TODO Auto-generated method stub
         return EventDefinitionCrfTag.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public EventDefinitionCrfTag findByCrfPath(int tagId, String path, boolean active) {
         String query = "from " + getDomainClassName() + " where path = :path and tagId= :tagId and active= :active ";
         Query<EventDefinitionCrfTag> q = getCurrentSession().createQuery(query, EventDefinitionCrfTag.class);
         q.setParameter("tagId", tagId);
         q.setParameter("path", path);
         q.setParameter("active", active);
-        return (EventDefinitionCrfTag) q.uniqueResult();
+        return (EventDefinitionCrfTag) q.getSingleResultOrNull();
 
     }
 

@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.CodedEnum;
 
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public enum ProcessingResultType implements CodedEnum {
     SUCCESS(1, "SUCCESS"), FAIL(2, "FAIL"), WARNING(3, "WARNING");
     

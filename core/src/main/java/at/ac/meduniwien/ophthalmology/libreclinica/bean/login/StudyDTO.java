@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.login;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class StudyDTO {
 	private String uniqueProtocolID;
 	private String briefTitle;

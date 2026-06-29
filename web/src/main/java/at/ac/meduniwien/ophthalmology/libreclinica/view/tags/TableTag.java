@@ -23,6 +23,7 @@ import jakarta.servlet.jsp.tagext.SimpleTagSupport;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 4, 2007
  */
+@SuppressWarnings("all")
 public class TableTag extends SimpleTagSupport {
     public static String VIEW_DATA_ENTRY = "viewdataentry";
     public static String INITIAL_DATA_ENTRY = "initialdataentry";
@@ -51,10 +52,10 @@ public class TableTag extends SimpleTagSupport {
             tabObject = context.findAttribute("tab");
         }
         if (tabObject == null) {
-            tabObject = new Integer("1");
+            tabObject = Integer.valueOf("1");
         }
 
-        tabId = new Integer(tabObject.toString());
+        tabId = Integer.valueOf(tabObject.toString());
 
         if (dBean != null) {
             HorizontalFormBuilder formBuilder = new HorizontalFormBuilder();

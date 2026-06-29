@@ -33,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.form.FormBeanUtil;
  * DisplaySectionBeans for a form, such as for a CRF that will be printed. The
  * class is used by PrintCRFServlet and PrintDataEntryServlet.
  */
+@SuppressWarnings("all")
 public class DisplaySectionBeanHandler {
     private int crfVersionId;
     private int eventCRFId;

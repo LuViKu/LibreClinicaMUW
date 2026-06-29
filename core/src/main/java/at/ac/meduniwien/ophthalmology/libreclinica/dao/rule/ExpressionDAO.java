@@ -31,6 +31,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
 
     private void setQueryNames() {
@@ -75,10 +76,10 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
 
         HashMap<Integer, Object> variables = new HashMap<>();
 		HashMap<Integer, Integer> nullVars = new HashMap<>();
-        variables.put(new Integer(1), expressionBean.getContext().getCode());
-        variables.put(new Integer(2), expressionBean.getValue());
-        variables.put(new Integer(3), expressionBean.getUpdaterId());
-        variables.put(new Integer(4), expressionBean.getId());
+        variables.put(Integer.valueOf(1), expressionBean.getContext().getCode());
+        variables.put(Integer.valueOf(2), expressionBean.getValue());
+        variables.put(Integer.valueOf(3), expressionBean.getUpdaterId());
+        variables.put(Integer.valueOf(4), expressionBean.getId());
 
         this.executeUpdate(digester.getQuery("update"), variables, nullVars);
 
@@ -92,11 +93,11 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
     public ExpressionBean create(ExpressionBean expressionBean) {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();
-        variables.put(new Integer(1), expressionBean.getContext().getCode());
-        variables.put(new Integer(2), expressionBean.getValue());
+        variables.put(Integer.valueOf(1), expressionBean.getContext().getCode());
+        variables.put(Integer.valueOf(2), expressionBean.getValue());
 
-        variables.put(new Integer(3), new Integer(expressionBean.getOwnerId()));
-        variables.put(new Integer(4), new Integer(Status.AVAILABLE.getId()));
+        variables.put(Integer.valueOf(3), Integer.valueOf(expressionBean.getOwnerId()));
+        variables.put(Integer.valueOf(4), Integer.valueOf(Status.AVAILABLE.getId()));
 
         executeUpdateWithPK(digester.getQuery("create"), variables, nullVars);
         if (isQuerySuccessful()) {

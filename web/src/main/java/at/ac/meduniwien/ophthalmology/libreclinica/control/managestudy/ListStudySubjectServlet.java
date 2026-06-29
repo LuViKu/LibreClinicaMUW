@@ -56,6 +56,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public abstract class ListStudySubjectServlet extends SecureController {
 
     /**
@@ -169,8 +170,8 @@ public abstract class ListStudySubjectServlet extends SecureController {
 
         // information for the event tabs
         session.setAttribute("allDefsArray", allDefs);
-        session.setAttribute("allDefsNumber", new Integer(allDefs.size()));
-        session.setAttribute("groupSize", new Integer(studyGroupClasses.size()));
+        session.setAttribute("allDefsNumber", Integer.valueOf(allDefs.size()));
+        session.setAttribute("groupSize", Integer.valueOf(studyGroupClasses.size()));
 
         // find all the subjects in current study
         ArrayList<StudySubjectBean> subjects = sdao.findAllByStudyId(currentStudy.getId());
@@ -365,7 +366,7 @@ public abstract class ListStudySubjectServlet extends SecureController {
         if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
             //Shaoyu Su
             //int nextLabel = ssdao.findTheGreatestLabel() + 1;
-            //request.setAttribute("label", new Integer(nextLabel).toString());
+            //request.setAttribute("label", Integer.valueOf(nextLabel).toString());
             request.setAttribute("label", resword.getString("id_generated_Save_Add"));
         }
 

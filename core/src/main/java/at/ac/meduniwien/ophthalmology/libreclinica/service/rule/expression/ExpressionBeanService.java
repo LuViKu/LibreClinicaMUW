@@ -24,6 +24,8 @@ import org.apache.commons.lang.time.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class ExpressionBeanService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -50,7 +52,6 @@ public class ExpressionBeanService {
 
     
     private void init(DataSource ds, ExpressionBeanObjectWrapper expressionBeanWrapper) {
-        //TODO add stuff here
         this.ds = ds;
         this.expressionBeanWrapper = expressionBeanWrapper;
 
@@ -70,7 +71,6 @@ public class ExpressionBeanService {
         String temp = null;
         String oid = null;
         int index = 0;
-        // TODO fix this
         logger.debug("Test :: {}", test);
 
         if(checkIfForScheduling(test)){

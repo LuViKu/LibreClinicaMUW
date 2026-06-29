@@ -54,6 +54,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.job.ImportSpringJob;
  * 
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class VerifyImportedCRFDataServlet extends SecureController {
 
     /**
@@ -173,7 +174,6 @@ public class VerifyImportedCRFDataServlet extends SecureController {
                 int eventCrfBeanId = -1;
                 EventCRFBean eventCrfBean = new EventCRFBean();
 
-                // TODO : tom , the wrapper object has all the necessary data -
                 // as you see we check the
                 // is to see if this data is Savable if it is then we go ahead
                 // and save it. if not we discard.
@@ -288,16 +288,16 @@ public class VerifyImportedCRFDataServlet extends SecureController {
                         }
                         // logger.info("created:
                         // "+displayItemBean.getDbData().getName());
-                        if (!eventCrfInts.contains(new Integer(eventCrfBean.getId()))) {
+                        if (!eventCrfInts.contains(Integer.valueOf(eventCrfBean.getId()))) {
 
-                            String eventCRFStatus = importedCRFStatuses.get(new Integer(eventCrfBean.getId()));
+                            String eventCRFStatus = importedCRFStatuses.get(Integer.valueOf(eventCrfBean.getId()));
                             if (eventCRFStatus != null && eventCRFStatus.equals(DataEntryStage.INITIAL_DATA_ENTRY.getName())
                                     && eventCrfBean.getStatus().isAvailable()) {
                                 crfBusinessLogicHelper.markCRFStarted(eventCrfBean, ub);
                             } else {
                                 crfBusinessLogicHelper.markCRFComplete(eventCrfBean, ub);
                             }
-                            eventCrfInts.add(new Integer(eventCrfBean.getId()));
+                            eventCrfInts.add(Integer.valueOf(eventCrfBean.getId()));
                         }
                     }
                     // Reset the SDV status if item data has been changed or added

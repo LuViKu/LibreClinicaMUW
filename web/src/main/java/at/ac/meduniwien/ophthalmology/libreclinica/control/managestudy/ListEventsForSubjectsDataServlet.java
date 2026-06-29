@@ -79,6 +79,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * monitor; {@code reassign} when study available + subject available
  * + not monitor + not investigator/RA/RA2.
  */
+@SuppressWarnings("all")
 public class ListEventsForSubjectsDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;
@@ -97,7 +98,6 @@ public class ListEventsForSubjectsDataServlet extends SecureController {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void processRequest() throws Exception {
         java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(locale);
         java.util.ResourceBundle resformat = ResourceBundleProvider.getFormatBundle(locale);

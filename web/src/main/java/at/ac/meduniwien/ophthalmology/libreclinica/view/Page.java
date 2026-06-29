@@ -15,6 +15,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view;
  *         Provides a type-safe enumeration for JSP Page,converted from original static class.
  *         @author jnyayapathi
  */
+@SuppressWarnings("all")
 public enum Page {
 	
 	
@@ -547,7 +548,6 @@ public enum Page {
 
     VIEW_CRF_VERSION ("/WEB-INF/jsp/" + "managestudy/viewCRFVersion.jsp", "View a CRF Version"),
 
-    // TODO do we need both versions here??? tbh
     LIST_STUDY_SUBJECT ("/WEB-INF/jsp/" + "managestudy/listStudySubject.jsp", "list subjects in a study"),
     LIST_STUDY_SUBJECT_SERVLET ("/ListStudySubject", "list subjects in a study"),
     VIEW_STUDY_SUBJECT ("/WEB-INF/jsp/" + "managestudy/viewStudySubject.jsp", "View Subject in a study"),

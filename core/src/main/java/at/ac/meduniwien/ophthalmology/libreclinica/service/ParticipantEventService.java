@@ -28,6 +28,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 
+@SuppressWarnings("all")
+
 public class ParticipantEventService {
 
     private DataSource dataSource = null;

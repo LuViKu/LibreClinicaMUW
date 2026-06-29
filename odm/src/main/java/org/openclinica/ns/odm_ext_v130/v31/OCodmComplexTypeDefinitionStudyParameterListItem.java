@@ -42,6 +42,7 @@ import org.cdisc.ns.odm.v130.ODMcomplexTypeDefinitionDecode;
 @XmlType(name = "OCodmComplexTypeDefinition-StudyParameterListItem", propOrder = {
     "decode"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyParameterListItem {
 
     @XmlElement(name = "Decode", namespace = "http://www.cdisc.org/ns/odm/v1.3", required = true)

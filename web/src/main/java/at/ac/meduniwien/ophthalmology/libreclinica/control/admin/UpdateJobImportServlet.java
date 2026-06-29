@@ -35,6 +35,8 @@ import org.quartz.impl.StdScheduler;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 
+@SuppressWarnings("all")
+
 public class UpdateJobImportServlet extends SecureController {
 
     /**
@@ -57,7 +59,7 @@ public class UpdateJobImportServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
     }
 
@@ -82,8 +84,8 @@ public class UpdateJobImportServlet extends SecureController {
         request.setAttribute(ImportSpringJob.STUDY_NAME, studyName);
         request.setAttribute("filePath", directory);
         request.setAttribute("firstFilePath", IMPORT_DIR);
-        request.setAttribute("hours", new Integer(hours).toString());
-        request.setAttribute("minutes", new Integer(minutes).toString());
+        request.setAttribute("hours", Integer.valueOf(hours).toString());
+        request.setAttribute("minutes", Integer.valueOf(minutes).toString());
 
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
 

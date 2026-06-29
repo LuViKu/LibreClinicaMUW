@@ -67,6 +67,7 @@ import javax.sql.DataSource;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RulesPostImportContainerService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -109,7 +110,6 @@ public class RulesPostImportContainerService {
                 for (RuleSetRuleBean persistentruleSetRuleBean : persistentRuleSetBean.getRuleSetRules()) {
                     if (persistentruleSetRuleBean.getStatus() != Status.DELETED && ruleSetRuleBean.equals(persistentruleSetRuleBean)) {
                         persistentruleSetRuleBean.setRuleSetRuleBeanImportStatus(RuleSetRuleBeanImportStatus.EXACT_DOUBLE);
-                        // TODO : DO SOMETHING HERE
                         // itr.remove();
                         break;
                     } else if (persistentruleSetRuleBean.getStatus() != Status.DELETED && ruleSetRuleBean.getRuleBean() != null

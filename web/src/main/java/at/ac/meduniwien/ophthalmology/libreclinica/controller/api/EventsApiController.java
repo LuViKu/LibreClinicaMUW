@@ -114,6 +114,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/events")
 @Tag(name = "Events", description = "Cross-subject study-event list + schedule.")
+@SuppressWarnings("null")
 public class EventsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(EventsApiController.class);
@@ -553,7 +554,7 @@ public class EventsApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
-        int studyId = currentStudy.getId();
+        currentStudy.getId();
 
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         StudyEventDAO seDao = new StudyEventDAO(dataSource);

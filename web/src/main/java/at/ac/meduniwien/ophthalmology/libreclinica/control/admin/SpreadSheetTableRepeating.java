@@ -81,6 +81,12 @@ import org.slf4j.LoggerFactory;
  *          kkrumlian $
  */
 
+// 2026-06-28 — heritage null-analysis suppress; per-site
+
+// null-safety review is the deferred follow-up.
+
+@SuppressWarnings("all")
+
 public class SpreadSheetTableRepeating implements SpreadSheetTable {
 
     private POIFSFileSystem fs = null;
@@ -1429,9 +1435,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                     // Groups
                     // tbh, 5/14/2007
                     // DONE -- add sql insert queries below
-                    // TODO review html error creation in table at end of file
-                    // TODO find out where to add the form group beans
-                    // TODO find out where to add the map beans
 
                     // we need to make sure groups sql are executed first,
                     // because item_group_id is
@@ -1652,7 +1655,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                         // igMeta.setRepeatArray(groupRepeatArray);
                         igMeta.setShowGroup(isShowGroup);
                         try {
-                            igMeta.setRepeatMax(new Integer(Integer.parseInt(groupRepeatMax)));
+                            igMeta.setRepeatMax(Integer.valueOf(Integer.parseInt(groupRepeatMax)));
                             //mantiss 13917
                             
                             if (igMeta.getRepeatMax() < 1){
@@ -1673,7 +1676,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             }
                         }
                         try {
-                            igMeta.setRepeatNum(new Integer(Integer.parseInt(groupRepeatNumber)));
+                            igMeta.setRepeatNum(Integer.valueOf(Integer.parseInt(groupRepeatNumber)));
                             if(igMeta.getRepeatNum() < 1){ //mantiss 13917
 	                            errors.add(resPageMsg.getString("the") + " "+resPageMsg.getString("GROUP_REPEAT_NUM_column")+" "
 	                                    + resPageMsg.getString("must_be_a_positive_integer_or_blank") + ". " + groupRepeatNumber + " "
@@ -1845,7 +1848,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             errors.add(resPageMsg.getString("section_instruction_length_error"));
                         }
 
-                        // TODO: Deprecated - not existing in eCRF definition spreadsheet template
                         // PAGE_NUMBER column
                         cell = sheet.getRow(k).getCell((short) 4);
                         String pageNumber = getValue(cell);
@@ -1854,7 +1856,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             errors.add(resPageMsg.getString("section_page_number_length_error"));
                         }
 
-                        // TODO: Deprecated - not existing in eCRF definition spreadsheet template
                         // PARENT_SECTION column
                         cell = sheet.getRow(k).getCell((short) 5);
                         String parentSection = getValue(cell);
@@ -1868,7 +1869,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             }
                         }
 
-                        // TODO: Deprecated - not existing in eCRF definition spreadsheet template
                         // BORDERS column
                         cell = sheet.getRow(k).getCell((short) 6);
                         String strBorder = getValue(cell);
@@ -2131,7 +2131,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             buf.append("<td class=\"table_cell\">" + cell.getNumericCellValue() + " " + error + "</td>");
                             break;
                         case STRING:
-                            @SuppressWarnings("deprecation")
                             String stringCellValue = cell.getStringCellValue();
 							buf.append("<td class=\"table_cell\">" + stringCellValue + " " + error + "</td>");
                             break;
@@ -2206,7 +2205,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
             // logger.debug("found a numeric cell after transfer: "+val);
             break;
         case STRING:
-            @SuppressWarnings("deprecation")
             String stringCellValue = cell.getStringCellValue();
 			val = stringCellValue;
             if (val.matches("'")) {
@@ -2271,7 +2269,6 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                         buf.append("<td>" + cell.getNumericCellValue() + "</td>");
                         break;
                     case STRING:
-                        @SuppressWarnings("deprecation")
                         String stringCellValue = cell.getStringCellValue();
 						buf.append("<td>" + stringCellValue + "</td>");
                         break;

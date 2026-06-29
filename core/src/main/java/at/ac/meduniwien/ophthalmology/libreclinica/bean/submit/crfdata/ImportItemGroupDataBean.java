@@ -17,6 +17,7 @@ import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlElement;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class ImportItemGroupDataBean {
     @XmlElement(name = "ItemData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<ImportItemDataBean> itemData;

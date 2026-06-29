@@ -20,6 +20,7 @@ import java.util.List;
  * @author ywang (May, 2008)
  * 
  */
+@SuppressWarnings("all")
 public class MetaDataVersionBean extends ElementOIDBean {
     private String name;
     private String Description;

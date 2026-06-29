@@ -14,16 +14,15 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrf;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class EventCrfDao extends AbstractDomainDao<EventCrf> {
 
     @Override
     Class<EventCrf> domainClass() {
-        // TODO Auto-generated method stub
         return EventCrf.class;
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public EventCrf findByStudyEventIdStudySubjectIdCrfVersionId(int study_event_id, int study_subject_id, int crf_version_id) {
         String query = "from "
                 + getDomainClassName()
@@ -32,11 +31,9 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         q.setParameter("studyeventid", study_event_id);
         q.setParameter("studysubjectid", study_subject_id);
         q.setParameter("crfversionid", crf_version_id);
-        return (EventCrf) q.uniqueResult();
+        return (EventCrf) q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public EventCrf findByStudyEventIdStudySubjectIdCrfId(int study_event_id, int study_subject_id, int crf_id) {
         String query = "from "
                 + getDomainClassName()
@@ -45,11 +42,9 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         q.setParameter("studyeventid", study_event_id);
         q.setParameter("studysubjectid", study_subject_id);
         q.setParameter("crfid", crf_id);
-        return (EventCrf) q.uniqueResult();
+        return (EventCrf) q.getSingleResultOrNull();
     }
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
 	public List<EventCrf> findByStudyEventIdStudySubjectId(Integer studyEventId, String studySubjectOid) {
         String query = "from "
                 + getDomainClassName()
@@ -57,11 +52,9 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
         q.setParameter("studyeventid", studyEventId);
         q.setParameter("studysubjectoid", studySubjectOid);
-        return q.list();
+        return q.getResultList();
 	}
 
-    // TODO update to CriteriaQuery 
-    @SuppressWarnings("deprecation")
     public List<EventCrf> findByStudyEventStatus(Integer studyEventId, Integer statusCode) {
         String query = "from "
                 + getDomainClassName()
@@ -69,7 +62,7 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
         q.setParameter("studyeventid", studyEventId);
         q.setParameter("statusid", statusCode);
-        return q.list();
+        return q.getResultList();
     }
     
         

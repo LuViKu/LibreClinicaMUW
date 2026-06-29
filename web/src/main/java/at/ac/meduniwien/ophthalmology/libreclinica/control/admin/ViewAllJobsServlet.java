@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
+@SuppressWarnings("all")
+
 public class ViewAllJobsServlet extends SecureController {
 
     /**
@@ -22,7 +24,6 @@ public class ViewAllJobsServlet extends SecureController {
 
 	@Override
     protected void mayProceed() throws InsufficientPermissionException {
-        // TODO Auto-generated method stub
         if (ub.isSysAdmin() || ub.isTechAdmin()) {
             return;
         }
@@ -32,13 +33,12 @@ public class ViewAllJobsServlet extends SecureController {
 //        }
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
 
     }
 
     @Override
     protected void processRequest() throws Exception {
-        // TODO Auto-generated method stub
         forwardPage(Page.VIEW_ALL_JOBS);
     }
 

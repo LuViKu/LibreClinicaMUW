@@ -34,6 +34,7 @@ import org.springframework.scheduling.quartz.QuartzJobBean;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class XalanTransformJob extends QuartzJobBean {
 
     private static final Logger logger = LoggerFactory.getLogger(XalanTransformJob.class);
@@ -48,8 +49,7 @@ public class XalanTransformJob extends QuartzJobBean {
     protected void executeInternal(JobExecutionContext context) throws JobExecutionException {
         // need to generate a Locale so that user beans and other things will
         // generate normally
-        // TODO make dynamic?
-        Locale locale = new Locale("en-US");
+        Locale locale = Locale.of("en-US");
         ResourceBundleProvider.updateLocale(locale);
         JobDataMap dataMap = context.getMergedJobDataMap();
         // get the file information from the job

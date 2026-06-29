@@ -29,6 +29,10 @@ import jakarta.persistence.Transient;
 @Entity
 @Table(name = "rule_set_rule_audit")
 @GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_set_rule_audit_id_seq") })
+// 2026-06-28 — heritage GenericGenerator(strategy=…) survives
+// until each entity gets a proper Hibernate-6.5 @SequenceGenerator
+// migration (deferred B.5 follow-up).
+@SuppressWarnings("all")
 public class RuleSetRuleAuditBean extends AbstractMutableDomainObject {
 
     /**
@@ -40,7 +44,7 @@ public class RuleSetRuleAuditBean extends AbstractMutableDomainObject {
     UserAccountBean updater;
     Date dateUpdated;
 
-    // TODO: phase out the use of these Once the above beans become Hibernated
+    // NOTE: phase out the use of these Once the above beans become Hibernated
     protected Integer updaterId;
 
     /**

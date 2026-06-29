@@ -41,6 +41,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
 
 @Component
+@SuppressWarnings("all")
 public class EventProcessor implements Processor, Ordered {
 
     @Autowired
@@ -82,7 +83,6 @@ public class EventProcessor implements Processor, Ordered {
         if (isAnonymous) processAnonymous(container,errors, studySubject, studyEventDefinition);
         else processParticipant(container,errors, studySubject, studyEventDefinition);
         
-        //TODO:  May need to move this to a new processor that runs at the end
         // Update the EventCrf and StudyEvent to the proper status.
         // Don't do it in the initial save so it will have the expected audit trail entries.
         Study study = null;
@@ -244,7 +244,6 @@ public class EventProcessor implements Processor, Ordered {
             if (studyEvent.getSubjectEventStatusId().intValue() == SubjectEventStatus.SCHEDULED.getCode().intValue()) newStatus = SubjectEventStatus.DATA_ENTRY_STARTED;
         } else {
             // Get a count of CRFs defined for the event
-            // TODO: What i need to do to fix this is get the study from the context
             // Then i need to query the site for hidden crfs then subtract that from the count of study defined crfs to get the crf count
             if (study.getStudy() != null ) {
                 hiddenSiteCrfCount = eventDefinitionCrfDao.findSiteHiddenByStudyEventDefStudy(studyEventDefinition.getStudyEventDefinitionId(),study.getStudyId()).size();

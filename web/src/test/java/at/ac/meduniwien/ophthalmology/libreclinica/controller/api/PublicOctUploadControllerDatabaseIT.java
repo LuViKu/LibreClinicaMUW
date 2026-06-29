@@ -55,6 +55,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectF
  * rows cleans up after itself so sibling tests still see the seeded
  * state.
  */
+@SuppressWarnings("null")
 class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Per-class on-disk upload root; mirrors the production e2eUploadsPath. */
@@ -204,7 +205,7 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
             ps.setInt(2, (int) jobId);
             try (ResultSet rs = ps.executeQuery()) {
                 assertTrue(rs.next(), "audit row should exist");
-                int userId = rs.getInt("user_id");
+                rs.getInt("user_id");
                 assertTrue(rs.wasNull(), "user_id must be NULL on a public-portal audit row");
                 assertEquals("retinal_inference_job", rs.getString("audit_table"));
                 assertEquals("queued", rs.getString("new_value"));

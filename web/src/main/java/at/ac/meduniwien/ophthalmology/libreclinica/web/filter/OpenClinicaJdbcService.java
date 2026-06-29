@@ -25,7 +25,8 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
 
-//TODO duplicate of the version in the core module?
+@SuppressWarnings("all")
+
 public class OpenClinicaJdbcService extends JdbcDaoImpl {
 
     private OcUsersByUsernameMapping ocUsersByUsernameMapping;

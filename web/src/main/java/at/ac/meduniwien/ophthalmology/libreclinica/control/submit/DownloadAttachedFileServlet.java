@@ -29,6 +29,7 @@ import org.apache.commons.io.FilenameUtils;
 /**
  * @author ywang (Dec., 2008)
  */
+@SuppressWarnings("all")
 public class DownloadAttachedFileServlet extends SecureController {
     
 	private static final long serialVersionUID = 3098103596566845378L;

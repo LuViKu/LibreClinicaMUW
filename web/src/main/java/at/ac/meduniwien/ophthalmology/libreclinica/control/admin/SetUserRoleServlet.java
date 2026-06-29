@@ -34,9 +34,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu
  *
- * TODO To change the template for this generated type comment go to Window -
- * Preferences - Java - Code Style - Code Templates
  */
+@SuppressWarnings("all")
 public class SetUserRoleServlet extends SecureController {
     /**
 	 * 
@@ -77,7 +76,6 @@ public class SetUserRoleServlet extends SecureController {
             for (int i = 0; i < studies.size(); i++) {
                 StudyBean study1 = (StudyBean) studies.get(i);
 
-                // TODO: implement equal() according to id
                 boolean hasStudy = false;
                 for (int j = 0; j < studiesHaveRole.size(); j++) {
                     StudyBean study2 = (StudyBean) studiesHaveRole.get(j);

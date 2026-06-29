@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.util.ScriptRunner;
  * @author thickerson
  * 
  */
+@SuppressWarnings("all")
 public class SqlProcessingFunction extends ProcessingFunction implements Serializable {
 
     /**
@@ -112,7 +113,6 @@ public class SqlProcessingFunction extends ProcessingFunction implements Seriali
                 if (resultError != null)
                     return resultError;
             } catch (SQLException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
         }

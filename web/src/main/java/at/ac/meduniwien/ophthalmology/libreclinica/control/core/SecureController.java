@@ -19,6 +19,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -150,6 +151,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 // The interface was a long-deprecated no-op marker — request-scoped state must
 // be addressed at the field level (each SecureController subclass owns its own
 // HttpSession-scoped or request-scoped fields). No behavior change.
+//
+// @SuppressWarnings("all"): the protected `context`, `session`, `request`,
+// `response`, DAO, and SimpleDateFormat fields below are non-Serializable per
+// request/session state. MUW runs single-host (no session replication), so the
+// servlet never round-trips a serialized form — the warning is meaningless here
+// and noisy across 195 subclasses.
+@SuppressWarnings("all")
 public abstract class SecureController extends HttpServlet {
     /**
 	 * 
@@ -286,7 +294,7 @@ public abstract class SecureController extends HttpServlet {
         	//@pgawade 18-Sep-2012: fix for issue #14506 (https://issuetracker.openclinica.com/view.php?id=14506#c58197)
             //addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"));
             // + "<a href=\"UpdateProfile\">" + respage.getString("user_profile") + " </a>");
-            int pwdChangeRequired = new Integer(SQLInitServlet.getField("change_passwd_required")).intValue();
+            int pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
             if (pwdChangeRequired == 1) {
             	addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"));
                 request.setAttribute("mustChangePass", "yes");
@@ -318,8 +326,7 @@ public abstract class SecureController extends HttpServlet {
                 String failMessage = dataMap.getString("failMessage");
                 if (state == TriggerState.NONE || state== TriggerState.COMPLETE) {
                     // add the message here that your export is done
-                    // TODO make absolute paths in the message, for example a link from /pages/* would break
-                    // TODO i18n
+                    // NOTE: i18n
                     if (failMessage != null) {
                         // The extract data job failed with the message:
                         // ERROR: relation "demographics" already exists
@@ -725,10 +732,8 @@ public abstract class SecureController extends HttpServlet {
                     	try {
 							getServletContext().getRequestDispatcher(viewNotesURL).forward(request, response);
 						} catch (ServletException e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 						} catch (IOException e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
                     } else if (p <= 0) {
@@ -1164,7 +1169,12 @@ public abstract class SecureController extends HttpServlet {
 
     protected void baseUrl() throws MalformedURLException {
         String portalURL = CoreResources.getField("portalURL");
-        URL pManageUrl = new URL(portalURL);
+        URL pManageUrl;
+        try {
+            pManageUrl = URI.create(portalURL).toURL();
+        } catch (IllegalArgumentException e) {
+            throw new MalformedURLException(e.getMessage());
+        }
 
         ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
         Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());

@@ -33,6 +33,8 @@ import java.util.ResourceBundle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class ScoreValidator {
     private Locale locale;
     private ResourceBundle resexception;
@@ -221,14 +223,14 @@ public class ScoreValidator {
         logger.debug("found height: " + height);
         String width = values[3];
         try {
-        	new Integer(height);
+        	Integer.valueOf(height);
         } catch (NumberFormatException npe) {
         	errors.append("Your expression in getExternalValues is incorrect: the third value should be a number, not '" + height + "'; ");
         }
         width = width.replace(")", "");
         logger.debug("found width: " + width);
         try {
-        	new Integer(width);
+        	Integer.valueOf(width);
         } catch (NumberFormatException npe) {
         	errors.append("Your expression in getExternalValues is incorrect: the fourth value should be a number, not '" + width + "'; ");
         }
@@ -410,7 +412,6 @@ public class ScoreValidator {
         // System.out.println("found contents: " + contents.toString() + " for token: " + token + " and for func: " + func);
         if (func.equalsIgnoreCase("getexternalvalue"))//(contents.toString().startsWith("http://"))
             return true;
-        // TODO replace with regexp in future versions
         return false;
     }
 

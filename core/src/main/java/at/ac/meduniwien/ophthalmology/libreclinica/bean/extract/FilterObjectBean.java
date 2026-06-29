@@ -18,6 +18,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class FilterObjectBean {
     private int itemId;
     private String value;

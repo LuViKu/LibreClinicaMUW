@@ -9,7 +9,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -82,6 +81,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/subjects")
 @Tag(name = "Modality Baselines",
      description = "Per-eye baseline observations (global + per-study).")
+@SuppressWarnings("null")
 public class ModalityBaselinesApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(ModalityBaselinesApiController.class);

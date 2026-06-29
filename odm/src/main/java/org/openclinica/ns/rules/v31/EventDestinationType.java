@@ -39,6 +39,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "EventDestinationType", propOrder = {
     "valueExpression"
 })
+@SuppressWarnings("all")
 public class EventDestinationType {
 
     @XmlElement(name = "ValueExpression")

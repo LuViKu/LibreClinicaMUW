@@ -32,6 +32,7 @@ import java.util.HashMap;
  *          thickerson $
  * 
  */
+@SuppressWarnings("all")
 public class ListStudyUserServlet extends SecureController {
 
     /**

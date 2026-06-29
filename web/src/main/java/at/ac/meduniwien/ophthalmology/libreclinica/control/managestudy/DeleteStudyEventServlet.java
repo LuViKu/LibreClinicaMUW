@@ -27,6 +27,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectD
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
+@SuppressWarnings("all")
+
 public class DeleteStudyEventServlet extends SecureController{
     /**
 	 * 
@@ -63,7 +65,7 @@ public class DeleteStudyEventServlet extends SecureController{
 
         if (studyEventId == 0) {
             addPageMessage(respage.getString("please_choose_a_SE_to_remove"));
-            request.setAttribute("id", new Integer(studySubId).toString());
+            request.setAttribute("id", Integer.valueOf(studySubId).toString());
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
 
@@ -105,7 +107,7 @@ public class DeleteStudyEventServlet extends SecureController{
 
                 addPageMessage(emailBody);
 //                sendEmail(emailBody);
-                request.setAttribute("id", new Integer(studySubId).toString());
+                request.setAttribute("id", Integer.valueOf(studySubId).toString());
                 forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
             }
         }

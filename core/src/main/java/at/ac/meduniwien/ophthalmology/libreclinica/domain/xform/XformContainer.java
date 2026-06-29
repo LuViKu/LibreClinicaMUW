@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.xform;
 
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class XformContainer {
     private List<XformGroup> groups;
     private List<XformItem> items;

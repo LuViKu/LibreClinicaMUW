@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.AbstractAuditableMutab
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class AuditableBeanWrapper<T extends AbstractAuditableMutableDomainObject> {
     private T auditableBean;
     private boolean isSavable;

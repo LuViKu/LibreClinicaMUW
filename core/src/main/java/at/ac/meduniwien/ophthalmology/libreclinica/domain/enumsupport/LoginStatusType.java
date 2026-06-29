@@ -14,6 +14,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginSt
  * Concrete {@link CodedEnumType} pre-bound to the
  * {@link LoginStatus} enum. Phase B.5 — see {@link StatusType} for rationale.
  */
+@SuppressWarnings("all")
 public class LoginStatusType extends CodedEnumType {
     public LoginStatusType() {
         setEnumClass(LoginStatus.class);

@@ -53,6 +53,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.Expre
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class DynamicsMetadataService implements MetadataServiceInterface {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -71,7 +73,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
     }
 
     public boolean hide(Object metadataBean, EventCRFBean eventCrfBean) {
-        // TODO -- interesting problem, where is the SpringServletAccess object going to live now? tbh 03/2010
         ItemFormMetadataBean itemFormMetadataBean = (ItemFormMetadataBean) metadataBean;
         itemFormMetadataBean.setShowItem(false);
         // DynamicsItemFormMetadataDao dynamicsMetadataDao = (DynamicsItemFormMetadataDao) metadataDao;
@@ -82,7 +83,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return true;
     }
 
-    // TODO: deprecated? probably not because it is still in use
     public boolean isShown(Object metadataBean, EventCRFBean eventCrfBean) {
         ItemFormMetadataBean itemFormMetadataBean = (ItemFormMetadataBean) metadataBean;
         DynamicsItemFormMetadataBean dynamicsMetadataBean = getDynamicsItemFormMetadataBean(itemFormMetadataBean, eventCrfBean, null);
@@ -103,7 +103,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return dynamicsMetadataBean.getPassedDde() > 0;
     }
 
-    // TODO: deprecated? is not used
     public boolean isShown(Integer itemId, EventCRFBean eventCrfBean) {
         // do we check against the database, or just against the object? prob against the db
         // ItemFormMetadataBean itemFormMetadataBean = (ItemFormMetadataBean) metadataBean;
@@ -167,7 +166,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
     }
 
     /**
-     * TODO: remove the @deprecated call. The reason it is there now is to accommodate the call being made from the DataEntryServlet
      *
      * @param itemFormMetadataBean item form metadata
      * @param eventCrfBean event crf
@@ -712,7 +710,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                             } else if (!dynamicsGroupBean.isShowGroup()) {
                                 dynamicsGroupBean.setShowGroup(false);
                                 getDynamicsItemGroupMetadataDao().saveOrUpdate(dynamicsGroupBean);
-                                // TODO is below required in hide?
                             } else if (eventCrfBeanA.getStage().equals(DataEntryStage.DOUBLE_DATA_ENTRY)) {
                                 dynamicsGroupBean.setPassedDde(1);//setVersion(1); // version 1 = passed DDE
                                 getDynamicsItemGroupMetadataDao().saveOrUpdate(dynamicsGroupBean);
@@ -788,11 +785,11 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                     DynamicsItemFormMetadataBean dynamicsMetadataBean = getDynamicsItemFormMetadataBean(itemFormMetadataBean, eventCrfBeanA, oidBasedItemData);
                     if (dynamicsMetadataBean == null) {
                         showItem(itemFormMetadataBean, eventCrfBeanA, oidBasedItemData);
-                        // itemsAlreadyShown.add(new Integer(oidBasedItemData.getId()));
+                        // itemsAlreadyShown.add(Integer.valueOf(oidBasedItemData.getId()));
                     } else if (!dynamicsMetadataBean.isShowItem()) {
                         dynamicsMetadataBean.setShowItem(true);
                         getDynamicsItemFormMetadataDao().saveOrUpdate(dynamicsMetadataBean);
-                        // itemsAlreadyShown.add(new Integer(oidBasedItemData.getId()));
+                        // itemsAlreadyShown.add(Integer.valueOf(oidBasedItemData.getId()));
                     } else if (eventCrfBeanA.getStage().equals(DataEntryStage.DOUBLE_DATA_ENTRY)) {
                         logger.debug("hit DDE here: idb " + oidBasedItemData.getId());
                         // need a guard clause to guarantee DDE
