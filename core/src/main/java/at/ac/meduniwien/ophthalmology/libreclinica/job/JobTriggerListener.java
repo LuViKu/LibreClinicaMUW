@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class JobTriggerListener extends TriggerListenerSupport {
 
     private static final Logger LOG = LoggerFactory.getLogger(JobTriggerListener.class);

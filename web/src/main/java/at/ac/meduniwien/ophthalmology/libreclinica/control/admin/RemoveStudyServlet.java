@@ -46,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Processes the request of removing a top level study, all the data assoicated
  * with this study will be removed
  */
+@SuppressWarnings("all")
 public class RemoveStudyServlet extends SecureController {
     /**
 	 * 

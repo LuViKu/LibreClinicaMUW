@@ -16,6 +16,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ExtractStudyEventDefinitionBean extends StudyEventDefinitionBean {
 
 	/**

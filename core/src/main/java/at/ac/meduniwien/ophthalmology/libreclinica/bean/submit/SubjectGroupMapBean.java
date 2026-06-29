@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class SubjectGroupMapBean extends AuditableEntityBean {
     /**
 	 * 

@@ -17,6 +17,8 @@ import java.util.List;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
+@SuppressWarnings("all")
+
 public class ListNotesFilter implements CriteriaCommand {
 
     List<Filter> filters = new ArrayList<Filter>();

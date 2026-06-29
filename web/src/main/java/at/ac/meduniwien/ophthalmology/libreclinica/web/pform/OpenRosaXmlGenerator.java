@@ -65,6 +65,7 @@ import org.w3c.dom.Element;
  * @author joekeremian
  * 
  */
+@SuppressWarnings("all")
 public class OpenRosaXmlGenerator {
 
     private final OdmJaxbContext odmJaxbContext;

@@ -25,6 +25,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
  *
  *
  */
+@SuppressWarnings("all")
 public interface DAOInterface<T> {
     // problem here is to prevent beans which recursively access themselves;
     // if we don't have a special boolean, the user account bean will recurse

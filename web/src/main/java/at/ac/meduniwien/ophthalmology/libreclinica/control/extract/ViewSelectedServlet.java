@@ -40,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Views selected items for creating dataset, aslo allow user to de-select or
  * select all items in a study
  */
+@SuppressWarnings("all")
 public class ViewSelectedServlet extends SecureController {
 
     /**

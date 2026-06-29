@@ -22,6 +22,7 @@ import org.jdom.Element;
  * JavaScript library. See the repetition-model specification at
  * http://www.whatwg.org/specs/web-forms/current-work/#repeatingFormControls.
  */
+@SuppressWarnings("all")
 public class RepeatManager {
 
     /*

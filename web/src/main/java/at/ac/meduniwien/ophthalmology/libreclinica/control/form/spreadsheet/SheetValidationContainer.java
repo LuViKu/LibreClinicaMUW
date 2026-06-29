@@ -17,6 +17,7 @@ import java.util.Map;
 /**
  * For validation of SpreadSheet Loading.
  */
+@SuppressWarnings("all")
 public class SheetValidationContainer {
     /*
      * YW: created file at Aug., 2011 with OnChangeSheetValidator

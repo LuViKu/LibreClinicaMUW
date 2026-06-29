@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author shamim
  *
  */
+@SuppressWarnings("all")
 public class MatchPasswordServlet extends SecureController {
 
     private static final long serialVersionUID = -358927626509831091L;

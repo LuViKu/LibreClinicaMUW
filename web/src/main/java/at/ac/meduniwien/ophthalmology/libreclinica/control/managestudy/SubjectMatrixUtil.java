@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
  * A Utility class for the issues involving the Subject matrix or table
  * @author Bruce W. Perry 3/2009
  */
+@SuppressWarnings("all")
 public class SubjectMatrixUtil {
 
     /**

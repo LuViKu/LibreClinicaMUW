@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class ResolutionStatus extends Term {
 
     /**

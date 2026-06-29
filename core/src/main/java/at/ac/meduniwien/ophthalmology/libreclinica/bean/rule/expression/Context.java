@@ -14,6 +14,7 @@ import java.util.HashMap;
 /*
  * @Author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public enum Context {
 
     OC_RULES_V1(1, "OpenClinica rules v1.0");

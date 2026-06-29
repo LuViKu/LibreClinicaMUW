@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 
+@SuppressWarnings("all")
+
 public class ItemItemDataContainer {
 	private ItemBean itemBean;
 	private ItemDataBean itemDataBean;

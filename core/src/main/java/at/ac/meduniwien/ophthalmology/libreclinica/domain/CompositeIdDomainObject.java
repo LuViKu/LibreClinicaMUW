@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain;
 
+@SuppressWarnings("all")
+
 public interface CompositeIdDomainObject {
 
     /**

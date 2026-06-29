@@ -44,6 +44,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class BeanPropertyRuleRunner extends RuleRunner{
 	NotificationActionProcessor notificationActionProcessor;
 	StudyEventDAO studyEventDAO;

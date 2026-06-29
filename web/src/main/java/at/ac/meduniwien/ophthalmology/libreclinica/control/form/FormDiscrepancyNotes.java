@@ -19,6 +19,7 @@ import java.util.HashMap;
  *
  * 
  */
+@SuppressWarnings("all")
 public class FormDiscrepancyNotes {
     private HashMap<String, ArrayList<DiscrepancyNoteBean>> fieldNotes;
     private HashMap<String, Integer> numExistingFieldNotes;

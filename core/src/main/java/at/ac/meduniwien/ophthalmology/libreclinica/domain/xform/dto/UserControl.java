@@ -20,6 +20,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto;
  * concrete subtype explicitly — see {@link Group#usercontrol},
  * {@link Repeat#usercontrol}, {@link Section#usercontrol}.
  */
+@SuppressWarnings("all")
 public interface UserControl {
 
     public String getRef();

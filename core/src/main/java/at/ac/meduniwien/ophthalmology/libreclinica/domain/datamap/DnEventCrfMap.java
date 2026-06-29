@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.DataMapDomainObject;
  */
 @Entity
 @Table(name = "dn_event_crf_map")
+@SuppressWarnings("all")
 public class DnEventCrfMap extends DataMapDomainObject {
 
 	/**

@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpServletRequest;
  * @author ywang (Feb. 2008)
  * Created on Sep 21, 2005
  */
+@SuppressWarnings("all")
 public class ScoreItemValidator extends DiscrepancyValidator {
 	
     public ScoreItemValidator(HttpServletRequest request, FormDiscrepancyNotes notes) {

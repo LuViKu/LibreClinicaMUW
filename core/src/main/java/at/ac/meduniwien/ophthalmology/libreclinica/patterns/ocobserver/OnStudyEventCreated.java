@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.patterns.ocobserver;
 
+@SuppressWarnings("all")
+
 public class OnStudyEventCreated extends OnStudyEventChanged {
 
 	/**

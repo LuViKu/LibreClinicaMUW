@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthType;
 /**
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class UserAccountBean extends AuditableEntityBean {
 
     /*

@@ -98,7 +98,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetadataUnit;
 
 // null-safety review is the deferred follow-up.
 
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 
 public class OdmExtractDAO extends DatasetDAO {
     

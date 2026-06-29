@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Processes the reuqest of 'view study details'
  */
+@SuppressWarnings("all")
 public class ViewStudyServlet extends SecureController {
     /**
 	 * 

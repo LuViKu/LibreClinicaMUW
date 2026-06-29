@@ -25,6 +25,7 @@ import java.util.ArrayList;
  * 
  * 
  */
+@SuppressWarnings("all")
 public class CRFBean extends AuditableEntityBean {
     /**
 	 * 

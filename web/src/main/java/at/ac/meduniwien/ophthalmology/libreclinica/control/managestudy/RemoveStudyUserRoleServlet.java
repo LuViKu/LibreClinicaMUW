@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class RemoveStudyUserRoleServlet extends SecureController {
 
 	private static final long serialVersionUID = 9002693250126772488L;

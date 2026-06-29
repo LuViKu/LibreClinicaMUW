@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage;
 
+@SuppressWarnings("all")
+
 public class AuthorizationStatus {
 
     private long id;	    

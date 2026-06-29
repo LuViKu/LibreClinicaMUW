@@ -37,6 +37,7 @@ import java.util.List;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class EditFilterServlet extends SecureController {
 
     /**

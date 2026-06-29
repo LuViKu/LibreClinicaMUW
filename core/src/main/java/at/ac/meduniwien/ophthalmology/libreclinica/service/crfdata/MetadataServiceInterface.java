@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupMetadata
  * initial implementations: ItemMetadataService and GroupMetadataService
  *
  */
+@SuppressWarnings("all")
 public interface MetadataServiceInterface {
 
     public abstract boolean isShown(Object metadataBean, EventCRFBean eventCrfBean);

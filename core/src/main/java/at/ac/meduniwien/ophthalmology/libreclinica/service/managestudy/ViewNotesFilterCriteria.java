@@ -25,6 +25,7 @@ import org.apache.commons.lang.StringUtils;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class ViewNotesFilterCriteria {
 
     private static final Map<String, String> FILTER_BY_TABLE_COLUMN = new HashMap<String, String>();

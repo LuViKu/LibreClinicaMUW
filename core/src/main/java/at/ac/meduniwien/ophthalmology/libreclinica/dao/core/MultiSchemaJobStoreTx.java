@@ -23,6 +23,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.multiten
 /**
  * Created by yogi on 2/10/17.
  */
+@SuppressWarnings("all")
 public class MultiSchemaJobStoreTx extends LocalDataSourceJobStore {
     @Override
     protected Connection getNonManagedTXConnection() throws JobPersistenceException {

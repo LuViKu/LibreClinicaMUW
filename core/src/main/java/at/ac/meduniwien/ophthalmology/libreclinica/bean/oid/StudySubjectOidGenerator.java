@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.oid;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class StudySubjectOidGenerator extends OidGenerator {
 
     private final int argumentLength = 1;

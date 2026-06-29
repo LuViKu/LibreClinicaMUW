@@ -21,6 +21,7 @@ import java.util.HashMap;
  *
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class OrderedEntityBeansSet {
 
     /**

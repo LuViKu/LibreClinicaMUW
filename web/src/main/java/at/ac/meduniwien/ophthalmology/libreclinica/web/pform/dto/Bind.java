@@ -14,6 +14,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlAttribute;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Bind {
     @XmlAttribute(name = "nodeset")
     private String nodeSet;

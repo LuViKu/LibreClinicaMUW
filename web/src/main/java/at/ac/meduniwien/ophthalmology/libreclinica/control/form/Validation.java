@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.form;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class Validation {
     private int type;
 

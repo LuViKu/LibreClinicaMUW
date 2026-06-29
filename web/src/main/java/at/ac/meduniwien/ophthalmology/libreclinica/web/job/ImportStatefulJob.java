@@ -19,6 +19,7 @@ import org.quartz.PersistJobDataAfterExecution;
 
 @PersistJobDataAfterExecution
 @DisallowConcurrentExecution
+@SuppressWarnings("all")
 public class ImportStatefulJob
     extends ImportSpringJob {
 

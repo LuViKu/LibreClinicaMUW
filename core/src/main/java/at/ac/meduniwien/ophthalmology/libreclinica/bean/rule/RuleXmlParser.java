@@ -31,6 +31,7 @@ import org.xml.sax.helpers.DefaultHandler;
  *
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RuleXmlParser extends DefaultHandler {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

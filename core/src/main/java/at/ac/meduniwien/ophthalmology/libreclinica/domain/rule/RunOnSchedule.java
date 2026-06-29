@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.rule;
 
+@SuppressWarnings("all")
+
 public class RunOnSchedule {
 
 	private String runTime;

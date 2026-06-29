@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Performs Log out action
  */
+@SuppressWarnings("all")
 public class LogoutServlet extends SecureController {
 
     /**

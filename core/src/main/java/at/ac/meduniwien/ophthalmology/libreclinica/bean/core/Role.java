@@ -13,6 +13,7 @@ import java.util.*;
 
 // Internationalized name and description in Term.getName and Term.getDescription()
 // Description identifiers are taken from facilityinfo.properties
+@SuppressWarnings("all")
 public class Role extends Term {
 
 	private static final long serialVersionUID = 8374394924123285829L;

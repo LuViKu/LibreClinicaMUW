@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyN
  * @author ssachs
  * Created on Sep 23, 2005
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteRow extends EntityBeanRow<DiscrepancyNoteBean, DiscrepancyNoteRow> {
     private DiscrepancyNoteType type;
     private ResolutionStatus status;

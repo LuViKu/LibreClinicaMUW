@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.xform;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class XformGroup {
     private String groupPath = null;
     private String groupName = null;

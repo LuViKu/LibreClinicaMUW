@@ -30,6 +30,8 @@ import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 
+@SuppressWarnings("all")
+
 public class StudyEventBeanListener implements Observer,ApplicationContextAware {
 
     protected final Logger LOGGER = LoggerFactory.getLogger(getClass().getName());

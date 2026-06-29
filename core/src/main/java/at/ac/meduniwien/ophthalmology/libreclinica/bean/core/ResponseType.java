@@ -16,6 +16,7 @@ import java.util.Optional;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ResponseType extends Term {
     /**
 	 * 

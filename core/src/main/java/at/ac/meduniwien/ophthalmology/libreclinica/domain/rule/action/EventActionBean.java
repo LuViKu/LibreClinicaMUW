@@ -33,6 +33,7 @@ import org.hibernate.annotations.FetchMode;
  */
 @Entity
 @DiscriminatorValue("6")
+@SuppressWarnings("all")
 public class EventActionBean extends RuleActionBean implements Serializable {
 
 	

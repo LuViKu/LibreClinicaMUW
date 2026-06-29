@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.core;
  *
  *
  */
+@SuppressWarnings("all")
 public class EntityBean implements java.io.Serializable {
 
     /**

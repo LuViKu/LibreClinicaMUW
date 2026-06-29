@@ -12,6 +12,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthoritiesBean;
 
 
+@SuppressWarnings("all")
+
+
 public class AuthoritiesDao extends AbstractDomainDao<AuthoritiesBean> {
 
     @Override

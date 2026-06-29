@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score;
  *
  * @author ywang (Mar. 2008)
  */
+@SuppressWarnings("all")
 public class ScoreToken {
     char symbol;
     String name;

@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.otp;
  * 
  * @author thillger
  */
+@SuppressWarnings("all")
 public final class TowFactorBean {
     private String authSecret;
     private String imageUrl;

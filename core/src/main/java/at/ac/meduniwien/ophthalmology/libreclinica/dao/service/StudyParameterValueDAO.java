@@ -24,6 +24,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAODigester;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
 
+@SuppressWarnings("all")
+
 public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterValueBean> {
 
     @Override

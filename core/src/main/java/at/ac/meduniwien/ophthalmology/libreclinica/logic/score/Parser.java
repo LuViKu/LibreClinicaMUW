@@ -24,6 +24,8 @@ import java.util.TreeSet;
  */
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 
+@SuppressWarnings("all")
+
 public class Parser {
     private HashMap<String, ItemBean> map;
     private HashMap<String, String> itemdata;

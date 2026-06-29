@@ -35,6 +35,7 @@ import org.quartz.impl.matchers.GroupMatcher;
  * @author thickerson purpose: to serve as the main UI for listing
  *         ImportSpringJob.java
  */
+@SuppressWarnings("all")
 public class ViewImportJobServlet extends SecureController {
 
     /**

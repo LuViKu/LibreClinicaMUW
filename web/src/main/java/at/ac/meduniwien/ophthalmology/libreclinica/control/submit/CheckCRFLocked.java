@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Date: Apr 12, 2010
  * Time: 3:32:44 PM
  */
+@SuppressWarnings("all")
 public class CheckCRFLocked extends SecureController {
     /**
 	 * 

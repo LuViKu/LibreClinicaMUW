@@ -44,6 +44,7 @@ import java.util.Date;
  * 
  * Processes request of 'restore an event CRF from a event'
  */
+@SuppressWarnings("all")
 public class RestoreEventCRFServlet extends SecureController {
     /**
 	 * 

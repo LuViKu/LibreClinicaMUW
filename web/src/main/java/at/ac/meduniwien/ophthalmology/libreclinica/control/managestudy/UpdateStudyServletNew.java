@@ -40,6 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import org.apache.commons.lang.StringUtils;
 
+@SuppressWarnings("all")
+
 public class UpdateStudyServletNew extends SecureController {
 	private static final long serialVersionUID = -4014694318178787570L;
 	public static final String INPUT_START_DATE = "startDate";

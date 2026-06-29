@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.core.BusinessRule;
  * @author thickerson
  * Created on Sep 1, 2005
  */
+@SuppressWarnings("all")
 public class MaskSubjectDOBRule implements BusinessRule {
     public boolean isPropertyTrue(String s) {
         if (s.equals(this.getClass().getName())) {

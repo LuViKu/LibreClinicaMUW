@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.form.spreadsheet;
  * Instant-calculation func:onchange validation type for loading CRF spreadsheet
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public enum OnChangeSheetValidationType {
     NONE(0, "none"), ALL(1, "all"), SHOULD_BE_FUNC_ONCHANGE(2, "response_value_is_func_onchange"),
     SHOULD_BE_FUNC_ONCHANGE_TYPE(3, "value_should_be_func_onchange_type"),

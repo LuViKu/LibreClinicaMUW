@@ -16,6 +16,7 @@ import java.util.ResourceBundle;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public interface ExpressionProcessor {
 
     String isRuleAssignmentExpressionValid();

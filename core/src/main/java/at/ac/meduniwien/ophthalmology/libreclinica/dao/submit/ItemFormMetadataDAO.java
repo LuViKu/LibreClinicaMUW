@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
 
     @Override

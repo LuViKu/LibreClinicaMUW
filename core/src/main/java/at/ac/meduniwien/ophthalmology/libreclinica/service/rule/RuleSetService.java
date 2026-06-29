@@ -87,7 +87,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author krikor
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class RuleSetService implements RuleSetServiceInterface {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

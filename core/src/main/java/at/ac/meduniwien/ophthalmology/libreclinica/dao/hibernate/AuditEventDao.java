@@ -12,6 +12,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditEvent;
 
 
+@SuppressWarnings("all")
+
+
 public class AuditEventDao extends AbstractDomainDao<AuditEvent> {
 
 	 @Override

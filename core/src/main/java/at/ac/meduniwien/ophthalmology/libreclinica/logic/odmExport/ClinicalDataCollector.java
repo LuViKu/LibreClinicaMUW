@@ -31,6 +31,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
  * @author ywang (May, 2009)
  */
 
+@SuppressWarnings("all")
+
 public class ClinicalDataCollector extends OdmDataCollector {
     private LinkedHashMap<String, OdmClinicalDataBean> odmClinicalDataMap;
 

@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class TextIO {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

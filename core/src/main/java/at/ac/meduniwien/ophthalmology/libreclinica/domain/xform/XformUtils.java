@@ -16,6 +16,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Text;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Translation;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Value;
 
+@SuppressWarnings("all")
+
 public class XformUtils {
 
     public static String getDefaultTranslation(Html html, String ref) {

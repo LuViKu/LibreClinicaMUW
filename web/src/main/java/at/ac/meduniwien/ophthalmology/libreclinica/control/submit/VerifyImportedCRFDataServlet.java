@@ -54,6 +54,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.job.ImportSpringJob;
  * 
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class VerifyImportedCRFDataServlet extends SecureController {
 
     /**

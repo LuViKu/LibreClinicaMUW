@@ -28,6 +28,7 @@ import javax.sql.DataSource;
  * Service handling the simple conditional display logic
  * @author ywang
  */
+@SuppressWarnings("all")
 public class SimpleConditionalDisplayService {
     
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

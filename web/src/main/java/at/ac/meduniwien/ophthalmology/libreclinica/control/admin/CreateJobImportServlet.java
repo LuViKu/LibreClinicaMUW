@@ -39,6 +39,7 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
  * @author thickerson Purpose: to create jobs in the 'importTrigger' group,
  *         which will be meant to run the ImportStatefulJob.
  */
+@SuppressWarnings("all")
 public class CreateJobImportServlet extends SecureController {
 
     /**

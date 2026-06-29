@@ -50,6 +50,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * View a single discrepancy note from note list page
  */
+@SuppressWarnings("all")
 public class ViewNoteServlet extends SecureController {
 
     /**

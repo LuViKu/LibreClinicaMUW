@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * how many files were removed so operators can review GC activity in
  * the SPA's Audit Log timeline alongside the per-download events.
  */
+@SuppressWarnings("all")
 public class ArchivedFileRetentionService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ArchivedFileRetentionService.class);

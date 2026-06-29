@@ -33,6 +33,7 @@ import org.apache.commons.lang.StringUtils;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class UpdateSubjectServlet extends SecureController {
     
     /**

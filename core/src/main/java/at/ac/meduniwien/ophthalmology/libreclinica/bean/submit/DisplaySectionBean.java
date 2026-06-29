@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinit
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class DisplaySectionBean {
     private CRFBean crf;
     private CRFVersionBean crfVersion;

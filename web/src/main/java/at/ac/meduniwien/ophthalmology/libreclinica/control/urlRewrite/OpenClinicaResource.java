@@ -22,6 +22,7 @@ import java.util.List;
  *         resource, it will have values for the related attributes and other
  *         unrelated attributes will not hold any value
  */
+@SuppressWarnings("all")
 public class OpenClinicaResource {
     private String StudyOID;
     private Integer StudyID;

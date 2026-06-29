@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
  * @author Krikor Krumlian
  * @see Strategy Pattern, Template Pattern
  */
+@SuppressWarnings("all")
 public abstract class OidGenerator {
 
     @Override

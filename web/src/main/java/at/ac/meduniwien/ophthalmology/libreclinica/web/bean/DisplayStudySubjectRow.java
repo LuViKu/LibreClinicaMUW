@@ -20,6 +20,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class DisplayStudySubjectRow extends EntityBeanRow<DisplayStudySubjectBean, DisplayStudySubjectRow> {
 
     // columns:

@@ -59,6 +59,7 @@ import java.util.stream.Stream;
  */
 
 // Internationalized description in Term.getDescription()
+@SuppressWarnings("all")
 public class NullValue extends Term {
     /**
 	 * 

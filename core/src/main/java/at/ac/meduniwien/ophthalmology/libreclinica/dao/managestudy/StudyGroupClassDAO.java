@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * The data access object that users will access the database for study group
  * class objects
  */
+@SuppressWarnings("all")
 public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> {
     protected void setQueryNames() {
         findAllByStudyName = "findAllByStudy";

@@ -18,6 +18,7 @@ import java.util.List;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class MultiSelectListBean extends ElementOIDBean {
     private String name;
     private String dataType;

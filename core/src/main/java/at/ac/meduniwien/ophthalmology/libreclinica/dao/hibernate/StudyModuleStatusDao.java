@@ -17,6 +17,7 @@ import org.hibernate.query.Query;
  * Date: Feb 18, 2009
  * Time: 8:01:42 PM
  */
+@SuppressWarnings("all")
 public class StudyModuleStatusDao extends AbstractDomainDao<StudyModuleStatus> {
     @Override
     Class<StudyModuleStatus> domainClass() {

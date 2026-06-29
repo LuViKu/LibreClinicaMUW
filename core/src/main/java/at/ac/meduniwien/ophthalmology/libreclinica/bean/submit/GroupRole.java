@@ -20,7 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
  * @author jxu
  * @deprecated
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 @Deprecated
 public class GroupRole extends Term {
     /**

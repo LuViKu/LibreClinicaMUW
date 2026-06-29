@@ -47,6 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  * 
  */
+@SuppressWarnings("all")
 public class StudySubjectServiceImpl implements StudySubjectService {
 
     private DataSource dataSource;

@@ -33,6 +33,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 @Entity
 @Table(name = "dn_study_event_map")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@SuppressWarnings("all")
 public class DnStudyEventMap implements MutableDomainObject,Serializable{
 
 	/**

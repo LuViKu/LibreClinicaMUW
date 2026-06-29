@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.service;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean;
 
+@SuppressWarnings("all")
+
 public class StudyParameterValueBean extends AuditableEntityBean {
     /**
 	 * 

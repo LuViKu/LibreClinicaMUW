@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
 
+@SuppressWarnings("all")
+
 public class StudyType extends Term {
 
     /**

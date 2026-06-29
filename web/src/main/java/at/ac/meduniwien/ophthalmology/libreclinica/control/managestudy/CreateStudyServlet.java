@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *          thickerson $
  *
  */
+@SuppressWarnings("all")
 public class CreateStudyServlet extends SecureController {
     /**
 	 * 

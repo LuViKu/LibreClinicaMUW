@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import jakarta.xml.bind.DatatypeConverter;
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.*;
+@SuppressWarnings("all")
 public class UploadFileServlet extends SecureController {
     /**
 	 * 

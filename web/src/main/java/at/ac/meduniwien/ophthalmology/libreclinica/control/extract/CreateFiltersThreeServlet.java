@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class CreateFiltersThreeServlet extends SecureController {
 
     /**

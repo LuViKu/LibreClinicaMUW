@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
  *         Performs 'administrative editing' action for study director/study
  *         coordinator
  */
+@SuppressWarnings("all")
 public class AdministrativeEditingServlet extends DataEntryServlet {
 
     /**

@@ -15,6 +15,7 @@ import org.springframework.context.ApplicationEvent;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public abstract class OnStudyEventChanged extends ApplicationEvent {
 
 	/**

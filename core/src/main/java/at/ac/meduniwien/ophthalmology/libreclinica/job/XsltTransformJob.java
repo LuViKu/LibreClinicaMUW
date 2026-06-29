@@ -79,6 +79,7 @@ import org.springframework.scheduling.quartz.QuartzJobBean;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class XsltTransformJob extends QuartzJobBean {
 
     private static final Logger logger = LoggerFactory.getLogger(XsltTransformJob.class);

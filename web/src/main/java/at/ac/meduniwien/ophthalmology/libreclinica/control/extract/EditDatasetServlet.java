@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  *
  */
+@SuppressWarnings("all")
 public class EditDatasetServlet extends SecureController {
 
     /**

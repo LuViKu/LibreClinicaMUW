@@ -26,6 +26,8 @@ import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.ldap.userdetails.LdapUserDetails;
 
+@SuppressWarnings("all")
+
 public class OpenClinicaSessionRegistryImpl extends SessionRegistryImpl {
 
     AuditUserLoginDao auditUserLoginDao;

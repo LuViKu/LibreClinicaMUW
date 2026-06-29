@@ -53,6 +53,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  * Create a discrepancy note
  *
  */
+@SuppressWarnings("all")
 public class CreateOneDiscrepancyNoteServlet extends SecureController {
 
     /**

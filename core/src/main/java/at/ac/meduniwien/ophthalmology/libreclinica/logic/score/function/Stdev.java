@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
 import org.apache.commons.math.stat.descriptive.moment.StandardDeviation;
 
+@SuppressWarnings("all")
+
 public class Stdev extends AbstractFunction {
     public Stdev() {
         super();

@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyEventRow extends EntityBeanRow<StudyEventBean, StudyEventRow> {
     // columns:
 

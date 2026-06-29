@@ -18,6 +18,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.service;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public interface ProcessingInterface {
     ProcessingResultType run();
 

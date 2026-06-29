@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat;
  * 
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class OpenClinicaException extends Exception {
 
     /**

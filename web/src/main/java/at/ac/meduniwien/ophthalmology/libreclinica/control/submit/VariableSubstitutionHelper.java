@@ -33,6 +33,7 @@ import java.util.Map;
  *
  * @author Douglas Rodrigues (drodrigues@openclinica.com)
  */
+@SuppressWarnings("all")
 public class VariableSubstitutionHelper {
 
     private static final Logger LOG = LoggerFactory.getLogger(VariableSubstitutionHelper.class);

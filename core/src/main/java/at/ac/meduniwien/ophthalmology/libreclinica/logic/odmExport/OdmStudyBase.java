@@ -25,6 +25,8 @@ import javax.sql.DataSource;
  * @author ywang (May, 2009)
  */
 
+@SuppressWarnings("all")
+
 public class OdmStudyBase {
     private StudyBean study;
     private List<StudyEventDefinitionBean> sedBeansInStudy;

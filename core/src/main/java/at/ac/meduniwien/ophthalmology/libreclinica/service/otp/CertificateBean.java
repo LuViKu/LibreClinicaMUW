@@ -14,6 +14,7 @@ import java.io.InputStream;
  * 
  * @author thillger
  */
+@SuppressWarnings("all")
 public class CertificateBean {
     private String username;
     private String secret;

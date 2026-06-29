@@ -26,6 +26,7 @@ import java.util.ArrayList;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class FilterRow extends EntityBeanRow<FilterBean, FilterRow> {
     // declare columns first
     public static final int COL_FILTERNAME = 0;

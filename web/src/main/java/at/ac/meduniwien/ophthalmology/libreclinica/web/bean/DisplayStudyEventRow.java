@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DisplayStudy
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class DisplayStudyEventRow extends EntityBeanRow<DisplayStudyEventBean, DisplayStudyEventRow> {
 
     // columns:

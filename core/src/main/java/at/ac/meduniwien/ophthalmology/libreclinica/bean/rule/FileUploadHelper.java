@@ -27,6 +27,8 @@ import java.util.List;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 
+@SuppressWarnings("all")
+
 public class FileUploadHelper {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

@@ -20,6 +20,7 @@ import java.util.Date;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class ViewEventDefinitionBean {
     private StudyEventDefinitionBean definition;
     private int subjectScheduled;

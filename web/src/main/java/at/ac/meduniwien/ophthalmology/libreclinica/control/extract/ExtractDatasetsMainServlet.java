@@ -33,6 +33,7 @@ import java.util.HashMap;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class ExtractDatasetsMainServlet extends SecureController {
 
     /**

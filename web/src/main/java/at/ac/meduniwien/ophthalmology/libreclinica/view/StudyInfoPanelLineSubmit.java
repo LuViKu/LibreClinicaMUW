@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyInfoPanelLineSubmit extends StudyInfoPanelLine {
     private int eventId;
     private int eventCRFId;

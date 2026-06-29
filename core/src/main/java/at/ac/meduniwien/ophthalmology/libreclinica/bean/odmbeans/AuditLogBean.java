@@ -17,6 +17,7 @@ import java.util.Date;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class AuditLogBean extends ElementOIDBean {
     private String userId;
     private Date datetimeStamp;

@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public class RulesPostImportContainer {
 
     private ArrayList<RuleSetBean> ruleSets;

@@ -20,6 +20,7 @@ import org.hibernate.query.Query;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class HibernateUtil {
 
     /**

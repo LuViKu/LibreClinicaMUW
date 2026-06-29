@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  *         Removes a site from a study
  */
+@SuppressWarnings("all")
 public class RemoveSiteServlet extends SecureController {
 
     /**

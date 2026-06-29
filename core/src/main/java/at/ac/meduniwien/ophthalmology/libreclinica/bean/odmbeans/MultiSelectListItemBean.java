@@ -16,6 +16,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class MultiSelectListItemBean  {
     private String codedOptionValue;
     private TranslatedTextBean decode;

@@ -22,6 +22,7 @@ import java.util.ArrayList;
  * Date: Nov 17, 2008
  * Time: 7:57:23 PM
  */
+@SuppressWarnings("all")
 public class DisplayStudySubjectEventsRow extends EntityBeanRow<DisplayStudySubjectBean, DisplayStudySubjectEventsRow> {
 
     // columns:

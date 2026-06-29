@@ -29,6 +29,7 @@ import jakarta.xml.bind.annotation.XmlElement;
  * jakarta migration happens in B.4.
  */
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class CRFDataPostImportContainer {
 
     @XmlElement(name = "SubjectData", namespace = "http://www.cdisc.org/ns/odm/v1.3")

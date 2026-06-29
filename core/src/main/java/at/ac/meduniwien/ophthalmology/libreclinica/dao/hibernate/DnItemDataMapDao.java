@@ -14,6 +14,8 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnItemDataMap;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class DnItemDataMapDao extends AbstractDomainDao<DnItemDataMap> {
 
     @Override

@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Time: 1:45:28 PM
  * To change this template use File | Settings | File Templates.
  */
+@SuppressWarnings("all")
 public class ChooseDownloadFormat extends SecureController{
     /**
 	 * 

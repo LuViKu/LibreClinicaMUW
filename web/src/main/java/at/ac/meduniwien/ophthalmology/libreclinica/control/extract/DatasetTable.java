@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Table;
  *
  *
  */
+@SuppressWarnings("all")
 public class DatasetTable extends Table {
     public DatasetTable() {
         columns.add("Dataset Name");

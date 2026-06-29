@@ -14,6 +14,7 @@ import java.util.ResourceBundle;
 /**
  * Utility class for crf spreadsheet validation. Created at Aug. 2011, ywang
  */
+@SuppressWarnings("all")
 public class SheetValidatorHelper {
     private SheetValidatorHelper() {}
 

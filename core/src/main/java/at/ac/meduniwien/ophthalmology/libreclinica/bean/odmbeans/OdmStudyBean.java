@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * @author ywang (May, 2008)
  * 
  */
+@SuppressWarnings("all")
 public class OdmStudyBean extends ElementOIDBean {
     private GlobalVariablesBean globalVariables;
     private BasicDefinitionsBean basicDefinitions;

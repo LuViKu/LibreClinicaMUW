@@ -39,6 +39,7 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
  * @author jxu
  * Created on Sep 23, 2005
  */
+@SuppressWarnings("all")
 public class ViewNotesServlet extends SecureController {
     /**
 	 * 

@@ -29,6 +29,7 @@ import java.util.ArrayList;
  *
  * Removes a subject group class from a study
  */
+@SuppressWarnings("all")
 public class RemoveSubjectGroupClassServlet extends SecureController {
     /**
 	 * 

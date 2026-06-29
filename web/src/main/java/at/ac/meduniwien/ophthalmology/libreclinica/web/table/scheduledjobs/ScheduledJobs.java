@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.web.table.scheduledjobs;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class ScheduledJobs {
     private String datasetId; //misnomer its actually dataset name
     private String scheduledFireTime;

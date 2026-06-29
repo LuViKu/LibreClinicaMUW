@@ -56,6 +56,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public abstract class ListStudySubjectServlet extends SecureController {
 
     /**

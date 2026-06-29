@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CompletionStatus;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class CompletionStatusDao extends AbstractDomainDao<CompletionStatus> {
 
     @Override

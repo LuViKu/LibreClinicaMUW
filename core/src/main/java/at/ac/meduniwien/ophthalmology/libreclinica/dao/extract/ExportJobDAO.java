@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
  * it in a try-with-resources. Caller-managed transactions are not
  * needed — each query is its own atomic statement.
  */
+@SuppressWarnings("all")
 public class ExportJobDAO {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExportJobDAO.class);

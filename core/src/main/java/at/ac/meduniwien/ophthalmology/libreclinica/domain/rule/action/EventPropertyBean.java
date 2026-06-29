@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action;
 
+@SuppressWarnings("all")
+
 public class EventPropertyBean extends PropertyBean {
     /**
 	 * 

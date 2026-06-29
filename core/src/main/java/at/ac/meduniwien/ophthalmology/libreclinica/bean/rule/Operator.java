@@ -17,6 +17,8 @@ import java.util.HashMap;
  *
  */
 
+@SuppressWarnings("all")
+
 public enum Operator {
 
     EQUAL(1), NOTEQUAL(2), GREATER(3), GREATERorEQUAL(4), LESS(5), LESSorEQUAL(6);

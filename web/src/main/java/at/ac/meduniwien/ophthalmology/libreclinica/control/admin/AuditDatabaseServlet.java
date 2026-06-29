@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class AuditDatabaseServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

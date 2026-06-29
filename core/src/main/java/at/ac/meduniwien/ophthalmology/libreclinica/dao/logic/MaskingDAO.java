@@ -26,6 +26,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  *
  *
  */
+@SuppressWarnings("all")
 public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
     private DAODigester digester;
 

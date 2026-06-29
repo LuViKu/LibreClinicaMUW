@@ -29,6 +29,7 @@ import java.util.Locale;
  * @author ssachs
  *
  */
+@SuppressWarnings("all")
 public class AdminSystemServlet extends SecureController {
 
     /**

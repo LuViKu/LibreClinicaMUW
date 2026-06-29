@@ -19,6 +19,8 @@ import java.util.List;
  * @author ywang (Nov, 2008)
  */
 
+@SuppressWarnings("all")
+
 public class ExportSubjectDataBean extends SubjectDataBean {
     private String studySubjectId;
     private String uniqueIdentifier;

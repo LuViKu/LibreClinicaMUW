@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEvent;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
 
     @Override

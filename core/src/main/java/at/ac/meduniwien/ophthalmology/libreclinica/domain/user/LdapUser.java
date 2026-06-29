@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * @author Doug Rodrigues (drodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class LdapUser implements Serializable {
 
     private static final long serialVersionUID = 989338796135101116L;

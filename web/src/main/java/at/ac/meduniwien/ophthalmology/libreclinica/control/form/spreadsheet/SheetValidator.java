@@ -19,6 +19,7 @@ import java.util.ResourceBundle;
 /**
  * For validation of spreadsheet loading on SheetValidationType.
  */
+@SuppressWarnings("all")
 public class SheetValidator implements SpreadSheetValidator{
     /*
      * YW: created file at Aug., 2011 with OnChangeSheetValidator

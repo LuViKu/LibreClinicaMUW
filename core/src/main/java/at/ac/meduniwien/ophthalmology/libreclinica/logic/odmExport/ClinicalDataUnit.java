@@ -25,6 +25,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.OdmExtractDAO;
  * @author ywang (May, 2009)
  */
 
+@SuppressWarnings("all")
+
 public class ClinicalDataUnit extends OdmUnit {
     private OdmClinicalDataBean odmClinicalData;
     private String studySubjectIds;

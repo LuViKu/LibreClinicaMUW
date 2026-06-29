@@ -26,6 +26,8 @@ import org.apache.poi.ss.usermodel.CellType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public final class SpreadsheetPreviewNw implements Preview {
     public static final String ITEMS = "Items";
     public static final String SECTIONS = "Sections";

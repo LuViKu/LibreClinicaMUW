@@ -31,6 +31,8 @@ import java.util.List;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class SubjectService implements SubjectServiceInterface {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

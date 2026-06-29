@@ -60,7 +60,7 @@ import org.slf4j.LoggerFactory;
  */
 /**
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
+@SuppressWarnings("all")
 public class ViewSectionDataEntryPreview extends DataEntryServlet {
 
     /**

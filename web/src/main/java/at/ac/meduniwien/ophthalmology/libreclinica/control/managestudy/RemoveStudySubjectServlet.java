@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Removes a study subject and all the related data
  */
+@SuppressWarnings("all")
 public class RemoveStudySubjectServlet extends SecureController {
     /**
 	 * 

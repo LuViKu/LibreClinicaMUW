@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class QueryBean extends EntityBean {
     /**
 	 * 

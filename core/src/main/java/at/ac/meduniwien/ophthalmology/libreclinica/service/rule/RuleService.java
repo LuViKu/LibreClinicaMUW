@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.rule.RuleDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class RuleService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

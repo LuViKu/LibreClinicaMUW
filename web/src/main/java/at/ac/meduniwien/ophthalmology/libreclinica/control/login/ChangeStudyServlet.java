@@ -47,6 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.table.sdv.SDVUtil;
  *
  * Processes the request of changing current study
  */
+@SuppressWarnings("all")
 public class ChangeStudyServlet extends SecureController {
     /**
 	 * 

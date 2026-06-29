@@ -20,6 +20,8 @@ import java.util.List;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class OdmClinicalDataBean {
     private String studyOID;
     private String metaDataVersionOID;

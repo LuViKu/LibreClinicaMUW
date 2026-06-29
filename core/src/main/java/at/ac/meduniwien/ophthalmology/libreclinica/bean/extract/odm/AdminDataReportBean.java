@@ -26,6 +26,8 @@ import org.apache.commons.lang.StringEscapeUtils;
  * @author ywang (March, 2010)
  */
 
+@SuppressWarnings("all")
+
 public class AdminDataReportBean extends OdmXmlReportBean {
     private OdmAdminDataBean adminData;
     private LinkedHashMap<String, OdmAdminDataBean> odmAdminDataMap;

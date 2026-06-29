@@ -30,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class TechAdminServlet extends SecureController {
 
     /**

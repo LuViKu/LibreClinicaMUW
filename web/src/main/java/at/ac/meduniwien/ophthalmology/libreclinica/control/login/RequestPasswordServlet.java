@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *
  * @author jxu  
  */
+@SuppressWarnings("all")
 public class RequestPasswordServlet extends SecureController {
     
 	private static final long serialVersionUID = -6525408217441592170L;

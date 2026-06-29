@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class EventDefinitionCRFBean extends AuditableEntityBean implements Comparable<EventDefinitionCRFBean> {
     /**
 	 * 

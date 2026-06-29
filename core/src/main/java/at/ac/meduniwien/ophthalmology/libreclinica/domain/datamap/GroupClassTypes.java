@@ -25,6 +25,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.DataMapDomainObject;
  */
 @Entity
 @Table(name = "group_class_types")
+@SuppressWarnings("all")
 public class GroupClassTypes  extends DataMapDomainObject {
 
 	/**

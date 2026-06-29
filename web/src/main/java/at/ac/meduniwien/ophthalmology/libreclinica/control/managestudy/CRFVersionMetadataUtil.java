@@ -31,6 +31,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 /**
  * Utility class with method for retrieving the metadata for a CRFVersion.
  */
+@SuppressWarnings("all")
 public class CRFVersionMetadataUtil {
 
 	private DataSource dataSource = null;

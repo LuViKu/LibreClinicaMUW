@@ -31,6 +31,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.form.PrintHorizontalForm
  * value formInvolvesDatabaseData maps to an attribute value indicating whether
  * the form involves an event or data. User: bruceperry Date: Feb 11, 2008
  */
+@SuppressWarnings("all")
 public class PrintTableTag extends SimpleTagSupport {
 
     private String involvesDatabaseData;

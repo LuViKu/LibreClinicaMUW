@@ -30,6 +30,7 @@ import java.util.Locale;
  * @version CVS: $Id: ListSiteServlet.java 12787 2009-05-23 18:02:01Z kkrumlian
  *          $
  */
+@SuppressWarnings("all")
 public class ListSiteServlet extends SecureController {
 
     /**

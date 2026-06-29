@@ -20,6 +20,7 @@ import java.io.Serializable;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public abstract class ProcessingFunction implements ProcessingInterface,Serializable {
     /**
 	 * 

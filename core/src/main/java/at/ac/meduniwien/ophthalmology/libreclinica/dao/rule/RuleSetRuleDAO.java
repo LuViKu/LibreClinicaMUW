@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
 
     private RuleDAO ruleDao;

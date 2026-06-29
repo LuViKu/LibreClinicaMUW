@@ -18,6 +18,8 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class ActionProcessorFacade {
 
     public static ActionProcessor getActionProcessor(ActionType actionType, DataSource ds, JavaMailSenderImpl mailSender,

@@ -29,6 +29,7 @@ import java.util.HashMap;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class DAODigester {
 
     private final HashMap<String, String> queries = new HashMap<>();

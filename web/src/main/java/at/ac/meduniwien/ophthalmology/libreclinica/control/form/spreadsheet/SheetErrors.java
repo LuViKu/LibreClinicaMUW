@@ -22,6 +22,7 @@ import java.util.ResourceBundle;
  * Error message for SpreadSheet uploading cooperating with existing message handling style.
  * ywang (Aug. 2011)
  */
+@SuppressWarnings("all")
 public final class SheetErrors {
     List<StringBuffer> errors;
     Map<String,String> htmlErrors;

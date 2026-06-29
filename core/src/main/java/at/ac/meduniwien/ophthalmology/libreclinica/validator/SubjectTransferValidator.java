@@ -27,6 +27,8 @@ import java.util.Date;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class SubjectTransferValidator implements Validator {
 
     DataSource dataSource;

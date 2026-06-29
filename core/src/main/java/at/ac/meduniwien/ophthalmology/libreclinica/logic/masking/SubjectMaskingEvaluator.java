@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.masking.rules.MaskSubje
  * @author thickerson
  * Created on Sep 1, 2005
  */
+@SuppressWarnings("all")
 public class SubjectMaskingEvaluator extends BusinessEvaluator {
     protected MaskingBean mBean;
 

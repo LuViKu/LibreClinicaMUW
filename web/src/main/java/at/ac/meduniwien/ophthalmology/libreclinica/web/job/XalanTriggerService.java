@@ -16,6 +16,8 @@ import java.util.Date;
 
 import org.quartz.SimpleTrigger;
 
+@SuppressWarnings("all")
+
 public class XalanTriggerService {
     public XalanTriggerService() {
         

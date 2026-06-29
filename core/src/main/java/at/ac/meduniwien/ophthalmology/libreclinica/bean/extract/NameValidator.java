@@ -26,6 +26,8 @@ import java.util.TreeSet;
  * @auther ywang
  */
 
+@SuppressWarnings("all")
+
 public abstract class NameValidator {
     protected TreeSet<String> uniqueNameTable = new TreeSet<String>();
     protected int digitSize;

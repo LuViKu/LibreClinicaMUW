@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
  * @author Jun Xu
  *
  */
+@SuppressWarnings("all")
 public class StudyEventAuditBean {
     private StudyEventDefinitionBean definition;
     private SubjectEventStatus oldSubjectEventStatus;

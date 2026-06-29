@@ -18,6 +18,8 @@ import java.util.List;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class MetaDataVersionProtocolBean {
     private List<ElementRefBean> studyEventRefs;
     

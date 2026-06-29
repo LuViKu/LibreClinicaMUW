@@ -12,7 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.exception;
 /**
  * @author Krikor Krumlian
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class OpenClinicaSystemException extends RuntimeException {
     private String errorCode;
     private Object[] errorParams;

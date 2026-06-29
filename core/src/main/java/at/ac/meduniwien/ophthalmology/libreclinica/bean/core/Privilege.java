@@ -21,6 +21,7 @@ import java.util.Optional;
 
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class Privilege extends Term {
     /**
 	 * 

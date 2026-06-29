@@ -28,6 +28,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 @Entity
 @Table(name = "response_type")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@SuppressWarnings("all")
 public class ResponseType  extends DataMapDomainObject {
 
 	/**

@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserType;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class UserTypeDao extends AbstractDomainDao<UserType> {
 	
     @Override

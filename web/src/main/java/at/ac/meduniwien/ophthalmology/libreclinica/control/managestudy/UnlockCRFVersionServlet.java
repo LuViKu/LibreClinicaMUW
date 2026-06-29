@@ -24,6 +24,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
+@SuppressWarnings("all")
+
 public class UnlockCRFVersionServlet extends SecureController {
     /**
 	 * 

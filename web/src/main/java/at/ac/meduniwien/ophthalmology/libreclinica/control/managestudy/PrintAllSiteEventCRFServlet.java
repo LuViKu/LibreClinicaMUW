@@ -53,6 +53,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author Shamim
   * Date: Dec 15, 2009
  */
+@SuppressWarnings("all")
 public class PrintAllSiteEventCRFServlet extends DataEntryServlet {
     /**
 	 * 

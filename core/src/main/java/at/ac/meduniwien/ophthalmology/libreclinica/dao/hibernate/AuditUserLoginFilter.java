@@ -36,6 +36,7 @@ import java.util.List;
  * over the implied [startDate, startDate+granularity) window — the original
  * Hibernate 5 form did the same, just expressed via {@code Restrictions.between}.
  */
+@SuppressWarnings("all")
 public class AuditUserLoginFilter implements CriteriaCommand<AuditUserLoginBean> {
 
     private final List<Filter> filters = new ArrayList<>();

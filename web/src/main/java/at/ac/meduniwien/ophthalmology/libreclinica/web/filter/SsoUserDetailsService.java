@@ -47,6 +47,7 @@ import org.springframework.security.web.authentication.preauth.PreAuthenticatedA
  *
  * @see <a href="../../../../../../../docs/development/modernization/phase-d-execution-playbook.md">Phase D playbook §D.3</a>
  */
+@SuppressWarnings("all")
 public class SsoUserDetailsService implements
         org.springframework.security.core.userdetails.AuthenticationUserDetailsService<PreAuthenticatedAuthenticationToken> {
 

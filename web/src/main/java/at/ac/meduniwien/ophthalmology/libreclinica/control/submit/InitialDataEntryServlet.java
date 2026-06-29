@@ -43,6 +43,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
  */
 @Controller
 @RequestMapping(value="/InitialDataEntry")
+@SuppressWarnings("all")
 public class InitialDataEntryServlet extends DataEntryServlet {
     /**
 	 * 

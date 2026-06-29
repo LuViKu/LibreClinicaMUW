@@ -25,6 +25,7 @@ import jakarta.servlet.jsp.tagext.SimpleTagSupport;
  * Time: 3:18:13 PM
  * To change this template use File | Settings | File Templates.
  */
+@SuppressWarnings("all")
 public class AlertTag extends SimpleTagSupport {
     private String message;
     @Override

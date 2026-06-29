@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author jxu
  * @version CVS: $Id: InitUpdateStudyServlet.java 13689 2009-12-16 21:10:37Z kkrumlian $
  */
+@SuppressWarnings("all")
 public class InitUpdateStudyServlet extends SecureController {
 
     /**

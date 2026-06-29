@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class PrintCRFByIdServlet extends PrintCRFServlet {
 
     private static final long serialVersionUID = 1L;

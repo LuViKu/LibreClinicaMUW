@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author thickerson
  * Created on Apr 18, 2005
  */
+@SuppressWarnings("all")
 public class ArchivedDatasetFileRow extends EntityBeanRow<ArchivedDatasetFileBean, ArchivedDatasetFileRow> {
     // declare columns first
     public static final int COL_FILENAME = 0;

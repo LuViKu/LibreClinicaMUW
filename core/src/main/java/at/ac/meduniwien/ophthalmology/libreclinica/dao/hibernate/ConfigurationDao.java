@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
 
     @Override

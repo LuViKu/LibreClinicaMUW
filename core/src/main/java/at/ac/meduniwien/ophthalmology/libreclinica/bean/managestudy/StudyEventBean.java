@@ -24,6 +24,7 @@ import java.util.Date;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyEventBean extends AuditableEntityBean implements Listener {
     /**
 	 * 

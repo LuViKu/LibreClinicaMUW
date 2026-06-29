@@ -51,6 +51,7 @@ import org.apache.commons.lang.StringUtils;
  * 
  * Defines a new study event
  */
+@SuppressWarnings("all")
 public class DefineStudyEventServlet extends SecureController {
     /**
 	 * 

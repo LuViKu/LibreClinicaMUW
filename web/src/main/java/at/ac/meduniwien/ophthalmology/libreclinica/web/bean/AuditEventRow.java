@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class AuditEventRow extends EntityBeanRow<AuditEventBean, AuditEventRow> {
     public static final int AUDIT_DATE = 0;
     public static final int AUDIT_ACTION = 1;

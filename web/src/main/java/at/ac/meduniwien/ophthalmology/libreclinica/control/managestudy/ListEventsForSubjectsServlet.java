@@ -35,6 +35,7 @@ import java.util.Locale;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ListEventsForSubjectsServlet extends SecureController {
 
     // Shaoyu Su

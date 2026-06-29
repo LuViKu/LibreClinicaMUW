@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.OidGenerator;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 7, 2007
  */
+@SuppressWarnings("all")
 public class ItemGroupBean extends AuditableEntityBean implements Serializable{
 
     /**

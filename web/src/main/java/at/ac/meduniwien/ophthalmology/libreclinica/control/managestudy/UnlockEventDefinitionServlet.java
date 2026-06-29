@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class UnlockEventDefinitionServlet extends SecureController {
     /**
 	 * 

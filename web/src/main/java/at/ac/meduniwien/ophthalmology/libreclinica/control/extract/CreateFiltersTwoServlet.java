@@ -51,6 +51,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class CreateFiltersTwoServlet extends SecureController {
 
     /**

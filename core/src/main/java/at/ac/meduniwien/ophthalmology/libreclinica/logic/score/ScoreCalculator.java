@@ -62,6 +62,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TreeSet;
 
+@SuppressWarnings("all")
+
 public class ScoreCalculator {
     private final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

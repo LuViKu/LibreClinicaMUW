@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBean;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class RuleActionPropertyDao extends AbstractDomainDao<PropertyBean> {
 
     @Override

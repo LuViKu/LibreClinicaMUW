@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class UnaryMinusNode extends ExpressionNode {
     ExpressionNode operand; // The operand to which the unary minus applies.
 

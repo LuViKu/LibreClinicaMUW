@@ -14,6 +14,7 @@ import java.io.Serializable;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ResponseOptionBean implements Serializable {
     /**
 	 * 

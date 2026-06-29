@@ -16,6 +16,8 @@ import java.util.HashMap;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class ExpressionObjectWrapper {
 
     DataSource ds;

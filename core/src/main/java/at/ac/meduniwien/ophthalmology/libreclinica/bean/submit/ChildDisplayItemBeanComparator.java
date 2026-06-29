@@ -14,6 +14,7 @@ import java.util.Comparator;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ChildDisplayItemBeanComparator implements Comparator<DisplayItemBean> {
     private static ChildDisplayItemBeanComparator instance = null;
 

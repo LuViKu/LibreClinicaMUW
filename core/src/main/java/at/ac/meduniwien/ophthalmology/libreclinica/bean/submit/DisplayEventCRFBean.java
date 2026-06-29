@@ -29,6 +29,8 @@ import java.util.Date;
  * @author ssachs
  */
 
+@SuppressWarnings("all")
+
 public class DisplayEventCRFBean implements Comparable<DisplayEventCRFBean> {
 
     protected final static Logger logger = LoggerFactory.getLogger(DisplayEventCRFBean.class.getName());

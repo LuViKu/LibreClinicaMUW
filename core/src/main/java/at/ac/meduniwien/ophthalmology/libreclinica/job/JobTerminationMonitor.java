@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class JobTerminationMonitor implements Serializable {
 
     private static final long serialVersionUID = 361394087982395855L;

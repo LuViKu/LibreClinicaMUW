@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.exception;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class DAOCleanupFailureException extends Exception {
     /**
 	 * 

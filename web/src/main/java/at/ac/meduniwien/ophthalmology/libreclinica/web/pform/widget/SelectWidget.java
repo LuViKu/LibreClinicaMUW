@@ -22,6 +22,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Label;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Select;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 
+@SuppressWarnings("all")
+
 public class SelectWidget extends BaseWidget {
 
 	private ItemBean item = null;

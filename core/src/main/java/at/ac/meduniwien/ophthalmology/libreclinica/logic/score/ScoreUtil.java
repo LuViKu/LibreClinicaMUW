@@ -25,6 +25,7 @@ import java.util.Stack;
  * @author ywang (Jan. 2008)
  * 
  */
+@SuppressWarnings("all")
 public class ScoreUtil {
 
     protected static final Logger logger = LoggerFactory.getLogger(ScoreUtil.class.getName());

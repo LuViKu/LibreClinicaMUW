@@ -23,6 +23,7 @@ import java.util.HashMap;
  *
  *
  */
+@SuppressWarnings("all")
 public class MaskingBean extends AuditableEntityBean {
     /**
 	 * 

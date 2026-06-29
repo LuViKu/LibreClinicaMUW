@@ -15,6 +15,7 @@ import java.util.List;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 7, 2007
  */
+@SuppressWarnings("all")
 public class DisplayItemGroupBean implements Comparable<DisplayItemGroupBean> {
     @Override
     public int hashCode() {

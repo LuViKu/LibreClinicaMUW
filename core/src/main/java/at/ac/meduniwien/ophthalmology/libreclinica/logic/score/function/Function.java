@@ -26,6 +26,8 @@ import java.util.List;
  * modified by ywang 1-16-2008
  */
 
+@SuppressWarnings("all")
+
 public interface Function {
     /**
      * @return the value which was calculated out by this function based on the

@@ -39,6 +39,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
+@SuppressWarnings("all")
+
 public class ListDiscNotesForCRFServlet extends SecureController {
 
     /**

@@ -20,6 +20,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class StudyAuditLogFilter implements CriteriaCommand {
 
     List<Filter> filters = new ArrayList<>();

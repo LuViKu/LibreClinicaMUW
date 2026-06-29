@@ -20,6 +20,7 @@ import java.util.ArrayList;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class DisplayItemBean implements Comparable<DisplayItemBean> {
     private ItemDataBean data;
     private ItemBean item;

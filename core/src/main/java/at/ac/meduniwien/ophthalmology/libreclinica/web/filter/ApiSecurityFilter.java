@@ -28,6 +28,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Created by krikorkrumlian on 8/7/15.
  */
+@SuppressWarnings("all")
 public class ApiSecurityFilter extends OncePerRequestFilter {
 
     private String realm = "Protected";

@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.submit;
 /**
  * This class collects a set of information for a simple conditional display
  */
+@SuppressWarnings("all")
 public class SimpleConditionalDisplayPair {
     private Integer SCDItemId = 0;
     private String SCDItemName = "";

@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author pgawade
  */
+@SuppressWarnings("all")
 public class LogUsageStatsService {
 
     protected final static Logger logger = LoggerFactory.getLogger(LogUsageStatsService.class);

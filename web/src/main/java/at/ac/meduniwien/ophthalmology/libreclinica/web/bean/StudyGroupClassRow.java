@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyGroupClassRow extends EntityBeanRow<StudyGroupClassBean, StudyGroupClassRow> {
     // columns:
     public static final int COL_NAME = 0;

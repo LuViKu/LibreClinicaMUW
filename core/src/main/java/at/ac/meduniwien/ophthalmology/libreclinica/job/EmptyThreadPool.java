@@ -16,6 +16,7 @@ import org.quartz.simpl.ZeroSizeThreadPool;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class EmptyThreadPool extends ZeroSizeThreadPool {
 
     private final Object lock = new Object();

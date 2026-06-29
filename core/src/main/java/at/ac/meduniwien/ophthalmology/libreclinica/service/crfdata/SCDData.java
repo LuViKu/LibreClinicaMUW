@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.SCDItemMetadat
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class SCDData {
 
     private SCDItemDisplayInfo scdDisplayInfo = new SCDItemDisplayInfo(); 

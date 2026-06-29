@@ -50,6 +50,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class CreateUserAccountServlet extends SecureController {
 
 	private static final long serialVersionUID = -3015174087186096328L;

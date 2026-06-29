@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 
 // Internationalized name and description in Term.getName and
 // Term.getDescription()
+@SuppressWarnings("all")
 public class SubjectEventStatus extends Term implements Comparable<SubjectEventStatus> {
     /**
 	 * 

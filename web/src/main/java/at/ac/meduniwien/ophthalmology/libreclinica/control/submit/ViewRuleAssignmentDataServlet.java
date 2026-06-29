@@ -56,6 +56,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * the rule is AVAILABLE; restore only when DELETED; extract/test
  * always).
  */
+@SuppressWarnings("all")
 public class ViewRuleAssignmentDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

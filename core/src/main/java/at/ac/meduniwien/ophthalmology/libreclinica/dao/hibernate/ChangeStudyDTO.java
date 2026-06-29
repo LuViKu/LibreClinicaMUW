@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
+@SuppressWarnings("all")
+
 public class ChangeStudyDTO {
     private int studyId;
     private String studyEnvUuid;

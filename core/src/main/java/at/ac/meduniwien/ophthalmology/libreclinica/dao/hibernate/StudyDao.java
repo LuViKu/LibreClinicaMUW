@@ -12,6 +12,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Study;
 
 
+@SuppressWarnings("all")
+
+
 public class StudyDao extends AbstractDomainDao<Study> {
 	
     @Override

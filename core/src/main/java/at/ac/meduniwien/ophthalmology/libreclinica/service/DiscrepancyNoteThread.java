@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyN
  * This class represents a Discrepancy Note thread or sequence of notes that are
  * conceptually linked together on an Event CRF.
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteThread {
     private LinkedList<DiscrepancyNoteBean> linkedNoteList;
     private String latestResolutionStatus;

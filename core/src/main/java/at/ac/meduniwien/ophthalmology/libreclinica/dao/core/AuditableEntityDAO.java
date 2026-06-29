@@ -32,6 +32,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public abstract class AuditableEntityDAO<T extends EntityBean> extends EntityDAO<T> {
 
     /**

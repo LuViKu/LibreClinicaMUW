@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.submit;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class DisplayItemWithGroupBean implements Comparable<DisplayItemWithGroupBean> {
     private DisplayItemBean singleItem;
 

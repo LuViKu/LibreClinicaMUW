@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Krikor krumlian
  */
+@SuppressWarnings("all")
 public class ViewRuleAssignmentNewServlet extends SecureController {
 
     private static final long serialVersionUID = 9116068126651934226L;

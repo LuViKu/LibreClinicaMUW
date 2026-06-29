@@ -67,6 +67,7 @@ import javax.sql.DataSource;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RulesPostImportContainerService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

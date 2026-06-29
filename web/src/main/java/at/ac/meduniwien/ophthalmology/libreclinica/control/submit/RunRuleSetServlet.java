@@ -25,6 +25,7 @@ import java.util.List;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RunRuleSetServlet extends SecureController {
 
     /**

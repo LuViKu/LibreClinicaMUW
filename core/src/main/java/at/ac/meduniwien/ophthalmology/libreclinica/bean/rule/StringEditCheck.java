@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
  * String edit checks should only support EQUAL , NOTEQUAL
  */
 
+@SuppressWarnings("all")
+
 public class StringEditCheck implements EditCheckInterface {
 
     // if ( x = y ) is true?

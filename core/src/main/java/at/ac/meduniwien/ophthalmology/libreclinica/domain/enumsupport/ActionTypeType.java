@@ -14,6 +14,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ActionType
  * Concrete {@link CodedEnumType} pre-bound to the rule
  * {@link ActionType} enum. Phase B.5 — see {@link StatusType} for rationale.
  */
+@SuppressWarnings("all")
 public class ActionTypeType extends CodedEnumType {
     public ActionTypeType() {
         setEnumClass(ActionType.class);

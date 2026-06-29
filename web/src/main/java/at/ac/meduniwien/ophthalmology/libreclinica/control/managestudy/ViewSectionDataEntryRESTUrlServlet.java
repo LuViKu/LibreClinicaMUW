@@ -68,6 +68,7 @@ import org.slf4j.LoggerFactory;
  *         <p/>
  *         View a CRF version section data entry
  */
+@SuppressWarnings("all")
 public class ViewSectionDataEntryRESTUrlServlet extends ViewSectionDataEntryServlet {
 
     /**

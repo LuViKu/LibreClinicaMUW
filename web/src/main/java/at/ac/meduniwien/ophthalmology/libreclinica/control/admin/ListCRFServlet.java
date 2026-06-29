@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.ListCRFRow;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ListCRFServlet extends SecureController {
     /**
 	 * 

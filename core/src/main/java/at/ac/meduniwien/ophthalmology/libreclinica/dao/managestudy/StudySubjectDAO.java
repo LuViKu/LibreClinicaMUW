@@ -38,6 +38,7 @@ import org.apache.commons.lang.StringUtils;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
 
     public void setQueryNames() {

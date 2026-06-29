@@ -18,6 +18,7 @@ import java.util.Iterator;
  * @author thickerson
  * Created on Sep 1, 2005
  */
+@SuppressWarnings("all")
 public abstract class BusinessEvaluator implements Runnable {
     protected ArrayList<BusinessRule> ruleSet;
     protected boolean hasBeenUpdated;

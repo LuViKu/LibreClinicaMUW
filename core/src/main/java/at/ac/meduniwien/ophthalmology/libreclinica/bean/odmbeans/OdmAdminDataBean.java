@@ -17,6 +17,7 @@ import java.util.List;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class OdmAdminDataBean extends ElementOIDBean {
     private String studyOID;
     private String metaDataVersionOID;

@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
  * @since Jan. 2012
  */
 // @author ywang
+@SuppressWarnings("all")
 public final class LocaleFilter implements Filter {
     private final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

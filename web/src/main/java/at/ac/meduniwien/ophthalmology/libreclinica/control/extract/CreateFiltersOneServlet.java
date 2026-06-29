@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
  *
  *
  */
+@SuppressWarnings("all")
 public class CreateFiltersOneServlet extends SecureController {
 
     /**

@@ -106,6 +106,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
+@SuppressWarnings("all")
 public class SiteVisibilityFilter {
 
     private static final Logger LOG = LoggerFactory.getLogger(SiteVisibilityFilter.class);

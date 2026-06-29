@@ -6,6 +6,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.admin;
  * 
  * @author thillger
  */
+@SuppressWarnings("all")
 public enum TwoFactorType {
 	/**
 	 * The standard way doing how 2-FA security key provision is handled. QR code

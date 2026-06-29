@@ -18,6 +18,7 @@ import java.util.ResourceBundle;
 /**
  * An enum that represents an Event definition's  requirement for SourceDataVerification.
  */
+@SuppressWarnings("all")
 public enum SourceDataVerification implements CodedEnum {
 
     AllREQUIRED(1, "100percent_required"), PARTIALREQUIRED(2, "partial_required"), NOTREQUIRED(3, "not_required"), NOTAPPLICABLE(4, "not_applicable");

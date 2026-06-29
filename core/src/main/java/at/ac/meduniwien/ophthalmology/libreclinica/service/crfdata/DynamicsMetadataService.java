@@ -53,7 +53,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.Expre
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class DynamicsMetadataService implements MetadataServiceInterface {
 

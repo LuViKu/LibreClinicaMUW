@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * chooses a subject or study event definition whose study events he wants to
  * see Step 3 - the user chooses the study event he wants to add data to
  */
+@SuppressWarnings("all")
 public class FindStudyEventServlet extends SecureController {
 
     /**

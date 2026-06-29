@@ -45,6 +45,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Removes a study event and all its related event CRFs, items
  */
+@SuppressWarnings("all")
 public class RemoveStudyEventServlet extends SecureController {
     /**
 	 * 

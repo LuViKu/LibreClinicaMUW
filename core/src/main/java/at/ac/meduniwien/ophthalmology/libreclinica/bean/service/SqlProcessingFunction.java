@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.util.ScriptRunner;
  * @author thickerson
  * 
  */
+@SuppressWarnings("all")
 public class SqlProcessingFunction extends ProcessingFunction implements Serializable {
 
     /**

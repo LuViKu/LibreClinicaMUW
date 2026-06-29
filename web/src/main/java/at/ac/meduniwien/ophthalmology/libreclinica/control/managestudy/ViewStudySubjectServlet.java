@@ -72,6 +72,7 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
  * Processes 'view subject' request
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ViewStudySubjectServlet extends SecureController {
 
 	private static final long serialVersionUID = 3682444868708787558L;

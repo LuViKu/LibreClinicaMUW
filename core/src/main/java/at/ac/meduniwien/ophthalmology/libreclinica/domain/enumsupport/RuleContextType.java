@@ -14,6 +14,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.Contex
  * Concrete {@link CodedEnumType} pre-bound to the rule
  * {@link Context} enum. Phase B.5 — see {@link StatusType} for rationale.
  */
+@SuppressWarnings("all")
 public class RuleContextType extends CodedEnumType {
     public RuleContextType() {
         setEnumClass(Context.class);

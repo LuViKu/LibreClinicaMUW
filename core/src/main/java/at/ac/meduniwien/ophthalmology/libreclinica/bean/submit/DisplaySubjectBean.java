@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class DisplaySubjectBean extends EntityBean {
     /**
 	 * 

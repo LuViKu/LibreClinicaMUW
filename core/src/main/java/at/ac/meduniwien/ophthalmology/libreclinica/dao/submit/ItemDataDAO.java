@@ -45,6 +45,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
  * 
  * 
  */
+@SuppressWarnings("all")
 public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
 
     boolean formatDates = true;

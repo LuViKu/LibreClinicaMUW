@@ -47,6 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Processes the request of restoring a top level study, all the data assoicated
  * with this study will be restored
  */
+@SuppressWarnings("all")
 public class RestoreStudyServlet extends SecureController {
     /**
 	 * 

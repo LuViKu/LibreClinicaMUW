@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersionMedia;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class CrfVersionMediaDao extends AbstractDomainDao<CrfVersionMedia> {
 
     @Override

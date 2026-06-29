@@ -14,6 +14,8 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrfItemTag;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class EventDefinitionCrfItemTagDao extends AbstractDomainDao<EventDefinitionCrfItemTag> {
 
     @Override

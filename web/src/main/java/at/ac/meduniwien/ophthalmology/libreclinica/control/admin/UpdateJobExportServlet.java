@@ -48,6 +48,8 @@ import org.quartz.impl.StdScheduler;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 
+@SuppressWarnings("all")
+
 public class UpdateJobExportServlet extends SecureController {
 
     /**

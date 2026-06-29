@@ -69,6 +69,7 @@ import java.util.Set;
  * version OIDs (operator-readable; the legacy schema accepts strings).
  */
 @Service
+@SuppressWarnings("all")
 public class CrfVersionMigrationService {
 
     private static final Logger LOG =

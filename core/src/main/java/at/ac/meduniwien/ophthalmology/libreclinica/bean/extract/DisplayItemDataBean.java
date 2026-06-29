@@ -17,6 +17,7 @@ import java.util.HashMap;
  *
  * To display dataset->item row on dataset html browser page
  */
+@SuppressWarnings("all")
 public class DisplayItemDataBean {
     private String subjectName;
     private String studyLabel;

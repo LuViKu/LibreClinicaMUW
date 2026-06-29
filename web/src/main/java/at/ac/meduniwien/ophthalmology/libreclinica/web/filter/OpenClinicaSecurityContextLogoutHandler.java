@@ -36,6 +36,7 @@ import org.springframework.security.web.authentication.logout.SecurityContextLog
  * 
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class OpenClinicaSecurityContextLogoutHandler extends SecurityContextLogoutHandler implements LogoutSuccessHandler {
 
     AuditUserLoginDao auditUserLoginDao;

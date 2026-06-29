@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlagWorkflow;
 
+@SuppressWarnings("all")
+
 public class ItemDataFlagWorkflowDao extends AbstractDomainDao<ItemDataFlagWorkflow> {
 
     @Override

@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class MarkEventCRFCompleteServlet extends SecureController {
 
     /**

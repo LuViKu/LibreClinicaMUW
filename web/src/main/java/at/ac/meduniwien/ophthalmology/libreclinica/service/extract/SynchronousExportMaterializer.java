@@ -62,6 +62,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
  * {@code new} only when no bean is registered.
  */
 @Component
+@SuppressWarnings("all")
 public class SynchronousExportMaterializer implements ExportFileMaterializer {
 
     private static final Logger LOG = LoggerFactory.getLogger(SynchronousExportMaterializer.class);

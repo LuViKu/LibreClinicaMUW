@@ -14,6 +14,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+@SuppressWarnings("all")
+
 public class DatasetItemStatus extends Term {
     /**
 	 * 

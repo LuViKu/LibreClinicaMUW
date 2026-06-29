@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class StudyInfoPanel {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

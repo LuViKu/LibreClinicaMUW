@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.RuleRunner.R
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class EventActionProcessor implements ActionProcessor {
 
 	@Override

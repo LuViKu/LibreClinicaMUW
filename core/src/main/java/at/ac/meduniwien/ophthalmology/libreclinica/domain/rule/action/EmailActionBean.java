@@ -19,6 +19,7 @@ import jakarta.persistence.Transient;
 
 @Entity
 @DiscriminatorValue("2")
+@SuppressWarnings("all")
 public class EmailActionBean extends RuleActionBean {
 
     /**

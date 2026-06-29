@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  * Created by krikorkrumlian on 7/9/15.
  */
 @Service
+@SuppressWarnings("all")
 public class BulkEmailSenderService {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

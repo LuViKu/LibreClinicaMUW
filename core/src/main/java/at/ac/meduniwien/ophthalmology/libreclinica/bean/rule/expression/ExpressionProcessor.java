@@ -15,6 +15,7 @@ import java.util.HashMap;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public interface ExpressionProcessor {
 
     String isRuleAssignmentExpressionValid();

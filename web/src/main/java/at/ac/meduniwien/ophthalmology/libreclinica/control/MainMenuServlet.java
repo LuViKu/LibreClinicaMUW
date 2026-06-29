@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.table.sdv.SDVUtil;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class MainMenuServlet extends SecureController {
 
     /**

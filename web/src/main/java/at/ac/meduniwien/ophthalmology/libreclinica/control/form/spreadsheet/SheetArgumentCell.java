@@ -17,6 +17,7 @@ import java.util.List;
  * It also contains arguments List which might need additional validation.</p>
  * ywang (Aug. 2011)
  */
+@SuppressWarnings("all")
 public class SheetArgumentCell {
     private final SheetCell sheetCell;
     private List<? extends Object> arguments;

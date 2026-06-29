@@ -16,6 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestTemplate;
 
+@SuppressWarnings("all")
+
 public class EnketoCredentials {
     private String serverUrl = null;
     private String apiKey = null;

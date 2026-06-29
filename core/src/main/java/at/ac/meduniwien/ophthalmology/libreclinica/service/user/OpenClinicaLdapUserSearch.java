@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
  *
  */
 @Service("openClinicaLdapUserSearch")
+@SuppressWarnings("all")
 public class OpenClinicaLdapUserSearch implements LdapUserSearch {
 
     @Autowired

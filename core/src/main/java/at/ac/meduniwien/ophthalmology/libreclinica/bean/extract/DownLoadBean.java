@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
  * @see DownloadDiscrepancyNote
  * @author Bruce W. Perry
  */
+@SuppressWarnings("all")
 public interface DownLoadBean {
 
     void downLoad(EntityBean bean, String format, OutputStream stream);

@@ -72,6 +72,8 @@ import org.slf4j.LoggerFactory;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataService {
 	protected final static Logger LOGGER = LoggerFactory
 			.getLogger("at.ac.meduniwien.ophthalmology.libreclinica.service.extract.GenerateClinicalDataServiceImpl");

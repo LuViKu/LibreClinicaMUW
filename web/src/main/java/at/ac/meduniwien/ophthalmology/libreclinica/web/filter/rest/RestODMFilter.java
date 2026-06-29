@@ -36,6 +36,10 @@ import com.sun.jersey.spi.container.ResourceFilter;
 
 
 
+@SuppressWarnings("all")
+
+
+
 public class RestODMFilter implements ContainerRequestFilter,ResourceFilter {
 
 	@Context

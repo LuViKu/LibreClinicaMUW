@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata;
 
+@SuppressWarnings("all")
+
 public class SummaryStatsBean {
 
     private int eventCrfCount;

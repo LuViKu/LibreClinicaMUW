@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.AbstractMutableDomainO
 // registered for completeness.
 @Entity(name = "DatamapStudyModuleStatus")
 @Table(name = "study_module_status")
+@SuppressWarnings("all")
 public class StudyModuleStatus  extends AbstractMutableDomainObject {
 
 	/**

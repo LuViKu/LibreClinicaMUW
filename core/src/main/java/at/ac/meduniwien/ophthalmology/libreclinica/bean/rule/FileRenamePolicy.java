@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule;
 import java.io.File;
 import java.io.InputStream;
 
+@SuppressWarnings("all")
+
 public interface FileRenamePolicy {
 
     public File rename(File f, InputStream content);

@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.logic.score;
 
+@SuppressWarnings("all")
+
 public class ScoreSymbol {
     /**
      * TERM_SYMBOL is for all of arguments, variables, values.

@@ -20,6 +20,7 @@ import java.util.List;
  * the purposes of creating a Print CRF view, change radio and select response
  * types to checkboxes.
  */
+@SuppressWarnings("all")
 public class FormBeanUtilDecorator {
     // Delegate the method call to this object, as in the Decorator design
     // pattern

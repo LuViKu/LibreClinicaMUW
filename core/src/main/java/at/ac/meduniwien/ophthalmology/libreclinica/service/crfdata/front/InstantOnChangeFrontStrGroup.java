@@ -16,6 +16,7 @@ import java.io.Serializable;
  * </p>
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class InstantOnChangeFrontStrGroup implements Serializable {
     private static final long serialVersionUID = 2200616942101253858L;
 

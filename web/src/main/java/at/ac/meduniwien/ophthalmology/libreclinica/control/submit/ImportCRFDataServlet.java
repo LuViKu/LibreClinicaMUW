@@ -46,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
  * 
  * @author Krikor Krumlian, Tom Hickerson updated Apr-May 2008
  */
+@SuppressWarnings("all")
 public class ImportCRFDataServlet extends SecureController {
 
     /**

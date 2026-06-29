@@ -47,6 +47,7 @@ import org.springframework.stereotype.Service;
  * notification site).
  */
 @Service
+@SuppressWarnings("all")
 public class DiscrepancyEmailNotifier {
 
     private static final Logger LOG = LoggerFactory.getLogger(DiscrepancyEmailNotifier.class);

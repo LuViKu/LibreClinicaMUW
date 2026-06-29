@@ -24,6 +24,7 @@ import jakarta.persistence.criteria.Root;
  * (filters) or {@code orderBy} clauses (sorts) using the supplied
  * {@link CriteriaBuilder} and {@link Root}.
  */
+@SuppressWarnings("all")
 public interface CriteriaCommand<T> {
 
     void apply(CriteriaBuilder cb, CriteriaQuery<?> query, Root<T> root);

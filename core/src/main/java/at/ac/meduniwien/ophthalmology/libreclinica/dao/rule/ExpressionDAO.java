@@ -31,6 +31,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
 
     private void setQueryNames() {

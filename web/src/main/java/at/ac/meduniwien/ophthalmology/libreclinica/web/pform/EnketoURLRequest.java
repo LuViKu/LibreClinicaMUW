@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
 
+@SuppressWarnings("all")
+
 public class EnketoURLRequest {
     private String server_url = null;
     private String form_id = null;
