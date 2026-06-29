@@ -114,15 +114,14 @@ const labels = computed<readonly string[]>(() => {
 
 const overlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
 /**
- * 2026-06-29 — ETDRS eccentricity-ring indicator toggle. Defaults ON so
- * operators correcting layers can immediately see the central 1/3/6 mm
- * landmarks on the B-scan. Persisted to localStorage so the operator's
- * preference survives a reload.
+ * 2026-06-29 — ETDRS eccentricity-ring indicator toggle. Defaults OFF
+ * so the B-scan stays uncluttered for routine reviewing; operators who
+ * are specifically correcting the central 1 mm enable it explicitly.
+ * Persisted to localStorage so the choice survives a reload.
  */
 const showEtdrsRings = ref<boolean>(
-  typeof localStorage === 'undefined'
-    ? true
-    : localStorage.getItem('retinal.correction.etdrsRings') !== '0',
+  typeof localStorage !== 'undefined'
+    && localStorage.getItem('retinal.correction.etdrsRings') === '1',
 )
 function toggleEtdrsRings(): void {
   showEtdrsRings.value = !showEtdrsRings.value
