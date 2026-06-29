@@ -8,7 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -80,7 +79,7 @@ class AdminApiControllerTest extends AbstractApiControllerTest {
     }
 
     private PasswordRequirementsDao stubPasswordDao() {
-        ConfigurationDao cfg = Mockito.mock(ConfigurationDao.class);
+        Mockito.mock(ConfigurationDao.class);
         PasswordRequirementsDao real = Mockito.mock(PasswordRequirementsDao.class);
         when(real.hasLower()).thenReturn(true);
         when(real.hasUpper()).thenReturn(true);
