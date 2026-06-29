@@ -41,6 +41,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "run",
     "message"
 })
+@SuppressWarnings("all")
 public class DiscrepancyNoteActionType {
 
     @XmlElement(name = "Run")

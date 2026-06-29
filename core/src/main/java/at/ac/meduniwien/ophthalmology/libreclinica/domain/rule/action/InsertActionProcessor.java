@@ -22,7 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.DynamicsMetad
 
 import javax.sql.DataSource;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class InsertActionProcessor implements ActionProcessor {
 

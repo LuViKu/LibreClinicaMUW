@@ -118,6 +118,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/discrepancies")
 @Tag(name = "Discrepancy", description = "Queries & discrepancy notes.")
+@SuppressWarnings("null")
 public class DiscrepancyApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(DiscrepancyApiController.class);

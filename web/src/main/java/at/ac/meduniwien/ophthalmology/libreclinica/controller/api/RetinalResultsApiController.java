@@ -107,6 +107,7 @@ import java.time.Duration;
 @RequestMapping("/api/v1")
 @Tag(name = "Retinal results",
      description = "Read-side endpoints for the SPA viewer (Wave 4).")
+@SuppressWarnings("null")
 public class RetinalResultsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultsApiController.class);

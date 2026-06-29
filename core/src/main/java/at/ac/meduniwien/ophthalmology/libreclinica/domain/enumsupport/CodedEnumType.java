@@ -72,7 +72,7 @@ public class CodedEnumType implements UserType<CodedEnum>, ParameterizedType {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("all")
     public void setParameterValues(Properties parameters) {
         String enumClassName = parameters.getProperty("enumClassname");
         if (enumClassName == null) {

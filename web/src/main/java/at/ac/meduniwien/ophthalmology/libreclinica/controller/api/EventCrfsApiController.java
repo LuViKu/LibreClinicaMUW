@@ -157,7 +157,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Event CRFs", description = "CRF read + bulk save + markComplete.")
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings({"null"})
 public class EventCrfsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(EventCrfsApiController.class);

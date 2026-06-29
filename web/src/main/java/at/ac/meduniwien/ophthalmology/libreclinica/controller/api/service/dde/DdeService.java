@@ -86,6 +86,7 @@ import org.slf4j.LoggerFactory;
  *       lands the export endpoint.</li>
  * </ul>
  */
+@SuppressWarnings("null")
 public class DdeService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DdeService.class);

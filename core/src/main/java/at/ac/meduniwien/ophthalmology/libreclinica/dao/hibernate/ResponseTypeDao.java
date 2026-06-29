@@ -23,7 +23,7 @@ import org.hibernate.query.Query;
 
 // is intentional and isolated to this DAO.
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
 

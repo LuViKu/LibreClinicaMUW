@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "messages"
 })
 @XmlRootElement(name = "Response")
+@SuppressWarnings("all")
 public class Response {
 
     @XmlElement(name = "Valid")

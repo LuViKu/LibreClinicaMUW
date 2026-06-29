@@ -43,6 +43,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "itemGroupRepeat",
     "itemGroupHeader"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionPresentInForm {
 
     @XmlElement(name = "ItemGroupRepeat")

@@ -48,6 +48,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *       fields.</li>
  * </ul>
  */
+@SuppressWarnings("null")
 class AdminApiControllerTest extends AbstractApiControllerTest {
 
     /**

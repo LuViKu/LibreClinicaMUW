@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCa
 import org.hibernate.HibernateException;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class RuleSetAuditDaoTest extends HibernateOcDbTestCase {
     private static RuleSetAuditDao ruleSetAuditDao;
     private static RuleSetDao ruleSetDao;

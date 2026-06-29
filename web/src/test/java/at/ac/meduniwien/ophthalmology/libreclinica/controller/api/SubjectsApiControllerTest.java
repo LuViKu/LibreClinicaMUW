@@ -52,6 +52,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
  *       when validation fails — without reaching the DAO.</li>
  * </ul>
  */
+@SuppressWarnings("null")
 class SubjectsApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {

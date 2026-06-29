@@ -45,6 +45,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "OCodmComplexTypeDefinition-StudyGroupClassList", propOrder = {
     "studyGroupItem"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyGroupClassList {
 
     @XmlElement(name = "StudyGroupItem")

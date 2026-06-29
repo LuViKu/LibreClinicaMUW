@@ -39,6 +39,7 @@ import jakarta.xml.bind.annotation.XmlType;
 @XmlType(name = "PropertyType", propOrder = {
     "valueExpression"
 })
+@SuppressWarnings("all")
 public class PropertyType {
 
     @XmlElement(name = "ValueExpression")

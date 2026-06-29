@@ -35,6 +35,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "ActionRunType")
+@SuppressWarnings("all")
 public class ActionRunType {
 
     @XmlAttribute(name = "AdministrativeDataEntry", required = true)

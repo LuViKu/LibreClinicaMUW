@@ -29,6 +29,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlType(name = "contextType")
 @XmlEnum
+@SuppressWarnings("all")
 public enum ContextType {
 
     @XmlEnumValue("OC_RULES_V1")

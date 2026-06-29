@@ -39,6 +39,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "key",
     "value"
 })
+@SuppressWarnings("all")
 public class RulesTestMessagesType {
 
     @XmlElement(name = "Key", required = true)

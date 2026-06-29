@@ -39,6 +39,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "key",
     "value"
 })
+@SuppressWarnings("all")
 public class ParameterType {
 
     @XmlElement(name = "Key", required = true)

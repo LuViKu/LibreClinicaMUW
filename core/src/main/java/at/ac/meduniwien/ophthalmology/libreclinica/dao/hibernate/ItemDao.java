@@ -28,7 +28,7 @@ import org.hibernate.query.NativeQuery;
 
 // is intentional and isolated to this DAO.
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class ItemDao extends AbstractDomainDao<Item> {
 

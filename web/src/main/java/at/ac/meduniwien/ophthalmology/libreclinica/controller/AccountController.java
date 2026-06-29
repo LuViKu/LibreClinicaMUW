@@ -60,6 +60,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @Controller
 @RequestMapping(value = "/accounts")
 @ResponseStatus(value = org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+@SuppressWarnings("all")
 public class AccountController {
 
     @Autowired

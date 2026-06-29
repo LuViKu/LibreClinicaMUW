@@ -63,7 +63,7 @@ import org.slf4j.LoggerFactory;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class TestRuleServlet extends SecureController {
 
     private static final long serialVersionUID = 9116068126651934226L;

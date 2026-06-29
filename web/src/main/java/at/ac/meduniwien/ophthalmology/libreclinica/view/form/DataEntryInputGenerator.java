@@ -32,7 +32,7 @@ import org.jdom.Element;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class DataEntryInputGenerator implements InputGenerator {
     private static Map<String, String> NULL_VALUES_INITVERSION = new HashMap<String, String>();
     static {

@@ -87,6 +87,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/studies/{studyOid}/event-definitions")
 @Tag(name = "EventDefinitions", description = "Study-level event-definition CRUD (build-study surface).")
+@SuppressWarnings("null")
 public class EventDefinitionsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(EventDefinitionsApiController.class);

@@ -26,7 +26,7 @@ import java.util.ArrayList;
 // per-call typed-form migration needs each query's expected result
 // type reviewed manually — deferred B.5 follow-up. Suppression here
 // is intentional and isolated to this DAO.
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
     @Override

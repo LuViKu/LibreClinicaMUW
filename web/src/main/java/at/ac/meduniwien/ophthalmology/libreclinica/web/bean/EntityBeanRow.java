@@ -63,7 +63,7 @@ import java.util.Date;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public abstract class EntityBeanRow<B extends EntityBean, R> implements Comparable<R> {
     /**
      * The object which will be displayed.

@@ -70,6 +70,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifa
  * resolution, geometry parsing.
  */
 @Service
+@SuppressWarnings("null")
 public class CrtComputeService {
 
     private static final Logger LOG = LoggerFactory.getLogger(CrtComputeService.class);

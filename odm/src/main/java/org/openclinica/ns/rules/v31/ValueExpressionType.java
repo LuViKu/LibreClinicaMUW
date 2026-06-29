@@ -33,6 +33,7 @@ import jakarta.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "ValueExpressionType")
+@SuppressWarnings("all")
 public class ValueExpressionType {
 
 

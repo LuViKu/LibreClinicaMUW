@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DatabaseChangeL
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.DatabaseChangeLogBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCase;
 
+@SuppressWarnings("all")
+
 public class DatabaseChangeLogDaoTest extends HibernateOcDbTestCase {
 
     public DatabaseChangeLogDaoTest() {

@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.Expres
 import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCase;
 import org.hibernate.HibernateException;
 
+@SuppressWarnings("all")
+
 public class RuleDaoTest extends HibernateOcDbTestCase {
     private static RuleDao ruleDao;
   /*  static

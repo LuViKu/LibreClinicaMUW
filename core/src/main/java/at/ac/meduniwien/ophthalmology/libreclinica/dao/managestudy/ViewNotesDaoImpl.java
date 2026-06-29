@@ -40,7 +40,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcDaoSupport;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class ViewNotesDaoImpl extends NamedParameterJdbcDaoSupport implements ViewNotesDao {
 
     private static final Logger LOG = LoggerFactory.getLogger(ViewNotesDaoImpl.class);

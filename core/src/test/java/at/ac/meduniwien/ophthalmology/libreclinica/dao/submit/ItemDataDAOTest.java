@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 
 import junit.framework.TestCase;
 
+@SuppressWarnings("all")
+
 public class ItemDataDAOTest extends TestCase {
 	public ItemDataDAOTest() {
 	}

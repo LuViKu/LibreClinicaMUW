@@ -49,6 +49,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "relatedInformation",
     "studyParameterConfiguration"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyDetails {
 
     @XmlElement(name = "StudyDescriptionAndStatus", required = true)

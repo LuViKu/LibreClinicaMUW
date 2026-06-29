@@ -31,7 +31,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefinitionBean> {
 
     private void setQueryNames() {

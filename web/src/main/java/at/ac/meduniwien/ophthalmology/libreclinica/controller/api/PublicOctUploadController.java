@@ -95,6 +95,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "Public OCT upload portal",
      description = "Unauthenticated drag-and-drop OCT (.e2e) upload that resolves "
                  + "across all studies via PatientId + scan date.")
+@SuppressWarnings("null")
 public class PublicOctUploadController {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublicOctUploadController.class);

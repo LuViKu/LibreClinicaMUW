@@ -20,6 +20,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUs
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.templates.HibernateOcDbTestCase;
 
+@SuppressWarnings("all")
+
 public class AuditUserLoginDaoTest extends HibernateOcDbTestCase {
 
     public AuditUserLoginDaoTest() {

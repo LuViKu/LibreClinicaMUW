@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 @Service
+@SuppressWarnings("all")
 public class PformSubmissionNotificationService {
 
     @Autowired

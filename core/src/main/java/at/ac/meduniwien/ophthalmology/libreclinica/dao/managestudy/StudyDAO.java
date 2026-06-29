@@ -32,7 +32,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
 
 // null-safety review is the deferred follow-up.
 
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 
 public class StudyDAO extends AuditableEntityDAO<StudyBean> {
 

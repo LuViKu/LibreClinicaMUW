@@ -30,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * shape, audit rows, reorder mechanics) needs Testcontainers Postgres
  * — deferred to the IT infra slice.
  */
+@SuppressWarnings("null")
 class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {

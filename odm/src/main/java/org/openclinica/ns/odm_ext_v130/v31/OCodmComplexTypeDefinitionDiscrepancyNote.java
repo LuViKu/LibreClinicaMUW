@@ -45,6 +45,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
 @XmlType(name = "OCodmComplexTypeDefinition-DiscrepancyNote", propOrder = {
     "childNote"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionDiscrepancyNote {
 
     @XmlElement(name = "ChildNote")

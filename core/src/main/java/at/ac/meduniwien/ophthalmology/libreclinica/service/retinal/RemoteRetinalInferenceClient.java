@@ -56,6 +56,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * untouched.
  */
 @Component
+@SuppressWarnings("null")
 public class RemoteRetinalInferenceClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(RemoteRetinalInferenceClient.class);

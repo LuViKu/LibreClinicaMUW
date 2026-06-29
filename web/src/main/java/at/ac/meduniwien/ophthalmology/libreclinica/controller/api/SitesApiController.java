@@ -84,6 +84,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/studies/{parentOid}/sites")
 @Tag(name = "Sites", description = "Multi-center site setup (sub-studies under a parent).")
+@SuppressWarnings("null")
 public class SitesApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(SitesApiController.class);

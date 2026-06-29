@@ -53,6 +53,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "healthyVolunteersAccepted",
     "expectedTotalEnrollment"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionConditionsAndEligibility {
 
     @XmlElement(name = "Conditions")

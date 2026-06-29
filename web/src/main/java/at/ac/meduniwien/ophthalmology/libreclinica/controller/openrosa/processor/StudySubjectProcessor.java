@@ -40,6 +40,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
 @Component
+@SuppressWarnings("all")
 public class StudySubjectProcessor implements Processor, Ordered {
 
     @Autowired

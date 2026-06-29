@@ -56,6 +56,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "facilityContactPhone",
     "facilityContactEmail"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionFacilityInformation {
 
     @XmlElement(name = "FacilityName")

@@ -53,6 +53,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @Controller
 @RequestMapping(value = "/auth/api/v1")
 @ResponseStatus(value = org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+@SuppressWarnings("all")
 public class UserAccountController {
 
 	@Autowired

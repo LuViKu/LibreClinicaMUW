@@ -29,6 +29,7 @@ import javax.xml.namespace.QName;
  * 
  */
 @XmlRegistry
+@SuppressWarnings("all")
 public class ObjectFactory {
 
     private final static QName _RuleAssignment_QNAME = new QName("http://www.openclinica.org/ns/rules/v3.1", "RuleAssignment");

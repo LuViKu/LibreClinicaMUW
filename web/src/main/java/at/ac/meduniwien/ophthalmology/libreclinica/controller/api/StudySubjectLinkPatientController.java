@@ -89,6 +89,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/api/v1/study-subjects")
 @Tag(name = "Study Subjects",
      description = "Cross-study patient identity soft-link.")
+@SuppressWarnings("null")
 public class StudySubjectLinkPatientController {
 
     private static final Logger LOG =

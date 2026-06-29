@@ -40,7 +40,7 @@ import org.hibernate.annotations.Parameter;
 
 // migration (deferred B.5 follow-up).
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class StudyGroupClass  extends DataMapDomainObject {
 

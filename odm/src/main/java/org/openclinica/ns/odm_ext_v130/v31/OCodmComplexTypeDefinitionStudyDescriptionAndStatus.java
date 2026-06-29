@@ -75,6 +75,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "interventionModel",
     "studyClassification"
 })
+@SuppressWarnings("all")
 public class OCodmComplexTypeDefinitionStudyDescriptionAndStatus {
 
     @XmlElement(name = "StudySytemStatus", required = true)

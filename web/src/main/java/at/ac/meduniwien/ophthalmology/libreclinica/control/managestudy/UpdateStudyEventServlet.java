@@ -65,7 +65,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 public class UpdateStudyEventServlet extends SecureController {
 
 	private static final long serialVersionUID = -6029524999558420563L;

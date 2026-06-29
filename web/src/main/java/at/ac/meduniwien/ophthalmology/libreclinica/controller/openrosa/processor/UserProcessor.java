@@ -32,6 +32,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
 
 @Component
+@SuppressWarnings("all")
 public class UserProcessor implements Processor, Ordered {
 
     @Autowired

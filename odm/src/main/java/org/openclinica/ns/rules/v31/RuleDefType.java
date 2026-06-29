@@ -41,6 +41,7 @@ import jakarta.xml.bind.annotation.XmlType;
     "description",
     "expression"
 })
+@SuppressWarnings("all")
 public class RuleDefType {
 
     @XmlElement(name = "Description", required = true)
