@@ -124,6 +124,13 @@ interface Props {
    * Monitor / CRC role.
    */
   canCorrectLayers?: boolean
+  /**
+   * 2026-06-29 — externally-controlled ETDRS-rings visibility (used by
+   * the Compare-tab masthead so both panes toggle together). When
+   * undefined the frame falls back to its own localStorage-backed
+   * toggle (the per-pane fullscreen masthead).
+   */
+  etdrsRings?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -135,6 +142,7 @@ const props = withDefaults(defineProps<Props>(), {
   prevVisit: null,
   studySubjectId: null,
   canCorrectLayers: false,
+  etdrsRings: undefined,
 })
 
 const emit = defineEmits<{
@@ -201,19 +209,26 @@ const correctionDiscardOpen = ref(false)
 const correctionOverlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
 
 /**
- * 2026-06-29 — ETDRS-ring eccentricity indicator toggle. Defaults OFF;
- * persisted in localStorage so the operator's choice survives across
- * sessions. Same key as the correction-fullscreen indicator so the
- * preference is shared.
+ * 2026-06-29 — ETDRS-ring eccentricity indicator toggle. Local state
+ * backs the per-pane fullscreen masthead toggle; when the consumer
+ * passes the {@code etdrsRings} prop (Compare-tab), that wins so both
+ * panes stay in sync. Default off; persisted in localStorage so the
+ * choice survives across sessions.
+ *
+ * <p>The indicator only renders in FULLSCREEN modes (per-pane fs OR
+ * compare-tab fillContainer) — inline non-fs viewers stay uncluttered.
  */
-const showEtdrsRings = ref<boolean>(
+const localEtdrsRings = ref<boolean>(
   typeof localStorage !== 'undefined'
     && localStorage.getItem('retinal.correction.etdrsRings') === '1',
 )
+const showEtdrsRings = computed<boolean>(() =>
+  props.etdrsRings !== undefined ? props.etdrsRings : localEtdrsRings.value,
+)
 function toggleEtdrsRings(): void {
-  showEtdrsRings.value = !showEtdrsRings.value
+  localEtdrsRings.value = !localEtdrsRings.value
   try {
-    localStorage.setItem('retinal.correction.etdrsRings', showEtdrsRings.value ? '1' : '0')
+    localStorage.setItem('retinal.correction.etdrsRings', localEtdrsRings.value ? '1' : '0')
   } catch {
     /* sandboxed / private mode — preference doesn't persist */
   }
@@ -911,8 +926,11 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
                   </template>
                 </svg>
               </template>
-              <!-- ETDRS rings (independent toggle, always evaluated) -->
+              <!-- ETDRS rings — only in fullscreen contexts (per-pane fs
+                   OR compare-tab fillContainer). Inline non-fs viewers
+                   stay uncluttered. -->
               <EtdrsRingsBscanIndicator
+                v-if="fsOpen || fillContainer"
                 :n-bscans="nSlices"
                 :current-z="slice"
                 :image-dims="slotImageDims(slotProps)"
@@ -994,26 +1012,6 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
       >
         <span class="w-2 h-2 rounded-full" :class="mask ? 'bg-muw-teal' : 'bg-white/50'" />
         {{ mask ? t('studyModules.namd.scanFrame.maskOn') : t('studyModules.namd.scanFrame.maskOff') }}
-      </button>
-      <!-- 2026-06-29 — ETDRS-rings toggle (1 / 3 / 6 mm). Sits next to
-           the mask toggle in inline mode. Hidden in compare-tab
-           fill-container mode for the same anti-duplicate reasoning
-           as the mask toggle. -->
-      <button
-        v-if="!fillContainer"
-        type="button"
-        :data-testid="`namd-scan-etdrs-toggle-${idBase}`"
-        :title="t('retinal.correction.etdrsToggle')"
-        class="absolute bottom-3 right-32 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
-        :class="showEtdrsRings ? 'bg-amber-400 text-slate-900' : 'bg-black/55 text-white/85 hover:bg-black/70'"
-        @click="toggleEtdrsRings"
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-          <circle cx="12" cy="12" r="3" />
-          <circle cx="12" cy="12" r="7" />
-          <circle cx="12" cy="12" r="11" />
-        </svg>
-        ETDRS
       </button>
     </div>
 

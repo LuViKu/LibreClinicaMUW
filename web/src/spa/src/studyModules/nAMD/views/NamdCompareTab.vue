@@ -164,6 +164,25 @@ onBeforeUnmount(() => {
 function toggleSynced(): void {
   synced.value = !synced.value
 }
+
+/**
+ * 2026-06-29 — ETDRS-rings toggle on the compare-tab masthead. Drives
+ * both stacked panes via NamdScanFrame's {@code etdrsRings} prop so
+ * they toggle together. Default off; persisted in localStorage under
+ * the same key the per-frame fullscreen + correction fullscreen use.
+ */
+const etdrsRings = ref<boolean>(
+  typeof localStorage !== 'undefined'
+    && localStorage.getItem('retinal.correction.etdrsRings') === '1',
+)
+function toggleEtdrsRings(): void {
+  etdrsRings.value = !etdrsRings.value
+  try {
+    localStorage.setItem('retinal.correction.etdrsRings', etdrsRings.value ? '1' : '0')
+  } catch {
+    /* sandboxed / private mode */
+  }
+}
 </script>
 
 <template>
@@ -209,6 +228,22 @@ function toggleSynced(): void {
           </span>
           <span>{{ t('studyModules.namd.compare.syncedScroll') }}</span>
         </label>
+        <!-- 2026-06-29 — ETDRS-rings toggle, controls both stacked panes. -->
+        <button
+          type="button"
+          data-testid="namd-compare-fs-etdrs"
+          :title="t('retinal.correction.etdrsToggle')"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          :class="etdrsRings ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-white/85 hover:bg-white/20'"
+          @click="toggleEtdrsRings"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="12" cy="12" r="7" />
+            <circle cx="12" cy="12" r="11" />
+          </svg>
+          ETDRS
+        </button>
         <button
           type="button"
           data-testid="namd-compare-fs-mask"
@@ -268,6 +303,7 @@ function toggleSynced(): void {
           :n-slices="nSlices"
           :slice="side.slice"
           :mask="mask"
+          :etdrs-rings="etdrsRings"
           :show-thumbs="false"
           :enable-fullscreen="false"
           :fill-container="true"

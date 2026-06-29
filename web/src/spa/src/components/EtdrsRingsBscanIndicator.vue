@@ -72,7 +72,19 @@ const markers = computed<Marker[]>(() => {
   const foveaZ = props.etdrsCenter?.bscan_z ?? Math.floor(props.nBscans / 2)
   const foveaX = props.etdrsCenter?.ascan_x ?? Math.floor(cols / 2)
 
-  const sliceMm = props.pixelSliceMm > 0 ? props.pixelSliceMm : lateralMm * 3
+  // 2026-06-29 — slice spacing default. The DICOM stack doesn't carry
+  // it (PixelSpacing is the in-plane axial × lateral pair), so when no
+  // explicit pixelSliceMm prop arrives we estimate from the canonical
+  // Heidelberg cube geometry: physical volume width ≈ physical volume
+  // depth (≈ 6 mm × 6 mm at the standard "dense" preset). That gives
+  //   sliceMm ≈ (cols × lateralMm) / nBscans
+  // → for a 49-slice × 1024-col cube at 0.0058 mm/px lateral, sliceMm
+  // ≈ 0.122 mm. The earlier `lateralMm × 3` heuristic was 3× too small
+  // and made the 1 mm ring intersect ~28 slices instead of the
+  // expected ~8 (±4 slices around the fovea-centred B-scan).
+  const sliceMm = props.pixelSliceMm > 0
+    ? props.pixelSliceMm
+    : (cols * lateralMm) / Math.max(1, props.nBscans)
   const dzMm = (props.currentZ - foveaZ) * sliceMm
 
   const out: Marker[] = []
