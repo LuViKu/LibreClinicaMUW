@@ -975,7 +975,10 @@ onBeforeUnmount(() => {
         name="overlay"
         :bbox-style="overlayBboxStyle"
         :image-dims="bscanImageDims"
+        :pixel-spacing="bscanPixelSpacing"
         :envelope="segEnvelope"
+        :current-z="modelValue"
+        :n-bscans="nBscans"
       />
       <!-- Discoverability hint — auto-fades after the operator has
            used the scroll/scrub once (the hint is only useful for the

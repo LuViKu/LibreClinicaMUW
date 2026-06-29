@@ -21,6 +21,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BscanLayerEditOverlay from '@/components/BscanLayerEditOverlay.vue'
+import EtdrsRingsBscanIndicator from '@/components/EtdrsRingsBscanIndicator.vue'
 import {
   clearSegmentationEnvelopeCache,
   useSegmentationEnvelope,
@@ -112,6 +113,44 @@ const labels = computed<readonly string[]>(() => {
 })
 
 const overlayRef = ref<InstanceType<typeof BscanLayerEditOverlay> | null>(null)
+/**
+ * 2026-06-29 — ETDRS eccentricity-ring indicator toggle. Defaults ON so
+ * operators correcting layers can immediately see the central 1/3/6 mm
+ * landmarks on the B-scan. Persisted to localStorage so the operator's
+ * preference survives a reload.
+ */
+const showEtdrsRings = ref<boolean>(
+  typeof localStorage === 'undefined'
+    ? true
+    : localStorage.getItem('retinal.correction.etdrsRings') !== '0',
+)
+function toggleEtdrsRings(): void {
+  showEtdrsRings.value = !showEtdrsRings.value
+  try {
+    localStorage.setItem('retinal.correction.etdrsRings', showEtdrsRings.value ? '1' : '0')
+  } catch {
+    /* sandboxed / private mode — preference doesn't persist */
+  }
+}
+function slotPixelSpacing(slotProps: unknown): { axialMm: number; lateralMm: number } | null {
+  const sp = (slotProps as { pixelSpacing?: { axialMm: number; lateralMm: number } | null })?.pixelSpacing
+  return sp ?? null
+}
+function slotImageDims(slotProps: unknown): { rows: number; cols: number } | null {
+  const d = (slotProps as { imageDims?: { rows: number; cols: number } | null })?.imageDims
+  return d ?? null
+}
+/**
+ * The fluid-task payload (if present on this job) carries the ETDRS
+ * center; layers tasks don't. The composable's envelope only exposes
+ * the raw shape, so we read the optional center via the job's
+ * outputPayload — see RetinalJobDetail.outputPayload typing.
+ *
+ * For the layers-task editing flow we usually don't have this, so the
+ * indicator falls back to (nBscans/2, cols/2) which is correct for
+ * fovea-centred acquisitions.
+ */
+const etdrsCenter = computed<{ bscan_z?: number; ascan_x?: number } | null>(() => null)
 const pendingCount = ref(0)
 const saving = ref(false)
 const showDiscardConfirm = ref(false)
@@ -262,6 +301,22 @@ onBeforeUnmount(() => {
         <span v-if="title" class="text-white/45 text-[12px] truncate">{{ title }}</span>
       </div>
       <div class="flex items-center gap-2.5 shrink-0">
+        <!-- ETDRS-ring eccentricity toggle (1 / 3 / 6 mm) -->
+        <button
+          type="button"
+          data-testid="correction-fs-etdrs"
+          :title="t('retinal.correction.etdrsToggle')"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          :class="showEtdrsRings ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-white/85 hover:bg-white/20'"
+          @click="toggleEtdrsRings"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="12" cy="12" r="7" />
+            <circle cx="12" cy="12" r="11" />
+          </svg>
+          ETDRS
+        </button>
         <!-- KI-Maske toggle (mirror NamdScanFrame's style) -->
         <button
           type="button"
@@ -357,6 +412,15 @@ onBeforeUnmount(() => {
             @save="onOverlaySave"
             @pending-edit-count="(n) => pendingCount = n"
             @painted-surfaces="(s) => paintedSurfaces = s"
+          />
+          <EtdrsRingsBscanIndicator
+            :n-bscans="nBscans"
+            :current-z="modelValue"
+            :image-dims="slotImageDims(slotProps)"
+            :pixel-spacing="slotPixelSpacing(slotProps)"
+            :etdrs-center="etdrsCenter ?? undefined"
+            :bbox-style="slotBbox(slotProps)"
+            :visible="showEtdrsRings"
           />
         </template>
       </BscanViewer>
