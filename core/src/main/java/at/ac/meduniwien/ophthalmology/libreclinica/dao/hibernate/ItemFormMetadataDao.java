@@ -44,7 +44,7 @@ public class ItemFormMetadataDao extends AbstractDomainDao<ItemFormMetadata> {
 
     public static final String findAllByCrfVersionQuery = "select distinct * from item_form_metadata ifm where ifm.crf_version_id = :crfversionid";
 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public List<ItemFormMetadata> findAllByCrfVersion(int crf_version_id) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionQuery).addEntity(ItemFormMetadata.class);
         q.setParameter("crfversionid", crf_version_id);

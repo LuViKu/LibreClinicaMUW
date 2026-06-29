@@ -34,7 +34,7 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         return SCDItemMetadataBean.class;
     }
     
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public ArrayList<SCDItemMetadataBean> findAllBySectionId(Integer sectionId) {
         String query = "select scd.* from scd_item_metadata scd where scd.scd_item_form_metadata_id in ("
             + "select ifm.item_form_metadata_id from item_form_metadata ifm where ifm.section_id = :sectionId)";
@@ -43,7 +43,7 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         return (ArrayList<SCDItemMetadataBean>) q.getResultList();  
     }
 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public List<Integer> findAllSCDItemFormMetadataIdsBySectionId(Integer sectionId) {
         String query = "select scd.scd_item_form_metadata_id from scd_item_metadata scd where scd.scd_item_form_metadata_id in ("
         + "select ifm.item_form_metadata_id from item_form_metadata ifm where ifm.section_id = :sectionId)";
@@ -52,7 +52,7 @@ public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
         return q.getResultList();
     }
     
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public ArrayList<SCDItemMetadataBean> findAllSCDByItemFormMetadataId(Integer itemFormMetadataId) {
         String query = "select scd.* from scd_item_metadata scd where scd.scd_item_form_metadata_id = :itemFormMetadataId)";
         NativeQuery q = this.getCurrentSession().createNativeQuery(query);

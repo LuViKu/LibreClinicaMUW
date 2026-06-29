@@ -31,7 +31,7 @@ public class SectionDao extends AbstractDomainDao<Section> {
         return Section.class;
     }
 
-    @SuppressWarnings({ "deprecation", "rawtypes" })
+    @SuppressWarnings("rawtypes")
     public Section findByCrfVersionOrdinal(int crfVersionId, int ordinal) {
         // String query = "from " + getDomainClassName() + " section  where section.crfVersionId = :crfversionid ";
         // org.hibernate.query.Query q = getCurrentSession().createQuery(query);

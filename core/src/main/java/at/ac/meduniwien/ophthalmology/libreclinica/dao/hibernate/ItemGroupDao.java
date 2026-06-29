@@ -58,7 +58,7 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
     public static final String findAllByCrfVersionIdQuery = "select distinct ig.* from item_group ig, item_group_metadata igm"
             + " where igm.crf_version_id = :crfversionid and ig.item_group_id = igm.item_group_id";
 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public ArrayList<ItemGroup> findByCrfVersionId(Integer crfVersionId) {
         NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery).addEntity(ItemGroup.class);
         q.setParameter("crfversionid", crfVersionId.intValue());

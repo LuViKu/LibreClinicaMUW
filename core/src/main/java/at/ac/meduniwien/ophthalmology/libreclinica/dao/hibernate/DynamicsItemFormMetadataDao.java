@@ -172,7 +172,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
      * @param crfVersionId crfVersionId
      * @return list of IDs
      */
-    @SuppressWarnings({"deprecation", "rawtypes"})
+    @SuppressWarnings("rawtypes")
     protected List<Integer> queryForIDs(String postgresQuery, Integer groupId, Integer sectionId,
             Integer eventCrfId, Integer crfVersionId) {
 
