@@ -241,7 +241,7 @@ function printReport() {
         class="mt-3 grid grid-cols-3 gap-3 text-sm text-slate-700"
       >
         <div>
-          <span class="text-slate-500">CRT:</span>
+          <span class="text-slate-500">CST:</span>
           <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.crt }} µm</span>
         </div>
         <div>
@@ -313,7 +313,7 @@ function printReport() {
             <th class="py-1.5 px-2 font-medium text-right">IRF</th>
             <th class="py-1.5 px-2 font-medium text-right">SRF</th>
             <th class="py-1.5 px-2 font-medium text-right">PED</th>
-            <th class="py-1.5 px-2 font-medium text-right">CRT</th>
+            <th class="py-1.5 px-2 font-medium text-right">CST</th>
             <th class="py-1.5 px-2 font-medium text-right">BCVA</th>
             <th class="py-1.5 px-2 font-medium">Injektion</th>
           </tr>

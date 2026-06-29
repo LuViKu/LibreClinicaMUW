@@ -20,7 +20,7 @@
  * and the global error toast picks up the rest.
  */
 
-import { apiGet, apiPatch, apiPost } from './client'
+import { apiDelete, apiGet, apiPatch, apiPost } from './client'
 
 /**
  * Per-task laterality of the underlying OCT volume — ophthalmology
@@ -611,6 +611,70 @@ export function rerunRetinalJobAs(
   task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers',
 ): Promise<RetinalJobRerunAsResponse> {
   return apiPost<RetinalJobRerunAsResponse>(`${BASE}/${jobId}/rerun-as`, { task })
+}
+
+/* ====================================================================== */
+/* 2026-06-26 — Layer-segmentation correction endpoints                   */
+/* ====================================================================== */
+
+/**
+ * Save / list / revert payload row. Matches the backend's
+ * {@code CorrectionDto}: includes the writer's id + name + timestamp so
+ * the SPA can render the "korrigiert von X am Y" badge without a join.
+ */
+export interface RetinalCorrection {
+  correctionId: number
+  jobId: number
+  layerIndex: number
+  layerLabel: string
+  editedSliceCount: number
+  csvRelpath: string
+  editedByUserId: number
+  editedByUserName: string | null
+  editedAt: string
+}
+
+/**
+ * Save a per-(slice, A-scan-row) correction for one layer. {@code perSliceRows}
+ * is keyed by stringified B-scan index; each value is the y-pixel row of
+ * length {@code cols} matching the original CSV's width.
+ */
+export function saveLayerCorrection(
+  jobId: number,
+  layerIndex: number,
+  layerLabel: string,
+  perSliceRows: Record<string, number[]>,
+): Promise<RetinalCorrection> {
+  return apiPost<RetinalCorrection>(
+    `${BASE}/${jobId}/segmentation/corrections`,
+    { layerIndex, layerLabel, perSliceRows },
+  )
+}
+
+/**
+ * Revert the correction for one layer back to the AI's output. Deletes
+ * the {@code corrections/<basename>.csv} file + the
+ * {@code retinal_inference_correction} row. 404 when no correction
+ * exists for the (job, layer).
+ */
+export function deleteLayerCorrection(
+  jobId: number,
+  layerIndex: number,
+): Promise<{ jobId: number; layerIndex: number; reverted: boolean }> {
+  return apiDelete(
+    `${BASE}/${jobId}/segmentation/corrections/${layerIndex}`,
+  )
+}
+
+/**
+ * List existing corrections for a job (one row per (job, layer)). Used
+ * by the SPA's correction-badge logic + the operator-facing audit
+ * timeline.
+ */
+export function listLayerCorrections(jobId: number): Promise<RetinalCorrection[]> {
+  return apiGet<RetinalCorrection[]>(
+    `${BASE}/${jobId}/segmentation/corrections`,
+  )
 }
 
 /**

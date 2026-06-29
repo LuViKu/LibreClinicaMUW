@@ -33,8 +33,16 @@ import JsonTree from '@/components/JsonTree.vue'
 import type { FundusOverlayTask } from '@/components/FundusOverlay.vue'
 import { useStudyArm } from '@/composables/useStudyArm'
 
+import { useAuthStore } from '@/stores/auth'
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import { useErrorsStore } from '@/stores/errors'
+
+/** 2026-06-26 — Layer-correction fullscreen wrapper (lazy: ~25 KB
+ *  gzipped including BscanLayerEditOverlay). Mounted only when the
+ *  operator clicks the maximize button on the B-scan navigator. */
+const RetinalCorrectionFullscreen = defineAsyncComponent(
+  () => import('@/components/RetinalCorrectionFullscreen.vue'),
+)
 import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
@@ -52,6 +60,48 @@ const route = useRoute()
 const router = useRouter()
 const store = useRetinalJobStore()
 const errors = useErrorsStore()
+const auth = useAuthStore()
+
+/**
+ * 2026-06-26 — role gate for the layer-correction UI. Only the
+ * Investigator + Data-Manager (+ Administrator) roles may write
+ * corrections; everyone else sees a read-only fullscreen viewer
+ * (BscanLayerEditOverlay rendered with `canEdit: false`).
+ * Mirrors RetinalResultsApiController.canCorrectSegmentation.
+ */
+const canCorrectLayers = computed<boolean>(
+  () => auth.hasRole('Investigator')
+    || auth.hasRole('Data Manager')
+    || auth.hasRole('Administrator'),
+)
+
+/** Layer-correction fullscreen open state + KI-Maske mirror. */
+const correctionFsOpen = ref<boolean>(false)
+const correctionFsMask = ref<boolean>(true)
+const correctionFsSlice = ref<number>(0)
+
+function openCorrectionFs(): void {
+  correctionFsSlice.value = currentBscanZ.value
+  correctionFsOpen.value = true
+}
+function closeCorrectionFs(): void {
+  correctionFsOpen.value = false
+}
+function onCorrectionSaved(_info: { layers: number; slices: number }): void {
+  // 2026-06-27 — success toast is rendered INSIDE
+  // RetinalCorrectionFullscreen as a local pill; routing it through the
+  // errors store would render the green "saved" message as a red "Ein
+  // Fehler ist aufgetreten" toast via GlobalErrorToast. Re-fetch the
+  // job so the corrected envelope + downloads list refresh after the
+  // operator closes the fullscreen.
+  void load()
+}
+function onCorrectionSaveError(message: string): void {
+  errors.push(
+    new Error(t('retinal.correction.saveFailed', { message })),
+    'retinal.correction.saveFailed',
+  )
+}
 
 // This view serves two routes:
 //   /retinal-jobs/:jobId               — canonical, by global job id
@@ -1343,7 +1393,7 @@ onBeforeUnmount(stopInflightPoll)
               </div>
             </section>
 
-            <div class="lg:col-span-7 flex flex-col">
+            <div class="lg:col-span-7 flex flex-col relative">
               <BscanViewer
                 v-if="job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
                 :bscan-dcm-url="job.bscanDcmUrl"
@@ -1353,14 +1403,50 @@ onBeforeUnmount(stopInflightPoll)
                 class="flex-1"
                 @update:model-value="(z) => hoveredBscanZ = z"
               />
+              <!-- 2026-06-26 — Layer-correction maximize. Visible only
+                   when the job's task is `layers` or `bm` (the only
+                   tasks whose envelope contains editable surfaces).
+                   Clicking opens the RetinalCorrectionFullscreen wrapper. -->
+              <button
+                v-if="job.bscanDcmUrl
+                  && (geometry?.bscan?.dim_z_bscans ?? 0) > 0
+                  && (job.task === 'layers' || job.task === 'bm')"
+                type="button"
+                data-testid="retinal-view-fs-open"
+                :title="t('retinal.correction.tools.points')"
+                :aria-label="t('retinal.correction.tools.points')"
+                class="absolute top-3 right-3 z-20 w-8 h-8 rounded-md bg-slate-900/55 backdrop-blur-sm text-white/85 hover:bg-white hover:text-muw-blue inline-flex items-center justify-center transition"
+                @click="openCorrectionFs"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <path d="M8 3 H5 a2 2 0 0 0 -2 2 V8 M21 8 V5 a2 2 0 0 0 -2 -2 H16 M3 16 V19 a2 2 0 0 0 2 2 H8 M16 21 H19 a2 2 0 0 0 2 -2 V16" />
+                </svg>
+              </button>
               <div
-                v-else
+                v-if="!(job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0)"
                 class="flex-1 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center text-xs text-slate-500 italic min-h-[300px]"
               >
                 {{ t('retinal.empty.bscanNotAvailable') }}
               </div>
             </div>
           </div>
+
+          <!-- 2026-06-26 — Layer-correction fullscreen wrapper. Lazy-
+               mounted on first open so the cornerstone bundle pulled
+               in by BscanViewer isn't loaded twice. -->
+          <RetinalCorrectionFullscreen
+            v-if="correctionFsOpen && job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
+            :job-id="job.jobId"
+            :bscan-dcm-url="job.bscanDcmUrl"
+            :n-bscans="geometry!.bscan!.dim_z_bscans"
+            v-model="correctionFsSlice"
+            v-model:show-segmentation="correctionFsMask"
+            :title="`${job.laterality ?? ''} · ${job.task ?? ''}`"
+            :can-edit="canCorrectLayers"
+            @close="closeCorrectionFs"
+            @save-success="onCorrectionSaved"
+            @save-error="onCorrectionSaveError"
+          />
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
             <section

@@ -120,6 +120,7 @@ function isDateMismatch(
 function buildMockData(): NamdWorkspaceData {
   const patient: NamdPatient = {
     id: 'S-0042',
+    studySubjectId: null,
     eye: 'OD',
     diagnosis: 'Exsudative AMD',
     age: 78,
@@ -302,8 +303,10 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
     })
     const current = visits.length > 0 ? visits[visits.length - 1]! : null
     const prev = visits.length > 1 ? visits[visits.length - 2]! : null
+    const numericId = Number.parseInt(oid, 10)
     const patient: NamdPatient = {
       id: args.studySubjectLabel?.value || oid,
+      studySubjectId: Number.isNaN(numericId) ? null : numericId,
       eye: selectedEye.value,
       diagnosis: 'Exsudative AMD',
       age: null,

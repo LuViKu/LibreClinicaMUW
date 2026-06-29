@@ -228,12 +228,29 @@ public class CrtComputeService {
      * contains the needle and ends with {@code .csv}. Returns
      * empty when the dir is missing, unreadable, or has no match.
      */
-    private static Optional<Path> locateSurfaceCsv(String dir, String needle) {
+    /** Package-private for direct unit testing of the corrections-preference rule. */
+    static Optional<Path> locateSurfaceCsv(String dir, String needle) {
         if (dir == null || dir.isBlank()) return Optional.empty();
         Path p = Paths.get(dir);
         if (!Files.isDirectory(p)) return Optional.empty();
         String lowerNeedle = needle.toLowerCase();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(p, "*.csv")) {
+        // 2026-06-27 — Operator-corrected surfaces live alongside the
+        // original AI output under {@code <dir>/corrections/<filename>}
+        // (same probe pattern SegmentationEnvelopeLoader uses for the
+        // streaming envelope). Probing corrections/ FIRST means CST
+        // automatically follows operator corrections: the next
+        // /crt-timeline request after a Save POST returns the
+        // recomputed value without any explicit cache invalidation.
+        Path corrections = p.resolve("corrections");
+        if (Files.isDirectory(corrections)) {
+            Optional<Path> corrected = scanCsvForNeedle(corrections, lowerNeedle);
+            if (corrected.isPresent()) return corrected;
+        }
+        return scanCsvForNeedle(p, lowerNeedle);
+    }
+
+    private static Optional<Path> scanCsvForNeedle(Path dir, String lowerNeedle) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.csv")) {
             for (Path entry : stream) {
                 String name = entry.getFileName().toString().toLowerCase();
                 if (name.contains(lowerNeedle)) {
@@ -241,7 +258,7 @@ public class CrtComputeService {
                 }
             }
         } catch (IOException ioEx) {
-            LOG.warn("Failed to enumerate {} for needle '{}': {}", dir, needle, ioEx.getMessage());
+            LOG.warn("Failed to enumerate {} for needle '{}': {}", dir, lowerNeedle, ioEx.getMessage());
             return Optional.empty();
         }
         return Optional.empty();

@@ -15,6 +15,8 @@ import { useI18n } from 'vue-i18n'
 import FundusOverlay, { type EtdrsRegion, type FundusOverlayTask } from '@/components/FundusOverlay.vue'
 import RetinalVisitComparison from '@/components/RetinalVisitComparison.vue'
 import { useRetinalJobStore } from '@/stores/retinalJob'
+import { useAuthStore } from '@/stores/auth'
+import { useErrorsStore } from '@/stores/errors'
 import NamdScanFrame from '../components/NamdScanFrame.vue'
 import Card from '../components/primitives/Card.vue'
 import type { NamdWorkspaceData } from '../types'
@@ -25,6 +27,33 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 const store = useRetinalJobStore()
+const auth = useAuthStore()
+const errors = useErrorsStore()
+
+/**
+ * 2026-06-26 — role gate for the layer-correction UI. Mirrors
+ * RetinalResultsApiController.canCorrectSegmentation: only the
+ * Investigator + Data-Manager + Administrator roles get the edit
+ * tools; every other role sees a read-only fullscreen viewer.
+ */
+const canCorrectLayers = computed<boolean>(
+  () => auth.hasRole('Investigator')
+    || auth.hasRole('Data Manager')
+    || auth.hasRole('Administrator'),
+)
+
+function onCorrectionSaved(_info: { layers: number; slices: number }): void {
+  // 2026-06-27 — success toast is rendered INSIDE NamdScanFrame's
+  // fullscreen masthead as a local emerald pill; routing through the
+  // errors store would render it red via GlobalErrorToast. No-op here
+  // (the parent gets the bubble so future side effects can hook in).
+}
+function onCorrectionError(message: string): void {
+  errors.push(
+    new Error(t('retinal.correction.saveFailed', { message })),
+    'retinal.correction.saveFailed',
+  )
+}
 
 const retinalJobId = computed<number | null>(() => props.data.current?.retinalJobId ?? null)
 
@@ -254,6 +283,8 @@ function formatNumber(v: number): string {
           :visit="props.data.current"
           :prev-visit="props.data.prev"
           :eye="props.data.patient.eye"
+          :study-subject-id="props.data.patient.studySubjectId"
+          :can-correct-layers="canCorrectLayers"
           :n-slices="nSlices"
           :slice="slice"
           :mask="mask"
@@ -262,6 +293,8 @@ function formatNumber(v: number): string {
           id-base="viewer"
           @update:slice="(z: number) => (slice = z)"
           @update:mask="(m: boolean) => (mask = m)"
+          @correction-saved="onCorrectionSaved"
+          @correction-error="onCorrectionError"
         />
         <div
           v-else
