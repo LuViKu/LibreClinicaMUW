@@ -76,7 +76,7 @@ import org.slf4j.LoggerFactory;
 
 // null-safety review is the deferred follow-up.
 
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "resource"})
 
 public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
     // SpreadSheetTable
