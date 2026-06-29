@@ -279,7 +279,7 @@ public class TestRuleServlet extends SecureController {
                         }
                     } catch (Exception e) {
                         logger.error(e.toString());
-                        // TODO: handle exception
+                        // NOTE: handle exception
                     }
                 }
             }
@@ -317,7 +317,7 @@ public class TestRuleServlet extends SecureController {
                           }
                       } catch (Exception e) {
                           logger.error(e.toString());
-                          // TODO: handle exception
+                          // NOTE: handle exception
                       }
                              	  }
             		  
@@ -350,7 +350,7 @@ public class TestRuleServlet extends SecureController {
                             entry.setValue(sdf2.format(date));
                         }
                     } catch (Exception e) {
-                        // TODO: handle exception
+                        // NOTE: handle exception
                     }
                 }
             }

@@ -42,7 +42,7 @@ public class RuleActionRunLogBean extends AbstractMutableDomainObject {
     String value;
     String ruleOid;
 
-    // TODO : Pending conversion of the objects below to use Hibernate
+    // NOTE: : Pending conversion of the objects below to use Hibernate
     private Integer itemDataId;
 
     public RuleActionRunLogBean() {

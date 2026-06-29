@@ -9,7 +9,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 
-// TODO: support YYYY-MM-DD HH:MM time formats
+// NOTE: support YYYY-MM-DD HH:MM time formats
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asArrayList;
 
 import java.net.URLEncoder;
@@ -104,7 +104,7 @@ public class CreateNewStudyEventServlet extends SecureController {
         // input from manage subject matrix, user has specified definition id
         int studyEventDefinitionId = fp.getInt(INPUT_STUDY_EVENT_DEFINITION);
 
-        // TODO: make this sensitive to permissions
+        // NOTE: make this sensitive to permissions
         StudySubjectDAO sdao = new StudySubjectDAO(sm.getDataSource());
         StudySubjectBean ssb;
         if (studySubjectId <= 0) {
@@ -128,7 +128,7 @@ public class CreateNewStudyEventServlet extends SecureController {
         // or remove it altogether tbh 10/2009
         // ArrayList subjects = sdao.findAllActiveByStudyOrderByLabel(currentStudy);
 
-        // TODO: make this sensitive to permissions
+        // NOTE: make this sensitive to permissions
         StudyEventDefinitionDAO seddao = new StudyEventDefinitionDAO(sm.getDataSource());
 
         StudyBean studyWithEventDefinitions = currentStudy;

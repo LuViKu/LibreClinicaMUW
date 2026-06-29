@@ -179,7 +179,7 @@ public class InsertActionValidator implements Validator {
                 }
             }
 
-            // TODO: check Null Value logic based on not event definition crf being selected
+            // NOTE: check Null Value logic based on not event definition crf being selected
             if (itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.CHECKBOX)
                 || itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.SELECTMULTI)) {
                 if (getEventDefinitionCRFBean() == null) {
@@ -192,7 +192,7 @@ public class InsertActionValidator implements Validator {
                 }
             }
 
-            // TODO: check Null Value logic based on not event definition crf being selected
+            // NOTE: check Null Value logic based on not event definition crf being selected
             if (itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.TEXT)
                 || itemFormMetadataBean.getResponseSet().getResponseType().equals(ResponseType.TEXTAREA)) {
                 if (getEventDefinitionCRFBean() == null) {

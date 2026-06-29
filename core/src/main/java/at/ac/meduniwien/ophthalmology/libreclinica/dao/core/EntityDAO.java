@@ -1388,19 +1388,19 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 // itemdataid
                 Integer vitemdataid = getAsInt(rs, "itemdataid", null);
                 if (vitemdataid == null) {
-                    // TODO ERROR - should always be different than NULL
+                    // NOTE: ERROR - should always be different than NULL
                 }
 
                 // itemdataordinal
                 Integer vitemdataordinal = getAsInt(rs, "itemdataordinal", null);
                 if (vitemdataordinal == null) {
-                    // TODO ERROR - should always be different than NULL
+                    // NOTE: ERROR - should always be different than NULL
                 }
 
                 // item_group_id
                 Integer vitem_group_id = getAsInt(rs, "item_group_id", null);
                 if (vitem_group_id == null) {
-                    // TODO ERROR - should always be different than NULL
+                    // NOTE: ERROR - should always be different than NULL
                 }
 
                 // itemgroupname

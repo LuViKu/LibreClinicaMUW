@@ -180,7 +180,7 @@ public abstract class Table {
         while (it.hasNext()) {
             String key = (String) it.next();
             String value = (String) args.get(key);
-            // TODO: provide URL Encoding!
+            // NOTE: provide URL Encoding!
             baseGetQuery += "&" + key + "=" + value;
         }
 

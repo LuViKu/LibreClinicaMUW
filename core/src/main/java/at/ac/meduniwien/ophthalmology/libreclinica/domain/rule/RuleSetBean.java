@@ -73,7 +73,7 @@ public class RuleSetBean extends AbstractAuditableMutableDomainObject implements
     private List<ExpressionBean> expressions; // itemGroup & item populated when RuleSets are retrieved
     private ItemGroupBean itemGroup;
 
-    // TODO : Pending conversion of the objects below to use Hibernate
+    // NOTE: : Pending conversion of the objects below to use Hibernate
     private Integer studyEventDefinitionId;
     private Integer studyId;
     private Integer crfId;

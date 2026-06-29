@@ -451,7 +451,7 @@ public class ImportCRFDataService {
                                 ItemGroupDAO itemGroupDAO = new ItemGroupDAO(ds);
                                 ItemGroupBean testBean = itemGroupDAO.findByOid(itemGroupDataBean.getItemGroupOID());
                                 if (testBean == null) {
-                                    // TODO i18n of message
+                                    // NOTE: i18n of message
                                     // logger.debug("hit the exception for item groups! " +
                                     // itemGroupDataBean.getItemGroupOID());
                                     MessageFormat mf = new MessageFormat("");

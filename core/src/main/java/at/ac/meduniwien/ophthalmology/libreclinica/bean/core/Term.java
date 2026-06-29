@@ -70,7 +70,7 @@ public class Term extends EntityBean {
         return resterm.getString(this.name).trim();
     }
 
-    // TODO: localised name resolve
+    // NOTE: localised name resolve
     /*
      * public String getLocalizedName() {
      * locale = LocaleProvider.getLocale();

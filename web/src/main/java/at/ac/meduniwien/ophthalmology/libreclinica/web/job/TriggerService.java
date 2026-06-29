@@ -144,7 +144,7 @@ public class TriggerService {
     }
 
     public String generateSummaryStatsMessage(SummaryStatsBean ssBean, ResourceBundle respage) {
-        // TODO i18n
+        // NOTE: i18n
         StringBuffer sb = new StringBuffer();
         sb.append("<table border=\'0\' cellpadding=\'0\' cellspacing=\'0\' width=\'100%\'>");
         sb.append("<tr valign=\'top\'> <td class=\'table_header_row\'>Summary Statistics:</td> </tr> <tr valign=\'top\'>");
@@ -170,7 +170,7 @@ public class TriggerService {
     }
 
     public String generateSkippedCRFMessage(ImportCRFInfoContainer importCRFList, ResourceBundle resword) {
-        // TODO i18n
+        // NOTE: i18n
         StringBuffer sb = new StringBuffer();
         sb.append("Skipped CRFs (due to import rules):<br/>");
         sb.append("<table border=\'0\' cellpadding=\'0\' cellspacing=\'0\' width=\'100%\'>");
