@@ -31,7 +31,7 @@
 <div id="headerDiv">
     <fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
     <div id="logoDiv">
-        <img src="../images/Logo.gif" alt="LibreClinica"/>
+        <jsp:include page="/WEB-INF/jsp/include/brand-lockup-header.jsp"/>
         <span class="muw-strapline" style="margin-left:14px; font-size:13px; color:#444; vertical-align:middle;">
             Department of Ophthalmology and Optometry &middot; Medical University of Vienna
         </span>
