@@ -40,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Restores a removed study event definition and all its related data
  */
+@SuppressWarnings("all")
 public class RestoreEventDefinitionServlet extends SecureController {
     /**
 	 * 

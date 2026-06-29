@@ -16,6 +16,8 @@ import java.util.Optional;
 // note: if you're going to add another member to this class, please update
 // Validator accordingly
 
+@SuppressWarnings("all")
+
 public class TermType extends Term {
     /**
 	 * 

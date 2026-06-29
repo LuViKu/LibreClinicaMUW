@@ -24,6 +24,8 @@ import javax.sql.DataSource;
 
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asHashMap;
 
+@SuppressWarnings("all")
+
 public class EmailActionProcessor implements ActionProcessor {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

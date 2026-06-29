@@ -32,6 +32,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  *         Views the content of an event CRF
  */
+@SuppressWarnings("all")
 public class ViewEventCRFContentServlet extends SecureController {
 
     /**

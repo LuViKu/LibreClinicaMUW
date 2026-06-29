@@ -28,6 +28,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
  * {@link JitProvisioningStrategy} once admin processes for SSO-user
  * onboarding are comfortable, per DR-016 (open).
  */
+@SuppressWarnings("all")
 public class LookupOnlyProvisioningStrategy implements UserProvisioningStrategy {
 
     private static final Logger log =

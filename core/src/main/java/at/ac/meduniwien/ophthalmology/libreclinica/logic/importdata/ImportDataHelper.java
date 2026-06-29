@@ -46,6 +46,7 @@ import java.util.HashMap;
  * @author Tom Hickerson, 04/2008
  * @category logic classes
  */
+@SuppressWarnings("all")
 public class ImportDataHelper {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

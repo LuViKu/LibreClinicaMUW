@@ -15,6 +15,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBe
  * @author Krikor Krumlian
  */
 
+@SuppressWarnings("all")
+
 public class RuleBulkExecuteContainerTwo {
 
     String expression;

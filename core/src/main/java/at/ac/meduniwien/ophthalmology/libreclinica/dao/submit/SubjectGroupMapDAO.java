@@ -26,6 +26,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * @author jxu
  * 
  */
+@SuppressWarnings("all")
 public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> {
 
     private void setQueryNames() {

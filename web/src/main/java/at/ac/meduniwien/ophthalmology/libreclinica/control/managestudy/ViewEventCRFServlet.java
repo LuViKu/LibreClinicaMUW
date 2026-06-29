@@ -36,6 +36,7 @@ import java.util.ArrayList;
  *
  * Views the detail of an event CRF
  */
+@SuppressWarnings("all")
 public class ViewEventCRFServlet extends SecureController {
     /**
 	 * 

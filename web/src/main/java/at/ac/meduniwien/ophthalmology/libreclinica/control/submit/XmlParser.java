@@ -31,6 +31,7 @@ import javax.xml.parsers.SAXParserFactory;
  * flat data.
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class XmlParser extends DefaultHandler {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

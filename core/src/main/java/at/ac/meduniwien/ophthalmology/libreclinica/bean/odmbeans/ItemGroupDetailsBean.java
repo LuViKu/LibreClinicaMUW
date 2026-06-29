@@ -18,6 +18,8 @@ import java.util.List;
  *
  */
 
+@SuppressWarnings("all")
+
 public class ItemGroupDetailsBean extends ElementDefBean {
     private List<PresentInFormBean> presentInForms = new ArrayList<PresentInFormBean>();
 

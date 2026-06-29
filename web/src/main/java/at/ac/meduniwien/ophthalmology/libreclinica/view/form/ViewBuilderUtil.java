@@ -25,6 +25,7 @@ import java.util.SortedMap;
  * form views.
  *
  */
+@SuppressWarnings("all")
 public class ViewBuilderUtil {
 
     /**

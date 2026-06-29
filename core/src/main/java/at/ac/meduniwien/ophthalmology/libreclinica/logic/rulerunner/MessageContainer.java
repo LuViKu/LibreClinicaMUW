@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class MessageContainer {
 
     TheContainer container;

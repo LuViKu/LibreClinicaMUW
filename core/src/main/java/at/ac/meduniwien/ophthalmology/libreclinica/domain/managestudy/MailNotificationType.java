@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.managestudy;
  * 
  * @author jbley
  */
+@SuppressWarnings("all")
 public enum MailNotificationType {
     /**
      * System user mail notification is enabled. Every successful login leads to

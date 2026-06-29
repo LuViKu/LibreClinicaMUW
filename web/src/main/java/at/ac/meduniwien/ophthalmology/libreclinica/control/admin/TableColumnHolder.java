@@ -13,6 +13,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleAction
 
 import java.util.List;
 
+@SuppressWarnings("all")
+
 public class TableColumnHolder {
 
     String versionName;

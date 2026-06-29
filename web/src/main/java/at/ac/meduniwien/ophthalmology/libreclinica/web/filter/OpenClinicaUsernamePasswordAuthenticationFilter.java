@@ -77,6 +77,7 @@ import org.springframework.util.Assert;
  * @author Luke Taylor
  * @since 3.0
  */
+@SuppressWarnings("all")
 public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAuthenticationProcessingFilter {
     public static final String SPRING_SECURITY_LAST_USERNAME_KEY = "SPRING_SECURITY_LAST_USERNAME";
     public static final String SPRING_SECURITY_FORM_USERNAME_KEY = "j_username";

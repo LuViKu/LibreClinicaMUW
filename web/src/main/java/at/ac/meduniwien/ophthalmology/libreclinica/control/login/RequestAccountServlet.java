@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *
  * Processes request of 'request a user account'
  */
+@SuppressWarnings("all")
 public class RequestAccountServlet extends SecureController {
     // private UserAccountBean ubForm = new UserAccountBean();
 

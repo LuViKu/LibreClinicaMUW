@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.Expre
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class OpenClinicaBeanVariableNode extends ExpressionNode {
     String number;
     ExpressionBeanService expressionBeanService;

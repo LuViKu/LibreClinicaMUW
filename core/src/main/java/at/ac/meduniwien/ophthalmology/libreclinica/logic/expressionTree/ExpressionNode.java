@@ -19,6 +19,7 @@ import java.util.HashMap;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public abstract class ExpressionNode {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

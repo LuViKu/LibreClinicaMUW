@@ -19,6 +19,7 @@ import java.util.ArrayList;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public abstract class ReportBean<I> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

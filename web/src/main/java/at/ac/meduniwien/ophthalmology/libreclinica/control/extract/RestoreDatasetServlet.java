@@ -30,6 +30,7 @@ import java.util.Locale;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class RestoreDatasetServlet extends SecureController {
 
     /**

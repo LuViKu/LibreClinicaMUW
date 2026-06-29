@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.StudyEventRow;
  *
  * Handles user request of "view study events"
  */
+@SuppressWarnings("all")
 public class ViewStudyEventsServlet extends SecureController {
 
     /**

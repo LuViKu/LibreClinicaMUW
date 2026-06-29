@@ -23,7 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  * @author thillger
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class PrintoutCertificateServlet extends SecureController {
 
     @Override

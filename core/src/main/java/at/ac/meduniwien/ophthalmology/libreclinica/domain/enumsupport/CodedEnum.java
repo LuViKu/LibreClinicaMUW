@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport;
 
+@SuppressWarnings("all")
+
 public interface CodedEnum {
 
     public Integer getCode();

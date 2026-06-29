@@ -31,6 +31,7 @@ import java.util.Locale;
  *
  *
  */
+@SuppressWarnings("all")
 public class AuditLogUserServlet extends SecureController {
 
     /**

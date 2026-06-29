@@ -18,6 +18,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditDAO;
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class ViewItemAuditLogServlet extends SecureController {
 
     /**

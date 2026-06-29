@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.service;
 
+@SuppressWarnings("all")
+
 public class StudyParamsConfig {
     private StudyParameterValueBean value;
     private StudyParameter parameter;

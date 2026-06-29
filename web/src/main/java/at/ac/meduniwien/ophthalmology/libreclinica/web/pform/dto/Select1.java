@@ -19,6 +19,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "select1")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Select1 implements UserControl {
     @XmlAttribute(name = "ref")
     private String ref;

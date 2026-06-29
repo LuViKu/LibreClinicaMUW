@@ -19,6 +19,7 @@ import java.util.ArrayList;
  * @author ywang
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ListCRFRow extends EntityBeanRow<CRFBean, ListCRFRow> {
     // columns:
     public static final int COL_NAME = 0;

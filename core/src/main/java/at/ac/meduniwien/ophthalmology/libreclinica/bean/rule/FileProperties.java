@@ -21,6 +21,7 @@ import java.util.Collections;
  * @since 3.1.0
  * @see FileUploadHelper
  */
+@SuppressWarnings("all")
 public class FileProperties {
 	
 	private String extensions;

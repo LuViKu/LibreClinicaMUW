@@ -16,6 +16,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.service;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyParameterConfig {
     private String collectDob;
 

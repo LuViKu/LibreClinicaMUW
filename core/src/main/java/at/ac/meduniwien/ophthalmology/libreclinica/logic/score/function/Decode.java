@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public final class Decode extends AbstractFunction {
     public Decode() {
         super();

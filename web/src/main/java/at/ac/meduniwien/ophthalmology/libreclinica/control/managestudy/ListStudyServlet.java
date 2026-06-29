@@ -30,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
  *
  * @version CVS: $Id: ListStudyServlet.java 13702 2009-12-21 20:06:48Z kkrumlian $
  */
+@SuppressWarnings("all")
 public class ListStudyServlet extends SecureController {
 
     /**

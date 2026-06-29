@@ -20,6 +20,7 @@ import java.util.ResourceBundle;
  * SpreadSheet loading validate for instant_calculation func:onChange
  * ywang (Aug., 2011)
  */
+@SuppressWarnings("all")
 public class OnChangeSheetValidator implements SpreadSheetValidator{
 
     private final SheetValidationContainer sheetValidationContainer;

@@ -15,6 +15,8 @@ import org.hibernate.boot.model.naming.Identifier;
 import org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 
+@SuppressWarnings("all")
+
 public class LegacyImprovedImplicitNamingStrategy extends ImplicitNamingStrategyJpaCompliantImpl {
 	private static final long serialVersionUID = 5627834311320589904L;
 

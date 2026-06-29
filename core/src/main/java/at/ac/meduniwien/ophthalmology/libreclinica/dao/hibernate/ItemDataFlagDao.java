@@ -14,6 +14,8 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlag;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class ItemDataFlagDao extends AbstractDomainDao<ItemDataFlag> {
 
     @Override

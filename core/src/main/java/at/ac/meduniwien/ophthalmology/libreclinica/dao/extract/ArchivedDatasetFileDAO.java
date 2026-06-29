@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class ArchivedDatasetFileDAO extends AuditableEntityDAO<ArchivedDatasetFileBean> {
     private DAODigester digester;
 

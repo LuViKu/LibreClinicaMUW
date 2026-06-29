@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ContactServlet extends SecureController {
 
 	private static final long serialVersionUID = 1418512105084748633L;

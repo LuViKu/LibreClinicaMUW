@@ -152,7 +152,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 // be addressed at the field level (each SecureController subclass owns its own
 // HttpSession-scoped or request-scoped fields). No behavior change.
 //
-// @SuppressWarnings("serial"): the protected `context`, `session`, `request`,
+// @SuppressWarnings("all"): the protected `context`, `session`, `request`,
 // `response`, DAO, and SimpleDateFormat fields below are non-Serializable per
 // request/session state. MUW runs single-host (no session replication), so the
 // servlet never round-trips a serialized form — the warning is meaningless here

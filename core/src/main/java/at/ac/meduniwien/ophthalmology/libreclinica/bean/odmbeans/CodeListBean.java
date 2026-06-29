@@ -18,6 +18,8 @@ import java.util.List;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class CodeListBean extends ElementOIDBean {
     private String name;
     private String dataType;

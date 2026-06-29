@@ -47,6 +47,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  *         <P>
  *         expand on query to get all that from a select star?
  */
+@SuppressWarnings("all")
 public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
 
     @Override

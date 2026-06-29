@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.RemoveFilterS
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class FilterTable extends Table {
     public FilterTable() {
         columns.add("Filter Name");

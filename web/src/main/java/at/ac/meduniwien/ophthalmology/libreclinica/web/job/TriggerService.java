@@ -33,6 +33,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ImportCRFInfo;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ImportCRFInfoContainer;
 import org.quartz.SimpleTrigger;
 
+@SuppressWarnings("all")
+
 public class TriggerService {
 
     public TriggerService() {

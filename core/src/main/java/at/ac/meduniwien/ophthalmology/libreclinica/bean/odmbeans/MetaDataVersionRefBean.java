@@ -17,6 +17,8 @@ import java.util.Date;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class MetaDataVersionRefBean extends ElementRefBean {
     private String studyOID;
     private Date effectiveDate;

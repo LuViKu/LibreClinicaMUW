@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import org.quartz.SimpleTrigger;
 import org.quartz.impl.triggers.SimpleTriggerImpl;
 
+@SuppressWarnings("all")
+
 public class XsltTriggerService {
     public XsltTriggerService() {
 

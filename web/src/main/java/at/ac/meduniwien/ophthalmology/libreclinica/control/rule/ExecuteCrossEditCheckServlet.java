@@ -24,6 +24,7 @@ import java.util.Locale;
  * @author Krikor Krumlian
  *
  */
+@SuppressWarnings("all")
 public class ExecuteCrossEditCheckServlet extends SecureController {
 
     /**

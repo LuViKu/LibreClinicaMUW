@@ -15,6 +15,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class CodeListItemBean {
     private TranslatedTextBean decode;
     private String codedValue;

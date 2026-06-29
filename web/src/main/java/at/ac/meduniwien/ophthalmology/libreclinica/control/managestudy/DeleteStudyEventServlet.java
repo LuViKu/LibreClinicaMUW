@@ -27,6 +27,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectD
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
+@SuppressWarnings("all")
+
 public class DeleteStudyEventServlet extends SecureController{
     /**
 	 * 

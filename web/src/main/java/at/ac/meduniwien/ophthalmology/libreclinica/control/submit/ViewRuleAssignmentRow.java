@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.domain.EntityBeanRow;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class ViewRuleAssignmentRow extends EntityBeanRow<RuleSetBean, ViewRuleAssignmentRow> {
     // columns:
     public static final int COL_NAME = 0;

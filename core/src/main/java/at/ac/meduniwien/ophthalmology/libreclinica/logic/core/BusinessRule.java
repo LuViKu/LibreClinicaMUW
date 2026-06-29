@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
  * @author thickerson
  * Created on Sep 1, 2005
  */
+@SuppressWarnings("all")
 public interface BusinessRule {
     public abstract boolean isPropertyTrue(String s);
 

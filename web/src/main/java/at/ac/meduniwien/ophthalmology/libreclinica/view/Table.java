@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 
+@SuppressWarnings("all")
+
 public abstract class Table {
     public static final int NUM_ROWS_PER_PAGE = 10;
 

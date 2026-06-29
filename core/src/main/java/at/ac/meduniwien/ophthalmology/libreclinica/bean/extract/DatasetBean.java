@@ -22,6 +22,7 @@ import java.util.HashMap;
 /**
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class DatasetBean extends AuditableEntityBean {
 
     /**

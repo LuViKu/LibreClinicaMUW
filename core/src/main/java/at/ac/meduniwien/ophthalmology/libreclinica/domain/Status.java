@@ -19,6 +19,7 @@ import java.util.ResourceBundle;
 /*
  * @Author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public enum Status implements CodedEnum {
 
     INVALID(0, "invalid"), AVAILABLE(1, "available"), UNAVAILABLE(2, "unavailable"), PRIVATE(3, "private"), PENDING(4, "pending"), DELETED(5, "removed"), LOCKED(

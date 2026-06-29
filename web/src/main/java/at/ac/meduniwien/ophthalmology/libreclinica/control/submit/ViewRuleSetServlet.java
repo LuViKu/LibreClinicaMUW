@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ViewRuleSetServlet extends SecureController {
 
     /**

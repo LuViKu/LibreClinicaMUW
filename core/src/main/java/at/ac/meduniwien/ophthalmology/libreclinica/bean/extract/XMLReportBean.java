@@ -14,6 +14,7 @@ import java.util.ArrayList;
 /**
  * @author ywang
  */
+@SuppressWarnings("all")
 public class XMLReportBean extends ReportBean<String>  {
     private ArrayList<String> dataLines;
 

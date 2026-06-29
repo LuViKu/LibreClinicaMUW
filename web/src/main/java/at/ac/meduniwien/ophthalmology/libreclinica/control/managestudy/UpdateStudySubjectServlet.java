@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu Processes request to update a study subject
  */
+@SuppressWarnings("all")
 public class UpdateStudySubjectServlet extends SecureController {
     /**
 	 * 

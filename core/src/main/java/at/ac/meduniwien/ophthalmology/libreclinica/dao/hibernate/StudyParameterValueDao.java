@@ -13,6 +13,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameter
 import org.hibernate.query.Query;
 
 
+@SuppressWarnings("all")
+
+
 public class StudyParameterValueDao extends AbstractDomainDao<StudyParameterValue> {
 	
     @Override

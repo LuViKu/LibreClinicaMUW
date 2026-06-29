@@ -77,6 +77,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * (renders the same table inline on the home page for monitor /
  * investigator roles).
  */
+@SuppressWarnings("all")
 public class FindSubjectsDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

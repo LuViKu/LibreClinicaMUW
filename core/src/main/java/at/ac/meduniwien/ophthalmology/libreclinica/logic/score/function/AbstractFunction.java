@@ -27,6 +27,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Vector;
 
+@SuppressWarnings("all")
+
 public abstract class AbstractFunction implements Function {
     /**
      * The argument list of this function

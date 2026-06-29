@@ -39,6 +39,7 @@ import org.quartz.impl.matchers.GroupMatcher;
  * 
  * @author thickerson purpose: to generate the list of jobs and allow us to view them
  */
+@SuppressWarnings("all")
 public class ViewJobServlet extends SecureController {
 
    

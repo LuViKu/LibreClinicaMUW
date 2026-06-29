@@ -18,6 +18,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "manifest")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Manifest {
     @XmlElement(name = "mediaFile")
     private ArrayList<MediaFile> mediaFile = null;

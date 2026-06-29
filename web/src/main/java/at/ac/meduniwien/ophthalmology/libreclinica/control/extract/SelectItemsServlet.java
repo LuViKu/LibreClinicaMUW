@@ -43,6 +43,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
  *
  *
  */
+@SuppressWarnings("all")
 public class SelectItemsServlet extends SecureController {
 
     /**

@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
+@SuppressWarnings("all")
+
 public class Median extends AbstractFunction {
     public Median() {
         super();

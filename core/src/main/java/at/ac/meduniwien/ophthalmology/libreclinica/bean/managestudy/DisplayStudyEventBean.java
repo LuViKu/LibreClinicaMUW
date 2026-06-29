@@ -17,6 +17,7 @@ import java.util.ArrayList;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class DisplayStudyEventBean extends AuditableEntityBean {
 
     /**

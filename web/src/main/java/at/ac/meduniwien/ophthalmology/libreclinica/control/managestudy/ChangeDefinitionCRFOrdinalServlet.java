@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
  * 
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ChangeDefinitionCRFOrdinalServlet extends ChangeOrdinalServlet {
 
     /**

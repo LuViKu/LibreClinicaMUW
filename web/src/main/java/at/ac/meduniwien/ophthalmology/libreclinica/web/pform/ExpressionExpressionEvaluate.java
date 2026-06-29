@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
 
+@SuppressWarnings("all")
+
 public class ExpressionExpressionEvaluate {
 	private String expression;
 	private boolean expressionEvaluate;

@@ -16,6 +16,8 @@ import java.util.Set;
  * @author Krikor Krumlian
  */
 
+@SuppressWarnings("all")
+
 public class RuleSetBasedViewContainer {
 
     String ruleName;

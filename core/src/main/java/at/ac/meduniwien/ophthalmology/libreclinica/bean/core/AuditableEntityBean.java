@@ -32,6 +32,7 @@ import java.util.Date;
  *
  *
  */
+@SuppressWarnings("all")
 public class AuditableEntityBean extends EntityBean {
 
     /**

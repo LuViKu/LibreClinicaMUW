@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @MappedSuperclass
+@SuppressWarnings("all")
 public abstract class AbstractAuditableMutableDomainObject extends AbstractMutableDomainObject implements MutableDomainObject, AuditableMutableDomainObject, Serializable {
 
     /**

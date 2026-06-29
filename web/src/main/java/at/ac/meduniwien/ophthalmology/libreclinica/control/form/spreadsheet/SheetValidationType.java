@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.form.spreadsheet;
 /**
  * Collect what could be validated upon spreadsheet loading.
  */
+@SuppressWarnings("all")
 public enum SheetValidationType {
     /*
      * YW: created file at Aug., 2011 with OnChangeSheetValidator

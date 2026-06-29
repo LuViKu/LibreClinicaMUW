@@ -34,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
  * @author jsampson
  *
  */
+@SuppressWarnings("all")
 public class AuditDAO extends EntityDAO<AuditBean> {
     // private DAODigester digester;
     // YW 12-06-2007 <<!!! Be careful when there is item with data-type as

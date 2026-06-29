@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.core;
 
+@SuppressWarnings("all")
+
 public class ApplicationConstants {
 
     public static String getDateFormatInItemData() {

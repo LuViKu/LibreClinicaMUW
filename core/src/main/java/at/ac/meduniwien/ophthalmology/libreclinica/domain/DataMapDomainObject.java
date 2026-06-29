@@ -13,6 +13,8 @@ import java.io.Serializable;
 
 import jakarta.persistence.Transient;
 
+@SuppressWarnings("all")
+
 public class DataMapDomainObject implements MutableDomainObject,Serializable {
 
 	/**

@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.OidGenerator;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfBean;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class CrfDao extends AbstractDomainDao<CrfBean> {
 
     @Override

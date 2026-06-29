@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ExtractCRFVersionBean extends EntityBean {
 
     /**

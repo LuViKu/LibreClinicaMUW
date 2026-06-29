@@ -11,7 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.exception;
  * @author jbley
  */
 
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class MailNotificationException extends RuntimeException {
 
 	public MailNotificationException() {

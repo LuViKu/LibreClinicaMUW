@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.action;
 
+@SuppressWarnings("all")
+
 public class DiscrepancyNoteActionBean extends RuleActionBean {
 
     private static final long serialVersionUID = -2315041919657806316L;

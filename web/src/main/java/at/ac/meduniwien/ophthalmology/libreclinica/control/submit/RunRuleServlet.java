@@ -34,6 +34,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
  *
  * @author Krikor krumlian
  */
+@SuppressWarnings("all")
 public class RunRuleServlet extends SecureController {
     private static final long serialVersionUID = 9116068126651934226L;
     protected final Logger log = LoggerFactory.getLogger(RunRuleServlet.class);

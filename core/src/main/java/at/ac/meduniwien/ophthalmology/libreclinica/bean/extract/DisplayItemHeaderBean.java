@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class DisplayItemHeaderBean {
     private String itemHeaderName;
     private ItemBean item;

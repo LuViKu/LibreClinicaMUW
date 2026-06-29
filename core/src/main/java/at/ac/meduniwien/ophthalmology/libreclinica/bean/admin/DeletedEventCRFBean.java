@@ -14,6 +14,7 @@ import java.util.Date;
 /*
  * @author S.M. Shamim 28/01/2008
  */
+@SuppressWarnings("all")
 public class DeletedEventCRFBean {
     private int studyEventId;
     private String crfName;

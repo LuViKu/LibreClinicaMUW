@@ -14,6 +14,8 @@ import java.util.TreeSet;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.admin.MeasurementUnit;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class MeasurementUnitDao extends AbstractDomainDao<MeasurementUnit> {
     @Override
     Class<MeasurementUnit> domainClass() {

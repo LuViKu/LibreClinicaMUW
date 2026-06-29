@@ -37,6 +37,7 @@ import org.apache.commons.lang.StringUtils;
  * @author jxu
  * 
  */
+@SuppressWarnings("all")
 public class EventDefinitionCRFDAO extends AuditableEntityDAO<EventDefinitionCRFBean> {
     // private DAODigester digester;
 

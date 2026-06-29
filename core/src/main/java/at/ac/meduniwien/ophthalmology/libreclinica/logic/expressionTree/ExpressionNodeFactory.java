@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 class ExpressionNodeFactory {
 
     static ExpressionNode getExpNode(Operator op, ExpressionNode node1, ExpressionNode node2) {

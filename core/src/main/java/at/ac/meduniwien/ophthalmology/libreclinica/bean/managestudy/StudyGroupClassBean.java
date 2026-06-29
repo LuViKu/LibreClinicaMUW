@@ -18,6 +18,7 @@ import java.util.ArrayList;
  *
  * Object for study group class
  */
+@SuppressWarnings("all")
 public class StudyGroupClassBean extends AuditableEntityBean {
     /**
 	 * 

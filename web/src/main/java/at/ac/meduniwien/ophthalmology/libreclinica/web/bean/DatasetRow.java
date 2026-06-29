@@ -20,6 +20,7 @@ import java.util.ArrayList;
  *
  *
  */
+@SuppressWarnings("all")
 public class DatasetRow extends EntityBeanRow<DatasetBean, DatasetRow> {
 
     public static final int COL_DATASETNAME = 0;

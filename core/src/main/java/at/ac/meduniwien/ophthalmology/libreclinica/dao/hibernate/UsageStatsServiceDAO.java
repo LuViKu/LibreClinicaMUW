@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author pgawade
  */
+@SuppressWarnings("all")
 public class UsageStatsServiceDAO extends AbstractDomainDao<LogUsageStatsBean> {
     private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass().getName());
 

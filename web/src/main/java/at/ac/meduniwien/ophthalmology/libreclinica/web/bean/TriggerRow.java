@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.TriggerBean;
  * @author thickerson, dec 2008
  *
  */
+@SuppressWarnings("all")
 public class TriggerRow extends EntityBeanRow<TriggerBean, TriggerRow> {
 	// columns:
     public static final int COL_TRIGGER_NAME = 0;

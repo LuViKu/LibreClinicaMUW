@@ -77,6 +77,7 @@ import org.springframework.security.core.userdetails.UserDetails;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public abstract class CoreSecureController extends HttpServlet {
 
 

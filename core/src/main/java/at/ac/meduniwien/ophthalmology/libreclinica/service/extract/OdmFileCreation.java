@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class OdmFileCreation {
 
     private static final Logger LOG = LoggerFactory.getLogger(OdmFileCreation.class);

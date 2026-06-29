@@ -16,6 +16,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class UserAccountRow extends EntityBeanRow<UserAccountBean, UserAccountRow> {
     // columns:
     public static final int COL_USERNAME = 0;

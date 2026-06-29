@@ -49,6 +49,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * shell). Both extend {@link SecureController} to share the
  * sysadmin-only access gate.
  */
+@SuppressWarnings("all")
 public class ListSubjectDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

@@ -96,6 +96,7 @@ import org.w3c.dom.NodeList;
 
 @Path("/openrosa")
 @Component
+@SuppressWarnings("all")
 public class OpenRosaServices {
 
     public static final String INPUT_USER_SOURCE = "userSource";

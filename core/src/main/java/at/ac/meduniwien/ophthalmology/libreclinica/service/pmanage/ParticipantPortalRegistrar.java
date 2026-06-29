@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+@SuppressWarnings("all")
+
 public class ParticipantPortalRegistrar {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

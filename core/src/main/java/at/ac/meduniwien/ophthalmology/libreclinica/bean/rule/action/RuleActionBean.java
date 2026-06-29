@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.RuleSetRuleBean;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RuleActionBean extends AuditableEntityBean {
 
     private static final long serialVersionUID = 7019049957184162568L;

@@ -23,6 +23,7 @@ import jakarta.servlet.jsp.tagext.SimpleTagSupport;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 4, 2007
  */
+@SuppressWarnings("all")
 public class TableTag extends SimpleTagSupport {
     public static String VIEW_DATA_ENTRY = "viewdataentry";
     public static String INITIAL_DATA_ENTRY = "initialdataentry";

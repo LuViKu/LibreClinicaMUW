@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyUserRoleRow extends EntityBeanRow<StudyUserRoleBean, StudyUserRoleRow> {
     // columns:
     public static final int COL_USERNAME = 0;

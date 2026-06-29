@@ -17,6 +17,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "upload")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Upload implements UserControl {
     @XmlAttribute(name = "ref")
     private String ref;

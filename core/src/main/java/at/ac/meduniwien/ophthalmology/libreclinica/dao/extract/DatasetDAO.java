@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
  *
  *
  */
+@SuppressWarnings("all")
 public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
 
     // private DataSource ds;

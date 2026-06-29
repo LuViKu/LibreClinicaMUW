@@ -33,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Servlet to create a new subject group class
  */
+@SuppressWarnings("all")
 public class CreateSubjectGroupClassServlet extends SecureController {
     /**
 	 * 

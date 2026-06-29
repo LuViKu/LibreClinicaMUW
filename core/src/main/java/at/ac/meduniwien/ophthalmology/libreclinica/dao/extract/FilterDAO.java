@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class FilterDAO extends AuditableEntityDAO<FilterBean> {
     private DAODigester digester;
 

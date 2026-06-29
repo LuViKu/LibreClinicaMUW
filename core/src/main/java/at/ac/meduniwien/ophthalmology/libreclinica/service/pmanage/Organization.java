@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+@SuppressWarnings("all")
 public class Organization {
     private long id;
     private String name;

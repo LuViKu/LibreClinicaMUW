@@ -33,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
  *
  *
  */
+@SuppressWarnings("all")
 public class SectionDAO extends AuditableEntityDAO<SectionBean> {
 
     // private DAODigester digester;

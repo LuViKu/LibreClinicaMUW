@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.exception;
  * @author sshamim
  *
  */
+@SuppressWarnings("all")
 public class CRFReadingException extends Exception {
     /**
 	 * 

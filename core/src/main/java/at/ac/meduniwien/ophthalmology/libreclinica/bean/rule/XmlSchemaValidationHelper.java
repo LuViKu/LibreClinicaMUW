@@ -33,6 +33,8 @@ import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
 
+@SuppressWarnings("all")
+
 public class XmlSchemaValidationHelper {
 
     public void validateAgainstSchema(File xmlFile, File xsdFile) {

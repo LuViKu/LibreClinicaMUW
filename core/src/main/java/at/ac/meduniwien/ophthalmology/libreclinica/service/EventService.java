@@ -32,6 +32,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class EventService implements EventServiceInterface {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

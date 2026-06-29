@@ -37,6 +37,7 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
  *
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ListStudySubjectsServlet extends SecureController {
 
     // Shaoyu Su

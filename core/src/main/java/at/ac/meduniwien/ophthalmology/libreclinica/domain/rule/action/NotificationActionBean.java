@@ -20,6 +20,7 @@ import jakarta.persistence.Transient;
 
 @Entity
 @DiscriminatorValue("7")
+@SuppressWarnings("all")
 public class NotificationActionBean extends RuleActionBean implements Serializable {
 
     /**

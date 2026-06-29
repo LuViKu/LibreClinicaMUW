@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Bind;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 
+@SuppressWarnings("all")
+
 public class GroupWidget extends BaseWidget {
 	private ItemGroupBean itemGroup = null;
 	private CRFVersionBean version = null;

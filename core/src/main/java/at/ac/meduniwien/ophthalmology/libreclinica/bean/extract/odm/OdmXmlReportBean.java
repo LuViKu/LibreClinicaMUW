@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
  * @author ywang (May, 2008)
  */
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public abstract class OdmXmlReportBean {
     private String ODMVersion;
     private StringBuffer xmlOutput;

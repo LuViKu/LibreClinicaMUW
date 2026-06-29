@@ -16,6 +16,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class DisplayEventDefinitionCRFBean extends AuditableEntityBean {
     /**
 	 * 

@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class RelationalOpNode extends ExpressionNode {
     Operator op; // The operator.
     ExpressionNode left; // The expression for its left operand.

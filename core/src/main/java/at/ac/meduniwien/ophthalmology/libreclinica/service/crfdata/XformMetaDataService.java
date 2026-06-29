@@ -64,7 +64,7 @@ import org.springframework.validation.DataBinder;
 import org.springframework.validation.Errors;
 
 @Service
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class XformMetaDataService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

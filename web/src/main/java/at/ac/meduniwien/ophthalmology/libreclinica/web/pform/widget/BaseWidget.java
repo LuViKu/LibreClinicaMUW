@@ -16,6 +16,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public abstract class BaseWidget implements Widget {
 
     protected final Logger log = LoggerFactory.getLogger(BaseWidget.class);

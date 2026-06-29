@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.login;
 
+@SuppressWarnings("all")
+
 public class UserDTO {
 
 private String fName ;

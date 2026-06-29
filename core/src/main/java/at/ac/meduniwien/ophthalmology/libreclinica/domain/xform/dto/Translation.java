@@ -17,6 +17,7 @@ import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlElement;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Translation {
     @XmlAttribute(name = "default")
     private String defaultLang;

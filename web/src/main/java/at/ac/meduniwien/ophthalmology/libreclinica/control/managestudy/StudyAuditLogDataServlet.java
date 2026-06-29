@@ -52,6 +52,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * JSP shell + sidebar + sysadmin/director-coordinator-monitor access
  * gate). Both extend {@link SecureController}.
  */
+@SuppressWarnings("all")
 public class StudyAuditLogDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

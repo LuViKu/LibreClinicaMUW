@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class BreadcrumbBean extends EntityBean {
 
     /**

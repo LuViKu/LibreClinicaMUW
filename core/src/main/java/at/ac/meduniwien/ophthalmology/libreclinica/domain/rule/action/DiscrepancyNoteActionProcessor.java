@@ -20,7 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.Discrepan
 
 import javax.sql.DataSource;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class DiscrepancyNoteActionProcessor implements ActionProcessor {
 

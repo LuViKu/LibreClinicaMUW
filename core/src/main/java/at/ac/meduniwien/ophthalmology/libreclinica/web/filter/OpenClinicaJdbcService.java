@@ -27,6 +27,7 @@ import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
 
 /*
  */
+@SuppressWarnings("all")
 public class OpenClinicaJdbcService extends JdbcDaoImpl {
 
     private MappingSqlQuery<UserDetails> ocUsersByUsernameMapping;

@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.core.util;
  *
  * @author Leonel Gayard, &lt;lgayard@openclinica.com&gt; 
  */
+@SuppressWarnings("all")
 public class Pair<T,U> {
 	private T first;
 	private U second;

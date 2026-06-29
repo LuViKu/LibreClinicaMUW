@@ -43,6 +43,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
  *
  *
  */
+@SuppressWarnings("all")
 public class ViewDatasetsServlet extends SecureController {
 
     /**

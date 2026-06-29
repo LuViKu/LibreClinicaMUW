@@ -53,6 +53,7 @@ import org.springframework.stereotype.Service;
  * </ul>
  */
 @Service
+@SuppressWarnings("all")
 public class EventCrfPresenceRegistry {
 
     /** Presence-entry TTL in seconds. Echoed to the SPA via {@code

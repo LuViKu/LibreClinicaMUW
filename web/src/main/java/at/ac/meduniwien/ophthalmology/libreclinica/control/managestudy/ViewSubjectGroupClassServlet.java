@@ -31,6 +31,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Views details of a Subject Group Class
  */
+@SuppressWarnings("all")
 public class ViewSubjectGroupClassServlet extends SecureController {
     /**
 	 * 

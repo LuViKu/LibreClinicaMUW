@@ -39,6 +39,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
  * 
  * @author jxu
  */
+@SuppressWarnings("all")
 public class AddCRFToDefinitionServlet extends SecureController {
 
     /**

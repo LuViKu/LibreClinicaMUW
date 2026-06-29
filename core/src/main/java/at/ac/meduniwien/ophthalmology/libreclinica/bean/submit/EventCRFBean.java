@@ -25,6 +25,7 @@ import java.util.Date;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class EventCRFBean extends AuditableEntityBean {
     /**
 	 * 

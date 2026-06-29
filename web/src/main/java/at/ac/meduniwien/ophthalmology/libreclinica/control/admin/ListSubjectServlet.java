@@ -25,6 +25,7 @@ import java.util.Locale;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ListSubjectServlet extends SecureController {
 
     private static final long serialVersionUID = 1884177064586726489L;

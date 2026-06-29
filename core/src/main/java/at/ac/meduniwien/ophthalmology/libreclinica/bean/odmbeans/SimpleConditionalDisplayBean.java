@@ -11,6 +11,10 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
 
 
 
+@SuppressWarnings("all")
+
+
+
 public class SimpleConditionalDisplayBean {
     private String controlItemName;
     private String optionValue;

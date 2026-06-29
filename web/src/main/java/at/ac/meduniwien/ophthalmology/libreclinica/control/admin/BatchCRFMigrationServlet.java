@@ -28,7 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class BatchCRFMigrationServlet extends SecureController {
 
     private static String CRF_ID = "crfId";

@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author thickerson
  * Created on Sep 21, 2005
  */
+@SuppressWarnings("all")
 public class AuditLogStudyServlet extends SecureController {
 
     /**

@@ -35,6 +35,8 @@ import org.quartz.Trigger.TriggerState;
 import org.quartz.TriggerKey;
 import org.quartz.impl.StdScheduler;
 
+@SuppressWarnings("all")
+
 public class ViewSingleJobServlet extends SecureController {
 
     /**

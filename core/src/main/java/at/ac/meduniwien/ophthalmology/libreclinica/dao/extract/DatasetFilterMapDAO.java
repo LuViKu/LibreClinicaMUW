@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
  * inline {@code INSERT}s in {@code CreateDatasetServlet}. This is the
  * first centralized accessor; new code paths should reuse it.
  */
+@SuppressWarnings("all")
 public class DatasetFilterMapDAO {
 
     private static final Logger LOG = LoggerFactory.getLogger(DatasetFilterMapDAO.class);

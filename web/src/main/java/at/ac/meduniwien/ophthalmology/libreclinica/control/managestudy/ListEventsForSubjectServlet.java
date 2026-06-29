@@ -46,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class ListEventsForSubjectServlet extends SecureController {
 
     /**

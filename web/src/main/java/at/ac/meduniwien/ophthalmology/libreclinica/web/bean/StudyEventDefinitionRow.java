@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyEventDefinitionRow extends EntityBeanRow<StudyEventDefinitionBean, StudyEventDefinitionRow> {
     // columns:
     // YW << Currently, for URL .../ListEventDefinition, the following collumn

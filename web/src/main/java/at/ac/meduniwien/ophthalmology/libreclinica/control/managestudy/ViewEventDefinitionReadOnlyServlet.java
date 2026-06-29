@@ -32,6 +32,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class ViewEventDefinitionReadOnlyServlet extends ViewEventDefinitionServlet {
     /**
 	 * 

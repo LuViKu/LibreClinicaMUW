@@ -29,6 +29,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 @Entity
 @Table(name = "dn_item_data_map")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@SuppressWarnings("all")
 public class DnItemDataMap extends DataMapDomainObject {
 
     /**

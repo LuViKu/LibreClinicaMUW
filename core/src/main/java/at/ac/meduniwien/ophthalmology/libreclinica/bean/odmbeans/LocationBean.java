@@ -15,6 +15,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class LocationBean extends ElementOIDBean {
     private String name;
     private MetaDataVersionRefBean metaDataVersionRef;

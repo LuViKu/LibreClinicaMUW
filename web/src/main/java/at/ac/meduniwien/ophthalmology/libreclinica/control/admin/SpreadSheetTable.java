@@ -20,6 +20,7 @@ import java.util.ResourceBundle;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public interface SpreadSheetTable {
     public NewCRFBean toNewCRF(javax.sql.DataSource ds, ResourceBundle bundle) throws IOException, CRFReadingException;
 

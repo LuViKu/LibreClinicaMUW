@@ -19,6 +19,7 @@ import org.springframework.scheduling.quartz.SchedulerFactoryBean;
  * @see OpenClinicaStdSchedulerFactory
  *
  */
+@SuppressWarnings("all")
 public class OpenClinicaSchedulerFactoryBean extends SchedulerFactoryBean {
 
     @Override

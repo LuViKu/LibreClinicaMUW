@@ -43,6 +43,8 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.mail.javamail.MimeMessagePreparator;
 
+@SuppressWarnings("all")
+
 public class NotificationActionProcessor implements ActionProcessor, Runnable {
 
 	protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

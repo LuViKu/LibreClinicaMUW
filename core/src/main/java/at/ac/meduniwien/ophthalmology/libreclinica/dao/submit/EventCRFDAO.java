@@ -47,6 +47,7 @@ import org.apache.commons.lang.StringUtils;
  * @author thickerson
  * 
  */
+@SuppressWarnings("all")
 public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
     private void setQueryNames() {
         this.findByPKAndStudyName = "findByPKAndStudy";

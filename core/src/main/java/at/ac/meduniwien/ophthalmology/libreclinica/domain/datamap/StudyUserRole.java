@@ -27,6 +27,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 @Entity
 @Table(name = "study_user_role")
 @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@SuppressWarnings("all")
 public class StudyUserRole implements CompositeIdDomainObject {
 
     private StudyUserRoleId id;

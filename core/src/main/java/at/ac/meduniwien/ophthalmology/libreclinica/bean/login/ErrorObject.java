@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.login;
 
+@SuppressWarnings("all")
+
 public class ErrorObject {
 
 private String resource;

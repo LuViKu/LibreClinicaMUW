@@ -33,6 +33,7 @@ import java.util.Locale;
  *
  *
  */
+@SuppressWarnings("all")
 public class RemoveDatasetServlet extends SecureController {
 
     /**

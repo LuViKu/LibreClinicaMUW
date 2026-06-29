@@ -25,6 +25,7 @@ import java.util.ResourceBundle;
 /**
  * @author Jun Xu
  */
+@SuppressWarnings("all")
 public class AuditEventBean extends AuditableEntityBean {
     // AUDIT_ID AUDIT_DATE AUDIT_TABLE USER_ID
     // ENTITY_ID REASON_FOR_CHANGE ACTION_MESSAGE

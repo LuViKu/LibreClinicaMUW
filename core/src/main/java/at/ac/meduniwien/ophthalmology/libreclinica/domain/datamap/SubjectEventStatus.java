@@ -21,6 +21,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
  * Generated Jul 31, 2013 2:03:33 PM by Hibernate Tools 3.4.0.CR1
  */
 
+@SuppressWarnings("all")
+
 public enum SubjectEventStatus  implements CodedEnum {
 
 	INVALID(0, "invalid"), SCHEDULED(1, "scheduled"), NOT_SCHEDULED(2, "not_scheduled"), DATA_ENTRY_STARTED(3, "data_entry_started"), COMPLETED(4, "completed"), STOPPED(5, "stopped"), SKIPPED(6, "skipped"),

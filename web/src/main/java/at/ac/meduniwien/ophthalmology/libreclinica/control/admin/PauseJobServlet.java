@@ -30,6 +30,7 @@ import org.quartz.impl.StdScheduler;
  * @author Tom Hickerson, 2009
  * 
  */
+@SuppressWarnings("all")
 public class PauseJobServlet extends SecureController {
 
     /**

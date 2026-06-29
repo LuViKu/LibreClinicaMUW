@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.web.pform.widget;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Bind;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 
+@SuppressWarnings("all")
+
 public interface Widget {
 	
 	public static final String APPEARANCE_FULL = "full";

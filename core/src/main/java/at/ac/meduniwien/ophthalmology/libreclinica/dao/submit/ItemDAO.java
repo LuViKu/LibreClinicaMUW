@@ -33,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
 /**
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class ItemDAO extends AuditableEntityDAO<ItemBean> {
 
     public ItemDAO(DataSource ds) {

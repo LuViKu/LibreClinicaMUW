@@ -70,6 +70,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
  * Created by IntelliJ IDEA. User: bads Date: Jun 10, 2008 Time: 5:28:46 PM To
  * change this template use File | Settings | File Templates.
  */
+@SuppressWarnings("all")
 public class SignStudySubjectServlet extends SecureController {
     /**
 	 * 

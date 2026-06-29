@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
  * Postgres deployments. The historic comment noted that other DB types
  * skipped the cache; not re-evaluating that policy here.
  */
+@SuppressWarnings("all")
 public class EhCacheWrapper<K, V> implements CacheWrapper<K, V> {
 
     private final String cacheName;

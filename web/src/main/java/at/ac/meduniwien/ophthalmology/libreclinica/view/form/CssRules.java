@@ -23,6 +23,7 @@ import java.util.Map;
  * CSS classes to dynamically generated elements, in the manner of td
  * class="aka_cellBorders" .
  */
+@SuppressWarnings("all")
 public class CssRules {
 
     protected static final Logger logger = LoggerFactory.getLogger(CssRules.class.getName());

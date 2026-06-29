@@ -51,6 +51,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Date: Nov 19, 2009
  * Time: 9:19:46 AM
  */
+@SuppressWarnings("all")
 public class PrintEventCRFServlet extends DataEntryServlet {
     /**
 	 * 

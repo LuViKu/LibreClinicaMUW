@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
 import org.apache.commons.math.stat.StatUtils;
 
+@SuppressWarnings("all")
+
 public class Avg extends AbstractFunction {
 
     public Avg() {

@@ -28,6 +28,7 @@ import jakarta.persistence.Transient;
 
 @Entity
 @DiscriminatorValue("8")
+@SuppressWarnings("all")
 public class RandomizeActionBean extends RuleActionBean {
 
     /**

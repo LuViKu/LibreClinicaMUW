@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.login;
  *
  *
  */
+@SuppressWarnings("all")
 public class PrivilegeBean {
     // does it really extend entity bean?
     // should it extend a simple entity bean instead?

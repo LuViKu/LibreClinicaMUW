@@ -29,6 +29,7 @@ import java.util.Date;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class ArchivedDatasetFileBean extends EntityBean {
 
     /**

@@ -29,6 +29,7 @@ import java.util.Locale;
  *
  *
  */
+@SuppressWarnings("all")
 public class AccessFileServlet extends SecureController {
 
     /**

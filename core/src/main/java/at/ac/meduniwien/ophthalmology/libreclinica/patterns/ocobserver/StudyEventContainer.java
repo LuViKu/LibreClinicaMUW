@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.patterns.ocobserver;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEvent;
 
+@SuppressWarnings("all")
+
 public class StudyEventContainer {
 	private StudyEvent event = null;
 	private StudyEventChangeDetails changeDetails = null;

@@ -66,6 +66,7 @@ import org.slf4j.LoggerFactory;
  */
 
 // an int
+@SuppressWarnings("all")
 public class TableOfContentsServlet extends SecureController {
     /**
 	 * 

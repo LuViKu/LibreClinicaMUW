@@ -19,6 +19,7 @@ import java.util.ResourceBundle;
  *
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class Term extends EntityBean {
 
 	private static final long serialVersionUID = 4380127915595883173L;

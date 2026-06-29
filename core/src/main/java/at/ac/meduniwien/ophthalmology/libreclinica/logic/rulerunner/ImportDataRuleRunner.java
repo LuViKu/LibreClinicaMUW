@@ -39,6 +39,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.MessageConta
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.transaction.annotation.Transactional;
 
+@SuppressWarnings("all")
+
 public class ImportDataRuleRunner extends RuleRunner {
 
     public ImportDataRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {

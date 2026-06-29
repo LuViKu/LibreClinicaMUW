@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class RuleDao extends AbstractDomainDao<RuleBean> {
 
     @Override

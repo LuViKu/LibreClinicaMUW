@@ -29,6 +29,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class QueryStore implements Serializable, ResourceLoaderAware {
 
     private static final long serialVersionUID = -5730668649244361127L;

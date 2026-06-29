@@ -19,6 +19,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import javax.sql.DataSource;
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public class ExpressionBeanObjectWrapper {
 
     public StudyEventDao getStudyEventDaoHib() {

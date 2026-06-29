@@ -25,6 +25,7 @@ import java.util.List;
  * <p> RuleSetBean, the object that collects rules associated with study events. </p>
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class RuleSetBean extends AuditableEntityBean {
 
     private static final long serialVersionUID = 1L;

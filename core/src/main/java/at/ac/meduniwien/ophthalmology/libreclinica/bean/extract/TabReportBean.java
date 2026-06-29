@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class TabReportBean extends TextReportBean {
     public TabReportBean() {
         end = "\n";// ending character

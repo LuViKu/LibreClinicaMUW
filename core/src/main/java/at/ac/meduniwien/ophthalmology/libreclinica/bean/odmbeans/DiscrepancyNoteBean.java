@@ -18,6 +18,7 @@ import java.util.List;
  * @author ywang (March, 2010)
  *
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteBean extends ElementOIDBean {
     private String status;
     private String noteType;

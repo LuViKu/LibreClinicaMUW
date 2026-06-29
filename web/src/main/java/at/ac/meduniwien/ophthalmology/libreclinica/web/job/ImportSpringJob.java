@@ -88,6 +88,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * @author thickerson, 04/2009
  * 
  */
+@SuppressWarnings("all")
 public class ImportSpringJob extends QuartzJobBean {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

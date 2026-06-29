@@ -49,6 +49,8 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class RuleRunner {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

@@ -21,6 +21,7 @@ import java.util.List;
  * Date: Nov 23, 2009
  * Time: 8:41:41 AM
  */
+@SuppressWarnings("all")
 public class PrintCRFBean {
     private StudyEventBean studyEventBean;
     private CRFBean crfBean;

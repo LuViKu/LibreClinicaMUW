@@ -56,6 +56,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *       (entityType != "eventCrf" OR stageId == 5)</li>
  * </ul>
  */
+@SuppressWarnings("all")
 public class ViewNotesDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

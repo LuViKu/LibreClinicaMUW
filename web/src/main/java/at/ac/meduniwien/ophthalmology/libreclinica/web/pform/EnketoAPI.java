@@ -28,6 +28,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.codec.Hex;
 import org.springframework.web.client.RestTemplate;
 
+@SuppressWarnings("all")
+
 public class EnketoAPI {
 
     private String enketoURL = null;

@@ -41,6 +41,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * goes out of scope after returning the {@link
  * org.springframework.security.core.Authentication} result.
  */
+@SuppressWarnings("all")
 public class PasswordRehashService {
 
     private static final Logger log =

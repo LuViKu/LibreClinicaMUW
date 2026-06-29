@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class ConstantNode extends ExpressionNode {
     String number; // The number.
 

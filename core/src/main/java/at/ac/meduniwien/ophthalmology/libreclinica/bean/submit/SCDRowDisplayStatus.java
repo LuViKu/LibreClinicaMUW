@@ -17,6 +17,7 @@ import java.util.HashMap;
  * SHOW_CHANGABLE 1: current display but changable; 
  * HIDE_CHANGABLE 2: current no display but changable; <br/>  
  */
+@SuppressWarnings("all")
 public enum SCDRowDisplayStatus {
     SHOW_UNCHANGABLE(0), SHOW_CHANGABLE(1), HIDE_CHANGABLE(2);
     

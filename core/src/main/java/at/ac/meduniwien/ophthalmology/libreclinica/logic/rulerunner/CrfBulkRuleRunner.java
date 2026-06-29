@@ -46,6 +46,8 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class CrfBulkRuleRunner extends RuleRunner {
 
     public CrfBulkRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {

@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
  * String generated from a JDOM Document object (HTML, basically) is then output
  * to a Web browser by a custom JSP tag.
  */
+@SuppressWarnings("all")
 public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
 
     private static final Logger logger= LoggerFactory.getLogger(PrintHorizontalFormBuilder.class);

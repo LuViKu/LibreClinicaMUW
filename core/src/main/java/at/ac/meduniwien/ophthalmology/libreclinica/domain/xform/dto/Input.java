@@ -17,6 +17,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "input")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Input implements UserControl {
     @XmlAttribute(name = "ref")
     private String ref;

@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  *
  */
+@SuppressWarnings("all")
 public class ViewNotesServiceImpl implements ViewNotesService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ViewNotesServiceImpl.class);

@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata;
  * For option of instant-calculation, func: onchange(item,option)
  */
 //ywang (Aug., 2011)
+@SuppressWarnings("all")
 public enum InstantOnChangeType{
     INVALID(0, "invalid"), CURRENT_DATE_TIME(1, "_CURRENT_DATE_TIME"), CURRENT_DATE(2,"_CURRENT_DATE");
 

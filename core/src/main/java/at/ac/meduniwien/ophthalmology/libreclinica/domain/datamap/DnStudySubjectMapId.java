@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.DataMapDomainObject;
  * Generated Aug 8, 2013 11:32:37 AM by Hibernate Tools 3.4.0.CR1
  */
 @Embeddable
+@SuppressWarnings("all")
 public class DnStudySubjectMapId extends DataMapDomainObject{
 	/**
 	 * 

@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 /*
  * Helper methods will be placed in this class - DRY
  */
+@SuppressWarnings("all")
 public class CrfBusinessLogicHelper {
 
     // SessionManager sm;

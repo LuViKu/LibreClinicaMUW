@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectGroupMapBe
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class StudyGroupBean extends AuditableEntityBean {
     /**
 	 * 

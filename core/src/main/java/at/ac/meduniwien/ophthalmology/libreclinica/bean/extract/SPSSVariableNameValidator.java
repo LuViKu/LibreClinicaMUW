@@ -48,7 +48,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
  *
  * @auther ywang
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 @Deprecated
 public class SPSSVariableNameValidator extends NameValidator {
     private final String[] reservedKeywords = { "all", "and", "by", "eq", "ge", "gt", "le", "lt", "ne", "not", "or", "to", "with" };

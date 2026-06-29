@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.odm;
 
+@SuppressWarnings("all")
+
 public class GlobalFormsMetadataBean extends MetaDataReportBean {
 
 	

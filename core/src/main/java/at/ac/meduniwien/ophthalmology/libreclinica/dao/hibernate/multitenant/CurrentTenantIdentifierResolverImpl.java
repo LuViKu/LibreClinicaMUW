@@ -24,6 +24,7 @@ import jakarta.servlet.http.HttpSession;
 /**
  * Created by yogi on 1/16/17.
  */
+@SuppressWarnings("all")
 public class CurrentTenantIdentifierResolverImpl implements CurrentTenantIdentifierResolver {
 
     public static final String DEFAULT_TENANT_ID = "public";

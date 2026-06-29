@@ -49,7 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class GenerateExtractFileService {
 
     private static final Logger logger = LoggerFactory.getLogger(GenerateExtractFileService.class);

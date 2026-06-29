@@ -28,6 +28,7 @@ import javax.sql.DataSource;
  * user logged in at the site level cannot view/use CRFs that are marked as
  * "hidden." User: bruceperry Date: Feb 9, 2009
  */
+@SuppressWarnings("all")
 public class HideCRFManager {
     public static at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.HideCRFManager createHideCRFManager() {
         return new at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.HideCRFManager();

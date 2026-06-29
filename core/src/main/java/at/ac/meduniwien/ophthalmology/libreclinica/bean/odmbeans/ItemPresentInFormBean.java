@@ -12,6 +12,11 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
 
 
 
+@SuppressWarnings("all")
+
+
+
+
 public class ItemPresentInFormBean {
     //attributes
     private String formOid;

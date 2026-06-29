@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.core.util;
  * @author htaycher
  *
  */
+@SuppressWarnings("all")
 public enum CrfTemplateColumnNameEnum {
 
 	ITEM_NAME (0),	DESCRIPTION_LABEL(1),	LEFT_ITEM_TEXT(2),

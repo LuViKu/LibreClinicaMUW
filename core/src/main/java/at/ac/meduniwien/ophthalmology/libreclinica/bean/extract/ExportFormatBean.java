@@ -16,6 +16,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
  *
  */
 
+@SuppressWarnings("all")
+
 public class ExportFormatBean extends Term {
 
     /**

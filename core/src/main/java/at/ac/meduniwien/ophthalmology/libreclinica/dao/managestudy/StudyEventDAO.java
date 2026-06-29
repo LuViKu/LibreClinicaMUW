@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  *         Modified by ywang.
  *
  */
+@SuppressWarnings("all")
 public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements Listener {
     
 	

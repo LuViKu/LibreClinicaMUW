@@ -15,6 +15,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class ElementRefBean {
     private String elementDefOID;
     private String mandatory;

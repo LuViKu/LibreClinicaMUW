@@ -16,6 +16,7 @@ import org.jdom.Content;
  * for inside a textarea tag, in order to force JDOM to create a non-empty tag
  * (&lt;textarea> &lt;/textarea>, as opposed to &lt;textarea />).
  */
+@SuppressWarnings("all")
 public class NbspaceContent extends Content {
     /**
 	 * 

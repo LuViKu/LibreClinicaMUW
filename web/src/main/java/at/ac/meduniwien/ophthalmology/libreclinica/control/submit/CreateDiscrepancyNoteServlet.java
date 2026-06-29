@@ -69,6 +69,7 @@ import org.apache.commons.lang.StringUtils;
  *
  * @author jxu
  */
+@SuppressWarnings("all")
 public class CreateDiscrepancyNoteServlet extends SecureController {
 
 	private static final long serialVersionUID = 4691058657903088336L;

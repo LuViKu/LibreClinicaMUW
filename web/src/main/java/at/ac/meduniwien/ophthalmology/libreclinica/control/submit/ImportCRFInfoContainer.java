@@ -38,6 +38,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class ImportCRFInfoContainer {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

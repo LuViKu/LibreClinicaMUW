@@ -18,7 +18,7 @@ import org.springframework.security.authentication.AccountStatusException;
  * @see applicationContext-security.xml
  * @author thillger
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public final class AccountConfigurationException extends AccountStatusException {
 
     public AccountConfigurationException() {

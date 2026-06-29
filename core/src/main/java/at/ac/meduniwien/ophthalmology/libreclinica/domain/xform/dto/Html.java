@@ -16,6 +16,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "html", namespace = "http://www.w3.org/1999/xhtml")
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Html {
 
     @XmlElement(name = "head", namespace = "http://www.w3.org/1999/xhtml")

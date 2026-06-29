@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteBean extends AuditableEntityBean implements Comparable<DiscrepancyNoteBean> {
     /**
 	 * 

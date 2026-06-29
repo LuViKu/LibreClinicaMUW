@@ -40,6 +40,8 @@ import org.springframework.validation.Errors;
 import org.springframework.validation.ValidationUtils;
 import org.springframework.validation.Validator;
 
+@SuppressWarnings("all")
+
 public class InsertActionValidator implements Validator {
 
     ItemDAO itemDAO;

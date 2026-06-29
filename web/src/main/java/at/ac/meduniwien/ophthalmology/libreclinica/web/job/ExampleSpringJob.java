@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.quartz.QuartzJobBean;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 public class ExampleSpringJob extends QuartzJobBean {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 

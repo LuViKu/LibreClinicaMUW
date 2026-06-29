@@ -15,6 +15,7 @@ import java.util.ArrayList;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class TextReportBean extends ReportBean<String> {
     protected String end;
     protected String sep;

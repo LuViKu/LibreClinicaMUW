@@ -15,6 +15,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 
 @Embeddable
+@SuppressWarnings("all")
 public class DatabaseChangeLogBeanPk implements Serializable {
 
     /**

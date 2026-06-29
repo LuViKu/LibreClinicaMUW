@@ -13,7 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.job;
  * Thrown to indicate that a job was interrupted.
  * @author Leonel Gayard, leonel.gayard@openclinica.com
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class JobInterruptedException extends RuntimeException {
 	public JobInterruptedException() {}
 

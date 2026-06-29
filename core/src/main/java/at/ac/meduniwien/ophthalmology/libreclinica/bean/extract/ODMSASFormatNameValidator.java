@@ -51,6 +51,8 @@ import java.util.TreeSet;
  * @auther ywang (May, 2008)
  */
 
+@SuppressWarnings("all")
+
 public class ODMSASFormatNameValidator {
     private TreeSet<String> uniqueNameTable = new TreeSet<String>();
     private int digitSize;

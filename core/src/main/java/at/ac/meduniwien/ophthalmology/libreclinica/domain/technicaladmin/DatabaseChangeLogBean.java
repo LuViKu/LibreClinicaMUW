@@ -27,6 +27,7 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "databasechangelog")
 @IdClass(DatabaseChangeLogBeanPk.class)
+@SuppressWarnings("all")
 public class DatabaseChangeLogBean {
 
     private String id;

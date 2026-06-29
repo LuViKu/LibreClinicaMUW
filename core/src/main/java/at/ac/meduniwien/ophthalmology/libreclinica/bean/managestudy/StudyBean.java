@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 /**
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class StudyBean extends AuditableEntityBean {
     /**
      * 

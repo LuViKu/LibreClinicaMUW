@@ -16,6 +16,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Model {
     @XmlElement(name = "bind")
     private List<Bind> bind;

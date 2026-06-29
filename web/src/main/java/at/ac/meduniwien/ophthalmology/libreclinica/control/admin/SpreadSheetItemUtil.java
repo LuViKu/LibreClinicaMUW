@@ -23,6 +23,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.util.CrfTemplateColumnNa
 import at.ac.meduniwien.ophthalmology.libreclinica.core.util.ItemGroupCrvVersionUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 
+@SuppressWarnings("all")
+
 public class SpreadSheetItemUtil {
 	
 	private String itemName;//1

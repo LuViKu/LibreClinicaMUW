@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class FormProcessor {
     private HttpServletRequest request;
     private final Locale locale;

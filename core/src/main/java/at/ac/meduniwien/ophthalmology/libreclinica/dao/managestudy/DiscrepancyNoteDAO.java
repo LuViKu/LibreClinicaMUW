@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> {
 
     // if true, we fetch the mapping along with the bean

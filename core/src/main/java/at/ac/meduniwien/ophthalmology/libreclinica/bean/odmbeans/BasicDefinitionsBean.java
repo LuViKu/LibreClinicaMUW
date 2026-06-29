@@ -16,6 +16,7 @@ import java.util.ArrayList;
  * @author ywang (May, 2009)
  *
  */
+@SuppressWarnings("all")
 public class BasicDefinitionsBean extends ElementOIDBean {
     private ArrayList<MeasurementUnitBean> measurementUnits;
 

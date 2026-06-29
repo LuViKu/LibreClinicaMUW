@@ -19,6 +19,7 @@ import java.sql.Date;
  * Constant values are matched with java.sql.Types constant field values
  * 
  */
+@SuppressWarnings("all")
 public interface TypeNames {
     // YW 04-2007 << With following match, JDBC driver could know datatype >> YW
     public static final int ARRAY = 2003;// as ARRAY

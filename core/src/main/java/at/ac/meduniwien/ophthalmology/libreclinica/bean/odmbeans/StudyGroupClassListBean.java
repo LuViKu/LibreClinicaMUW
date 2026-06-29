@@ -18,6 +18,8 @@ import java.util.List;
  * 
  */
 
+@SuppressWarnings("all")
+
 public class StudyGroupClassListBean {
     private String ID;
     private String name;

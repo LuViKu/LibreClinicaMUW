@@ -36,6 +36,7 @@ import org.hibernate.annotations.CacheConcurrencyStrategy;
 		@UniqueConstraint(columnNames = "oc_oid"),
 		@UniqueConstraint(columnNames = "name") })
 @Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
+@SuppressWarnings("all")
 public class MeasurementUnit  extends AbstractMutableDomainObject {
 
 	/**

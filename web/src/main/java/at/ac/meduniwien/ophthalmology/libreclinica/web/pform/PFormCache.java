@@ -18,6 +18,8 @@ import jakarta.servlet.ServletContext;
 
 import org.springframework.security.crypto.codec.Hex;
 
+@SuppressWarnings("all")
+
 public class PFormCache {
     
     //HashMap of study, HashMap of crfVersionOID, pFormURL

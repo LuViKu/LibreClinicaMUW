@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap;
  * Enum representing the types of environment to which the protocol can be published
  * Created by yogi on 4/27/17.
  */
+@SuppressWarnings("all")
 public enum StudyEnvEnum {
     PROD("PROD"), TEST("TEST"), NOT_PUBLISHED("");
     private String env;

@@ -24,6 +24,7 @@ import java.util.List;
  * @see SectionVisit
  * @author Bruce W. Perry Date: Nov 30, 2007
  */
+@SuppressWarnings("all")
 public class DoubleDataProgress implements EnterDataProgress {
     // the synchronizedList is accessed from a session attribute
     private List<SectionVisit> synchronizedList;

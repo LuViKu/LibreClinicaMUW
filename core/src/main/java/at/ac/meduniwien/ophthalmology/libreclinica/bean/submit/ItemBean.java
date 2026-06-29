@@ -22,6 +22,7 @@ import java.util.ArrayList;
  *
  * @author thickerson
  */
+@SuppressWarnings("all")
 public class ItemBean extends AuditableEntityBean implements Comparable<ItemBean> {
     /**
 	 * 

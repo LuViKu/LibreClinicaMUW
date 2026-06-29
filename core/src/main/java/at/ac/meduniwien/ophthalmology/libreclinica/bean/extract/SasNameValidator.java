@@ -38,7 +38,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.extract;
  * 
  * @auther ywang
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 @Deprecated
 public class SasNameValidator extends NameValidator {
     private int nameMaxLength = 8; // 8;// 32;

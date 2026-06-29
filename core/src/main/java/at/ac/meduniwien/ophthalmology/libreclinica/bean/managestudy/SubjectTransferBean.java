@@ -17,6 +17,7 @@ import java.util.Date;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class SubjectTransferBean extends EntityBean {
 
     private static final long serialVersionUID = 2270466335721404526L;

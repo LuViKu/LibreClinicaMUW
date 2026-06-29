@@ -27,6 +27,7 @@ import jakarta.servlet.ServletOutputStream;
 /**
  * @author jxu
  */
+@SuppressWarnings("all")
 public class DownloadVersionSpreadSheetServlet extends SecureController {
 
 	private static final long serialVersionUID = 6969545356468114843L;

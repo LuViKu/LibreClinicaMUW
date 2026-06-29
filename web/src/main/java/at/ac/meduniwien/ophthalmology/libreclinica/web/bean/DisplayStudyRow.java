@@ -18,6 +18,7 @@ import java.util.ArrayList;
  * 
  * @author Jun Xu
  */
+@SuppressWarnings("all")
 public class DisplayStudyRow extends EntityBeanRow<DisplayStudyBean, DisplayStudyRow> {
     // columns:
     public static final int COL_NAME = 0;

@@ -14,6 +14,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata;
  * @author ywang (Nov, 2008)
  * 
  */
+@SuppressWarnings("all")
 public class SubjectGroupDataBean {
     private String studyGroupClassId;
     private String studyGroupClassName;

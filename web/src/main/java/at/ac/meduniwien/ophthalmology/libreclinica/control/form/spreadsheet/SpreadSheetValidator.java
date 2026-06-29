@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.form.spreadsheet;
  * For CRF SpreadSheet uploading validation
  * ywang (Aug. 2011)
  */
+@SuppressWarnings("all")
 public interface SpreadSheetValidator {
     public SheetErrors getSheetErrors();
     public void validate();

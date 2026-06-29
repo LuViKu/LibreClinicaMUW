@@ -43,6 +43,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
  *
  * @see <a href="../../../../../../../docs/development/modernization/decision-record.md#dr-014--institution-agnostic-sso-via-reverse-proxy-pre-authentication">DR-014</a>
  */
+@SuppressWarnings("all")
 public interface UserProvisioningStrategy {
 
     /**

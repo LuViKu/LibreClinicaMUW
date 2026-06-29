@@ -17,6 +17,7 @@ import org.springframework.context.ApplicationEvent;
  * @author jnyayapathi
  *
  */
+@SuppressWarnings("all")
 public class OnStudyEventJDBCBeanChanged  extends ApplicationEvent  {
 
 	/**

@@ -27,7 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author Krikor Krumlian
  */
-@SuppressWarnings("serial")
+@SuppressWarnings("all")
 public class VerifyImportedRuleServlet extends SecureController {
 
     Locale locale;

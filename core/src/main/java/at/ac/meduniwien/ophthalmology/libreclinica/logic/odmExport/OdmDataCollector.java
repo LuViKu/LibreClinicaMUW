@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @author ywang (May, 2008)
  */
+@SuppressWarnings("all")
 public abstract class OdmDataCollector {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

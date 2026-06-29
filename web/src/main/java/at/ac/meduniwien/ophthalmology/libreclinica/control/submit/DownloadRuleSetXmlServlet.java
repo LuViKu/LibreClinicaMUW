@@ -33,6 +33,8 @@ import java.util.List;
 
 import jakarta.servlet.ServletOutputStream;
 
+@SuppressWarnings("all")
+
 public class DownloadRuleSetXmlServlet extends SecureController {
 
     protected final Logger log = LoggerFactory.getLogger(DownloadRuleSetXmlServlet.class);

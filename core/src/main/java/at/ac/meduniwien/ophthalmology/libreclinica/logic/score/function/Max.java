@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.logic.score.function;
 
 import org.apache.commons.math.stat.StatUtils;
 
+@SuppressWarnings("all")
+
 public class Max extends AbstractFunction {
     public Max() {
         super();

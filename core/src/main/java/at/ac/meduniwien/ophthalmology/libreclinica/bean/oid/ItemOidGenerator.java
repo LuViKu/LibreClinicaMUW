@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.oid;
  * @author Krikor Krumlian
  *
  */
+@SuppressWarnings("all")
 public class ItemOidGenerator extends OidGenerator {
 
     private final int argumentLength = 2;

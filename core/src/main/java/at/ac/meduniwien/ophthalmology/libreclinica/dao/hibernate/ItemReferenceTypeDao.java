@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemReferenceType;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("all")
+
 public class ItemReferenceTypeDao extends AbstractDomainDao<ItemReferenceType> {
 
     @Override

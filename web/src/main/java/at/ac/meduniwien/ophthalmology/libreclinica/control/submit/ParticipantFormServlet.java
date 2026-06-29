@@ -18,6 +18,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.EnketoAPI;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.EnketoCredentials;
 
+@SuppressWarnings("all")
+
 public class ParticipantFormServlet extends SecureController {
 
     /**

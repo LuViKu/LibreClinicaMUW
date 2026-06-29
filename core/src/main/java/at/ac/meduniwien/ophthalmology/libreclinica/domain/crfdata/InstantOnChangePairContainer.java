@@ -13,6 +13,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata;
  * For origin and destination items of instant-calculation func:onchange
  */
 //ywang (Aug., 2011)
+@SuppressWarnings("all")
 public class InstantOnChangePairContainer {
     private Integer destItemFormMetadataId;
     private Integer destSectionId;

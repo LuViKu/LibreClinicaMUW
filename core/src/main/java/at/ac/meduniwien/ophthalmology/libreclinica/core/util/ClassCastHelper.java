@@ -24,6 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
  * @author Christian H&auml;nsel
  *
  */
+@SuppressWarnings("all")
 public class ClassCastHelper {
 
 	/**

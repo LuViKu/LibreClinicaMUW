@@ -17,6 +17,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata;
  * @author ywang (Nov, 2008)
  */
 
+@SuppressWarnings("all")
+
 public class ExportFormDataBean extends FormDataBean {
     private String crfVersion;
     private String interviewerName;

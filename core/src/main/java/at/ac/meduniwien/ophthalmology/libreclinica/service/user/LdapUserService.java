@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
  * @author Doug Rodrigues (drodrigues@openclinica.com)
  */
 @Service
+@SuppressWarnings("all")
 public class LdapUserService {
 
     @Autowired

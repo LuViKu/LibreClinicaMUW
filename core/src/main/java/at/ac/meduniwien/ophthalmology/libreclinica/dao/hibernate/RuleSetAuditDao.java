@@ -15,6 +15,8 @@ import org.hibernate.query.Query;
 
 import java.util.ArrayList;
 
+@SuppressWarnings("all")
+
 public class RuleSetAuditDao extends AbstractDomainDao<RuleSetAuditBean> {
 
     @Override

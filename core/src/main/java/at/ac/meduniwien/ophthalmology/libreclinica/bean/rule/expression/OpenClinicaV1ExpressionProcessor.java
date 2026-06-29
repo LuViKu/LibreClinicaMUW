@@ -26,6 +26,7 @@ import javax.sql.DataSource;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class OpenClinicaV1ExpressionProcessor implements ExpressionProcessor {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

@@ -37,6 +37,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
  * @author ywang (May, 2009)
  */
 
+@SuppressWarnings("all")
+
 public class MetaDataCollector extends OdmDataCollector {
     private LinkedHashMap<String, OdmStudyBean> odmStudyMap;
     private static int textLength = 4000;

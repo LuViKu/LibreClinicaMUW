@@ -18,6 +18,7 @@ import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlElements;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Group {
     @XmlElement(name = "label")
     private Label label;

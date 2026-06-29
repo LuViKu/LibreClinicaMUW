@@ -14,6 +14,8 @@ import java.text.SimpleDateFormat;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExtractPropertyBean;
 
+@SuppressWarnings("all")
+
 public class ExtractUtils {
 
     /**

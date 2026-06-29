@@ -22,6 +22,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.AbstractMutableDomainO
 // Phase B.5: @Entity removed. This class was never in the active annotatedClasses list in the Hibernate 5 config; with Hibernate 6 packagesToScan it would be auto-discovered but has broken collection mappings or no DAO callers. If revived, restore  AND fix the underlying mapping issues first.
 // @Entity
 @Table(name = "null_value_type")
+@SuppressWarnings("all")
 public class NullValueType  extends AbstractMutableDomainObject {
 
 	/**

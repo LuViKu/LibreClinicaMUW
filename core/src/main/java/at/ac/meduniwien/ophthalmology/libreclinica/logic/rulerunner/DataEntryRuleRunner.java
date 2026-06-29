@@ -40,6 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.expressionTree.OpenClinicaExpressionParser;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+@SuppressWarnings("all")
+
 public class DataEntryRuleRunner extends RuleRunner {
     
     EventCRFBean ecb;

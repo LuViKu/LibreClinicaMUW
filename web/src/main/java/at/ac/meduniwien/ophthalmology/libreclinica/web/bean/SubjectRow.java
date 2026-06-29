@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class SubjectRow extends EntityBeanRow<SubjectBean, SubjectRow> {
     // columns:
     public static final int COL_NAME = 0;

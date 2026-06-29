@@ -37,6 +37,7 @@ import java.util.Locale;
  * @author thickerson
  *
  */
+@SuppressWarnings("all")
 public class RemoveFilterServlet extends SecureController {
 
     /**

@@ -26,6 +26,7 @@ import java.io.FileReader;
  * @author thickerson, purpose is to be able to show an external file in a log to a user
  * 
  */
+@SuppressWarnings("all")
 public class ViewLogMessageServlet extends SecureController {
 
     /**

@@ -43,6 +43,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jsampson
  */
+@SuppressWarnings("all")
 public class ViewStudySubjectAuditLogServlet extends SecureController {
 
     /**

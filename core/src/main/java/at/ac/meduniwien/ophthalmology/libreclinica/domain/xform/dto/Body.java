@@ -17,6 +17,7 @@ import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlElement;
 
 @XmlAccessorType(XmlAccessType.NONE)
+@SuppressWarnings("all")
 public class Body {
     @XmlAttribute(name = "class")
     private String cssClass = null;

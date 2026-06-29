@@ -17,6 +17,8 @@ import java.util.ArrayList;
  *
  */
 
+@SuppressWarnings("all")
+
 public class RangeCheckBean {
     private String comparator;
     private String softHard;

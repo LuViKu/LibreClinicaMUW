@@ -22,6 +22,7 @@ import java.io.IOException;
  *
  * @author Douglas Rodrigues (drodrigues@openclinica.com)
  */
+@SuppressWarnings("all")
 public class JavaScriptEscapeTag extends SimpleTagSupport {
 
     private static final Logger LOG = LoggerFactory.getLogger(JavaScriptEscapeTag.class);

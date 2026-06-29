@@ -15,6 +15,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
 import java.util.Date;
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public interface EventServiceInterface {
 
     public HashMap<String, String> scheduleEvent(UserAccountBean user, Date startDateTime, Date endDateTime, String location, String studyUniqueId,

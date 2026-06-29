@@ -15,6 +15,7 @@ import org.jdom.Element;
  * This interface defines the public interface for dynamically creating the
  * markup for an XHTML or HTML table. User: bruceperry Date: May 15, 2007
  */
+@SuppressWarnings("all")
 public interface FormBuilder {
     String createMarkup();
 

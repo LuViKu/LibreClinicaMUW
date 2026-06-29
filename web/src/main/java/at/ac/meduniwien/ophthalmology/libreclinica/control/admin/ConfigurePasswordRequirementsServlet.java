@@ -25,6 +25,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * @author Leonel Gayard
  * @author Douglas Rodrigues (drodrigues@openclinica.com)
  */
+@SuppressWarnings("all")
 public class ConfigurePasswordRequirementsServlet extends SecureController {
     private static final long serialVersionUID = 2729725318725545575L;
 

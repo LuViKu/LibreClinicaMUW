@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.Bind;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.dto.UserControl;
 
+@SuppressWarnings("all")
+
 public class SectionWidget extends BaseWidget {
 	private SectionBean section = null;
 	private CRFVersionBean version = null;

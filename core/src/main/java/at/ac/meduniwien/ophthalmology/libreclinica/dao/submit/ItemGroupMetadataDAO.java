@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 10, 2007
  */
+@SuppressWarnings("all")
 public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
     public ItemGroupMetadataDAO(DataSource ds) {
         super(ds);

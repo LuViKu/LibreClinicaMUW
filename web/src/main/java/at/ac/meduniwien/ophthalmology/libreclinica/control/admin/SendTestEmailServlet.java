@@ -18,6 +18,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import org.springframework.mail.MailException;
 
+@SuppressWarnings("all")
+
 public class SendTestEmailServlet extends SecureController {
     @Override
     protected void mayProceed() throws InsufficientPermissionException {

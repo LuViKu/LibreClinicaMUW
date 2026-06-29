@@ -40,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.StudyEventDefinition
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class ListEventDefinitionServlet extends SecureController {
 
     /**

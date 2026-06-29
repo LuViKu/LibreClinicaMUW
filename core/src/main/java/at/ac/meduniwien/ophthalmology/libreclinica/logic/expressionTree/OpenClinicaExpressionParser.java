@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * @author Krikor Krumlian
  * 
  */
+@SuppressWarnings("all")
 public class OpenClinicaExpressionParser {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Created by IntelliJ IDEA. User: bruceperry Date: May 4, 2007
  */
+@SuppressWarnings("all")
 public class FormBuilderTest {
 
     private static final Logger logger= LoggerFactory.getLogger(FormBuilderTest.class);

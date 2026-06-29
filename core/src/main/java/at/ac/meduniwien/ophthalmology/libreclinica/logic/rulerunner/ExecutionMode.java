@@ -14,6 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.CodedEnum;
 
 import java.util.HashMap;
 
+@SuppressWarnings("all")
+
 public enum ExecutionMode implements CodedEnum {
 
     DRY_RUN(1, "Dry Run"), SAVE(2, "Save");

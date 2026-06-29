@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 /**
  * Allows both deletion and restoration of a study user role
  */
+@SuppressWarnings("all")
 public class UnLockUserServlet extends SecureController {
 
     private static final long serialVersionUID = 5028384981301316490L;

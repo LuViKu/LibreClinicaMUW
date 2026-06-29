@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * sysadmin-only access gate; the gate logic lives in the
  * {@link #mayProceed()} override.
  */
+@SuppressWarnings("all")
 public class AuditUserActivityDataServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;

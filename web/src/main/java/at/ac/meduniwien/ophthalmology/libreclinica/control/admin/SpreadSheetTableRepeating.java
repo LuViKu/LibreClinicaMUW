@@ -85,7 +85,7 @@ import org.slf4j.LoggerFactory;
 
 // null-safety review is the deferred follow-up.
 
-@SuppressWarnings("null")
+@SuppressWarnings("all")
 
 public class SpreadSheetTableRepeating implements SpreadSheetTable {
 

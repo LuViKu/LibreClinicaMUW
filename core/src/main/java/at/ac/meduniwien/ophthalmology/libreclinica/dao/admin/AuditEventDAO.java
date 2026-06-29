@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
  * 
  * 
  */
+@SuppressWarnings("all")
 public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     // private DAODigester digester;
 

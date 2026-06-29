@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.patterns.ocobserver;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 
+@SuppressWarnings("all")
+
 public class StudyEventBeanContainer implements Listener{
 	private StudyEventBean event = null;
 	private StudyEventChangeDetails changeDetails = null;

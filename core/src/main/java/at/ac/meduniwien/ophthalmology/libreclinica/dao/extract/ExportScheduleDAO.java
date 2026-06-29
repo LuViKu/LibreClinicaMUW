@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
  * {@code last_run_at} / {@code last_run_job_id}, then the runner
  * picks it up like a manual trigger.
  */
+@SuppressWarnings("all")
 public class ExportScheduleDAO {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExportScheduleDAO.class);

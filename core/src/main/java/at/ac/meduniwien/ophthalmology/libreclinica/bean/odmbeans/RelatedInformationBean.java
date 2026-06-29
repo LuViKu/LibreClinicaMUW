@@ -17,6 +17,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
  *
  */
 
+@SuppressWarnings("all")
+
 public class RelatedInformationBean {
     private String MEDLINEIdentifier;
     private String ResultsReference;

@@ -36,7 +36,7 @@ import javax.sql.DataSource;
 
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.*;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings("all")
 
 public class EmailActionProcessor implements ActionProcessor {
 

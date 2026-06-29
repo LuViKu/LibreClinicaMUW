@@ -15,6 +15,7 @@ import java.io.Serializable;
  * @author Krikor Krumlian
  *
  */
+@SuppressWarnings("all")
 public class GenericOidGenerator extends OidGenerator implements Serializable {
 
     /**

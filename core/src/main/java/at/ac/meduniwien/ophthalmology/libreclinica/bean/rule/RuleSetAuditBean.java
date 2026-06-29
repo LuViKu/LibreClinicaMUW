@@ -15,6 +15,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 
 import java.util.Date;
 
+@SuppressWarnings("all")
+
 public class RuleSetAuditBean extends EntityBean {
 
     /**

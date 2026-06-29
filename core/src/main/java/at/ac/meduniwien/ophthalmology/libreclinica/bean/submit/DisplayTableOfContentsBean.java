@@ -21,6 +21,7 @@ import java.util.ArrayList;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class DisplayTableOfContentsBean {
     private boolean active; // AND's together all the active bits of all the
     // beans that were explicitly set, except for

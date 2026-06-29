@@ -15,6 +15,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view;
  *         Provides a type-safe enumeration for JSP Page,converted from original static class.
  *         @author jnyayapathi
  */
+@SuppressWarnings("all")
 public enum Page {
 	
 	

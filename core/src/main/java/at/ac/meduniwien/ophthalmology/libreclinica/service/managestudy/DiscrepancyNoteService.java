@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class DiscrepancyNoteService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

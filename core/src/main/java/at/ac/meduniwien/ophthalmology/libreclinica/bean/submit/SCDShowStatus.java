@@ -17,6 +17,7 @@ import java.util.HashMap;
  * SHOW_CHANGABLE: 1: display but changable; 
  * HIDE_CHANGABLE: 2: no display but changable;   
  */
+@SuppressWarnings("all")
 public enum SCDShowStatus {
     SHOW_UNCHANGABLE(0), SHOW_CHANGABLE(1), HIDE_CHANGABLE(2);
     

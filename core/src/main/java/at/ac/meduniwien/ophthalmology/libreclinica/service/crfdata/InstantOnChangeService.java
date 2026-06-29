@@ -32,6 +32,7 @@ import javax.sql.DataSource;
  * For instant-calculation func:onchange
  * ywang (Aug. 2011)
  */
+@SuppressWarnings("all")
 public class InstantOnChangeService {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

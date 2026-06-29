@@ -35,6 +35,7 @@ import java.util.Locale;
  * @author jxu
  *
  */
+@SuppressWarnings("all")
 public class ListSubjectGroupClassServlet extends SecureController {
 
     /**

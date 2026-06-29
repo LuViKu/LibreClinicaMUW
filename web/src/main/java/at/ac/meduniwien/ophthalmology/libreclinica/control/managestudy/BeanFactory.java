@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @see at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SpreadsheetPreviewNw
  */
+@SuppressWarnings("all")
 public class BeanFactory {
     public static final String UNGROUPED = "Ungrouped";
     protected static final Logger logger = LoggerFactory.getLogger("at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.BeanFactory");

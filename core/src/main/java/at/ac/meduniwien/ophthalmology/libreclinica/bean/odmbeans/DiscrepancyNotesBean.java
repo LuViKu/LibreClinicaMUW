@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author ywang (May, 2010)
  *
  */
+@SuppressWarnings("all")
 public class DiscrepancyNotesBean {
     private String entityID;
     private ArrayList<DiscrepancyNoteBean> dns = new ArrayList<DiscrepancyNoteBean>();

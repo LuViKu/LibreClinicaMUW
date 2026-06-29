@@ -22,6 +22,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("all")
+
 public class StudyConfigService {
 
     private DataSource ds;

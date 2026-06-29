@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.UserAccountRow;
  * 
  * @author jxu
  */
+@SuppressWarnings("all")
 public class AssignUserToStudyServlet extends SecureController {
 
 	private static final long serialVersionUID = 4960926890819274181L;

@@ -20,6 +20,7 @@ import java.util.Locale;
  * @author ssachs
  * Created on Jan 21, 2005
  */
+@SuppressWarnings("all")
 public class ListStudySubjectsSubmitServlet extends ListStudySubjectServlet {
 
     /**

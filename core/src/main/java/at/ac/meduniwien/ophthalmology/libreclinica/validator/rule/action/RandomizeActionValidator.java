@@ -34,6 +34,8 @@ import java.util.ResourceBundle;
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class RandomizeActionValidator implements Validator {
 
     ItemDAO itemDAO;

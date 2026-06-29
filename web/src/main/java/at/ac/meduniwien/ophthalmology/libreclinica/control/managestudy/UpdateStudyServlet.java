@@ -39,6 +39,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *          kkrumlian $
  * 
  */
+@SuppressWarnings("all")
 public class UpdateStudyServlet extends SecureController {
     /**
 	 * 

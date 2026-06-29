@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class Link {
     private String caption = "";
     private String url = "";

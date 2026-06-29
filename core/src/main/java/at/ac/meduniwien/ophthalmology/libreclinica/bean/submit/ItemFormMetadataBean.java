@@ -14,6 +14,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean;
 /**
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class ItemFormMetadataBean extends EntityBean implements Comparable<ItemFormMetadataBean> {
     /**
 	 * 

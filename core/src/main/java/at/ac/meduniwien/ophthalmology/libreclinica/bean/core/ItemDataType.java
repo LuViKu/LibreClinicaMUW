@@ -39,6 +39,7 @@ import java.util.Optional;
  */
 
 // Internationalized description in Term.getDescription()
+@SuppressWarnings("all")
 public class ItemDataType extends Term {
     /**
 	 * 

@@ -24,6 +24,7 @@ import java.util.HashMap;
 /**
  * @author Krikor Krumlian
  */
+@SuppressWarnings("all")
 public class ConfigureServlet extends SecureController {
 
     private static final long serialVersionUID = 2729725318725545575L;

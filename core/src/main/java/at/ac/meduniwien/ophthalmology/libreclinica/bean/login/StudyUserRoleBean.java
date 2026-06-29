@@ -25,6 +25,7 @@ import java.util.ResourceBundle;
  * @author thickerson
  * @author ssachs
  */
+@SuppressWarnings("all")
 public class StudyUserRoleBean extends AuditableEntityBean {
 
 	private static final long serialVersionUID = -6618017307375291254L;

@@ -15,6 +15,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.Discrepan
 
 import javax.sql.DataSource;
 
+@SuppressWarnings("all")
+
 public class DiscrepancyNoteActionProcessor implements ActionProcessor {
 
     DataSource ds;
