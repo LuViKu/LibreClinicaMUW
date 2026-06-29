@@ -56,7 +56,7 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings({ "deprecation", "rawtypes" })
+    @SuppressWarnings("rawtypes")
     public Boolean hasShowingInSection(int sectionId, int crfVersionId, int eventCrfId) {
         String query = "select dg.item_group_id from dyn_item_group_metadata dg where dg.event_crf_id = :eventCrfId and dg.item_group_metadata_id in ("
                 + " select distinct igm.item_group_metadata_id from item_group_metadata igm where igm.crf_version_id = :crfVersionId"

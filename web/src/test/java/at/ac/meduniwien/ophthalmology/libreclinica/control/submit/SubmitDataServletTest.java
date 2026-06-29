@@ -20,6 +20,8 @@ import static org.mockito.Mockito.*;
 
 import junit.framework.TestCase;
 
+@SuppressWarnings("all")
+
 public class SubmitDataServletTest extends TestCase {
 
     public SubmitDataServletTest() {

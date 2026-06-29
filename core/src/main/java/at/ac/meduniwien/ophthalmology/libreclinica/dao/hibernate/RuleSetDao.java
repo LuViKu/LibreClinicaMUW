@@ -87,7 +87,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return (ArrayList<RuleSetBean>) q.getResultList();
     }
 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Transactional
     public ArrayList<RuleSetBean> findByCrfVersionOrCrfAndStudyAndStudyEventDefinition(CRFVersionBean crfVersion, CRFBean crfBean, StudyBean currentStudy,
             StudyEventDefinitionBean sed) {
@@ -114,7 +114,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    @SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public ArrayList<RuleSetBean> findByCrf(CRFBean crfBean, StudyBean currentStudy) {
         String query =
             " select rs.* from rule_set rs where rs.study_id = :studyId "

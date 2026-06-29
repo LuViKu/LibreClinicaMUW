@@ -28,6 +28,7 @@ import org.mockito.junit.MockitoJUnitRunner;
  * @author thillger
  */
 @RunWith(MockitoJUnitRunner.class)
+@SuppressWarnings("all")
 public class MailNotificationServiceTest {
     private MailNotificationService service;
     @Mock

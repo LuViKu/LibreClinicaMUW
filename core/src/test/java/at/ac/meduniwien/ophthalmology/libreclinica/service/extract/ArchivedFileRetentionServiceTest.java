@@ -57,6 +57,7 @@ import org.mockito.junit.MockitoJUnitRunner;
  * </ul>
  */
 @RunWith(MockitoJUnitRunner.class)
+@SuppressWarnings("all")
 public class ArchivedFileRetentionServiceTest {
 
     @Mock
