@@ -19,6 +19,9 @@ import DeltaChip from '../components/primitives/DeltaChip.vue'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdDecisionPanel from '../components/NamdDecisionPanel.vue'
+import NamdRecommendationCard from '../components/NamdRecommendationCard.vue'
+import { useNamdAiRecommendation } from '../composables/useNamdAiRecommendation'
+import { useStudyArm } from '../composables/useStudyArm'
 import type { NamdWorkspaceData } from '../types'
 
 interface Props {
@@ -26,6 +29,16 @@ interface Props {
 }
 const props = defineProps<Props>()
 const { t } = useI18n()
+
+// 2026-06-30 — cohort gate for the AI-fluid panels (seg cards, trend
+// chart, recommendation card). Control-arm visits hide all of them;
+// the OCT viewer + decision panel still render so the operator can
+// capture a treatment decision either way.
+const currentRef = computed(() => props.data.current)
+const prevRef = computed(() => props.data.prev)
+const armRef = computed(() => props.data.subjectArm)
+const { aiVisible } = useStudyArm(armRef)
+const recommendation = useNamdAiRecommendation({ current: currentRef, prev: prevRef })
 
 /**
  * 2026-06-26 user-feedback round — surface the CRT delta-vs-prev
@@ -50,7 +63,9 @@ const crtDelta = computed<number | null>(() => {
 <template>
   <div data-testid="namd-overview-tab" class="grid grid-cols-12 gap-5">
     <div class="col-span-12 lg:col-span-8 space-y-5">
-      <Card :title="t('studyModules.namd.overview.current')">
+      <!-- AI fluid quantification — study-arm only. Control-arm hides
+           the seg-cards + CRT chip + trend chart entirely. -->
+      <Card v-if="aiVisible" :title="t('studyModules.namd.overview.current')">
         <NamdSegCards :current="props.data.current" :prev="props.data.prev" />
         <div class="mt-3 rounded-md bg-slate-50 px-3.5 py-2.5 flex items-center justify-between gap-3">
           <span class="text-[12px] text-slate-500">
@@ -73,18 +88,19 @@ const crtDelta = computed<number | null>(() => {
         </div>
       </Card>
 
-      <!-- 2026-06-26 user-feedback round — the chart now owns its
-           inline legend chip strip + the ETDRS-ring region selector
-           (Zentral 1 mm / 3 mm / 6 mm) in its header. The old
-           right-column Legend Card is gone; that real estate is
-           reclaimed by the Decision panel below. -->
-      <Card :title="t('studyModules.namd.overview.trend')">
+      <Card v-if="aiVisible" :title="t('studyModules.namd.overview.trend')">
         <NamdFluidTrendChart :visits="props.data.visits" />
       </Card>
     </div>
 
     <div class="col-span-12 lg:col-span-4 space-y-5">
-      <NamdDecisionPanel />
+      <!-- AI recommendation card — study-arm only. -->
+      <NamdRecommendationCard v-if="aiVisible" :rec="recommendation" />
+      <NamdDecisionPanel
+        :event-crf-id="props.data.current?.eventCrfId ?? null"
+        :subject-arm="props.data.subjectArm"
+        :ai-rec="aiVisible ? recommendation : null"
+      />
     </div>
   </div>
 </template>

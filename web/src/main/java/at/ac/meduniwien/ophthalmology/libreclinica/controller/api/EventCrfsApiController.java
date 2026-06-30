@@ -566,6 +566,15 @@ public class EventCrfsApiController {
         int rejected = 0;
         int rfcCreatedCount = 0;
         int groupRowsSaved = 0;
+        // 2026-06-30 — nAMD treat-and-extend decision summary capture.
+        // The save loop emits one type-1 (item value updated) audit row
+        // per changed item, which is fine for the audit-log table but
+        // produces N rows for one logical "decision saved" event. We
+        // collect the salient values inside the loop and emit a single
+        // TREATMENT_DECISION_RECORDED summary row after — keyed on
+        // event_crf, packed with action/drug/interval/agreed so the
+        // timeline UI doesn't need to join back to item_data.
+        Map<String, String> namdDecisionSummary = new LinkedHashMap<>();
         Map<String, Object> topLevelValues = visibleTopLevelValues;
         for (Map.Entry<String, Object> entry : topLevelValues.entrySet()) {
             String itemOid = entry.getKey();
@@ -625,6 +634,17 @@ public class EventCrfsApiController {
                     isCreate ? "item_data_create" : "item_data_update",
                     "item_data", itemDataIdAfter,
                     itemOid, oldValue, newValue);
+
+            // 2026-06-30 — capture nAMD treat-and-extend decision values
+            // for the summary audit row emitted after the loop.
+            switch (itemOid) {
+                case "I_NAMD_DECISION_ACTION":        namdDecisionSummary.put("action", newValue); break;
+                case "I_NAMD_DECISION_DRUG":          namdDecisionSummary.put("drug", newValue); break;
+                case "I_NAMD_DECISION_INTERVAL_WEEKS":namdDecisionSummary.put("interval", newValue); break;
+                case "I_NAMD_AI_AGREED":              namdDecisionSummary.put("agreedWithAi", newValue); break;
+                case "I_NAMD_DECISION_RATIONALE_CODE":namdDecisionSummary.put("rationale", newValue); break;
+                default: /* not a summary field */ break;
+            }
 
             // Phase E.6 admin-rfc — write the RFC discrepancy note + mapping
             // when this is a post-complete edit. The writer is best-effort:
@@ -708,6 +728,24 @@ public class EventCrfsApiController {
                     groupRowsSaved++;
                 }
             }
+        }
+
+        // 2026-06-30 — TREATMENT_DECISION_RECORDED summary audit row.
+        // Emit only when at least one decision-significant item changed
+        // (i.e. namdDecisionSummary is non-empty). Packs the chosen
+        // action/drug/interval + AI-agreement flag so the audit timeline
+        // reads as one logical event instead of N item_data updates.
+        if (!namdDecisionSummary.isEmpty()) {
+            StringBuilder newVal = new StringBuilder();
+            for (Map.Entry<String, String> e : namdDecisionSummary.entrySet()) {
+                if (newVal.length() > 0) newVal.append(',');
+                newVal.append(e.getKey()).append(':').append(e.getValue() == null ? "" : e.getValue());
+            }
+            writeAuditEvent(auditDAO, AuditTypeIds.TREATMENT_DECISION_RECORDED,
+                    currentUser, currentStudy, ss,
+                    "namd_treatment_decision_recorded",
+                    "event_crf", ecb.getId(),
+                    "F_NAMD_VISIT", "", newVal.toString());
         }
 
         // Touch the EventCRF so {date_updated} reflects the save —

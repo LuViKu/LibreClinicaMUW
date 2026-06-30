@@ -87,5 +87,6 @@
   <include  file="migration/lc-muw-2026-06-24-event-def-retinal-tasks-layers.xml"/>
   <include  file="migration/lc-muw-2026-06-26-retinal-correction.xml"/>
   <include  file="migration/lc-muw-2026-06-28-seed-manual-accounts.xml"/>
+  <include  file="migration/lc-muw-2026-06-30-namd-clinical-flags.xml"/>
 </databaseChangeLog>
 

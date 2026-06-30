@@ -87,8 +87,28 @@
         "treat": "[NEEDS_REVIEW] Treat",
         "observe": "[NEEDS_REVIEW] Observe",
         "drug": "[NEEDS_REVIEW] Drug",
+        "drugs": {
+          "BEVACIZUMAB": "[NEEDS_REVIEW] Bevacizumab",
+          "AFLIBERCEPT": "[NEEDS_REVIEW] Aflibercept",
+          "FARICIMAB": "[NEEDS_REVIEW] Faricimab"
+        },
         "interval": "[NEEDS_REVIEW] Interval (weeks)",
+        "dateLabel": "[NEEDS_REVIEW] Clinical date of decision",
+        "rationaleLabel": "[NEEDS_REVIEW] Rationale",
+        "rationaleOtherPlaceholder": "[NEEDS_REVIEW] Please specify …",
+        "rationaleCodes": {
+          "CLINICAL_JUDGMENT": "[NEEDS_REVIEW] Clinical judgment differs from AI",
+          "STABLE_NO_TREAT": "[NEEDS_REVIEW] Stable — no treatment",
+          "ACTIVE_DISEASE_TREAT": "[NEEDS_REVIEW] Active disease — treatment",
+          "CLINICAL_WORSENING": "[NEEDS_REVIEW] Clinical worsening",
+          "PATIENT_PREFERENCE": "[NEEDS_REVIEW] Patient preference",
+          "COMORBIDITY": "[NEEDS_REVIEW] Comorbidity",
+          "LOGISTICS_COMPLIANCE": "[NEEDS_REVIEW] Logistics / compliance",
+          "SAFETY_CONCERN": "[NEEDS_REVIEW] Safety concern",
+          "OTHER": "[NEEDS_REVIEW] Other"
+        },
         "confirm": "[NEEDS_REVIEW] Confirm decision",
+        "saving": "[NEEDS_REVIEW] Saving …",
         "confirmed": "[NEEDS_REVIEW] Decision documented.",
         "back": "[NEEDS_REVIEW] Back"
       },
@@ -105,6 +125,34 @@
       },
       "overview2": {
         "crtDeltaAria": "[NEEDS_REVIEW] Change in central retinal thickness vs previous visit"
+      },
+      "recommendation": {
+        "headline": {
+          "SHORTEN": "[NEEDS_REVIEW] Shorten interval",
+          "KEEP": "[NEEDS_REVIEW] Hold interval",
+          "EXTEND": "[NEEDS_REVIEW] Extend interval"
+        },
+        "intervalProposed": "[NEEDS_REVIEW] Proposed: {weeks} weeks",
+        "firedTriggers": "[NEEDS_REVIEW] Fired triggers",
+        "disclaimer": "[NEEDS_REVIEW] This recommendation follows the study protocol. The treating physician makes the clinical decision.",
+        "triggers": {
+          "DE_NOVO_IRF": "[NEEDS_REVIEW] New-onset intraretinal fluid",
+          "IRF_INCREASE": "[NEEDS_REVIEW] IRF +{value} nL above threshold ({threshold} nL)",
+          "IRF_DECREASE_INSUFFICIENT": "[NEEDS_REVIEW] IRF decreased <50% vs previous visit",
+          "DE_NOVO_CENTRAL_SRF": "[NEEDS_REVIEW] New-onset central SRF (1 mm)",
+          "CENTRAL_SRF_INCREASE": "[NEEDS_REVIEW] Central SRF +{value} nL above threshold ({threshold} nL)",
+          "SRF_RING_1_3_INCREASE": "[NEEDS_REVIEW] SRF in 1–3 mm ring +{value} nL",
+          "NEW_HEMORRHAGE": "[NEEDS_REVIEW] New retinal hemorrhage recorded",
+          "BCVA_LOSS_5_LETTERS": "[NEEDS_REVIEW] BCVA loss ≥5 letters, nAMD-attributed",
+          "RESIDUAL_IRF_HALVED": "[NEEDS_REVIEW] Residual IRF reduced ≥50% — still present",
+          "RESIDUAL_IRF_STABLE": "[NEEDS_REVIEW] Residual IRF stable — hold interval",
+          "CENTRAL_SRF_IMPROVING": "[NEEDS_REVIEW] Central SRF stable or improving",
+          "ACTIVITY_IMPROVING": "[NEEDS_REVIEW] Overall activity decreasing",
+          "IRF_ABSENT": "[NEEDS_REVIEW] No IRF present",
+          "CENTRAL_SRF_ABSENT": "[NEEDS_REVIEW] No central SRF present",
+          "NO_HEMORRHAGE_OR_BCVA_LOSS": "[NEEDS_REVIEW] No hemorrhage, no BCVA loss",
+          "SRF_ISOLATED_1_3_STABLE": "[NEEDS_REVIEW] SRF — absent, or isolated stable in 1–3 mm ring"
+        }
       },
       "report": {
         "letterhead": "[NEEDS_REVIEW] nAMD Fluid Monitoring · Report",

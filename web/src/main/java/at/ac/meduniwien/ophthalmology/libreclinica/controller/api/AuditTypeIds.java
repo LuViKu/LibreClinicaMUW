@@ -318,4 +318,21 @@ public final class AuditTypeIds {
      * Visible in the operator-facing /api/v1/audit feed.
      */
     public static final int RETINAL_SEGMENTATION_CORRECTED  = 123;
+
+    /**
+     * 2026-06-30 — nAMD treat-and-extend treatment decision recorded
+     * via {@code POST /event-crfs/{id}/items} when any of the seven
+     * decision items
+     * ({@code NAMD_DECISION_ACTION / DRUG / INTERVAL_WEEKS /
+     * RATIONALE_CODE / RATIONALE_OTHER / DATE / AI_REC_SNAPSHOT /
+     * AI_AGREED}) lands. Writer is
+     * {@code EventCrfsApiController.saveItems}; audit_table =
+     * {@code event_crf}, entity_id = event_crf_id; new_value packs
+     * {@code "action:<TREAT|OBSERVE>,drug:<code>,interval:<weeks>,
+     * agreedWithAi:<true|false>"} so the timeline reads
+     * "Treatment decision: TREAT with Aflibercept @ 8wk, agreed:false"
+     * without a join back to item_data. The full AI snapshot lives on
+     * the matching {@code NAMD_AI_REC_SNAPSHOT} item_data row.
+     */
+    public static final int TREATMENT_DECISION_RECORDED      = 124;
 }
