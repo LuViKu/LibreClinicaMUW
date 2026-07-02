@@ -1913,6 +1913,16 @@ public class SubjectsApiController {
 
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        // 2026-06-30 — match the GET resolver: fall back to label
+        // lookup when the path variable is a site-scoped label
+        // (e.g. "EIAMD139") rather than the OID ("SS_EIAMD139_RIS").
+        // Without this the SPA's PUT from SubjectGroupEditDialog —
+        // which passes SubjectDetail.id = label — 404s.
+        if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
+            String label = studySubjectOid.startsWith("SS_")
+                    ? studySubjectOid.substring(3) : studySubjectOid;
+            ss = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
+        }
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Subject with OID '" + studySubjectOid + "' not found."));

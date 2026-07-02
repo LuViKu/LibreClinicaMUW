@@ -38,7 +38,15 @@
         "current": "Aktueller Status",
         "trend": "Flüssigkeitsverlauf",
         "crt": "Zentrale Netzhautdicke",
-        "legend": "Legende"
+        "legend": "Legende",
+        "clinical": "Klinische Beobachtungen",
+        "clinicalHemorrhage": "Neue Blutung",
+        "clinicalBcvaAttr": "Visusverlust nAMD-bedingt",
+        "clinicalFlagYes": "Ja",
+        "clinicalFlagNo": "Nein",
+        "visitList": "Visiten-Verlauf (BCVA)",
+        "bcvaTrend": "Visusverlauf",
+        "armUnassigned": "Diese*r Patient*in ist noch keiner Studienarm-Gruppe zugeordnet. KI-Quantifizierung + KI-Empfehlung sind bis zur Zuteilung ausgeblendet."
       },
       "viewer": {
         "volume": "OCT-Volumen · aktueller Besuch",
@@ -111,6 +119,9 @@
         "saving": "Speichern …",
         "confirmed": "Entscheidung dokumentiert.",
         "back": "Zurück"
+      },
+      "bcvaTrend": {
+        "aria": "Visusverlauf (BCVA-Buchstaben) über die letzten Visiten, mit Injektions-Markierungen entlang der Zeitachse."
       },
       "trend": {
         "aria": "Verlauf der Flüssigkeitsvolumina IRF, SRF und PED über die letzten Visiten.",

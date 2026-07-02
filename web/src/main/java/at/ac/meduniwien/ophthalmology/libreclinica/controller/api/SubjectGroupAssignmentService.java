@@ -163,10 +163,17 @@ final class SubjectGroupAssignmentService {
             }
             if (a.groupId() != null) {
                 StudyGroupBean sg = sgDao.findByPK(a.groupId().intValue());
+                // 2026-06-30 — drop the AVAILABLE check. The
+                // {@code study_group} table has NO {@code status_id}
+                // column (see lc-muw-2026-06-01 schema + StudyGroupDAO
+                // .getEntityFromHashMap which doesn't populate it),
+                // so {@code sg.getStatus()} is always null + every
+                // assignment got rejected with a misleading
+                // "Group X not found in class Y" message. Existence +
+                // class-membership are the only fields we can
+                // genuinely verify.
                 if (sg == null || sg.getId() == 0
-                        || sg.getStudyGroupClassId() != gc.getId()
-                        || sg.getStatus() == null
-                        || !Status.AVAILABLE.equals(sg.getStatus())) {
+                        || sg.getStudyGroupClassId() != gc.getId()) {
                     errors.add(new ValidationErrorBody.FieldError(
                             "assignments[" + a.groupClassId() + "].groupId",
                             "Group " + a.groupId() + " not found in class " + gc.getId()));

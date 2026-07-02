@@ -342,10 +342,11 @@ public class RetinalResultsApiController {
         // so the SPA can honour-system-gate the AI panels for Arm B.
         String subjectArm = null;
         try (Connection c = dataSource.getConnection()) {
-            subjectArm = resolveSubjectArm(c, row.eventCrfId);
+            int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
+            subjectArm = resolveSubjectArm(c, row.eventCrfId, sev);
         } catch (SQLException sqlEx) {
-            LOG.warn("subjectArm lookup failed for job {} (ecrf={}): {}",
-                    jobId, row.eventCrfId, sqlEx.getMessage());
+            LOG.warn("subjectArm lookup failed for job {} (ecrf={}, sev={}): {}",
+                    jobId, row.eventCrfId, row.studyEventId, sqlEx.getMessage());
         }
 
         RetinalJobDetailDto dto = new RetinalJobDetailDto(
@@ -444,19 +445,33 @@ public class RetinalResultsApiController {
      * <p>The match is case-insensitive on the group name to absorb
      * institutional capitalisation variants.
      */
-    private static String resolveSubjectArm(Connection c, int eventCrfId) throws SQLException {
-        String sql = "SELECT sg.name "
-                + "  FROM event_crf ec "
-                + "  JOIN study_event ev ON ev.study_event_id = ec.study_event_id "
-                + "  JOIN subject_group_map sgm "
-                + "    ON sgm.study_subject_id = ev.study_subject_id "
-                + "   AND sgm.status_id = 1 "
-                + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
-                + " WHERE ec.event_crf_id = ? "
-                + "   AND UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') "
-                + " LIMIT 1";
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, eventCrfId);
+    private static String resolveSubjectArm(Connection c, int eventCrfId, int studyEventId) throws SQLException {
+        // 2026-07-02 — retinal jobs from the public OCT-upload portal +
+        // Wave-2 pipeline attach directly via {@code study_event_id}
+        // and leave {@code event_crf_id} null on the row. The prior
+        // event_crf-only join missed 100% of those jobs and the SPA
+        // always saw {@code subjectArm=null}. Accept either path:
+        // pin the join on {@code study_event.study_event_id = ?} when
+        // caller has it, else fall through to the event_crf lookup.
+        if (studyEventId <= 0 && eventCrfId <= 0) return null;
+        StringBuilder sql = new StringBuilder(
+                "SELECT sg.name "
+              + "  FROM study_event ev "
+              + "  JOIN subject_group_map sgm "
+              + "    ON sgm.study_subject_id = ev.study_subject_id "
+              + "   AND sgm.status_id = 1 "
+              + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+              + " WHERE UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') "
+              + "   AND ");
+        if (studyEventId > 0) {
+            sql.append("ev.study_event_id = ? ");
+        } else {
+            sql.append("ev.study_event_id IN ("
+                    + "SELECT study_event_id FROM event_crf WHERE event_crf_id = ?) ");
+        }
+        sql.append(" LIMIT 1");
+        try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
+            ps.setInt(1, studyEventId > 0 ? studyEventId : eventCrfId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 String name = rs.getString(1);
@@ -2401,6 +2416,12 @@ public class RetinalResultsApiController {
         // the artifact resolver to pick the right scan-N/ subdirectory
         // for multi-volume .e2e uploads.
         int scanIndex;
+        // 2026-07-02 — direct study_event_id on retinal_inference_job.
+        // Modern jobs (public OCT-upload portal + Wave-2 pipeline)
+        // attach directly via study_event_id and leave event_crf_id
+        // null; the {@link #resolveSubjectArm} path needs both to
+        // find the subject's arm assignment.
+        Integer studyEventId;
     }
 
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
@@ -2431,7 +2452,7 @@ public class RetinalResultsApiController {
         // because studyId comes back null.
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
-                + "       j.scan_index, "
+                + "       j.scan_index, j.study_event_id, "
                 + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
                 + "       r.bscan_masks_dir, r.confidence, ss.study_id "
                 + "  FROM retinal_inference_job j "
@@ -2463,6 +2484,8 @@ public class RetinalResultsApiController {
                 int sid = rs.getInt("study_id");
                 row.studyId = rs.wasNull() ? null : sid;
                 row.scanIndex = rs.getInt("scan_index");
+                int sev = rs.getInt("study_event_id");
+                row.studyEventId = rs.wasNull() ? null : sev;
                 return row;
             }
         }

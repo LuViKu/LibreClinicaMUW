@@ -38,7 +38,15 @@
         "current": "[NEEDS_REVIEW] Current status",
         "trend": "[NEEDS_REVIEW] Fluid trend",
         "crt": "[NEEDS_REVIEW] Central retinal thickness",
-        "legend": "[NEEDS_REVIEW] Legend"
+        "legend": "[NEEDS_REVIEW] Legend",
+        "clinical": "[NEEDS_REVIEW] Clinical observations",
+        "clinicalHemorrhage": "[NEEDS_REVIEW] New hemorrhage",
+        "clinicalBcvaAttr": "[NEEDS_REVIEW] BCVA loss nAMD-attributed",
+        "clinicalFlagYes": "[NEEDS_REVIEW] Yes",
+        "clinicalFlagNo": "[NEEDS_REVIEW] No",
+        "visitList": "[NEEDS_REVIEW] Visit timeline (BCVA)",
+        "bcvaTrend": "[NEEDS_REVIEW] BCVA trend",
+        "armUnassigned": "[NEEDS_REVIEW] This patient is not yet assigned to a study-arm group. AI quantification + AI recommendation are hidden until assignment."
       },
       "viewer": {
         "volume": "[NEEDS_REVIEW] OCT volume · current visit",
@@ -111,6 +119,9 @@
         "saving": "[NEEDS_REVIEW] Saving …",
         "confirmed": "[NEEDS_REVIEW] Decision documented.",
         "back": "[NEEDS_REVIEW] Back"
+      },
+      "bcvaTrend": {
+        "aria": "[NEEDS_REVIEW] BCVA-letter trend across the last visits, with injection markers along the time axis."
       },
       "trend": {
         "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits.",

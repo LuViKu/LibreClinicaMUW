@@ -18,6 +18,7 @@ import Card from '../components/primitives/Card.vue'
 import DeltaChip from '../components/primitives/DeltaChip.vue'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
+import NamdBcvaTrendChart from '../components/NamdBcvaTrendChart.vue'
 import NamdDecisionPanel from '../components/NamdDecisionPanel.vue'
 import NamdRecommendationCard from '../components/NamdRecommendationCard.vue'
 import { useNamdAiRecommendation } from '../composables/useNamdAiRecommendation'
@@ -91,6 +92,72 @@ const crtDelta = computed<number | null>(() => {
       <Card v-if="aiVisible" :title="t('studyModules.namd.overview.trend')">
         <NamdFluidTrendChart :visits="props.data.visits" />
       </Card>
+
+      <!-- 2026-06-30 — Standalone BCVA-only trend. Control-arm ONLY —
+           the study-arm's NamdFluidTrendChart above already includes
+           a BCVA strip along the bottom, so surfacing this chart there
+           duplicates the information. Renders only when at least one
+           visit carries a non-zero BCVA reading. -->
+      <Card
+        v-if="!aiVisible && props.data.visits.some((v) => v.bcva > 0)"
+        :title="t('studyModules.namd.overview.bcvaTrend')"
+      >
+        <NamdBcvaTrendChart :visits="props.data.visits" />
+      </Card>
+
+      <!-- 2026-06-30 — Control-arm clinical fallback. The AI panels
+           are hidden on the control arm + on the defensive
+           "unassigned subject" path; without this block the entire
+           left column would be empty. Surface BCVA + the per-eye
+           clinical flags + an arm-unassigned warning so the operator
+           has something to read while authoring the decision. -->
+      <Card v-if="!aiVisible && props.data.current" :title="t('studyModules.namd.overview.clinical')">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-slate-700">
+          <div>
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1">BCVA</div>
+            <div class="text-[16px] font-semibold tabular-nums">
+              <template v-if="props.data.current.bcva > 0">{{ props.data.current.bcva }} L</template>
+              <template v-else>—</template>
+            </div>
+            <div v-if="props.data.current.bcvaRaw" class="text-[11px] text-slate-400 mt-0.5">
+              {{ props.data.current.bcvaRaw }}
+            </div>
+          </div>
+          <div>
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+              {{ t('studyModules.namd.overview.clinicalHemorrhage') }}
+            </div>
+            <div
+              class="text-[14px] font-semibold"
+              :class="props.data.current.hemorrhage ? 'text-rose-700' : 'text-slate-500'"
+            >
+              {{ props.data.current.hemorrhage
+                ? t('studyModules.namd.overview.clinicalFlagYes')
+                : t('studyModules.namd.overview.clinicalFlagNo') }}
+            </div>
+          </div>
+          <div>
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+              {{ t('studyModules.namd.overview.clinicalBcvaAttr') }}
+            </div>
+            <div
+              class="text-[14px] font-semibold"
+              :class="props.data.current.bcvaAttributableToNamd ? 'text-rose-700' : 'text-slate-500'"
+            >
+              {{ props.data.current.bcvaAttributableToNamd
+                ? t('studyModules.namd.overview.clinicalFlagYes')
+                : t('studyModules.namd.overview.clinicalFlagNo') }}
+            </div>
+          </div>
+        </div>
+        <div
+          v-if="props.data.subjectArm == null"
+          class="mt-3 rounded-md bg-amber-50 text-amber-800 px-3 py-2 text-[12px]"
+        >
+          {{ t('studyModules.namd.overview.armUnassigned') }}
+        </div>
+      </Card>
+
     </div>
 
     <div class="col-span-12 lg:col-span-4 space-y-5">

@@ -27,6 +27,7 @@
 
 import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { listSubjectJobs, listSubjectBcvaTimeline, listSubjectCrtTimeline, listSubjectNamdClinicalFlags, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow, type CrtTimelineRow, type NamdClinicalFlagsRow } from '@/api/retinal'
+import { apiGet } from '@/api/client'
 import { decimalToLetters, formatBcva } from '@/lib/bcvaConversion'
 import type { Laterality, NamdAiRecommendation, NamdPatient, NamdSubjectArm, NamdVisit, NamdWorkspaceData } from '../types'
 import { useNamdAiRecommendation } from './useNamdAiRecommendation'
@@ -460,6 +461,25 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
         if (subjectArm == null && detail != null) {
           if (detail.subjectArm === 'AI_SHOWN') subjectArm = 'study'
           else if (detail.subjectArm === 'AI_HIDDEN') subjectArm = 'control'
+        }
+      }
+      // 2026-06-30 — fallback: a subject with NO retinal jobs (or jobs
+      // that pre-date the resolveSubjectArm wire-up) leaves subjectArm
+      // null. Read the arm directly from the subject's group
+      // membership via SubjectDetail.groupAssignments so the workspace
+      // can still gate AI panels correctly.
+      if (subjectArm == null) {
+        try {
+          const subj = await apiGet<{ groupAssignments?: { groupName?: string | null }[] }>(
+            `/pages/api/v1/subjects/${encodeURIComponent(oid)}`,
+          )
+          for (const g of subj.groupAssignments ?? []) {
+            const name = (g.groupName ?? '').toUpperCase()
+            if (name === 'AI_SHOWN') { subjectArm = 'study'; break }
+            if (name === 'AI_HIDDEN') { subjectArm = 'control'; break }
+          }
+        } catch {
+          /* leave subjectArm null — workspace shows the unassigned-arm warning */
         }
       }
       allFluidDone.value = fluidDone
