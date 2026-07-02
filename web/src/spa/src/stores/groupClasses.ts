@@ -134,5 +134,35 @@ export const useGroupClassesStore = defineStore('groupClasses', () => {
     return e instanceof Error ? e.message : `Unbekannter Fehler beim ${op}.`
   }
 
-  return { rows, isLoading, error, load, create, update, disable, restore }
+  /**
+   * 2026-07-02 — v1 randomization picker call.
+   *
+   * <p>Wraps {@code POST /api/v1/studies/{studyOid}/group-classes/{id}/randomize}
+   * (backend: SubjectRandomizationService). Returns the pick + the
+   * hex seed so the AddSubjectView can round-trip the randomization
+   * envelope into the enrollment POST. Stateless — the store rows
+   * stay untouched.
+   */
+  async function randomize(studyOid: string, groupClassId: number): Promise<RandomizeResult> {
+    return apiPost<RandomizeResult>(
+      `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/group-classes/${groupClassId}/randomize`,
+      {},
+    )
+  }
+
+  return { rows, isLoading, error, load, create, update, disable, restore, randomize }
 })
+
+/**
+ * 2026-07-02 — response shape of the {@code /randomize} endpoint.
+ * Matches {@code RandomizeGroupClassResponse} in Java.
+ */
+export interface RandomizeResult {
+  groupId: number
+  groupName: string
+  seed: string
+  source: string
+  meta: string | null
+  groupClassId: number
+  groupClassName: string
+}

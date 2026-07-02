@@ -845,6 +845,8 @@ public class SubjectsApiController {
             try {
                 groupService.reconcile(ssb.getId(), currentUser, body.groupAssignments(),
                         new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+                emitRandomizationAudits(groupService.lastOutcomes,
+                        currentUser, currentStudy, ssb, new AuditEventDAO(dataSource));
             } catch (RuntimeException e) {
                 LOG.error("Initial group assignment failed for study_subject={} oid={} (subject enrolled but unassigned)",
                         ssb.getId(), ssb.getOid(), e);
@@ -1980,6 +1982,8 @@ public class SubjectsApiController {
         try {
             touched = service.reconcile(ss.getId(), currentUser, desired,
                     new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+            emitRandomizationAudits(service.lastOutcomes,
+                    currentUser, currentStudy, ss, new AuditEventDAO(dataSource));
         } catch (RuntimeException e) {
             LOG.error("Group-assignment reconcile failed for ss={} oid={} by user={}",
                     ss.getId(), studySubjectOid, currentUser.getName(), e);
@@ -2950,6 +2954,60 @@ public class SubjectsApiController {
                     studyIds, e);
         }
         return out;
+    }
+
+    /**
+     * 2026-07-02 — emit one summary audit row per non-MANUAL
+     * subject_group_map insert, plus one override-audit row per
+     * outgoing row that carried a non-MANUAL source.
+     *
+     * <p>Types:
+     * <ul>
+     *   <li>{@link AuditTypeIds#SUBJECT_RANDOMIZED} for every fresh
+     *     row whose {@code randomization_source != MANUAL}.</li>
+     *   <li>{@link AuditTypeIds#SUBJECT_RANDOMIZATION_OVERRIDDEN} for
+     *     every outcome that overrode a previously-randomized row
+     *     (i.e. a MANUAL pick replacing a randomized assignment). The
+     *     {@code reason_for_change} column is left null here; the SPA
+     *     is expected to supply it via the RFC dialog once a follow-up
+     *     PR extends the PUT to accept it. For now we still capture
+     *     the fact of the override for audit hygiene.</li>
+     * </ul>
+     */
+    private static void emitRandomizationAudits(
+            java.util.List<SubjectGroupAssignmentService.Outcome> outcomes,
+            UserAccountBean actor, StudyBean study, StudySubjectBean ss,
+            AuditEventDAO auditDAO) {
+        if (outcomes == null || outcomes.isEmpty()) return;
+        for (SubjectGroupAssignmentService.Outcome o : outcomes) {
+            if (o == null || o.newRowId() <= 0) continue;
+            boolean isRandomized = o.source() != null && !o.source().equalsIgnoreCase("MANUAL");
+            if (isRandomized) {
+                String seedPrefix = o.seed() == null ? "-" :
+                        (o.seed().length() > 8 ? o.seed().substring(0, 8) : o.seed());
+                String newVal = "class:" + o.groupClassId()
+                        + ",group:" + (o.groupName() == null ? "" : o.groupName())
+                        + ",source:" + o.source()
+                        + ",seed:" + seedPrefix;
+                EventCrfsApiController.writeAuditEvent(auditDAO,
+                        AuditTypeIds.SUBJECT_RANDOMIZED,
+                        actor, study, ss,
+                        "subject_randomized",
+                        "subject_group_map", o.newRowId(),
+                        "randomization_source", "", newVal);
+            }
+            if (o.overrodeRandomized() && !isRandomized) {
+                String newVal = "class:" + o.groupClassId()
+                        + ",group:" + (o.groupName() == null ? "" : o.groupName())
+                        + ",source:MANUAL_OVERRIDE";
+                EventCrfsApiController.writeAuditEvent(auditDAO,
+                        AuditTypeIds.SUBJECT_RANDOMIZATION_OVERRIDDEN,
+                        actor, study, ss,
+                        "subject_randomization_overridden",
+                        "subject_group_map", o.newRowId(),
+                        "randomization_source", "RANDOMIZED", newVal);
+            }
+        }
     }
 
     /**

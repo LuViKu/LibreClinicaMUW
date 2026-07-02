@@ -12,6 +12,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.Validation
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -95,10 +96,12 @@ public class GroupClassesApiController {
     private static final Set<String> LEGAL_ASSIGNMENT = Set.of("REQUIRED", "OPTIONAL");
 
     private final DataSource dataSource;
+    private final SubjectRandomizationService randomizer;
 
     @Autowired
     public GroupClassesApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
+        this.randomizer = new SubjectRandomizationService();
     }
 
     /* ----------------------------------------------------------------- */
@@ -390,6 +393,131 @@ public class GroupClassesApiController {
                                      @PathVariable("groupClassId") int groupClassId,
                                      HttpSession session) {
         return lifecycle(studyOid, groupClassId, session, Status.AVAILABLE, "restore");
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /randomize — pick a group for enrollment                     */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * 2026-07-02 — subject-randomization picker.
+     *
+     * <p>Returns a pick for the given Arm-type group_class, encoded as
+     * {@link RandomizeGroupClassResponse}. Does NOT persist — the SPA
+     * round-trips the response through the AddSubject POST body so the
+     * assignment lands atomically with the rest of the enrollment.
+     *
+     * <p>Guards:
+     * <ul>
+     *   <li>Same session + role gate as the mutating endpoints (via
+     *     {@link #preflight}).</li>
+     *   <li>{@code study_parameter.randomization = 'enabled'} for the
+     *     target study — the flag is what opts a study into the
+     *     randomization workflow.</li>
+     *   <li>Group class exists in the study, is AVAILABLE, is
+     *     {@link GroupClassType#ARM}, and has ≥2 available groups.</li>
+     * </ul>
+     *
+     * <p>The picker uses {@link SubjectRandomizationService#pickWeighted}
+     * so v1 (uniform, weight=1 everywhere) and v2a (weighted allocation
+     * ratios) share the same path.
+     */
+    @PostMapping("/{groupClassId}/randomize")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RandomizeGroupClassResponse.class)))
+    public ResponseEntity<?> randomize(@PathVariable("studyOid") String studyOid,
+                                       @PathVariable("groupClassId") int groupClassId,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        if (study == null || study.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Study '" + studyOid + "' not found"));
+        }
+
+        if (!isRandomizationEnabled(study.getId())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Randomization is not enabled for this study. "
+                    + "Set study_parameter.randomization = 'enabled' first."));
+        }
+
+        StudyGroupClassDAO sgcDao = new StudyGroupClassDAO(dataSource);
+        StudyGroupClassBean gc = resolveGroupClass(sgcDao, study, groupClassId);
+        if (gc == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No group class with id " + groupClassId + " in study '" + studyOid + "'"));
+        }
+        if (gc.getStatus() == null || !Status.AVAILABLE.equals(gc.getStatus())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Group class is not available"));
+        }
+        if (gc.getGroupClassTypeId() != GroupClassType.ARM.getId()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Group class must be of type Arm to be randomizable"));
+        }
+
+        StudyGroupDAO sgDao = new StudyGroupDAO(dataSource);
+        ArrayList<StudyGroupBean> all = sgDao.findAllByGroupClass(gc);
+        List<StudyGroupBean> eligible = new ArrayList<>();
+        for (StudyGroupBean g : all) {
+            // study_group has no status column so every row is
+            // implicitly available; still filter defensively for the
+            // day a status column ships.
+            if (g == null || g.getId() == 0) continue;
+            if (g.getStatus() != null && !Status.AVAILABLE.equals(g.getStatus())) continue;
+            eligible.add(g);
+        }
+        if (eligible.size() < 2) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Group class must have at least 2 available groups to randomize"));
+        }
+
+        SubjectRandomizationService.Result pick = randomizer.pickWeighted(eligible);
+        String meta = "RANDOMIZED_WEIGHTED".equals(pick.source())
+                ? SubjectRandomizationService.weightedMetaJson(eligible)
+                : null;
+        RandomizeGroupClassResponse dto = new RandomizeGroupClassResponse(
+                pick.groupId(),
+                pick.groupName(),
+                pick.seedHex(),
+                pick.source(),
+                meta,
+                gc.getId(),
+                gc.getName());
+        LOG.info("Randomized: studyOid={} class={} → group={} source={} by user={}",
+                studyOid, groupClassId, pick.groupName(), pick.source(),
+                sessionUser(session));
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Read the {@code study_parameter.randomization} handle for the
+     * study; the default is {@code disabled} so a study without an
+     * explicit row rejects randomization automatically.
+     */
+    private boolean isRandomizationEnabled(int studyId) {
+        String sql = "SELECT value FROM study_parameter_value "
+                   + "WHERE study_id = ? AND parameter = 'randomization'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                String v = rs.getString(1);
+                return v != null && v.equalsIgnoreCase("enabled");
+            }
+        } catch (SQLException e) {
+            LOG.warn("Failed to read randomization param for study {}: {}", studyId, e.getMessage());
+            return false;
+        }
+    }
+
+    private static String sessionUser(HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        return me == null ? "?" : me.getName();
     }
 
     private ResponseEntity<?> lifecycle(String studyOid, int groupClassId, HttpSession session,

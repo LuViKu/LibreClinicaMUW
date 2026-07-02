@@ -30,6 +30,13 @@ public class StudyGroupBean extends AuditableEntityBean {
     private String description = "";
     private int studyGroupClassId;
     private ArrayList<SubjectGroupMapBean> subjectMaps = new ArrayList<>(); // not in DB
+    /**
+     * 2026-07-02 — allocation weight for weighted-uniform
+     * randomization (v2a). Defaults to 1 so groups without an explicit
+     * weight participate in 1:1 draws. See
+     * {@code lc-muw-2026-07-02-subject-randomization.xml}.
+     */
+    private int allocationWeight = 1;
 
     /**
      * @return Returns the subjectMaps.
@@ -74,5 +81,18 @@ public class StudyGroupBean extends AuditableEntityBean {
      */
     public void setStudyGroupClassId(int studyGroupClassId) {
         this.studyGroupClassId = studyGroupClassId;
+    }
+
+    /**
+     * @return the {@code allocation_weight} column value (v2a). A
+     *   weight of 1 is the neutral default; larger values raise the
+     *   pick probability proportionally.
+     */
+    public int getAllocationWeight() {
+        return allocationWeight;
+    }
+
+    public void setAllocationWeight(int allocationWeight) {
+        this.allocationWeight = allocationWeight;
     }
 }
