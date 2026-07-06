@@ -564,6 +564,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/study-events/{studyEventId}/namd-clinical-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["upsertNamdClinicalFlags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies": {
         parameters: {
             query?: never;
@@ -654,6 +670,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["restore_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/group-classes/{groupClassId}/randomize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["randomize"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2020,6 +2052,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/study-subjects/{studySubjectId}/namd-clinical-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listNamdClinicalFlagsTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/study-subjects/{studySubjectId}/crt-timeline": {
         parameters: {
             query?: never;
@@ -3009,6 +3057,12 @@ export interface components {
             groupClassId?: number;
             /** Format: int32 */
             groupId?: number;
+            randomization?: components["schemas"]["RandomizationEnvelope"];
+        };
+        RandomizationEnvelope: {
+            source?: string;
+            seed?: string;
+            meta?: string;
         };
         UpdateSubjectGroupsRequest: {
             assignments?: components["schemas"]["Assignment"][];
@@ -3512,6 +3566,29 @@ export interface components {
         GroupInput: {
             name?: string;
             description?: string;
+        };
+        /** @description Result of a randomization pick — the group id + audit-grade metadata. */
+        RandomizeGroupClassResponse: {
+            /**
+             * Format: int32
+             * @description Chosen study_group id.
+             */
+            groupId?: number;
+            /** @description Chosen study_group name. */
+            groupName?: string;
+            /** @description Hex-encoded seed (32 bytes = 64 hex chars) used for the pick. */
+            seed?: string;
+            /** @description Which picker was invoked — RANDOMIZED_UNIFORM (v1) or RANDOMIZED_WEIGHTED (v2a). */
+            source?: string;
+            /** @description JSON-encoded metadata envelope. Null for RANDOMIZED_UNIFORM; carries {"ratio":[w1,w2,...]} for RANDOMIZED_WEIGHTED. The SPA opaquely round-trips this field into the enrollment POST. */
+            meta?: string;
+            /**
+             * Format: int32
+             * @description study_group_class_id the pick belongs to (mirrors the URL path variable).
+             */
+            groupClassId?: number;
+            /** @description study_group_class name (mirrors gc.name). */
+            groupClassName?: string;
         };
         CreateEventDefinitionRequest: {
             name?: string;
@@ -5867,6 +5944,34 @@ export interface operations {
             };
         };
     };
+    upsertNamdClinicalFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyEventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     list_2: {
         parameters: {
             query?: never;
@@ -6053,6 +6158,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["GroupClassDto"];
+                };
+            };
+        };
+    };
+    randomize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                groupClassId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RandomizeGroupClassResponse"];
                 };
             };
         };
@@ -8496,6 +8624,28 @@ export interface operations {
         };
     };
     listByStudySubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listNamdClinicalFlagsTimeline: {
         parameters: {
             query?: never;
             header?: never;
