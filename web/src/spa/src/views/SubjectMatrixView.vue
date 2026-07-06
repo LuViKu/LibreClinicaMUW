@@ -38,12 +38,15 @@ useViewBreadcrumb(computed(() => [{ label: t('nav.subjectMatrix'), to: null }]))
 const isScheduleMode = ref(route.query.action === 'schedule')
 
 onMounted(() => {
-  if (subjects.rows.length === 0) {
-    // The store ignores the argument (server scopes by session-bound
-    // active study); pass null to make that explicit and drop the
-    // legacy "TDS0004" mock-era placeholder.
-    subjects.load()
-  }
+  // 2026-07-06 — always re-load on mount. The prior `rows.length === 0`
+  // gate skipped the fetch whenever the store already held rows,
+  // which broke the Add-Subject → Matrix flow: `subjects.add()`
+  // optimistically prepends the new row (rows.length becomes 1
+  // even if `load()` had never run), so the subsequent matrix
+  // mount saw a non-zero count and served only that one row,
+  // hiding every previously-enrolled subject. The endpoint is cheap
+  // (< 100 ms for the demo studies), correctness beats the cache.
+  subjects.load()
   // Phase E.6 — fetch the active study identity so the footer card
   // (PI, planned start, status) renders real data instead of the
   // Phase-E.4 mock placeholders ("Max von Pettenkofer", "01-Jul-2020").
