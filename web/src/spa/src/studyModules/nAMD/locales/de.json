@@ -38,7 +38,15 @@
         "current": "Aktueller Status",
         "trend": "Flüssigkeitsverlauf",
         "crt": "Zentrale Netzhautdicke",
-        "legend": "Legende"
+        "legend": "Legende",
+        "clinical": "Klinische Beobachtungen",
+        "clinicalHemorrhage": "Neue Blutung",
+        "clinicalBcvaAttr": "Visusverlust nAMD-bedingt",
+        "clinicalFlagYes": "Ja",
+        "clinicalFlagNo": "Nein",
+        "visitList": "Visiten-Verlauf (BCVA)",
+        "bcvaTrend": "Visusverlauf",
+        "armUnassigned": "Diese*r Patient*in ist noch keiner Studienarm-Gruppe zugeordnet. KI-Quantifizierung + KI-Empfehlung sind bis zur Zuteilung ausgeblendet."
       },
       "viewer": {
         "volume": "OCT-Volumen · aktueller Besuch",
@@ -87,10 +95,33 @@
         "treat": "Behandeln",
         "observe": "Beobachten",
         "drug": "Wirkstoff",
+        "drugs": {
+          "BEVACIZUMAB": "Bevacizumab",
+          "AFLIBERCEPT": "Aflibercept",
+          "FARICIMAB": "Faricimab"
+        },
         "interval": "Intervall (Wochen)",
+        "dateLabel": "Klinisches Datum der Entscheidung",
+        "rationaleLabel": "Begründung",
+        "rationaleOtherPlaceholder": "Bitte präzisieren …",
+        "rationaleCodes": {
+          "CLINICAL_JUDGMENT": "Klinische Einschätzung weicht von KI ab",
+          "STABLE_NO_TREAT": "Stabiler Befund — keine Behandlung",
+          "ACTIVE_DISEASE_TREAT": "Aktive Erkrankung — Behandlung",
+          "CLINICAL_WORSENING": "Klinische Verschlechterung",
+          "PATIENT_PREFERENCE": "Patient bevorzugt anderes Vorgehen",
+          "COMORBIDITY": "Komorbidität",
+          "LOGISTICS_COMPLIANCE": "Compliance / logistische Gründe",
+          "SAFETY_CONCERN": "Sicherheitsbedenken",
+          "OTHER": "Sonstiges"
+        },
         "confirm": "Entscheidung bestätigen",
+        "saving": "Speichern …",
         "confirmed": "Entscheidung dokumentiert.",
         "back": "Zurück"
+      },
+      "bcvaTrend": {
+        "aria": "Visusverlauf (BCVA-Buchstaben) über die letzten Visiten, mit Injektions-Markierungen entlang der Zeitachse."
       },
       "trend": {
         "aria": "Verlauf der Flüssigkeitsvolumina IRF, SRF und PED über die letzten Visiten.",
@@ -105,6 +136,34 @@
       },
       "overview2": {
         "crtDeltaAria": "Veränderung der zentralen Netzhautdicke gegenüber der Vorvisite"
+      },
+      "recommendation": {
+        "headline": {
+          "SHORTEN": "Intervall verkürzen",
+          "KEEP": "Intervall halten",
+          "EXTEND": "Intervall verlängern"
+        },
+        "intervalProposed": "Vorgeschlagen: {weeks} Wochen",
+        "firedTriggers": "Auslösende Befunde",
+        "disclaimer": "Diese Empfehlung folgt dem Studienprotokoll. Die klinische Entscheidung trifft der Behandelnde.",
+        "triggers": {
+          "DE_NOVO_IRF": "Neu aufgetretene intraretinale Flüssigkeit",
+          "IRF_INCREASE": "IRF um +{value} nL über der Schwelle ({threshold} nL)",
+          "IRF_DECREASE_INSUFFICIENT": "IRF rückläufig um weniger als 50 % vs. Vorbesuch",
+          "DE_NOVO_CENTRAL_SRF": "Neu aufgetretene zentrale SRF (1 mm)",
+          "CENTRAL_SRF_INCREASE": "Zentrale SRF um +{value} nL über der Schwelle ({threshold} nL)",
+          "SRF_RING_1_3_INCREASE": "SRF im 1–3 mm Ring um {value} nL gestiegen",
+          "NEW_HEMORRHAGE": "Neue retinale Blutung dokumentiert",
+          "BCVA_LOSS_5_LETTERS": "Visusverlust ≥ 5 Buchstaben, nAMD-attribuiert",
+          "RESIDUAL_IRF_HALVED": "Residuelle IRF um ≥ 50 % rückläufig — noch vorhanden",
+          "RESIDUAL_IRF_STABLE": "Residuelle IRF stabil — Intervall halten",
+          "CENTRAL_SRF_IMPROVING": "Zentrale SRF stabil oder rückläufig",
+          "ACTIVITY_IMPROVING": "Gesamtaktivität rückläufig",
+          "IRF_ABSENT": "Keine IRF vorhanden",
+          "CENTRAL_SRF_ABSENT": "Keine zentrale SRF vorhanden",
+          "NO_HEMORRHAGE_OR_BCVA_LOSS": "Keine Blutung, kein Visusverlust",
+          "SRF_ISOLATED_1_3_STABLE": "SRF — keine, oder isoliert stabil im 1–3 mm Ring"
+        }
       },
       "report": {
         "letterhead": "nAMD Fluid-Monitoring · Bericht",

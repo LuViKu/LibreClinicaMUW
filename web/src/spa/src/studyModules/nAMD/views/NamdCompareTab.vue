@@ -26,9 +26,10 @@ import Card from '../components/primitives/Card.vue'
 import NamdVisitPicker from '../components/NamdVisitPicker.vue'
 import NamdCompareDeltaBar from '../components/NamdCompareDeltaBar.vue'
 import NamdScanFrame from '../components/NamdScanFrame.vue'
+import { useStudyArm } from '../composables/useStudyArm'
 import { FLUID } from '../fluid'
 import { I } from '../icons'
-import type { NamdVisit } from '../types'
+import type { NamdVisit, NamdSubjectArm } from '../types'
 
 interface Props {
   data: { patient: { eye: 'OD' | 'OS' } } & {
@@ -36,10 +37,14 @@ interface Props {
     current: NamdVisit | null
     prev: NamdVisit | null
     nSlices: number | null
+    /** 2026-06-30 — cohort assignment; control arm hides the AI delta bar. */
+    subjectArm: NamdSubjectArm
   }
 }
 const props = defineProps<Props>()
 const { t } = useI18n()
+const armRef = computed(() => props.data.subjectArm)
+const { aiVisible } = useStudyArm(armRef)
 
 const nSlices = computed(() => props.data.nSlices ?? 49)
 const aId = ref<string | null>(props.data.prev?.id ?? null)
@@ -323,7 +328,9 @@ function toggleEtdrsRings(): void {
     </div>
 
     <!-- ── Inline (non-fullscreen) layout below ── -->
-    <Card v-if="!fsOpen" :title="t('studyModules.namd.compare.delta')">
+    <!-- AI delta bar — study-arm only. Control-arm comparison shows
+         the OCT panes without the AI-derived fluid delta. -->
+    <Card v-if="!fsOpen && aiVisible" :title="t('studyModules.namd.compare.delta')">
       <template #right>
         <div class="inline-flex items-center gap-3">
           <label

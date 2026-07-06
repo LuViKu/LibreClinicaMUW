@@ -15,6 +15,7 @@ import CancelEventDialog from '@/components/CancelEventDialog.vue'
 import SignEventDialog from '@/components/SignEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
+import SubjectGroupEditDialog from '@/components/SubjectGroupEditDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
 import ParkedScansList from '@/components/retinal/ParkedScansList.vue'
@@ -581,6 +582,19 @@ const transitionError = ref<string | null>(null)
 const transitionSuccess = ref<string | null>(null)
 const transitionSubmitting = ref(false)
 
+// 2026-06-30 — subject group-assignment editor (wraps the existing
+// PUT /pages/api/v1/subjects/{oid}/groups endpoint). The SPA never
+// had a UI for it before; AddSubjectView removed its group picker
+// + this view only showed groupLabel read-only.
+const groupEditOpen = ref(false)
+async function onGroupsSaved() {
+  // Refetch the subject so the updated groupAssignments + groupLabel
+  // surface in the read-only block.
+  if (subject.value?.id) {
+    await subjects.fetchOne(subject.value.id)
+  }
+}
+
 function openTransitionDialog(eye: 'OD' | 'OS') {
   transitionError.value = null
   transitionSuccess.value = null
@@ -859,7 +873,38 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.secondaryId') }}</dt><dd class="font-medium">{{ subject.secondaryId ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.gender') }}</dt><dd class="font-medium">{{ genderLabel(subject.gender) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt><dd class="font-medium">{{ subject.groupLabel ?? '—' }}</dd></div>
+            <div class="flex justify-between items-baseline gap-3">
+              <dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt>
+              <dd class="font-medium flex items-baseline gap-2">
+                <span>
+                  <template v-if="(subject.groupAssignments?.length ?? 0) === 0">—</template>
+                  <template v-else>
+                    <span
+                      v-for="(g, i) in (subject.groupAssignments ?? [])"
+                      :key="g.groupClassId"
+                      class="inline"
+                    >
+                      <span class="text-slate-500">{{ g.groupClassName }}:</span>
+                      <span class="ml-1">{{ g.groupName ?? '—' }}</span>
+                      <span v-if="i < (subject.groupAssignments!.length - 1)"> · </span>
+                    </span>
+                  </template>
+                </span>
+                <button
+                  type="button"
+                  data-testid="subject-detail-edit-groups"
+                  :title="t('subjectGroupEdit.openButton')"
+                  :aria-label="t('subjectGroupEdit.openButton')"
+                  class="text-slate-400 hover:text-muw-blue p-0.5 -my-0.5 rounded"
+                  @click="groupEditOpen = true"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              </dd>
+            </div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.enrolledOn') }}</dt><dd class="font-medium font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</dd></div>
             <!-- Phase E.6 Tier 1 + per-eye cohort transition workflow —
                  ophthalmology study-eye block. Each eye row carries a
@@ -1477,6 +1522,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       :event-label="cancelDialogEvent.label"
       @cancelled="onEventCancelled"
       @close="cancelDialogEvent = null"
+    />
+
+    <!-- 2026-06-30 — subject group-assignment editor. -->
+    <SubjectGroupEditDialog
+      v-if="groupEditOpen && subject"
+      :open="true"
+      :study-subject-oid="subject.id"
+      :study-oid="activeStudyOid"
+      :current-assignments="subject.groupAssignments ?? []"
+      @close="groupEditOpen = false"
+      @saved="onGroupsSaved"
     />
 
     <!-- 2026-06-21 round 7 — per-visit electronic signature. -->

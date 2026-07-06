@@ -446,6 +446,38 @@ export function listSubjectCrtTimeline(studySubjectId: number): Promise<CrtTimel
 }
 
 /**
+ * 2026-06-30 — per-eye clinical-flag observations the nAMD rule
+ * engine consumes alongside the BCVA + CRT timelines.
+ * {@code hemorrhage} / {@code bcvaLossAttributedToNamd} are written
+ * by the physician via the existing F_NAMD_VISIT CRF section
+ * S_NAMD_CLINICAL_FLAGS (lc-muw-2026-06-30-namd-clinical-flags
+ * migration).
+ */
+export interface NamdClinicalFlagsEye {
+  hemorrhage: boolean
+  bcvaLossAttributedToNamd: boolean
+}
+
+export interface NamdClinicalFlagsRow {
+  studyEventId: number
+  eventDate: string | null
+  od: NamdClinicalFlagsEye
+  os: NamdClinicalFlagsEye
+}
+
+/**
+ * 2026-06-30 — fetch the subject's per-event clinical-flag history.
+ * Backs the rule-engine inputs in {@link useNamdAiRecommendation}.
+ * Soft-fails to {@code []} when the backend service isn't wired
+ * (legacy compose deployments before the nAMD arms feature shipped).
+ */
+export function listSubjectNamdClinicalFlags(studySubjectId: number): Promise<NamdClinicalFlagsRow[]> {
+  return apiGet<NamdClinicalFlagsRow[]>(
+    `/pages/api/v1/study-subjects/${studySubjectId}/namd-clinical-flags`,
+  )
+}
+
+/**
  * Build the absolute URL for a single artifact / companion file. Used
  * as the {@code src} of {@code <img>} for {@code fundus.png}, the
  * {@code href} of download anchors, and as the fetch target for

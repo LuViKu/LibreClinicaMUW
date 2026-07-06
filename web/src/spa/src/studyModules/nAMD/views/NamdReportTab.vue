@@ -23,6 +23,7 @@ import NamdReportScan from '../components/NamdReportScan.vue'
 import { totalFluid } from '../fluid'
 import { I } from '../icons'
 import { useRetinalJobStore } from '@/stores/retinalJob'
+import { useStudyArm } from '../composables/useStudyArm'
 import type { NamdWorkspaceData, NamdVisit } from '../types'
 
 interface Props {
@@ -31,6 +32,11 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 const store = useRetinalJobStore()
+// 2026-06-30 — cohort gate. Control-arm reports drop the AI-fluid
+// section (seg-cards + CST + total chip + trend chart + dynamic
+// B-scans). The patient banner, BCVA, and OCT pair-figure stay.
+const armRef = computed(() => props.data.subjectArm)
+const { aiVisible } = useStudyArm(armRef)
 
 const today = computed(() => {
   const d = new Date()
@@ -231,7 +237,7 @@ function printReport() {
       </div>
     </section>
 
-    <section class="mb-6">
+    <section v-if="aiVisible" class="mb-6">
       <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
         {{ t('studyModules.namd.report.current') }}
       </h2>
@@ -259,7 +265,24 @@ function printReport() {
       </div>
     </section>
 
-    <section class="mb-6">
+    <!-- Control-arm BCVA-only block (replaces the AI-fluid section). -->
+    <section v-else-if="props.data.current" class="mb-6">
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+        {{ t('studyModules.namd.report.current') }}
+      </h2>
+      <div class="grid grid-cols-1 gap-2 text-sm text-slate-700">
+        <div>
+          <span class="text-slate-500">BCVA:</span>
+          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva }} L</span>
+          <span
+            v-if="props.data.current.bcvaRaw"
+            class="ml-1 text-slate-400 text-xs"
+          >· {{ props.data.current.bcvaRaw }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="aiVisible" class="mb-6">
       <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
         {{ t('studyModules.namd.report.trend') }}
       </h2>
@@ -267,9 +290,10 @@ function printReport() {
     </section>
 
     <!-- Top-2 B-scans by fluid Δ (fallback: baseline-vs-current when
-         no prior visit). -->
+         no prior visit). Hidden on control-arm reports — the Δ
+         requires the AI per-B-scan trace which control arm doesn't see. -->
     <section
-      v-if="dynamicBscans && dynamicBscans.length > 0"
+      v-if="aiVisible && dynamicBscans && dynamicBscans.length > 0"
       class="mb-6 print:break-before-page"
       data-testid="namd-report-dynamic-block"
     >
