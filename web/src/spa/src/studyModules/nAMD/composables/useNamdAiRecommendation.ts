@@ -248,7 +248,16 @@ export function useNamdAiRecommendation(
 
     // ─── Pick the rec ───
     let rec: NamdAiRecommendation['rec']
-    const baseInterval = prevV.interval ?? LOADING_INTERVAL_WEEKS
+    // 2026-07-06 — derive the "last applied interval" from the week
+    // gap between prev and current. `prevV.interval` is set from the
+    // NAMD_DECISION_INTERVAL_WEEKS CRF item (when present) — but the
+    // composable currently leaves it null for real subjects because
+    // no decision-timeline reader has shipped yet. Falling straight
+    // through to LOADING_INTERVAL_WEEKS made KEEP always propose 4 w
+    // even when the visit's actual gap was 12 w.
+    const spanWeeks = cur.week - prevV.week
+    const baseInterval = prevV.interval
+      ?? (spanWeeks > 0 ? spanWeeks : LOADING_INTERVAL_WEEKS)
     let next: number
     if (shortens.length > 0) {
       rec = 'SHORTEN'
