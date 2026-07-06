@@ -17,7 +17,10 @@ import { useErrorsStore } from '@/stores/errors'
  * Routes are added per-sub-phase as workflows ship.
  */
 const router = createRouter({
-  history: createWebHistory('/LibreClinica/app/'),
+  // 2026-07-06 — follow the Vite base (now '/') so the router matches clean
+  // root URLs (/login, /subjects/…) and keeps them in the address bar. Served
+  // at the site root behind nginx; see vite.config.ts + deploy/nginx/ecrf.conf.
+  history: createWebHistory(import.meta.env.BASE_URL),
   // Phase E.6 polish — honour the in-route hash so navigations from
   // CrfEntryView post-completion (#events) land on the correct panel
   // of subject-detail instead of the page top.
