@@ -21,14 +21,20 @@ import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdBcvaTrendChart from '../components/NamdBcvaTrendChart.vue'
 import NamdDecisionPanel from '../components/NamdDecisionPanel.vue'
 import NamdRecommendationCard from '../components/NamdRecommendationCard.vue'
+import NamdClinicalFlagsCard from '../components/NamdClinicalFlagsCard.vue'
 import { useNamdAiRecommendation } from '../composables/useNamdAiRecommendation'
 import { useStudyArm } from '../composables/useStudyArm'
 import type { NamdWorkspaceData } from '../types'
 
 interface Props {
   data: NamdWorkspaceData
+  /** Currently-viewed eye — needed by the clinical-flags card to write the correct per-eye items. */
+  selectedEye: 'OD' | 'OS'
 }
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'refresh'): void
+}>()
 const { t } = useI18n()
 
 // 2026-06-30 — cohort gate for the AI-fluid panels (seg cards, trend
@@ -161,6 +167,20 @@ const crtDelta = computed<number | null>(() => {
     </div>
 
     <div class="col-span-12 lg:col-span-4 space-y-5">
+      <!-- 2026-07-06 — Clinical-flags entry. Sits above the rec card so
+           the physician can toggle hemorrhage / BCVA-attribution before
+           reading the recommendation (both feed the rule engine as
+           SHORTEN triggers). Rendered for BOTH arms — control-arm
+           clinicians still need to record these observations for the
+           protocol. -->
+      <NamdClinicalFlagsCard
+        v-if="props.data.current"
+        :study-event-id="props.data.current.studyEventId ?? null"
+        :eye="props.selectedEye"
+        :hemorrhage="props.data.current.hemorrhage"
+        :bcva-attributable-to-namd="props.data.current.bcvaAttributableToNamd"
+        @saved="emit('refresh')"
+      />
       <!-- AI recommendation card — study-arm only. -->
       <NamdRecommendationCard v-if="aiVisible" :rec="recommendation" />
       <NamdDecisionPanel

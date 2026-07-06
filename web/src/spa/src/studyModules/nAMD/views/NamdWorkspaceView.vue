@@ -57,7 +57,7 @@ const studySubjectLabel = computed(() => {
 
 const isMock = computed(() => route.query.mock === '1')
 
-const { data, loading, error, availableEyes, selectedEye, setEye } = useNamdVisitData({
+const { data, loading, error, availableEyes, selectedEye, setEye, refresh } = useNamdVisitData({
   studySubjectOid,
   studySubjectLabel,
   mock: isMock,
@@ -111,7 +111,12 @@ useViewBreadcrumb(computed(() => {
         {{ t('studyModules.namd.errorPrefix') }} {{ error }}
       </div>
       <template v-else-if="data && data.visits.length > 0">
-        <NamdOverviewTab v-if="tab === 'overview'" :data="data" />
+        <NamdOverviewTab
+          v-if="tab === 'overview'"
+          :data="data"
+          :selected-eye="selectedEye"
+          @refresh="refresh"
+        />
         <NamdViewerTab v-else-if="tab === 'viewer'" :data="data" />
         <NamdCompareTab v-else-if="tab === 'compare'" :data="data" />
         <NamdReportTab v-else-if="tab === 'report'" :data="data" />

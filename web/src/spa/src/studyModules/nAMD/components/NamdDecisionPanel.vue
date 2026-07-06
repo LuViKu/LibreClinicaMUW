@@ -40,6 +40,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { I } from '../icons'
 import type { NamdAiRecommendation, NamdSubjectArm } from '../types'
+import { apiPost } from '@/api/client'
 
 const props = defineProps<{
   /**
@@ -178,23 +179,10 @@ function pickRationale(code: RationaleCode) {
 }
 
 async function postDecision(values: Record<string, string>): Promise<void> {
-  const url = `/pages/api/v1/eventCrfs/${props.eventCrfId}/items`
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values }),
-  })
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`
-    try {
-      const payload = await res.json() as { message?: string }
-      if (payload.message) msg = payload.message
-    } catch {
-      /* non-JSON error body — keep status */
-    }
-    throw new Error(msg)
-  }
+  // 2026-07-06 — Switched from raw fetch to apiPost so the
+  // `/LibreClinica` context path is prepended. The raw call 404'd
+  // under both vite (dev proxy expects the prefix) and prod Tomcat.
+  await apiPost<void>(`/pages/api/v1/eventCrfs/${props.eventCrfId}/items`, { values })
 }
 
 async function confirm() {

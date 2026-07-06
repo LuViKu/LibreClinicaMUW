@@ -34,6 +34,16 @@
         "SRF": { "long": "Subretinale Flüssigkeit" },
         "PED": { "long": "Pigmentepithelabhebung" }
       },
+      "clinicalFlags": {
+        "title": "Klinische Befunde erfassen",
+        "hemorrhage": "Neue retinale Blutung",
+        "hemorrhageHint": "Neue Blutung auf dem aktuellen OCT. SHORTEN-Trigger.",
+        "bcvaAttr": "Visusverlust auf nAMD zurückzuführen",
+        "bcvaAttrHint": "Klinische Einschätzung bei ≥ 5 Buchstaben Verlust vs. Vorvisite. Bestätigt den BCVA-basierten SHORTEN-Trigger.",
+        "saved": "Gespeichert",
+        "dirty": "Ungespeicherte Änderungen",
+        "unavailable": "Diese Visite hat noch keinen CRF-Datensatz. Bitte die NAMD_VISIT-CRF für diese Visite anlegen, bevor klinische Befunde erfasst werden."
+      },
       "overview": {
         "current": "Aktueller Status",
         "trend": "Flüssigkeitsverlauf",

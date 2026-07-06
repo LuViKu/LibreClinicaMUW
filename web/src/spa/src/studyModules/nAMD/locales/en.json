@@ -34,6 +34,16 @@
         "SRF": { "long": "[NEEDS_REVIEW] Subretinal fluid" },
         "PED": { "long": "[NEEDS_REVIEW] Pigment epithelial detachment" }
       },
+      "clinicalFlags": {
+        "title": "[NEEDS_REVIEW] Record clinical findings",
+        "hemorrhage": "[NEEDS_REVIEW] New retinal hemorrhage",
+        "hemorrhageHint": "[NEEDS_REVIEW] New hemorrhage on the current OCT. SHORTEN trigger.",
+        "bcvaAttr": "[NEEDS_REVIEW] BCVA loss attributable to nAMD",
+        "bcvaAttrHint": "[NEEDS_REVIEW] Clinical judgement on ≥ 5-letter loss vs prior visit. Confirms the BCVA-based SHORTEN trigger.",
+        "saved": "[NEEDS_REVIEW] Saved",
+        "dirty": "[NEEDS_REVIEW] Unsaved changes",
+        "unavailable": "[NEEDS_REVIEW] This visit has no CRF row yet. Create the NAMD_VISIT CRF for this visit before recording clinical findings."
+      },
       "overview": {
         "current": "[NEEDS_REVIEW] Current status",
         "trend": "[NEEDS_REVIEW] Fluid trend",

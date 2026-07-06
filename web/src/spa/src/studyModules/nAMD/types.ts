@@ -121,6 +121,14 @@ export interface NamdVisit {
    */
   eventCrfId: number | null
   /**
+   * 2026-07-06 — legacy `study_event.study_event_id` that anchors
+   * this visit. Independent of {@link eventCrfId} — a visit can
+   * exist without any CRF row (fresh scheduled visit). The clinical-
+   * flags write endpoint keys off this so it can create the NAMD_VISIT
+   * event_crf on demand when a physician records the first flag.
+   */
+  studyEventId: number | null
+  /**
    * 2026-06-30 — per-eye clinical-flag observations recorded by the
    * physician at this visit. Both default to false when no CRF row
    * was authored. The rule engine reads the eye matching
