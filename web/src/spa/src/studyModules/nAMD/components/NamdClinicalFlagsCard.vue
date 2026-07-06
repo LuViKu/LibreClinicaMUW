@@ -66,8 +66,14 @@ const dirty = computed(
      || localBcvaAttr.value !== props.bcvaAttributableToNamd,
 )
 
+// 2026-07-06 — treat 0 as "no CRF" the same as null; the backend
+// composable resolves a missing event_crf row to 0 (Integer default),
+// and POST /eventCrfs/0/items 500s with "No event_crf with id 0".
+const hasCrfRow = computed(
+  () => props.eventCrfId != null && props.eventCrfId > 0,
+)
 const canSave = computed(
-  () => props.eventCrfId != null && dirty.value && !saving.value,
+  () => hasCrfRow.value && dirty.value && !saving.value,
 )
 
 /**
@@ -113,7 +119,7 @@ async function save() {
       </span>
     </template>
 
-    <div v-if="eventCrfId == null" class="text-[12px] text-slate-500 italic">
+    <div v-if="!hasCrfRow" class="text-[12px] text-slate-500 italic">
       {{ t('studyModules.namd.clinicalFlags.unavailable') }}
     </div>
 
