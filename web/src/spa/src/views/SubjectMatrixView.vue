@@ -128,6 +128,16 @@ const eventColumns = computed(() => {
 /* Studien-Statistik modal — opens on the SideRail link. */
 const metricsModalOpen = ref(false)
 
+/**
+ * 2026-07-06 — Look up a subject's cell for a given event-column oid.
+ * Rendering the visit row via `v-for="col in eventColumns"` (union) +
+ * this lookup keeps every row the same width; without it, subjects
+ * with fewer scheduled visits produced short rows and the sticky
+ * `Öffnen` cell drifted left of the header's rightmost column.
+ */
+const eventCell = (subject: Subject, oid: string) =>
+  subject.events.find((e) => e.eventDefinitionOid === oid)
+
 const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'neutral' => {
   switch (status) {
     case 'signed':
@@ -548,20 +558,23 @@ watch(eventColumns, async (next, prev) => {
                 <td class="px-3 py-2 text-slate-600 font-mono text-xs border-t border-slate-100 whitespace-nowrap">{{ formatDate(subject.enrolledOn) }}</td>
 
                 <td
-                  v-for="cell in subject.events"
-                  :key="cell.eventDefinitionOid"
+                  v-for="col in eventColumns"
+                  :key="col.oid"
                   class="px-3 py-2 border-t border-slate-100"
                 >
-                  <div class="flex items-center justify-center gap-1.5">
-                    <StatusPill :variant="statusVariant(cell.status)">{{ statusLabel(cell.status) }}</StatusPill>
+                  <div v-if="eventCell(subject, col.oid)" class="flex items-center justify-center gap-1.5">
+                    <StatusPill :variant="statusVariant(eventCell(subject, col.oid)!.status)">
+                      {{ statusLabel(eventCell(subject, col.oid)!.status) }}
+                    </StatusPill>
                     <span
-                      v-if="cell.openQueries > 0"
+                      v-if="(eventCell(subject, col.oid)!.openQueries ?? 0) > 0"
                       class="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-1.5"
-                      :title="t('subjectMatrix.openQueriesTooltip', { count: cell.openQueries })"
+                      :title="t('subjectMatrix.openQueriesTooltip', { count: eventCell(subject, col.oid)!.openQueries })"
                     >
-                      {{ cell.openQueries }}
+                      {{ eventCell(subject, col.oid)!.openQueries }}
                     </span>
                   </div>
+                  <span v-else class="text-slate-300 text-center block">—</span>
                 </td>
 
                 <td class="px-3 py-2 border-t border-slate-100 whitespace-nowrap">
