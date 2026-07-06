@@ -23,6 +23,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Card from './primitives/Card.vue'
+import { apiPost } from '@/api/client'
 
 interface Props {
   /** event_crf_id for the NAMD_VISIT CRF at this visit. Save disabled if null. */
@@ -87,20 +88,10 @@ async function save() {
     [bcvaKey]: String(localBcvaAttr.value),
   }
   try {
-    const res = await fetch(`/pages/api/v1/eventCrfs/${props.eventCrfId}/items`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values }),
-    })
-    if (!res.ok) {
-      let msg = `HTTP ${res.status}`
-      try {
-        const payload = await res.json() as { message?: string }
-        if (payload.message) msg = payload.message
-      } catch { /* non-JSON */ }
-      throw new Error(msg)
-    }
+    // apiPost auto-prefixes the `/LibreClinica` context path. Raw
+    // `fetch('/pages/...')` misses the WAR prefix and 404s under both
+    // vite (which proxies /LibreClinica/*) and prod Tomcat.
+    await apiPost<void>(`/pages/api/v1/eventCrfs/${props.eventCrfId}/items`, { values })
     savedRecently.value = true
     emit('saved', {
       hemorrhage: localHemorrhage.value,
