@@ -1046,7 +1046,12 @@ export interface SubjectLabelAvailability {
  */
 function toStudySubjectOid(idOrOid: string): string {
   if (idOrOid.startsWith('SS_')) return idOrOid
-  return 'SS_' + idOrOid.replace(/[^A-Za-z0-9]/g, '')
+  // 2026-07-02 — must uppercase the sanitised tail. The legacy
+  // `StudySubjectDAO.create` OID generator upper-cases the label
+  // (`ris-demo-2` → `SS_RISDEMO2`); without matching here, subjects
+  // with lowercase labels 404 on every SPA lookup because `findByOid`
+  // is case-sensitive.
+  return 'SS_' + idOrOid.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 }
 
 /** Form payload from the Add Subject view. */

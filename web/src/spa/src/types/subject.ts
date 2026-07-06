@@ -70,6 +70,27 @@ export interface GroupAssignmentInput {
   groupClassId: number
   /** Null expresses the OPTIONAL "not-now" branch. */
   groupId: number | null
+  /**
+   * 2026-07-02 — optional randomization envelope. When present the
+   * SPA received these fields from a prior
+   * {@code POST /group-classes/{id}/randomize} response and asks the
+   * enrollment path to preserve the randomization audit trail on the
+   * newly-inserted row.
+   */
+  randomization?: GroupAssignmentRandomization | null
+}
+
+/**
+ * 2026-07-02 — round-trip payload for a randomized pick. Opaque to
+ * the SPA — the backend generated it via {@code SubjectRandomizationService};
+ * the SPA reflects it back into the enrollment POST so
+ * {@code SubjectGroupAssignmentService.reconcile} can persist
+ * {@code randomization_source} / {@code _seed} / {@code _meta}.
+ */
+export interface GroupAssignmentRandomization {
+  source: string
+  seed: string
+  meta?: string | null
 }
 
 /**

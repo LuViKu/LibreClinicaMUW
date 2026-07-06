@@ -2343,6 +2343,13 @@
       }
     }
   },
+  "subjectRandomize": {
+    "randomize": "Randomisieren",
+    "rolling": "Wird ausgewürfelt …",
+    "banner": "Zufällig zugewiesen · Seed {seed}… — Sie können manuell überschreiben.",
+    "overrideReasonLabel": "Grund für die Überschreibung",
+    "overrideReasonRequired": "Grund erforderlich, wenn eine Randomisierung überschrieben wird."
+  },
   "subjectGroupEdit": {
     "openButton": "bearbeiten",
     "title": "Studiengruppen bearbeiten",

@@ -1,0 +1,161 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-07-02 — Subject randomization at enrollment (v1 + v2a).
+
+        Enables RCT-flavoured studies to randomize new subjects into
+        arm-type group_class groups at enrollment time. Before this
+        migration:
+
+          * AddSubjectView deliberately stripped its group-class picker
+            because there was no clinically-credible allocation path;
+          * post-recruit assignments happened via
+            SubjectGroupEditDialog, introducing selection bias on any
+            RCT design (including the nAMD two-arm study under test).
+
+        This migration lays the DB foundation:
+
+          1. Extends {@code subject_group_map} with three columns
+             capturing the "how" of each assignment:
+               * randomization_source — enum-like text; MANUAL for
+                 direct picks, RANDOMIZED_UNIFORM / _WEIGHTED / _BLOCK
+                 / _STRATIFIED for the various pickers, SEALED_REVEAL
+                 for the DM-only reveal branch (v2d).
+               * randomization_seed — hex encoding of the seed used
+                 (32 random bytes → 64 hex chars). Null for MANUAL.
+               * randomization_meta — free-form JSON envelope so the
+                 v2 pickers can pack their side-channel state (ratio,
+                 block position, stratum, …) without further schema
+                 growth.
+
+          2. Extends {@code study_group} with {@code allocation_weight}
+             (v2a — allocation ratio). Defaults to 1 so existing rows
+             read as uniform 1:1 without editing.
+
+          3. Seeds two new audit_log_event_type rows:
+               * 125 = subject_randomized       — emitted by the
+                 SubjectsApiController enrollment path when a picker
+                 actually rolled the dice, alongside the existing DB
+                 trigger's generic insert-audit.
+               * 126 = subject_randomization_overridden — emitted by
+                 the PUT /groups path when SubjectGroupEditDialog
+                 overrides a previously-randomized row; the reason
+                 travels in reason_for_change.
+
+        The study_parameter `randomization` handle already exists (seeded
+        by the base OpenClinica schema with default 'disabled'); no new
+        parameter is added here — v1 flips the value to 'enabled' per
+        study to opt in.
+
+        ID allocation (continues prior runs):
+          * audit_log_event_type_id = 125, 126
+             (124 taken by treatment_decision_recorded from
+              lc-muw-2026-06-30-namd-clinical-flags)
+
+        Non-destructive: existing rows keep their current
+        randomization_source = NULL (semantically = MANUAL). Post-
+        migration writes prefer the explicit 'MANUAL' string; a
+        one-shot backfill sets NULL → 'MANUAL' so downstream code can
+        rely on the column being non-null.
+    -->
+
+    <changeSet id="2026-07-02-subject-group-map-randomization-cols" author="muw-ophthalmology">
+        <comment>Add randomization_source / _seed / _meta to subject_group_map.</comment>
+        <addColumn tableName="subject_group_map">
+            <column name="randomization_source" type="VARCHAR(32)"
+                    remarks="How this assignment was chosen: MANUAL (default) or one of RANDOMIZED_UNIFORM / _WEIGHTED / _BLOCK / _STRATIFIED / SEALED_REVEAL. See SubjectRandomizationService."/>
+            <column name="randomization_seed" type="VARCHAR(64)"
+                    remarks="Hex-encoded seed (32 bytes = 64 hex chars) used by the picker. Null for MANUAL."/>
+            <column name="randomization_meta" type="TEXT"
+                    remarks="JSON envelope for picker-specific metadata (allocation ratio, block position, stratum key, ...). Null when no picker-specific state applies."/>
+        </addColumn>
+        <sql splitStatements="false"><![CDATA[
+            -- Backfill: every pre-existing row was a manual pick (either
+            -- via AddNewSubjectServlet or the legacy admin update flow).
+            -- Mark them explicitly so downstream code can assume the
+            -- column is populated on every row it reads.
+            UPDATE subject_group_map SET randomization_source = 'MANUAL'
+             WHERE randomization_source IS NULL;
+        ]]></sql>
+        <rollback>
+            <dropColumn tableName="subject_group_map" columnName="randomization_meta"/>
+            <dropColumn tableName="subject_group_map" columnName="randomization_seed"/>
+            <dropColumn tableName="subject_group_map" columnName="randomization_source"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-07-02-study-group-allocation-weight" author="muw-ophthalmology">
+        <comment>v2a — per-group allocation weight for weighted-uniform randomization.</comment>
+        <addColumn tableName="study_group">
+            <column name="allocation_weight" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="study_group" columnName="allocation_weight"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Audit-event-type seed: SUBJECT_RANDOMIZED = 125.
+        Writer: SubjectsApiController.doCreatePersist (enrollment)
+        and SubjectsApiController.replaceGroups (post-recruit change)
+        when SubjectGroupAssignmentService.reconcile writes a row with
+        randomization_source != MANUAL.
+        audit_table = 'subject_group_map', entity_id = subject_group_map_id,
+        new_value = "class:<n>,group:<name>,source:<enum>,seed:<truncated>".
+    -->
+    <changeSet id="2026-07-02-audit-event-type-subject-randomized"
+               author="muw-ophthalmology" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 125;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="125"/>
+            <column name="name" value="subject_randomized"/>
+            <column name="display_name" value="Subject randomized into study group"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 125</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Audit-event-type seed: SUBJECT_RANDOMIZATION_OVERRIDDEN = 126.
+        Writer: SubjectsApiController.replaceGroups when a row whose
+        randomization_source != MANUAL gets a new group. The historical
+        randomization_source + seed on the OUTGOING row are preserved
+        (soft-deleted) so the trial-master file keeps the audit trail.
+        reason_for_change is populated from the SPA's RFC dialog.
+    -->
+    <changeSet id="2026-07-02-audit-event-type-subject-randomization-overridden"
+               author="muw-ophthalmology" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 126;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="126"/>
+            <column name="name" value="subject_randomization_overridden"/>
+            <column name="display_name" value="Randomization result overridden"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 126</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

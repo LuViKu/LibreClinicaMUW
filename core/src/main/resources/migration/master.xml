@@ -88,5 +88,6 @@
   <include  file="migration/lc-muw-2026-06-26-retinal-correction.xml"/>
   <include  file="migration/lc-muw-2026-06-28-seed-manual-accounts.xml"/>
   <include  file="migration/lc-muw-2026-06-30-namd-clinical-flags.xml"/>
+  <include  file="migration/lc-muw-2026-07-02-subject-randomization.xml"/>
 </databaseChangeLog>
 

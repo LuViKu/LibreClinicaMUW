@@ -59,11 +59,14 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
         // name varchar(255),
         // description varchar(1000),
         // study_group_class_id numeric,
+        // allocation_weight int (added 2026-07-02 —
+        //   lc-muw-2026-07-02-subject-randomization).
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);
         this.setTypeExpected(2, TypeNames.STRING);
         this.setTypeExpected(3, TypeNames.STRING);
         this.setTypeExpected(4, TypeNames.INT);
+        this.setTypeExpected(5, TypeNames.INT);
     }
 
     /**
@@ -77,7 +80,13 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
         eb.setName((String) hm.get("name"));
         eb.setDescription((String) hm.get("description"));
         eb.setStudyGroupClassId(((Integer) hm.get("study_group_class_id")).intValue());
-
+        // 2026-07-02 — v2a allocation weight. `SELECT *` queries pick it
+        // up transparently; queries that hand-list columns keep working
+        // because the fallback preserves the bean's default of 1.
+        Object aw = hm.get("allocation_weight");
+        if (aw instanceof Number) {
+            eb.setAllocationWeight(((Number) aw).intValue());
+        }
         return eb;
     }
 

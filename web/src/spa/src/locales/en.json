@@ -2341,6 +2341,13 @@
       }
     }
   },
+  "subjectRandomize": {
+    "randomize": "[NEEDS_REVIEW] Randomize",
+    "rolling": "[NEEDS_REVIEW] Rolling …",
+    "banner": "[NEEDS_REVIEW] Randomly assigned · seed {seed}… — you may override manually.",
+    "overrideReasonLabel": "[NEEDS_REVIEW] Reason for override",
+    "overrideReasonRequired": "[NEEDS_REVIEW] Reason required when overriding a randomization."
+  },
   "subjectGroupEdit": {
     "openButton": "[NEEDS_REVIEW] edit",
     "title": "[NEEDS_REVIEW] Edit study groups",
