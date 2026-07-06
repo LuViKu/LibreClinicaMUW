@@ -284,6 +284,17 @@ public class SubjectsApiController {
         // SPA passes `SS_<label>` by convention; when that OID misses (non-standard
         // OID), fall back to a label lookup in the active study.
         if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
+            // 2026-07-02 — the SPA's toStudySubjectOid used to preserve
+            // the label's case, but the DAO generator upper-cases at
+            // creation time (`ris-demo-2` → `SS_RISDEMO2`). Retry with
+            // upper-cased OID so any residual mixed-case caller lands
+            // on the row instead of 404ing.
+            StudySubjectBean upper = studySubjectDAO.findByOid(studySubjectOid.toUpperCase());
+            if (upper != null && upper.getId() != 0) {
+                ss = upper;
+            }
+        }
+        if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
             String label = studySubjectOid.startsWith("SS_")
                     ? studySubjectOid.substring(3) : studySubjectOid;
             StudySubjectBean fallback = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
