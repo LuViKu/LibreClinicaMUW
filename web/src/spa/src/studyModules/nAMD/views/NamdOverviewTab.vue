@@ -175,7 +175,7 @@ const crtDelta = computed<number | null>(() => {
            protocol. -->
       <NamdClinicalFlagsCard
         v-if="props.data.current"
-        :event-crf-id="props.data.current.eventCrfId ?? null"
+        :study-event-id="props.data.current.studyEventId ?? null"
         :eye="props.selectedEye"
         :hemorrhage="props.data.current.hemorrhage"
         :bcva-attributable-to-namd="props.data.current.bcvaAttributableToNamd"

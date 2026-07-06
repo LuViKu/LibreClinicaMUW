@@ -860,6 +860,212 @@ public class RetinalResultsApiController {
     }
 
     /* ====================================================================== */
+    /* POST /study-events/{studyEventId}/namd-clinical-flags                   */
+    /* Upsert the per-eye clinical-flag observations for a visit.              */
+    /* ====================================================================== */
+
+    /**
+     * 2026-07-06 — Persist the nAMD clinical-flag observations for one
+     * study_event. Fills the write-side gap of {@link #listNamdClinicalFlagsTimeline}:
+     * the GET timeline lets the rec engine consume the flags, but until
+     * this endpoint shipped nothing let the physician set them from the
+     * nAMD workspace UI.
+     *
+     * <p>Behaviour:
+     *
+     * <ol>
+     *   <li>Guards session + study visibility on the subject's study.</li>
+     *   <li>Finds an existing {@code event_crf} row for
+     *     {@code (study_event_id, F_NAMD_VISIT crf_version)}; if none,
+     *     creates one so a fresh visit can carry the flags without the
+     *     physician manually opening the CRF in the legacy UI first.</li>
+     *   <li>Upserts {@code item_data} for each supplied per-eye flag
+     *     (the request body carries {@code od} and/or {@code os}; either
+     *     or both may be omitted).</li>
+     * </ol>
+     *
+     * <p>Response returns the resolved {@code eventCrfId} so the SPA
+     * can update its local {@code NamdVisit.eventCrfId} without another
+     * roundtrip.
+     */
+    @PostMapping(path = "/study-events/{studyEventId:[0-9]+}/namd-clinical-flags",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> upsertNamdClinicalFlags(
+            @PathVariable("studyEventId") int studyEventId,
+            @RequestBody Map<String, Object> body,
+            HttpSession session) {
+        ResponseEntity<?> denied = guardSession(session);
+        if (denied != null) return denied;
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+
+            int studySubjectId;
+            int studyId;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT se.study_subject_id, ss.study_id "
+                            + "  FROM study_event se "
+                            + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                            + " WHERE se.study_event_id = ?")) {
+                ps.setInt(1, studyEventId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return ResponseEntity.status(404).body(Map.of(
+                                "message", "study_event " + studyEventId + " not found"));
+                    }
+                    studySubjectId = rs.getInt(1);
+                    studyId = rs.getInt(2);
+                }
+            }
+            ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+                    "study_event " + studyEventId + " is outside your site visibility");
+            if (visGuard != null) return visGuard;
+
+            // Resolve F_NAMD_VISIT crf_version_id. The demo seed ships
+            // exactly one version; production configurations may add
+            // more, in which case the latest wins.
+            int crfVersionId;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT cv.crf_version_id "
+                            + "  FROM crf_version cv "
+                            + "  JOIN crf c ON c.crf_id = cv.crf_id "
+                            + " WHERE c.oc_oid = 'F_NAMD_VISIT' "
+                            + " ORDER BY cv.crf_version_id DESC LIMIT 1")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return ResponseEntity.status(500).body(Map.of(
+                                "message", "F_NAMD_VISIT CRF version not found"));
+                    }
+                    crfVersionId = rs.getInt(1);
+                }
+            }
+
+            // Find or create the event_crf row for (study_event, crf_version).
+            Integer eventCrfId = null;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT event_crf_id FROM event_crf "
+                            + " WHERE study_event_id = ? AND crf_version_id = ? "
+                            + " LIMIT 1")) {
+                ps.setInt(1, studyEventId);
+                ps.setInt(2, crfVersionId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) eventCrfId = rs.getInt(1);
+                }
+            }
+            if (eventCrfId == null) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO event_crf ("
+                                + "  study_event_id, crf_version_id, "
+                                + "  status_id, completion_status_id, "
+                                + "  owner_id, date_created, "
+                                + "  study_subject_id, "
+                                + "  interviewer_name, date_interviewed, "
+                                + "  electronic_signature_status, sdv_status, "
+                                + "  old_status_id, sdv_update_id) "
+                                + "VALUES (?, ?, 1, 1, ?, now(), ?, '', NULL, false, false, 1, 0) "
+                                + "RETURNING event_crf_id")) {
+                    ps.setInt(1, studyEventId);
+                    ps.setInt(2, crfVersionId);
+                    ps.setInt(3, currentUser.getId());
+                    ps.setInt(4, studySubjectId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) throw new SQLException("INSERT event_crf returned no id");
+                        eventCrfId = rs.getInt(1);
+                    }
+                }
+            }
+
+            // Resolve item_ids for the four per-eye flag items on this CRF version.
+            Map<String, Integer> itemIds = new LinkedHashMap<>();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT i.name, i.item_id "
+                            + "  FROM item_form_metadata ifm "
+                            + "  JOIN item i ON i.item_id = ifm.item_id "
+                            + " WHERE ifm.crf_version_id = ? "
+                            + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE',"
+                            + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',"
+                            + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED')")) {
+                ps.setInt(1, crfVersionId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) itemIds.put(rs.getString(1), rs.getInt(2));
+                }
+            }
+
+            // Walk the body's per-eye maps + upsert each provided flag.
+            Map<String, Object> od = castMap(body.get("od"));
+            Map<String, Object> os = castMap(body.get("os"));
+            upsertFlag(c, itemIds, "NAMD_OD_NEW_HEMORRHAGE", od, "hemorrhage",
+                    eventCrfId, currentUser.getId());
+            upsertFlag(c, itemIds, "NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED", od,
+                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
+            upsertFlag(c, itemIds, "NAMD_OS_NEW_HEMORRHAGE", os, "hemorrhage",
+                    eventCrfId, currentUser.getId());
+            upsertFlag(c, itemIds, "NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED", os,
+                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
+
+            c.commit();
+
+            LOG.info("nAMD clinical flags saved: study_event={} event_crf={} by user={}",
+                    studyEventId, eventCrfId, currentUser.getName());
+
+            return ResponseEntity.ok(Map.of(
+                    "studyEventId", studyEventId,
+                    "eventCrfId", eventCrfId
+            ));
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to upsert nAMD clinical flags for study_event {}: {}",
+                    studyEventId, sqlEx.getMessage(), sqlEx);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to save nAMD clinical flags: " + sqlEx.getMessage()));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object o) {
+        return o instanceof Map ? (Map<String, Object>) o : Map.of();
+    }
+
+    /**
+     * Upsert one item_data row for the given flag. The uniqueness
+     * constraint {@code (item_id, event_crf_id, ordinal)} lets us do
+     * this in one statement via ON CONFLICT; ordinal is fixed at 1
+     * for these non-repeating items.
+     *
+     * <p>Skips silently when the CRF version doesn't carry that item
+     * (defensive — production installs may drift from the demo seed).
+     */
+    private static void upsertFlag(Connection c, Map<String, Integer> itemIds,
+                                   String itemName, Map<String, Object> eyeBody,
+                                   String bodyKey, int eventCrfId, int userId) throws SQLException {
+        Integer itemId = itemIds.get(itemName);
+        if (itemId == null) return;
+        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return;
+        Object raw = eyeBody.get(bodyKey);
+        String value = raw instanceof Boolean ? String.valueOf(raw) : String.valueOf(raw);
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO item_data ("
+                        + "  item_id, event_crf_id, status_id, value, "
+                        + "  date_created, owner_id, ordinal, deleted) "
+                        + "VALUES (?, ?, 1, ?, now(), ?, 1, false) "
+                        + "ON CONFLICT (item_id, event_crf_id, ordinal) DO UPDATE "
+                        + "SET value = EXCLUDED.value, "
+                        + "    date_updated = now(), "
+                        + "    update_id = EXCLUDED.owner_id, "
+                        + "    deleted = false")) {
+            ps.setInt(1, itemId);
+            ps.setInt(2, eventCrfId);
+            ps.setString(3, value);
+            ps.setInt(4, userId);
+            ps.executeUpdate();
+        }
+    }
+
+    /* ====================================================================== */
     /* GET /study-subjects/{studySubjectId}/crt-timeline                       */
     /* central 1 mm retinal thickness                                          */
     /* ====================================================================== */

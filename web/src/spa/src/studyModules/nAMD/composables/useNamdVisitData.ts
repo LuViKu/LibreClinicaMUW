@@ -129,14 +129,14 @@ function buildMockData(): NamdWorkspaceData {
     regimen: 'Treat-and-Extend · Aflibercept',
   }
   const visits: NamdVisit[] = [
-    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
-    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
   ]
   const current = visits[visits.length - 1]!
   const prev = visits[visits.length - 2]!
@@ -238,6 +238,10 @@ function fluidJobToVisit(
     // carry it). Falls back to null for parked jobs / detail-fetch
     // failures.
     eventCrfId: detail?.eventCrfId ?? null,
+    // 2026-07-06 — study_event.study_event_id propagated from the
+    // job summary. Powers the clinical-flags write endpoint's
+    // event_crf-on-demand path.
+    studyEventId: summary.studyEventId ?? null,
     // 2026-06-30 — clinical-flag observations from the new
     // /namd-clinical-flags endpoint. Default false when the timeline
     // row hasn't surfaced yet (subject has no flags written, or

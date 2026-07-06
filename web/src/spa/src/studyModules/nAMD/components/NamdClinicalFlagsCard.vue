@@ -26,8 +26,13 @@ import Card from './primitives/Card.vue'
 import { apiPost } from '@/api/client'
 
 interface Props {
-  /** event_crf_id for the NAMD_VISIT CRF at this visit. Save disabled if null. */
-  eventCrfId: number | null
+  /**
+   * study_event.study_event_id for the visit. Drives the write —
+   * the backend creates the NAMD_VISIT event_crf on demand when
+   * none exists, so we key off the study_event, not the event_crf.
+   * Save disabled if null (fresh subject with no scheduled events).
+   */
+  studyEventId: number | null
   /** Currently-viewed eye — determines which per-eye item names to write. */
   eye: 'OD' | 'OS'
   /** Current in-memory flag values (from useNamdVisitData → props.data.current). */
@@ -52,7 +57,7 @@ const saveError = ref<string | null>(null)
 // switch, refresh after save). Without this the toggles would freeze
 // on the first-mount value.
 watch(
-  () => [props.hemorrhage, props.bcvaAttributableToNamd, props.eye, props.eventCrfId] as const,
+  () => [props.hemorrhage, props.bcvaAttributableToNamd, props.eye, props.studyEventId] as const,
   ([nextHem, nextBcva]) => {
     localHemorrhage.value = nextHem
     localBcvaAttr.value = nextBcva
@@ -66,14 +71,14 @@ const dirty = computed(
      || localBcvaAttr.value !== props.bcvaAttributableToNamd,
 )
 
-// 2026-07-06 — treat 0 as "no CRF" the same as null; the backend
-// composable resolves a missing event_crf row to 0 (Integer default),
-// and POST /eventCrfs/0/items 500s with "No event_crf with id 0".
-const hasCrfRow = computed(
-  () => props.eventCrfId != null && props.eventCrfId > 0,
+// 2026-07-06 — treat 0 as "no event" the same as null. Backend
+// resolves the NAMD_VISIT event_crf on demand, so the presence of a
+// study_event id is all we need.
+const hasEvent = computed(
+  () => props.studyEventId != null && props.studyEventId > 0,
 )
 const canSave = computed(
-  () => hasCrfRow.value && dirty.value && !saving.value,
+  () => hasEvent.value && dirty.value && !saving.value,
 )
 
 /**
@@ -84,20 +89,28 @@ const canSave = computed(
  * the read endpoint accepts either literal, cf. its truthy check).
  */
 async function save() {
-  if (!canSave.value || props.eventCrfId == null) return
+  if (!canSave.value || props.studyEventId == null) return
   saving.value = true
   saveError.value = null
-  const hemKey = `I_NAMD_${props.eye}_NEW_HEMORRHAGE`
-  const bcvaKey = `I_NAMD_${props.eye}_BCVA_LOSS_NAMD_ATTRIBUTED`
-  const values: Record<string, string> = {
-    [hemKey]: String(localHemorrhage.value),
-    [bcvaKey]: String(localBcvaAttr.value),
+  const eyeBody: Record<string, boolean> = {
+    hemorrhage: localHemorrhage.value,
+    bcvaLossAttributedToNamd: localBcvaAttr.value,
   }
+  const body =
+    props.eye === 'OD'
+      ? { od: eyeBody }
+      : { os: eyeBody }
   try {
-    // apiPost auto-prefixes the `/LibreClinica` context path. Raw
-    // `fetch('/pages/...')` misses the WAR prefix and 404s under both
-    // vite (which proxies /LibreClinica/*) and prod Tomcat.
-    await apiPost<void>(`/pages/api/v1/eventCrfs/${props.eventCrfId}/items`, { values })
+    // POST /study-events/{id}/namd-clinical-flags — the endpoint
+    // ensures the NAMD_VISIT event_crf exists (creating one if the
+    // physician is entering flags before any legacy CRF was opened)
+    // + upserts item_data for the four per-eye flag items. Returns
+    // the resolved eventCrfId so the parent can splice it into its
+    // local visit state without a full refresh.
+    await apiPost<{ studyEventId: number; eventCrfId: number }>(
+      `/pages/api/v1/study-events/${props.studyEventId}/namd-clinical-flags`,
+      body,
+    )
     savedRecently.value = true
     emit('saved', {
       hemorrhage: localHemorrhage.value,
@@ -119,7 +132,7 @@ async function save() {
       </span>
     </template>
 
-    <div v-if="!hasCrfRow" class="text-[12px] text-slate-500 italic">
+    <div v-if="!hasEvent" class="text-[12px] text-slate-500 italic">
       {{ t('studyModules.namd.clinicalFlags.unavailable') }}
     </div>
 
