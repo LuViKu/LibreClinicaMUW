@@ -25,7 +25,8 @@ jobs:
       matrix:
         # Phase B.1: single JDK 21 entry matching the Dockerfile builder + runtime
         # (maven:3-eclipse-temurin-21 + tomcat:10-jdk21 since Phase B.6).
-        java: ['21']
+        # Upgraded to JDK 25 (latest LTS) in appmod/java-upgrade-20260706175956.
+        java: ['25']
     steps:
       - uses: actions/checkout@v4
 
@@ -73,7 +74,7 @@ jobs:
         run: node_modules/.bin/vitest run --reporter=basic
 
       - name: Upload WAR artifacts
-        if: matrix.java == '21' && success()
+        if: matrix.java == '25' && success()
         uses: actions/upload-artifact@v4
         with:
           name: libreclinica-wars
@@ -96,7 +97,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload JaCoCo coverage reports
-        if: matrix.java == '21' && always()
+        if: matrix.java == '25' && always()
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-coverage-jdk${{ matrix.java }}
@@ -107,7 +108,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Surface coverage summary in job log
-        if: matrix.java == '21' && always()
+        if: matrix.java == '25' && always()
         run: |
           set +e
           for csv in $(find . -path '*/target/site/jacoco/jacoco.csv' 2>/dev/null); do
@@ -157,7 +158,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: maven
 
       - name: Maven verify (integration-tests profile)
