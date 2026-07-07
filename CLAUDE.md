@@ -39,7 +39,7 @@ docker run --rm \
   -v "$(pwd)":/app \
   -v "$(pwd)/.m2-cache":/root/.m2 \
   -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -DskipTests=true -ntp clean compile
 ```
 
@@ -58,7 +58,7 @@ docker run -d --rm --name lc-test-pg --network lc-test-net \
 
 docker run --rm --network lc-test-net \
   -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -ntp -pl core -am -P integration-tests -Ddb.test=lc-test-pg test
 
 docker stop lc-test-pg && docker network rm lc-test-net

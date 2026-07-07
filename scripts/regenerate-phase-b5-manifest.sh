@@ -64,7 +64,7 @@ docker run --rm \
   -v "${REPO_ROOT}":/app \
   -v "${M2_CACHE}":/root/.m2 \
   -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -DskipTests=true -ntp -pl core -am clean compile \
   > "${BUILD_LOG}" 2>&1
 

@@ -84,7 +84,7 @@ checkout):
 ```bash
 docker run --rm \
   -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -pl core liquibase:status \
       -Dconfig.file=docker/config/datainfo.properties
 ```
@@ -173,7 +173,7 @@ anything:
 ```bash
 docker run --rm \
   -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -pl core liquibase:validate \
       -Dconfig.file=docker/config/datainfo.properties
 ```
