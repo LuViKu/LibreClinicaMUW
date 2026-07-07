@@ -1377,6 +1377,21 @@
 			        		</goals>
 			        	</execution>
 			        </executions>
+			        <!-- Java 21 -> 25 (appmod/java-upgrade): analyzer 1.15.0 bundles
+			             ASM 9.7, which cannot read class file major version 69 (JDK 25)
+			             and aborts analyze-only with "Unsupported class file major
+			             version 69". Override the transitive ASM (the analyzer uses
+			             only the core asm artifact) to a JDK-25-aware release so the
+			             analyze guard keeps working. The Dockerfile build sidesteps
+			             analyze via -Dmdep.analyze.skip=true; CI's `mvn package` runs
+			             it, so this override is what unblocks CI. -->
+			        <dependencies>
+			        	<dependency>
+			        		<groupId>org.ow2.asm</groupId>
+			        		<artifactId>asm</artifactId>
+			        		<version>9.10.1</version>
+			        	</dependency>
+			        </dependencies>
 			        <configuration>
 			        	<failOnWarning>true</failOnWarning>
 			        	<ignoreNonCompile>true</ignoreNonCompile>
