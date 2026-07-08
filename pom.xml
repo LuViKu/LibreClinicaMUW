@@ -647,10 +647,22 @@
 	    		<version>3.0.0</version>
 	    		<scope>runtime</scope>
 			</dependency>
-			<!-- LIQUIBASE: version pin removed — Spring Boot 3.5.0 BOM manages
-			     4.31.1 which fixes CVE-2022-0839 (XXE in XMLChangeLogSAXParser,
-			     CRITICAL). Liquibase 4.x is API-compatible with 3.x changelogs
-			     and SpringLiquibase. liquibase-slf4j 3.0.0 targets Liquibase 4.x. -->
+			<!-- LIQUIBASE: keep pinned to 3.6.3. Do NOT drop this pin to let
+			     Boot's BOM pull Liquibase 4.x — 4.x removed the legacy
+			     `modifyColumn` change type still used by the heritage changelog
+			     migration/2.5/changeLogCreateTables.xml (which the checksum rule
+			     forbids editing), so 4.x cannot parse it and the Spring context
+			     fails to start (integration + compose-smoke go red; unit tests
+			     do not catch it). That un-pin was tried in 1e47ca099 and reverted
+			     here. CVE-2022-0839 (XXE in XMLChangeLogSAXParser, CRITICAL; fixed
+			     only in Liquibase 4.8.0+) thus stays open on 3.6.3 — low practical
+			     risk here (changelogs are bundled in the WAR, not attacker-
+			     controlled). Liquibase 4 + this CVE are deferred to Phase B.5. -->
+			<dependency>
+				<groupId>org.liquibase</groupId>
+				<artifactId>liquibase-core</artifactId>
+				<version>3.6.3</version>
+			</dependency>
 			<!-- LOGBACK -->
 			<dependency>
 				<groupId>ch.qos.logback</groupId>
