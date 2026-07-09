@@ -657,7 +657,7 @@
 			     here. CVE-2022-0839 (XXE in XMLChangeLogSAXParser, CRITICAL; fixed
 			     only in Liquibase 4.8.0+) thus stays open on 3.6.3 — low practical
 			     risk here (changelogs are bundled in the WAR, not attacker-
-			     controlled). Liquibase 4 + this CVE are deferred to Phase B.5. -->
+			     controlled). Liquibase 4 + this CVE are deferred to Phase D (D-Libs). -->
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>

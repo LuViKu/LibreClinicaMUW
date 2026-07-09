@@ -1,8 +1,8 @@
 # LibreClinica MUW — Backend Modernization Plan
 
 **Owner:** Department of Ophthalmology and Optometry, Medical University of Vienna
-**Status (last refreshed 2026-06-28):** **Phases 0, A, B (all sub-phases), C, D-Sec closed.** Phase D-Libs and Phase E remain active. The 1.5.0-beta.4-muw release (lc-develop @ `06509d24d`, 2026-06-26) ships on the modernised stack: JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + JSP/JSTL Jakarta taglibs + bcrypt + reverse-proxy SSO + `at.ac.meduniwien.ophthalmology.libreclinica.*` package namespace.
-**Target:** Spring Boot 3 + Java 21 + Jakarta EE + library replacement (full re-platform)
+**Status (last refreshed 2026-07-09):** **Phases 0, A, B (all sub-phases), C, D-Sec closed.** Phase D-Libs and Phase E remain active. The 1.5.0-beta.4-muw release (lc-develop @ `06509d24d`, 2026-06-26) shipped on the modernised stack: JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + JSP/JSTL Jakarta taglibs + bcrypt + reverse-proxy SSO + `at.ac.meduniwien.ophthalmology.libreclinica.*` package namespace. **Post-B runtime bump (2026-07-09, heading to 1.5.0-beta.5-muw): lc-develop now builds + runs on JDK 25 (latest LTS)** — Temurin 25 across the Dockerfile builder + runtime and all CI workflows, with `maven.compiler.release=25`. Two Java-25 CI breakages were fixed in the same pass: `maven-dependency-plugin`'s ASM was pinned to 9.10.1 (so `analyze-only` can read class-file major version 69), and `liquibase-core` was re-pinned to 3.6.3 (Liquibase 4.x drops the heritage `modifyColumn` change type used by `migration/2.5/changeLogCreateTables.xml`; the 4.x upgrade + CVE-2022-0839 remain deferred to Phase D-Libs).
+**Target:** Spring Boot 3 + Java 21 → 25 (LTS) + Jakarta EE + library replacement (full re-platform)
 **Posture:** **Released, independent fork — no upstream sync** (as of 2026-06-26; supersedes the original Eclipse-Transformer cherry-pick framing in DR-003). The fork no longer merges or cherry-picks from upstream LibreClinica.
 **Estimated effort (original 2026-05-28):** 12–18 months · 2–3 developers FTE. **Actual to date:** ~5 weeks of one-developer-with-AI-assist (2026-05-28 → 2026-06-28) to ship Phases 0 + A + B + C + D-Sec to lc-develop. The remaining D-Libs + Phase E work is incremental + parallelisable.
 
@@ -20,7 +20,7 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 
 | Layer | From | To | Phase |
 |-------|------|----|----|
-| Java | 11 | **21 (LTS)** | B |
+| Java | 11 | **21 (B) → 25 (LTS, 2026-07)** | B |
 | Spring Framework | 5.1.4 | **6.1+** | B |
 | Spring Boot | n/a | **3.x** | C |
 | Spring Security | 5.1.4 | **6.x** | B |
