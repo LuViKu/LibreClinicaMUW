@@ -101,7 +101,14 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  base: '/LibreClinica/app/',
+  // 2026-07-06 — SPA served at the clean site root behind the nginx reverse
+  // proxy (ecrf.augen.meduniwien.ac.at/login instead of /LibreClinica/app/login).
+  // The built assets reference '/assets/…'; the WAR still physically serves
+  // them under /LibreClinica/app/, so nginx maps '/assets/' → the WAR path
+  // (deploy/nginx/ecrf.conf). NOTE: the app is now only reachable THROUGH the
+  // proxy — a direct :8080/LibreClinica/app load can't resolve the root-based
+  // asset URLs. See deploy/nginx/README.md.
+  base: '/',
   build: {
     outDir: fileURLToPath(new URL('../main/webapp/app', import.meta.url)),
     emptyOutDir: true,

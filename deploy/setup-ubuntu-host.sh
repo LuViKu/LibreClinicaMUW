@@ -89,6 +89,11 @@ set -euo pipefail
 : "${LIBRECLINICA_RETINAL_PREPROCESS_URL:=http://retinal-inference:8000}"
 : "${LIBRECLINICA_RETINAL_PREPROCESS_TOKEN:=cb2e7d0edd4d54cd8af46bbef78755a7}"
 
+# Public base URL (datainfo `sysURL`) behind the nginx TLS reverse proxy — used
+# in system emails + absolute links. The seeded config ships the dev default
+# (http://localhost:8080/...); this stamps the institutional https URL.
+: "${LIBRECLINICA_SYS_URL:=https://ecrf.augen.meduniwien.ac.at/LibreClinica/MainMenu}"
+
 INSTALL_PREFIX=/opt/libreclinica
 CONFIG_DIR=/etc/libreclinica
 ENV_FILE=${CONFIG_DIR}/env
@@ -563,6 +568,17 @@ if [[ -f "$DATAINFO_FILE" ]]; then
   else
     log "datainfo.properties retinal pipeline already configured (remotePushUrl off the dev default) — leaving as-is"
   fi
+
+  # Public base URL (sysURL) — system emails + absolute links. The seeded
+  # config ships the dev default (localhost:8080); stamp the public https URL
+  # behind the reverse proxy. Guarded on the localhost default so operator
+  # edits survive a re-run.
+  if grep -q '^sysURL=http://localhost:8080' "$DATAINFO_FILE"; then
+    sed -i "s|^sysURL=.*|sysURL=${LIBRECLINICA_SYS_URL}|" "$DATAINFO_FILE"
+    log "Configured datainfo.properties sysURL=${LIBRECLINICA_SYS_URL}"
+  else
+    log "datainfo.properties sysURL already configured (off the localhost default) — leaving as-is"
+  fi
 else
   warn "  $DATAINFO_FILE not found — could not sync dbPass / mail config"
 fi
@@ -594,7 +610,7 @@ EnvironmentFile=${ENV_FILE}
 # Bring up only the production-relevant services. mailcrab is excluded
 # because production SMTP is the institutional MUW relay (configure via
 # ${RUNTIME_CONFIG}/datainfo.properties).
-ExecStart=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml up --remove-orphans -d libreclinica db retinal-inference
+ExecStart=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml up --remove-orphans -d libreclinica db retinal-inference nginx
 ExecStop=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml down
 TimeoutStartSec=900
 

@@ -114,6 +114,16 @@ RUN set -eux; \
         '</html>' \
         > /usr/local/tomcat/webapps/ROOT/index.html;
 
+# 2026-07-06 — honour the reverse proxy's forwarded headers. Behind the nginx
+# TLS terminator (deploy/nginx/ecrf.conf) Tomcat must see the real client
+# scheme/host/IP so it treats the request as https (Secure session cookie,
+# correct absolute redirects, request.isSecure()). RemoteIpValve reads
+# X-Forwarded-For + X-Forwarded-Proto; its default internalProxies regex
+# trusts RFC1918 + loopback, which covers the compose-network nginx sidecar.
+RUN sed -i \
+    's#</Context>#  <Valve className="org.apache.catalina.valves.RemoteIpValve" remoteIpHeader="X-Forwarded-For" protocolHeader="X-Forwarded-Proto" protocolHeaderHttpsValue="https" />\n</Context>#' \
+    /usr/local/tomcat/conf/context.xml
+
 # set up volumes for data and logs
 VOLUME \
     /usr/local/tomcat/libreclinica.data \
