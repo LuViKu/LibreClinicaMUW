@@ -5,7 +5,7 @@
 	<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 	<artifactId>LibreClinica</artifactId>
 	<packaging>pom</packaging>
-	<version>1.5.0-beta.5-muw</version>
+	<version>1.5.0-beta.6-muw</version>
 	<name>LibreClinica MUW Ophthalmology</name>
 	<description>Electronic Data Capture (EDC) for clinical trials — institutional build of LibreClinica for the Department of Ophthalmology and Optometry, Medical University of Vienna.</description>
 	<organization>
