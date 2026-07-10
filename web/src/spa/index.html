@@ -19,18 +19,15 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#111d4e" />
     <!--
-      nAMD workspace (and Phase E design system at large) — load MUW
-      typeface stack from Google Fonts. Newsreader ≈ MUW Danton serif
-      for branding accents; Inter ≈ MUW Akkurat Pro for body / UI;
-      JetBrains Mono for OIDs + SQL-like keys. style.css's @theme block
-      already references these family names via --font-{serif,sans,mono}.
+      2026-07-06 — MUW typeface stack (Newsreader ≈ Danton serif for
+      branding, Inter ≈ Akkurat Pro for UI, JetBrains Mono for OIDs)
+      is bundled at build time via @fontsource-variable/* — see
+      src/main.ts. Clinical-environment requirement: no runtime CDN
+      fetches so we don't leak the operator's IP/Referer to third
+      parties and keep the SPA typography working on CDN-blocked
+      MUW networks. style.css's @font-face aliases pick the bundled
+      files up automatically.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&display=swap"
-    />
   </head>
   <body>
     <div id="app"></div>
