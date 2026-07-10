@@ -29,6 +29,12 @@ set -euo pipefail
 
 MODE="${1:-background}"
 
+# systemd --user runs services with a minimal environment in which $USER is
+# usually NOT set. Combined with `set -u` that aborts the script before it does
+# anything — and only under systemd, not in an interactive shell. Derive it.
+: "${USER:=$(id -un)}"
+export USER
+
 # ----------------------------- paths ------------------------------------------
 : "${RI_HOME:=/home/optima/$USER}"                 # persistent, user-owned assets
 : "${RI_SHARED:=/home/optima/octreader}"           # shared read-only model tree
@@ -53,7 +59,15 @@ export RETINAL_INFERENCE_APPTAINER_USE_SLURM=false
 export RETINAL_INFERENCE_APPTAINER_GPU_DEVICE="${RETINAL_INFERENCE_APPTAINER_GPU_DEVICE:-0}"
 
 # Shared secret must match core.retinalInference.remotePushToken on the app VM.
-: "${RETINAL_INFERENCE_AUTH_TOKEN:?set RETINAL_INFERENCE_AUTH_TOKEN (must match the app VM's remotePushToken)}"
+#
+# NB: do NOT fold this into "${VAR:?message}". bash parses quote characters
+# inside the `:?` word even when the whole expansion is double-quoted, so an
+# apostrophe there (e.g. "the app VM's token") silently opens a single-quoted
+# string that never closes — and the script then fails to parse dozens of lines
+# later, at whatever the next `(` happens to be.
+if [ -z "${RETINAL_INFERENCE_AUTH_TOKEN:-}" ]; then
+  die "set RETINAL_INFERENCE_AUTH_TOKEN — it must match the app VM's core.retinalInference.remotePushToken"
+fi
 export RETINAL_INFERENCE_AUTH_TOKEN
 
 # fluid / onl / pr — apptainer .sif dispatch
