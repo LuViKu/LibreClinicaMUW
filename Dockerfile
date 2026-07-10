@@ -1,4 +1,4 @@
-FROM docker.io/library/maven:3-eclipse-temurin-21 AS builder
+FROM docker.io/library/maven:3-eclipse-temurin-25 AS builder
 
 # SKIP_SPA gates the frontend-maven-plugin SPA build (web/pom.xml:23
 # `<skipSpa>false</skipSpa>` is the maven default). Default `true` here
@@ -64,7 +64,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
 
 ############################################################
-FROM tomcat:10-jdk21
+FROM tomcat:10.1-jdk25-temurin
 
 # Phase B.1 JDK 21 baseline: legacy Spring/Hibernate reflection needs java.base
 # opens, Castor 1.4.1's BaseXercesJDK5Serializer touches an internal JDK class
@@ -114,6 +114,16 @@ RUN set -eux; \
         '</html>' \
         > /usr/local/tomcat/webapps/ROOT/index.html;
 
+# 2026-07-06 — honour the reverse proxy's forwarded headers. Behind the nginx
+# TLS terminator (deploy/nginx/ecrf.conf) Tomcat must see the real client
+# scheme/host/IP so it treats the request as https (Secure session cookie,
+# correct absolute redirects, request.isSecure()). RemoteIpValve reads
+# X-Forwarded-For + X-Forwarded-Proto; its default internalProxies regex
+# trusts RFC1918 + loopback, which covers the compose-network nginx sidecar.
+RUN sed -i \
+    's#</Context>#  <Valve className="org.apache.catalina.valves.RemoteIpValve" remoteIpHeader="X-Forwarded-For" protocolHeader="X-Forwarded-Proto" protocolHeaderHttpsValue="https" />\n</Context>#' \
+    /usr/local/tomcat/conf/context.xml
+
 # set up volumes for data and logs
 VOLUME \
     /usr/local/tomcat/libreclinica.data \
@@ -142,7 +152,7 @@ COPY --from=builder \
 # negatives on a cold start. interval/timeout/retries match the
 # retinal-inference sidecar (retinal-inference/Dockerfile:12-13).
 #
-# curl is preinstalled in the tomcat:10-jdk21 (Debian) base — verified
+# curl is preinstalled in the tomcat:10.1-jdk25-temurin (Debian) base — verified
 # 2026-06-10 — so no apt-get layer needed.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD curl -fsS http://localhost:8080/LibreClinica/actuator/health || exit 1

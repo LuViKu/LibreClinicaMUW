@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-06-30 — nAMD two-arm RCT scope. Extends the F_NAMD_VISIT
+        CRF (crf_id=3, crf_version_id=21) with:
+
+          1. A new S_NAMD_CLINICAL_FLAGS section (id=12) carrying
+             four per-eye booleans the rule engine consumes:
+               * NAMD_OD_NEW_HEMORRHAGE, NAMD_OS_NEW_HEMORRHAGE
+               * NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED,
+                 NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED
+          2. Eight new items on the existing S_NAMD_DECISION section
+             (id=9) capturing the doctor's treatment decision +
+             rationale code + free-text + clinical date + the AI
+             recommendation snapshot at decision time:
+               * NAMD_DECISION_ACTION (radio TREAT/OBSERVE)
+               * NAMD_DECISION_DRUG (radio Bevacizumab/Aflibercept/
+                 Faricimab; show-when ACTION=TREAT)
+               * NAMD_DECISION_INTERVAL_WEEKS (int)
+               * NAMD_DECISION_RATIONALE_CODE (single-select; one
+                 union response set spans the study-arm-override
+                 preset + the control-arm preset; SPA filters the
+                 visible options by subject arm)
+               * NAMD_DECISION_RATIONALE_OTHER (text; show-when
+                 RATIONALE_CODE=OTHER)
+               * NAMD_DECISION_DATE (DATE; optional clinical date
+                 for retrospective backfill per
+                 project_retrospective_data_phase memory)
+               * NAMD_AI_REC_SNAPSHOT (text; JSON of
+                 {rec, intervalWeeks, triggersFired[]})
+               * NAMD_AI_AGREED (BL; computed SPA-side; true when
+                 chosen action + interval match the AI rec)
+
+        Plus one new audit_log_event_type id=124,
+        treatment_decision_recorded — emitted by EventCrfsApiController
+        when any of the seven decision items lands. See the plan
+        at /Users/lukas/.claude/plans/robust-jumping-eich.md.
+
+        ID allocation (continues prior runs):
+          - section_id            = 12         (11 taken by AI section)
+          - item_id               = 62..73     (61 taken by CRT items)
+          - item_form_metadata_id = 39..50     (38 taken)
+          - response_set_id       = 15..18     (14 taken)
+          - audit_log_event_type_id = 124      (123 taken by retinal_segmentation_corrected)
+
+        Context: "demo" matches the rest of the F_NAMD_VISIT seeding.
+        Production institutional deployments opt in by re-running the
+        same changesets under the production context — same convention
+        as the existing NAMD seeds.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-30-namd-clinical-flags-section" context="demo">
+        <comment>S_NAMD_CLINICAL_FLAGS section (id=12) for the per-eye observation booleans.</comment>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="12"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_NAMD_CLINICAL_FLAGS"/>
+            <column name="title" value="Clinical observation flags"/>
+            <column name="instructions" value="Per-eye observation flags that feed the treat-and-extend rule engine. Record whether a new retinal hemorrhage was seen on the current OCT and whether any BCVA drop is clinically attributable to nAMD activity (vs cataract, dry eye, etc)."/>
+            <column name="ordinal" valueNumeric="5"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <rollback>
+            <delete tableName="section">
+                <where>section_id = 12</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-30-namd-clinical-flag-items" context="demo">
+        <comment>Four per-eye clinical-flag items on section 12 (BL data type).</comment>
+
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="62"/>
+            <column name="name" value="NAMD_OD_NEW_HEMORRHAGE"/>
+            <column name="description" value="New retinal hemorrhage observed on the current OCT, right eye (OD). One of the SHORTEN-interval triggers per the nAMD treat-and-extend protocol."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="1"/> <!-- BL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_OD_NEW_HEMORRHAGE"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="63"/>
+            <column name="name" value="NAMD_OS_NEW_HEMORRHAGE"/>
+            <column name="description" value="New retinal hemorrhage observed on the current OCT, left eye (OS)."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_OS_NEW_HEMORRHAGE"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="64"/>
+            <column name="name" value="NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED"/>
+            <column name="description" value="Visual-acuity loss (≥5 letters vs the prior visit) clinically attributable to nAMD activity, right eye (OD). The rule engine treats this as a SHORTEN trigger when the BCVA drop is also observed in the BCVA timeline."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="65"/>
+            <column name="name" value="NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED"/>
+            <column name="description" value="Visual-acuity loss clinically attributable to nAMD activity, left eye (OS)."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED"/>
+        </insert>
+
+        <!-- response_set_id=15 — yes/no radio for the BL items. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="15"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="namd_yes_no"/>
+            <column name="options_text" value="No,Yes"/>
+            <column name="options_values" value="false,true"/>
+        </insert>
+
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="39"/>
+            <column name="item_id" valueNumeric="62"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="12"/>
+            <column name="response_set_id" valueNumeric="15"/>
+            <column name="left_item_text" value="Right eye (OD) — new retinal hemorrhage"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="40"/>
+            <column name="item_id" valueNumeric="63"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="12"/>
+            <column name="response_set_id" valueNumeric="15"/>
+            <column name="left_item_text" value="Left eye (OS) — new retinal hemorrhage"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="41"/>
+            <column name="item_id" valueNumeric="64"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="12"/>
+            <column name="response_set_id" valueNumeric="15"/>
+            <column name="left_item_text" value="Right eye (OD) — BCVA loss attributable to nAMD"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="42"/>
+            <column name="item_id" valueNumeric="65"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="12"/>
+            <column name="response_set_id" valueNumeric="15"/>
+            <column name="left_item_text" value="Left eye (OS) — BCVA loss attributable to nAMD"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="item_form_metadata">
+                <where>item_form_metadata_id IN (39, 40, 41, 42)</where>
+            </delete>
+            <delete tableName="response_set">
+                <where>response_set_id = 15</where>
+            </delete>
+            <delete tableName="item">
+                <where>item_id IN (62, 63, 64, 65)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-30-namd-decision-items" context="demo">
+        <comment>Seven decision items on the existing S_NAMD_DECISION section (id=9).</comment>
+
+        <!-- response_set_id=16 — treatment action radio. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="16"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="namd_decision_action"/>
+            <column name="options_text" value="Treat (injection),Observe (no injection)"/>
+            <column name="options_values" value="TREAT,OBSERVE"/>
+        </insert>
+        <!-- response_set_id=17 — treatment drug radio (subset of the existing
+             namd_antivegf_agent set; the v1 decision panel surfaces only
+             the three drugs in active use at MUW). -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="17"/>
+            <column name="response_type_id" valueNumeric="5"/>
+            <column name="label" value="namd_decision_drug"/>
+            <column name="options_text" value="Bevacizumab (Avastin),Aflibercept (Eylea),Faricimab (Vabysmo)"/>
+            <column name="options_values" value="BEVACIZUMAB,AFLIBERCEPT,FARICIMAB"/>
+        </insert>
+        <!-- response_set_id=18 — rationale code single-select. Union of
+             the study-arm-override preset and the control-arm preset;
+             the SPA filters which subset is shown based on subject arm
+             + whether the doctor's choice matches the AI rec. Free-text
+             "Other" reveals the sibling NAMD_DECISION_RATIONALE_OTHER
+             item via show-when. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="18"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="namd_decision_rationale"/>
+            <column name="options_text" value="Clinical judgment differs from AI,Stable — no treatment indicated,Active disease — treatment indicated,Clinical worsening,Patient preference,Comorbidity,Logistics / compliance,Safety concern,Other"/>
+            <column name="options_values" value="CLINICAL_JUDGMENT,STABLE_NO_TREAT,ACTIVE_DISEASE_TREAT,CLINICAL_WORSENING,PATIENT_PREFERENCE,COMORBIDITY,LOGISTICS_COMPLIANCE,SAFETY_CONCERN,OTHER"/>
+        </insert>
+
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="66"/>
+            <column name="name" value="NAMD_DECISION_ACTION"/>
+            <column name="description" value="Treat-and-extend decision: did the physician treat or observe at this visit. The SPA surfaces the AI rule-engine recommendation alongside (study arm only); this item records what the physician actually chose."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_DECISION_ACTION"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="67"/>
+            <column name="name" value="NAMD_DECISION_DRUG"/>
+            <column name="description" value="Anti-VEGF drug chosen for the injection. Only shown when NAMD_DECISION_ACTION=TREAT (via show-when on the SPA decision panel — the legacy CRF renderer's show-when machinery is keyed off a sibling item value, see project_show_when_spec.md)."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_DECISION_DRUG"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="68"/>
+            <column name="name" value="NAMD_DECISION_INTERVAL_WEEKS"/>
+            <column name="description" value="Chosen interval to the next visit, in weeks. Treat-and-extend canonical values: 4, 6, 8, 10, 12, 16. Drives the auto-scheduler via the scheduled_interval_days write."/>
+            <column name="units" value="weeks"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_DECISION_INTERVAL_WEEKS"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="69"/>
+            <column name="name" value="NAMD_DECISION_RATIONALE_CODE"/>
+            <column name="description" value="Coded rationale for the chosen decision. Required when (study arm AND physician's choice differs from AI rec) OR (control arm). The SPA surfaces a preset of options per (arm, override-status) combination; the persisted code is one of the values in response_set 18."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_DECISION_RATIONALE_CODE"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="70"/>
+            <column name="name" value="NAMD_DECISION_RATIONALE_OTHER"/>
+            <column name="description" value="Free-text rationale, shown when NAMD_DECISION_RATIONALE_CODE=OTHER. Capped at 500 characters at the SPA layer; no DB-level constraint to avoid breaking partial-text writes mid-typing."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_DECISION_RATIONALE_OTHER"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="71"/>
+            <column name="name" value="NAMD_DECISION_DATE"/>
+            <column name="description" value="Clinical date of the treatment decision. Optional — defaults to the visit date when blank. Allows retrospective backfill where the digitization date differs from the clinical date (per project_retrospective_data_phase memory). The audit_log_event row keeps server NOW() in audit_date independently."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="9"/> <!-- DATE -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_DECISION_DATE"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="72"/>
+            <column name="name" value="NAMD_AI_REC_SNAPSHOT"/>
+            <column name="description" value="Frozen JSON snapshot of the AI recommendation surfaced to the physician at decision time: {rec: SHORTEN|KEEP|EXTEND, intervalWeeks: int, triggersFired: [{key, value, threshold}...]}. Captured client-side; preserves the audit trail even if the rule engine evolves after the fact."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_AI_REC_SNAPSHOT"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="73"/>
+            <column name="name" value="NAMD_AI_AGREED"/>
+            <column name="description" value="True iff the physician's chosen action + interval match the AI recommendation that was on screen at decision time. Computed SPA-side from the matching NAMD_AI_REC_SNAPSHOT + NAMD_DECISION_ACTION/INTERVAL_WEEKS values. Null on control-arm visits (no AI rec is shown)."/>
+            <column name="units" value=""/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="1"/> <!-- BL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-30"/>
+            <column name="oc_oid" value="I_NAMD_AI_AGREED"/>
+        </insert>
+
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="43"/>
+            <column name="item_id" valueNumeric="66"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="16"/>
+            <column name="left_item_text" value="Treat-and-extend decision"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="44"/>
+            <column name="item_id" valueNumeric="67"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="17"/>
+            <column name="left_item_text" value="Anti-VEGF drug"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="5"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="45"/>
+            <column name="item_id" valueNumeric="68"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="14"/> <!-- open numeric, reused -->
+            <column name="left_item_text" value="Next interval (weeks)"/>
+            <column name="right_item_text" value="weeks"/>
+            <column name="width_decimal" value="(3,0)"/>
+            <column name="ordinal" valueNumeric="6"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="46"/>
+            <column name="item_id" valueNumeric="69"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="18"/>
+            <column name="left_item_text" value="Rationale"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="7"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="47"/>
+            <column name="item_id" valueNumeric="70"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="14"/> <!-- free text reuses 14 -->
+            <column name="left_item_text" value="Rationale (other)"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="8"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="false"/> <!-- conditional via SPA -->
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="48"/>
+            <column name="item_id" valueNumeric="71"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Clinical date of decision"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="9"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="49"/>
+            <column name="item_id" valueNumeric="72"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="AI recommendation snapshot"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="10"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="false"/> <!-- not surfaced in UI; audit-only -->
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="50"/>
+            <column name="item_id" valueNumeric="73"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="15"/> <!-- yes/no -->
+            <column name="left_item_text" value="Physician agreed with AI rec"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="11"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="false"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="item_form_metadata">
+                <where>item_form_metadata_id IN (43, 44, 45, 46, 47, 48, 49, 50)</where>
+            </delete>
+            <delete tableName="response_set">
+                <where>response_set_id IN (16, 17, 18)</where>
+            </delete>
+            <delete tableName="item">
+                <where>item_id IN (66, 67, 68, 69, 70, 71, 72, 73)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Audit-event-type seed: TREATMENT_DECISION_RECORDED = 124.
+        Emitted by EventCrfsApiController when any of the seven decision
+        items lands. Mirrors the seed pattern of audit type 122 + 123.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-06-30-audit-event-type-treatment-decision" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 124;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="124"/>
+            <column name="name" value="treatment_decision_recorded"/>
+            <column name="display_name" value="Treatment decision recorded"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 124</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

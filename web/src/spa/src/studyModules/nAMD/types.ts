@@ -113,16 +113,102 @@ export interface NamdVisit {
   interval: number | null
   /** Retinal-inference job id for this visit (drives the viewer wrapper). */
   retinalJobId: number | null
+  /**
+   * 2026-06-30 — event_crf_id that backs this visit's NAMD_VISIT
+   * CRF row. Sourced from the retinal-job detail; null on the demo
+   * fixture + on parked jobs (no event binding). Drives the
+   * {@link NamdDecisionPanel}'s POST target.
+   */
+  eventCrfId: number | null
+  /**
+   * 2026-07-06 — legacy `study_event.study_event_id` that anchors
+   * this visit. Independent of {@link eventCrfId} — a visit can
+   * exist without any CRF row (fresh scheduled visit). The clinical-
+   * flags write endpoint keys off this so it can create the NAMD_VISIT
+   * event_crf on demand when a physician records the first flag.
+   */
+  studyEventId: number | null
+  /**
+   * 2026-06-30 — per-eye clinical-flag observations recorded by the
+   * physician at this visit. Both default to false when no CRF row
+   * was authored. The rule engine reads the eye matching
+   * {@link NamdPatient.eye}.
+   */
+  hemorrhage: boolean
+  /**
+   * 2026-06-30 — true when a BCVA drop is clinically attributable
+   * to nAMD activity (vs cataract, dry eye, etc). The rule engine
+   * fires {@code BCVA_LOSS_5_LETTERS} only when this flag is true
+   * AND the BCVA delta vs the prior visit is ≤ −5 letters.
+   */
+  bcvaAttributableToNamd: boolean
+}
+
+/** Trigger keys the rule engine emits — stable wire identifiers. */
+export type NamdTriggerKey =
+  // SHORTEN triggers (8)
+  | 'DE_NOVO_IRF'
+  | 'IRF_INCREASE'
+  | 'IRF_DECREASE_INSUFFICIENT'
+  | 'DE_NOVO_CENTRAL_SRF'
+  | 'CENTRAL_SRF_INCREASE'
+  | 'SRF_RING_1_3_INCREASE'
+  | 'NEW_HEMORRHAGE'
+  | 'BCVA_LOSS_5_LETTERS'
+  // KEEP triggers (4)
+  | 'RESIDUAL_IRF_HALVED'
+  | 'RESIDUAL_IRF_STABLE'
+  | 'CENTRAL_SRF_IMPROVING'
+  | 'ACTIVITY_IMPROVING'
+  // EXTEND-eligibility conditions (4)
+  | 'IRF_ABSENT'
+  | 'CENTRAL_SRF_ABSENT'
+  | 'NO_HEMORRHAGE_OR_BCVA_LOSS'
+  | 'SRF_ISOLATED_1_3_STABLE'
+
+/** A single fired trigger. The UI renders one row per hit. */
+export interface NamdTriggerHit {
+  key: NamdTriggerKey
+  /** Verdict bucket — drives the chip colour in NamdRecommendationCard. */
+  bucket: 'SHORTEN' | 'KEEP' | 'EXTEND'
+  /** Measured value that caused the trigger (e.g. delta in nL). Null for boolean-only triggers. */
+  value: number | null
+  /** Threshold the value crossed. Null for boolean-only triggers. */
+  threshold: number | null
 }
 
 export interface NamdAiRecommendation {
-  /** Recommendation classification — drives the decision panel pill. */
-  rec: 'TREAT' | 'EXTEND' | 'SHORTEN' | 'OBSERVE'
+  /**
+   * Recommendation classification. SHORTEN / KEEP / EXTEND maps to the
+   * three interval-adjustment buckets in the treat-and-extend protocol.
+   * The doctor's chosen TREAT/OBSERVE action stays a separate concern
+   * captured by the decision panel.
+   */
+  rec: 'SHORTEN' | 'KEEP' | 'EXTEND'
   /** Suggested next interval (weeks). */
   intervalWeeks: number
-  /** One-line rationale string, German. */
+  /** One-line rationale string, German — derived from the top-priority trigger. */
   rationale: string
+  /**
+   * 2026-06-30 — every fired trigger, in priority order
+   * (SHORTEN first, then KEEP, then EXTEND-eligibility). The UI
+   * shows ALL fired triggers so the rec is explainable. The
+   * top-priority trigger drives {@link rec} + {@link rationale}.
+   */
+  triggersFired: NamdTriggerHit[]
 }
+
+/**
+ * 2026-06-30 — two-arm RCT cohort identifier. The backend
+ * {@code RetinalResultsApiController.resolveSubjectArm} reads the
+ * subject's {@code subject_group_map} membership in a group_class of
+ * type Arm with a group name matching {@code "AI_SHOWN"} or
+ * {@code "AI_HIDDEN"}. {@code 'study'} = AI panels visible; {@code 'control'}
+ * = AI panels hidden + AI recommendation suppressed; {@code null} =
+ * subject isn't in either arm (defensive — workspace falls back to
+ * the control-arm presentation).
+ */
+export type NamdSubjectArm = 'study' | 'control' | null
 
 export interface NamdWorkspaceData {
   patient: NamdPatient
@@ -132,4 +218,10 @@ export interface NamdWorkspaceData {
   ai: NamdAiRecommendation | null
   /** Total OCT slices for the current visit — drives the BscanViewer slider. */
   nSlices: number | null
+  /**
+   * 2026-06-30 — subject's cohort assignment. The workspace uses this
+   * to gate every AI panel (seg cards, trend chart, recommendation card,
+   * delta bar, CST chip, report fluid columns) on the study arm.
+   */
+  subjectArm: NamdSubjectArm
 }

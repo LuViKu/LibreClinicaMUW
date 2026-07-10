@@ -36,6 +36,36 @@ public record UpdateSubjectGroupsRequest(
     @Schema(name = "Assignment")
     public record Assignment(
             int groupClassId,
-            Integer groupId
+            Integer groupId,
+            /**
+             * 2026-07-02 — optional randomization envelope. When
+             * present the SPA received these fields from a prior
+             * {@code POST /group-classes/{id}/randomize} response and
+             * is asking the enrollment path to preserve the
+             * randomization audit trail on the newly-inserted row.
+             * When null the assignment is treated as MANUAL.
+             *
+             * <p>Backwards-compatible: the Jackson binder tolerates
+             * missing fields on records.
+             */
+            RandomizationEnvelope randomization
+    ) {
+        public Assignment(int groupClassId, Integer groupId) {
+            this(groupClassId, groupId, null);
+        }
+    }
+
+    /**
+     * 2026-07-02 — round-trip payload for a randomized pick. The SPA
+     * gets these from the {@code /randomize} endpoint and returns
+     * them opaquely in the enrollment POST; {@link SubjectGroupAssignmentService}
+     * persists {@code source} + {@code seed} + {@code meta} into the
+     * matching {@code subject_group_map} columns.
+     */
+    @Schema(name = "RandomizationEnvelope")
+    public record RandomizationEnvelope(
+            String source,
+            String seed,
+            String meta
     ) {}
 }

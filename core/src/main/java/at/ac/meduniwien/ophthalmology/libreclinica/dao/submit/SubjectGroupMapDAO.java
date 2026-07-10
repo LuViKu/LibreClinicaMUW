@@ -84,6 +84,14 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
 
         this.setTypeExpected(9, TypeNames.INT);
         this.setTypeExpected(10, TypeNames.STRING);
+        // 2026-07-02 — randomization envelope columns from
+        // lc-muw-2026-07-02-subject-randomization.xml. Any `SELECT *`
+        // on subject_group_map now returns these three extra columns
+        // and the legacy EntityDAO validator rejects the row unless
+        // every column has a declared type.
+        this.setTypeExpected(11, TypeNames.STRING);
+        this.setTypeExpected(12, TypeNames.STRING);
+        this.setTypeExpected(13, TypeNames.STRING);
     }
 
     /**
@@ -120,8 +128,10 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
 
     public ArrayList<SubjectGroupMapBean> findAllByStudySubject(int studySubjectId) {
         setTypesExpected();
-        this.setTypeExpected(11, TypeNames.STRING);
-        this.setTypeExpected(12, TypeNames.STRING);
+        // 2026-07-02 — indices shifted by 3 (base + 3 randomization
+        // columns) to leave room for randomization_source / _seed / _meta.
+        this.setTypeExpected(14, TypeNames.STRING);
+        this.setTypeExpected(15, TypeNames.STRING);
         
         HashMap<Integer, Object> variables = variables(studySubjectId);
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAllByStudySubject"), variables);
@@ -137,8 +147,9 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
 
     public SubjectGroupMapBean findByStudySubjectAndStudyGroupClass(int studySubjectId, int studyGroupClassId) {
         setTypesExpected();
-        this.setTypeExpected(11, TypeNames.STRING);
-        this.setTypeExpected(12, TypeNames.STRING);
+        // 2026-07-02 — same shift as findAllByStudySubject above.
+        this.setTypeExpected(14, TypeNames.STRING);
+        this.setTypeExpected(15, TypeNames.STRING);
         HashMap<Integer, Object> variables = variables(studySubjectId, studyGroupClassId);
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findByStudySubjectAndStudyGroupClass"), variables);
         SubjectGroupMapBean eb = null;

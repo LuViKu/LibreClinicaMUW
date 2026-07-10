@@ -38,12 +38,15 @@ useViewBreadcrumb(computed(() => [{ label: t('nav.subjectMatrix'), to: null }]))
 const isScheduleMode = ref(route.query.action === 'schedule')
 
 onMounted(() => {
-  if (subjects.rows.length === 0) {
-    // The store ignores the argument (server scopes by session-bound
-    // active study); pass null to make that explicit and drop the
-    // legacy "TDS0004" mock-era placeholder.
-    subjects.load()
-  }
+  // 2026-07-06 — always re-load on mount. The prior `rows.length === 0`
+  // gate skipped the fetch whenever the store already held rows,
+  // which broke the Add-Subject → Matrix flow: `subjects.add()`
+  // optimistically prepends the new row (rows.length becomes 1
+  // even if `load()` had never run), so the subsequent matrix
+  // mount saw a non-zero count and served only that one row,
+  // hiding every previously-enrolled subject. The endpoint is cheap
+  // (< 100 ms for the demo studies), correctness beats the cache.
+  subjects.load()
   // Phase E.6 — fetch the active study identity so the footer card
   // (PI, planned start, status) renders real data instead of the
   // Phase-E.4 mock placeholders ("Max von Pettenkofer", "01-Jul-2020").
@@ -548,20 +551,23 @@ watch(eventColumns, async (next, prev) => {
                 <td class="px-3 py-2 text-slate-600 font-mono text-xs border-t border-slate-100 whitespace-nowrap">{{ formatDate(subject.enrolledOn) }}</td>
 
                 <td
-                  v-for="cell in subject.events"
-                  :key="cell.eventDefinitionOid"
+                  v-for="(_col, idx) in eventColumns"
+                  :key="idx"
                   class="px-3 py-2 border-t border-slate-100"
                 >
-                  <div class="flex items-center justify-center gap-1.5">
-                    <StatusPill :variant="statusVariant(cell.status)">{{ statusLabel(cell.status) }}</StatusPill>
+                  <div v-if="subject.events[idx]" class="flex items-center justify-center gap-1.5">
+                    <StatusPill :variant="statusVariant(subject.events[idx]!.status)">
+                      {{ statusLabel(subject.events[idx]!.status) }}
+                    </StatusPill>
                     <span
-                      v-if="cell.openQueries > 0"
+                      v-if="(subject.events[idx]!.openQueries ?? 0) > 0"
                       class="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-1.5"
-                      :title="t('subjectMatrix.openQueriesTooltip', { count: cell.openQueries })"
+                      :title="t('subjectMatrix.openQueriesTooltip', { count: subject.events[idx]!.openQueries })"
                     >
-                      {{ cell.openQueries }}
+                      {{ subject.events[idx]!.openQueries }}
                     </span>
                   </div>
+                  <span v-else class="text-slate-300 text-center block">—</span>
                 </td>
 
                 <td class="px-3 py-2 border-t border-slate-100 whitespace-nowrap">

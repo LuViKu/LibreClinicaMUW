@@ -318,4 +318,50 @@ public final class AuditTypeIds {
      * Visible in the operator-facing /api/v1/audit feed.
      */
     public static final int RETINAL_SEGMENTATION_CORRECTED  = 123;
+
+    /**
+     * 2026-06-30 — nAMD treat-and-extend treatment decision recorded
+     * via {@code POST /event-crfs/{id}/items} when any of the seven
+     * decision items
+     * ({@code NAMD_DECISION_ACTION / DRUG / INTERVAL_WEEKS /
+     * RATIONALE_CODE / RATIONALE_OTHER / DATE / AI_REC_SNAPSHOT /
+     * AI_AGREED}) lands. Writer is
+     * {@code EventCrfsApiController.saveItems}; audit_table =
+     * {@code event_crf}, entity_id = event_crf_id; new_value packs
+     * {@code "action:<TREAT|OBSERVE>,drug:<code>,interval:<weeks>,
+     * agreedWithAi:<true|false>"} so the timeline reads
+     * "Treatment decision: TREAT with Aflibercept @ 8wk, agreed:false"
+     * without a join back to item_data. The full AI snapshot lives on
+     * the matching {@code NAMD_AI_REC_SNAPSHOT} item_data row.
+     */
+    public static final int TREATMENT_DECISION_RECORDED      = 124;
+
+    /**
+     * 2026-07-02 — subject randomized into an Arm-type group_class at
+     * enrollment (or on a post-recruit PUT /groups). Writer is
+     * {@code SubjectsApiController.doCreatePersist} +
+     * {@code SubjectsApiController.replaceGroups} whenever the freshly
+     * inserted {@code subject_group_map} row carries a non-MANUAL
+     * {@code randomization_source}. audit_table =
+     * {@code subject_group_map}, entity_id = subject_group_map_id;
+     * new_value packs
+     * {@code "class:<n>,group:<name>,source:<enum>,seed:<truncated>"}.
+     * Emitted alongside the existing DB trigger's generic insert row
+     * so the timeline reads "randomized into AI_SHOWN" instead of just
+     * "group assignment inserted".
+     */
+    public static final int SUBJECT_RANDOMIZED               = 125;
+
+    /**
+     * 2026-07-02 — operator overrode a subject's randomization result
+     * via {@code PUT /subjects/{oid}/groups}. Detected when the
+     * outgoing row carries a non-MANUAL {@code randomization_source}
+     * and the incoming assignment has no {@code randomization}
+     * envelope (i.e. a manual pick). audit_table =
+     * {@code subject_group_map}, entity_id = the outgoing row's id;
+     * reason_for_change is populated from the SPA RFC dialog and is
+     * REQUIRED — an unexplained override would break the trial-master
+     * file's audit hygiene.
+     */
+    public static final int SUBJECT_RANDOMIZATION_OVERRIDDEN = 126;
 }

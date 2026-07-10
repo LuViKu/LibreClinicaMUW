@@ -26,9 +26,10 @@
  */
 
 import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
-import { listSubjectJobs, listSubjectBcvaTimeline, listSubjectCrtTimeline, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow, type CrtTimelineRow } from '@/api/retinal'
+import { listSubjectJobs, listSubjectBcvaTimeline, listSubjectCrtTimeline, listSubjectNamdClinicalFlags, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow, type CrtTimelineRow, type NamdClinicalFlagsRow } from '@/api/retinal'
+import { apiGet } from '@/api/client'
 import { decimalToLetters, formatBcva } from '@/lib/bcvaConversion'
-import type { Laterality, NamdAiRecommendation, NamdPatient, NamdVisit, NamdWorkspaceData } from '../types'
+import type { Laterality, NamdAiRecommendation, NamdPatient, NamdSubjectArm, NamdVisit, NamdWorkspaceData } from '../types'
 import { useNamdAiRecommendation } from './useNamdAiRecommendation'
 
 export interface UseNamdVisitDataArgs {
@@ -128,14 +129,14 @@ function buildMockData(): NamdWorkspaceData {
     regimen: 'Treat-and-Extend · Aflibercept',
   }
   const visits: NamdVisit[] = [
-    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
-    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null },
+    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
+    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false, fluidByRegion: null , eventCrfId: null, studyEventId: null, hemorrhage: false, bcvaAttributableToNamd: false },
   ]
   const current = visits[visits.length - 1]!
   const prev = visits[visits.length - 2]!
@@ -146,8 +147,9 @@ function buildMockData(): NamdWorkspaceData {
     rec: 'SHORTEN',
     intervalWeeks: 6,
     rationale: 'Reaktivierung mit Anstieg der Gesamtflüssigkeit — Intervall verkürzen.',
+    triggersFired: [],
   }
-  return { patient, visits, current, prev, ai, nSlices: 49 }
+  return { patient, visits, current, prev, ai, nSlices: 49, subjectArm: 'study' }
 }
 
 /** Reshape a single fluid {@link RetinalJobDetail} into a {@link NamdVisit}. */
@@ -231,6 +233,22 @@ function fluidJobToVisit(
     inj: '',
     interval: null,
     retinalJobId: summary.jobId,
+    // 2026-06-30 — surface event_crf_id so the decision panel can
+    // POST against it. Sourced from the detail (the summary doesn't
+    // carry it). Falls back to null for parked jobs / detail-fetch
+    // failures.
+    eventCrfId: detail?.eventCrfId ?? null,
+    // 2026-07-06 — study_event.study_event_id propagated from the
+    // job summary. Powers the clinical-flags write endpoint's
+    // event_crf-on-demand path.
+    studyEventId: summary.studyEventId ?? null,
+    // 2026-06-30 — clinical-flag observations from the new
+    // /namd-clinical-flags endpoint. Default false when the timeline
+    // row hasn't surfaced yet (subject has no flags written, or
+    // request still in flight). The rule engine treats missing as
+    // negative trigger.
+    hemorrhage: false,
+    bcvaAttributableToNamd: false,
   }
 }
 
@@ -262,6 +280,15 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   // Same lookup pattern as the BCVA cache; soft-fails to `visit.crt = 0`
   // when the event has no paired done jobs.
   const crtByEventId = new Map<number, CrtTimelineRow>()
+  // 2026-06-30 — per-event clinical-flag timeline (hemorrhage,
+  // BCVA-loss-attributed-to-nAMD). Same lookup pattern as BCVA/CRT;
+  // missing rows surface as `false` for both flags on the visit.
+  const flagsByEventId = new Map<number, NamdClinicalFlagsRow>()
+  // 2026-06-30 — subjectArm captured from the first fluid-job detail
+  // (every job carries the same value — it's a function of the
+  // subject's group-membership, not the job). Drives the AI-panel
+  // gate in useStudyArm.
+  let subjectArm: NamdSubjectArm = null
 
   /**
    * Build the visit timeline + patient banner from the cached
@@ -285,13 +312,23 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       const eventId = s.studyEventId ?? null
       const bcvaRow = eventId != null ? (bcvaByEventId.get(eventId) ?? null) : null
       const crtRow = eventId != null ? (crtByEventId.get(eventId) ?? null) : null
-      return fluidJobToVisit(
+      const flagsRow = eventId != null ? (flagsByEventId.get(eventId) ?? null) : null
+      const v = fluidJobToVisit(
         s,
         fluidDetailsCache.get(s.jobId) ?? null,
         `V${String(idx + 1).padStart(2, '0')}`,
         bcvaRow,
         crtRow,
       )
+      // 2026-06-30 — per-eye clinical-flag overlay. The timeline row
+      // carries OD + OS independently; pick whichever matches the
+      // workspace's selected eye.
+      if (flagsRow) {
+        const eyeFlags = selectedEye.value === 'OD' ? flagsRow.od : flagsRow.os
+        v.hemorrhage = eyeFlags.hemorrhage
+        v.bcvaAttributableToNamd = eyeFlags.bcvaLossAttributedToNamd
+      }
+      return v
     })
     const baselineMs = parseDateMs(rawVisits[0]?.date)
     const visits: NamdVisit[] = rawVisits.map((v, idx) => {
@@ -320,6 +357,12 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       prev,
       ai: null, // derived reactively below
       nSlices: null,
+      // 2026-06-30 — populated from the first fluid job's detail
+      // (every job carries the same subjectArm — it's a property of
+      // the subject, not the job). Falls back to null when no detail
+      // has landed yet; the SPA's defensive gate hides AI panels
+      // when null, matching the control-arm presentation.
+      subjectArm,
     }
   }
 
@@ -352,10 +395,14 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       // network error so legacy studies without any BCVA writes (or
       // pre-portal deploys) keep rendering the nAMD module without
       // BCVA values rather than failing the whole load.
-      const [summaries, bcvaTimeline, crtTimeline] = await Promise.all([
+      const [summaries, bcvaTimeline, crtTimeline, flagsTimeline] = await Promise.all([
         listSubjectJobs(numericId),
         listSubjectBcvaTimeline(numericId).catch(() => [] as BcvaTimelineRow[]),
         listSubjectCrtTimeline(numericId).catch(() => [] as CrtTimelineRow[]),
+        // 2026-06-30 — soft-fail like the BCVA/CRT timelines so the
+        // workspace still loads on legacy compose deploys before the
+        // namd-clinical-flags endpoint shipped.
+        listSubjectNamdClinicalFlags(numericId).catch(() => [] as NamdClinicalFlagsRow[]),
       ])
       bcvaByEventId.clear()
       for (const row of bcvaTimeline) {
@@ -364,6 +411,10 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       crtByEventId.clear()
       for (const row of crtTimeline) {
         crtByEventId.set(row.studyEventId, row)
+      }
+      flagsByEventId.clear()
+      for (const row of flagsTimeline) {
+        flagsByEventId.set(row.studyEventId, row)
       }
       // 2026-06-23 — accept both the DB-native 'done' and the
       // historical/typed 'succeeded' label so jobs returned straight
@@ -403,8 +454,37 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
           }
         }),
       )
+      subjectArm = null
       for (const [jobId, detail] of details) {
         fluidDetailsCache.set(jobId, detail)
+        // 2026-06-30 — every job carries the same subjectArm (it's a
+        // property of the subject); pick the first non-null value
+        // and stop. AI_SHOWN → 'study'; AI_HIDDEN → 'control';
+        // anything else → null (defensive — workspace falls back to
+        // the control-arm presentation).
+        if (subjectArm == null && detail != null) {
+          if (detail.subjectArm === 'AI_SHOWN') subjectArm = 'study'
+          else if (detail.subjectArm === 'AI_HIDDEN') subjectArm = 'control'
+        }
+      }
+      // 2026-06-30 — fallback: a subject with NO retinal jobs (or jobs
+      // that pre-date the resolveSubjectArm wire-up) leaves subjectArm
+      // null. Read the arm directly from the subject's group
+      // membership via SubjectDetail.groupAssignments so the workspace
+      // can still gate AI panels correctly.
+      if (subjectArm == null) {
+        try {
+          const subj = await apiGet<{ groupAssignments?: { groupName?: string | null }[] }>(
+            `/pages/api/v1/subjects/${encodeURIComponent(oid)}`,
+          )
+          for (const g of subj.groupAssignments ?? []) {
+            const name = (g.groupName ?? '').toUpperCase()
+            if (name === 'AI_SHOWN') { subjectArm = 'study'; break }
+            if (name === 'AI_HIDDEN') { subjectArm = 'control'; break }
+          }
+        } catch {
+          /* leave subjectArm null — workspace shows the unassigned-arm warning */
+        }
       }
       allFluidDone.value = fluidDone
       rebuildData(oid)

@@ -2341,6 +2341,25 @@
       }
     }
   },
+  "subjectRandomize": {
+    "randomize": "[NEEDS_REVIEW] Randomize",
+    "rolling": "[NEEDS_REVIEW] Rolling …",
+    "banner": "[NEEDS_REVIEW] Randomly assigned · seed {seed}… — you may override manually.",
+    "overrideReasonLabel": "[NEEDS_REVIEW] Reason for override",
+    "overrideReasonRequired": "[NEEDS_REVIEW] Reason required when overriding a randomization."
+  },
+  "subjectGroupEdit": {
+    "openButton": "[NEEDS_REVIEW] edit",
+    "title": "[NEEDS_REVIEW] Edit study groups",
+    "description": "[NEEDS_REVIEW] Pick a group per class. Required classes must have a group selected; optional classes accept '— unassigned —'.",
+    "loading": "[NEEDS_REVIEW] Loading group classes …",
+    "noClasses": "[NEEDS_REVIEW] This study has no group classes defined yet. Create one first via the legacy Build Study admin (\"Subject Group Classes\").",
+    "unassigned": "[NEEDS_REVIEW] — unassigned —",
+    "requiredHint": "[NEEDS_REVIEW] Required — a group must be selected",
+    "save": "[NEEDS_REVIEW] Save",
+    "saving": "[NEEDS_REVIEW] Saving …",
+    "cancel": "[NEEDS_REVIEW] Cancel"
+  },
   "subjectDetail": {
     "subTrail": "subject detail",
     "notSigned": "Not signed",

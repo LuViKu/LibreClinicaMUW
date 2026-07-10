@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -20,7 +20,9 @@ import {
   type AddSubjectInput,
 } from '@/stores/subjects'
 import { useAuthStore } from '@/stores/auth'
-import type { Gender, StudyEye } from '@/types/subject'
+import { useGroupClassesStore, type RandomizeResult } from '@/stores/groupClasses'
+import { useStudyParametersStore } from '@/stores/studyParameters'
+import type { Gender, GroupAssignmentInput, StudyEye } from '@/types/subject'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -41,6 +43,107 @@ const subjectIdPrefix = computed(() => {
   const ident = auth.user?.activeStudy?.uniqueIdentifier?.trim()
   return ident ? `${ident}-` : ''
 })
+
+// 2026-07-02 — subject-randomization at enrollment. When the active
+// study opts in via study_parameter.randomization=enabled the form
+// grows an Arm-picker card per Arm-type group_class with ≥2 groups.
+// Randomization goes through the backend /randomize endpoint; the
+// SPA opaquely round-trips the resulting envelope so the audit trail
+// lands on the subject_group_map row at enrollment time.
+const groupClasses = useGroupClassesStore()
+const studyParams = useStudyParametersStore()
+
+interface ArmPick {
+  groupId: number | null
+  randomization: { source: string; seed: string; meta: string | null } | null
+}
+/** Per-class pick state, keyed by groupClassId. Reactive. */
+const armPicks = ref<Record<number, ArmPick>>({})
+const armPickerBusy = ref<Record<number, boolean>>({})
+const armPickerError = ref<Record<number, string | null>>({})
+
+const randomizationEnabled = computed(
+  () => studyParams.current?.randomization === 'enabled',
+)
+/** Arm-type classes with ≥2 groups. Everything else stays hidden. */
+const armClasses = computed(() =>
+  groupClasses.rows.filter(
+    (c) => c.groupClassType === 'Arm'
+        && (c.status ?? 'available').toLowerCase() !== 'deleted'
+        && Array.isArray(c.groups)
+        && c.groups.length >= 2,
+  ),
+)
+const showArmPicker = computed(
+  () => randomizationEnabled.value && armClasses.value.length > 0,
+)
+
+async function loadClassesForActiveStudy() {
+  const oid = auth.user?.activeStudy?.oid
+  if (!oid) return
+  await Promise.all([
+    studyParams.load(oid).catch(() => { /* soft-fail */ }),
+    groupClasses.load(oid).catch(() => { /* soft-fail */ }),
+  ])
+}
+
+onMounted(loadClassesForActiveStudy)
+watch(() => auth.user?.activeStudy?.oid, () => { void loadClassesForActiveStudy() })
+
+function pickGroup(classId: number, groupId: number) {
+  // Manual radio pick — clears any prior randomization envelope so the
+  // row lands as MANUAL on the backend.
+  armPicks.value = {
+    ...armPicks.value,
+    [classId]: { groupId, randomization: null },
+  }
+  armPickerError.value[classId] = null
+}
+
+async function randomizeClass(classId: number) {
+  const oid = auth.user?.activeStudy?.oid
+  if (!oid) return
+  armPickerBusy.value[classId] = true
+  armPickerError.value[classId] = null
+  try {
+    const result: RandomizeResult = await groupClasses.randomize(oid, classId)
+    armPicks.value = {
+      ...armPicks.value,
+      [classId]: {
+        groupId: result.groupId,
+        randomization: {
+          source: result.source,
+          seed: result.seed,
+          meta: result.meta,
+        },
+      },
+    }
+  } catch (e) {
+    armPickerError.value[classId] = e instanceof Error ? e.message : String(e)
+  } finally {
+    armPickerBusy.value[classId] = false
+  }
+}
+
+/**
+ * Sync the arm-picker state into {@link form.groupAssignments} whenever
+ * the operator makes a pick. Keeps the submit path zero-magic — the
+ * existing {@code subjects.add({...form})} call picks the assignments
+ * up automatically.
+ */
+watch(armPicks, (next) => {
+  const list: GroupAssignmentInput[] = []
+  for (const [classIdStr, p] of Object.entries(next)) {
+    const classId = Number(classIdStr)
+    if (!p || p.groupId == null) continue
+    list.push({
+      groupClassId: classId,
+      groupId: p.groupId,
+      randomization: p.randomization ?? null,
+    })
+  }
+  form.groupAssignments = list.length > 0 ? list : null
+}, { deep: true })
 
 const form = reactive<AddSubjectInput>({
   id: subjectIdPrefix.value,
@@ -357,15 +460,67 @@ const genderOptions: { code: Gender; label: () => string }[] = [
               <ErrorText v-if="errorFor('gender')">{{ errorFor('gender') }}</ErrorText>
             </div>
 
-            <!-- Group assignment dropdown is deliberately omitted.
-                 The historical hardcoded "Arm A / Arm B" stub
-                 (pre-Phase-E.6) never read from the active study's
-                 actual group_class definitions, and MUW's iAMD/GA
-                 cohorts are observational — no randomisation arm.
-                 The proper group_class-driven UI surfaces on the
-                 SubjectDetailView per-group picker for studies that
-                 declare groups; the AddSubject form posts
-                 groupAssignments=null which the backend accepts. -->
+            <!-- 2026-07-02 — Arm-picker card. Surfaces only when the
+                 active study opts in via
+                 study_parameter.randomization=enabled AND has an
+                 Arm-type group_class with ≥2 groups. Radio picks
+                 land as MANUAL; the dice button randomizes via the
+                 backend /randomize endpoint (audit-grade seed) and
+                 pre-selects the returned group. -->
+            <fieldset
+              v-for="cls in armClasses"
+              v-show="showArmPicker"
+              :key="cls.id"
+              :data-testid="`add-subject-arm-${cls.id}`"
+              class="col-span-2 border border-slate-200 rounded-md p-3 space-y-2"
+            >
+              <div class="flex items-center gap-3">
+                <legend class="text-[13px] font-semibold text-slate-700">
+                  {{ cls.name }}
+                </legend>
+                <button
+                  type="button"
+                  :data-testid="`add-subject-arm-${cls.id}-randomize`"
+                  :disabled="armPickerBusy[cls.id]"
+                  class="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold text-white bg-muw-blue hover:bg-muw-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  @click="randomizeClass(cls.id)"
+                >
+                  <span aria-hidden="true">🎲</span>
+                  {{ armPickerBusy[cls.id]
+                    ? t('subjectRandomize.rolling')
+                    : t('subjectRandomize.randomize') }}
+                </button>
+              </div>
+              <div class="space-y-1">
+                <label
+                  v-for="g in cls.groups"
+                  :key="g.id"
+                  class="flex items-start gap-2 text-[13px] text-slate-700 cursor-pointer"
+                  :data-testid="`add-subject-arm-${cls.id}-choice-${g.id}`"
+                >
+                  <input
+                    type="radio"
+                    :checked="armPicks[cls.id]?.groupId === g.id"
+                    :name="`arm-${cls.id}`"
+                    class="mt-0.5"
+                    @change="pickGroup(cls.id, g.id)"
+                  />
+                  <span>{{ g.name }}</span>
+                </label>
+              </div>
+              <div
+                v-if="armPicks[cls.id]?.randomization"
+                :data-testid="`add-subject-arm-${cls.id}-banner`"
+                class="rounded-md bg-amber-50 text-amber-800 px-2.5 py-1.5 text-[12px]"
+              >
+                {{ t('subjectRandomize.banner', {
+                  seed: armPicks[cls.id]?.randomization?.seed.slice(0, 8) ?? ''
+                }) }}
+              </div>
+              <ErrorText v-if="armPickerError[cls.id]">
+                {{ armPickerError[cls.id] }}
+              </ErrorText>
+            </fieldset>
           </div>
         </section>
 

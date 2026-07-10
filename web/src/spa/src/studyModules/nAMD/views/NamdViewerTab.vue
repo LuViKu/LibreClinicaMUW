@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import NamdScanFrame from '../components/NamdScanFrame.vue'
 import Card from '../components/primitives/Card.vue'
+import { useStudyArm } from '../composables/useStudyArm'
 import type { NamdWorkspaceData } from '../types'
 
 interface Props {
@@ -29,6 +30,13 @@ const { t } = useI18n()
 const store = useRetinalJobStore()
 const auth = useAuthStore()
 const errors = useErrorsStore()
+// 2026-06-30 — cohort gate. Control arm hides:
+//   - ETDRS selection summary chip strip
+//   - Biomarker-quantification row (Δ vs prev)
+// Keeps FundusOverlay's locator + B-scan viewer + slider so the
+// operator can still scrub raw OCT.
+const armRef = computed(() => props.data.subjectArm)
+const { aiVisible } = useStudyArm(armRef)
 
 /**
  * 2026-06-26 — role gate for the layer-correction UI. Mirrors
@@ -226,9 +234,10 @@ function formatNumber(v: number): string {
         <!-- ETDRS selection summary — visible only when at least
              one region is clicked. The selection chips let the
              operator remove individual regions; the biomarker row
-             shows IRF / SRF / PED / ∑ in mm³ for the union. -->
+             shows IRF / SRF / PED / ∑ in mm³ for the union.
+             2026-06-30 — control-arm gate: AI biomarker sums hidden. -->
         <div
-          v-if="selectedSum"
+          v-if="selectedSum && aiVisible"
           data-testid="namd-viewer-etdrs-selection"
           class="px-5 py-3 border-t border-slate-100 bg-muw-sky-50/60 flex flex-col gap-2"
         >
@@ -306,9 +315,10 @@ function formatNumber(v: number): string {
       </section>
     </div>
 
-    <!-- ── Row 2: biomarker quantification + delta vs previous visit ── -->
+    <!-- ── Row 2: biomarker quantification + delta vs previous visit.
+         Control-arm hides the entire Δ-vs-prev Card. ── -->
     <Card
-      v-if="retinalJobId != null"
+      v-if="aiVisible && retinalJobId != null"
       :title="t('studyModules.namd.viewer2.deltaHeader')"
     >
       <RetinalVisitComparison :job-id="retinalJobId" />

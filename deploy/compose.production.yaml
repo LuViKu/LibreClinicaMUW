@@ -25,6 +25,26 @@
 name: libreclinica-muw
 
 services:
+  # 2026-07-06 — TLS reverse proxy + clean-URL router. Terminates HTTPS for
+  # ecrf.augen.meduniwien.ac.at (+ the host FQDN), serves the SPA at the site
+  # root, and forwards to the app over the compose network (libreclinica:8080).
+  # Config: deploy/nginx/ecrf.conf. Cert + key live in /etc/libreclinica/tls/
+  # (root-only, mounted read-only). systemd ExecStart must include `nginx`; the
+  # app's host 8080 should be narrowed to 127.0.0.1 so users go through HTTPS.
+  # See deploy/nginx/README.md.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: libreclinica-muw-nginx-1
+    restart: unless-stopped
+    depends_on:
+      - libreclinica
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/libreclinica/tls:/etc/libreclinica/tls:ro
+
   libreclinica:
     image: ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG:-latest}
     pull_policy: always

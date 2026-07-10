@@ -2343,6 +2343,25 @@
       }
     }
   },
+  "subjectRandomize": {
+    "randomize": "Randomisieren",
+    "rolling": "Wird ausgewürfelt …",
+    "banner": "Zufällig zugewiesen · Seed {seed}… — Sie können manuell überschreiben.",
+    "overrideReasonLabel": "Grund für die Überschreibung",
+    "overrideReasonRequired": "Grund erforderlich, wenn eine Randomisierung überschrieben wird."
+  },
+  "subjectGroupEdit": {
+    "openButton": "bearbeiten",
+    "title": "Studiengruppen bearbeiten",
+    "description": "Pro Klasse eine Gruppe wählen. Pflicht-Klassen können nicht leer bleiben; bei optionalen Klassen ist „— nicht zugewiesen —“ erlaubt.",
+    "loading": "Gruppen-Klassen werden geladen …",
+    "noClasses": "Diese Studie hat noch keine Gruppen-Klassen definiert. Erstellen Sie zuerst eine über das klassische Build-Study-Menü („Subject Group Classes“).",
+    "unassigned": "— nicht zugewiesen —",
+    "requiredHint": "Pflicht — eine Gruppe muss gewählt sein",
+    "save": "Speichern",
+    "saving": "Speichern …",
+    "cancel": "Abbrechen"
+  },
   "subjectDetail": {
     "subTrail": "Probandendetail",
     "notSigned": "Nicht signiert",

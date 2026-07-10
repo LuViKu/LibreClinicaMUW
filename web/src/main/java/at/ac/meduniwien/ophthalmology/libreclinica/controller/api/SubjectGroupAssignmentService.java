@@ -163,10 +163,17 @@ final class SubjectGroupAssignmentService {
             }
             if (a.groupId() != null) {
                 StudyGroupBean sg = sgDao.findByPK(a.groupId().intValue());
+                // 2026-06-30 — drop the AVAILABLE check. The
+                // {@code study_group} table has NO {@code status_id}
+                // column (see lc-muw-2026-06-01 schema + StudyGroupDAO
+                // .getEntityFromHashMap which doesn't populate it),
+                // so {@code sg.getStatus()} is always null + every
+                // assignment got rejected with a misleading
+                // "Group X not found in class Y" message. Existence +
+                // class-membership are the only fields we can
+                // genuinely verify.
                 if (sg == null || sg.getId() == 0
-                        || sg.getStudyGroupClassId() != gc.getId()
-                        || sg.getStatus() == null
-                        || !Status.AVAILABLE.equals(sg.getStatus())) {
+                        || sg.getStudyGroupClassId() != gc.getId()) {
                     errors.add(new ValidationErrorBody.FieldError(
                             "assignments[" + a.groupClassId() + "].groupId",
                             "Group " + a.groupId() + " not found in class " + gc.getId()));
@@ -193,6 +200,27 @@ final class SubjectGroupAssignmentService {
     }
 
     /**
+     * 2026-07-02 — per-assignment outcome of one {@link #reconcile}
+     * call, so the caller can emit audit rows (types 125 / 126)
+     * without re-reading state.
+     */
+    public record Outcome(
+            int groupClassId,
+            int newRowId,
+            String source,
+            String seed,
+            String groupName,
+            /**
+             * True when this row overrode a previously non-MANUAL
+             * assignment. Drives the {@link AuditTypeIds#SUBJECT_RANDOMIZATION_OVERRIDDEN}
+             * audit path.
+             */
+            boolean overrodeRandomized) { }
+
+    /** Populated at the end of every {@link #reconcile} call. */
+    public List<Outcome> lastOutcomes = Collections.emptyList();
+
+    /**
      * Apply the validated reconciliation to {@code subject_group_map}.
      * Returns the number of rows touched (inserts + soft-deletes).
      */
@@ -214,6 +242,7 @@ final class SubjectGroupAssignmentService {
         }
 
         int touched = 0;
+        List<Outcome> outcomes = new ArrayList<>();
         Set<Integer> desiredClassIds = new HashSet<>();
         List<UpdateSubjectGroupsRequest.Assignment> safeDesired = desired == null
                 ? Collections.emptyList()
@@ -226,31 +255,37 @@ final class SubjectGroupAssignmentService {
             if (existingRow != null && existingRow.getStudyGroupId() == targetGroupId) {
                 continue;  // Already in the desired state — no-op.
             }
+            // 2026-07-02 — capture the outgoing row's randomization
+            // source BEFORE we soft-delete it, so the caller can emit
+            // SUBJECT_RANDOMIZATION_OVERRIDDEN when the incoming
+            // assignment carries no envelope (i.e. a MANUAL override).
+            boolean overrodeRandomized = false;
             if (existingRow != null) {
+                overrodeRandomized = isRandomized(existingRow.getId());
                 softDelete(existingRow, sgmDao, actor);
                 touched++;
             }
-            // Insert the new row (concrete or null group).
+            // Insert the new row (concrete or null group). Randomization
+            // envelope, when present, lands in the three new columns.
+            UpdateSubjectGroupsRequest.RandomizationEnvelope env = a.randomization();
+            String source = env != null && env.source() != null ? env.source() : "MANUAL";
+            String seed = env != null ? env.seed() : null;
+            String meta = env != null ? env.meta() : null;
             SubjectGroupMapBean fresh = new SubjectGroupMapBean();
             fresh.setStudySubjectId(studySubjectId);
             fresh.setStudyGroupClassId(a.groupClassId());
-            // SubjectGroupMapDAO#create writes through getStudyGroupId(); zero
-            // is the legacy sentinel for "no concrete group picked", which
-            // we use here for the OPTIONAL not-now branch. The DAO column
-            // accepts NULL — see the inline insert path below for the
-            // null-friendly variant.
             fresh.setStudyGroupId(targetGroupId);
             fresh.setStatus(Status.AVAILABLE);
             fresh.setOwner(actor);
             fresh.setCreatedDate(new Date());
             fresh.setNotes("");
-            if (targetGroupId == 0) {
-                insertNullGroup(fresh, actor);
-            } else {
-                sgmDao.create(fresh);
-            }
+            int newRowId = insertWithRandomization(fresh, actor, targetGroupId,
+                    source, seed, meta);
             touched++;
+            outcomes.add(new Outcome(a.groupClassId(), newRowId, source, seed,
+                    lookupGroupName(targetGroupId), overrodeRandomized));
         }
+        this.lastOutcomes = outcomes;
 
         // Soft-delete every existing-active row whose class is no longer
         // in the desired set.
@@ -272,30 +307,90 @@ final class SubjectGroupAssignmentService {
     }
 
     /**
-     * Insert a {@code subject_group_map} row with a NULL
-     * {@code study_group_id}. The legacy DAO's create() writes zero
-     * instead of null for the missing group id; for OPTIONAL not-now
-     * rows we want a true NULL so the LEFT JOIN in the matrix-side
-     * batch query returns the expected row.
+     * 2026-07-02 — canonical inline insert for {@code subject_group_map}.
+     * Handles all four combinations we ship:
+     *
+     * <ul>
+     *   <li>Concrete group + MANUAL — the everyday path.</li>
+     *   <li>NULL group (OPTIONAL not-now) + MANUAL — legacy null-branch.</li>
+     *   <li>Concrete group + randomized — v1 uniform / v2a weighted.</li>
+     *   <li>Concrete group + sealed-envelope reveal (v2d — future).</li>
+     * </ul>
+     *
+     * <p>Bypasses the legacy DAO's create() because the DAO writes zero
+     * instead of NULL for {@code study_group_id} and doesn't know about
+     * the three new randomization columns. Returns the new
+     * {@code subject_group_map_id} so the caller can emit audit rows
+     * keyed on the concrete row.
      */
-    private void insertNullGroup(SubjectGroupMapBean row, UserAccountBean actor) {
+    private int insertWithRandomization(SubjectGroupMapBean row, UserAccountBean actor,
+                                        int targetGroupId,
+                                        String source, String seed, String meta) {
         String sql = "INSERT INTO subject_group_map "
                 + "(study_group_class_id, study_subject_id, study_group_id, "
-                + " status_id, owner_id, date_created, notes) "
-                + "VALUES (?, ?, NULL, ?, ?, ?, ?)";
+                + " status_id, owner_id, date_created, notes, "
+                + " randomization_source, randomization_seed, randomization_meta) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                + "RETURNING subject_group_map_id";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, row.getStudyGroupClassId());
             ps.setInt(2, row.getStudySubjectId());
-            ps.setInt(3, row.getStatus().getId());
-            ps.setInt(4, actor.getId());
-            ps.setTimestamp(5, new java.sql.Timestamp(new Date().getTime()));
-            ps.setString(6, row.getNotes() == null ? "" : row.getNotes());
-            ps.executeUpdate();
+            if (targetGroupId == 0) {
+                ps.setNull(3, java.sql.Types.INTEGER);
+            } else {
+                ps.setInt(3, targetGroupId);
+            }
+            ps.setInt(4, row.getStatus().getId());
+            ps.setInt(5, actor.getId());
+            ps.setTimestamp(6, new java.sql.Timestamp(new Date().getTime()));
+            ps.setString(7, row.getNotes() == null ? "" : row.getNotes());
+            ps.setString(8, source);
+            if (seed == null) ps.setNull(9, java.sql.Types.VARCHAR); else ps.setString(9, seed);
+            if (meta == null) ps.setNull(10, java.sql.Types.VARCHAR); else ps.setString(10, meta);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+                return 0;
+            }
         } catch (SQLException e) {
-            LOG.error("Failed to insert OPTIONAL not-now subject_group_map row for ss={} class={}",
-                    row.getStudySubjectId(), row.getStudyGroupClassId(), e);
+            LOG.error("Failed to insert subject_group_map row for ss={} class={} source={}",
+                    row.getStudySubjectId(), row.getStudyGroupClassId(), source, e);
             throw new RuntimeException("subject_group_map insert failed", e);
+        }
+    }
+
+    /** True when the given row's randomization_source != MANUAL (i.e. was randomized). */
+    private boolean isRandomized(int subjectGroupMapId) {
+        String sql = "SELECT randomization_source FROM subject_group_map "
+                   + "WHERE subject_group_map_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, subjectGroupMapId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                String s = rs.getString(1);
+                return s != null && !s.equalsIgnoreCase("MANUAL");
+            }
+        } catch (SQLException e) {
+            LOG.warn("isRandomized({}) failed: {}", subjectGroupMapId, e.getMessage());
+            return false;
+        }
+    }
+
+    /** Best-effort group-name lookup for the audit summary; empty string on miss. */
+    private String lookupGroupName(int studyGroupId) {
+        if (studyGroupId <= 0) return "";
+        String sql = "SELECT name FROM study_group WHERE study_group_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studyGroupId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return "";
+                String n = rs.getString(1);
+                return n == null ? "" : n;
+            }
+        } catch (SQLException e) {
+            return "";
         }
     }
 }

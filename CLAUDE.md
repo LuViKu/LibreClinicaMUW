@@ -12,15 +12,15 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 
 | Layer | Now | Target (post-modernization) |
 |-------|-----|----|
-| Java | 21 (build + runtime, per Dockerfile) | (achieved) |
-| Framework | Spring 6.1.18 + Spring Security 6.3.6 + XML config | Spring Boot 3.x + Java config |
-| Web | JSP + SiteMesh + Spring MVC + ~295 legacy servlets; jmesa fully evicted | unchanged this phase; SPA in Phase E (deferred) |
-| Persistence | Hibernate 5.6.15 (jakarta-namespaced artifact) + Liquibase 3.6.3 + PostgreSQL 13/14 | Hibernate 6.4 (Phase B.5, deferred) + Liquibase 4 + PostgreSQL 14+ |
-| Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR with embedded Tomcat |
+| Java | **25** (build + runtime, per Dockerfile; 21→25 bump 2026-07) | (achieved — exceeds the original Java 21 target) |
+| Framework | Spring Boot 3.5 + Java config (Spring 6.1.18 + Security 6.3.6; residual security XML) | (achieved — Phase C) |
+| Web | JSP + SiteMesh + Spring MVC + ~295 legacy servlets; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
+| Persistence | Hibernate 6.4 (jakarta) + Liquibase 3.6.3 + PostgreSQL 14 | Liquibase 4 (Phase D-Libs, deferred — heritage `modifyColumn` blocker) + PostgreSQL 14+ |
+| Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.5.0-beta.4-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.5-muw` | continues with `-muw` suffix |
 
 ## Build & run
 
@@ -39,7 +39,7 @@ docker run --rm \
   -v "$(pwd)":/app \
   -v "$(pwd)/.m2-cache":/root/.m2 \
   -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -DskipTests=true -ntp clean compile
 ```
 
@@ -58,7 +58,7 @@ docker run -d --rm --name lc-test-pg --network lc-test-net \
 
 docker run --rm --network lc-test-net \
   -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-21 \
+  maven:3-eclipse-temurin-25 \
   mvn -B -ntp -pl core -am -P integration-tests -Ddb.test=lc-test-pg test
 
 docker stop lc-test-pg && docker network rm lc-test-net

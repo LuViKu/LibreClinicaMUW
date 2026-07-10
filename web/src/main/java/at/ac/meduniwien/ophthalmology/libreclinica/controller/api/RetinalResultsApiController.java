@@ -342,10 +342,11 @@ public class RetinalResultsApiController {
         // so the SPA can honour-system-gate the AI panels for Arm B.
         String subjectArm = null;
         try (Connection c = dataSource.getConnection()) {
-            subjectArm = resolveSubjectArm(c, row.eventCrfId);
+            int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
+            subjectArm = resolveSubjectArm(c, row.eventCrfId, sev);
         } catch (SQLException sqlEx) {
-            LOG.warn("subjectArm lookup failed for job {} (ecrf={}): {}",
-                    jobId, row.eventCrfId, sqlEx.getMessage());
+            LOG.warn("subjectArm lookup failed for job {} (ecrf={}, sev={}): {}",
+                    jobId, row.eventCrfId, row.studyEventId, sqlEx.getMessage());
         }
 
         RetinalJobDetailDto dto = new RetinalJobDetailDto(
@@ -444,19 +445,33 @@ public class RetinalResultsApiController {
      * <p>The match is case-insensitive on the group name to absorb
      * institutional capitalisation variants.
      */
-    private static String resolveSubjectArm(Connection c, int eventCrfId) throws SQLException {
-        String sql = "SELECT sg.name "
-                + "  FROM event_crf ec "
-                + "  JOIN study_event ev ON ev.study_event_id = ec.study_event_id "
-                + "  JOIN subject_group_map sgm "
-                + "    ON sgm.study_subject_id = ev.study_subject_id "
-                + "   AND sgm.status_id = 1 "
-                + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
-                + " WHERE ec.event_crf_id = ? "
-                + "   AND UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') "
-                + " LIMIT 1";
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, eventCrfId);
+    private static String resolveSubjectArm(Connection c, int eventCrfId, int studyEventId) throws SQLException {
+        // 2026-07-02 — retinal jobs from the public OCT-upload portal +
+        // Wave-2 pipeline attach directly via {@code study_event_id}
+        // and leave {@code event_crf_id} null on the row. The prior
+        // event_crf-only join missed 100% of those jobs and the SPA
+        // always saw {@code subjectArm=null}. Accept either path:
+        // pin the join on {@code study_event.study_event_id = ?} when
+        // caller has it, else fall through to the event_crf lookup.
+        if (studyEventId <= 0 && eventCrfId <= 0) return null;
+        StringBuilder sql = new StringBuilder(
+                "SELECT sg.name "
+              + "  FROM study_event ev "
+              + "  JOIN subject_group_map sgm "
+              + "    ON sgm.study_subject_id = ev.study_subject_id "
+              + "   AND sgm.status_id = 1 "
+              + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+              + " WHERE UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') "
+              + "   AND ");
+        if (studyEventId > 0) {
+            sql.append("ev.study_event_id = ? ");
+        } else {
+            sql.append("ev.study_event_id IN ("
+                    + "SELECT study_event_id FROM event_crf WHERE event_crf_id = ?) ");
+        }
+        sql.append(" LIMIT 1");
+        try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
+            ps.setInt(1, studyEventId > 0 ? studyEventId : eventCrfId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 String name = rs.getString(1);
@@ -734,6 +749,319 @@ public class RetinalResultsApiController {
             // path before giving up.
             Double d = parseDoubleOrNull(s);
             return d == null ? null : (int) Math.round(d);
+        }
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/{studySubjectId}/namd-clinical-flags                */
+    /* Per-event per-eye observation booleans for the rule engine.             */
+    /* ====================================================================== */
+
+    /**
+     * Per-subject nAMD clinical-flags timeline. Returns one row per
+     * study_event for which any of the four observation flags is set:
+     * {@code NAMD_OD_NEW_HEMORRHAGE}, {@code NAMD_OS_NEW_HEMORRHAGE},
+     * {@code NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED},
+     * {@code NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED}.
+     *
+     * <p>The SPA rule engine consumes this alongside the BCVA + CRT
+     * timelines to derive the SHORTEN / KEEP / EXTEND recommendation
+     * per visit. Missing rows (no flag set) are omitted from the
+     * response; the SPA treats missing as {@code false}.
+     *
+     * <p>Same auth posture as {@link #listBcvaTimeline}: session +
+     * site-visibility filter on the subject's study. Tolerant — a
+     * subject with zero flag rows returns an empty array.
+     */
+    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/namd-clinical-flags",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listNamdClinicalFlagsTimeline(@PathVariable("studySubjectId") int studySubjectId,
+                                                           HttpSession session) {
+        ResponseEntity<?> denied = guardSession(session);
+        if (denied != null) return denied;
+        Integer subjectStudyId;
+        try (Connection c = dataSource.getConnection()) {
+            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
+        }
+        if (subjectStudyId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "study_subject " + studySubjectId + " not found"));
+        }
+        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+                "study_subject " + studySubjectId + " is outside your site visibility");
+        if (visGuard != null) return visGuard;
+
+        String sql = "SELECT se.study_event_id, "
+                + "       date(se.date_start) AS event_date, "
+                + "       i.name AS oid, "
+                + "       idata.value AS value "
+                + "  FROM item_data idata "
+                + "  JOIN event_crf ec ON ec.event_crf_id = idata.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  JOIN item i ON i.item_id = idata.item_id "
+                + " WHERE ec.study_subject_id = ? "
+                + "   AND COALESCE(idata.deleted, false) = false "
+                + "   AND idata.value IS NOT NULL AND idata.value <> '' "
+                + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE', "
+                + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED', "
+                + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED') "
+                + " ORDER BY se.date_start ASC, se.study_event_id ASC";
+
+        Map<Integer, Map<String, Object>> byEvent = new LinkedHashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int sev = rs.getInt("study_event_id");
+                    Map<String, Object> row = byEvent.computeIfAbsent(sev, k -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("studyEventId", k);
+                        try {
+                            java.sql.Date ed = rs.getDate("event_date");
+                            m.put("eventDate", ed == null ? null : ed.toString());
+                        } catch (SQLException ignored) {
+                            m.put("eventDate", null);
+                        }
+                        Map<String, Object> od = new LinkedHashMap<>();
+                        od.put("hemorrhage", false);
+                        od.put("bcvaLossAttributedToNamd", false);
+                        Map<String, Object> os = new LinkedHashMap<>();
+                        os.put("hemorrhage", false);
+                        os.put("bcvaLossAttributedToNamd", false);
+                        m.put("od", od);
+                        m.put("os", os);
+                        return m;
+                    });
+                    String oid = rs.getString("oid");
+                    String value = rs.getString("value");
+                    boolean truthy = "true".equalsIgnoreCase(value) || "1".equals(value)
+                            || "yes".equalsIgnoreCase(value);
+                    String eyeKey = oid.contains("_OD_") ? "od" : "os";
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(eyeKey);
+                    if (oid.endsWith("_NEW_HEMORRHAGE")) {
+                        eyeRow.put("hemorrhage", truthy);
+                    } else if (oid.endsWith("_BCVA_LOSS_NAMD_ATTRIBUTED")) {
+                        eyeRow.put("bcvaLossAttributedToNamd", truthy);
+                    }
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list nAMD clinical flags for study_subject {}: {}",
+                    studySubjectId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list nAMD clinical flags: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(new ArrayList<>(byEvent.values()));
+    }
+
+    /* ====================================================================== */
+    /* POST /study-events/{studyEventId}/namd-clinical-flags                   */
+    /* Upsert the per-eye clinical-flag observations for a visit.              */
+    /* ====================================================================== */
+
+    /**
+     * 2026-07-06 — Persist the nAMD clinical-flag observations for one
+     * study_event. Fills the write-side gap of {@link #listNamdClinicalFlagsTimeline}:
+     * the GET timeline lets the rec engine consume the flags, but until
+     * this endpoint shipped nothing let the physician set them from the
+     * nAMD workspace UI.
+     *
+     * <p>Behaviour:
+     *
+     * <ol>
+     *   <li>Guards session + study visibility on the subject's study.</li>
+     *   <li>Finds an existing {@code event_crf} row for
+     *     {@code (study_event_id, F_NAMD_VISIT crf_version)}; if none,
+     *     creates one so a fresh visit can carry the flags without the
+     *     physician manually opening the CRF in the legacy UI first.</li>
+     *   <li>Upserts {@code item_data} for each supplied per-eye flag
+     *     (the request body carries {@code od} and/or {@code os}; either
+     *     or both may be omitted).</li>
+     * </ol>
+     *
+     * <p>Response returns the resolved {@code eventCrfId} so the SPA
+     * can update its local {@code NamdVisit.eventCrfId} without another
+     * roundtrip.
+     */
+    @PostMapping(path = "/study-events/{studyEventId:[0-9]+}/namd-clinical-flags",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> upsertNamdClinicalFlags(
+            @PathVariable("studyEventId") int studyEventId,
+            @RequestBody Map<String, Object> body,
+            HttpSession session) {
+        ResponseEntity<?> denied = guardSession(session);
+        if (denied != null) return denied;
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+
+            int studySubjectId;
+            int studyId;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT se.study_subject_id, ss.study_id "
+                            + "  FROM study_event se "
+                            + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                            + " WHERE se.study_event_id = ?")) {
+                ps.setInt(1, studyEventId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return ResponseEntity.status(404).body(Map.of(
+                                "message", "study_event " + studyEventId + " not found"));
+                    }
+                    studySubjectId = rs.getInt(1);
+                    studyId = rs.getInt(2);
+                }
+            }
+            ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+                    "study_event " + studyEventId + " is outside your site visibility");
+            if (visGuard != null) return visGuard;
+
+            // Resolve F_NAMD_VISIT crf_version_id. The demo seed ships
+            // exactly one version; production configurations may add
+            // more, in which case the latest wins.
+            int crfVersionId;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT cv.crf_version_id "
+                            + "  FROM crf_version cv "
+                            + "  JOIN crf c ON c.crf_id = cv.crf_id "
+                            + " WHERE c.oc_oid = 'F_NAMD_VISIT' "
+                            + " ORDER BY cv.crf_version_id DESC LIMIT 1")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return ResponseEntity.status(500).body(Map.of(
+                                "message", "F_NAMD_VISIT CRF version not found"));
+                    }
+                    crfVersionId = rs.getInt(1);
+                }
+            }
+
+            // Find or create the event_crf row for (study_event, crf_version).
+            Integer eventCrfId = null;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT event_crf_id FROM event_crf "
+                            + " WHERE study_event_id = ? AND crf_version_id = ? "
+                            + " LIMIT 1")) {
+                ps.setInt(1, studyEventId);
+                ps.setInt(2, crfVersionId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) eventCrfId = rs.getInt(1);
+                }
+            }
+            if (eventCrfId == null) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO event_crf ("
+                                + "  study_event_id, crf_version_id, "
+                                + "  status_id, completion_status_id, "
+                                + "  owner_id, date_created, "
+                                + "  study_subject_id, "
+                                + "  interviewer_name, date_interviewed, "
+                                + "  electronic_signature_status, sdv_status, "
+                                + "  old_status_id, sdv_update_id) "
+                                + "VALUES (?, ?, 1, 1, ?, now(), ?, '', NULL, false, false, 1, 0) "
+                                + "RETURNING event_crf_id")) {
+                    ps.setInt(1, studyEventId);
+                    ps.setInt(2, crfVersionId);
+                    ps.setInt(3, currentUser.getId());
+                    ps.setInt(4, studySubjectId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) throw new SQLException("INSERT event_crf returned no id");
+                        eventCrfId = rs.getInt(1);
+                    }
+                }
+            }
+
+            // Resolve item_ids for the four per-eye flag items on this CRF version.
+            Map<String, Integer> itemIds = new LinkedHashMap<>();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT i.name, i.item_id "
+                            + "  FROM item_form_metadata ifm "
+                            + "  JOIN item i ON i.item_id = ifm.item_id "
+                            + " WHERE ifm.crf_version_id = ? "
+                            + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE',"
+                            + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',"
+                            + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED')")) {
+                ps.setInt(1, crfVersionId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) itemIds.put(rs.getString(1), rs.getInt(2));
+                }
+            }
+
+            // Walk the body's per-eye maps + upsert each provided flag.
+            Map<String, Object> od = castMap(body.get("od"));
+            Map<String, Object> os = castMap(body.get("os"));
+            upsertFlag(c, itemIds, "NAMD_OD_NEW_HEMORRHAGE", od, "hemorrhage",
+                    eventCrfId, currentUser.getId());
+            upsertFlag(c, itemIds, "NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED", od,
+                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
+            upsertFlag(c, itemIds, "NAMD_OS_NEW_HEMORRHAGE", os, "hemorrhage",
+                    eventCrfId, currentUser.getId());
+            upsertFlag(c, itemIds, "NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED", os,
+                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
+
+            c.commit();
+
+            LOG.info("nAMD clinical flags saved: study_event={} event_crf={} by user={}",
+                    studyEventId, eventCrfId, currentUser.getName());
+
+            return ResponseEntity.ok(Map.of(
+                    "studyEventId", studyEventId,
+                    "eventCrfId", eventCrfId
+            ));
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to upsert nAMD clinical flags for study_event {}: {}",
+                    studyEventId, sqlEx.getMessage(), sqlEx);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to save nAMD clinical flags: " + sqlEx.getMessage()));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object o) {
+        return o instanceof Map ? (Map<String, Object>) o : Map.of();
+    }
+
+    /**
+     * Upsert one item_data row for the given flag. The uniqueness
+     * constraint {@code (item_id, event_crf_id, ordinal)} lets us do
+     * this in one statement via ON CONFLICT; ordinal is fixed at 1
+     * for these non-repeating items.
+     *
+     * <p>Skips silently when the CRF version doesn't carry that item
+     * (defensive — production installs may drift from the demo seed).
+     */
+    private static void upsertFlag(Connection c, Map<String, Integer> itemIds,
+                                   String itemName, Map<String, Object> eyeBody,
+                                   String bodyKey, int eventCrfId, int userId) throws SQLException {
+        Integer itemId = itemIds.get(itemName);
+        if (itemId == null) return;
+        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return;
+        Object raw = eyeBody.get(bodyKey);
+        String value = raw instanceof Boolean ? String.valueOf(raw) : String.valueOf(raw);
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO item_data ("
+                        + "  item_id, event_crf_id, status_id, value, "
+                        + "  date_created, owner_id, ordinal, deleted) "
+                        + "VALUES (?, ?, 1, ?, now(), ?, 1, false) "
+                        + "ON CONFLICT (item_id, event_crf_id, ordinal) DO UPDATE "
+                        + "SET value = EXCLUDED.value, "
+                        + "    date_updated = now(), "
+                        + "    update_id = EXCLUDED.owner_id, "
+                        + "    deleted = false")) {
+            ps.setInt(1, itemId);
+            ps.setInt(2, eventCrfId);
+            ps.setString(3, value);
+            ps.setInt(4, userId);
+            ps.executeUpdate();
         }
     }
 
@@ -2294,6 +2622,12 @@ public class RetinalResultsApiController {
         // the artifact resolver to pick the right scan-N/ subdirectory
         // for multi-volume .e2e uploads.
         int scanIndex;
+        // 2026-07-02 — direct study_event_id on retinal_inference_job.
+        // Modern jobs (public OCT-upload portal + Wave-2 pipeline)
+        // attach directly via study_event_id and leave event_crf_id
+        // null; the {@link #resolveSubjectArm} path needs both to
+        // find the subject's arm assignment.
+        Integer studyEventId;
     }
 
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
@@ -2324,7 +2658,7 @@ public class RetinalResultsApiController {
         // because studyId comes back null.
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
-                + "       j.scan_index, "
+                + "       j.scan_index, j.study_event_id, "
                 + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
                 + "       r.bscan_masks_dir, r.confidence, ss.study_id "
                 + "  FROM retinal_inference_job j "
@@ -2356,6 +2690,8 @@ public class RetinalResultsApiController {
                 int sid = rs.getInt("study_id");
                 row.studyId = rs.wasNull() ? null : sid;
                 row.scanIndex = rs.getInt("scan_index");
+                int sev = rs.getInt("study_event_id");
+                row.studyEventId = rs.wasNull() ? null : sev;
                 return row;
             }
         }

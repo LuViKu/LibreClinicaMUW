@@ -5,7 +5,7 @@
 	<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 	<artifactId>LibreClinica</artifactId>
 	<packaging>pom</packaging>
-	<version>1.5.0-beta.5-muw</version>
+	<version>1.5.0-beta.6-muw</version>
 	<name>LibreClinica MUW Ophthalmology</name>
 	<description>Electronic Data Capture (EDC) for clinical trials — institutional build of LibreClinica for the Department of Ophthalmology and Optometry, Medical University of Vienna.</description>
 	<organization>
@@ -50,7 +50,7 @@
 		<spring.version>6.2.6</spring.version>
 		<spring.security.version>6.4.4</spring.security.version>
 		<db.test>localhost</db.test>
-		<jackson.version>2.17.3</jackson.version>
+		<jackson.version>2.18.8</jackson.version>
 		<saxon.version>8.7</saxon.version>
 		<!-- Phase B.5 (2026-05-29): Hibernate 5.6.15 → 6.4.10. groupId moves
 		     to org.hibernate.orm; the -jakarta artifact-id suffix goes away
@@ -647,7 +647,17 @@
 	    		<version>3.0.0</version>
 	    		<scope>runtime</scope>
 			</dependency>
-			<!-- LIQUIBASE -->
+			<!-- LIQUIBASE: keep pinned to 3.6.3. Do NOT drop this pin to let
+			     Boot's BOM pull Liquibase 4.x — 4.x removed the legacy
+			     `modifyColumn` change type still used by the heritage changelog
+			     migration/2.5/changeLogCreateTables.xml (which the checksum rule
+			     forbids editing), so 4.x cannot parse it and the Spring context
+			     fails to start (integration + compose-smoke go red; unit tests
+			     do not catch it). That un-pin was tried in 1e47ca099 and reverted
+			     here. CVE-2022-0839 (XXE in XMLChangeLogSAXParser, CRITICAL; fixed
+			     only in Liquibase 4.8.0+) thus stays open on 3.6.3 — low practical
+			     risk here (changelogs are bundled in the WAR, not attacker-
+			     controlled). Liquibase 4 + this CVE are deferred to Phase D (D-Libs). -->
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
@@ -713,7 +723,9 @@
 			<dependency>
 				<groupId>org.postgresql</groupId>
 				<artifactId>postgresql</artifactId>
-				<version>42.7.5</version>
+				<!-- CVE-2025-49146, CVE-2026-42198: 42.7.5 (Boot 3.5.0 default)
+				     upgraded to 42.7.11. Boot manages 42.7.5; override required. -->
+				<version>42.7.11</version>
 				<scope>runtime</scope>
 			</dependency>
 			<!-- Oracle JDBC driver -->
@@ -1113,8 +1125,8 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>3.13.0</version>
 					<configuration>
-						<source>21</source>
-						<target>21</target>
+						<source>25</source>
+						<target>25</target>
 						<compilerArgument>-Xlint:all</compilerArgument>
 					</configuration>
 				</plugin>
@@ -1230,11 +1242,13 @@
 				     prepare-agent populates the `argLine` Maven property (referenced
 				     by surefire `@{argLine}`); the `report` execution generates
 				     core/target/site/jacoco/ at the end of the `test` phase. No
-				     coverage threshold enforced yet (Phase 0 goal: track baseline). -->
+				     coverage threshold enforced yet (Phase 0 goal: track baseline).
+				     Upgraded 0.8.12 → 0.8.15: 0.8.12 does not recognise Java 25
+				     class file major version 69 (added in 0.8.14). -->
 				<plugin>
 					<groupId>org.jacoco</groupId>
 					<artifactId>jacoco-maven-plugin</artifactId>
-					<version>0.8.12</version>
+					<version>0.8.15</version>
 					<executions>
 						<execution>
 							<id>jacoco-prepare-agent</id>
@@ -1375,6 +1389,21 @@
 			        		</goals>
 			        	</execution>
 			        </executions>
+			        <!-- Java 21 -> 25 (appmod/java-upgrade): analyzer 1.15.0 bundles
+			             ASM 9.7, which cannot read class file major version 69 (JDK 25)
+			             and aborts analyze-only with "Unsupported class file major
+			             version 69". Override the transitive ASM (the analyzer uses
+			             only the core asm artifact) to a JDK-25-aware release so the
+			             analyze guard keeps working. The Dockerfile build sidesteps
+			             analyze via -Dmdep.analyze.skip=true; CI's `mvn package` runs
+			             it, so this override is what unblocks CI. -->
+			        <dependencies>
+			        	<dependency>
+			        		<groupId>org.ow2.asm</groupId>
+			        		<artifactId>asm</artifactId>
+			        		<version>9.10.1</version>
+			        	</dependency>
+			        </dependencies>
 			        <configuration>
 			        	<failOnWarning>true</failOnWarning>
 			        	<ignoreNonCompile>true</ignoreNonCompile>
