@@ -123,6 +123,14 @@ const subjectSeqParam = computed<number | null>(() => {
 const resolvedJobId = ref<number | null>(null)
 const resolving = ref(false)
 const resolveError = ref<string | null>(null)
+/**
+ * NaN is the "not resolved yet" sentinel: on the per-subject deep link
+ * (/subjects/{label}/jobs/{n}) there is no jobId until the backend resolver
+ * returns. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
+ * ANY consumer that turns this into a request URL must guard with
+ * `Number.isFinite(jobId.value)` — NaN passes a bare `!= null` check and we
+ * shipped GET /retinal-jobs/NaN/segmentation for exactly that reason.
+ */
 const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
@@ -416,7 +424,11 @@ interface EtdrsRow {
  * surface_y data + the fundus geometry, matching the
  * raw-data-no-PNG architectural direction.
  */
-const segEnvelope = useSegmentationEnvelope(computed(() => jobId.value)).envelope
+// Pass `null` (not the NaN sentinel) while the per-subject deep link is still
+// resolving, so the composable doesn't fetch /retinal-jobs/NaN/segmentation.
+const segEnvelope = useSegmentationEnvelope(
+  computed(() => (Number.isFinite(jobId.value) ? jobId.value : null)),
+).envelope
 
 /**
  * Pre-derived per-(z, x) thickness in µm, packed as Float32Array. Returns
