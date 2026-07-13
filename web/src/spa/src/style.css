@@ -84,9 +84,13 @@
   /* the working surfaces clean and clinical. Flip if you want more brand   */
   /* weight on every page (see [[phase-e-design-system]] memory note).      */
   /* ---------------------------------------------------------------------- */
-  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-sans:  "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono:  "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* 2026-07-06 — the `Variable` suffix matches the @fontsource-variable
+   * packages imported in main.ts (bundled at build time; no runtime
+   * CDN fetch). Falls back to the plain family name for browsers that
+   * still receive an old cached SPA bundle, then to the OS stack. */
+  --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans:  "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:  "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* ---------------------------------------------------------------------- */
   /* Shape — `siegel`-echoing rounded radius for cards + primary surfaces.  */
