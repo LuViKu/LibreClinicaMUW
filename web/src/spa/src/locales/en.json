@@ -2533,7 +2533,8 @@
       "startSpa": "Start data entry →",
       "starting": "Starting…",
       "markComplete": "[NEEDS_REVIEW] Mark visit complete",
-      "completing": "[NEEDS_REVIEW] Marking complete…"
+      "completing": "[NEEDS_REVIEW] Marking complete…",
+      "requiredIncomplete": "All required CRFs must be complete before the visit can be marked complete."
     },
     "error": {
       "notFound": "Event not found.",

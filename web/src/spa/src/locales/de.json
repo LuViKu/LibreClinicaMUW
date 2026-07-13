@@ -2535,7 +2535,8 @@
       "startSpa": "Datenerfassung starten →",
       "starting": "Wird gestartet…",
       "markComplete": "Visite abschließen",
-      "completing": "Wird abgeschlossen…"
+      "completing": "Wird abgeschlossen…",
+      "requiredIncomplete": "Alle Pflicht-CRFs müssen abgeschlossen sein, bevor die Visite abgeschlossen werden kann."
     },
     "error": {
       "notFound": "Visite nicht gefunden.",

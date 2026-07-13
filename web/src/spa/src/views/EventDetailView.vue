@@ -55,8 +55,17 @@ const canMarkEventComplete = computed(() => {
   return s !== 'completed' && s !== 'signed' && s !== 'locked'
       && s !== 'stopped' && s !== 'skipped'
 })
+// Required-CRF gate — mirrors the server (EventsApiController.update): a
+// required CRF counts as done only when its status is 'completed' or
+// 'signed'. The button stays visible but disabled with a hint until every
+// required CRF is complete; the backend 409 is the authoritative gate.
+const incompleteRequiredCrfs = computed<EventCrfRowDto[]>(() =>
+  (event.value?.crfs ?? []).filter(
+    (c) => c.required && c.status !== 'completed' && c.status !== 'signed',
+  ),
+)
 async function onMarkEventComplete(): Promise<void> {
-  if (!event.value || !canMarkEventComplete.value) return
+  if (!event.value || !canMarkEventComplete.value || incompleteRequiredCrfs.value.length) return
   markEventCompleteError.value = null
   isMarkingEventComplete.value = true
   try {
@@ -258,7 +267,8 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               v-if="canMarkEventComplete"
               type="button"
               class="text-xs px-3 py-1.5 rounded bg-muw-blue text-white hover:bg-muw-blue/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              :disabled="isMarkingEventComplete"
+              :disabled="isMarkingEventComplete || incompleteRequiredCrfs.length > 0"
+              :title="incompleteRequiredCrfs.length > 0 ? t('eventDetail.action.requiredIncomplete') : undefined"
               data-test="event-detail-mark-complete"
               @click="onMarkEventComplete"
             >
@@ -267,6 +277,13 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                   : t('eventDetail.action.markComplete') }}
             </button>
           </div>
+          <p
+            v-if="canMarkEventComplete && incompleteRequiredCrfs.length > 0"
+            class="mt-1.5 text-xs text-slate-500"
+            data-test="event-detail-required-incomplete-hint"
+          >
+            {{ t('eventDetail.action.requiredIncomplete') }}
+          </p>
           <div
             v-if="markEventCompleteError"
             class="mt-2 rounded-muw border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
