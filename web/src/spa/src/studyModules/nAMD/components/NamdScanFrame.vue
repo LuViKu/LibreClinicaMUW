@@ -131,6 +131,16 @@ interface Props {
    * toggle (the per-pane fullscreen masthead).
    */
   etdrsRings?: boolean
+  /**
+   * 2026-07-13 — trial blinding. When false (the default — fail closed), the
+   * frame shows ONLY the raw B-scan: no fluid/layer segmentation overlay, no
+   * per-slice activity bar strip, and the AI segmentation + sibling-layers
+   * fetches are suppressed entirely. The parent passes the cohort's
+   * {@code aiVisible} (AI_SHOWN → true, AI_HIDDEN / unassigned → false). The
+   * backend also masks these for treating roles, so this is the UX layer of a
+   * server-enforced gate.
+   */
+  aiVisible?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -143,6 +153,7 @@ const props = withDefaults(defineProps<Props>(), {
   studySubjectId: null,
   canCorrectLayers: false,
   etdrsRings: undefined,
+  aiVisible: false,
 })
 
 const emit = defineEmits<{
@@ -163,12 +174,18 @@ const bscanDcmUrl = computed(() =>
   props.visit.retinalJobId != null ? artifactUrl(props.visit.retinalJobId, 'bscan.dcm') : null,
 )
 
+// Trial blinding — only fetch AI segmentation when the cohort permits overlays.
+// When aiVisible is false (AI_HIDDEN / unassigned) this is null, so the
+// composable skips the fetch entirely (no overlay, no activity strip, and no
+// 403 from the now-masked backend endpoint). The raw B-scan above is unaffected.
+const aiJobIdRef = computed(() => (props.aiVisible ? props.visit.retinalJobId : null))
+
 // Lift the envelope into the frame so we can derive a per-slice
 // activity bar strip without poking into BscanViewer's internals.
 // The composable's module-level Map cache means BscanViewer's own
 // call resolves from the same promise — only one HTTP fetch per
 // job total.
-const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
+const { envelope: segEnvelope } = useSegmentationEnvelope(aiJobIdRef)
 
 /**
  * 2026-06-26 — Sibling `layers` / `bm` job for the same (subject, event,
@@ -176,7 +193,9 @@ const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
  * frame paints ILM + BM polylines on top of the fluid mask AND mounts
  * the editing overlay in fullscreen.
  */
-const studySubjectIdRef = computed<number | null>(() => props.studySubjectId)
+// Trial blinding — the sibling layers/BM job drives the ILM/BM polyline
+// overlay, which is AI output; suppress its resolution when AI is hidden.
+const studySubjectIdRef = computed<number | null>(() => (props.aiVisible ? props.studySubjectId : null))
 const { siblingJobId, envelope: siblingEnvelope } = useSiblingLayersJob({
   studySubjectId: studySubjectIdRef,
   currentJobId: jobIdRef,
@@ -869,7 +888,7 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
             :n-bscans="nSlices"
             :model-value="slice"
             :job-id="jobIdRef"
-            :show-segmentation="mask"
+            :show-segmentation="mask && aiVisible"
             :static-frame="true"
             :fill-container="fillsParent"
           >
@@ -1048,8 +1067,11 @@ const fillsParent = computed(() => fsOpen.value || props.fillContainer)
       </button>
 
       <div class="flex-1 min-w-0">
-        <!-- Activity heatmap: one clickable bar per slice -->
+        <!-- Activity heatmap: one clickable bar per slice. Trial blinding —
+             per-slice fluid activity is AI quantification; hidden when the
+             cohort masks AI (also empty because the envelope isn't fetched). -->
         <div
+          v-if="aiVisible"
           :data-testid="`namd-scan-activity-${idBase}`"
           class="flex items-end gap-px h-3 mb-1.5 px-0.5"
         >

@@ -729,6 +729,16 @@ const shouldShowRetinalTab = computed(() =>
     && retinalJobCount.value > 0,
 )
 
+// 2026-07-13 — the retinal-history + baseline tables ("Retinal-Verlauf",
+// "Bisherige Auswertungen", "Erstmessungen") are a study-management surface,
+// not a treating-clinician one: they expose AI quantification + link into the
+// job view. Show them only to Data Manager (study manager) + Administrator;
+// hidden from Investigator (physician), CRC, and Monitor. The feeding
+// endpoints also mask AI server-side for treating roles (defense-in-depth).
+const canSeeRetinalTables = computed(() =>
+  auth.hasRole('Data Manager') || auth.hasRole('Administrator'),
+)
+
 watch(
   () => retinalNumericId.value,
   async (id) => {
@@ -1402,7 +1412,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              endpoints (keyed by the numeric id, not the OID) work
              directly. -->
         <SubjectRetinalTab
-          v-if="shouldShowRetinalTab && retinalNumericId != null"
+          v-if="shouldShowRetinalTab && retinalNumericId != null && canSeeRetinalTables"
           data-testid="subject-retinal-tab-mount"
           :subject-id="retinalNumericId"
           :subject-label="subject.id"
@@ -1420,7 +1430,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              so OD vs OS stay visually distinct without an extra label
              row. -->
         <div
-          v-if="baselinePanelEyes.length"
+          v-if="baselinePanelEyes.length && canSeeRetinalTables"
           data-testid="modality-baselines-block"
         >
           <ModalityBaselinesPanel

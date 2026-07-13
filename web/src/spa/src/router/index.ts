@@ -324,7 +324,11 @@ const router = createRouter({
       component: () => import('@/views/RetinalMetricsView.vue'),
       meta: {
         title: 'Retinal scan metrics',
-        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+        // Trial blinding — the standalone job view is NOT a treating-clinician
+        // surface. Investigator + CRC are excluded (CRC inherits Investigator,
+        // so dropping Investigator blocks both); they see OCT scans only inside
+        // the nAMD module, cohort-gated. Server-side masking backs this up.
+        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
     /* 2026-06-26 — per-subject deep link to a retinal job. Same view as
@@ -339,7 +343,8 @@ const router = createRouter({
       component: () => import('@/views/RetinalMetricsView.vue'),
       meta: {
         title: 'Retinal scan metrics',
-        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+        // Trial blinding — see /retinal-jobs/:jobId above. Not a physician surface.
+        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
     /* 2026-06-19 — Administrator-only cross-study parked-scans admin.
