@@ -1,0 +1,54 @@
+# =============================================================================
+# systemd --user unit for the retinal-inference cluster server (cn5)
+# =============================================================================
+# Replaces the `nohup` launch, which dies on logout and on node reboot — the
+# cause of the 2026-07-10 outage (jobs failed with "Remote /run returned null"
+# because nothing was listening on cn5:8000).
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user ~/.config/retinal-inference
+#   printf 'RETINAL_INFERENCE_AUTH_TOKEN=<shared-secret>\n' \
+#     > ~/.config/retinal-inference/env
+#   chmod 600 ~/.config/retinal-inference/env
+#   cp retinal-inference/deploy/retinal-inference-cluster.service \
+#     ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now retinal-inference-cluster.service
+#
+#   # survive logout AND reboot (without this the unit stops when you log out):
+#   loginctl enable-linger "$USER"
+#
+# Check:  systemctl --user status retinal-inference-cluster.service
+# Logs:   journalctl --user -u retinal-inference-cluster.service -f
+#
+# If your admin disallows `systemd --user` / lingering on compute nodes, fall
+# back to tmux (survives logout, NOT reboot):
+#   tmux new -d -s ri 'retinal-inference/scripts/start-cluster-server.sh --foreground'
+# =============================================================================
+
+[Unit]
+Description=LibreClinicaMUW retinal-inference cluster server (apptainer, run-only)
+Documentation=file:%h/libreclinicamuw/retinal-inference/docs/cluster-deployment.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The launcher derives BM_LD_LIBRARY_PATH from the LMOD modules, asserts the
+# DR-024 invariant, then execs uvicorn in the foreground so systemd owns the
+# process lifecycle (restart, logging) instead of nohup.
+ExecStart=%h/libreclinicamuw/retinal-inference/scripts/start-cluster-server.sh --foreground
+
+# The shared secret must match core.retinalInference.remotePushToken on the app
+# VM. Kept out of this file (and out of git) — see the install block above.
+EnvironmentFile=%h/.config/retinal-inference/env
+
+Restart=on-failure
+RestartSec=10
+
+# Cluster homes are on NFS and the import pulls a lot of Python; give the
+# startup a generous window before systemd calls the unit hung.
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
