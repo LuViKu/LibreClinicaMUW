@@ -321,7 +321,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 <th scope="col" class="px-5 py-2 font-medium">{{ t('eventDetail.table.crfName') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-32">{{ t('eventDetail.table.version') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('eventDetail.table.status') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-20 text-center">{{ t('eventDetail.table.required') }}</th>
+                <th scope="col" class="px-5 py-2 font-medium w-24 text-center cursor-help" :title="t('eventDetail.table.requiredHint')">{{ t('eventDetail.table.required') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44 text-right">{{ t('eventDetail.table.action') }}</th>
               </tr>
             </template>

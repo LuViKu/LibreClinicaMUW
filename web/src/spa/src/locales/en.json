@@ -174,6 +174,8 @@
     "title": "Print preview",
     "printAgain": "Print again",
     "back": "Back",
+    "subject": "Subject ID",
+    "event": "Visit",
     "eventCrfId": "Event CRF",
     "status": "Status",
     "lastSaved": "Last saved",
@@ -2522,7 +2524,8 @@
       "crfName": "CRF",
       "version": "Version",
       "status": "Status",
-      "required": "Req.",
+      "required": "Required",
+      "requiredHint": "Required CRF — must be completed before the visit can be marked complete",
       "action": ""
     },
     "action": {
