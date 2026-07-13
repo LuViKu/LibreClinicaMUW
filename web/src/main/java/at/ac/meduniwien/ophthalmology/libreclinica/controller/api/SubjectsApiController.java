@@ -1989,6 +1989,14 @@ public class SubjectsApiController {
                     "Validation failed", errors));
         }
 
+        // 2026-07-13 — trial-blinding gate. Restrict who may move a
+        // subject between the AI_SHOWN / AI_HIDDEN arms, and when. Runs
+        // AFTER the generic roleMayEdit gate so non-AI group edits are
+        // unaffected.
+        ResponseEntity<?> cohortDenied = guardAiCohortChange(
+                assignmentStudy, ss.getId(), desired, roleId);
+        if (cohortDenied != null) return cohortDenied;
+
         int touched;
         try {
             touched = service.reconcile(ss.getId(), currentUser, desired,
@@ -2018,6 +2026,129 @@ public class SubjectsApiController {
         SubjectDetailDto dto = toDetailDto(refreshed, subj, currentStudy, studyEventDAO,
                 studyEventDefinitionDAO, eventCRFDAO, defCache, openQueriesByEvent);
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * 2026-07-13 — trial-blinding gate for the AI cohort
+     * ({@code AI_SHOWN} / {@code AI_HIDDEN}).
+     *
+     * <p>The nAMD study randomises subjects into an AI-shown vs an
+     * AI-hidden arm. Once a subject has a completed (or locked / signed)
+     * visit, moving them between arms would corrupt the RCT, so a change
+     * to the AI cohort is restricted beyond the generic
+     * {@link SubjectEditAuthorization} gate:
+     * <ul>
+     *   <li><strong>Before</strong> the first completed visit — the
+     *       study manager ({@link Role#STUDYDIRECTOR}, "Data Manager")
+     *       or an administrator may change the cohort, e.g. to fix a
+     *       mis-randomisation.</li>
+     *   <li><strong>After</strong> the first completed visit — only an
+     *       administrator may override.</li>
+     *   <li>Treating roles ({@link Role#INVESTIGATOR} /
+     *       {@link Role#COORDINATOR}) may never change the cohort.</li>
+     * </ul>
+     *
+     * <p>Returns a populated {@link ResponseEntity} (403 / 409 / 500)
+     * when the request would change the AI cohort and the actor is not
+     * permitted; returns {@code null} when the request does not touch
+     * the AI cohort — or the study has no AI cohort class — leaving the
+     * standard authorization gate authoritative. Fails <em>closed</em>
+     * (500) on any lookup error: a blinding-critical gate must never
+     * open by accident.
+     *
+     * @param assignmentStudy the top-level study that owns the group
+     *        classes (already resolved by the caller for multi-site).
+     * @param studySubjectId  the subject being edited.
+     * @param desired         the requested final assignment list.
+     * @param roleId          the actor's role id in the active study.
+     */
+    private ResponseEntity<?> guardAiCohortChange(
+            StudyBean assignmentStudy, int studySubjectId,
+            List<UpdateSubjectGroupsRequest.Assignment> desired, int roleId) {
+        try (Connection c = dataSource.getConnection()) {
+            // 1. Which group class carries the AI_SHOWN / AI_HIDDEN groups?
+            Integer aiClassId = null;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT sg.study_group_class_id "
+                            + "  FROM study_group sg "
+                            + "  JOIN study_group_class sgc "
+                            + "    ON sgc.study_group_class_id = sg.study_group_class_id "
+                            + " WHERE sgc.study_id = ? "
+                            + "   AND UPPER(sg.name) IN ('AI_SHOWN','AI_HIDDEN') "
+                            + " LIMIT 1")) {
+                ps.setInt(1, assignmentStudy.getId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) aiClassId = rs.getInt(1);
+                }
+            }
+            if (aiClassId == null) return null; // study has no AI cohort — nothing to guard.
+
+            // 2. Current AI group for the subject (0 = none active).
+            int currentAiGroupId = 0;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT study_group_id FROM subject_group_map "
+                            + " WHERE study_subject_id = ? AND study_group_class_id = ? "
+                            + "   AND status_id = 1 LIMIT 1")) {
+                ps.setInt(1, studySubjectId);
+                ps.setInt(2, aiClassId.intValue());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) currentAiGroupId = rs.getInt(1);
+                }
+            }
+
+            // 3. Desired AI group from the request. reconcile() treats a
+            //    class present-then-absent as a soft-delete, so an omitted
+            //    AI class that is currently active is ALSO a cohort change
+            //    (to none).
+            int desiredAiGroupId = 0;
+            boolean aiClassInRequest = false;
+            if (desired != null) {
+                for (UpdateSubjectGroupsRequest.Assignment a : desired) {
+                    if (a != null && a.groupClassId() == aiClassId.intValue()) {
+                        aiClassInRequest = true;
+                        desiredAiGroupId = a.groupId() == null ? 0 : a.groupId().intValue();
+                        break;
+                    }
+                }
+            }
+            boolean changed = aiClassInRequest
+                    ? desiredAiGroupId != currentAiGroupId
+                    : currentAiGroupId != 0;
+            if (!changed) return null; // AI cohort untouched — defer to the generic gate.
+
+            // 4. Role / visit gate on the cohort change.
+            if (roleId == Role.ADMIN.getId()) return null; // admin may always change.
+
+            if (roleId != Role.STUDYDIRECTOR.getId()) {
+                // Treating roles (Investigator / CRC) and everyone else.
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "Only the study manager may change a subject's AI cohort; "
+                        + "an administrator can override after the first completed visit."));
+            }
+
+            // Study manager — permitted only before the first completed
+            // (or locked / signed) visit.
+            boolean hasCompletedVisit;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT 1 FROM study_event "
+                            + " WHERE study_subject_id = ? "
+                            + "   AND subject_event_status_id IN (4, 7, 8) LIMIT 1")) {
+                ps.setInt(1, studySubjectId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    hasCompletedVisit = rs.next();
+                }
+            }
+            if (hasCompletedVisit) {
+                return ResponseEntity.status(409).body(Map.of("message",
+                        "This subject already has a completed visit — the AI cohort is "
+                        + "locked. An administrator must override to change it."));
+            }
+            return null; // study manager, pre-first-visit — allowed.
+        } catch (SQLException e) {
+            LOG.error("AI-cohort guard failed for ss={}: {}", studySubjectId, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Could not verify AI-cohort change permission — see server log."));
+        }
     }
 
     /**

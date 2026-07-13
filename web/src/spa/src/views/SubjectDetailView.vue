@@ -105,6 +105,20 @@ const canEdit = computed(() => {
   return !!role && canEditSubject(role)
 })
 
+/*
+ * 2026-07-13 — cohort-edit gate (trial blinding, defense-in-depth).
+ * The group-assignment dialog is the surface that moves a subject
+ * between the AI_SHOWN / AI_HIDDEN arms, so restrict the affordance to
+ * the study manager (Data Manager) + Administrator. Treating roles
+ * (Investigator / CRC) and Monitors do not see the pencil. The server
+ * (SubjectsApiController.guardAiCohortChange) is authoritative and also
+ * enforces the "before the first completed visit / admin override
+ * after" rule — this is only the UX layer.
+ */
+const canEditCohort = computed(
+  () => auth.hasRole('Data Manager') || auth.hasRole('Administrator'),
+)
+
 interface EditForm {
   secondaryId: string
   gender: Gender
@@ -891,6 +905,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   </template>
                 </span>
                 <button
+                  v-if="canEditCohort"
                   type="button"
                   data-testid="subject-detail-edit-groups"
                   :title="t('subjectGroupEdit.openButton')"
