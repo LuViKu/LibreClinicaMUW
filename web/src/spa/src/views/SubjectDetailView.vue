@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -395,9 +395,54 @@ function onCancelEvent(ev: { eventId: string; label: string }) {
  */
 const openMenuEventId = ref<string | null>(null)
 
-function toggleEventMenu(eventId: string): void {
-  openMenuEventId.value = openMenuEventId.value === eventId ? null : eventId
+/**
+ * 2026-07-13 — kebab-menu popover position, in viewport coordinates.
+ * The events table lives inside an `overflow-x-auto` wrapper, and CSS
+ * forces `overflow-y` to `auto` whenever `overflow-x` is `auto`, so the
+ * old `absolute` popover was clipped by the wrapper and spawned a stray
+ * vertical scrollbar. We now render the popover `position: fixed`
+ * (which escapes the scroll container's clip WITHOUT leaving the DOM
+ * subtree, so the v-click-outside directive keeps working) and anchor
+ * it to the trigger button's bounding rect.
+ */
+const menuPos = ref<{ top: number; right: number } | null>(null)
+
+function toggleEventMenu(eventId: string, evt?: MouseEvent): void {
+  if (openMenuEventId.value === eventId) {
+    openMenuEventId.value = null
+    return
+  }
+  const btn = evt?.currentTarget as HTMLElement | undefined
+  if (btn) {
+    const r = btn.getBoundingClientRect()
+    // Right-align to the button (mirrors the old `right-0`), open below.
+    menuPos.value = { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) }
+  }
+  openMenuEventId.value = eventId
 }
+
+/**
+ * A fixed popover does not track the trigger on scroll/resize, so close
+ * it instead of letting it drift away from the ⋮ button. Listeners are
+ * bound only while a menu is open (see the watcher) and torn down on
+ * unmount.
+ */
+function closeEventMenuOnViewportShift(): void {
+  openMenuEventId.value = null
+}
+watch(openMenuEventId, (open) => {
+  if (open) {
+    window.addEventListener('scroll', closeEventMenuOnViewportShift, true)
+    window.addEventListener('resize', closeEventMenuOnViewportShift)
+  } else {
+    window.removeEventListener('scroll', closeEventMenuOnViewportShift, true)
+    window.removeEventListener('resize', closeEventMenuOnViewportShift)
+  }
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', closeEventMenuOnViewportShift, true)
+  window.removeEventListener('resize', closeEventMenuOnViewportShift)
+})
 
 function onMenuEdit(ev: {
   eventId: string
@@ -1273,11 +1318,12 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                         class="cursor-pointer px-1.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 select-none"
                         :aria-label="t('subjectDetail.event.moreActions')"
                         :aria-expanded="openMenuEventId === ev.eventId"
-                        @click="toggleEventMenu(ev.eventId)"
+                        @click="toggleEventMenu(ev.eventId, $event)"
                       >⋮</button>
                       <div
-                        v-if="openMenuEventId === ev.eventId"
-                        class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-lg z-50 py-1 text-left"
+                        v-if="openMenuEventId === ev.eventId && menuPos"
+                        class="fixed min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-lg z-50 py-1 text-left"
+                        :style="{ top: menuPos.top + 'px', right: menuPos.right + 'px' }"
                       >
                         <button
                           v-if="canEditEv(ev.status)"
