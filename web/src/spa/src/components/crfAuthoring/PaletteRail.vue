@@ -52,7 +52,7 @@ const presets = computed(() => PRESET_CATALOG)
  * future-proofing trivial — additional drag sources (e.g. ophth
  * catalog rows) can co-exist by adding a kind.
  */
-function makeDragPayload(kind: 'primitive', dataType: string): string
+function makeDragPayload(kind: 'primitive', primitiveId: string): string
 function makeDragPayload(kind: 'preset', presetId: string): string
 function makeDragPayload(kind: 'primitive' | 'preset', value: string): string {
   return JSON.stringify({ kind, value })
@@ -63,13 +63,13 @@ function onPrimitiveDragStart(ev: DragEvent, p: PalettePrimitive): void {
   ev.dataTransfer.effectAllowed = 'copy'
   ev.dataTransfer.setData(
     'application/x-crf-palette',
-    makeDragPayload('primitive', p.dataType),
+    makeDragPayload('primitive', p.id),
   )
   // Some browsers fall back to text/plain for non-registered MIME
   // types; mirror so dragover handlers can sniff either.
   ev.dataTransfer.setData(
     'text/plain',
-    makeDragPayload('primitive', p.dataType),
+    makeDragPayload('primitive', p.id),
   )
 }
 
@@ -102,12 +102,12 @@ function onPresetDragStart(ev: DragEvent, p: PresetDescriptor): void {
           {{ t('crfAuthoring.canvas.palette.primitives') }}
         </h4>
         <ul class="space-y-1.5">
-          <li v-for="p in primitives" :key="p.dataType">
+          <li v-for="p in primitives" :key="p.id">
             <button
               type="button"
               class="w-full flex flex-col text-left px-2.5 py-1.5 rounded-md border border-slate-200 bg-white hover:border-muw-blue hover:bg-muw-blue/5 cursor-grab"
               :draggable="true"
-              :data-testid="`crf-canvas-palette-prim-${p.dataType}`"
+              :data-testid="`crf-canvas-palette-prim-${p.id}`"
               @dragstart="(ev) => onPrimitiveDragStart(ev, p)"
               @click="emit('primitive-activated', p)"
               @keydown.enter.prevent="emit('primitive-activated', p)"

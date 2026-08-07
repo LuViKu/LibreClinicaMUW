@@ -1256,6 +1256,7 @@
       "PDATE": "Teildatum (PDATE)",
       "FILE": "Dateianhang (FILE)",
       "BL": "Boolean (BL)",
+      "TRISTATE_REASON": "Ja / Nein / Unbekannt (+ Grund)",
       "BLHelper": "Boolean-Items werden als einzelne Checkbox dargestellt (Ja = 1 / Nein = 0). Das Antwortset ist fest vorgegeben, daher wird die Optionen-Auswahl ausgeblendet.",
       "BLPreviewHeading": "Vorschau",
       "BLPlaceholder": "Boolean-Item"
@@ -1384,6 +1385,9 @@
           "DATE": { "label": "Datum", "description": "Vollständiges Datum (TT.MM.JJJJ)." },
           "BL": { "label": "Boolean", "description": "Ja / Nein als einzelne Checkbox." },
           "TRISTATE_REASON": { "label": "Ja / Nein / Unbekannt + Grund", "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld." },
+          "PDATE": { "label": "Teildatum", "description": "Jahr oder Monat und Jahr." },
+          "CHOICE_SINGLE": { "label": "Auswahlliste", "description": "Einfachauswahl aus eigenen Optionen." },
+          "CHOICE_MULTI": { "label": "Mehrfachauswahl", "description": "Mehrere Optionen gleichzeitig auswählbar." },
           "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
         }
       },
@@ -1409,6 +1413,11 @@
       },
       "properties": {
         "title": "Eigenschaften",
+        "options": {
+          "fromCatalog": "Aus Katalog übernehmen …",
+          "refNotice": "Verknüpftes Antwortset — zum Bearbeiten in eigene Optionen umwandeln.",
+          "detach": "In eigene Optionen umwandeln"
+        },
         "clear": "Auswahl aufheben",
         "noSelection": "Wählen Sie ein Item im Canvas, um seine Eigenschaften zu bearbeiten.",
         "labelField": "Item-Name",
@@ -1469,7 +1478,10 @@
         "itemNameInvalidChars": "Item-Name darf nur Buchstaben, Ziffern und Unterstriche enthalten.",
         "dataTypeUnsupported": "Datentyp wird vom Server nicht akzeptiert.",
         "responseTypeUnsupported": "Antworttyp wird vom Server nicht akzeptiert.",
-        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben."
+        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben.",
+        "optionsRequired": "Mindestens eine Antwortoption ist erforderlich.",
+        "fileResponseTypeRequired": "Der Antworttyp „Datei-Upload“ setzt den Datentyp FILE voraus.",
+        "fileDataTypeRequired": "Items vom Datentyp FILE benötigen den Antworttyp „Datei-Upload“."
       }
     },
     "presets": {

@@ -50,7 +50,7 @@ describe('PaletteRail', () => {
   it('renders one button per primitive', () => {
     const w = mountRail()
     for (const p of PALETTE_PRIMITIVES) {
-      expect(w.find(`[data-testid="crf-canvas-palette-prim-${p.dataType}"]`).exists()).toBe(true)
+      expect(w.find(`[data-testid="crf-canvas-palette-prim-${p.id}"]`).exists()).toBe(true)
     }
   })
 
@@ -76,7 +76,7 @@ describe('PaletteRail', () => {
     await w.find('[data-testid="crf-canvas-palette-prim-INT"]').trigger('click')
     const emitted = w.emitted('primitive-activated')
     expect(emitted).toBeTruthy()
-    expect((emitted![0]![0] as { dataType: string }).dataType).toBe('INT')
+    expect((emitted![0]![0] as { id: string }).id).toBe('INT')
   })
 
   it('emits preset-activated when a preset is clicked', async () => {

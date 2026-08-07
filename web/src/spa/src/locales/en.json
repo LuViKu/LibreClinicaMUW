@@ -1256,6 +1256,7 @@
       "PDATE": "Partial date (PDATE)",
       "FILE": "File attachment (FILE)",
       "BL": "Boolean (BL)",
+      "TRISTATE_REASON": "Yes / No / Unknown (+ reason)",
       "BLHelper": "Boolean items render as a single checkbox (Yes = 1 / No = 0). The response set is fixed, so the options picker is hidden.",
       "BLPreviewHeading": "Preview",
       "BLPlaceholder": "Boolean item"
@@ -1382,6 +1383,9 @@
           "DATE": { "label": "[NEEDS_REVIEW] Date", "description": "[NEEDS_REVIEW] Full date (DD.MM.YYYY)." },
           "BL": { "label": "[NEEDS_REVIEW] Boolean", "description": "[NEEDS_REVIEW] Yes / No as a single checkbox." },
           "TRISTATE_REASON": { "label": "[NEEDS_REVIEW] Yes / No / Unknown + reason", "description": "[NEEDS_REVIEW] Three-state selector with conditional reason field." },
+          "PDATE": { "label": "[NEEDS_REVIEW] Partial date", "description": "[NEEDS_REVIEW] Year, or month and year." },
+          "CHOICE_SINGLE": { "label": "[NEEDS_REVIEW] Dropdown list", "description": "[NEEDS_REVIEW] Single choice from your own options." },
+          "CHOICE_MULTI": { "label": "[NEEDS_REVIEW] Multi-select", "description": "[NEEDS_REVIEW] Several options selectable at once." },
           "FILE": { "label": "[NEEDS_REVIEW] File attachment", "description": "[NEEDS_REVIEW] File upload." }
         }
       },
@@ -1407,6 +1411,11 @@
       },
       "properties": {
         "title": "[NEEDS_REVIEW] Properties",
+        "options": {
+          "fromCatalog": "[NEEDS_REVIEW] Copy from catalog …",
+          "refNotice": "[NEEDS_REVIEW] Linked response set — convert to your own options to edit it.",
+          "detach": "[NEEDS_REVIEW] Convert to own options"
+        },
         "clear": "[NEEDS_REVIEW] Clear selection",
         "noSelection": "[NEEDS_REVIEW] Select an item in the canvas to edit its properties.",
         "labelField": "[NEEDS_REVIEW] Item name",
@@ -1467,7 +1476,10 @@
         "itemNameInvalidChars": "[NEEDS_REVIEW] Item name may only contain letters, digits and underscores.",
         "dataTypeUnsupported": "[NEEDS_REVIEW] Data type is not accepted by the server.",
         "responseTypeUnsupported": "[NEEDS_REVIEW] Response type is not accepted by the server.",
-        "duplicateItemName": "[NEEDS_REVIEW] Duplicate item name in this section."
+        "duplicateItemName": "[NEEDS_REVIEW] Duplicate item name in this section.",
+        "optionsRequired": "[NEEDS_REVIEW] At least one response option is required.",
+        "fileResponseTypeRequired": "[NEEDS_REVIEW] The 'file' response type requires data type FILE.",
+        "fileDataTypeRequired": "[NEEDS_REVIEW] Items with data type FILE require the 'file' response type."
       }
     },
     "presets": {

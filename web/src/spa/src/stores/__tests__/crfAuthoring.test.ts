@@ -664,4 +664,203 @@ describe('useCrfAuthoringStore', () => {
       expect('showWhen' in payload.sections[0]!.items[0]!).toBe(false)
     })
   })
+
+  /**
+   * Response-shape reconciliation — the invariant that used to live in a
+   * watcher inside the (dead) ItemEditor.vue, which is why the palette
+   * drop path never got it.
+   */
+  describe('reconcileItemResponseShape', () => {
+    type Inline = { type: string; label: string; options: Array<{ text: string; value: string }> }
+    const inlineOf = (store: ReturnType<typeof useCrfAuthoringStore>, i = 0): Inline =>
+      store.draft.sections[0]!.items[i]!.responseSet as unknown as Inline
+
+    it('seeds the Ja/Nein/Unbekannt trio for a bare TRISTATE_REASON drop', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'TRISTATE_REASON' })
+      const item = store.draft.sections[0]!.items[0]!
+      // Previously left at 'text' — out of the matrix — with a null set,
+      // which the rail then rendered as an uncorrectable disabled select.
+      expect(item.responseType).toBe('single-select')
+      expect(inlineOf(store).options.map((o) => o.value)).toEqual(['JA', 'NEIN', 'UNBEKANNT'])
+    })
+
+    it('clamps a bare FILE drop to the file response type', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'FILE' })
+      const item = store.draft.sections[0]!.items[0]!
+      expect(item.responseType).toBe('file')
+      expect(item.responseSet).toBeNull()
+    })
+
+    it('leaves BL without an inline set (Yes/No is synthesised at wire time)', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'BL' })
+      const item = store.draft.sections[0]!.items[0]!
+      expect(item.responseType).toBe('single-select')
+      expect(item.responseSet).toBeNull()
+    })
+
+    it('seeds two blank rows when the response type gains options', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0)
+      store.setItemField(0, 0, 'responseType', 'single-select')
+      expect(inlineOf(store).options).toHaveLength(2)
+      expect(inlineOf(store).options.every((o) => o.text === '' && o.value === '')).toBe(true)
+    })
+
+    it('clears the inline set when the response type drops options again', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0)
+      store.setItemField(0, 0, 'responseType', 'single-select')
+      store.setItemField(0, 0, 'responseType', 'text')
+      expect(store.draft.sections[0]!.items[0]!.responseSet).toBeNull()
+    })
+
+    it('preserves authored options across a compatible data-type change', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'A', value: '1' }] },
+      })
+      // single-select is in INT's allowed matrix, so nothing is lost.
+      store.setItemField(0, 0, 'dataType', 'INT')
+      expect(inlineOf(store).options).toEqual([{ text: 'A', value: '1' }])
+    })
+
+    it('clears options when the new data type cannot carry them', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'A', value: '1' }] },
+      })
+      store.setItemField(0, 0, 'dataType', 'DATE')
+      const item = store.draft.sections[0]!.items[0]!
+      expect(item.responseType).toBe('text')
+      expect(item.responseSet).toBeNull()
+    })
+
+    it('does not disturb options when an unrelated field is edited', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'TRISTATE_REASON' })
+      store.setItemField(0, 0, 'name', 'SMOKER')
+      expect(inlineOf(store).options).toHaveLength(3)
+    })
+
+    it('leaves a catalog-linked (ref) response set untouched', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        responseType: 'radio',
+        responseSet: { ref: { label: 'yes_no' } },
+      })
+      expect(store.draft.sections[0]!.items[0]!.responseSet).toEqual({ ref: { label: 'yes_no' } })
+    })
+
+    it('preserves preset-supplied inline options verbatim', () => {
+      const store = useCrfAuthoringStore()
+      const options = [
+        { text: 'Ja', value: 'JA' },
+        { text: 'Nein', value: 'NEIN' },
+      ]
+      store.addItem(0, {
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: 'iop_tristate', options },
+      })
+      expect(inlineOf(store).label).toBe('iop_tristate')
+      expect(inlineOf(store).options).toEqual(options)
+    })
+  })
+
+  describe('buildPayload — choice response sets', () => {
+    const CHOICE_TYPES = ['radio', 'single-select', 'multi-select', 'checkbox'] as const
+
+    it.each(CHOICE_TYPES)('always emits an options array for %s', (rt) => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'Q1', responseType: rt })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { type: string; options?: unknown } }> }>
+      }
+      const rs = payload.sections[0]!.items[0]!.responseSet
+      expect(rs.type).toBe(rt)
+      // Regression guard: the canvas used to ship a choice type with no
+      // options key at all, which the backend rejected with an
+      // unlocalised "requires at least one option".
+      expect(Array.isArray(rs.options)).toBe(true)
+    })
+
+    it('gives two blank-labelled dropdowns distinct response-set labels', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'CONSENT',
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'Ja', value: 'JA' }] },
+      })
+      store.addItem(0, {
+        name: 'SEX',
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'W', value: 'F' }] },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { label: string } }> }>
+      }
+      const [first, second] = payload.sections[0]!.items
+      // Both used to serialise with a blank label, which the adapter
+      // stamped as a shared `single_select_options` token — and the
+      // parser then rejected the whole version because one label carried
+      // two different option lists. A CRF could hold only ONE dropdown.
+      expect(first!.responseSet.label).toBe('consent_options')
+      expect(second!.responseSet.label).toBe('sex_options')
+      expect(first!.responseSet.label).not.toBe(second!.responseSet.label)
+    })
+
+    it('lets an operator-typed label win over the derived one', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'CONSENT',
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: 'ja_nein', options: [{ text: 'Ja', value: 'JA' }] },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { label: string } }> }>
+      }
+      expect(payload.sections[0]!.items[0]!.responseSet.label).toBe('ja_nein')
+    })
+
+    it('filters blank starter rows off the wire', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'Q1', responseType: 'single-select' })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { options: unknown[] } }> }>
+      }
+      expect(payload.sections[0]!.items[0]!.responseSet.options).toEqual([])
+    })
+
+    it('emits the full four-option dropdown the HealthAEye CRF needs', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'CHILDBEARING', responseType: 'single-select' })
+      store.setItemResponseSet(0, 0, {
+        type: 'single-select',
+        label: '',
+        options: [
+          { text: 'Ja', value: 'JA' },
+          { text: 'Nein', value: 'NEIN' },
+          { text: 'Nicht zutreffend', value: 'NICHT_ZUTREFFEND' },
+          { text: 'Unbekannt', value: 'UNBEKANNT' },
+        ],
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{
+          items: Array<{ responseSet: { label: string; options: Array<{ value: string }> } }>
+        }>
+      }
+      const rs = payload.sections[0]!.items[0]!.responseSet
+      expect(rs.label).toBe('childbearing_options')
+      expect(rs.options.map((o) => o.value)).toEqual([
+        'JA',
+        'NEIN',
+        'NICHT_ZUTREFFEND',
+        'UNBEKANNT',
+      ])
+    })
+  })
 })

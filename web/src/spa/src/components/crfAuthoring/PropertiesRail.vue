@@ -2,11 +2,16 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ResponseOptionsEditor from './ResponseOptionsEditor.vue'
+
 import {
   useCrfAuthoringStore,
   allowedResponseTypesForDataType,
+  dataTypeIsBoolean,
+  responseTypeRequiresOptions,
   type AuthoringDataType,
   type AuthoringItem,
+  type AuthoringResponseSet,
   type AuthoringResponseType,
   type ShowWhenComparator,
 } from '@/stores/crfAuthoring'
@@ -35,6 +40,34 @@ const store = useCrfAuthoringStore()
 const DATA_TYPES: ReadonlyArray<AuthoringDataType> = [
   'ST', 'INT', 'REAL', 'DATE', 'PDATE', 'BL', 'TRISTATE_REASON', 'FILE',
 ]
+
+/**
+ * Localised labels for the two type dropdowns. The rail used to render
+ * the raw union codes ({@code ST}, {@code single-select}) even though
+ * fully-translated key blocks already existed — they were only ever
+ * consumed by the orphaned {@code ItemEditor.vue}. Static maps rather
+ * than a template literal so the keys stay greppable.
+ */
+const DATA_TYPE_LABEL_KEYS: Record<AuthoringDataType, string> = {
+  ST: 'crfAuthoring.dataType.ST',
+  INT: 'crfAuthoring.dataType.INT',
+  REAL: 'crfAuthoring.dataType.REAL',
+  DATE: 'crfAuthoring.dataType.DATE',
+  PDATE: 'crfAuthoring.dataType.PDATE',
+  FILE: 'crfAuthoring.dataType.FILE',
+  BL: 'crfAuthoring.dataType.BL',
+  TRISTATE_REASON: 'crfAuthoring.dataType.TRISTATE_REASON',
+}
+
+const RESPONSE_TYPE_LABEL_KEYS: Record<AuthoringResponseType, string> = {
+  text: 'crfAuthoring.responseType.text',
+  textarea: 'crfAuthoring.responseType.textarea',
+  radio: 'crfAuthoring.responseType.radio',
+  'single-select': 'crfAuthoring.responseType.single-select',
+  'multi-select': 'crfAuthoring.responseType.multi-select',
+  checkbox: 'crfAuthoring.responseType.checkbox',
+  file: 'crfAuthoring.responseType.file',
+}
 
 const COMPARATORS: ReadonlyArray<{ value: ShowWhenComparator; labelKey: string }> = [
   { value: '==', labelKey: 'crfAuthoring.showWhen.comparator.eq' },
@@ -72,6 +105,17 @@ const allowedResponseTypes = computed<ReadonlyArray<AuthoringResponseType>>(() =
   const it = selectedItem.value
   if (!it) return []
   return allowedResponseTypesForDataType(it.dataType)
+})
+
+/**
+ * Whether to surface the response-options editor. Choice response types
+ * need options; BL synthesises its own fixed Yes/No at serialise time.
+ */
+const showOptionsEditor = computed<boolean>(() => {
+  const it = selectedItem.value
+  if (!it) return false
+  if (dataTypeIsBoolean(it.dataType)) return false
+  return responseTypeRequiresOptions(it.responseType)
 })
 
 /**
@@ -123,18 +167,20 @@ function onRequiredInput(ev: Event): void {
 }
 
 function onDataTypeChange(ev: Event): void {
-  const value = (ev.target as HTMLSelectElement).value as AuthoringDataType
-  setField('dataType', value)
-  // Re-clamp response type to one allowed by the new data type.
-  const allowed = allowedResponseTypesForDataType(value)
-  const item = selectedItem.value
-  if (item && !allowed.includes(item.responseType) && allowed.length > 0) {
-    setField('responseType', allowed[0]!)
-  }
+  // The store's reconcileItemResponseShape re-clamps the response type
+  // and seeds/clears the response set — no component-side clamping, so
+  // this path and the palette-drop path cannot diverge.
+  setField('dataType', (ev.target as HTMLSelectElement).value as AuthoringDataType)
 }
 
 function onResponseTypeChange(ev: Event): void {
   setField('responseType', (ev.target as HTMLSelectElement).value as AuthoringResponseType)
+}
+
+function onResponseSetUpdate(next: AuthoringResponseSet): void {
+  const coord = selectedCoord.value
+  if (!coord) return
+  store.setItemResponseSet(coord.sectionIndex, coord.itemIndex, next)
 }
 
 function onValidationRegexInput(ev: Event): void {
@@ -279,7 +325,9 @@ function onClearSelection(): void {
             data-testid="crf-canvas-properties-dataType"
             @change="onDataTypeChange"
           >
-            <option v-for="dt in DATA_TYPES" :key="dt" :value="dt">{{ dt }}</option>
+            <option v-for="dt in DATA_TYPES" :key="dt" :value="dt">
+              {{ t(DATA_TYPE_LABEL_KEYS[dt]) }}
+            </option>
           </select>
           <p class="mt-1 text-[10.5px] leading-snug text-slate-500">
             {{ t(`crfAuthoring.canvas.properties.dataTypeHint.${selectedItem.dataType}`) }}
@@ -297,12 +345,35 @@ function onClearSelection(): void {
             data-testid="crf-canvas-properties-responseType"
             @change="onResponseTypeChange"
           >
-            <option v-for="rt in allowedResponseTypes" :key="rt" :value="rt">{{ rt }}</option>
+            <option v-for="rt in allowedResponseTypes" :key="rt" :value="rt">
+              {{ t(RESPONSE_TYPE_LABEL_KEYS[rt]) }}
+            </option>
           </select>
           <p class="mt-1 text-[10.5px] leading-snug text-slate-500">
             {{ t(`crfAuthoring.canvas.properties.responseTypeHint.${selectedItem.responseType}`) }}
           </p>
         </div>
+
+        <!-- Response options — the editor the canvas never had. Keyed on
+             the item uid so switching selection remounts with fresh rows
+             rather than showing the previously-selected item's options. -->
+        <div v-if="showOptionsEditor" data-testid="crf-canvas-properties-options-host">
+          <ResponseOptionsEditor
+            :key="selectedItem.uid"
+            :model-value="selectedItem.responseSet"
+            :response-type="selectedItem.responseType"
+            :data-type="selectedItem.dataType"
+            :catalog="store.responseSetCatalog"
+            @update:model-value="onResponseSetUpdate"
+          />
+        </div>
+        <p
+          v-else-if="selectedItem.dataType === 'BL'"
+          class="text-[10.5px] leading-snug text-slate-500"
+          data-testid="crf-canvas-properties-options-bl-hint"
+        >
+          {{ t('crfAuthoring.dataType.BLHelper') }}
+        </p>
 
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
