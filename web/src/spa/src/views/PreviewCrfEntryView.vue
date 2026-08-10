@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -113,7 +113,12 @@ function statusLabel(s: CrfEntryStatus): string {
   return t(`crfEntry.status.${s}`)
 }
 
+// Required-field errors are only surfaced after the operator attempts to
+// save / mark complete — don't flag empty required fields on first render.
+const submitted = ref(false)
+
 function showError(item: CrfItem): string | null {
+  if (!submitted.value) return null
   return store.itemErrors[item.oid] ?? null
 }
 
@@ -181,11 +186,13 @@ function hasBilateralRow(rows: BilateralRow[]): boolean {
 function onSaveStub(): void {
   // No-op stub: flips local in-memory status only (per Phase E.6
   // preview spec — Save and Mark complete render their flow without
-  // persisting anything).
+  // persisting anything). Attempting either surfaces required-field errors.
+  submitted.value = true
   store.save()
 }
 
 function onMarkCompleteStub(): void {
+  submitted.value = true
   store.markComplete()
 }
 

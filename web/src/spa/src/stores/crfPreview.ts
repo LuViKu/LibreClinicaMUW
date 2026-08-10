@@ -67,6 +67,12 @@ function authoringDataTypeToRuntime(
   authoring: AuthoringItem['dataType'] | 'BL',
   responseType: AuthoringResponseType,
 ): CrfItem['dataType'] {
+  // BL (boolean) always renders as a yes/no control and takes precedence
+  // over the responseType override below: an authored boolean is clamped to
+  // responseType 'single-select' but carries no explicit option set, so
+  // without this it would map to `select-one` with no options and fall
+  // through to a plain text input on the form.
+  if (authoring === 'BL') return 'boolean'
   // Option-bearing response types override the raw data type: a
   // radio / single-select renders as `select-one`, a multi-select /
   // checkbox group renders as `select-multi`, regardless of the
@@ -97,8 +103,8 @@ function authoringDataTypeToRuntime(
       return 'partial-date'
     case 'FILE':
       return 'file'
-    case 'BL':
-      return 'boolean'
+    // 'BL' is handled by the early return above (before the responseType
+    // switch), so it never reaches here.
     case 'ST':
     default:
       return 'string'

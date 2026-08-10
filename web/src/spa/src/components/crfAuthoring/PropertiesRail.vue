@@ -306,13 +306,16 @@ function onClearSelection(): void {
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.descriptionField') }}
           </label>
-          <input
-            type="text"
-            class="w-full text-xs border-slate-200 rounded px-2 py-1 focus:border-muw-blue focus:outline-none focus:ring-1 focus:ring-muw-blue/40"
+          <!-- Multi-line + vertically resizable (drag the lower-right grip) so
+               a long description can break across lines. resize-y shows the
+               native resize handle as the affordance. -->
+          <textarea
+            rows="2"
+            class="w-full text-xs border-slate-200 rounded px-2 py-1 resize-y min-h-[2.25rem] focus:border-muw-blue focus:outline-none focus:ring-1 focus:ring-muw-blue/40"
             :value="selectedItem.descriptionLabel"
             data-testid="crf-canvas-properties-description"
             @input="onLabelInput"
-          />
+          ></textarea>
         </div>
 
         <div>
