@@ -702,6 +702,19 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     }
   }
 
+  /**
+   * Replace the whole draft with a restored copy (e.g. from the
+   * local autosave in {@code useCrfDraftPersistence}). Mirrors the
+   * wholesale replacement {@link loadFromVersion} does, clearing the
+   * canvas selection so the properties rail doesn't dangle on a uid
+   * that may no longer exist.
+   */
+  function hydrateDraft(next: AuthoringDraft): void {
+    draft.value = next
+    selectedItemUid.value = null
+    error.value = null
+  }
+
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
     if (patch.versionName !== undefined) draft.value.versionName = patch.versionName
     if (patch.versionDescription !== undefined) draft.value.versionDescription = patch.versionDescription
@@ -1556,6 +1569,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     selectItem,
     reset,
     loadFromVersion,
+    hydrateDraft,
     setMetadata,
     setVersionName,
     setVersionDescription,

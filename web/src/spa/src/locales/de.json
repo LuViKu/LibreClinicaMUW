@@ -1363,6 +1363,12 @@
         "loadedNamed": "Inhalte aus Version „{name}\" übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
         "failed": "Vorversion konnte nicht geladen werden — Entwurf wurde mit einer leeren Sektion gestartet."
       },
+      "draftRestore": {
+        "message": "Ein nicht gespeicherter Entwurf wurde gefunden. Wiederherstellen oder verwerfen?",
+        "messageAt": "Ein nicht gespeicherter Entwurf von {time} wurde gefunden. Wiederherstellen oder verwerfen?",
+        "restore": "Wiederherstellen",
+        "discard": "Verwerfen"
+      },
       "preview": "Vorschau",
       "previewing": "Erzeuge Vorschau …",
       "versionName": "Versionsname",

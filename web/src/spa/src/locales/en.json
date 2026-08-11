@@ -1363,6 +1363,12 @@
         "loadedNamed": "[NEEDS_REVIEW] Contents from version \"{name}\" copied into the draft.",
         "failed": "[NEEDS_REVIEW] Could not load the prior version — started the draft with a blank section."
       },
+      "draftRestore": {
+        "message": "[NEEDS_REVIEW] An unsaved draft was found. Restore it or discard it?",
+        "messageAt": "[NEEDS_REVIEW] An unsaved draft from {time} was found. Restore it or discard it?",
+        "restore": "[NEEDS_REVIEW] Restore",
+        "discard": "[NEEDS_REVIEW] Discard"
+      },
       "versionName": "[NEEDS_REVIEW] Version name",
       "versionDescription": "[NEEDS_REVIEW] Version description",
       "versionNamePlaceholder": "[NEEDS_REVIEW] e.g. v1.0",
