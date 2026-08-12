@@ -5840,7 +5840,9 @@ export interface operations {
     sign: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
             path: {
                 studySubjectOid: string;
             };
@@ -8573,7 +8575,9 @@ export interface operations {
     preflightForSign: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
             path: {
                 studySubjectOid: string;
             };
