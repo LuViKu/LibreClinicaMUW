@@ -153,7 +153,7 @@ const inputClasses = computed(() => {
     <!-- Calendar button opens the browser's native date picker. -->
     <button
       type="button"
-      class="absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-500 hover:text-muw-blue disabled:text-slate-300 disabled:cursor-not-allowed"
+      class="absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-500 hover:text-muw-blue disabled:text-slate-500 disabled:cursor-not-allowed"
       :disabled="disabled"
       :aria-label="ariaLabel ? `${ariaLabel} — Kalender öffnen` : 'Kalender öffnen'"
       tabindex="-1"

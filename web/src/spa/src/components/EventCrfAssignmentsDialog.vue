@@ -305,7 +305,7 @@ const activeAssignments = computed(() =>
                 <button class="text-muw-blue hover:underline" @click="openEdit(a)">
                   {{ t('assignCrfs.edit') }}
                 </button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-rose-600 hover:underline" @click="onRemove(a)">
                   {{ t('assignCrfs.remove') }}
                 </button>

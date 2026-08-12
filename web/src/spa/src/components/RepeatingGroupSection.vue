@@ -199,7 +199,7 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
             <td class="py-1.5 pl-2 align-top">
               <button
                 type="button"
-                class="text-[11px] text-rose-700 hover:underline disabled:text-slate-300 disabled:no-underline"
+                class="text-[11px] text-rose-700 hover:underline disabled:text-slate-500 disabled:no-underline"
                 :disabled="disabled || busy"
                 :aria-label="deleteRowLabel"
                 @click="onDeleteRow(row.ordinal)"
@@ -215,7 +215,7 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
     <div class="mt-3 flex items-center gap-3">
       <button
         type="button"
-        class="text-xs px-3 py-1.5 border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:text-slate-300 disabled:bg-slate-50/50"
+        class="text-xs px-3 py-1.5 border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:text-slate-500 disabled:bg-slate-50/50"
         :disabled="!canAddRow || busy"
         @click="emit('add-row')"
       >

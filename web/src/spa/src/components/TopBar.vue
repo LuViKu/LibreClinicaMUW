@@ -228,7 +228,7 @@ function onReportBugClick() {
             {{ item.label }}
           </RouterLink>
           <span v-else class="text-slate-900 font-medium">{{ item.label }}</span>
-          <svg v-if="idx < breadcrumb.length - 1" class="w-3.5 h-3.5 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <svg v-if="idx < breadcrumb.length - 1" class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </template>

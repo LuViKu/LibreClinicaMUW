@@ -346,7 +346,7 @@ watch(eventColumns, async (next, prev) => {
       </template>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6 min-w-0">
+    <div class="flex-1 px-8 py-6 min-w-0">
       <!-- Phase E.6 — schedule-visit hint from HomeView's
            "Schedule visit" card. The actual dialog lives on
            SubjectDetailView; this banner tells the operator to drill
@@ -621,7 +621,7 @@ watch(eventColumns, async (next, prev) => {
                       {{ subject.events[idx]!.openQueries }}
                     </span>
                   </div>
-                  <span v-else class="text-slate-300 text-center block">—</span>
+                  <span v-else class="text-slate-500 text-center block">—</span>
                 </td>
 
                 <td class="px-3 py-2 border-t border-slate-100 whitespace-nowrap">
@@ -647,7 +647,7 @@ watch(eventColumns, async (next, prev) => {
           <span>{{ t('subjectMatrix.rowsPerPage') }}: 25</span>
         </div>
       </div>
-    </main>
+    </div>
 
     <StudyMetricsModal :open="metricsModalOpen" @close="metricsModalOpen = false" />
   </div>

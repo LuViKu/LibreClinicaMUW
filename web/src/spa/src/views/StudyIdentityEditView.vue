@@ -151,7 +151,7 @@ function cancel() {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-3xl px-8 py-6">
+    <div class="flex-1 max-w-3xl px-8 py-6">
       <div class="mb-4">
         <div class="text-xs text-slate-500 mb-1">{{ t('studyForm.edit.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('studyForm.edit.title') }}</h1>
@@ -237,6 +237,6 @@ function cancel() {
           </button>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>

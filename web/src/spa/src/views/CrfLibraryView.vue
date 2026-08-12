@@ -280,7 +280,7 @@ const visibleRows = computed(() =>
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-6">
+    <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('crfLibrary.subTrail') }}</div>
@@ -431,7 +431,7 @@ const visibleRows = computed(() =>
                   </button>
                 </div>
               </div>
-              <span class="text-slate-300">·</span>
+              <span class="text-slate-500">·</span>
               <button class="text-rose-600 hover:underline" @click="onDisableCrf(crf)">
                 {{ t('crfLibrary.disable') }}
               </button>
@@ -540,7 +540,7 @@ const visibleRows = computed(() =>
           >{{ isUploading ? t('common.saving') : t('crfLibrary.submitUpload') }}</button>
         </div>
       </div>
-    </main>
+    </div>
 
     <!-- Hard-remove blocker modal — renders the 409 VersionUsageReport
          when a hard-remove can't proceed. Migrate-dialog wiring lives

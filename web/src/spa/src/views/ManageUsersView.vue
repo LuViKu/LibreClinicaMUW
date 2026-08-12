@@ -169,7 +169,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6">
+    <div class="flex-1 px-8 py-6">
       <div class="flex items-end justify-between mb-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('manageUsers.subTrail') }}</div>
@@ -311,7 +311,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
               >
                 {{ t('manageUsers.editRow') }}
               </button>
-              <span class="text-slate-300">·</span>
+              <span class="text-slate-500">·</span>
               <button
                 v-if="u.active"
                 class="text-rose-600 hover:underline disabled:opacity-50"
@@ -329,7 +329,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
                 {{ t('manageUsers.lifecycle.restore') }}
               </button>
               <template v-if="canResetPassword(u)">
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button
                   class="text-amber-700 hover:underline disabled:opacity-50"
                   :disabled="isLifecycleBusy === u.username"
@@ -339,7 +339,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
                 </button>
               </template>
               <template v-if="canUnlock(u)">
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button
                   class="text-amber-700 hover:underline disabled:opacity-50"
                   :disabled="isLifecycleBusy === u.username"
@@ -348,7 +348,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
                   {{ t('manageUsers.lifecycle.unlock') }}
                 </button>
               </template>
-              <span class="text-slate-300">·</span>
+              <span class="text-slate-500">·</span>
               <button
                 class="text-muw-blue hover:underline disabled:opacity-50"
                 :disabled="isLifecycleBusy === u.username"
@@ -402,7 +402,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
           </button>
         </div>
       </div>
-    </main>
+    </div>
 
     <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
     <EditUserDialog v-model:open="editOpen" :user="editTarget" />

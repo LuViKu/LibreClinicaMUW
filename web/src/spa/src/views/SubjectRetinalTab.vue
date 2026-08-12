@@ -277,7 +277,7 @@ const SORTABLE_COLS: { key: SortKey; label: string }[] = [
             >
               <span class="inline-flex items-center gap-1">
                 <span>{{ t(`retinal.trends.history.${col.label}`) }}</span>
-                <span class="w-2 text-[10px]" :class="sort.key === col.key ? 'text-muw-blue' : 'text-slate-300'">{{ sortArrow(col.key) }}</span>
+                <span class="w-2 text-[10px]" :class="sort.key === col.key ? 'text-muw-blue' : 'text-slate-500'">{{ sortArrow(col.key) }}</span>
               </span>
             </th>
             <th scope="col" class="px-5 py-2 font-medium w-20 text-right"></th>

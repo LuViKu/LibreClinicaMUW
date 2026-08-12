@@ -252,7 +252,7 @@ function openAssignments(row: EventDefinition) {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('eventDefinitions.subTrail') }}</div>
@@ -315,20 +315,20 @@ function openAssignments(row: EventDefinition) {
                   @click="moveDown(idx)"
                   :aria-label="t('eventDefinitions.moveDown')"
                 >↓</button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-muw-blue hover:underline" @click="openEdit(row)">
                   {{ t('common.next') === 'Next' ? 'Edit' : 'Bearbeiten' }}
                 </button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-muw-blue hover:underline" @click="openAssignments(row)">
                   {{ t('eventDefinitions.manageCrfs') }}
                 </button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-rose-600 hover:underline" @click="onDisable(row)">
                   {{ t('eventDefinitions.disable') }}
                 </button>
                 <template v-if="canLifecycle">
-                  <span class="text-slate-300">·</span>
+                  <span class="text-slate-500">·</span>
                   <button
                     v-if="row.status !== 'locked'"
                     class="text-amber-700 hover:underline"
@@ -506,7 +506,7 @@ function openAssignments(row: EventDefinition) {
           >{{ isSavingEdit ? t('common.saving') : t('eventDefinitions.submitEdit') }}</button>
         </div>
       </div>
-    </main>
+    </div>
 
     <EventCrfAssignmentsDialog
       v-model:open="assignDialogOpen"

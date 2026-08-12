@@ -37,15 +37,15 @@
       "title": "An error occurred",
       "dismiss": "Dismiss error message",
       "reqIdLabel": "Error ID",
-      "detailsToggle": "[NEEDS_REVIEW] Show details",
-      "detailsHide": "[NEEDS_REVIEW] Hide details",
-      "serverMessageLabel": "[NEEDS_REVIEW] Server message",
-      "urlLabel": "[NEEDS_REVIEW] URL",
-      "moreErrors": "[NEEDS_REVIEW] {n} more error(s)",
-      "queuedListTitle": "[NEEDS_REVIEW] More errors"
+      "detailsToggle": "Show details",
+      "detailsHide": "Hide details",
+      "serverMessageLabel": "Server message",
+      "urlLabel": "URL",
+      "moreErrors": "{n} more error(s)",
+      "queuedListTitle": "More errors"
     },
     "systemAuditLog": "System audit",
-    "retinalParked": "[NEEDS_REVIEW] Parked scans"
+    "retinalParked": "Parked scans"
   },
   "network": {
     "offline": {
@@ -261,12 +261,12 @@
     "rowsPerPage": "Rows",
     "empty": "No subjects match the current filter.",
     "openSubject": "Open →",
-    "visitsTrail": "[NEEDS_REVIEW] {count} visits",
+    "visitsTrail": "{count} visits",
     "visitNav": {
-      "first": "[NEEDS_REVIEW] First visit",
-      "prev": "[NEEDS_REVIEW] Previous visit",
-      "next": "[NEEDS_REVIEW] Next visit",
-      "jumpLatest": "[NEEDS_REVIEW] Latest visit"
+      "first": "First visit",
+      "prev": "Previous visit",
+      "next": "Next visit",
+      "jumpLatest": "Latest visit"
     },
     "signed": "Signed",
     "scheduleHint": "Pick a subject below to schedule the next visit.",
@@ -723,27 +723,27 @@
       "inactiveHint": "Active once \"{value}\" is selected"
     },
     "prefill": {
-      "button": "[NEEDS_REVIEW] Vom letzten Besuch übernehmen",
-      "modalTitle": "[NEEDS_REVIEW] Werte vom letzten Besuch übernehmen",
-      "sourceLabel": "[NEEDS_REVIEW] Quelle: Visite vom {date}",
-      "colItem": "[NEEDS_REVIEW] Item",
-      "colValue": "[NEEDS_REVIEW] Wert",
-      "colApply": "[NEEDS_REVIEW] Übernehmen",
-      "confirm": "[NEEDS_REVIEW] Übernehmen",
-      "cancel": "[NEEDS_REVIEW] Abbrechen",
-      "empty": "[NEEDS_REVIEW] Keine vorherige Visite gefunden",
-      "errorFetch": "[NEEDS_REVIEW] Vorherige Werte konnten nicht geladen werden.",
-      "checkAll": "[NEEDS_REVIEW] Alle auswählen",
-      "uncheckAll": "[NEEDS_REVIEW] Keine auswählen"
+      "button": "Vom letzten Besuch übernehmen",
+      "modalTitle": "Werte vom letzten Besuch übernehmen",
+      "sourceLabel": "Quelle: Visite vom {date}",
+      "colItem": "Item",
+      "colValue": "Wert",
+      "colApply": "Übernehmen",
+      "confirm": "Übernehmen",
+      "cancel": "Abbrechen",
+      "empty": "Keine vorherige Visite gefunden",
+      "errorFetch": "Vorherige Werte konnten nicht geladen werden.",
+      "checkAll": "Alle auswählen",
+      "uncheckAll": "Keine auswählen"
     }
   },
   "crfItem": {
     "tristate": {
-      "tristateYes": "[NEEDS_REVIEW] Ja",
-      "tristateNo": "[NEEDS_REVIEW] Nein",
-      "tristateUnknown": "[NEEDS_REVIEW] Unbekannt",
-      "reasonLabel": "[NEEDS_REVIEW] Grund",
-      "reasonPlaceholder": "[NEEDS_REVIEW] Grund angeben…"
+      "tristateYes": "Ja",
+      "tristateNo": "Nein",
+      "tristateUnknown": "Unbekannt",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Grund angeben…"
     }
   },
   "dde": {
@@ -1173,11 +1173,11 @@
       "committed": "Migrated {count} event definition(s).",
       "failed": "Migration failed: {message}"
     },
-    "authorManually": "[NEEDS_REVIEW] New version",
+    "authorManually": "New version",
     "forkMenu": {
-      "label": "[NEEDS_REVIEW] Fork from prior version",
-      "heading": "[NEEDS_REVIEW] Fork from prior version",
-      "fromVersion": "[NEEDS_REVIEW] Copy from \"{name}\""
+      "label": "Fork from prior version",
+      "heading": "Fork from prior version",
+      "fromVersion": "Copy from \"{name}\""
     },
     "ophthCatalog": {
       "title": "Add from ophthalmology catalog",
@@ -1347,306 +1347,306 @@
       "errorsTitle": "The preview rejected the draft:"
     },
     "canvas": {
-      "heading": "[NEEDS_REVIEW] CRF builder",
-      "subheading": "[NEEDS_REVIEW] Definition for {name}",
-      "subheadingGeneric": "[NEEDS_REVIEW] Build CRF definition",
-      "useLegacy": "[NEEDS_REVIEW] Use classic wizard",
-      "cancel": "[NEEDS_REVIEW] Cancel",
-      "save": "[NEEDS_REVIEW] Save",
-      "saving": "[NEEDS_REVIEW] Saving …",
-      "validate": "[NEEDS_REVIEW] Validate",
-      "validating": "[NEEDS_REVIEW] Validating …",
-      "validationOk": "[NEEDS_REVIEW] Validation succeeded — no errors.",
+      "heading": "CRF builder",
+      "subheading": "Definition for {name}",
+      "subheadingGeneric": "Build CRF definition",
+      "useLegacy": "Use classic wizard",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving …",
+      "validate": "Validate",
+      "validating": "Validating …",
+      "validationOk": "Validation succeeded — no errors.",
       "fork": {
-        "loading": "[NEEDS_REVIEW] Loading prior-version contents …",
-        "loaded": "[NEEDS_REVIEW] Prior-version contents copied into the draft.",
-        "loadedNamed": "[NEEDS_REVIEW] Contents from version \"{name}\" copied into the draft.",
-        "failed": "[NEEDS_REVIEW] Could not load the prior version — started the draft with a blank section."
+        "loading": "Loading prior-version contents …",
+        "loaded": "Prior-version contents copied into the draft.",
+        "loadedNamed": "Contents from version \"{name}\" copied into the draft.",
+        "failed": "Could not load the prior version — started the draft with a blank section."
       },
       "draftRestore": {
-        "message": "[NEEDS_REVIEW] An unsaved draft was found. Restore it or discard it?",
-        "messageAt": "[NEEDS_REVIEW] An unsaved draft from {time} was found. Restore it or discard it?",
-        "restore": "[NEEDS_REVIEW] Restore",
-        "discard": "[NEEDS_REVIEW] Discard"
+        "message": "An unsaved draft was found. Restore it or discard it?",
+        "messageAt": "An unsaved draft from {time} was found. Restore it or discard it?",
+        "restore": "Restore",
+        "discard": "Discard"
       },
-      "versionName": "[NEEDS_REVIEW] Version name",
-      "versionDescription": "[NEEDS_REVIEW] Version description",
-      "versionNamePlaceholder": "[NEEDS_REVIEW] e.g. v1.0",
-      "versionDescriptionPlaceholder": "[NEEDS_REVIEW] Short description of changes in this version",
-      "errorTitle": "[NEEDS_REVIEW] Save failed:",
+      "versionName": "Version name",
+      "versionDescription": "Version description",
+      "versionNamePlaceholder": "e.g. v1.0",
+      "versionDescriptionPlaceholder": "Short description of changes in this version",
+      "errorTitle": "Save failed:",
       "errors": {
-        "unknown": "[NEEDS_REVIEW] Unknown error.",
-        "validationFailed": "[NEEDS_REVIEW] The inputs are incomplete or invalid — please check the highlighted fields below."
+        "unknown": "Unknown error.",
+        "validationFailed": "The inputs are incomplete or invalid — please check the highlighted fields below."
       },
       "palette": {
-        "title": "[NEEDS_REVIEW] Building blocks",
-        "primitives": "[NEEDS_REVIEW] Primitive items",
-        "presets": "[NEEDS_REVIEW] Presets",
+        "title": "Building blocks",
+        "primitives": "Primitive items",
+        "presets": "Presets",
         "prim": {
-          "ST": { "label": "[NEEDS_REVIEW] Text", "description": "[NEEDS_REVIEW] Single- or multi-line text." },
-          "INT": { "label": "[NEEDS_REVIEW] Integer", "description": "[NEEDS_REVIEW] Whole-number value." },
-          "REAL": { "label": "[NEEDS_REVIEW] Real number", "description": "[NEEDS_REVIEW] Numeric value with decimals." },
-          "DATE": { "label": "[NEEDS_REVIEW] Date", "description": "[NEEDS_REVIEW] Full date (DD.MM.YYYY)." },
-          "BL": { "label": "[NEEDS_REVIEW] Boolean", "description": "[NEEDS_REVIEW] Yes / No as a single checkbox." },
-          "TRISTATE_REASON": { "label": "[NEEDS_REVIEW] Yes / No / Unknown + reason", "description": "[NEEDS_REVIEW] Three-state selector with conditional reason field." },
-          "PDATE": { "label": "[NEEDS_REVIEW] Partial date", "description": "[NEEDS_REVIEW] Year, or month and year." },
-          "CHOICE_SINGLE": { "label": "[NEEDS_REVIEW] Dropdown list", "description": "[NEEDS_REVIEW] Single choice from your own options." },
-          "CHOICE_MULTI": { "label": "[NEEDS_REVIEW] Multi-select", "description": "[NEEDS_REVIEW] Several options selectable at once." },
-          "FILE": { "label": "[NEEDS_REVIEW] File attachment", "description": "[NEEDS_REVIEW] File upload." }
+          "ST": { "label": "Text", "description": "Single- or multi-line text." },
+          "INT": { "label": "Integer", "description": "Whole-number value." },
+          "REAL": { "label": "Real number", "description": "Numeric value with decimals." },
+          "DATE": { "label": "Date", "description": "Full date (DD.MM.YYYY)." },
+          "BL": { "label": "Boolean", "description": "Yes / No as a single checkbox." },
+          "TRISTATE_REASON": { "label": "Yes / No / Unknown + reason", "description": "Three-state selector with conditional reason field." },
+          "PDATE": { "label": "Partial date", "description": "Year, or month and year." },
+          "CHOICE_SINGLE": { "label": "Dropdown list", "description": "Single choice from your own options." },
+          "CHOICE_MULTI": { "label": "Multi-select", "description": "Several options selectable at once." },
+          "FILE": { "label": "File attachment", "description": "File upload." }
         }
       },
       "canvas": {
-        "dropHere": "[NEEDS_REVIEW] Drag building blocks or presets from the left panel here.",
-        "emptySection": "[NEEDS_REVIEW] This section is empty.",
-        "untitled": "[NEEDS_REVIEW] (untitled)",
-        "removeItem": "[NEEDS_REVIEW] Remove",
-        "dragItem": "[NEEDS_REVIEW] Reorder item"
+        "dropHere": "Drag building blocks or presets from the left panel here.",
+        "emptySection": "This section is empty.",
+        "untitled": "(untitled)",
+        "removeItem": "Remove",
+        "dragItem": "Reorder item"
       },
       "section": {
-        "add": "[NEEDS_REVIEW] + Add new section",
-        "remove": "[NEEDS_REVIEW] Remove section",
-        "titlePlaceholder": "[NEEDS_REVIEW] Section title",
-        "labelPlaceholder": "[NEEDS_REVIEW] Section label (e.g. S1)",
-        "bilateralOn": "[NEEDS_REVIEW] Bilateral active — items shown in OD/OS grid. Click to switch to unilateral.",
-        "bilateralOff": "[NEEDS_REVIEW] Unilateral — items in a flat list. Click to switch to bilateral (OD left / OS right).",
-        "bilateralOnShort": "[NEEDS_REVIEW] OD/OS",
-        "bilateralOffShort": "[NEEDS_REVIEW] Uni",
-        "collapse": "[NEEDS_REVIEW] Collapse section",
-        "expand": "[NEEDS_REVIEW] Expand section",
-        "dragHandle": "[NEEDS_REVIEW] Drag section to reorder"
+        "add": "+ Add new section",
+        "remove": "Remove section",
+        "titlePlaceholder": "Section title",
+        "labelPlaceholder": "Section label (e.g. S1)",
+        "bilateralOn": "Bilateral active — items shown in OD/OS grid. Click to switch to unilateral.",
+        "bilateralOff": "Unilateral — items in a flat list. Click to switch to bilateral (OD left / OS right).",
+        "bilateralOnShort": "OD/OS",
+        "bilateralOffShort": "Uni",
+        "collapse": "Collapse section",
+        "expand": "Expand section",
+        "dragHandle": "Drag section to reorder"
       },
       "properties": {
-        "title": "[NEEDS_REVIEW] Properties",
+        "title": "Properties",
         "options": {
-          "fromCatalog": "[NEEDS_REVIEW] Copy from catalog …",
-          "refNotice": "[NEEDS_REVIEW] Linked response set — convert to your own options to edit it.",
-          "detach": "[NEEDS_REVIEW] Convert to own options"
+          "fromCatalog": "Copy from catalog …",
+          "refNotice": "Linked response set — convert to your own options to edit it.",
+          "detach": "Convert to own options"
         },
-        "clear": "[NEEDS_REVIEW] Clear selection",
-        "noSelection": "[NEEDS_REVIEW] Select an item in the canvas to edit its properties.",
-        "labelField": "[NEEDS_REVIEW] Item name",
-        "oidField": "[NEEDS_REVIEW] Item OID",
-        "oidHelper": "[NEEDS_REVIEW] Suggested from the item name; can be overridden.",
-        "descriptionField": "[NEEDS_REVIEW] Description label",
-        "dataTypeField": "[NEEDS_REVIEW] Data type",
+        "clear": "Clear selection",
+        "noSelection": "Select an item in the canvas to edit its properties.",
+        "labelField": "Item name",
+        "oidField": "Item OID",
+        "oidHelper": "Suggested from the item name; can be overridden.",
+        "descriptionField": "Description label",
+        "dataTypeField": "Data type",
         "dataTypeHint": {
-          "ST": "[NEEDS_REVIEW] Free-form text (single or multi-line).",
-          "INT": "[NEEDS_REVIEW] Whole number without decimals, e.g. letter count.",
-          "REAL": "[NEEDS_REVIEW] Numeric value with decimals, e.g. mmHg.",
-          "DATE": "[NEEDS_REVIEW] Full date (DD.MM.YYYY).",
-          "PDATE": "[NEEDS_REVIEW] Partial date (year or month/year).",
-          "BL": "[NEEDS_REVIEW] Yes/no value, stored as a boolean column.",
-          "TRISTATE_REASON": "[NEEDS_REVIEW] Three-state: Yes / No / Unknown plus a required reason on “No”.",
-          "FILE": "[NEEDS_REVIEW] File attachment (e.g. PDF, image)."
+          "ST": "Free-form text (single or multi-line).",
+          "INT": "Whole number without decimals, e.g. letter count.",
+          "REAL": "Numeric value with decimals, e.g. mmHg.",
+          "DATE": "Full date (DD.MM.YYYY).",
+          "PDATE": "Partial date (year or month/year).",
+          "BL": "Yes/no value, stored as a boolean column.",
+          "TRISTATE_REASON": "Three-state: Yes / No / Unknown plus a required reason on “No”.",
+          "FILE": "File attachment (e.g. PDF, image)."
         },
-        "responseTypeField": "[NEEDS_REVIEW] Response type",
+        "responseTypeField": "Response type",
         "responseTypeHint": {
-          "text": "[NEEDS_REVIEW] Single-line input.",
-          "textarea": "[NEEDS_REVIEW] Multi-line text input.",
-          "radio": "[NEEDS_REVIEW] Single choice as radio buttons (compact, all options visible).",
-          "single-select": "[NEEDS_REVIEW] Single choice as dropdown (compact for many options).",
-          "multi-select": "[NEEDS_REVIEW] Multi-choice dropdown.",
-          "checkbox": "[NEEDS_REVIEW] Single checkbox (yes/no) or list of checkboxes.",
-          "calculation": "[NEEDS_REVIEW] Value is computed automatically from other items.",
-          "number-stepper": "[NEEDS_REVIEW] Numeric input with up/down arrows.",
-          "file": "[NEEDS_REVIEW] File upload control."
+          "text": "Single-line input.",
+          "textarea": "Multi-line text input.",
+          "radio": "Single choice as radio buttons (compact, all options visible).",
+          "single-select": "Single choice as dropdown (compact for many options).",
+          "multi-select": "Multi-choice dropdown.",
+          "checkbox": "Single checkbox (yes/no) or list of checkboxes.",
+          "calculation": "Value is computed automatically from other items.",
+          "number-stepper": "Numeric input with up/down arrows.",
+          "file": "File upload control."
         },
-        "unitsField": "[NEEDS_REVIEW] Units",
-        "defaultField": "[NEEDS_REVIEW] Default value",
-        "requiredField": "[NEEDS_REVIEW] Required",
-        "validationSection": "[NEEDS_REVIEW] Validation",
-        "validationRegex": "[NEEDS_REVIEW] Regex (e.g. ^-?\\d+$)",
-        "validationMessage": "[NEEDS_REVIEW] Error message",
-        "showWhenSection": "[NEEDS_REVIEW] Conditional display",
-        "showWhenToggle": "[NEEDS_REVIEW] Only show when …",
-        "showWhenSourcePlaceholder": "[NEEDS_REVIEW] Select source item …",
-        "showWhenLiteralPlaceholder": "[NEEDS_REVIEW] Compare value"
+        "unitsField": "Units",
+        "defaultField": "Default value",
+        "requiredField": "Required",
+        "validationSection": "Validation",
+        "validationRegex": "Regex (e.g. ^-?\\d+$)",
+        "validationMessage": "Error message",
+        "showWhenSection": "Conditional display",
+        "showWhenToggle": "Only show when …",
+        "showWhenSourcePlaceholder": "Select source item …",
+        "showWhenLiteralPlaceholder": "Compare value"
       },
       "validation": {
-        "itemNameRequired": "[NEEDS_REVIEW] Item name is required.",
-        "descriptionRequired": "[NEEDS_REVIEW] Description label is required.",
-        "dataTypeRequired": "[NEEDS_REVIEW] Data type is required.",
-        "responseTypeRequired": "[NEEDS_REVIEW] Response type is required.",
-        "sectionTitleRequired": "[NEEDS_REVIEW] Section title is required.",
-        "sectionLabelRequired": "[NEEDS_REVIEW] Section label is required.",
-        "atLeastOneSection": "[NEEDS_REVIEW] At least one section is required.",
-        "atLeastOneItem": "[NEEDS_REVIEW] Section must contain at least one item.",
-        "optionTextRequired": "[NEEDS_REVIEW] Option text is required.",
-        "optionValueRequired": "[NEEDS_REVIEW] Option value is required.",
-        "calculationFormulaRequired": "[NEEDS_REVIEW] Calculation formula must not be empty.",
-        "expressionRequired": "[NEEDS_REVIEW] Expression must not be empty.",
-        "versionNameRequired": "[NEEDS_REVIEW] Version name is required.",
-        "versionNameTooLong": "[NEEDS_REVIEW] Version name must be 255 characters or fewer.",
-        "versionDescriptionRequired": "[NEEDS_REVIEW] Version description is required.",
-        "fileResponseSetRequired": "[NEEDS_REVIEW] FILE items require a 'file' response set.",
-        "itemNameInvalidChars": "[NEEDS_REVIEW] Item name may only contain letters, digits and underscores.",
-        "dataTypeUnsupported": "[NEEDS_REVIEW] Data type is not accepted by the server.",
-        "responseTypeUnsupported": "[NEEDS_REVIEW] Response type is not accepted by the server.",
-        "duplicateItemName": "[NEEDS_REVIEW] Duplicate item name in this section.",
-        "optionsRequired": "[NEEDS_REVIEW] At least one response option is required.",
-        "fileResponseTypeRequired": "[NEEDS_REVIEW] The 'file' response type requires data type FILE.",
-        "fileDataTypeRequired": "[NEEDS_REVIEW] Items with data type FILE require the 'file' response type."
+        "itemNameRequired": "Item name is required.",
+        "descriptionRequired": "Description label is required.",
+        "dataTypeRequired": "Data type is required.",
+        "responseTypeRequired": "Response type is required.",
+        "sectionTitleRequired": "Section title is required.",
+        "sectionLabelRequired": "Section label is required.",
+        "atLeastOneSection": "At least one section is required.",
+        "atLeastOneItem": "Section must contain at least one item.",
+        "optionTextRequired": "Option text is required.",
+        "optionValueRequired": "Option value is required.",
+        "calculationFormulaRequired": "Calculation formula must not be empty.",
+        "expressionRequired": "Expression must not be empty.",
+        "versionNameRequired": "Version name is required.",
+        "versionNameTooLong": "Version name must be 255 characters or fewer.",
+        "versionDescriptionRequired": "Version description is required.",
+        "fileResponseSetRequired": "FILE items require a 'file' response set.",
+        "itemNameInvalidChars": "Item name may only contain letters, digits and underscores.",
+        "dataTypeUnsupported": "Data type is not accepted by the server.",
+        "responseTypeUnsupported": "Response type is not accepted by the server.",
+        "duplicateItemName": "Duplicate item name in this section.",
+        "optionsRequired": "At least one response option is required.",
+        "fileResponseTypeRequired": "The 'file' response type requires data type FILE.",
+        "fileDataTypeRequired": "Items with data type FILE require the 'file' response type."
       }
     },
     "presets": {
       "iop": {
-        "label": "[NEEDS_REVIEW] IOP measurement",
-        "description": "[NEEDS_REVIEW] Tonometry with Yes/No/Unknown plus conditional IOP value or reason.",
+        "label": "IOP measurement",
+        "description": "Tonometry with Yes/No/Unknown plus conditional IOP value or reason.",
         "parent": {
-          "label": "[NEEDS_REVIEW] IOP measured?"
+          "label": "IOP measured?"
         },
         "option": {
-          "ja": "[NEEDS_REVIEW] Yes",
-          "nein": "[NEEDS_REVIEW] No",
-          "unbekannt": "[NEEDS_REVIEW] Unknown"
+          "ja": "Yes",
+          "nein": "No",
+          "unbekannt": "Unknown"
         },
         "value": {
-          "label": "[NEEDS_REVIEW] IOP value (mmHg)",
-          "validation": "[NEEDS_REVIEW] Enter a numeric value (e.g. 14.5)."
+          "label": "IOP value (mmHg)",
+          "validation": "Enter a numeric value (e.g. 14.5)."
         },
         "reason": {
-          "label": "[NEEDS_REVIEW] Reason IOP was not measured"
+          "label": "Reason IOP was not measured"
         }
       },
       "ophthExam": {
-        "label": "[NEEDS_REVIEW] Ophthalmology bilateral examination",
-        "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CST)."
+        "label": "Ophthalmology bilateral examination",
+        "description": "OD/OS pairs for standard measurements (BCVA, IOP, CCT, CST)."
       },
       "bcva": {
-        "label": "[NEEDS_REVIEW] BCVA (ETDRS letters)",
-        "description": "[NEEDS_REVIEW] Best-corrected visual acuity per ETDRS — letters per eye plus optional refraction (sphere / cylinder / axis).",
+        "label": "BCVA (ETDRS letters)",
+        "description": "Best-corrected visual acuity per ETDRS — letters per eye plus optional refraction (sphere / cylinder / axis).",
         "items": {
-          "letters": "[NEEDS_REVIEW] BCVA — letters",
-          "lettersValidation": "[NEEDS_REVIEW] Integer 0–100 expected.",
-          "sphere": "[NEEDS_REVIEW] Refraction — sphere",
-          "cylinder": "[NEEDS_REVIEW] Refraction — cylinder",
-          "axis": "[NEEDS_REVIEW] Refraction — axis",
-          "refractionValidation": "[NEEDS_REVIEW] Enter a numeric value (e.g. -1.75).",
-          "axisValidation": "[NEEDS_REVIEW] Integer 0–180 expected."
+          "letters": "BCVA — letters",
+          "lettersValidation": "Integer 0–100 expected.",
+          "sphere": "Refraction — sphere",
+          "cylinder": "Refraction — cylinder",
+          "axis": "Refraction — axis",
+          "refractionValidation": "Enter a numeric value (e.g. -1.75).",
+          "axisValidation": "Integer 0–180 expected."
         }
       },
       "bcvaDecimal": {
-        "label": "[NEEDS_REVIEW] BCVA (decimal + refraction)",
-        "description": "[NEEDS_REVIEW] Best-corrected visual acuity decimal (autorefractometer output) with signed partial-line offset (p-N / +N) plus refraction per eye. Backs the public BCVA-entry portal.",
+        "label": "BCVA (decimal + refraction)",
+        "description": "Best-corrected visual acuity decimal (autorefractometer output) with signed partial-line offset (p-N / +N) plus refraction per eye. Backs the public BCVA-entry portal.",
         "items": {
-          "decimal": "[NEEDS_REVIEW] Visus (decimal)",
-          "decimalValidation": "[NEEDS_REVIEW] Decimal 0.01–2.0 expected (e.g. 1.0 or 0.8).",
-          "partial": "[NEEDS_REVIEW] Partial line (signed −4…+4)",
-          "partialValidation": "[NEEDS_REVIEW] Integer −4 to +4 expected (−N = N optotypes missed, +N = N additional letters read).",
-          "sphere": "[NEEDS_REVIEW] Refraction — sphere",
-          "cylinder": "[NEEDS_REVIEW] Refraction — cylinder",
-          "axis": "[NEEDS_REVIEW] Refraction — axis",
-          "refractionValidation": "[NEEDS_REVIEW] Enter a numeric value (e.g. -1.75).",
-          "axisValidation": "[NEEDS_REVIEW] Integer 0–180 expected."
+          "decimal": "Visus (decimal)",
+          "decimalValidation": "Decimal 0.01–2.0 expected (e.g. 1.0 or 0.8).",
+          "partial": "Partial line (signed −4…+4)",
+          "partialValidation": "Integer −4 to +4 expected (−N = N optotypes missed, +N = N additional letters read).",
+          "sphere": "Refraction — sphere",
+          "cylinder": "Refraction — cylinder",
+          "axis": "Refraction — axis",
+          "refractionValidation": "Enter a numeric value (e.g. -1.75).",
+          "axisValidation": "Integer 0–180 expected."
         }
       },
       "crt": {
-        "label": "[NEEDS_REVIEW] CST (central 1 mm, µm)",
-        "description": "[NEEDS_REVIEW] Central subfield thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
+        "label": "CST (central 1 mm, µm)",
+        "description": "Central subfield thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
         "items": {
-          "crtMicrons": "[NEEDS_REVIEW] CST (central 1 mm)",
-          "crtValidation": "[NEEDS_REVIEW] Integer or decimal 0–1500 µm expected."
+          "crtMicrons": "CST (central 1 mm)",
+          "crtValidation": "Integer or decimal 0–1500 µm expected."
         }
       },
       "rnfl": {
-        "label": "[NEEDS_REVIEW] RNFL (peripapillary, Heidelberg HRA / Spectralis ONH)",
-        "description": "[NEEDS_REVIEW] Peripapillary nerve fiber layer — global mean + quadrants (S/T/I/N) + signal quality per eye.",
+        "label": "RNFL (peripapillary, Heidelberg HRA / Spectralis ONH)",
+        "description": "Peripapillary nerve fiber layer — global mean + quadrants (S/T/I/N) + signal quality per eye.",
         "items": {
-          "global": "[NEEDS_REVIEW] RNFL — global mean",
-          "superior": "[NEEDS_REVIEW] RNFL — superior (S)",
-          "temporal": "[NEEDS_REVIEW] RNFL — temporal (T)",
-          "inferior": "[NEEDS_REVIEW] RNFL — inferior (I)",
-          "nasal": "[NEEDS_REVIEW] RNFL — nasal (N)",
-          "signalQuality": "[NEEDS_REVIEW] Signal quality (0–10)",
-          "umValidation": "[NEEDS_REVIEW] Integer 0–999 µm expected.",
-          "signalValidation": "[NEEDS_REVIEW] Integer 0–10 expected."
+          "global": "RNFL — global mean",
+          "superior": "RNFL — superior (S)",
+          "temporal": "RNFL — temporal (T)",
+          "inferior": "RNFL — inferior (I)",
+          "nasal": "RNFL — nasal (N)",
+          "signalQuality": "Signal quality (0–10)",
+          "umValidation": "Integer 0–999 µm expected.",
+          "signalValidation": "Integer 0–10 expected."
         }
       },
       "thicknessMap": {
-        "label": "[NEEDS_REVIEW] Macular thickness map (ETDRS 9-subfield)",
-        "description": "[NEEDS_REVIEW] ETDRS macular grid with nine subfields per eye plus device modality (Spectralis / Cirrus / Topcon).",
+        "label": "Macular thickness map (ETDRS 9-subfield)",
+        "description": "ETDRS macular grid with nine subfields per eye plus device modality (Spectralis / Cirrus / Topcon).",
         "items": {
-          "central": "[NEEDS_REVIEW] Central subfield (1 mm)",
-          "innerSuperior": "[NEEDS_REVIEW] Inner — superior (1–3 mm)",
-          "innerTemporal": "[NEEDS_REVIEW] Inner — temporal (1–3 mm)",
-          "innerInferior": "[NEEDS_REVIEW] Inner — inferior (1–3 mm)",
-          "innerNasal": "[NEEDS_REVIEW] Inner — nasal (1–3 mm)",
-          "outerSuperior": "[NEEDS_REVIEW] Outer — superior (3–6 mm)",
-          "outerTemporal": "[NEEDS_REVIEW] Outer — temporal (3–6 mm)",
-          "outerInferior": "[NEEDS_REVIEW] Outer — inferior (3–6 mm)",
-          "outerNasal": "[NEEDS_REVIEW] Outer — nasal (3–6 mm)",
-          "modality": "[NEEDS_REVIEW] Device modality",
-          "modalitySpectralis": "[NEEDS_REVIEW] Spectralis",
-          "modalityCirrus": "[NEEDS_REVIEW] Cirrus",
-          "modalityTopcon": "[NEEDS_REVIEW] Topcon",
-          "modalityOther": "[NEEDS_REVIEW] Other",
-          "umValidation": "[NEEDS_REVIEW] Integer 0–999 µm expected."
+          "central": "Central subfield (1 mm)",
+          "innerSuperior": "Inner — superior (1–3 mm)",
+          "innerTemporal": "Inner — temporal (1–3 mm)",
+          "innerInferior": "Inner — inferior (1–3 mm)",
+          "innerNasal": "Inner — nasal (1–3 mm)",
+          "outerSuperior": "Outer — superior (3–6 mm)",
+          "outerTemporal": "Outer — temporal (3–6 mm)",
+          "outerInferior": "Outer — inferior (3–6 mm)",
+          "outerNasal": "Outer — nasal (3–6 mm)",
+          "modality": "Device modality",
+          "modalitySpectralis": "Spectralis",
+          "modalityCirrus": "Cirrus",
+          "modalityTopcon": "Topcon",
+          "modalityOther": "Other",
+          "umValidation": "Integer 0–999 µm expected."
         }
       },
       "slitLamp": {
-        "label": "[NEEDS_REVIEW] Slit-lamp — anterior segment",
-        "description": "[NEEDS_REVIEW] Cornea / AC / iris / lens / vitreous per eye + overall remark.",
+        "label": "Slit-lamp — anterior segment",
+        "description": "Cornea / AC / iris / lens / vitreous per eye + overall remark.",
         "items": {
-          "cornea": "[NEEDS_REVIEW] Cornea",
-          "ac": "[NEEDS_REVIEW] Anterior chamber",
-          "iris": "[NEEDS_REVIEW] Iris",
-          "lens": "[NEEDS_REVIEW] Lens",
-          "vitreous": "[NEEDS_REVIEW] Vitreous (anterior)",
-          "remark": "[NEEDS_REVIEW] Remark"
+          "cornea": "Cornea",
+          "ac": "Anterior chamber",
+          "iris": "Iris",
+          "lens": "Lens",
+          "vitreous": "Vitreous (anterior)",
+          "remark": "Remark"
         }
       },
       "imaging": {
         "option": {
-          "ja": "[NEEDS_REVIEW] Yes",
-          "nein": "[NEEDS_REVIEW] No",
-          "unbekannt": "[NEEDS_REVIEW] Unknown"
+          "ja": "Yes",
+          "nein": "No",
+          "unbekannt": "Unknown"
         },
         "reason": {
-          "label": "[NEEDS_REVIEW] Reason (not acquired)"
+          "label": "Reason (not acquired)"
         }
       },
       "spectralisOct": {
-        "label": "[NEEDS_REVIEW] Spectralis SD-OCT",
-        "description": "[NEEDS_REVIEW] Heidelberg Spectralis SD-OCT acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" }
+        "label": "Spectralis SD-OCT",
+        "description": "Heidelberg Spectralis SD-OCT acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "OCT acquired?" }
       },
       "spectralisFaf": {
-        "label": "[NEEDS_REVIEW] Spectralis FAF",
-        "description": "[NEEDS_REVIEW] Heidelberg Spectralis fundus autofluorescence acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] FAF acquired?" }
+        "label": "Spectralis FAF",
+        "description": "Heidelberg Spectralis fundus autofluorescence acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "FAF acquired?" }
       },
       "plexEliteOcta": {
-        "label": "[NEEDS_REVIEW] ZEISS PLEX Elite OCT-A",
-        "description": "[NEEDS_REVIEW] PLEX Elite 9000 OCT angiography acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] OCT-A acquired?" }
+        "label": "ZEISS PLEX Elite OCT-A",
+        "description": "PLEX Elite 9000 OCT angiography acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "OCT-A acquired?" }
       },
       "zeissClarus": {
-        "label": "[NEEDS_REVIEW] ZEISS Clarus 700",
-        "description": "[NEEDS_REVIEW] Ultra-widefield fundus photography acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] Fundus image acquired?" }
+        "label": "ZEISS Clarus 700",
+        "description": "Ultra-widefield fundus photography acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "Fundus image acquired?" }
       },
       "topconMaestro2Oct": {
-        "label": "[NEEDS_REVIEW] Topcon Maestro2 OCT",
-        "description": "[NEEDS_REVIEW] Topcon Maestro 2 SD-OCT acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" }
+        "label": "Topcon Maestro2 OCT",
+        "description": "Topcon Maestro 2 SD-OCT acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "OCT acquired?" }
       },
       "plBcva": {
-        "label": "[NEEDS_REVIEW] PL-BCVA (Pinhole)",
-        "description": "[NEEDS_REVIEW] Pinhole best-corrected visual acuity — letters per eye + notes.",
+        "label": "PL-BCVA (Pinhole)",
+        "description": "Pinhole best-corrected visual acuity — letters per eye + notes.",
         "letters": {
-          "label": "[NEEDS_REVIEW] PL-BCVA (letters)",
-          "validation": "[NEEDS_REVIEW] 0–100 letters (integer)."
+          "label": "PL-BCVA (letters)",
+          "validation": "0–100 letters (integer)."
         },
-        "notes": { "label": "[NEEDS_REVIEW] Notes" }
+        "notes": { "label": "Notes" }
       },
       "llBcva": {
-        "label": "[NEEDS_REVIEW] LL-BCVA (Low Luminance)",
-        "description": "[NEEDS_REVIEW] Low-luminance best-corrected visual acuity (2.0 ND filter) — letters per eye + notes.",
+        "label": "LL-BCVA (Low Luminance)",
+        "description": "Low-luminance best-corrected visual acuity (2.0 ND filter) — letters per eye + notes.",
         "letters": {
-          "label": "[NEEDS_REVIEW] LL-BCVA (letters)",
-          "validation": "[NEEDS_REVIEW] 0–100 letters (integer)."
+          "label": "LL-BCVA (letters)",
+          "validation": "0–100 letters (integer)."
         },
-        "notes": { "label": "[NEEDS_REVIEW] Notes" }
+        "notes": { "label": "Notes" }
       }
     }
   },
@@ -1772,9 +1772,9 @@
     "description": "Description",
     "repeatingLabel": "Repeating event (can occur multiple times per subject)",
     "retinalTasks": {
-      "label": "[NEEDS_REVIEW] Retinal inference tasks",
-      "hint": "[NEEDS_REVIEW] When an OCT scan is uploaded for this visit, one inference job is enqueued per selected task. With no selection, fluid segmentation is used by default.",
-      "saveError": "[NEEDS_REVIEW] Could not save inference task selection."
+      "label": "Retinal inference tasks",
+      "hint": "When an OCT scan is uploaded for this visit, one inference job is enqueued per selected task. With no selection, fluid segmentation is used by default.",
+      "saveError": "Could not save inference task selection."
     },
     "disable": "Remove",
     "disableConfirm": "Remove event \"{name}\"? Existing CRFs scheduled against it remain in the audit trail but become inaccessible. The action is recorded in the audit trail.",
@@ -1952,39 +1952,39 @@
     }
   },
   "retinalParked": {
-    "title": "[NEEDS_REVIEW] Parked scans",
-    "subtitle": "[NEEDS_REVIEW] Cross-study list of retinal inference jobs uploaded without a visit, awaiting assignment. Sysadmin-only.",
-    "empty": "[NEEDS_REVIEW] No parked scans.",
-    "unknownPatient": "[NEEDS_REVIEW] Unknown PatientId",
+    "title": "Parked scans",
+    "subtitle": "Cross-study list of retinal inference jobs uploaded without a visit, awaiting assignment. Sysadmin-only.",
+    "empty": "No parked scans.",
+    "unknownPatient": "Unknown PatientId",
     "columns": {
-      "jobId": "[NEEDS_REVIEW] Job",
-      "patientId": "[NEEDS_REVIEW] PatientId",
-      "eye": "[NEEDS_REVIEW] Eye",
-      "task": "[NEEDS_REVIEW] Task",
-      "uploadedAt": "[NEEDS_REVIEW] Uploaded",
-      "actions": "[NEEDS_REVIEW] Action"
+      "jobId": "Job",
+      "patientId": "PatientId",
+      "eye": "Eye",
+      "task": "Task",
+      "uploadedAt": "Uploaded",
+      "actions": "Action"
     },
     "action": {
-      "assign": "[NEEDS_REVIEW] Assign",
-      "refresh": "[NEEDS_REVIEW] Refresh"
+      "assign": "Assign",
+      "refresh": "Refresh"
     },
     "toast": {
-      "bindOk": "[NEEDS_REVIEW] Scan assigned.",
-      "bindRaced": "[NEEDS_REVIEW] Already assigned by someone else — list refreshed.",
-      "noEventCrf": "[NEEDS_REVIEW] No CRF for this visit yet — open the subject's visit first so the CRF is initialised, then re-assign."
+      "bindOk": "Scan assigned.",
+      "bindRaced": "Already assigned by someone else — list refreshed.",
+      "noEventCrf": "No CRF for this visit yet — open the subject's visit first so the CRF is initialised, then re-assign."
     },
     "bulkBind": {
-      "selectedCount": "[NEEDS_REVIEW] {count} of {total} selected",
-      "selectionClear": "[NEEDS_REVIEW] Clear selection",
-      "selectAllAria": "[NEEDS_REVIEW] Select every scan",
-      "selectRowAria": "[NEEDS_REVIEW] Select scan #{jobId}",
-      "bulkAction": "[NEEDS_REVIEW] Assign selected …",
-      "bulkConfirm": "[NEEDS_REVIEW] Assigning {count} scans to the next visit.",
-      "bulkSummaryBound": "[NEEDS_REVIEW] {count} assigned",
-      "bulkSummaryAlreadyBound": "[NEEDS_REVIEW] {count} already bound",
-      "bulkSummaryForbidden": "[NEEDS_REVIEW] {count} not permitted",
-      "bulkSummaryInvalidState": "[NEEDS_REVIEW] {count} invalid status",
-      "bulkErrorPartial": "[NEEDS_REVIEW] Bulk assignment failed — please retry."
+      "selectedCount": "{count} of {total} selected",
+      "selectionClear": "Clear selection",
+      "selectAllAria": "Select every scan",
+      "selectRowAria": "Select scan #{jobId}",
+      "bulkAction": "Assign selected …",
+      "bulkConfirm": "Assigning {count} scans to the next visit.",
+      "bulkSummaryBound": "{count} assigned",
+      "bulkSummaryAlreadyBound": "{count} already bound",
+      "bulkSummaryForbidden": "{count} not permitted",
+      "bulkSummaryInvalidState": "{count} invalid status",
+      "bulkErrorPartial": "Bulk assignment failed — please retry."
     }
   },
   "modalities": {
@@ -2292,13 +2292,13 @@
     "signOut": "Sign out"
   },
   "studyModuleEnrollment": {
-    "title": "[NEEDS_REVIEW] SPA study modules",
-    "hint": "[NEEDS_REVIEW] Enable the study-specific SPA modules for this study. A module only appears in the navigation when it is toggled on here AND the study's protocol type matches the module.",
-    "enrolled": "[NEEDS_REVIEW] Enrolled",
-    "notEnrolled": "[NEEDS_REVIEW] Enable",
-    "noModules": "[NEEDS_REVIEW] No SPA modules are registered.",
-    "loadError": "[NEEDS_REVIEW] Failed to load module enrollments.",
-    "toggleError": "[NEEDS_REVIEW] Failed to toggle module enrollment."
+    "title": "SPA study modules",
+    "hint": "Enable the study-specific SPA modules for this study. A module only appears in the navigation when it is toggled on here AND the study's protocol type matches the module.",
+    "enrolled": "Enrolled",
+    "notEnrolled": "Enable",
+    "noModules": "No SPA modules are registered.",
+    "loadError": "Failed to load module enrollments.",
+    "toggleError": "Failed to toggle module enrollment."
   },
   "studyParameters": {
     "title": "Study parameters",
@@ -2362,23 +2362,23 @@
     }
   },
   "subjectRandomize": {
-    "randomize": "[NEEDS_REVIEW] Randomize",
-    "rolling": "[NEEDS_REVIEW] Rolling …",
-    "banner": "[NEEDS_REVIEW] Randomly assigned · seed {seed}… — you may override manually.",
-    "overrideReasonLabel": "[NEEDS_REVIEW] Reason for override",
-    "overrideReasonRequired": "[NEEDS_REVIEW] Reason required when overriding a randomization."
+    "randomize": "Randomize",
+    "rolling": "Rolling …",
+    "banner": "Randomly assigned · seed {seed}… — you may override manually.",
+    "overrideReasonLabel": "Reason for override",
+    "overrideReasonRequired": "Reason required when overriding a randomization."
   },
   "subjectGroupEdit": {
-    "openButton": "[NEEDS_REVIEW] edit",
-    "title": "[NEEDS_REVIEW] Edit study groups",
-    "description": "[NEEDS_REVIEW] Pick a group per class. Required classes must have a group selected; optional classes accept '— unassigned —'.",
-    "loading": "[NEEDS_REVIEW] Loading group classes …",
-    "noClasses": "[NEEDS_REVIEW] This study has no group classes defined yet. Create one first via the legacy Build Study admin (\"Subject Group Classes\").",
-    "unassigned": "[NEEDS_REVIEW] — unassigned —",
-    "requiredHint": "[NEEDS_REVIEW] Required — a group must be selected",
-    "save": "[NEEDS_REVIEW] Save",
-    "saving": "[NEEDS_REVIEW] Saving …",
-    "cancel": "[NEEDS_REVIEW] Cancel"
+    "openButton": "edit",
+    "title": "Edit study groups",
+    "description": "Pick a group per class. Required classes must have a group selected; optional classes accept '— unassigned —'.",
+    "loading": "Loading group classes …",
+    "noClasses": "This study has no group classes defined yet. Create one first via the legacy Build Study admin (\"Subject Group Classes\").",
+    "unassigned": "— unassigned —",
+    "requiredHint": "Required — a group must be selected",
+    "save": "Save",
+    "saving": "Saving …",
+    "cancel": "Cancel"
   },
   "subjectDetail": {
     "subTrail": "subject detail",
@@ -2422,8 +2422,8 @@
     "event": {
       "edit": "Edit",
       "cancel": "Cancel",
-      "sign": "[NEEDS_REVIEW] Sign visit",
-      "moreActions": "[NEEDS_REVIEW] More actions",
+      "sign": "Sign visit",
+      "moreActions": "More actions",
       "save": "Save",
       "location": "Location",
       "saveSuccess": "Visit saved.",
@@ -2494,31 +2494,31 @@
   },
   "events": {
     "cancel": {
-      "title": "[NEEDS_REVIEW] Cancel visit",
-      "subtitle": "[NEEDS_REVIEW] Visit «{label}»",
-      "reasonLabel": "[NEEDS_REVIEW] Reason",
-      "reasonPlaceholder": "[NEEDS_REVIEW] Select a reason…",
-      "reasonRequired": "[NEEDS_REVIEW] Please pick a reason.",
-      "otherTextLabel": "[NEEDS_REVIEW] Free-text rationale",
-      "otherTextRequired": "[NEEDS_REVIEW] Please supply a rationale.",
-      "otherPlaceholder": "[NEEDS_REVIEW] Capture the rationale…",
-      "confirm": "[NEEDS_REVIEW] Cancel visit",
-      "cancel": "[NEEDS_REVIEW] Dismiss",
-      "errorLoadReasons": "[NEEDS_REVIEW] Could not load cancel reasons — please try again later.",
-      "errorSubmit": "[NEEDS_REVIEW] Cancellation failed — please try again later.",
-      "successToast": "[NEEDS_REVIEW] Visit cancelled."
+      "title": "Cancel visit",
+      "subtitle": "Visit «{label}»",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Select a reason…",
+      "reasonRequired": "Please pick a reason.",
+      "otherTextLabel": "Free-text rationale",
+      "otherTextRequired": "Please supply a rationale.",
+      "otherPlaceholder": "Capture the rationale…",
+      "confirm": "Cancel visit",
+      "cancel": "Dismiss",
+      "errorLoadReasons": "Could not load cancel reasons — please try again later.",
+      "errorSubmit": "Cancellation failed — please try again later.",
+      "successToast": "Visit cancelled."
     }
   },
   "eventSign": {
-    "title": "[NEEDS_REVIEW] Sign visit",
-    "subtitle": "[NEEDS_REVIEW] Electronically sign visit {event} of {subject}.",
-    "passwordLabel": "[NEEDS_REVIEW] Password",
-    "passwordRequired": "[NEEDS_REVIEW] Password is required.",
-    "showPassword": "[NEEDS_REVIEW] Show password",
-    "attestation": "[NEEDS_REVIEW] I confirm I have reviewed the data for this visit and electronically attest to it.",
-    "attestationRequired": "[NEEDS_REVIEW] Attestation is required.",
-    "cancel": "[NEEDS_REVIEW] Cancel",
-    "confirm": "[NEEDS_REVIEW] Sign"
+    "title": "Sign visit",
+    "subtitle": "Electronically sign visit {event} of {subject}.",
+    "passwordLabel": "Password",
+    "passwordRequired": "Password is required.",
+    "showPassword": "Show password",
+    "attestation": "I confirm I have reviewed the data for this visit and electronically attest to it.",
+    "attestationRequired": "Attestation is required.",
+    "cancel": "Cancel",
+    "confirm": "Sign"
   },
   "eventDetail": {
     "title": "CRFs for this event",
@@ -2550,8 +2550,8 @@
       "open": "Open CRF →",
       "startSpa": "Start data entry →",
       "starting": "Starting…",
-      "markComplete": "[NEEDS_REVIEW] Mark visit complete",
-      "completing": "[NEEDS_REVIEW] Marking complete…",
+      "markComplete": "Mark visit complete",
+      "completing": "Marking complete…",
       "requiredIncomplete": "All required CRFs must be complete before the visit can be marked complete."
     },
     "error": {
@@ -2821,249 +2821,249 @@
     }
   },
   "bcvaPortal": {
-    "title": "[NEEDS_REVIEW] BCVA-Entry Portal",
-    "studyOid": "[NEEDS_REVIEW] Study · {oid}",
-    "date": "[NEEDS_REVIEW] Visit date",
-    "enteredBy": "[NEEDS_REVIEW] Entered by",
-    "enteredByPlaceholder": "[NEEDS_REVIEW] First + last name",
-    "enteredByRequired": "[NEEDS_REVIEW] Please enter your name first.",
-    "loading": "[NEEDS_REVIEW] Loading visits …",
-    "empty": "[NEEDS_REVIEW] No visits scheduled on this date.",
-    "alreadyEntered": "[NEEDS_REVIEW] BCVA already entered",
-    "committed": "[NEEDS_REVIEW] Saved ✓",
-    "reopen": "[NEEDS_REVIEW] Re-open",
-    "bcva": "[NEEDS_REVIEW] BCVA",
-    "bcvaPlaceholder": "[NEEDS_REVIEW] e.g. 1,0 or 1,0p-2 or 0,8+2",
-    "bcvaInvalid": "[NEEDS_REVIEW] Format: 1,0  ·  1,0p-2  ·  0,8+2",
-    "noBcvaProvided": "[NEEDS_REVIEW] Enter at least one BCVA value (OD or OS).",
-    "submit": "[NEEDS_REVIEW] Save",
-    "submitting": "[NEEDS_REVIEW] Saving …"
+    "title": "BCVA-Entry Portal",
+    "studyOid": "Study · {oid}",
+    "date": "Visit date",
+    "enteredBy": "Entered by",
+    "enteredByPlaceholder": "First + last name",
+    "enteredByRequired": "Please enter your name first.",
+    "loading": "Loading visits …",
+    "empty": "No visits scheduled on this date.",
+    "alreadyEntered": "BCVA already entered",
+    "committed": "Saved ✓",
+    "reopen": "Re-open",
+    "bcva": "BCVA",
+    "bcvaPlaceholder": "e.g. 1,0 or 1,0p-2 or 0,8+2",
+    "bcvaInvalid": "Format: 1,0  ·  1,0p-2  ·  0,8+2",
+    "noBcvaProvided": "Enter at least one BCVA value (OD or OS).",
+    "submit": "Save",
+    "submitting": "Saving …"
   },
   "octPortal": {
     "topbar": {
-      "brandSuffix": "[NEEDS_REVIEW] MUW",
-      "portalLabel": "[NEEDS_REVIEW] OCT upload portal",
-      "noLoginRequired": "[NEEDS_REVIEW] No login required"
+      "brandSuffix": "MUW",
+      "portalLabel": "OCT upload portal",
+      "noLoginRequired": "No login required"
     },
     "footer": {
-      "formatNote": "[NEEDS_REVIEW] Heidelberg Spectralis OCT",
-      "versionLine": "[NEEDS_REVIEW] LibreClinica MUW · Version {version}",
-      "buildLine": "[NEEDS_REVIEW] Build {date} · {hash}"
+      "formatNote": "Heidelberg Spectralis OCT",
+      "versionLine": "LibreClinica MUW · Version {version}",
+      "buildLine": "Build {date} · {hash}"
     },
     "head": {
-      "eyebrow": "[NEEDS_REVIEW] OCT imaging · upload portal",
-      "title": "[NEEDS_REVIEW] Upload OCT scans",
-      "leadIntro": "[NEEDS_REVIEW] Cross-study — the matching",
-      "leadAnd": "[NEEDS_REVIEW] and",
-      "leadDetermine": "[NEEDS_REVIEW] are automatically resolved from",
-      "leadFromHeader": "[NEEDS_REVIEW] from the file header.",
-      "studyWord": "[NEEDS_REVIEW] study",
-      "visitWord": "[NEEDS_REVIEW] visit",
-      "patientIdWord": "[NEEDS_REVIEW] PatientId",
-      "scanDateWord": "[NEEDS_REVIEW] scan date",
-      "parsingStatus": "[NEEDS_REVIEW] Reading headers…"
+      "eyebrow": "OCT imaging · upload portal",
+      "title": "Upload OCT scans",
+      "leadIntro": "Cross-study — the matching",
+      "leadAnd": "and",
+      "leadDetermine": "are automatically resolved from",
+      "leadFromHeader": "from the file header.",
+      "studyWord": "study",
+      "visitWord": "visit",
+      "patientIdWord": "PatientId",
+      "scanDateWord": "scan date",
+      "parsingStatus": "Reading headers…"
     },
     "hero": {
-      "noLoginPrefix": "[NEEDS_REVIEW] No login required. The browser reads the",
-      "noLoginHeader": "[NEEDS_REVIEW] header locally and extracts",
-      "noLoginEye": "[NEEDS_REVIEW] eye",
-      "noLoginSuffix": "[NEEDS_REVIEW] then suggests the matching study and visit for confirmation."
+      "noLoginPrefix": "No login required. The browser reads the",
+      "noLoginHeader": "header locally and extracts",
+      "noLoginEye": "eye",
+      "noLoginSuffix": "then suggests the matching study and visit for confirmation."
     },
     "dropzone": {
-      "slimDropMorePrefix": "[NEEDS_REVIEW] Drag more",
-      "slimDropMoreSuffix": "[NEEDS_REVIEW] files here",
-      "browse": "[NEEDS_REVIEW] Browse",
-      "heroTitle": "[NEEDS_REVIEW] Drag OCT scans here",
-      "heroBrowsePrefix": "[NEEDS_REVIEW] or",
-      "heroBrowse": "[NEEDS_REVIEW] browse files",
-      "heroNote": "[NEEDS_REVIEW] multiple files supported · processed locally in the browser"
+      "slimDropMorePrefix": "Drag more",
+      "slimDropMoreSuffix": "files here",
+      "browse": "Browse",
+      "heroTitle": "Drag OCT scans here",
+      "heroBrowsePrefix": "or",
+      "heroBrowse": "browse files",
+      "heroNote": "multiple files supported · processed locally in the browser"
     },
     "parseQueue": {
-      "headerLabel": "[NEEDS_REVIEW] Processing · {done} of {total} files read",
-      "headerHint": "[NEEDS_REVIEW] .e2e header → PatientId · date · eye → study/visit"
+      "headerLabel": "Processing · {done} of {total} files read",
+      "headerHint": ".e2e header → PatientId · date · eye → study/visit"
     },
     "parseRow": {
-      "studyVisitDetermining": "[NEEDS_REVIEW] Resolving study & visit…",
-      "headerReading": "[NEEDS_REVIEW] Reading header…"
+      "studyVisitDetermining": "Resolving study & visit…",
+      "headerReading": "Reading header…"
     },
     "reviewQueue": {
-      "colFile": "[NEEDS_REVIEW] File",
-      "colPatientId": "[NEEDS_REVIEW] PatientId",
-      "colScanDate": "[NEEDS_REVIEW] Scan date",
-      "colEye": "[NEEDS_REVIEW] Eye",
-      "colStudyVisit": "[NEEDS_REVIEW] Study · visit"
+      "colFile": "File",
+      "colPatientId": "PatientId",
+      "colScanDate": "Scan date",
+      "colEye": "Eye",
+      "colStudyVisit": "Study · visit"
     },
     "assignment": {
-      "patientFound": "[NEEDS_REVIEW] Patient found",
-      "patientNotFound": "[NEEDS_REVIEW] Patient not found",
-      "alreadyUploaded": "[NEEDS_REVIEW] Already uploaded",
-      "alreadyUploadedDetail": "[NEEDS_REVIEW] Identical .e2e already exists as job",
-      "multipleStudies": "[NEEDS_REVIEW] Multiple studies",
-      "patientIdMissingPrefix": "[NEEDS_REVIEW] PatientId",
-      "patientIdMissingSuffix": "[NEEDS_REVIEW] does not exist in any study.",
-      "patientIdAmbiguous": "[NEEDS_REVIEW] PatientId exists in multiple studies — assignment required.",
-      "noEventForDate": "[NEEDS_REVIEW] No visit scheduled for {date}.",
-      "assigned": "[NEEDS_REVIEW] Assigned",
-      "parked": "[NEEDS_REVIEW] Parked",
-      "today": "[NEEDS_REVIEW] today",
-      "todayScheduled": "[NEEDS_REVIEW] scheduled today",
-      "processError": "[NEEDS_REVIEW] Processing error",
-      "uploading": "[NEEDS_REVIEW] Uploading…",
-      "change": "[NEEDS_REVIEW] change",
-      "dismissAria": "[NEEDS_REVIEW] Dismiss"
+      "patientFound": "Patient found",
+      "patientNotFound": "Patient not found",
+      "alreadyUploaded": "Already uploaded",
+      "alreadyUploadedDetail": "Identical .e2e already exists as job",
+      "multipleStudies": "Multiple studies",
+      "patientIdMissingPrefix": "PatientId",
+      "patientIdMissingSuffix": "does not exist in any study.",
+      "patientIdAmbiguous": "PatientId exists in multiple studies — assignment required.",
+      "noEventForDate": "No visit scheduled for {date}.",
+      "assigned": "Assigned",
+      "parked": "Parked",
+      "today": "today",
+      "todayScheduled": "scheduled today",
+      "processError": "Processing error",
+      "uploading": "Uploading…",
+      "change": "change",
+      "dismissAria": "Dismiss"
     },
     "actions": {
-      "confirm": "[NEEDS_REVIEW] Confirm",
-      "undo": "[NEEDS_REVIEW] Undo",
-      "pickVisit": "[NEEDS_REVIEW] Pick visit",
-      "parkLater": "[NEEDS_REVIEW] Assign later",
-      "searchPatient": "[NEEDS_REVIEW] Search patient",
-      "park": "[NEEDS_REVIEW] Park",
-      "pickStudy": "[NEEDS_REVIEW] Pick study"
+      "confirm": "Confirm",
+      "undo": "Undo",
+      "pickVisit": "Pick visit",
+      "parkLater": "Assign later",
+      "searchPatient": "Search patient",
+      "park": "Park",
+      "pickStudy": "Pick study"
     },
     "summary": {
-      "fileSingular": "[NEEDS_REVIEW] file",
-      "filePlural": "[NEEDS_REVIEW] files",
-      "recognised": "[NEEDS_REVIEW] recognised",
-      "studySingular": "[NEEDS_REVIEW] study",
-      "studyPlural": "[NEEDS_REVIEW] studies",
-      "suggestionSingular": "[NEEDS_REVIEW] suggestion",
-      "suggestionPlural": "[NEEDS_REVIEW] suggestions",
-      "confirmedSuffix": "[NEEDS_REVIEW] confirmed",
-      "noVisitSuffix": "[NEEDS_REVIEW] without visit",
-      "noPatientSuffix": "[NEEDS_REVIEW] without patient",
-      "ambiguousSuffix": "[NEEDS_REVIEW] ambiguous",
-      "problemSingular": "[NEEDS_REVIEW] issue",
-      "problemPlural": "[NEEDS_REVIEW] issues",
-      "confirmAllSuffix": "[NEEDS_REVIEW] confirm"
+      "fileSingular": "file",
+      "filePlural": "files",
+      "recognised": "recognised",
+      "studySingular": "study",
+      "studyPlural": "studies",
+      "suggestionSingular": "suggestion",
+      "suggestionPlural": "suggestions",
+      "confirmedSuffix": "confirmed",
+      "noVisitSuffix": "without visit",
+      "noPatientSuffix": "without patient",
+      "ambiguousSuffix": "ambiguous",
+      "problemSingular": "issue",
+      "problemPlural": "issues",
+      "confirmAllSuffix": "confirm"
     },
     "modals": {
       "patientSearch": {
-        "title": "[NEEDS_REVIEW] Search patient",
-        "placeholder": "[NEEDS_REVIEW] Enter study ID or subject label…",
-        "tooShort": "[NEEDS_REVIEW] Enter at least 2 characters.",
-        "empty": "[NEEDS_REVIEW] No matching study subjects found.",
-        "searching": "[NEEDS_REVIEW] Searching…",
-        "cancel": "[NEEDS_REVIEW] Cancel",
-        "siteLabel": "[NEEDS_REVIEW] Site",
-        "studyLabel": "[NEEDS_REVIEW] Study",
-        "loadError": "[NEEDS_REVIEW] Search failed."
+        "title": "Search patient",
+        "placeholder": "Enter study ID or subject label…",
+        "tooShort": "Enter at least 2 characters.",
+        "empty": "No matching study subjects found.",
+        "searching": "Searching…",
+        "cancel": "Cancel",
+        "siteLabel": "Site",
+        "studyLabel": "Study",
+        "loadError": "Search failed."
       },
       "visitPicker": {
-        "title": "[NEEDS_REVIEW] Pick visit",
-        "empty": "[NEEDS_REVIEW] No visits for this subject.",
-        "loading": "[NEEDS_REVIEW] Loading visits…",
-        "cancel": "[NEEDS_REVIEW] Cancel",
-        "loadError": "[NEEDS_REVIEW] Failed to load visits."
+        "title": "Pick visit",
+        "empty": "No visits for this subject.",
+        "loading": "Loading visits…",
+        "cancel": "Cancel",
+        "loadError": "Failed to load visits."
       },
       "studyPicker": {
-        "title": "[NEEDS_REVIEW] Pick study",
-        "subtitle": "[NEEDS_REVIEW] PatientId exists in multiple studies — please pick the cohort for",
-        "subjectLabelPrefix": "[NEEDS_REVIEW] Subject:",
-        "siteLabelPrefix": "[NEEDS_REVIEW] Site:",
-        "visitFound": "[NEEDS_REVIEW] Visit found",
-        "noVisit": "[NEEDS_REVIEW] No visit on scan date",
-        "cancel": "[NEEDS_REVIEW] Cancel"
+        "title": "Pick study",
+        "subtitle": "PatientId exists in multiple studies — please pick the cohort for",
+        "subjectLabelPrefix": "Subject:",
+        "siteLabelPrefix": "Site:",
+        "visitFound": "Visit found",
+        "noVisit": "No visit on scan date",
+        "cancel": "Cancel"
       }
     }
   },
   "retinal": {
-    "loading": "[NEEDS_REVIEW] Loading retinal scan metrics…",
-    "failedToLoad": "[NEEDS_REVIEW] Failed to load retinal job: {error}",
+    "loading": "Loading retinal scan metrics…",
+    "failedToLoad": "Failed to load retinal job: {error}",
     "breadcrumb": {
-      "job": "[NEEDS_REVIEW] Job #{seq}"
+      "job": "Job #{seq}"
     },
     "header": {
-      "eventCrfLabel": "[NEEDS_REVIEW] Event-CRF #{id} · Retinal inference job #{jobId}",
-      "title": "[NEEDS_REVIEW] Retinal scan metrics",
-      "modelLabel": "[NEEDS_REVIEW] Model:",
-      "runLabel": "[NEEDS_REVIEW] Run:",
-      "confidenceLabel": "[NEEDS_REVIEW] Confidence:",
-      "downloadAll": "[NEEDS_REVIEW] Download all",
+      "eventCrfLabel": "Event-CRF #{id} · Retinal inference job #{jobId}",
+      "title": "Retinal scan metrics",
+      "modelLabel": "Model:",
+      "runLabel": "Run:",
+      "confidenceLabel": "Confidence:",
+      "downloadAll": "Download all",
       "lateralityLong": {
-        "OS": "[NEEDS_REVIEW] OS · left eye",
-        "OD": "[NEEDS_REVIEW] OD · right eye",
-        "OU": "[NEEDS_REVIEW] OU · both eyes"
+        "OS": "OS · left eye",
+        "OD": "OD · right eye",
+        "OU": "OU · both eyes"
       }
     },
     "status": {
-      "queued": "[NEEDS_REVIEW] Queued",
-      "remote_pending": "[NEEDS_REVIEW] Waiting for sidecar",
-      "screening": "[NEEDS_REVIEW] Screening",
-      "screened": "[NEEDS_REVIEW] Screened",
-      "preprocessing": "[NEEDS_REVIEW] Preprocessing",
-      "segmenting": "[NEEDS_REVIEW] Segmenting",
-      "succeeded": "[NEEDS_REVIEW] Done",
-      "done": "[NEEDS_REVIEW] Done",
-      "failed": "[NEEDS_REVIEW] Failed",
-      "parked": "[NEEDS_REVIEW] Parked"
+      "queued": "Queued",
+      "remote_pending": "Waiting for sidecar",
+      "screening": "Screening",
+      "screened": "Screened",
+      "preprocessing": "Preprocessing",
+      "segmenting": "Segmenting",
+      "succeeded": "Done",
+      "done": "Done",
+      "failed": "Failed",
+      "parked": "Parked"
     },
     "task": {
-      "fluid": "[NEEDS_REVIEW] Fluid",
-      "onl": "[NEEDS_REVIEW] ONL thickness",
-      "pr": "[NEEDS_REVIEW] PR thickness",
-      "ga": "[NEEDS_REVIEW] GA area",
-      "bmeis": "[NEEDS_REVIEW] BMEIS",
-      "layers": "[NEEDS_REVIEW] Layer segmentation (IOWA + BM)",
-      "bm": "[NEEDS_REVIEW] Bruch's membrane"
+      "fluid": "Fluid",
+      "onl": "ONL thickness",
+      "pr": "PR thickness",
+      "ga": "GA area",
+      "bmeis": "BMEIS",
+      "layers": "Layer segmentation (IOWA + BM)",
+      "bm": "Bruch's membrane"
     },
     "empty": {
-      "awaitingSidecar": "[NEEDS_REVIEW] Awaiting sidecar…",
-      "preprocessing": "[NEEDS_REVIEW] Preprocessing the OCT volume…",
-      "segmenting": "[NEEDS_REVIEW] Running segmentation — metrics will appear when the sidecar completes.",
-      "failed": "[NEEDS_REVIEW] Inference failed — segmentation artifacts (if any) are still available below.",
-      "noMetric": "[NEEDS_REVIEW] Metrics couldn't be computed — segmentation artifacts are still available below.",
-      "noKpi": "[NEEDS_REVIEW] No KPI yet.",
-      "fundusNotAvailable": "[NEEDS_REVIEW] Fundus image not yet available.",
-      "bscanNotAvailable": "[NEEDS_REVIEW] OCT B-scan not yet available.",
-      "noPerBscan": "[NEEDS_REVIEW] No per-B-scan trace for this task."
+      "awaitingSidecar": "Awaiting sidecar…",
+      "preprocessing": "Preprocessing the OCT volume…",
+      "segmenting": "Running segmentation — metrics will appear when the sidecar completes.",
+      "failed": "Inference failed — segmentation artifacts (if any) are still available below.",
+      "noMetric": "Metrics couldn't be computed — segmentation artifacts are still available below.",
+      "noKpi": "No KPI yet.",
+      "fundusNotAvailable": "Fundus image not yet available.",
+      "bscanNotAvailable": "OCT B-scan not yet available.",
+      "noPerBscan": "No per-B-scan trace for this task."
     },
     "kpi": {
       "irf": "IRF",
       "srf": "SRF",
       "ped": "PED",
-      "total": "[NEEDS_REVIEW] Total",
-      "gaArea": "[NEEDS_REVIEW] GA area",
-      "onlThickness": "[NEEDS_REVIEW] ONL thickness",
-      "prThickness": "[NEEDS_REVIEW] PR thickness",
-      "validAscans": "[NEEDS_REVIEW] {valid} / {total} A-scans valid",
+      "total": "Total",
+      "gaArea": "GA area",
+      "onlThickness": "ONL thickness",
+      "prThickness": "PR thickness",
+      "validAscans": "{valid} / {total} A-scans valid",
       "subtitle": {
-        "notDetected": "[NEEDS_REVIEW] not detected",
-        "affected": "[NEEDS_REVIEW] {count} of {total} B-scans affected",
-        "totalLoad": "[NEEDS_REVIEW] Total fluid load"
+        "notDetected": "not detected",
+        "affected": "{count} of {total} B-scans affected",
+        "totalLoad": "Total fluid load"
       }
     },
     "etdrs": {
-      "header": "[NEEDS_REVIEW] ETDRS sub-totals",
-      "colRing": "[NEEDS_REVIEW] Ring",
-      "colIrf": "[NEEDS_REVIEW] IRF mm³",
-      "colSrf": "[NEEDS_REVIEW] SRF mm³",
-      "colPed": "[NEEDS_REVIEW] PED mm³",
-      "colTotal": "[NEEDS_REVIEW] Total mm³",
-      "colGaArea": "[NEEDS_REVIEW] GA area mm²",
-      "colThicknessUm": "[NEEDS_REVIEW] Mean thickness µm",
-      "sectionCircle": "[NEEDS_REVIEW] Circle",
-      "sectionRing": "[NEEDS_REVIEW] Ring",
-      "ringLabel": "[NEEDS_REVIEW] {mm} mm",
-      "ringLabelRange": "[NEEDS_REVIEW] {from}–{to} mm",
-      "selectionHint": "[NEEDS_REVIEW] Click regions on the fundus to sum biomarkers",
-      "selectionHeader": "[NEEDS_REVIEW] Selection",
-      "selectionClear": "[NEEDS_REVIEW] Clear selection",
-      "selectionLabelThickness": "[NEEDS_REVIEW] Mean thickness"
+      "header": "ETDRS sub-totals",
+      "colRing": "Ring",
+      "colIrf": "IRF mm³",
+      "colSrf": "SRF mm³",
+      "colPed": "PED mm³",
+      "colTotal": "Total mm³",
+      "colGaArea": "GA area mm²",
+      "colThicknessUm": "Mean thickness µm",
+      "sectionCircle": "Circle",
+      "sectionRing": "Ring",
+      "ringLabel": "{mm} mm",
+      "ringLabelRange": "{from}–{to} mm",
+      "selectionHint": "Click regions on the fundus to sum biomarkers",
+      "selectionHeader": "Selection",
+      "selectionClear": "Clear selection",
+      "selectionLabelThickness": "Mean thickness"
     },
     "downloads": {
-      "header": "[NEEDS_REVIEW] Downloads",
-      "empty": "[NEEDS_REVIEW] No artifacts available yet.",
-      "sectionPerScan": "[NEEDS_REVIEW] Per-scan",
-      "sectionSegmentation": "[NEEDS_REVIEW] Segmentation",
-      "action": "[NEEDS_REVIEW] Download"
+      "header": "Downloads",
+      "empty": "No artifacts available yet.",
+      "sectionPerScan": "Per-scan",
+      "sectionSegmentation": "Segmentation",
+      "action": "Download"
     },
     "fundus": {
-      "header": "[NEEDS_REVIEW] En-face · ETDRS locator",
-      "bscanPosition": "[NEEDS_REVIEW] B-scan position"
+      "header": "En-face · ETDRS locator",
+      "bscanPosition": "B-scan position"
     },
     "jsonTree": {
-      "rawPayloadHeader": "[NEEDS_REVIEW] Raw output payload"
+      "rawPayloadHeader": "Raw output payload"
     },
     "retry": {
       "cta": "Retry",
@@ -3072,45 +3072,45 @@
       "successBanner": "Re-dispatch started — the status will update automatically."
     },
     "rerunAs": {
-      "cta": "[NEEDS_REVIEW] Run as different task",
-      "inflight": "[NEEDS_REVIEW] Starting…",
-      "menuHeader": "[NEEDS_REVIEW] New inference task",
-      "error": "[NEEDS_REVIEW] Run with different task failed.",
-      "successBanner": "[NEEDS_REVIEW] New {task} job (#{jobId}) started.",
-      "duplicateBanner": "[NEEDS_REVIEW] A {task} job (#{jobId}) already exists for this scan — you were navigated there."
+      "cta": "Run as different task",
+      "inflight": "Starting…",
+      "menuHeader": "New inference task",
+      "error": "Run with different task failed.",
+      "successBanner": "New {task} job (#{jobId}) started.",
+      "duplicateBanner": "A {task} job (#{jobId}) already exists for this scan — you were navigated there."
     },
     "nav": {
-      "backToSubjects": "[NEEDS_REVIEW] ← Back to subjects",
-      "home": "[NEEDS_REVIEW] Home"
+      "backToSubjects": "← Back to subjects",
+      "home": "Home"
     },
     "perBscan": {
-      "header": "[NEEDS_REVIEW] Per-B-scan trace",
-      "empty": "[NEEDS_REVIEW] No per-B-scan data.",
-      "xAxisLabel": "[NEEDS_REVIEW] B-scan index",
-      "yAxisLabel": "[NEEDS_REVIEW] mm²",
-      "tooltipPrefix": "[NEEDS_REVIEW] B-scan {label}"
+      "header": "Per-B-scan trace",
+      "empty": "No per-B-scan data.",
+      "xAxisLabel": "B-scan index",
+      "yAxisLabel": "mm²",
+      "tooltipPrefix": "B-scan {label}"
     },
     "results": {
-      "header": "[NEEDS_REVIEW] Retinal results",
-      "jobsLabel": "[NEEDS_REVIEW] {n} job(s)",
-      "loading": "[NEEDS_REVIEW] Loading…",
-      "empty": "[NEEDS_REVIEW] No retinal inference jobs yet.",
-      "colTask": "[NEEDS_REVIEW] Task",
-      "colEye": "[NEEDS_REVIEW] Eye",
-      "colStatus": "[NEEDS_REVIEW] Status",
-      "colPrimaryMetric": "[NEEDS_REVIEW] Primary metric",
-      "colModel": "[NEEDS_REVIEW] Model",
-      "colCompleted": "[NEEDS_REVIEW] Completed",
-      "viewMetricsLink": "[NEEDS_REVIEW] View metrics"
+      "header": "Retinal results",
+      "jobsLabel": "{n} job(s)",
+      "loading": "Loading…",
+      "empty": "No retinal inference jobs yet.",
+      "colTask": "Task",
+      "colEye": "Eye",
+      "colStatus": "Status",
+      "colPrimaryMetric": "Primary metric",
+      "colModel": "Model",
+      "colCompleted": "Completed",
+      "viewMetricsLink": "View metrics"
     },
     "fundusOverlay": {
-      "aria": "[NEEDS_REVIEW] Fundus image with retinal overlays, {laterality}",
-      "foveaTooltip": "[NEEDS_REVIEW] Fovea estimate ({source})",
+      "aria": "Fundus image with retinal overlays, {laterality}",
+      "foveaTooltip": "Fovea estimate ({source})",
       "region": {
-        "center": "[NEEDS_REVIEW] Central 1 mm",
-        "ring_1_3": "[NEEDS_REVIEW] Ring 1–3 mm",
-        "ring_3_6": "[NEEDS_REVIEW] Ring 3–6 mm",
-        "corners": "[NEEDS_REVIEW] Outside 6 mm (corners)"
+        "center": "Central 1 mm",
+        "ring_1_3": "Ring 1–3 mm",
+        "ring_3_6": "Ring 3–6 mm",
+        "corners": "Outside 6 mm (corners)"
       }
     },
     "biomarkerToggle": {
@@ -3132,99 +3132,99 @@
       "position": "Slice {current} / {total}",
       "loading": "Loading viewer…",
       "errorPrefix": "Could not load B-scan viewer:",
-      "segOverlayAlt": "[NEEDS_REVIEW] Segmentation overlay for slice {current} of {total}",
-      "scrollHint": "[NEEDS_REVIEW] Scroll = change slice",
-      "previous": "[NEEDS_REVIEW] Previous slice",
-      "next": "[NEEDS_REVIEW] Next slice"
+      "segOverlayAlt": "Segmentation overlay for slice {current} of {total}",
+      "scrollHint": "Scroll = change slice",
+      "previous": "Previous slice",
+      "next": "Next slice"
     },
     "layers": {
-      "legendTitle": "[NEEDS_REVIEW] Retinal layers",
-      "allOn": "[NEEDS_REVIEW] All on",
-      "allOff": "[NEEDS_REVIEW] All off"
+      "legendTitle": "Retinal layers",
+      "allOn": "All on",
+      "allOff": "All off"
     },
     "correction": {
       "tools": {
-        "off": "[NEEDS_REVIEW] View",
-        "shift": "[NEEDS_REVIEW] Shift whole layer",
-        "free": "[NEEDS_REVIEW] Freehand draw",
-        "points": "[NEEDS_REVIEW] Edit control points"
+        "off": "View",
+        "shift": "Shift whole layer",
+        "free": "Freehand draw",
+        "points": "Edit control points"
       },
       "hint": {
-        "off": "[NEEDS_REVIEW] Pick a tool to correct the AI segmentation",
-        "shift": "[NEEDS_REVIEW] Drag to shift the whole layer up or down",
-        "free": "[NEEDS_REVIEW] Draw over the scan to correct the curve",
-        "points": "[NEEDS_REVIEW] Drag a point · Double-click to add · Rectangle to select · Del to remove"
+        "off": "Pick a tool to correct the AI segmentation",
+        "shift": "Drag to shift the whole layer up or down",
+        "free": "Draw over the scan to correct the curve",
+        "points": "Drag a point · Double-click to add · Rectangle to select · Del to remove"
       },
-      "selectedPoints": "[NEEDS_REVIEW] {n} point(s) selected",
-      "resetLayer": "[NEEDS_REVIEW] Reset to AI output",
-      "undo": "[NEEDS_REVIEW] Undo (Ctrl/⌘+Z)",
-      "etdrsToggle": "[NEEDS_REVIEW] Toggle ETDRS rings (1 / 3 / 6 mm)",
-      "layerBarCollapse": "[NEEDS_REVIEW] Collapse layer bar",
-      "layerBarExpand": "[NEEDS_REVIEW] Expand layer bar",
-      "prevSlice": "[NEEDS_REVIEW] Previous slice",
-      "nextSlice": "[NEEDS_REVIEW] Next slice",
-      "save": "[NEEDS_REVIEW] Save correction",
-      "saveBadge": "[NEEDS_REVIEW] {n} edit(s)",
-      "savedToast": "[NEEDS_REVIEW] Correction saved · {layers} layer(s) · {slices} slice(s)",
-      "discardConfirm": "[NEEDS_REVIEW] Discard unsaved corrections?",
-      "discardYes": "[NEEDS_REVIEW] Discard",
-      "discardCancel": "[NEEDS_REVIEW] Cancel",
-      "correctedBadge": "[NEEDS_REVIEW] corrected",
-      "saveFailed": "[NEEDS_REVIEW] Failed to save correction: {message}",
-      "noChanges": "[NEEDS_REVIEW] No changes to save",
-      "roleRequired": "[NEEDS_REVIEW] Corrections require Investigator or Data-Manager role"
+      "selectedPoints": "{n} point(s) selected",
+      "resetLayer": "Reset to AI output",
+      "undo": "Undo (Ctrl/⌘+Z)",
+      "etdrsToggle": "Toggle ETDRS rings (1 / 3 / 6 mm)",
+      "layerBarCollapse": "Collapse layer bar",
+      "layerBarExpand": "Expand layer bar",
+      "prevSlice": "Previous slice",
+      "nextSlice": "Next slice",
+      "save": "Save correction",
+      "saveBadge": "{n} edit(s)",
+      "savedToast": "Correction saved · {layers} layer(s) · {slices} slice(s)",
+      "discardConfirm": "Discard unsaved corrections?",
+      "discardYes": "Discard",
+      "discardCancel": "Cancel",
+      "correctedBadge": "corrected",
+      "saveFailed": "Failed to save correction: {message}",
+      "noChanges": "No changes to save",
+      "roleRequired": "Corrections require Investigator or Data-Manager role"
     },
     "trends": {
-      "title": "[NEEDS_REVIEW] Biomarker trends",
-      "chartHeader": "[NEEDS_REVIEW] Trend",
-      "empty": "[NEEDS_REVIEW] No data yet",
-      "emptyEye": "[NEEDS_REVIEW] No data for {eye}",
-      "loading": "[NEEDS_REVIEW] Loading trends…",
-      "errorPrefix": "[NEEDS_REVIEW] Failed to load trends:",
-      "xAxisLabel": "[NEEDS_REVIEW] Date",
-      "yAxisLabel": "[NEEDS_REVIEW] Value ({unit})",
-      "yAxisLabelBlank": "[NEEDS_REVIEW] Value",
-      "taskLabel": "[NEEDS_REVIEW] Task",
+      "title": "Biomarker trends",
+      "chartHeader": "Trend",
+      "empty": "No data yet",
+      "emptyEye": "No data for {eye}",
+      "loading": "Loading trends…",
+      "errorPrefix": "Failed to load trends:",
+      "xAxisLabel": "Date",
+      "yAxisLabel": "Value ({unit})",
+      "yAxisLabelBlank": "Value",
+      "taskLabel": "Task",
       "taskLabels": {
-        "fluid": "[NEEDS_REVIEW] Fluid (IRF / SRF / PED)",
-        "onl": "[NEEDS_REVIEW] ONL thickness",
-        "pr": "[NEEDS_REVIEW] PR thickness",
-        "ga": "[NEEDS_REVIEW] GA area"
+        "fluid": "Fluid (IRF / SRF / PED)",
+        "onl": "ONL thickness",
+        "pr": "PR thickness",
+        "ga": "GA area"
       },
-      "historyHeader": "[NEEDS_REVIEW] Past inferences",
+      "historyHeader": "Past inferences",
       "history": {
-        "colJob": "[NEEDS_REVIEW] Job",
-        "colCompleted": "[NEEDS_REVIEW] Completed",
-        "colAcquired": "[NEEDS_REVIEW] Acquired",
-        "colTask": "[NEEDS_REVIEW] Task",
-        "colEye": "[NEEDS_REVIEW] Eye",
-        "colStatus": "[NEEDS_REVIEW] Status",
-        "colPrimaryMetric": "[NEEDS_REVIEW] Primary metric",
-        "viewLink": "[NEEDS_REVIEW] View",
-        "empty": "[NEEDS_REVIEW] No inferences yet."
+        "colJob": "Job",
+        "colCompleted": "Completed",
+        "colAcquired": "Acquired",
+        "colTask": "Task",
+        "colEye": "Eye",
+        "colStatus": "Status",
+        "colPrimaryMetric": "Primary metric",
+        "viewLink": "View",
+        "empty": "No inferences yet."
       }
     },
     "subject": {
-      "sectionTitle": "[NEEDS_REVIEW] Retinal trends",
-      "sectionSubtitle": "[NEEDS_REVIEW] Longitudinal OCT inference results for this subject."
+      "sectionTitle": "Retinal trends",
+      "sectionSubtitle": "Longitudinal OCT inference results for this subject."
     },
     "live": {
-      "indicator": "[NEEDS_REVIEW] Live"
+      "indicator": "Live"
     },
     "parked": {
-      "title": "[NEEDS_REVIEW] Parked scans",
-      "subtitle": "[NEEDS_REVIEW] Uploaded scans without an assigned visit — please bind to a visit.",
-      "empty": "[NEEDS_REVIEW] No parked scans.",
-      "loading": "[NEEDS_REVIEW] Loading…",
-      "loadError": "[NEEDS_REVIEW] Failed to load parked scans.",
-      "colTask": "[NEEDS_REVIEW] Task",
-      "colEye": "[NEEDS_REVIEW] Eye",
-      "colEnqueued": "[NEEDS_REVIEW] Received",
-      "colAction": "[NEEDS_REVIEW] Action",
-      "bindAction": "[NEEDS_REVIEW] Assign visit",
-      "bindSuccess": "[NEEDS_REVIEW] Scan assigned to a visit.",
-      "bindConflict": "[NEEDS_REVIEW] Scan was already assigned by another session.",
-      "bindError": "[NEEDS_REVIEW] Assignment failed."
+      "title": "Parked scans",
+      "subtitle": "Uploaded scans without an assigned visit — please bind to a visit.",
+      "empty": "No parked scans.",
+      "loading": "Loading…",
+      "loadError": "Failed to load parked scans.",
+      "colTask": "Task",
+      "colEye": "Eye",
+      "colEnqueued": "Received",
+      "colAction": "Action",
+      "bindAction": "Assign visit",
+      "bindSuccess": "Scan assigned to a visit.",
+      "bindConflict": "Scan was already assigned by another session.",
+      "bindError": "Assignment failed."
     }
   },
   "bugReport": {

@@ -213,7 +213,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-8">
+    <div class="flex-1 max-w-5xl px-8 py-8">
       <div class="mb-6 flex items-start justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('dataExport.subTrail') }}</div>
@@ -399,7 +399,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
           </tbody>
         </table>
       </section>
-    </main>
+    </div>
 
     <!-- Export modal. -->
     <div

@@ -152,7 +152,7 @@ async function onSign(payload: ESignaturePayload) {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <p v-if="subjects.isLoadingSelected || subjects.isLoadingPreflight" class="text-slate-500 italic">
         {{ t('common.loading') }}
       </p>
@@ -252,6 +252,6 @@ async function onSign(payload: ESignaturePayload) {
           {{ t('signSubject.signedToast', { id: subject.id }) }}
         </div>
       </template>
-    </main>
+    </div>
   </div>
 </template>

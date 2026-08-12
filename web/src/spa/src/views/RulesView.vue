@@ -439,7 +439,7 @@ watch(selectedId, () => {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6">
+    <div class="flex-1 px-8 py-6">
       <div class="mb-4 flex items-start justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('rules.subTrail') }}</div>
@@ -891,7 +891,7 @@ watch(selectedId, () => {
           </div>
         </section>
       </div>
-    </main>
+    </div>
 
     <RulesImportDialog
       v-model:open="importDialogOpen"

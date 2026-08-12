@@ -113,7 +113,7 @@ const rows = computed(() => store.list)
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-6xl px-8 py-6">
+    <div class="flex-1 max-w-6xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <h1 class="text-xl font-semibold tracking-tight">{{ t('modalities.title') }}</h1>
@@ -192,6 +192,6 @@ const rows = computed(() => store.list)
         @cancel="closeDialog"
         @update:open="(v) => { if (!v) closeDialog() }"
       />
-    </main>
+    </div>
   </div>
 </template>

@@ -356,7 +356,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-3xl px-8 py-8">
+    <div class="flex-1 max-w-3xl px-8 py-8">
       <div class="mb-6">
         <div class="text-xs text-slate-500 mb-1">{{ form.siteLabel }} · {{ t('addSubject.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('addSubject.title') }}</h1>
@@ -632,6 +632,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
         </svg>
         <p class="leading-relaxed">{{ t('addSubject.modesHelp') }}</p>
       </div>
-    </main>
+    </div>
   </div>
 </template>

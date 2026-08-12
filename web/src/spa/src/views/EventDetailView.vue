@@ -213,7 +213,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <p v-if="store.isLoading && !event" class="text-slate-500 italic">
         {{ t('common.loading') }}
       </p>
@@ -243,9 +243,9 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
         <div class="mb-5">
           <div class="text-xs text-slate-500 mb-1">
             {{ event.studyName }}
-            <span class="text-slate-300"> / </span>
+            <span class="text-slate-500"> / </span>
             <RouterLink :to="`/subjects/${event.subjectLabel}`" class="underline">{{ event.subjectLabel }}</RouterLink>
-            <span class="text-slate-300"> / </span>
+            <span class="text-slate-500"> / </span>
             {{ event.eventDefinitionName }}
             <span v-if="event.repeating && event.ordinal > 1" class="text-slate-400">· #{{ event.ordinal }}</span>
           </div>
@@ -426,6 +426,6 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           {{ t('eventDetail.back') }}
         </RouterLink>
       </template>
-    </main>
+    </div>
   </div>
 </template>

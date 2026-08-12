@@ -72,7 +72,7 @@
   --color-muw-coral-400: #f4b3a2;
   --color-muw-coral-500: #f0a794;
   --color-muw-coral-600: #d96849;
-  --color-muw-coral-700: #b04a30;
+  --color-muw-coral-700: #a03f28; /* darkened from #b04a30 for WCAG AA (4.36→≥4.5:1 as text on coral-50/100 tints) */
   --color-muw-coral-800: #7a3220;
   --color-muw-coral-900: #4e1f12;
   --color-muw-coral:     #f0a794;
@@ -96,6 +96,19 @@
   /* Shape — `siegel`-echoing rounded radius for cards + primary surfaces.  */
   /* ---------------------------------------------------------------------- */
   --radius-muw: 0.625rem;
+
+  /* ---------------------------------------------------------------------- */
+  /* Accessibility — muted-text contrast (WCAG 2.2 AA, 1.4.3).              */
+  /* ---------------------------------------------------------------------- */
+  /* Tailwind's slate-400 (#90a1b9) is used almost exclusively as muted TEXT
+     (~182 text uses vs ~16 border/bg) — footers, hints, timestamps, "—"
+     placeholders — and fails AA on white/slate-50 (~2.5:1 vs the 4.5:1
+     minimum). Clamp it to the AA floor (= slate-500's value) so every muted-
+     text utility becomes compliant in one place; the few border/bg-slate-400
+     uses (small dots, disabled fills) darken imperceptibly. slate-300 is NOT
+     overridden here — it is mostly borders (~128 uses); its ~36 text uses are
+     bumped to text-slate-500 at the call sites instead. */
+  --color-slate-400: #64748b;
 
   /* ---------------------------------------------------------------------- */
   /* Elevation — softer, blue-tinged shadows match the MUW palette.         */

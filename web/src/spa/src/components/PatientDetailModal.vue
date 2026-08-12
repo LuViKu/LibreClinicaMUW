@@ -552,7 +552,7 @@ watch(
                 </button>
                 <span
                   v-if="idx < row.pills.length - 1"
-                  class="text-slate-300"
+                  class="text-slate-500"
                   aria-hidden="true"
                 >→</span>
               </li>

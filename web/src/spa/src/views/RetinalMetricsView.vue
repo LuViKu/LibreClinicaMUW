@@ -1045,7 +1045,7 @@ onBeforeUnmount(stopInflightPoll)
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 min-w-0 px-8 py-7">
+    <div class="flex-1 min-w-0 px-8 py-7">
       <div class="max-w-[1200px] mx-auto">
         <p v-if="(isLoading || resolving) && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
           {{ t('retinal.loading') }}
@@ -1102,11 +1102,11 @@ onBeforeUnmount(stopInflightPoll)
                 <span>{{ t('retinal.header.modelLabel') }}
                   <span class="font-mono text-slate-700">{{ job.modelVersion ?? '—' }}</span>
                 </span>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <span>{{ t('retinal.header.runLabel') }}
                   <span class="font-mono text-slate-700">{{ formatIsoDate(job.completedAt ?? job.enqueuedAt) }}</span>
                 </span>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <span class="inline-flex items-center gap-2">{{ t('retinal.header.confidenceLabel') }}
                   <span class="inline-flex items-center gap-1.5">
                     <span class="w-20 h-1.5 rounded-full bg-slate-200 overflow-hidden inline-block align-middle">
@@ -1556,6 +1556,6 @@ onBeforeUnmount(stopInflightPoll)
           </RouterLink>
         </template>
       </div>
-    </main>
+    </div>
   </div>
 </template>

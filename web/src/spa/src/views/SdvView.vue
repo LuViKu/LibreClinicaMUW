@@ -154,7 +154,7 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6">
+    <div class="flex-1 px-8 py-6">
       <div class="flex items-end justify-between mb-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('sdv.subTrail') }}</div>
@@ -344,7 +344,7 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
           <span>{{ t('sdv.showingCount', { visible: sdv.visibleCount, total: sdv.totalCount, verifiable: sdv.verifiableCount }) }}</span>
         </template>
       </DenseTable>
-    </main>
+    </div>
 
     <!-- Bulk-verify confirmation modal -->
     <Modal v-model:open="confirmOpen" labelled-by="sdv-confirm-title" panel-class="max-w-md">

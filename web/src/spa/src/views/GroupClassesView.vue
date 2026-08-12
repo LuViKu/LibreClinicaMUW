@@ -139,7 +139,7 @@ const visibleRows = computed(() => gc.rows)
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-6">
+    <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('groupClasses.subTrail') }}</div>
@@ -274,6 +274,6 @@ const visibleRows = computed(() => gc.rows)
           >{{ isCreating ? t('common.saving') : t('groupClasses.submitCreate') }}</button>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>

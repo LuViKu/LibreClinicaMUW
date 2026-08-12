@@ -133,7 +133,7 @@ function rowAriaLabel(p: PatientListItem): string {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6 max-w-[1200px]">
+    <div class="flex-1 px-8 py-6 max-w-[1200px]">
       <div class="flex items-end justify-between mb-5">
         <div>
           <div class="text-xs text-slate-500 mb-1">
@@ -268,7 +268,7 @@ function rowAriaLabel(p: PatientListItem): string {
           </div>
         </template>
       </DenseTable>
-    </main>
+    </div>
 
     <PatientDetailModal
       :open="modalOpen"

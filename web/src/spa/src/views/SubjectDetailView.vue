@@ -899,7 +899,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <p v-if="isLoading && !subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <template v-else-if="!subject">
@@ -1571,7 +1571,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           </div>
         </div>
       </template>
-    </main>
+    </div>
 
     <!-- Phase E.6 — Schedule-event dialog (mounted regardless of
          data-load state so the open binding can stay simple). -->

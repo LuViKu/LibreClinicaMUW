@@ -92,7 +92,7 @@ const openCount = computed<number>(() =>
 </script>
 
 <template>
-  <main class="dde-reconcile">
+  <div class="dde-reconcile">
     <header class="dde-reconcile__header">
       <h1>{{ t('dde.reconcile.title') }}</h1>
       <p v-if="dde.conflicts" class="dde-reconcile__subline">
@@ -188,7 +188,7 @@ const openCount = computed<number>(() =>
         </tr>
       </tbody>
     </table>
-  </main>
+  </div>
 </template>
 
 <style scoped>

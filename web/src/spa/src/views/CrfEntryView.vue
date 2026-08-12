@@ -593,7 +593,7 @@ function onPrefillApply(values: Record<string, string>) {
       </nav>
     </SideRail>
 
-    <main class="flex-1 max-w-3xl px-8 py-8">
+    <div class="flex-1 max-w-3xl px-8 py-8">
       <div class="mb-6">
         <div class="text-xs text-slate-500 mb-1" v-if="store.entry">
           {{ store.entry.subjectId }} · {{ store.entry.eventLabel }}
@@ -1035,7 +1035,7 @@ function onPrefillApply(values: Record<string, string>) {
           </div>
         </div>
       </form>
-    </main>
+    </div>
 
     <NewNoteDialog
       v-if="newNoteDialogState"
