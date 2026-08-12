@@ -11,6 +11,7 @@ import RuleActionEditDialog from '@/components/RuleActionEditDialog.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
+import { useConfirm } from '@/composables/useConfirm'
 import type { ActionType, AttachedRule, RuleAction, RuleSet } from '@/types/rule'
 
 const RUN_LOG_PAGE_SIZE = 25
@@ -28,6 +29,7 @@ const RUN_LOG_PAGE_SIZE = 25
 const { t } = useI18n()
 const rules = useRulesStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 /**
  * Phase E RX.4 — lifecycle buttons gate to Administrator + Data
@@ -233,7 +235,7 @@ async function onDisableRuleSet(rs: RuleSet) {
   // same pattern; a heavier modal can come later. The message warns
   // about audit-trail retention to match the legacy "are you sure"
   // page (verifyOperationServlet).
-  if (!window.confirm(t('rules.confirm.disableRuleSet', { target }))) return
+  if (!(await confirm({ message: t('rules.confirm.disableRuleSet', { target }), danger: true }))) return
   const key = makeBusyKey(rs.id)
   busyKey.value = key
   try {
@@ -255,7 +257,7 @@ async function onRestoreRuleSet(rs: RuleSet) {
 
 async function onDisableAttachedRule(rs: RuleSet, ar: AttachedRule) {
   const ruleOid = ar.ruleOid ?? ar.ruleName ?? `#${ar.ruleSetRuleId}`
-  if (!window.confirm(t('rules.confirm.disableRule', { ruleOid }))) return
+  if (!(await confirm({ message: t('rules.confirm.disableRule', { ruleOid }), danger: true }))) return
   const key = makeBusyKey(rs.id, ar.ruleSetRuleId)
   busyKey.value = key
   try {

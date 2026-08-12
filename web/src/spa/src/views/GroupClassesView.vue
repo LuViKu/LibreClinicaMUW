@@ -11,6 +11,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useGroupClassesStore } from '@/stores/groupClasses'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { GroupClass, GroupClassType, SubjectAssignment } from '@/types/groupClass'
 
 /**
@@ -23,6 +24,7 @@ import type { GroupClass, GroupClassType, SubjectAssignment } from '@/types/grou
 const { t } = useI18n()
 const gc = useGroupClassesStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const canManage = computed(() => {
@@ -108,7 +110,7 @@ async function submitCreate() {
 
 async function onDisable(row: GroupClass) {
   if (!studyOid.value) return
-  if (!confirm(t('groupClasses.disableConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('groupClasses.disableConfirm', { name: row.name }), danger: true }))) return
   await gc.disable(studyOid.value, row.id)
 }
 

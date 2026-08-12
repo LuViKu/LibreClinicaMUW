@@ -12,6 +12,7 @@ import EventCrfAssignmentsDialog from '@/components/EventCrfAssignmentsDialog.vu
 
 import { useEventDefinitionsStore } from '@/stores/eventDefinitions'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { EventDefinition, EventType } from '@/types/eventDefinition'
 
 /**
@@ -29,6 +30,7 @@ import type { EventDefinition, EventType } from '@/types/eventDefinition'
 const { t } = useI18n()
 const eventDefs = useEventDefinitionsStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const canManage = computed(() => {
@@ -185,7 +187,7 @@ async function submitEdit() {
 
 async function onDisable(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.disableConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.disableConfirm', { name: row.name }), danger: true }))) return
   await eventDefs.disable(studyOid.value, row.oid)
 }
 
@@ -194,17 +196,17 @@ async function onDisable(row: EventDefinition) {
 const showRemoved = ref(false)
 async function onRestore(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.restoreConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.restoreConfirm', { name: row.name }), danger: false }))) return
   await eventDefs.restore(studyOid.value, row.oid)
 }
 async function onLock(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.lockConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.lockConfirm', { name: row.name }), danger: true }))) return
   await eventDefs.lock(studyOid.value, row.oid)
 }
 async function onUnlock(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.unlockConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.unlockConfirm', { name: row.name }), danger: false }))) return
   await eventDefs.unlock(studyOid.value, row.oid)
 }
 

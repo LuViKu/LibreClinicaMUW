@@ -18,6 +18,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 
+// #19 — Reopen now confirms via the useConfirm() modal (benign). Mock it
+// to auto-accept so the reopen call fires without a mounted ConfirmDialog.
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn(() => Promise.resolve(true)) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
+
 vi.mock('@/api/client', () => {
   class ApiError extends Error {
     isUnauthorized = false
@@ -252,9 +257,7 @@ describe('CrfEntryView — completed-CRF read-only lock', () => {
       return {}
     })
 
-    // Reopen confirms via window.confirm — auto-accept.
-    vi.stubGlobal('confirm', vi.fn(() => true))
-
+    // Reopen confirms via the useConfirm() modal — mocked to auto-accept.
     const reopenBtn = w
       .findAll('button')
       .find((b) => b.text().includes('Reopen CRF'))

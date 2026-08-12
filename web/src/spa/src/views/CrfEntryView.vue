@@ -37,6 +37,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import { useConfirm } from '@/composables/useConfirm'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
@@ -45,6 +46,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
+const confirm = useConfirm()
 const notifications = useNotificationsStore()
 const advanced = useCrfEntryAdvancedStore()
 
@@ -332,7 +334,7 @@ async function onUploadFile(itemOid: string, file: File): Promise<void> {
 }
 
 async function onClearFile(itemOid: string): Promise<void> {
-  if (!confirm(t('crfEntry.file.removeConfirm'))) return
+  if (!(await confirm({ message: t('crfEntry.file.removeConfirm'), danger: true }))) return
   await store.deleteFile(itemOid)
 }
 
@@ -407,7 +409,7 @@ async function onMarkComplete() {
  * `isReadOnly` / `isSaving` chain.
  */
 async function onReopen() {
-  if (!confirm(t('crfEntry.action.reopenConfirm'))) return
+  if (!(await confirm({ message: t('crfEntry.action.reopenConfirm'), danger: false }))) return
   await store.reopen()
 }
 

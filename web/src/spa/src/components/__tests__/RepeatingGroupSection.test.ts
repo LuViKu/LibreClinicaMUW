@@ -1,7 +1,14 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import RepeatingGroupSection from '../RepeatingGroupSection.vue'
 import type { CrfItem, CrfItemGroup } from '@/types/crf'
+
+// #19 — row deletion now goes through the useConfirm() modal instead of
+// window.confirm(). Mock the composable so the component doesn't need an
+// active Pinia + a mounted ConfirmDialog; the modal itself is covered by
+// ConfirmDialog.test.ts.
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn(() => Promise.resolve(true)) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
 
 const ITEMS_BY_OID: Record<string, CrfItem> = {
   I_EYE: {
@@ -44,10 +51,8 @@ function makeGroup(rows: CrfItemGroup['rows'] = [], repeatMax = 4): CrfItemGroup
 
 describe('RepeatingGroupSection', () => {
   beforeEach(() => {
-    vi.stubGlobal('confirm', vi.fn(() => true))
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
+    confirmMock.mockReset()
+    confirmMock.mockResolvedValue(true)
   })
 
   it('renders the empty-state label when no rows', () => {
@@ -104,7 +109,8 @@ describe('RepeatingGroupSection', () => {
     })
     const deletes = wrapper.findAll('button').filter((b) => b.text() === 'Delete')
     await deletes[1].trigger('click')
-    expect(window.confirm).toHaveBeenCalledWith('Are you sure?')
+    await flushPromises()
+    expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ message: 'Are you sure?' }))
     expect(wrapper.emitted('delete-row')).toEqual([[2]])
   })
 })

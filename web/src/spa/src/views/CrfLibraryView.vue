@@ -11,6 +11,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { Crf } from '@/types/crfLibrary'
 
 /**
@@ -32,6 +33,7 @@ const { t } = useI18n()
 const router = useRouter()
 const lib = useCrfLibraryStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const canManage = computed(() => {
   const role = auth.user?.role
@@ -199,12 +201,12 @@ const vClickOutside = {
 }
 
 async function onDisableCrf(crf: Crf) {
-  if (!confirm(t('crfLibrary.disableConfirm', { name: crf.name }))) return
+  if (!(await confirm({ message: t('crfLibrary.disableConfirm', { name: crf.name }), danger: true }))) return
   await lib.disableCrf(crf.oid)
 }
 
 async function onDisableVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.disableVersionConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.disableVersionConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   await lib.disableVersion(crf.oid, versionOid)
 }
 
@@ -217,17 +219,17 @@ async function onDisableVersion(crf: Crf, versionOid: string, versionName: strin
 const isSysadmin = computed(() => auth.user?.role === 'Administrator')
 
 async function onLockVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.lockConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.lockConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   await lib.lockVersion(crf.oid, versionOid)
 }
 
 async function onUnlockVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.unlockConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.unlockConfirm', { name: crf.name, version: versionName }), danger: false }))) return
   await lib.unlockVersion(crf.oid, versionOid)
 }
 
 async function onRestoreVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.restoreConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.restoreConfirm', { name: crf.name, version: versionName }), danger: false }))) return
   await lib.restoreVersion(crf.oid, versionOid)
 }
 
@@ -237,7 +239,7 @@ const hardRemoveBlocker = ref<{
 } | null>(null)
 
 async function onHardRemoveVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.hardRemoveConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.hardRemoveConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   const result = await lib.hardRemoveVersion(crf.oid, versionOid)
   if (result.ok) {
     // success — list patched in-place.
