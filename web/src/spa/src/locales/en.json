@@ -1369,6 +1369,8 @@
       "validating": "Validating …",
       "validationOk": "Validation succeeded — no errors.",
       "saveSuccess": "Version “{name}” saved.",
+      "preview": "Preview",
+      "previewing": "Generating preview …",
       "fork": {
         "loading": "Loading prior-version contents …",
         "loaded": "Prior-version contents copied into the draft.",

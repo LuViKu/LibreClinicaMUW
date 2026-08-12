@@ -11,6 +11,7 @@ import ErrorText from '@/components/ErrorText.vue'
 import { useSitesStore } from '@/stores/sites'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
+import SkeletonList from '@/components/SkeletonList.vue'
 import type { StudyIdentity } from '@/types/study'
 
 /**
@@ -161,7 +162,10 @@ const visibleRows = computed(() => sites.rows)
         <span class="flex-1">{{ sites.error }}</span>
         <button type="button" class="shrink-0 text-rose-500 hover:text-rose-700" :aria-label="t('common.dismiss')" @click="sites.error = null">✕</button>
       </div>
-      <p v-if="sites.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
+      <template v-if="sites.isLoading">
+        <span class="sr-only" role="status">{{ t('common.loading') }}</span>
+        <SkeletonList :rows="3" />
+      </template>
       <p v-else-if="visibleRows.length === 0" class="text-slate-500 italic">{{ t('sites.empty') }}</p>
 
       <ul v-else class="space-y-2">
