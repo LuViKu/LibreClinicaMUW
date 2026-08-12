@@ -279,7 +279,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     to: { name: 'sites' },
     titleKey: 'home.administrator.sitesTitle',
     descKey: 'home.administrator.sitesDesc',
-    allowedRoles: ['Administrator'],
+    allowedRoles: ['Data Manager', 'Administrator'],
     scope: 'study-scoped',
   },
 

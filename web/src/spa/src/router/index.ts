@@ -195,7 +195,10 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: () => import('@/views/SitesView.vue'),
-      meta: { title: 'Sites', role: 'Administrator' as const },
+      // Site (location) management is a study-build task the Data Manager /
+      // study director owns alongside CRFs, visits, rules and groups — not
+      // just a system Administrator concern.
+      meta: { title: 'Sites', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.6 — subject group classes (Arms, families, etc.). */
     {
