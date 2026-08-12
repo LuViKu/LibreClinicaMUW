@@ -148,8 +148,18 @@ const visibleRows = computed(() => sites.rows)
         </button>
       </div>
 
+      <!-- Error as a dismissible banner ABOVE the list — a failed disable/
+           restore no longer replaces (unmounts) the whole site list. -->
+      <div
+        v-if="sites.error"
+        class="mb-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        role="alert"
+        data-testid="sites-error"
+      >
+        <span class="flex-1">{{ sites.error }}</span>
+        <button type="button" class="shrink-0 text-rose-500 hover:text-rose-700" :aria-label="t('common.dismiss')" @click="sites.error = null">✕</button>
+      </div>
       <p v-if="sites.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
-      <p v-else-if="sites.error" class="text-rose-700">{{ sites.error }}</p>
       <p v-else-if="visibleRows.length === 0" class="text-slate-500 italic">{{ t('sites.empty') }}</p>
 
       <ul v-else class="space-y-2">

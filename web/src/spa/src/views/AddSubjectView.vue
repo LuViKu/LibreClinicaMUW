@@ -595,9 +595,12 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           </RouterLink>
 
           <div class="flex items-center gap-2">
+            <!-- Clear action hierarchy: schedule = primary (below), finish =
+                 secondary (bordered), add-next = tertiary (ghost) so the two
+                 non-primary actions no longer compete as look-alike buttons. -->
             <button
               type="button"
-              class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
+              class="px-3 py-2 text-xs rounded-md text-slate-600 hover:text-muw-blue hover:bg-slate-50 disabled:opacity-50"
               :disabled="subjects.isLoading"
               @click="submit('addNext')"
             >
@@ -605,7 +608,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
             </button>
             <button
               type="submit"
-              class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
+              class="px-3 py-2 text-xs border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
               :disabled="subjects.isLoading"
             >
               {{ t('addSubject.action.saveAndFinish') }}
