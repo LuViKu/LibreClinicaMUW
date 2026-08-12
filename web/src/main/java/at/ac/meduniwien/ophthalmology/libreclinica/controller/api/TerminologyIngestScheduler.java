@@ -2,15 +2,10 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.ApplicationListener;
-import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +19,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * #26 Slice 2 — scheduled medication-catalogue ingest.
@@ -45,13 +41,13 @@ import java.time.Duration;
  * The single-host dev compose keeps working untouched with the flag unset.
  */
 @Component
-public class TerminologyIngestScheduler implements ApplicationListener<ContextRefreshedEvent> {
+public class TerminologyIngestScheduler implements SmartInitializingSingleton {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerminologyIngestScheduler.class);
     private static final String SYSTEM = "medication";
 
-    /** One-shot guard: ContextRefreshedEvent fires for every context refresh. */
-    private volatile boolean booted = false;
+    /** One-shot guard for the first-boot load. */
+    private final AtomicBoolean booted = new AtomicBoolean(false);
 
     // Defaults target the ELGA termgit ASP-Liste. All overridable via datainfo.
     private static final String DEFAULT_PROJECT = "elga-gmbh%2Ftermgit";
@@ -61,7 +57,6 @@ public class TerminologyIngestScheduler implements ApplicationListener<ContextRe
 
     private final TerminologyIngestService ingestService;
     private final DataSource dataSource;
-    private final JsonFactory jsonFactory = new JsonFactory();
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(30))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -99,15 +94,27 @@ public class TerminologyIngestScheduler implements ApplicationListener<ContextRe
      * fresh).
      *
      * <p>Runs on a daemon thread so a 95 MB fetch + 21k-row COPY never blocks
-     * app startup, and mirrors {@code ExportScheduleRegistrar}: guarded to fire
-     * once, on the ROOT context refresh only.
+     * app startup. Triggered by {@link ContextRefreshedEvent} — the startup
+     * hook this app publishes (it does NOT emit Spring Boot's
+     * ApplicationReadyEvent).
+     *
+     * <p>Triggered via {@link SmartInitializingSingleton} — a bean-factory
+     * callback that runs once when this bean's context finishes instantiating
+     * its singletons, independent of {@code ContextRefreshedEvent} routing.
+     * This bean is component-scanned by {@code WebMvcConfig} into the
+     * {@code pages} DispatcherServlet CHILD context (its ContextRefreshedEvent
+     * never reached this listener); the singleton callback fires reliably
+     * regardless. By the time it runs the root context (DataSource + the
+     * Liquibase-migrated schema) is fully up. The {@link #booted} CAS keeps it
+     * to a single run.
      */
     @Override
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        if (booted) return;
-        if (event.getApplicationContext().getParent() != null) return; // root context only
-        booted = true;
-        if (!enabled()) return;
+    public void afterSingletonsInstantiated() {
+        if (!booted.compareAndSet(false, true)) return;
+        if (!enabled()) {
+            LOG.debug("Medication ingest disabled — skipping first-boot load");
+            return;
+        }
         if (currentSourceSha() != null) {
             LOG.info("Medication catalogue already present — skipping first-boot load");
             return;
@@ -164,30 +171,23 @@ public class TerminologyIngestScheduler implements ApplicationListener<ContextRe
         }
     }
 
-    /** GET the GitLab file-metadata JSON and pull {@code content_sha256}. */
+    /**
+     * Read the upstream fingerprint via a HEAD request — cheaply. GitLab's file
+     * endpoint returns the {@code X-Gitlab-Content-Sha256} header without a body;
+     * a GET would instead stream the file's full base64 {@code content} inline
+     * (bigger than /raw), defeating the purpose.
+     */
     private String fetchContentSha256(String metaUrl) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(metaUrl))
                 .timeout(Duration.ofSeconds(60))
-                .GET()
+                .method("HEAD", HttpRequest.BodyPublishers.noBody())
                 .build();
-        HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<Void> resp = http.send(req, HttpResponse.BodyHandlers.discarding());
         if (resp.statusCode() != 200) {
-            LOG.warn("Medication ingest: metadata HTTP {} for {}", resp.statusCode(), metaUrl);
-            resp.body().close();
+            LOG.warn("Medication ingest: metadata HEAD HTTP {} for {}", resp.statusCode(), metaUrl);
             return null;
         }
-        try (InputStream in = resp.body(); JsonParser p = jsonFactory.createParser(in)) {
-            if (p.nextToken() != JsonToken.START_OBJECT) return null;
-            while (p.nextToken() != JsonToken.END_OBJECT && !p.isClosed()) {
-                String field = p.currentName();
-                p.nextToken();
-                if ("content_sha256".equals(field)) {
-                    return p.getValueAsString();
-                }
-                p.skipChildren();
-            }
-        }
-        return null;
+        return resp.headers().firstValue("x-gitlab-content-sha256").orElse(null);
     }
 
     private String currentSourceSha() {
