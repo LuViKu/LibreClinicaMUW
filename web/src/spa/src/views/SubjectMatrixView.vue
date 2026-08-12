@@ -6,6 +6,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
+import SkeletonRow from '@/components/SkeletonRow.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useStudyStore } from '@/stores/study'
@@ -564,11 +565,10 @@ watch(eventColumns, async (next, prev) => {
               </tr>
             </thead>
             <tbody>
-              <tr v-if="subjects.isLoading">
-                <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-slate-500 italic">
-                  {{ t('common.loading') }}
-                </td>
-              </tr>
+              <template v-if="subjects.isLoading">
+                <tr class="sr-only"><td :colspan="7 + eventColumns.length" role="status">{{ t('common.loading') }}</td></tr>
+                <SkeletonRow :columns="7 + eventColumns.length" :rows="6" />
+              </template>
               <tr v-else-if="subjects.error">
                 <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-rose-700">
                   {{ subjects.error }}

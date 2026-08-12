@@ -20,12 +20,14 @@ import { useRouter } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
+import { useConfirm } from '@/composables/useConfirm'
 import type { ExportFormat } from '@/types/export'
 import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const auth = useAuthStore()
 const datasets = useDatasetsStore()
+const confirm = useConfirm()
 const router = useRouter()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
@@ -54,7 +56,7 @@ const showRemoved = computed<boolean>({
 })
 
 async function confirmRestore(datasetId: number, name: string) {
-  if (!window.confirm(t('datasetList.confirmRestore', { name }))) return
+  if (!(await confirm({ message: t('datasetList.confirmRestore', { name }), danger: false }))) return
   restoring.value = datasetId
   restoreError.value = null
   try {
@@ -87,7 +89,7 @@ function openWizardEdit(datasetId: number) {
 }
 
 async function confirmRemove(datasetId: number, name: string) {
-  if (!window.confirm(t('datasetList.confirmRemove', { name }))) return
+  if (!(await confirm({ message: t('datasetList.confirmRemove', { name }), danger: true }))) return
   removing.value = datasetId
   removeError.value = null
   try {

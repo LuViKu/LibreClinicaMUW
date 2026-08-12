@@ -147,6 +147,8 @@
     "filter": "Filter",
     "clear": "Clear",
     "dismiss": "Dismiss",
+    "confirm": "Confirm",
+    "confirmTitle": "Confirmation required",
     "export": "Export",
     "eye": {
       "od": "right",
@@ -604,6 +606,8 @@
     "saving": "Auto-saving…",
     "lastSaved": "Last saved at {at}",
     "notSavedYet": "Not saved yet",
+    "saveSuccess": "Saved.",
+    "markCompleteSuccess": "CRF marked complete.",
     "cancelLink": "Cancel — return to Subject Matrix",
     "status": {
       "not-started": "Not started",
@@ -807,7 +811,7 @@
     "adminOnly": "Administrator only",
     "createAction": "New study",
     "editAction": "Edit identity",
-    "parametersAction": "Parameters",
+    "parametersAction": "Parameters & modules",
     "statusAction": "Change status…",
     "statusTarget": {
       "AVAILABLE": "Available",
@@ -1364,6 +1368,9 @@
       "validate": "Validate",
       "validating": "Validating …",
       "validationOk": "Validation succeeded — no errors.",
+      "saveSuccess": "Version “{name}” saved.",
+      "preview": "Preview",
+      "previewing": "Generating preview …",
       "fork": {
         "loading": "Loading prior-version contents …",
         "loaded": "Prior-version contents copied into the draft.",
@@ -1399,8 +1406,39 @@
           "PDATE": { "label": "Partial date", "description": "Year, or month and year." },
           "CHOICE_SINGLE": { "label": "Dropdown list", "description": "Single choice from your own options." },
           "CHOICE_MULTI": { "label": "Multi-select", "description": "Several options selectable at once." },
-          "FILE": { "label": "File attachment", "description": "File upload." }
+          "FILE": { "label": "File attachment", "description": "File upload." },
+          "TABLE": { "label": "Repeating table", "description": "Define your own columns; the user adds rows (e.g. medications, diagnoses)." }
         }
+      },
+      "table": {
+        "section": "Table columns",
+        "minRows": "Min. rows",
+        "maxRows": "Max. rows",
+        "addColumn": "Add column",
+        "removeColumn": "Remove column",
+        "columnLabelPlaceholder": "Column heading",
+        "untitledColumn": "(untitled)",
+        "addRow": "Add row",
+        "removeRow": "Remove row",
+        "columnType": {
+          "text": "Text",
+          "number": "Number",
+          "date": "Date"
+        }
+      },
+      "terminology": {
+        "section": "Terminology autocomplete",
+        "enable": "Enable autocomplete for this text field",
+        "sourceLabel": "Data source",
+        "system": {
+          "icd10gm": "Diagnoses (ICD-10-GM)",
+          "medication": "Medications"
+        },
+        "fillLabel": "Auto-fill fields",
+        "fillHint": "When a suggestion is picked, properties are copied into other fields of the same row.",
+        "addFill": "+ Rule",
+        "removeFill": "Remove rule",
+        "propertyPlaceholder": "Property (e.g. strength)"
       },
       "canvas": {
         "dropHere": "Drag building blocks or presets from the left panel here.",
@@ -1821,6 +1859,8 @@
     "protocolType_Interventional": "Interventional",
     "protocolType_Observational": "Observational",
     "phase": "Phase",
+    "requiredField": "Required field",
+    "validationSummary": "Please complete the highlighted required fields.",
     "create": {
       "title": "Create a new study",
       "subTrail": "Build study",
@@ -1833,7 +1873,8 @@
       "intro": "Fields marked with an asterisk are required. Every change emits an audit-trail entry recording the old and new values.",
       "submit": "Save changes",
       "saved": "Saved. Changes are reflected throughout the platform.",
-      "leaveUnchanged": "— Leave unchanged —"
+      "leaveUnchanged": "— Leave unchanged —",
+      "parametersLink": "Parameters & modules"
     }
   },
   "manageUsers": {

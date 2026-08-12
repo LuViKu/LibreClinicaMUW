@@ -147,6 +147,8 @@
     "filter": "Filter",
     "clear": "Zurücksetzen",
     "dismiss": "Schließen",
+    "confirm": "Bestätigen",
+    "confirmTitle": "Bestätigung erforderlich",
     "export": "Export",
     "eye": {
       "od": "rechts",
@@ -604,6 +606,8 @@
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",
     "notSavedYet": "Noch nicht gespeichert",
+    "saveSuccess": "Gespeichert.",
+    "markCompleteSuccess": "CRF als abgeschlossen markiert.",
     "cancelLink": "Abbrechen — zurück zur Übersicht",
     "status": {
       "not-started": "Nicht begonnen",
@@ -807,7 +811,7 @@
     "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
-    "parametersAction": "Parameter",
+    "parametersAction": "Parameter & Module",
     "statusAction": "Status ändern…",
     "statusTarget": {
       "AVAILABLE": "Verfügbar",
@@ -1364,6 +1368,7 @@
       "validate": "Validieren",
       "validating": "Validiere …",
       "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "saveSuccess": "Version „{name}“ gespeichert.",
       "fork": {
         "loading": "Inhalte der Vorversion werden geladen …",
         "loaded": "Inhalte der Vorversion übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
@@ -1401,8 +1406,39 @@
           "PDATE": { "label": "Teildatum", "description": "Jahr oder Monat und Jahr." },
           "CHOICE_SINGLE": { "label": "Auswahlliste", "description": "Einfachauswahl aus eigenen Optionen." },
           "CHOICE_MULTI": { "label": "Mehrfachauswahl", "description": "Mehrere Optionen gleichzeitig auswählbar." },
-          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
+          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." },
+          "TABLE": { "label": "Wiederholbare Tabelle", "description": "Spalten selbst definieren; Anwender fügt Zeilen hinzu (z. B. Medikamente, Diagnosen)." }
         }
+      },
+      "table": {
+        "section": "Tabellenspalten",
+        "minRows": "Min. Zeilen",
+        "maxRows": "Max. Zeilen",
+        "addColumn": "Spalte hinzufügen",
+        "removeColumn": "Spalte entfernen",
+        "columnLabelPlaceholder": "Spaltenüberschrift",
+        "untitledColumn": "(ohne Titel)",
+        "addRow": "Zeile hinzufügen",
+        "removeRow": "Zeile entfernen",
+        "columnType": {
+          "text": "Text",
+          "number": "Zahl",
+          "date": "Datum"
+        }
+      },
+      "terminology": {
+        "section": "Terminologie-Autocomplete",
+        "enable": "Autocomplete für dieses Textfeld aktivieren",
+        "sourceLabel": "Datenquelle",
+        "system": {
+          "icd10gm": "Diagnosen (ICD-10-GM)",
+          "medication": "Medikamente"
+        },
+        "fillLabel": "Felder automatisch befüllen",
+        "fillHint": "Beim Auswählen eines Vorschlags werden Eigenschaften in andere Felder derselben Zeile übernommen.",
+        "addFill": "+ Regel",
+        "removeFill": "Regel entfernen",
+        "propertyPlaceholder": "Eigenschaft (z. B. strength)"
       },
       "canvas": {
         "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",
@@ -1823,6 +1859,8 @@
     "protocolType_Interventional": "Interventionell",
     "protocolType_Observational": "Beobachtend",
     "phase": "Phase",
+    "requiredField": "Pflichtfeld",
+    "validationSummary": "Bitte die markierten Pflichtfelder ausfüllen.",
     "create": {
       "title": "Neue Studie anlegen",
       "subTrail": "Studienaufbau",
@@ -1835,7 +1873,8 @@
       "intro": "Pflichtfelder sind mit einem Sternchen markiert. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit altem und neuem Wert.",
       "submit": "Änderungen speichern",
       "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
-      "leaveUnchanged": "— Unverändert lassen —"
+      "leaveUnchanged": "— Unverändert lassen —",
+      "parametersLink": "Parameter & Module"
     }
   },
   "manageUsers": {

@@ -13,12 +13,14 @@ import UserRolesDialog from '@/components/UserRolesDialog.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { StudyUser, UserAuth, UserRole } from '@/types/user'
 import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const users = useUsersStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 onMounted(() => { if (users.rows.length === 0) users.load() })
 
@@ -43,14 +45,14 @@ const isLifecycleBusy = ref<string | null>(null)
 const restoredPanel = ref<{ username: string; password: string | null; kind: 'restore' | 'reset' | 'unlock' } | null>(null)
 
 async function onDisable(u: StudyUser) {
-  if (!confirm(t('manageUsers.lifecycle.disableConfirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.lifecycle.disableConfirm', { username: u.username }), danger: true }))) return
   isLifecycleBusy.value = u.username
   try { await users.disableUser(u.username) }
   finally { isLifecycleBusy.value = null }
 }
 
 async function onRestore(u: StudyUser) {
-  if (!confirm(t('manageUsers.lifecycle.restoreConfirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.lifecycle.restoreConfirm', { username: u.username }), danger: false }))) return
   isLifecycleBusy.value = u.username
   try {
     const result = await users.restoreUser(u.username)
@@ -72,7 +74,7 @@ function canResetPassword(u: StudyUser): boolean {
 }
 
 async function onResetPassword(u: StudyUser) {
-  if (!confirm(t('manageUsers.resetPassword.confirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.resetPassword.confirm', { username: u.username }), danger: true }))) return
   isLifecycleBusy.value = u.username
   try {
     const result = await users.resetPassword(u.username)
@@ -90,7 +92,7 @@ function canUnlock(u: StudyUser): boolean {
 }
 
 async function onUnlock(u: StudyUser) {
-  if (!confirm(t('manageUsers.lifecycle.unlockConfirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.lifecycle.unlockConfirm', { username: u.username }), danger: false }))) return
   isLifecycleBusy.value = u.username
   try {
     const result = await users.unlock(u.username)

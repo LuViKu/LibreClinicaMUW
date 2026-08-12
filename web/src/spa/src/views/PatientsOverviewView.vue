@@ -17,6 +17,7 @@ import { RouterLink } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
+import SkeletonRow from '@/components/SkeletonRow.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import PatientDetailModal from '@/components/PatientDetailModal.vue'
@@ -180,11 +181,10 @@ function rowAriaLabel(p: PatientListItem): string {
           </tr>
         </template>
 
-        <tr v-if="store.isLoadingList">
-          <td colspan="7" class="px-3 py-6 text-center text-slate-500 italic">
-            {{ t('common.loading') }}
-          </td>
-        </tr>
+        <template v-if="store.isLoadingList">
+          <tr class="sr-only"><td colspan="7" role="status">{{ t('common.loading') }}</td></tr>
+          <SkeletonRow :columns="7" :rows="6" />
+        </template>
 
         <tr v-else-if="store.listError">
           <td colspan="7" class="px-3 py-6 text-center text-rose-700">

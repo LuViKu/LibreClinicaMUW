@@ -18,6 +18,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 
+// #19 — Reopen now confirms via the useConfirm() modal (benign). Mock it
+// to auto-accept so the reopen call fires without a mounted ConfirmDialog.
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn(() => Promise.resolve(true)) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
+
 vi.mock('@/api/client', () => {
   class ApiError extends Error {
     isUnauthorized = false
@@ -52,6 +57,12 @@ import { apiGet, apiPost } from '@/api/client'
 import CrfEntryView from '@/views/CrfEntryView.vue'
 // eslint-disable-next-line import/first
 import { useAuthStore } from '@/stores/auth'
+// eslint-disable-next-line import/first
+import { useCrfEntryStore } from '@/stores/crfEntry'
+// eslint-disable-next-line import/first
+import { useNotificationsStore } from '@/stores/notifications'
+// eslint-disable-next-line import/first
+import { nextTick } from 'vue'
 // eslint-disable-next-line import/first
 import type { CrfEntry, CrfEntryStatus } from '@/types/crf'
 // eslint-disable-next-line import/first
@@ -252,9 +263,7 @@ describe('CrfEntryView — completed-CRF read-only lock', () => {
       return {}
     })
 
-    // Reopen confirms via window.confirm — auto-accept.
-    vi.stubGlobal('confirm', vi.fn(() => true))
-
+    // Reopen confirms via the useConfirm() modal — mocked to auto-accept.
     const reopenBtn = w
       .findAll('button')
       .find((b) => b.text().includes('Reopen CRF'))
@@ -292,5 +301,32 @@ describe('CrfEntryView — completed-CRF read-only lock', () => {
     expect(w.text()).not.toContain('Reopen CRF')
     expect(w.text()).not.toContain('Save draft')
     expect(w.find('fieldset').element.disabled).toBe(true)
+  })
+})
+
+// #11/#15 — the save-success toast fires from the view. Store-level save()
+// is covered in crfEntry.test; this pins the view wiring (fill a field →
+// Save draft → success toast) as the verifiable stand-in for the deferred
+// eCRF fill+save e2e (#23).
+describe('CrfEntryView — save feedback', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+  })
+
+  it('shows a success toast after a successful save', async () => {
+    const w = await mountView({ status: 'in-progress' })
+    const store = useCrfEntryStore()
+    // Dirty a field so save() proceeds (guards on pendingChanges).
+    store.setValue('I_NAME', 'Neuer Wert')
+    await nextTick()
+
+    const saveBtn = w.findAll('button').find((b) => b.text() === 'Save draft')
+    expect(saveBtn).toBeTruthy()
+    await saveBtn!.trigger('click')
+    await flushPromises()
+
+    const notifications = useNotificationsStore()
+    expect(notifications.toasts.some((t) => t.kind === 'success' && t.message === 'Saved.')).toBe(true)
   })
 })

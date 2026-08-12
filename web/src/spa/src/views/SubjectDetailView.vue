@@ -32,6 +32,7 @@ import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
 import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import { useConfirm } from '@/composables/useConfirm'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -39,6 +40,7 @@ const router = useRouter()
 const subjects = useSubjectsStore()
 const events = useEventsStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 /**
  * 2026-06-21 round 6 follow-up — local click-outside directive used by
@@ -86,7 +88,7 @@ const canRemove = computed(() => {
 
 async function onRemove() {
   if (!subject.value) return
-  if (!confirm(t('subjectDetail.actions.removeConfirm', { id: subject.value.id }))) return
+  if (!(await confirm({ message: t('subjectDetail.actions.removeConfirm', { id: subject.value.id }), danger: true }))) return
   const ok = await subjects.removeSubject(subject.value.id)
   if (ok) router.push('/subjects')
 }
@@ -332,9 +334,9 @@ function openEditEvent(ev: {
   }
 }
 
-function unlockEditEvent() {
+async function unlockEditEvent() {
   if (!editEvent.value) return
-  if (!confirm(t('subjectDetail.event.editConfirm'))) return
+  if (!(await confirm({ message: t('subjectDetail.event.editConfirm'), danger: false }))) return
   editEvent.value.unlocked = true
 }
 
@@ -592,7 +594,7 @@ const canUnlock = computed(() => canRemove.value && subject.value?.locked)
 
 async function onLock() {
   if (!subject.value) return
-  if (!confirm(t('subjectDetail.actions.lockConfirm', { id: subject.value.id }))) return
+  if (!(await confirm({ message: t('subjectDetail.actions.lockConfirm', { id: subject.value.id }), danger: true }))) return
   await subjects.lockSubject(subject.value.id)
 }
 

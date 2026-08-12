@@ -5,6 +5,7 @@
  */
 
 import type { AuthoringItem } from '@/stores/crfAuthoring'
+import { defaultRepeatingTableSpec } from '@/stores/crfAuthoring'
 import { IOP_PRESET_ID, generateIopPresetItems } from './presets/iopPreset'
 import {
   OPHTH_EXAM_PRESET_ID,
@@ -287,6 +288,12 @@ export const PALETTE_PRIMITIVES: ReadonlyArray<PalettePrimitive> = [
     responseType: 'single-select',
   })),
   primitive('FILE', () => ({ dataType: 'FILE', responseType: 'file' })),
+  // #26 (2026-08-12) — generic repeating table. Seeds a two-column table
+  // the operator fleshes out in the properties rail (add columns, set
+  // types, opt any text column into terminology autocomplete). The scalar
+  // dataType is inert for a table item but kept as ST so the item stays
+  // well-formed if the table spec is ever cleared.
+  primitive('TABLE', () => ({ dataType: 'ST', responseType: 'text', table: defaultRepeatingTableSpec() })),
 ]
 
 export function findPalettePrimitive(id: string): PalettePrimitive | undefined {

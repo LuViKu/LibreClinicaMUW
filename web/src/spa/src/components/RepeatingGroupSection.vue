@@ -22,6 +22,7 @@
  */
 
 import { computed } from 'vue'
+import { useConfirm } from '@/composables/useConfirm'
 import type { CrfItem, CrfItemGroup } from '@/types/crf'
 
 interface Props {
@@ -44,6 +45,8 @@ const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   busy: false,
 })
+
+const confirm = useConfirm()
 
 const emit = defineEmits<{
   (e: 'add-row'): void
@@ -88,9 +91,9 @@ function onChangeValue(
   emit('set-value', { rowOrdinal, itemOid, value })
 }
 
-function onDeleteRow(rowOrdinal: number): void {
+async function onDeleteRow(rowOrdinal: number): Promise<void> {
   if (props.disabled || props.busy) return
-  if (typeof window !== 'undefined' && !window.confirm(props.deleteRowConfirm)) return
+  if (!(await confirm({ message: props.deleteRowConfirm, danger: true }))) return
   emit('delete-row', rowOrdinal)
 }
 

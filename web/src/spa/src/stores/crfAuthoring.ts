@@ -146,6 +146,90 @@ export interface ShowWhenRule {
  */
 export type AuthoringLaterality = 'OD' | 'OS' | 'OU'
 
+/**
+ * #26 (2026-08-12) — terminology data source for an autocomplete-bound
+ * text field. A loose string (not a closed union) so a new catalogue can
+ * be ingested and wired up without a code change; the known values are
+ * {@code 'icd10gm'} (ICD-10-GM diagnoses, ingested) and {@code 'medication'}
+ * (ATC/drug catalogue — Slice 2, carries strength/unit/form properties the
+ * fill map fans out).
+ */
+export type TerminologySystem = string
+
+/**
+ * One fill rule on an autocomplete binding: when the operator picks a
+ * catalogue suggestion, copy the concept's {@code fromProperty} (a key in
+ * the terminology row's JSONB properties, e.g. {@code 'strength'}) into a
+ * sibling field named by {@code toKey}.
+ *
+ * <p>{@code toKey} resolves against the SAME repeating-table row when the
+ * binding lives on a table column (matched by column {@link RepeatingTableColumn.key});
+ * on a flat item it names a sibling item OID in the same section. Explicit
+ * mapping (per the 2026-08-12 design decision) so it survives column
+ * reordering and works for both table + flat fields.
+ */
+export interface AutocompleteFill {
+  fromProperty: string
+  toKey: string
+}
+
+/**
+ * #26 — opt-in terminology autocomplete on a text field. Absent = plain
+ * text input. When present the field renders {@code TerminologyAutocomplete}
+ * against {@link system}; picking a suggestion writes "CODE — Display" into
+ * the field and fans {@link fills} out into sibling fields.
+ *
+ * <p>Wizard-only for now: NOT serialised by {@code buildItemPayload} (the
+ * workbook adapter has no column for it yet — that's the backend
+ * follow-up). Preview + live-entry rendering read it directly from the
+ * draft, so the behaviour is verifiable in-SPA today.
+ */
+export interface AutocompleteBinding {
+  system: TerminologySystem
+  fills: AutocompleteFill[]
+}
+
+/** Column value kind for a repeating-table cell. */
+export type RepeatingTableColumnType = 'text' | 'number' | 'date'
+
+/**
+ * One operator-defined column of a repeating-table item. A {@code text}
+ * column may opt into terminology autocomplete via {@link autocomplete}.
+ */
+export interface RepeatingTableColumn {
+  /** Stable key — the per-row cell address and the fill-map {@code toKey} target. */
+  key: string
+  label: string
+  type: RepeatingTableColumnType
+  autocomplete?: AutocompleteBinding
+}
+
+/**
+ * #26 — a generic repeating-table item: the operator defines the columns
+ * and the clinician adds/removes rows at entry time (medication list,
+ * diagnosis list, …). Wizard-only metadata (see {@link AutocompleteBinding}).
+ */
+export interface RepeatingTableSpec {
+  columns: RepeatingTableColumn[]
+  minRows: number
+  maxRows: number
+}
+
+/** Monotonic column-key source. Wizard-only (table isn't persisted), so a
+ *  per-session counter never collides with a reloaded draft. */
+let tableColumnKeySeq = 0
+
+/** A fresh blank text column with a unique {@link RepeatingTableColumn.key}. */
+export function newRepeatingTableColumn(label = ''): RepeatingTableColumn {
+  tableColumnKeySeq += 1
+  return { key: `col_${tableColumnKeySeq}`, label, type: 'text' }
+}
+
+/** Default two-column generic table seeded by the TABLE palette block. */
+export function defaultRepeatingTableSpec(): RepeatingTableSpec {
+  return { columns: [newRepeatingTableColumn(''), newRepeatingTableColumn('')], minRows: 1, maxRows: 20 }
+}
+
 export interface AuthoringItem {
   /**
    * Stable client-side identity used by vuedraggable's `item-key` so the
@@ -194,6 +278,20 @@ export interface AuthoringItem {
    * they want to drift from the catalog defaults.
    */
   catalogCode?: string
+  /**
+   * #26 (2026-08-12) — opt-in terminology autocomplete on a FLAT text
+   * item (ST / text). When set the entry + preview render
+   * {@code TerminologyAutocomplete}; {@code fills[].toKey} names sibling
+   * item OIDs in the same section. Wizard-only (not persisted yet).
+   */
+  autocomplete?: AutocompleteBinding
+  /**
+   * #26 (2026-08-12) — when set, this item is a generic repeating table
+   * (operator-defined columns; clinician adds/removes rows). The scalar
+   * {@code dataType}/{@code responseType} are inert for a table item.
+   * Wizard-only metadata (see {@link RepeatingTableSpec}).
+   */
+  table?: RepeatingTableSpec
 }
 
 export interface AuthoringSection {

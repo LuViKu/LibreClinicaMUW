@@ -7,6 +7,7 @@ import DenseTable from '@/components/DenseTable.vue'
 import ModalityEditDialog from '@/components/ModalityEditDialog.vue'
 
 import { useModalitiesStore } from '@/stores/modalities'
+import { useConfirm } from '@/composables/useConfirm'
 import { ApiError } from '@/api/client'
 import type {
   CreateModalityRequest,
@@ -33,6 +34,7 @@ import type {
  */
 const { t } = useI18n()
 const store = useModalitiesStore()
+const confirm = useConfirm()
 
 onMounted(() => { void store.load() })
 
@@ -94,7 +96,7 @@ function mapDialogError(e: unknown): string {
 }
 
 async function onDelete(row: Modality) {
-  if (!confirm(t('modalities.action.deleteConfirm', { code: row.code }))) return
+  if (!(await confirm({ message: t('modalities.action.deleteConfirm', { code: row.code }), danger: true }))) return
   try {
     await store.remove(row.modalityId)
   } catch {
