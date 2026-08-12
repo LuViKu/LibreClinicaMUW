@@ -9,6 +9,8 @@ import com.fasterxml.jackson.core.JsonToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -43,10 +45,13 @@ import java.time.Duration;
  * The single-host dev compose keeps working untouched with the flag unset.
  */
 @Component
-public class TerminologyIngestScheduler {
+public class TerminologyIngestScheduler implements ApplicationListener<ContextRefreshedEvent> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerminologyIngestScheduler.class);
     private static final String SYSTEM = "medication";
+
+    /** One-shot guard: ContextRefreshedEvent fires for every context refresh. */
+    private volatile boolean booted = false;
 
     // Defaults target the ELGA termgit ASP-Liste. All overridable via datainfo.
     private static final String DEFAULT_PROJECT = "elga-gmbh%2Ftermgit";
@@ -84,6 +89,39 @@ public class TerminologyIngestScheduler {
             // A scheduled job must never propagate — log and let the next run retry.
             LOG.warn("Scheduled medication ingest failed: {}", e.toString());
         }
+    }
+
+    /**
+     * First-boot load: when enabled and NO medication catalogue has ever been
+     * fetched, load it on startup rather than waiting for the nightly run — so
+     * a fresh deployment has working medication autocomplete immediately. Once
+     * a version exists this no-ops on every restart (the nightly job keeps it
+     * fresh).
+     *
+     * <p>Runs on a daemon thread so a 95 MB fetch + 21k-row COPY never blocks
+     * app startup, and mirrors {@code ExportScheduleRegistrar}: guarded to fire
+     * once, on the ROOT context refresh only.
+     */
+    @Override
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        if (booted) return;
+        if (event.getApplicationContext().getParent() != null) return; // root context only
+        booted = true;
+        if (!enabled()) return;
+        if (currentSourceSha() != null) {
+            LOG.info("Medication catalogue already present — skipping first-boot load");
+            return;
+        }
+        LOG.info("No medication catalogue present — starting first-boot load");
+        Thread t = new Thread(() -> {
+            try {
+                runIngest();
+            } catch (Exception e) {
+                LOG.warn("First-boot medication ingest failed (nightly job will retry): {}", e.toString());
+            }
+        }, "medication-ingest-startup");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Fetch metadata, compare fingerprints, and ingest only when changed. */
