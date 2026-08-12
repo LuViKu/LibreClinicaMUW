@@ -15,6 +15,15 @@ test.describe('@smoke Investigator', () => {
     await expect(page.getByRole('link', { name: /M-\d+/ }).first()).toBeVisible({ timeout: 15_000 })
   })
 
+  test('exports the (filtered) subject matrix to CSV', async ({ page }) => {
+    await loginAndGoto(page, 'investigator', '/subjects')
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByTestId('subject-matrix-export').click(),
+    ])
+    expect(download.suggestedFilename()).toMatch(/^subjects-.*\.csv$/)
+  })
+
   test('opens a subject record and its visits', async ({ page }) => {
     await loginAndGoto(page, 'investigator', '/subjects')
     const subject = page.getByRole('link', { name: /M-\d+/ }).first()

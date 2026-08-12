@@ -148,6 +148,54 @@ const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'n
 
 const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${status}`)
 
+/**
+ * Client-side CSV export of the *currently filtered* matrix — the columns the
+ * table shows (subject, gender, study-eye, group, enrolment, one column per
+ * visit with its status, aggregate signed). No backend round-trip; honours the
+ * active filter/search. (Per-subject ODM/CSV/PDF snapshots remain the row-level
+ * SubjectExportButton.) Previously this button had no handler at all.
+ */
+function csvCell(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+function exportCsv(): void {
+  const rows = subjects.filtered
+  if (rows.length === 0) return
+  const evCols = eventColumns.value
+  const header = [
+    t('subjectMatrix.column.subject'),
+    t('subjectMatrix.column.gender'),
+    t('ophth.studyEye.column'),
+    t('subjectMatrix.column.group'),
+    t('subjectMatrix.column.enrolled'),
+    ...evCols.map((c) => c.title || c.label),
+    t('subjectMatrix.column.signed'),
+  ]
+  const lines = [header.map(csvCell).join(',')]
+  for (const s of rows) {
+    lines.push([
+      s.id,
+      s.gender ?? '',
+      s.studyEye ?? '',
+      s.groupLabel ?? '',
+      s.enrolledOn ?? '',
+      ...evCols.map((_c, i) => (s.events[i] ? statusLabel(s.events[i]!.status) : '')),
+      s.signed ? t('subjectMatrix.signed') : '',
+    ].map(csvCell).join(','))
+  }
+  // Prepend a UTF-8 BOM so Excel reads the umlauts correctly.
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `subjects-${auth.user?.activeStudy?.oid ?? 'study'}-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 type Filter =
   | 'all'
   | 'open-events'
@@ -324,7 +372,13 @@ watch(eventColumns, async (next, prev) => {
           <h1 class="text-xl font-semibold tracking-tight">{{ t('subjectMatrix.title') }}</h1>
         </div>
         <div class="flex items-center gap-2">
-          <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
+          <button
+            data-testid="subject-matrix-export"
+            :disabled="subjects.filtered.length === 0"
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="subjects.filtered.length === 0 ? t('subjectMatrix.empty') : t('common.export')"
+            @click="exportCsv"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />

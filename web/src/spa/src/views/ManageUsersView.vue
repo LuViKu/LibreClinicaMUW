@@ -188,6 +188,24 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
         </button>
       </div>
 
+      <!-- Surface user-lifecycle failures (disable / restore / reset-password /
+           unlock). The store sets `error` on failure but the view previously
+           never rendered it, so a failed action was silent. Dismissible. -->
+      <div
+        v-if="users.error"
+        class="mb-4 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        role="alert"
+        data-testid="manage-users-error"
+      >
+        <span class="flex-1">{{ users.error }}</span>
+        <button
+          type="button"
+          class="shrink-0 text-rose-500 hover:text-rose-700"
+          :aria-label="t('common.dismiss')"
+          @click="users.error = null"
+        >✕</button>
+      </div>
+
       <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
         <div class="w-64">
           <TextInput

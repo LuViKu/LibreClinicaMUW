@@ -534,7 +534,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
              rendered as one-eye when the scope is OD or OS). -->
         <section>
           <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-            Ophthalmology
+            {{ t('ophth.sectionHeading') }}
           </h2>
 
           <div class="grid grid-cols-2 gap-x-6 gap-y-4">

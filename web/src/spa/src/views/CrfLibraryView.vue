@@ -48,6 +48,9 @@ const createOpen = ref(false)
 const createForm = ref({ name: '', description: '' })
 const createErrors = ref<Record<string, string>>({})
 const createFormError = ref<string | null>(null)
+// Surfaces per-action failures (hard-remove, .xls download) in a dismissible
+// banner instead of a native alert() — consistent with the app's error UI.
+const actionError = ref<string | null>(null)
 const isCreating = ref(false)
 
 function openCreate() {
@@ -244,13 +247,13 @@ async function onHardRemoveVersion(crf: Crf, versionOid: string, versionName: st
     hardRemoveBlocker.value = { crfName: crf.name, report: result.blocker }
     return
   }
-  alert(result.message)
+  actionError.value = result.message ?? null
 }
 
 async function onDownloadXls(crf: Crf, versionOid: string) {
   const result = await lib.downloadVersionXls(crf.oid, versionOid)
   if (!result.ok) {
-    alert(t('crfLibrary.downloadXlsFailed', { message: result.message }))
+    actionError.value = t('crfLibrary.downloadXlsFailed', { message: result.message })
     return
   }
   // Trigger browser download via a transient anchor.
@@ -297,6 +300,21 @@ const visibleRows = computed(() =>
             {{ t('crfLibrary.createAction') }}
           </button>
         </div>
+      </div>
+
+      <div
+        v-if="actionError"
+        class="mb-4 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        role="alert"
+        data-testid="crf-library-action-error"
+      >
+        <span class="flex-1">{{ actionError }}</span>
+        <button
+          type="button"
+          class="shrink-0 text-rose-500 hover:text-rose-700"
+          :aria-label="t('common.dismiss')"
+          @click="actionError = null"
+        >✕</button>
       </div>
 
       <!-- 2026-06-21 user-feedback batch — the XLSX-parser hint banner

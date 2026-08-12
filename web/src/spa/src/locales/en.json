@@ -2601,6 +2601,7 @@
     }
   },
   "ophth": {
+    "sectionHeading": "Ophthalmology",
     "studyEye": {
       "label": "Study eye",
       "helper": "Which eye the study endpoints scope to. Leave blank for non-ophthalmology studies.",

@@ -2603,6 +2603,7 @@
     }
   },
   "ophth": {
+    "sectionHeading": "Ophthalmologie",
     "studyEye": {
       "label": "Studienauge",
       "helper": "Auf welches Auge sich die Studien-Endpunkte beziehen. Bei nicht-ophthalmologischen Studien leer lassen.",
