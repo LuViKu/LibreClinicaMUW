@@ -411,7 +411,8 @@ public class CrfsApiController {
      *        template); {@code false} keeps it (round-trip / export).
      */
     private CrfVersionAuthoringRequest authoringRequestFromVersion(
-            CRFBean crf, CRFVersionBean version, boolean clearVersionName) {
+            CRFBean crf, CRFVersionBean version, boolean clearVersionName)
+            throws at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException {
         SectionDAO sectionDao = new SectionDAO(dataSource);
         ItemFormMetadataDAO ifmDao = new ItemFormMetadataDAO(dataSource);
         ItemDAO itemDao = new ItemDAO(dataSource);
