@@ -864,3 +864,33 @@ describe('useCrfAuthoringStore', () => {
     })
   })
 })
+
+describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
+  it('expands a table item into grouped column items sharing a groupLabel', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'MEDS',
+      oid: 'MEDS',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'med', label: 'Medikament', type: 'text' },
+          { key: 'dose', label: 'Dosis', type: 'number' },
+          { key: 'start', label: 'Beginn', type: 'date' },
+        ],
+      },
+    })
+    const payload = store.buildPayload() as {
+      sections: { items: { oid: string; dataType: string; descriptionLabel: string; groupLabel?: string }[] }[]
+    }
+    const items = payload.sections[0]!.items
+    const grouped = items.filter((i) => i.groupLabel === 'MEDS')
+    expect(grouped).toHaveLength(3)
+    expect(grouped.map((i) => i.oid)).toEqual(['MEDS_MED', 'MEDS_DOSE', 'MEDS_START'])
+    expect(grouped.map((i) => i.dataType)).toEqual(['ST', 'REAL', 'DATE'])
+    expect(grouped.map((i) => i.descriptionLabel)).toEqual(['Medikament', 'Dosis', 'Beginn'])
+    // The table item does NOT leak through as a lone scalar item.
+    expect(items.some((i) => i.oid === 'MEDS' && !i.groupLabel)).toBe(false)
+  })
+})

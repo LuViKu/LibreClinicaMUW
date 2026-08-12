@@ -289,7 +289,13 @@ export interface AuthoringItem {
    * #26 (2026-08-12) — when set, this item is a generic repeating table
    * (operator-defined columns; clinician adds/removes rows). The scalar
    * {@code dataType}/{@code responseType} are inert for a table item.
-   * Wizard-only metadata (see {@link RepeatingTableSpec}).
+   *
+   * <p>Persistence (Slice 3): {@code buildTableItemPayloads} expands this
+   * into one grouped item per column (shared {@code groupLabel}), which the
+   * backend materialises as an OpenClinica repeating item-group — so the
+   * table STRUCTURE round-trips and renders at entry via RepeatingGroupSection.
+   * The per-column terminology {@link AutocompleteBinding} is NOT persisted
+   * yet (no backend column) — it stays preview-only until that follow-up.
    */
   table?: RepeatingTableSpec
 }
@@ -1348,9 +1354,49 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         title: s.title.trim(),
         instructions: s.instructions.trim(),
         ordinal: s.ordinal || idx + 1,
-        items: s.items.map((it) => buildItemPayload(it)),
+        // #26 Slice 3 persistence — a repeating-table item expands into one
+        // grouped item per column (shared groupLabel → the backend workbook
+        // adapter materialises an OpenClinica repeating item-group, which the
+        // runtime renders via RepeatingGroupSection). A plain item serialises
+        // as itself.
+        items: s.items.flatMap((it) => (it.table ? buildTableItemPayloads(it) : [buildItemPayload(it)])),
       })),
     }
+  }
+
+  /**
+   * #26 Slice 3 persistence — expand a repeating-table item into its column
+   * items. Each column becomes an item in the SAME flat repeating group
+   * (groupLabel = the table's OID); the column type maps to a scalar data
+   * type. Terminology autocomplete bindings are NOT persisted here yet (no
+   * backend column) — they remain wizard/preview-only; a saved table renders
+   * as a plain repeating group at entry until that follow-up lands.
+   */
+  function buildTableItemPayloads(it: AuthoringItem): Record<string, unknown>[] {
+    const table = it.table!
+    const baseOid = (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
+    const groupLabel = baseOid
+    return table.columns.map((col, i) => {
+      const colOid = `${baseOid}_${(col.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
+      const dataType: AuthoringDataType =
+        col.type === 'number' ? 'REAL' : col.type === 'date' ? 'DATE' : 'ST'
+      const label = col.label.trim() || col.key
+      return {
+        name: colOid,
+        oid: colOid,
+        descriptionLabel: label,
+        leftItemText: label,
+        rightItemText: '',
+        units: '',
+        dataType,
+        defaultValue: '',
+        required: false,
+        groupLabel,
+        // Open-text response for the column (the backend treats absence of
+        // options + the dataType as the open-entry branch).
+        responseSet: { type: 'text', label: `${colOid.toLowerCase()}_response` },
+      }
+    })
   }
 
   function buildItemPayload(it: AuthoringItem): Record<string, unknown> {
