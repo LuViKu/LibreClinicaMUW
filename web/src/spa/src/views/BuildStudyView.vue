@@ -46,6 +46,19 @@ const tasksForRole = computed(() => {
 type TargetStatus = 'AVAILABLE' | 'PENDING' | 'LOCKED' | 'FROZEN'
 const statusDialog = ref<{ target: TargetStatus; reason: string; error: string | null; busy: boolean } | null>(null)
 
+// #6 (2026-08-12) — status changes are ACTIONS, not a value to pick, so
+// the old native <select> (which reset itself and offered the current
+// status as a target) is a semantic/a11y smell. Render a proper action
+// menu instead. The build-status DTO carries no current operational
+// status, so all four transitions are offered and the backend rejects
+// illegal ones.
+const STATUS_TARGETS: readonly TargetStatus[] = ['AVAILABLE', 'PENDING', 'LOCKED', 'FROZEN']
+const statusMenuOpen = ref(false)
+function pickStatus(target: TargetStatus): void {
+  statusMenuOpen.value = false
+  openStatusDialog(target)
+}
+
 // Phase E.6 build-study tracker — operator-discretion task ack.
 // Tracks per-task busy + error state for the "Als abgeschlossen
 // markieren" button on zero-count optional cards.
@@ -191,20 +204,50 @@ function iconFor(id: StudyBuildTaskId): string {
             <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('buildStudy.intro') }}</p>
           </div>
           <div v-if="canManageStudy" class="flex items-center gap-2">
-            <!-- Phase E A8.5 — status dropdown. The legal options
-                 are computed against the current status; the modal
-                 captures the reason for GCP-sensitive transitions. -->
-            <select
-              class="px-2 py-1.5 text-xs border border-slate-200 rounded-md bg-white text-slate-700"
-              :value="''"
-              @change="(e) => openStatusDialog((e.target as HTMLSelectElement).value as TargetStatus)"
-            >
-              <option value="" disabled>{{ t('buildStudy.statusAction') }}</option>
-              <option value="AVAILABLE">{{ t('buildStudy.statusTarget.AVAILABLE') }}</option>
-              <option value="PENDING">{{ t('buildStudy.statusTarget.PENDING') }}</option>
-              <option value="LOCKED">{{ t('buildStudy.statusTarget.LOCKED') }}</option>
-              <option value="FROZEN">{{ t('buildStudy.statusTarget.FROZEN') }}</option>
-            </select>
+            <!-- #6 (2026-08-12) — status-change ACTION menu (was a native
+                 <select> that reset itself + listed the current status as
+                 a target). A button opens a popover of the transitions;
+                 the modal then captures the reason for GCP-sensitive ones. -->
+            <div class="relative">
+              <button
+                type="button"
+                class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1.5"
+                aria-haspopup="menu"
+                :aria-expanded="statusMenuOpen"
+                data-testid="build-study-status-menu-trigger"
+                @click="statusMenuOpen = !statusMenuOpen"
+              >
+                {{ t('buildStudy.statusAction') }}
+                <span aria-hidden="true" class="text-[9px]">▾</span>
+              </button>
+              <!-- backdrop closes on outside click -->
+              <button
+                v-if="statusMenuOpen"
+                type="button"
+                class="fixed inset-0 z-10 cursor-default"
+                tabindex="-1"
+                aria-hidden="true"
+                @click="statusMenuOpen = false"
+              ></button>
+              <ul
+                v-if="statusMenuOpen"
+                class="absolute right-0 mt-1 z-20 min-w-[12rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+                role="menu"
+                data-testid="build-study-status-menu"
+              >
+                <li v-for="target in STATUS_TARGETS" :key="target" role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-muw-blue-50"
+                    :data-testid="`build-study-status-target-${target}`"
+                    @click="pickStatus(target)"
+                  >
+                    {{ t(`buildStudy.statusTarget.${target}`) }}
+                  </button>
+                </li>
+              </ul>
+            </div>
             <RouterLink
               v-if="activeStudyOid"
               :to="`/studies/${activeStudyOid}/edit`"
@@ -332,10 +375,9 @@ function iconFor(id: StudyBuildTaskId): string {
                 class="text-xs text-slate-400 italic"
                 :title="t('buildStudy.adminOnly')"
               >{{ t('buildStudy.adminOnly') }}</span>
-              <span
-                v-else-if="!(task.status === 'optional' && isAckTaskId(task.id))"
-                class="text-xs text-slate-400"
-              >{{ t('buildStudy.noDeepLinkYet') }}</span>
+              <!-- #6 (2026-08-12) — removed the dead "noDeepLinkYet"
+                   placeholder label; a task row with no next action now
+                   shows nothing rather than a meaningless grey tag. -->
             </div>
           </li>
         </ol>
