@@ -96,6 +96,8 @@ interface RequestOptions {
  * If the WAR is ever renamed (e.g. to `/`), change this single
  * constant + the Vite proxy regex.
  */
+import { i18n } from '@/i18n'
+
 const CONTEXT_PATH = '/LibreClinica'
 
 /**
@@ -145,6 +147,9 @@ async function request<T>(
   const reqId = generateRequestId()
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    // #16 — advertise the SPA locale so the backend can localise the few
+    // API strings the operator reads verbatim (sign pre-flight rows).
+    'Accept-Language': String(i18n.global.locale.value ?? 'de-AT'),
     [REQUEST_ID_HEADER]: reqId,
     ...opts.headers,
   }

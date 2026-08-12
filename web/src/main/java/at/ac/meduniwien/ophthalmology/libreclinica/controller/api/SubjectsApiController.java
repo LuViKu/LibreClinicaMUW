@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -67,6 +68,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -359,6 +361,7 @@ public class SubjectsApiController {
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = SignPreflightDto.class)))
     public ResponseEntity<?> preflightForSign(@PathVariable("studySubjectOid") String studySubjectOid,
+                                              @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
                                               HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
@@ -387,7 +390,8 @@ public class SubjectsApiController {
             ));
         }
 
-        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole, currentUser);
+        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole, currentUser,
+                resolveLocale(acceptLanguage));
 
         LOG.debug("Sign-preflight for {} (study {}, user {}): {} blocking, {} warnings",
                 ss.getOid(), currentStudy.getOid(), currentUser.getName(),
@@ -428,9 +432,34 @@ public class SubjectsApiController {
      *       Study Director; fail otherwise.</li>
      * </ul>
      */
+    /**
+     * #16 — best-effort {@code Accept-Language} → {@link Locale} (first tag,
+     * English fallback). Mirrors the parser in {@code CrfsApiController}.
+     */
+    private static Locale resolveLocale(String acceptLanguage) {
+        if (acceptLanguage == null || acceptLanguage.isBlank()) return Locale.ENGLISH;
+        try {
+            List<Locale.LanguageRange> ranges = Locale.LanguageRange.parse(acceptLanguage);
+            if (ranges.isEmpty()) return Locale.ENGLISH;
+            return Locale.forLanguageTag(ranges.get(0).getRange());
+        } catch (RuntimeException e) {
+            return Locale.ENGLISH;
+        }
+    }
+
+    /**
+     * #16 — pick the German string when the resolved locale is German, else
+     * English. The SPA is de-AT primary; these sign pre-flight rows are the
+     * only API strings the operator reads verbatim, so localise them at the
+     * source rather than translating on the client.
+     */
+    private static String msg(Locale locale, String en, String de) {
+        return locale != null && "de".equalsIgnoreCase(locale.getLanguage()) ? de : en;
+    }
+
     private SignPreflightDto computePreflight(StudySubjectBean ss, StudyBean currentStudy,
                                               StudyUserRoleBean currentRole,
-                                              UserAccountBean currentUser) {
+                                              UserAccountBean currentUser, Locale locale) {
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
 
@@ -465,20 +494,29 @@ public class SubjectsApiController {
         if (scheduledNotStarted > 0) {
             eventsCheck = new SignPreflightDto.CheckRow(
                     "events-complete", "fail",
-                    "Not all scheduled events have data entry",
-                    scheduledNotStarted + " of " + totalSchedulable + " events still scheduled with no data."
+                    msg(locale, "Not all scheduled events have data entry",
+                            "Nicht alle geplanten Visiten haben Dateneingaben"),
+                    msg(locale,
+                            scheduledNotStarted + " of " + totalSchedulable + " events still scheduled with no data.",
+                            scheduledNotStarted + " von " + totalSchedulable + " Visiten noch geplant ohne Daten.")
             );
         } else if (inProgressEvents > 0) {
             eventsCheck = new SignPreflightDto.CheckRow(
                     "events-complete", "warn",
-                    "Some scheduled events are still in progress",
-                    inProgressEvents + " of " + totalSchedulable + " events have data entry in progress."
+                    msg(locale, "Some scheduled events are still in progress",
+                            "Einige geplante Visiten sind noch in Bearbeitung"),
+                    msg(locale,
+                            inProgressEvents + " of " + totalSchedulable + " events have data entry in progress.",
+                            inProgressEvents + " von " + totalSchedulable + " Visiten mit laufender Dateneingabe.")
             );
         } else {
             eventsCheck = new SignPreflightDto.CheckRow(
                     "events-complete", "pass",
-                    "All scheduled events have at least one CRF completed",
-                    completedCount + " of " + totalSchedulable + " events complete or signed."
+                    msg(locale, "All scheduled events have at least one CRF completed",
+                            "Alle geplanten Visiten haben mindestens ein abgeschlossenes CRF"),
+                    msg(locale,
+                            completedCount + " of " + totalSchedulable + " events complete or signed.",
+                            completedCount + " von " + totalSchedulable + " Visiten abgeschlossen oder signiert.")
             );
         }
 
@@ -509,20 +547,27 @@ public class SubjectsApiController {
         if (totalCrfs == 0) {
             crfsCheck = new SignPreflightDto.CheckRow(
                     "crfs-complete", "fail",
-                    "No CRFs have been started yet",
-                    "Sign Subject requires at least one CRF with data entry complete."
+                    msg(locale, "No CRFs have been started yet", "Es wurde noch kein CRF begonnen"),
+                    msg(locale, "Sign Subject requires at least one CRF with data entry complete.",
+                            "Zum Signieren muss mindestens ein CRF vollständig ausgefüllt sein.")
             );
         } else if (inProgressCrfs > 0) {
             crfsCheck = new SignPreflightDto.CheckRow(
                     "crfs-complete", "warn",
-                    "Some CRFs still in initial data entry",
-                    completedCrfs + " of " + totalCrfs + " required CRFs marked complete."
+                    msg(locale, "Some CRFs still in initial data entry",
+                            "Einige CRFs sind noch in der Ersterfassung"),
+                    msg(locale,
+                            completedCrfs + " of " + totalCrfs + " required CRFs marked complete.",
+                            completedCrfs + " von " + totalCrfs + " erforderlichen CRFs als abgeschlossen markiert.")
             );
         } else {
             crfsCheck = new SignPreflightDto.CheckRow(
                     "crfs-complete", "pass",
-                    "All required CRFs are marked complete",
-                    completedCrfs + " of " + totalCrfs + " required CRFs in status Data entry complete."
+                    msg(locale, "All required CRFs are marked complete",
+                            "Alle erforderlichen CRFs sind als abgeschlossen markiert"),
+                    msg(locale,
+                            completedCrfs + " of " + totalCrfs + " required CRFs in status Data entry complete.",
+                            completedCrfs + " von " + totalCrfs + " erforderlichen CRFs im Status „Dateneingabe abgeschlossen“.")
             );
         }
 
@@ -536,14 +581,19 @@ public class SubjectsApiController {
         if (subjectOpenQueries == 0) {
             openQueriesCheck = new SignPreflightDto.CheckRow(
                     "open-queries", "pass",
-                    "No open discrepancies attached to this subject",
-                    "All queries resolved."
+                    msg(locale, "No open discrepancies attached to this subject",
+                            "Keine offenen Rückfragen zu diesem Teilnehmer"),
+                    msg(locale, "All queries resolved.", "Alle Rückfragen erledigt.")
             );
         } else {
             openQueriesCheck = new SignPreflightDto.CheckRow(
                     "open-queries", "warn",
-                    subjectOpenQueries + " open discrepancies attached to this subject",
-                    "Open queries do not block signing, but you should reconcile them first when possible."
+                    msg(locale,
+                            subjectOpenQueries + " open discrepancies attached to this subject",
+                            subjectOpenQueries + " offene Rückfragen zu diesem Teilnehmer"),
+                    msg(locale,
+                            "Open queries do not block signing, but you should reconcile them first when possible.",
+                            "Offene Rückfragen verhindern das Signieren nicht, sollten aber nach Möglichkeit zuerst geklärt werden.")
             );
         }
 
@@ -553,14 +603,18 @@ public class SubjectsApiController {
         if (alreadySigned) {
             signedCheck = new SignPreflightDto.CheckRow(
                     "subject-not-signed", "fail",
-                    "Subject is already signed",
-                    "Signing is a one-way action. To re-sign, an administrator must reset the subject first."
+                    msg(locale, "Subject is already signed", "Teilnehmer ist bereits signiert"),
+                    msg(locale,
+                            "Signing is a one-way action. To re-sign, an administrator must reset the subject first.",
+                            "Signieren ist einmalig. Für ein erneutes Signieren muss ein Administrator den Teilnehmer zuerst zurücksetzen.")
             );
         } else {
             signedCheck = new SignPreflightDto.CheckRow(
                     "subject-not-signed", "pass",
-                    "No previous signature on this subject",
-                    "This is a first signature, not a re-sign after administrator reset."
+                    msg(locale, "No previous signature on this subject",
+                            "Noch keine Signatur für diesen Teilnehmer"),
+                    msg(locale, "This is a first signature, not a re-sign after administrator reset.",
+                            "Dies ist eine Erstsignatur, kein erneutes Signieren nach Zurücksetzung.")
             );
         }
 
@@ -579,16 +633,22 @@ public class SubjectsApiController {
         if (canSign) {
             roleCheck = new SignPreflightDto.CheckRow(
                     "user-role-can-sign", "pass",
-                    "Your role allows signing this subject",
-                    "Signed in as " + currentUser.getName() + " (" + legacyRoleName + ")."
+                    msg(locale, "Your role allows signing this subject",
+                            "Ihre Rolle erlaubt das Signieren dieses Teilnehmers"),
+                    msg(locale,
+                            "Signed in as " + currentUser.getName() + " (" + legacyRoleName + ").",
+                            "Angemeldet als " + currentUser.getName() + " (" + legacyRoleName + ").")
             );
         } else {
             String detail = (legacyRoleName == null)
-                    ? "No study-scoped role bound — pick a study first."
-                    : "Your role (" + legacyRoleName + ") cannot sign subjects. Only Investigator and Study Director may sign.";
+                    ? msg(locale, "No study-scoped role bound — pick a study first.",
+                            "Keine studienbezogene Rolle — bitte zuerst eine Studie wählen.")
+                    : msg(locale,
+                            "Your role (" + legacyRoleName + ") cannot sign subjects. Only Investigator and Study Director may sign.",
+                            "Ihre Rolle (" + legacyRoleName + ") darf keine Teilnehmer signieren. Nur Prüfarzt/Prüfärztin und Studienleitung dürfen signieren.");
             roleCheck = new SignPreflightDto.CheckRow(
                     "user-role-can-sign", "fail",
-                    "Your role does not allow signing",
+                    msg(locale, "Your role does not allow signing", "Ihre Rolle erlaubt das Signieren nicht"),
                     detail
             );
         }
@@ -1378,6 +1438,7 @@ public class SubjectsApiController {
                  content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
     public ResponseEntity<?> sign(@PathVariable("studySubjectOid") String studySubjectOid,
                                   @RequestBody(required = false) SignSubjectRequest body,
+                                  @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
                                   HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
@@ -1456,7 +1517,8 @@ public class SubjectsApiController {
             ));
         }
 
-        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser);
+        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser,
+                resolveLocale(acceptLanguage));
         List<SignPreflightDto.CheckRow> blockingFails = new ArrayList<>();
         for (SignPreflightDto.CheckRow c : preflight.checks()) {
             // subject-not-signed:fail is the converse precondition of a
