@@ -20,7 +20,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * #26 — Terminology ingest. Streams a FHIR R4 {@code CodeSystem} document
@@ -195,44 +201,84 @@ public class TerminologyIngestService {
     private int readConceptArray(JsonParser p, StringBuilder csv, String codeSystem, long versionId)
             throws IOException {
         if (p.currentToken() != JsonToken.START_ARRAY) { p.skipChildren(); return 0; }
+        PropertyProfile profile = profileFor(codeSystem);
+        Set<String> wanted = new HashSet<>(profile.outToSrc().values());
         int loaded = 0;
         while (p.nextToken() != JsonToken.END_ARRAY) {
-            String code = null, display = null, classKind = null;
+            String code = null, display = null;
+            Map<String, String> src = new HashMap<>();
             while (p.nextToken() != JsonToken.END_OBJECT) {
                 String f = p.currentName();
                 p.nextToken();
                 if ("code".equals(f)) code = p.getValueAsString();
                 else if ("display".equals(f)) display = p.getValueAsString();
-                else if ("property".equals(f)) classKind = extractClassKind(p);
+                else if ("property".equals(f)) src = collectProperties(p, wanted);
                 else p.skipChildren();
             }
             if (code == null || code.isBlank() || display == null) continue;
-            String properties = classKind == null ? "{}" : "{\"classKind\":\"" + jsonEscape(classKind) + "\"}";
             csv.append(csvField(codeSystem)).append(',')
                .append(csvField(code)).append(',')
                .append(csvField(display)).append(',')
-               .append(csvField(normalise(display))).append(',')
-               .append(csvField(properties)).append(',')
+               .append(csvField(buildMatchText(display, profile, src))).append(',')
+               .append(csvField(buildPropertiesJson(profile, src))).append(',')
                .append(versionId).append('\n');
             loaded++;
         }
         return loaded;
     }
 
-    /** Pull the {@code classKind} (chapter | block | category …) from a concept's property[]. */
-    private String extractClassKind(JsonParser p) throws IOException {
-        String classKind = null;
-        if (p.currentToken() != JsonToken.START_ARRAY) { p.skipChildren(); return null; }
+    /**
+     * Per-code-system property-capture profile: which FHIR property codes to
+     * flatten into the concept's JSONB, mapped to stable output keys (the keys
+     * the SPA fill-map + autocomplete read), plus which output keys also feed
+     * the search {@code match_text}.
+     */
+    private record PropertyProfile(LinkedHashMap<String, String> outToSrc, List<String> matchExtraKeys) {}
+
+    /**
+     * ASP-Liste (Austrian medicinal products, ELGA termgit) → flatten the
+     * clinically useful satellite fields so a medication pick can fan
+     * strength / unit / form / ATC into the sibling table cells (#26 Slice 3
+     * fill-map). "_01" = the primary ingredient/form/ATC of a multi-component
+     * product; good enough for entry-time autocomplete assistance.
+     */
+    private static PropertyProfile medicationProfile() {
+        LinkedHashMap<String, String> m = new LinkedHashMap<>();
+        m.put("name", "Bezeichnung_Arzneispezialitaet_Zulassung");
+        m.put("strength", "ELGA_Ingredient_low_strength_01");
+        m.put("unit", "ELGA_Ingredient_low_strength_unit_01");
+        m.put("form", "ELGA_MedikationDarreichungsform_01_text");
+        m.put("atc", "ELGA_whoATC_01_code");
+        m.put("substance", "ELGA_whoATC_01_text");
+        return new PropertyProfile(m, List.of("name", "substance"));
+    }
+
+    private static final PropertyProfile MEDICATION_PROFILE = medicationProfile();
+    /** ICD-10-GM (and any other system): capture only {@code classKind}, match on display. */
+    private static final PropertyProfile DEFAULT_PROFILE =
+            new PropertyProfile(new LinkedHashMap<>(Map.of("classKind", "classKind")), List.of());
+
+    private static PropertyProfile profileFor(String codeSystem) {
+        return "medication".equalsIgnoreCase(codeSystem) ? MEDICATION_PROFILE : DEFAULT_PROFILE;
+    }
+
+    /**
+     * Collect the scalar values of the {@code wanted} property codes from a
+     * concept's {@code property[]} (first occurrence wins).
+     *
+     * <p>Property values are polymorphic: {@code valueString}/{@code valueCode}
+     * (scalar) but also {@code valueCoding} (an OBJECT). Only scalars are read;
+     * a container value MUST be skipped or the parser desyncs and the concept
+     * array terminates early (dropping thousands of rows).
+     */
+    private Map<String, String> collectProperties(JsonParser p, Set<String> wanted) throws IOException {
+        Map<String, String> out = new HashMap<>();
+        if (p.currentToken() != JsonToken.START_ARRAY) { p.skipChildren(); return out; }
         while (p.nextToken() != JsonToken.END_ARRAY) {
             String propCode = null, propVal = null;
             while (p.nextToken() != JsonToken.END_OBJECT) {
                 String f = p.currentName();
                 p.nextToken();
-                // Property values are polymorphic: valueString/valueCode (scalar)
-                // but also valueCoding (an OBJECT). Only scalars can be read as a
-                // string; a container value MUST be skipped or the parser desyncs
-                // and the concept array terminates early (dropping thousands of
-                // rows). classKind is a valueString, so scalar handling suffices.
                 if ("code".equals(f)) {
                     propCode = p.getValueAsString();
                 } else if (f != null && f.startsWith("value") && p.currentToken().isScalarValue()) {
@@ -241,9 +287,43 @@ public class TerminologyIngestService {
                     p.skipChildren();
                 }
             }
-            if ("classKind".equals(propCode) && propVal != null) classKind = propVal;
+            if (propCode != null && propVal != null && wanted.contains(propCode) && !out.containsKey(propCode)) {
+                out.put(propCode, propVal);
+            }
         }
-        return classKind;
+        return out;
+    }
+
+    /** Build the flat {@code properties} JSONB object from the profile's out→src map. */
+    private static String buildPropertiesJson(PropertyProfile profile, Map<String, String> src) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<String, String> e : profile.outToSrc().entrySet()) {
+            String val = src.get(e.getValue());
+            if (val == null || val.isBlank()) continue;
+            if ("atc".equals(e.getKey())) val = stripOidPrefix(val);
+            if (!first) sb.append(',');
+            sb.append('"').append(jsonEscape(e.getKey())).append("\":\"").append(jsonEscape(val)).append('"');
+            first = false;
+        }
+        return sb.append('}').toString();
+    }
+
+    /** Search key = display plus the profile's extra match fields (e.g. full name + substance). */
+    private static String buildMatchText(String display, PropertyProfile profile, Map<String, String> src) {
+        StringBuilder sb = new StringBuilder(display);
+        for (String key : profile.matchExtraKeys()) {
+            String srcCode = profile.outToSrc().get(key);
+            String val = srcCode == null ? null : src.get(srcCode);
+            if (val != null && !val.isBlank()) sb.append(' ').append(val);
+        }
+        return normalise(sb.toString());
+    }
+
+    /** ELGA property values are OID-prefixed ("2.16.840.1.113883.6.73:C05BB02"); keep the tail. */
+    static String stripOidPrefix(String v) {
+        int i = v.lastIndexOf(':');
+        return i >= 0 && i < v.length() - 1 ? v.substring(i + 1) : v;
     }
 
     /** Normalised search key: lower-cased, whitespace-collapsed. Umlauts kept (German catalogue). */
