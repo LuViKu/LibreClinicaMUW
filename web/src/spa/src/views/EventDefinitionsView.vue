@@ -304,13 +304,13 @@ function openAssignments(row: EventDefinition) {
             <td class="px-3 py-2 text-right text-xs">
               <div v-if="canManage" class="inline-flex items-center gap-2">
                 <button
-                  class="text-slate-500 hover:text-muw-blue disabled:opacity-30"
+                  class="inline-flex items-center justify-center min-w-[24px] min-h-[24px] text-slate-500 hover:text-muw-blue disabled:opacity-30"
                   :disabled="idx === 0"
                   @click="moveUp(idx)"
                   :aria-label="t('eventDefinitions.moveUp')"
                 >↑</button>
                 <button
-                  class="text-slate-500 hover:text-muw-blue disabled:opacity-30"
+                  class="inline-flex items-center justify-center min-w-[24px] min-h-[24px] text-slate-500 hover:text-muw-blue disabled:opacity-30"
                   :disabled="idx === activeRows.length - 1"
                   @click="moveDown(idx)"
                   :aria-label="t('eventDefinitions.moveDown')"

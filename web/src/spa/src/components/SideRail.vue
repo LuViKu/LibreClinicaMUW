@@ -26,14 +26,18 @@ const buildDate = /^\d{4}-\d{2}-\d{2}$/.test(rawBuildDate)
 </script>
 
 <template>
+  <!-- Complementary region (implicit for <aside>). It previously carried
+       role="navigation", which is not an allowed role on <aside> (axe
+       aria-allowed-role) AND created a second navigation landmark alongside
+       the inner <nav> (axe landmark-unique). The <nav> below is the single
+       navigation landmark; the <aside> stays complementary. -->
   <aside
     class="w-56 shrink-0 border-r border-slate-200 bg-slate-50 text-sm sticky top-14 self-start flex flex-col"
     style="min-height: calc(100vh - 3.5rem);"
-    role="navigation"
-    aria-label="Side rail"
+    aria-label="Seitenleiste"
   >
     <div class="flex-1 px-3 py-4 overflow-y-auto">
-      <nav class="space-y-0.5">
+      <nav class="space-y-0.5" aria-label="Bereichsnavigation">
         <slot />
       </nav>
 

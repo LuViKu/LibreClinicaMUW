@@ -225,13 +225,13 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
         </div>
 
         <div class="w-44">
-          <SelectInput id="users-role-filter" :model-value="users.roleFilter" @update:model-value="(v) => users.roleFilter = v as 'all' | UserRole">
+          <SelectInput id="users-role-filter" :aria-label="t('manageUsers.roleFilter')" :model-value="users.roleFilter" @update:model-value="(v) => users.roleFilter = v as 'all' | UserRole">
             <option v-for="o in roleOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
           </SelectInput>
         </div>
 
         <div class="w-48">
-          <SelectInput id="users-auth-filter" :model-value="users.authFilter" @update:model-value="(v) => users.authFilter = v as 'all' | UserAuth">
+          <SelectInput id="users-auth-filter" :aria-label="t('manageUsers.authFilter')" :model-value="users.authFilter" @update:model-value="(v) => users.authFilter = v as 'all' | UserAuth">
             <option v-for="o in authOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
           </SelectInput>
         </div>
@@ -264,7 +264,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
             <th scope="col" class="px-3 py-2 font-medium w-32">{{ t('manageUsers.column.auth') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('manageUsers.column.lastLogin') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('manageUsers.column.active') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium text-right w-16"></th>
+            <th scope="col" class="px-3 py-2 font-medium text-right w-16"><span class="sr-only">{{ t('common.actions') }}</span></th>
           </tr>
         </template>
 

@@ -134,6 +134,7 @@
     "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown."
   },
   "common": {
+    "actions": "Actions",
     "loading": "Loading…",
     "saving": "Saving…",
     "save": "Save",
@@ -463,6 +464,8 @@
   },
   "notes": {
     "title": "Notes & Discrepancies",
+    "statusFilter": "Filter by status",
+    "typeFilter": "Filter by type",
     "subTrail": "All sites",
     "searchPlaceholder": "Find subject, item, or description…",
     "showingCount": "{visible} of {total} shown",
@@ -1831,6 +1834,8 @@
   },
   "manageUsers": {
     "title": "Manage Users",
+    "roleFilter": "Filter by role",
+    "authFilter": "Filter by authentication",
     "subTrail": "Platform user management",
     "searchPlaceholder": "Find user by name, username or email…",
     "showingCount": "{visible} of {total} shown",

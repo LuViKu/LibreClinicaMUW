@@ -244,7 +244,14 @@ function iconFor(id: StudyBuildTaskId): string {
               <div class="text-2xl font-semibold text-muw-blue mt-1">{{ study.percentComplete }}%</div>
             </div>
           </div>
-          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden" :aria-label="t('buildStudy.progressAriaLabel', { percent: study.percentComplete })">
+          <div
+            class="w-full h-2 bg-slate-100 rounded-full overflow-hidden"
+            role="progressbar"
+            :aria-valuenow="study.percentComplete"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="t('buildStudy.progressAriaLabel', { percent: study.percentComplete })"
+          >
             <div class="h-full bg-muw-blue transition-all" :style="{ width: study.percentComplete + '%' }"></div>
           </div>
           <dl class="grid grid-cols-2 gap-4 mt-4 text-xs text-slate-600">
@@ -292,7 +299,7 @@ function iconFor(id: StudyBuildTaskId): string {
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2 flex-wrap">
                 <span class="text-[11px] text-slate-400 font-mono">{{ String(idx + 1).padStart(2, '0') }}</span>
-                <h3 class="font-medium text-slate-900">{{ t(`buildStudy.task.${task.id}.title`) }}</h3>
+                <h2 class="font-medium text-slate-900">{{ t(`buildStudy.task.${task.id}.title`) }}</h2>
                 <StatusPill :variant="variantFor(task.status)">{{ t(`buildStudy.status.${task.status}`) }}</StatusPill>
                 <span v-if="task.count != null" class="text-xs text-slate-500">{{ t(`buildStudy.task.${task.id}.summary`, { count: task.count }) }}</span>
               </div>

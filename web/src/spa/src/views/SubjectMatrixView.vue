@@ -558,7 +558,9 @@ watch(eventColumns, async (next, prev) => {
                   scope="col"
                   class="sticky right-0 z-20 bg-slate-50 px-3 py-2 border-b border-slate-200 text-right whitespace-nowrap"
                   style="box-shadow: -1px 0 0 #e2e8f0"
-                />
+                >
+                  <span class="sr-only">{{ t('common.actions') }}</span>
+                </th>
               </tr>
             </thead>
             <tbody>

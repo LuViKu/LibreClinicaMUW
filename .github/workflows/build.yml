@@ -458,13 +458,11 @@ jobs:
         working-directory: web/src/spa
         run: pnpm test:smoke:e2e
 
-      # Reporting-only for now: the SPA carries a pre-existing WCAG 2.2 AA
-      # backlog (systemic colour-contrast + landmark/target-size violations).
-      # Runs + uploads the report so the backlog is visible; flip to a gate
-      # (drop continue-on-error) once triaged.
-      - name: E2E accessibility scan (reporting)
+      # Gate: the WCAG 2.2 AA backlog (contrast, landmarks, control names,
+      # target-size) was cleared 2026-08, so axe must stay at zero violations
+      # across the scanned route-level pages.
+      - name: E2E accessibility scan (gate)
         working-directory: web/src/spa
-        continue-on-error: true
         run: pnpm test:a11y:e2e
 
       - name: Upload Playwright report

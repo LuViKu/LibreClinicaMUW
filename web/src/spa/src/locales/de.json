@@ -134,6 +134,7 @@
     "switchStudyDesc": "Andere Studie auswählen, der Sie zugeordnet sind. Nur Ihre zugeordneten Studien werden angezeigt."
   },
   "common": {
+    "actions": "Aktionen",
     "loading": "Wird geladen…",
     "saving": "Wird gespeichert…",
     "save": "Speichern",
@@ -463,6 +464,8 @@
   },
   "notes": {
     "title": "Rückfragen & Diskrepanzen",
+    "statusFilter": "Nach Status filtern",
+    "typeFilter": "Nach Art filtern",
     "subTrail": "Alle Standorte",
     "searchPlaceholder": "Teilnehmer, Item oder Beschreibung suchen…",
     "showingCount": "{visible} von {total} sichtbar",
@@ -1833,6 +1836,8 @@
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
+    "roleFilter": "Nach Rolle filtern",
+    "authFilter": "Nach Authentifizierung filtern",
     "subTrail": "Plattform-Nutzerverwaltung",
     "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
     "showingCount": "{visible} von {total} sichtbar",

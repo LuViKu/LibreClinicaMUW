@@ -162,10 +162,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/setupTests.ts'],
-    // tests/a11y/spa-routes.spec.ts + tests/manual/** are Playwright specs
-    // that pull in @playwright/test (a non-vitest runner). When vitest's
-    // default include picks them up the files fail to collect. Exclude
-    // here; Playwright runs out-of-band.
-    exclude: ['**/node_modules/**', '**/dist/**', 'tests/a11y/spa-routes.spec.ts', 'tests/manual/**'],
+    // Everything under tests/** is a Playwright spec/helper (@playwright/test,
+    // a non-vitest runner) — a11y, smoke, visual, manual + their support/.
+    // Vitest's unit specs live in src/**/__tests__; exclude the whole tests/
+    // tree so Playwright files don't fail collection here. Playwright runs
+    // out-of-band via `pnpm test:e2e` / `test:smoke:e2e` / `test:a11y:e2e`.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/**'],
   },
 })

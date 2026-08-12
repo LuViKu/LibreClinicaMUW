@@ -370,7 +370,7 @@ const visibleRows = computed(() =>
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2">
-                <h3 class="font-medium text-slate-900">{{ crf.name }}</h3>
+                <h2 class="font-medium text-slate-900">{{ crf.name }}</h2>
                 <span class="text-[10px] text-slate-400 font-mono">{{ crf.oid }}</span>
                 <StatusPill
                   v-if="crf.status === 'removed'"
