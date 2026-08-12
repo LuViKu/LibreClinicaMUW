@@ -147,6 +147,8 @@
     "filter": "Filter",
     "clear": "Clear",
     "dismiss": "Dismiss",
+    "confirm": "Confirm",
+    "confirmTitle": "Confirmation required",
     "export": "Export",
     "eye": {
       "od": "right",

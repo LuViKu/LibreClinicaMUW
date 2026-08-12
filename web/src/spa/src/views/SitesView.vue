@@ -10,6 +10,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useSitesStore } from '@/stores/sites'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { StudyIdentity } from '@/types/study'
 
 /**
@@ -27,6 +28,7 @@ import type { StudyIdentity } from '@/types/study'
 const { t } = useI18n()
 const sites = useSitesStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const parentOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const canManage = computed(() => {
@@ -112,7 +114,7 @@ async function submitCreate() {
 
 async function onDisable(site: StudyIdentity) {
   if (!parentOid.value) return
-  if (!confirm(t('sites.disableConfirm', { name: site.name }))) return
+  if (!(await confirm({ message: t('sites.disableConfirm', { name: site.name }), danger: true }))) return
   await sites.disable(parentOid.value, site.oid)
 }
 

@@ -147,6 +147,8 @@
     "filter": "Filter",
     "clear": "Zurücksetzen",
     "dismiss": "Schließen",
+    "confirm": "Bestätigen",
+    "confirmTitle": "Bestätigung erforderlich",
     "export": "Export",
     "eye": {
       "od": "rechts",
