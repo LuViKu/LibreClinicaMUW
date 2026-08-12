@@ -420,6 +420,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terminology/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ingest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects": {
         parameters: {
             query?: never;
@@ -1922,6 +1938,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["bindParkedJob"];
+        trace?: never;
+    };
+    "/api/v1/terminology/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/subjects/{subjectLabel}/retinal-jobs/{seq}": {
@@ -3466,6 +3498,12 @@ export interface components {
         };
         ResetPasswordRequest: {
             sendEmail?: boolean;
+        };
+        IngestRequest: {
+            system?: string;
+            path?: string;
+            sourceUrl?: string;
+            sourceSha?: string;
         };
         AddSubjectRequest: {
             id?: string;
@@ -5703,6 +5741,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    ingest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -8449,6 +8511,30 @@ export interface operations {
                 "application/json": components["schemas"]["BindRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                system: string;
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
