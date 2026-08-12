@@ -15,14 +15,24 @@ import { mkdirSync } from 'node:fs'
 const OUT = resolve(process.cwd(), 'tests/visual/__shots__')
 const SCREENS: { role: Role | null; path: string; name: string }[] = [
   { role: null, path: '/login', name: '00-login' },
-  { role: 'dataManager', path: '/', name: '01-dm-home' },
-  { role: 'dataManager', path: '/crf-library', name: '02-crf-library' },
-  { role: 'dataManager', path: '/build-study', name: '03-build-study' },
-  { role: 'dataManager', path: '/event-definitions', name: '04-event-definitions' },
-  { role: 'investigator', path: '/subjects', name: '05-subject-matrix' },
-  { role: 'admin', path: '/manage-users', name: '06-manage-users' },
-  { role: 'admin', path: '/sites', name: '07-sites' },
-  { role: 'admin', path: '/studies/new', name: '08-create-study' },
+  // Admin — study creation + settings + user management
+  { role: 'admin', path: '/studies/new', name: 'admin-01-create-study' },
+  { role: 'admin', path: '/manage-users', name: 'admin-02-manage-users' },
+  { role: 'admin', path: '/sites', name: 'admin-03-sites' },
+  // Data Manager / study manager — settings + setup + export
+  { role: 'dataManager', path: '/studies/S_DEFAULTS1/edit', name: 'dm-01-study-edit' },
+  { role: 'dataManager', path: '/studies/S_DEFAULTS1/parameters', name: 'dm-02-study-parameters' },
+  { role: 'dataManager', path: '/build-study', name: 'dm-03-build-study' },
+  { role: 'dataManager', path: '/crf-library', name: 'dm-04-crf-library' },
+  { role: 'dataManager', path: '/event-definitions', name: 'dm-05-event-definitions' },
+  { role: 'dataManager', path: '/rules', name: 'dm-06-rules' },
+  { role: 'dataManager', path: '/group-classes', name: 'dm-07-group-classes' },
+  { role: 'dataManager', path: '/datasets', name: 'dm-08-datasets-export' },
+  // Investigator / physician — participants, visit, sign, notes (bug fix)
+  { role: 'investigator', path: '/subjects', name: 'phys-01-subject-matrix' },
+  { role: 'investigator', path: '/subjects/M-001', name: 'phys-02-subject-detail' },
+  { role: 'investigator', path: '/subjects/M-001/sign', name: 'phys-03-sign' },
+  { role: 'investigator', path: '/notes', name: 'phys-04-notes' },
 ]
 
 test.describe('visual capture', () => {
