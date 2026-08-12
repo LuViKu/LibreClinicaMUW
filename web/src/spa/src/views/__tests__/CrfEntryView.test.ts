@@ -58,6 +58,12 @@ import CrfEntryView from '@/views/CrfEntryView.vue'
 // eslint-disable-next-line import/first
 import { useAuthStore } from '@/stores/auth'
 // eslint-disable-next-line import/first
+import { useCrfEntryStore } from '@/stores/crfEntry'
+// eslint-disable-next-line import/first
+import { useNotificationsStore } from '@/stores/notifications'
+// eslint-disable-next-line import/first
+import { nextTick } from 'vue'
+// eslint-disable-next-line import/first
 import type { CrfEntry, CrfEntryStatus } from '@/types/crf'
 // eslint-disable-next-line import/first
 import enMessages from '@/locales/en.json'
@@ -295,5 +301,32 @@ describe('CrfEntryView — completed-CRF read-only lock', () => {
     expect(w.text()).not.toContain('Reopen CRF')
     expect(w.text()).not.toContain('Save draft')
     expect(w.find('fieldset').element.disabled).toBe(true)
+  })
+})
+
+// #11/#15 — the save-success toast fires from the view. Store-level save()
+// is covered in crfEntry.test; this pins the view wiring (fill a field →
+// Save draft → success toast) as the verifiable stand-in for the deferred
+// eCRF fill+save e2e (#23).
+describe('CrfEntryView — save feedback', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+  })
+
+  it('shows a success toast after a successful save', async () => {
+    const w = await mountView({ status: 'in-progress' })
+    const store = useCrfEntryStore()
+    // Dirty a field so save() proceeds (guards on pendingChanges).
+    store.setValue('I_NAME', 'Neuer Wert')
+    await nextTick()
+
+    const saveBtn = w.findAll('button').find((b) => b.text() === 'Save draft')
+    expect(saveBtn).toBeTruthy()
+    await saveBtn!.trigger('click')
+    await flushPromises()
+
+    const notifications = useNotificationsStore()
+    expect(notifications.toasts.some((t) => t.kind === 'success' && t.message === 'Saved.')).toBe(true)
   })
 })
