@@ -539,7 +539,13 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
                     <circle cx="15" cy="18" r="1.2" fill="currentColor" />
                   </svg>
                 </span>
-                <div class="flex-1 min-w-0">
+                <!-- uid-stable selection hook. The positional
+                     crf-canvas-item-<s>-<i> testid on the row shifts when
+                     items are added/reordered, which makes index-based
+                     automation select the wrong item; this uid-keyed testid
+                     is stable for the item's lifetime. A click here bubbles to
+                     the row's @click and selects by uid. -->
+                <div class="flex-1 min-w-0" :data-testid="`crf-canvas-item-uid-${item.uid}`">
                   <div class="text-[12px] font-medium text-slate-800 truncate">
                     {{ item.name || item.oid || t('crfAuthoring.canvas.canvas.untitled') }}
                   </div>

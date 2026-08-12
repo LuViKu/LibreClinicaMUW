@@ -90,5 +90,6 @@
   <include  file="migration/lc-muw-2026-06-30-namd-clinical-flags.xml"/>
   <include  file="migration/lc-muw-2026-07-02-subject-randomization.xml"/>
   <include  file="migration/lc-muw-2026-07-13-namd-visit-crf-prod-seed.xml"/>
+  <include  file="migration/lc-muw-2026-08-11-resync-seeded-sequences.xml"/>
 </databaseChangeLog>
 

@@ -128,6 +128,13 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
+    // Hot-module-reload toggle. Default on (normal dev). Set
+    // VITE_DISABLE_HMR=1 to turn it off — Vite then never pushes an HMR
+    // patch or a full page reload when source files change, so an editing
+    // session in another window can't reload a browser tab that an
+    // automated agent (e.g. Claude-in-Chrome) is driving. Requires a dev
+    // server restart to take effect (changing this file already restarts it).
+    hmr: process.env.VITE_DISABLE_HMR === '1' ? false : true,
     proxy: {
       // Forward backend-bound calls to the Spring Boot WAR running in
       // Docker Compose. The SPA never talks to the backend through `/app/`;

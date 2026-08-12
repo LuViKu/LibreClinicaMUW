@@ -13,6 +13,7 @@
     "test:a11y": "vitest run src/test/a11y",
     "test:e2e": "playwright test",
     "test:a11y:e2e": "playwright test --grep @a11y",
+    "test:smoke:e2e": "playwright test tests/smoke",
     "stories": "histoire dev",
     "stories:build": "histoire build",
     "lint": "eslint --ext .vue,.ts src",

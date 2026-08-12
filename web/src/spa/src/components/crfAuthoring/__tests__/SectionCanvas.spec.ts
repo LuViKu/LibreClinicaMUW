@@ -96,6 +96,21 @@ describe('SectionCanvas', () => {
     expect(store.selectedItemUid).toBe(store.draft.sections[0]!.items[0]!.uid)
   })
 
+  it('exposes a uid-stable testid that selects the item regardless of position', async () => {
+    const w = mountCanvas()
+    const store = useCrfAuthoringStore()
+    // Two items; the uid-keyed hook must address the SECOND independently of
+    // its index, so automation can't select the wrong item after reordering.
+    store.addItem(0, { name: 'A', oid: 'A' })
+    store.addItem(0, { name: 'B', oid: 'B' })
+    await flushPromises()
+    const bUid = store.draft.sections[0]!.items[1]!.uid
+    const hook = w.find(`[data-testid="crf-canvas-item-uid-${bUid}"]`)
+    expect(hook.exists()).toBe(true)
+    await hook.trigger('click')
+    expect(store.selectedItemUid).toBe(bUid)
+  })
+
   it('"Add section" extends the section list', async () => {
     const w = mountCanvas()
     const store = useCrfAuthoringStore()
