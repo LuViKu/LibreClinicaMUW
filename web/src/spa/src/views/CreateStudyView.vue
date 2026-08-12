@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -60,20 +60,30 @@ const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const isSubmitting = ref(false)
 
-const canSubmit = computed(() => {
-  return (
-    form.value.name.trim().length > 0 &&
-    form.value.uniqueProtocolId.trim().length > 0 &&
-    form.value.briefSummary.trim().length > 0 &&
-    form.value.principalInvestigator.trim().length > 0 &&
-    form.value.sponsor.trim().length > 0
-  )
-})
+// #7/#12 — required fields for a new study. Validated client-side on
+// submit so the operator sees exactly which fields are missing (the old
+// silently-disabled button gave no hint about WHY it wouldn't submit).
+const REQUIRED: (keyof Form)[] = ['name', 'uniqueProtocolId', 'briefSummary', 'principalInvestigator', 'sponsor']
+
+function validate(): boolean {
+  const errors: Record<string, string> = {}
+  for (const key of REQUIRED) {
+    if (form.value[key].trim() === '') errors[key] = t('studyForm.requiredField')
+  }
+  fieldErrors.value = errors
+  const firstMissing = REQUIRED.find((k) => errors[k])
+  if (firstMissing) {
+    formError.value = t('studyForm.validationSummary')
+    document.getElementById(`study-${firstMissing === 'uniqueProtocolId' ? 'uid' : firstMissing === 'principalInvestigator' ? 'pi' : firstMissing === 'briefSummary' ? 'summary' : firstMissing}`)?.focus()
+    return false
+  }
+  return true
+}
 
 async function submit() {
-  if (!canSubmit.value) return
   fieldErrors.value = {}
   formError.value = null
+  if (!validate()) return
   isSubmitting.value = true
   try {
     const result = await studies.create({
@@ -193,7 +203,7 @@ function cancel() {
           </button>
           <button
             class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
-            :disabled="!canSubmit || isSubmitting"
+            :disabled="isSubmitting"
             @click="submit"
           >
             {{ isSubmitting ? t('common.saving') : t('studyForm.create.submit') }}

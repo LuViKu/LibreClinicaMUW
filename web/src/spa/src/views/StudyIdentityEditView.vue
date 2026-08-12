@@ -99,10 +99,31 @@ onMounted(async () => {
   }
 })
 
+// #7/#12 — required identity fields (uniqueProtocolId is create-only, so
+// it's not part of the edit form). Validated client-side before the PUT so
+// the operator gets immediate inline feedback rather than a backend round-trip.
+const REQUIRED: (keyof Form)[] = ['name', 'briefSummary', 'principalInvestigator', 'sponsor']
+
+function validate(): boolean {
+  const errors: Record<string, string> = {}
+  for (const key of REQUIRED) {
+    if (form.value[key].trim() === '') errors[key] = t('studyForm.requiredField')
+  }
+  fieldErrors.value = errors
+  const firstMissing = REQUIRED.find((k) => errors[k])
+  if (firstMissing) {
+    formError.value = t('studyForm.validationSummary')
+    document.getElementById(`study-${firstMissing === 'principalInvestigator' ? 'pi' : firstMissing === 'briefSummary' ? 'summary' : firstMissing}`)?.focus()
+    return false
+  }
+  return true
+}
+
 async function submit() {
   fieldErrors.value = {}
   formError.value = null
   savedAt.value = null
+  if (!validate()) return
   isSubmitting.value = true
   try {
     // Phase E.6: send EVERY field, not just non-blank ones. The form
@@ -239,6 +260,16 @@ function cancel() {
           >
             {{ isSubmitting ? t('common.saving') : t('studyForm.edit.submit') }}
           </button>
+          <!-- #7/#12 discoverability — modules are enabled on the Study
+               Parameters page, which was hard to find. Surface a direct
+               link from the identity-edit flow. -->
+          <RouterLink
+            :to="`/studies/${oid}/parameters`"
+            class="ml-auto px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue font-medium"
+            data-testid="study-edit-parameters-link"
+          >
+            {{ t('studyForm.edit.parametersLink') }} →
+          </RouterLink>
         </div>
       </div>
     </div>

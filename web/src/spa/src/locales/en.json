@@ -811,7 +811,7 @@
     "adminOnly": "Administrator only",
     "createAction": "New study",
     "editAction": "Edit identity",
-    "parametersAction": "Parameters",
+    "parametersAction": "Parameters & modules",
     "statusAction": "Change status…",
     "statusTarget": {
       "AVAILABLE": "Available",
@@ -1859,6 +1859,8 @@
     "protocolType_Interventional": "Interventional",
     "protocolType_Observational": "Observational",
     "phase": "Phase",
+    "requiredField": "Required field",
+    "validationSummary": "Please complete the highlighted required fields.",
     "create": {
       "title": "Create a new study",
       "subTrail": "Build study",
@@ -1871,7 +1873,8 @@
       "intro": "Fields marked with an asterisk are required. Every change emits an audit-trail entry recording the old and new values.",
       "submit": "Save changes",
       "saved": "Saved. Changes are reflected throughout the platform.",
-      "leaveUnchanged": "— Leave unchanged —"
+      "leaveUnchanged": "— Leave unchanged —",
+      "parametersLink": "Parameters & modules"
     }
   },
   "manageUsers": {

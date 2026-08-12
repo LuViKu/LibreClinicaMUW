@@ -811,7 +811,7 @@
     "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
-    "parametersAction": "Parameter",
+    "parametersAction": "Parameter & Module",
     "statusAction": "Status ändern…",
     "statusTarget": {
       "AVAILABLE": "Verfügbar",
@@ -1859,6 +1859,8 @@
     "protocolType_Interventional": "Interventionell",
     "protocolType_Observational": "Beobachtend",
     "phase": "Phase",
+    "requiredField": "Pflichtfeld",
+    "validationSummary": "Bitte die markierten Pflichtfelder ausfüllen.",
     "create": {
       "title": "Neue Studie anlegen",
       "subTrail": "Studienaufbau",
@@ -1871,7 +1873,8 @@
       "intro": "Pflichtfelder sind mit einem Sternchen markiert. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit altem und neuem Wert.",
       "submit": "Änderungen speichern",
       "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
-      "leaveUnchanged": "— Unverändert lassen —"
+      "leaveUnchanged": "— Unverändert lassen —",
+      "parametersLink": "Parameter & Module"
     }
   },
   "manageUsers": {
