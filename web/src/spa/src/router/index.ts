@@ -92,7 +92,11 @@ const router = createRouter({
       path: '/notes',
       name: 'notes',
       component: () => import('@/views/NotesDiscrepanciesView.vue'),
-      meta: { title: 'Notes & Discrepancies', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
+      // Investigator + CRC respond to queries on their own subjects, so the
+      // Notes view is cross-role — matching the HomeView notes card's
+      // allowedRoles. (Previously the card showed for Investigator/CRC but the
+      // route bounced them.)
+      meta: { title: 'Notes & Discrepancies', role: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     {
       path: '/audit-log',

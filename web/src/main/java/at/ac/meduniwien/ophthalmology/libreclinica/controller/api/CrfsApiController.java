@@ -387,6 +387,31 @@ public class CrfsApiController {
                     "No version with oid '" + versionOid + "' on CRF '" + crfOid + "'"));
         }
 
+        CrfVersionAuthoringRequest body;
+        try {
+            // Fork template: clear versionName so the operator types a fresh
+            // one (re-submitting the prior name trips the unique-name check).
+            body = authoringRequestFromVersion(crf, version, /* clearVersionName */ true);
+        } catch (Exception e) {
+            LOG.error("Failed to load version contents for crf_version {}", version.getId(), e);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Version contents load failed: " + e.getMessage()));
+        }
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Reconstruct a {@link CrfVersionAuthoringRequest} from a persisted CRF
+     * version (sections + items + item_form_metadata + response sets). Shared
+     * by the fork-contents endpoint (template for a new version) and the .xls
+     * download (which synthesises a workbook from this when there is no
+     * original uploaded spreadsheet on disk).
+     *
+     * @param clearVersionName {@code true} blanks the version name (fork
+     *        template); {@code false} keeps it (round-trip / export).
+     */
+    private CrfVersionAuthoringRequest authoringRequestFromVersion(
+            CRFBean crf, CRFVersionBean version, boolean clearVersionName) {
         SectionDAO sectionDao = new SectionDAO(dataSource);
         ItemFormMetadataDAO ifmDao = new ItemFormMetadataDAO(dataSource);
         ItemDAO itemDao = new ItemDAO(dataSource);
@@ -394,14 +419,7 @@ public class CrfsApiController {
         List<SectionBean> sections = sectionDao.findAllByCRFVersionId(version.getId());
         sections.sort(Comparator.comparingInt(SectionBean::getOrdinal));
 
-        List<ItemFormMetadataBean> allIfms;
-        try {
-            allIfms = ifmDao.findAllByCRFVersionId(version.getId());
-        } catch (Exception e) {
-            LOG.error("Failed to load item_form_metadata for crf_version {} on fork", version.getId(), e);
-            return ResponseEntity.internalServerError().body(Map.of("message",
-                    "Version contents load failed: " + e.getMessage()));
-        }
+        List<ItemFormMetadataBean> allIfms = ifmDao.findAllByCRFVersionId(version.getId());
         Map<Integer, ItemFormMetadataBean> ifmByItemId = new HashMap<>();
         for (ItemFormMetadataBean ifm : allIfms) {
             ifmByItemId.put(ifm.getItemId(), ifm);
@@ -415,8 +433,7 @@ public class CrfsApiController {
                     itemDao.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
             List<CrfVersionAuthoringRequest.Item> itemDtos = new ArrayList<>(items.size());
             for (ItemBean ib : items) {
-                ItemFormMetadataBean ifm = ifmByItemId.get(ib.getId());
-                itemDtos.add(buildAuthoringItemDto(ib, ifm));
+                itemDtos.add(buildAuthoringItemDto(ib, ifmByItemId.get(ib.getId())));
             }
             sectionDtos.add(new CrfVersionAuthoringRequest.Section(
                     nullToEmpty(sb.getLabel()),
@@ -426,16 +443,11 @@ public class CrfsApiController {
                     itemDtos));
         }
 
-        // The "new version" flow uses fork content as a template; clear
-        // versionName so the operator types a fresh one rather than
-        // re-submitting the prior version's name and tripping the
-        // unique-version-name check.
-        CrfVersionAuthoringRequest body = new CrfVersionAuthoringRequest(
-                /* versionName        */ "",
-                /* versionDescription */ nullToEmpty(version.getDescription()),
-                /* revisionNotes      */ nullToEmpty(version.getRevisionNotes()),
+        return new CrfVersionAuthoringRequest(
+                clearVersionName ? "" : nullToEmpty(version.getName()),
+                nullToEmpty(version.getDescription()),
+                nullToEmpty(version.getRevisionNotes()),
                 sectionDtos);
-        return ResponseEntity.ok(body);
     }
 
     /**
@@ -1334,12 +1346,10 @@ public class CrfsApiController {
                     "No CRF version with oid '" + versionOid + "'"));
         }
 
-        String xformName = version.getXformName();
-        if (xformName == null || xformName.isBlank()) {
-            // Authored-in-app version; no source spreadsheet on disk.
+        CRFBean crf = new CRFDAO(dataSource).findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
-                    "This version was authored in-app and has no source spreadsheet on disk",
-                    "fallbackFilename", crfOid + "-" + version.getName() + ".xls"));
+                    "No CRF with oid '" + crfOid + "'"));
         }
 
         String filePath = at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources
@@ -1347,16 +1357,17 @@ public class CrfsApiController {
         if (filePath == null || filePath.isBlank()) {
             filePath = System.getProperty("java.io.tmpdir");
         }
-        Path source = Paths.get(filePath, "crf", "original", xformName);
-        if (!Files.exists(source)) {
-            // Filename row stays, but the file was scrubbed off disk
-            // (operations cleanup, restore from a backup that missed
-            // the upload dir, etc.). 404 + structured body so the SPA
-            // can surface "version metadata exists but spreadsheet was
-            // not preserved" instead of a generic 500.
-            return ResponseEntity.status(404).body(Map.of("message",
-                    "Spreadsheet '" + xformName + "' is no longer present on disk",
-                    "fallbackFilename", xformName));
+        String xformName = version.getXformName();
+        Path source = (xformName != null && !xformName.isBlank())
+                ? Paths.get(filePath, "crf", "original", xformName)
+                : null;
+
+        // No original uploaded spreadsheet — the version was authored in-app
+        // (no source on disk) or the upload was scrubbed. Synthesise a workbook
+        // from the persisted definition so the download always yields a usable
+        // .xls rather than a 404. (Uploaded versions still stream verbatim.)
+        if (source == null || !Files.exists(source)) {
+            return synthesizeVersionXls(crf, version);
         }
 
         String contentType = xformName.toLowerCase(Locale.ROOT).endsWith(".xlsx")
@@ -1375,6 +1386,36 @@ public class CrfsApiController {
                     crfOid, versionOid, ioe.getMessage(), ioe);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Could not read spreadsheet from disk"));
+        }
+    }
+
+    /**
+     * Synthesise + stream an .xls generated from a persisted version's
+     * definition, reusing the same workbook adapter the authoring endpoint
+     * uses. Lets the CRF-library ".xls" download work for in-app-authored
+     * versions (which have no original uploaded spreadsheet).
+     */
+    private ResponseEntity<?> synthesizeVersionXls(CRFBean crf, CRFVersionBean version) {
+        try {
+            CrfVersionAuthoringRequest req =
+                    authoringRequestFromVersion(crf, version, /* clearVersionName */ false);
+            Path workbook = workbookAdapter.synthesize(req, crf);
+            try {
+                byte[] bytes = Files.readAllBytes(workbook);
+                String fname = crf.getOid() + "-" + nullToEmpty(version.getName()) + ".xls";
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel")
+                        .header(HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"" + fname + "\"")
+                        .body(bytes);
+            } finally {
+                Files.deleteIfExists(workbook);
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to synthesise .xls for crf {} version {}: {}",
+                    crf.getOid(), version.getId(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Could not generate spreadsheet from the CRF definition: " + e.getMessage()));
         }
     }
 
