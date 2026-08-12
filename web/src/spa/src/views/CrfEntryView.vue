@@ -31,6 +31,7 @@ import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 import { parseShowWhen } from '@/components/showWhen'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
@@ -44,6 +45,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
+const notifications = useNotificationsStore()
 const advanced = useCrfEntryAdvancedStore()
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
@@ -348,7 +350,7 @@ const saveBlockedByRfc = computed(
   () => store.requiresReasonForChange && store.itemsAwaitingReason.length > 0,
 )
 
-function onSave() {
+async function onSave() {
   submitAttempted.value = true
   // If the operator clicks Save on a post-complete entry without
   // every reason staged, route through the modal rather than firing
@@ -358,12 +360,18 @@ function onSave() {
     store.missingReasonItemOids = [...store.itemsAwaitingReason]
     return
   }
-  void store.save()
+  // #11/#15 — confirm the save. Silent success previously left the
+  // operator unsure anything happened (only the passive "last saved"
+  // timestamp changed).
+  const ok = await store.save()
+  if (ok) notifications.success(t('crfEntry.saveSuccess'))
 }
 async function onMarkComplete() {
   submitAttempted.value = true
   await store.markComplete()
   if (store.status === 'complete') {
+    // #11/#15 — the toast survives the navigation below (app-level store).
+    notifications.success(t('crfEntry.markCompleteSuccess'))
     // 2026-06-21 user-feedback round 5 — return to the parent visit
     // view rather than the subject casebook. The operator was just
     // working through a CRF for a specific visit; landing them back

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
 import GlobalErrorToast from '@/components/GlobalErrorToast.vue'
+import GlobalToast from '@/components/GlobalToast.vue'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -228,6 +229,10 @@ function openBugReport() {
          once, outside any conditional, so uncaught errors from any
          view (including login / first-login / NotFound) surface. -->
     <GlobalErrorToast />
+
+    <!-- UX sweep (#11/#15) — singleton success/info toast stack, mounted
+         once at top-right (clear of the bottom-right error toast). -->
+    <GlobalToast />
 
     <!-- Phase E in-app bug-report. Dialog lives at the app shell so
          every authenticated route can open it via the TopBar

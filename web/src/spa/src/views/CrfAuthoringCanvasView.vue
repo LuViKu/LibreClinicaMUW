@@ -7,6 +7,7 @@ import PaletteRail from '@/components/crfAuthoring/PaletteRail.vue'
 import SectionCanvas from '@/components/crfAuthoring/SectionCanvas.vue'
 import PropertiesRail from '@/components/crfAuthoring/PropertiesRail.vue'
 import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useCrfDraftPersistence } from '@/composables/useCrfDraftPersistence'
 import { useCrfPreviewStore } from '@/stores/crfPreview'
 import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
@@ -47,6 +48,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfAuthoringStore()
+const notifications = useNotificationsStore()
 
 /**
  * 2026-06-21 user-feedback batch — preview button + overlay. The
@@ -285,6 +287,9 @@ async function onSave(): Promise<void> {
     // Version is now persisted server-side — drop the local autosave so the
     // restore banner doesn't resurrect an already-saved draft next time.
     draftPersistence.clear()
+    // #11/#15 — confirm the save; the redirect away used to be the only
+    // signal that anything happened.
+    notifications.success(t('crfAuthoring.canvas.saveSuccess', { name: result.version.name }))
     // Land back on the CRF library so the operator can verify the new
     // version is listed.
     void router.push({ name: 'crf-library' })

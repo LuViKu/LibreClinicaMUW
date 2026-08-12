@@ -604,6 +604,8 @@
     "saving": "Auto-saving…",
     "lastSaved": "Last saved at {at}",
     "notSavedYet": "Not saved yet",
+    "saveSuccess": "Saved.",
+    "markCompleteSuccess": "CRF marked complete.",
     "cancelLink": "Cancel — return to Subject Matrix",
     "status": {
       "not-started": "Not started",
@@ -1364,6 +1366,7 @@
       "validate": "Validate",
       "validating": "Validating …",
       "validationOk": "Validation succeeded — no errors.",
+      "saveSuccess": "Version “{name}” saved.",
       "fork": {
         "loading": "Loading prior-version contents …",
         "loaded": "Prior-version contents copied into the draft.",

@@ -604,6 +604,8 @@
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",
     "notSavedYet": "Noch nicht gespeichert",
+    "saveSuccess": "Gespeichert.",
+    "markCompleteSuccess": "CRF als abgeschlossen markiert.",
     "cancelLink": "Abbrechen — zurück zur Übersicht",
     "status": {
       "not-started": "Nicht begonnen",
@@ -1364,6 +1366,7 @@
       "validate": "Validieren",
       "validating": "Validiere …",
       "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "saveSuccess": "Version „{name}“ gespeichert.",
       "fork": {
         "loading": "Inhalte der Vorversion werden geladen …",
         "loaded": "Inhalte der Vorversion übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",

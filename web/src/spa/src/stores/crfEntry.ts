@@ -516,8 +516,8 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     }
   }
 
-  async function save(): Promise<void> {
-    if (!entry.value || !pendingChanges.value) return
+  async function save(): Promise<boolean> {
+    if (!entry.value || !pendingChanges.value) return false
     const target = entry.value
     isSaving.value = true
     error.value = null
@@ -528,7 +528,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     if (requiresReasonForChange.value && itemsAwaitingReason.value.length > 0) {
       missingReasonItemOids.value = [...itemsAwaitingReason.value]
       isSaving.value = false
-      return
+      return false
     }
     // Phase E.6 polish-runtime — defensive filter of currently-hidden
     // items from the wire payload. The hidden-flip watcher already
@@ -555,7 +555,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
         if (!ddeResp) {
           // ddeStore.error carries the user-facing message
           error.value = ddeStore.error ?? error.value
-          return
+          return false
         }
         target.lastSavedAt = ddeResp.lastSavedAt
         // status flips on the backend (dde-complete / dde-conflicts);
@@ -563,7 +563,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
         // union — leaving the status as-is and letting the view read
         // entry.dde to decide is simpler than fighting the type union.
         pendingChanges.value = false
-        return
+        return true
       }
       // Phase E.6 — bundle dirty repeating-group row writes with the
       // top-level values payload so the backend gets a single saveItems
@@ -600,6 +600,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       pendingReasons.value = {}
       missingReasonItemOids.value = []
       dirtyItemOids.value = new Set()
+      return true
     } catch (e) {
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
         throw e
@@ -620,11 +621,11 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
           pendingReasons.value = next
           error.value = (body as { message?: string } | null)?.message
             ?? 'Bitte Begründung für die markierten Felder eintragen.'
-          return
+          return false
         }
         const errBody = e.body as { message?: string } | null
         error.value = errBody?.message ?? `Speichern fehlgeschlagen (HTTP ${e.status}).`
-        return
+        return false
       }
       if (e instanceof ApiNetworkError) {
         error.value =
@@ -638,6 +639,8 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     } finally {
       isSaving.value = false
     }
+    // Reached only via a caught error that set error.value above.
+    return false
   }
 
   /** Phase E.6 — shared error handler for the new mutating actions. */
