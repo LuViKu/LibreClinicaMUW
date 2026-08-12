@@ -550,7 +550,9 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
                     {{ item.name || item.oid || t('crfAuthoring.canvas.canvas.untitled') }}
                   </div>
                   <div class="text-[10px] font-mono text-slate-500 truncate">
-                    {{ item.oid || '—' }} · {{ item.dataType }}
+                    {{ item.oid || '—' }} ·
+                    <template v-if="item.table">{{ t('crfAuthoring.canvas.table.section') }} ({{ item.table.columns.length }})</template>
+                    <template v-else>{{ item.dataType }}<template v-if="item.autocomplete"> · ⌕</template></template>
                   </div>
                   <div
                     v-if="errorForItem(item.oid)"

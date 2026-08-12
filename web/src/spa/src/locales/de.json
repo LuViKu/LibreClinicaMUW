@@ -1401,8 +1401,39 @@
           "PDATE": { "label": "Teildatum", "description": "Jahr oder Monat und Jahr." },
           "CHOICE_SINGLE": { "label": "Auswahlliste", "description": "Einfachauswahl aus eigenen Optionen." },
           "CHOICE_MULTI": { "label": "Mehrfachauswahl", "description": "Mehrere Optionen gleichzeitig auswählbar." },
-          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
+          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." },
+          "TABLE": { "label": "Wiederholbare Tabelle", "description": "Spalten selbst definieren; Anwender fügt Zeilen hinzu (z. B. Medikamente, Diagnosen)." }
         }
+      },
+      "table": {
+        "section": "Tabellenspalten",
+        "minRows": "Min. Zeilen",
+        "maxRows": "Max. Zeilen",
+        "addColumn": "Spalte hinzufügen",
+        "removeColumn": "Spalte entfernen",
+        "columnLabelPlaceholder": "Spaltenüberschrift",
+        "untitledColumn": "(ohne Titel)",
+        "addRow": "Zeile hinzufügen",
+        "removeRow": "Zeile entfernen",
+        "columnType": {
+          "text": "Text",
+          "number": "Zahl",
+          "date": "Datum"
+        }
+      },
+      "terminology": {
+        "section": "Terminologie-Autocomplete",
+        "enable": "Autocomplete für dieses Textfeld aktivieren",
+        "sourceLabel": "Datenquelle",
+        "system": {
+          "icd10gm": "Diagnosen (ICD-10-GM)",
+          "medication": "Medikamente"
+        },
+        "fillLabel": "Felder automatisch befüllen",
+        "fillHint": "Beim Auswählen eines Vorschlags werden Eigenschaften in andere Felder derselben Zeile übernommen.",
+        "addFill": "+ Regel",
+        "removeFill": "Regel entfernen",
+        "propertyPlaceholder": "Eigenschaft (z. B. strength)"
       },
       "canvas": {
         "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",

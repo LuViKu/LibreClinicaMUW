@@ -174,6 +174,11 @@ function authoringItemToRuntime(item: AuthoringItem): CrfItem {
     min: undefined,
     max: undefined,
     showWhen,
+    // #26 (2026-08-12) — carry the wizard-only terminology binding + table
+    // spec through to the preview so the operator can try out autocomplete
+    // + repeating tables before persistence lands (backend follow-up).
+    autocomplete: item.autocomplete,
+    table: item.table,
   } as CrfItem
 }
 

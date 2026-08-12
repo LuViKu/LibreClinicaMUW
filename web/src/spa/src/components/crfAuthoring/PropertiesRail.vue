@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ResponseOptionsEditor from './ResponseOptionsEditor.vue'
+import RepeatingTableEditor from './RepeatingTableEditor.vue'
+import TerminologyBindingEditor from './TerminologyBindingEditor.vue'
 
 import {
   useCrfAuthoringStore,
@@ -11,8 +13,10 @@ import {
   responseTypeRequiresOptions,
   type AuthoringDataType,
   type AuthoringItem,
+  type AutocompleteBinding,
   type AuthoringResponseSet,
   type AuthoringResponseType,
+  type RepeatingTableSpec,
   type ShowWhenComparator,
 } from '@/stores/crfAuthoring'
 
@@ -241,6 +245,38 @@ function onShowWhenLiteral(ev: Event): void {
 function onClearSelection(): void {
   store.selectItem(null)
 }
+
+/* ------------------- #26 terminology + repeating table ------------------- */
+
+/** True for a table item — its scalar type fields are inert, so hide them. */
+const isTableItem = computed<boolean>(() => selectedItem.value?.table != null)
+
+/**
+ * Flat text items that can host autocomplete. Only ST/text makes sense —
+ * a coded free-text field. Not shown for table items (columns carry their
+ * own bindings) or non-text data types.
+ */
+const canBindFlatAutocomplete = computed<boolean>(() => {
+  const it = selectedItem.value
+  return it != null && !it.table && it.dataType === 'ST'
+})
+
+/** Sibling items a flat fill rule may target — same section, excluding self. */
+const flatFillTargets = computed<{ key: string; label: string }[]>(() => {
+  const coord = selectedCoord.value
+  if (!coord) return []
+  return coord.section.items
+    .filter((it) => it.uid !== coord.item.uid && it.oid.trim() !== '')
+    .map((it) => ({ key: it.oid.trim(), label: it.name.trim() || it.oid.trim() }))
+})
+
+function onFlatBinding(binding: AutocompleteBinding | undefined): void {
+  setField('autocomplete', binding)
+}
+
+function onTableUpdate(spec: RepeatingTableSpec): void {
+  setField('table', spec)
+}
 </script>
 
 <template>
@@ -318,6 +354,9 @@ function onClearSelection(): void {
           ></textarea>
         </div>
 
+        <!-- #26 — scalar type fields are inert for a repeating-table item;
+             the table editor below owns its column definitions instead. -->
+        <template v-if="!isTableItem">
         <div>
           <label class="block text-[11px] font-semibold text-slate-700 mb-0.5">
             {{ t('crfAuthoring.canvas.properties.dataTypeField') }}
@@ -403,6 +442,43 @@ function onClearSelection(): void {
             @input="onDefaultValueInput"
           />
         </div>
+        </template>
+
+        <!-- #26 — repeating-table column editor (operator-defined columns
+             + per-text-column terminology autocomplete). -->
+        <details
+          v-if="isTableItem && selectedItem.table"
+          class="border border-slate-200 rounded p-2"
+          open
+          data-testid="crf-canvas-properties-table-section"
+        >
+          <summary class="text-[11px] font-semibold text-slate-700 cursor-pointer">
+            {{ t('crfAuthoring.canvas.table.section') }}
+          </summary>
+          <div class="mt-2">
+            <RepeatingTableEditor :spec="selectedItem.table" @update:spec="onTableUpdate" />
+          </div>
+        </details>
+
+        <!-- #26 — flat text field terminology autocomplete opt-in. -->
+        <details
+          v-if="canBindFlatAutocomplete"
+          class="border border-slate-200 rounded p-2"
+          :open="!!selectedItem.autocomplete"
+          data-testid="crf-canvas-properties-autocomplete-section"
+        >
+          <summary class="text-[11px] font-semibold text-slate-700 cursor-pointer">
+            {{ t('crfAuthoring.canvas.terminology.section') }}
+          </summary>
+          <div class="mt-2">
+            <TerminologyBindingEditor
+              :binding="selectedItem.autocomplete"
+              :targets="flatFillTargets"
+              id-prefix="crf-canvas-properties-flat"
+              @update:binding="onFlatBinding"
+            />
+          </div>
+        </details>
 
         <div>
           <label class="flex items-center gap-2 text-[11px] text-slate-700">
