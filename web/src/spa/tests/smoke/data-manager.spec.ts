@@ -7,7 +7,7 @@
  * (out-of-sync id sequences 500'd every new-version save).
  */
 import { test, expect } from '@playwright/test'
-import { login, loginAndGoto, purgeCrfsByPrefix, CREDENTIALS } from '../support/auth'
+import { login, loginAndGoto, purgeCrfsByPrefix } from '../support/auth'
 
 const CTX = '/LibreClinica'
 const TEST_CRF_PREFIXES = ['E2E Authoring', 'E2E UI CRF']
@@ -71,8 +71,9 @@ test.describe('@smoke Data Manager', () => {
     await expect(page.getByText(`E2E UI CRF ${ts}`)).toBeVisible({ timeout: 15_000 })
   })
 
-  test('reaches the study-details editor for the active study', async ({ page }) => {
-    await loginAndGoto(page, 'dataManager', `/studies/${CREDENTIALS.dataManager.studyOid}/edit`)
-    // loginAndGoto already asserts a real (non-404, non-login) heading rendered.
+  test('reaches site (location) management', async ({ page }) => {
+    // #2 — site management is a Data-Manager study-build task (was admin-only).
+    // (Study-details EDIT is Administrator-only — covered by the admin spec.)
+    await loginAndGoto(page, 'dataManager', '/sites')
   })
 })

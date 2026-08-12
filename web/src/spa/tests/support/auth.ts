@@ -22,7 +22,7 @@ export type Role = 'admin' | 'dataManager' | 'investigator' | 'crc' | 'monitor'
  * of truth for the smoke + a11y suites.
  */
 export const CREDENTIALS: Record<Role, { username: string; password: string; studyOid: string }> = {
-  admin: { username: 'manual_admin', password: '12345678', studyOid: '' }, // system admin: no study assignment
+  admin: { username: 'manual_admin', password: '12345678', studyOid: 'S_DEFAULTS1' },
   dataManager: { username: 'manual_dm', password: '12345678', studyOid: 'S_DEFAULTS1' },
   investigator: { username: 'manual_investigator', password: '12345678', studyOid: 'S_DEFAULTS1' },
   crc: { username: 'manual_crc', password: '12345678', studyOid: 'S_DEFAULTS1' },
@@ -86,6 +86,14 @@ export async function loginAndGoto(page: Page, role: Role, path: string): Promis
   await login(page.context(), role)
   await page.goto(path, { waitUntil: 'domcontentloaded' })
   await expect(page, `role ${role} should reach ${path}, not bounce to login`).not.toHaveURL(/\/login/)
+  // Assert we actually stayed on the requested route — a role-gated bounce to
+  // home (e.g. DM → an admin-only route) otherwise slips through as a false
+  // pass because home is neither /login nor the 404 page.
+  if (path !== '/') {
+    const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    await expect(page, `role ${role} should stay on ${path}, not be redirected away`)
+      .toHaveURL(new RegExp(escaped + '(?:[/?#]|$)'))
+  }
   const h1 = page.getByRole('heading', { level: 1 })
   await expect(h1.first()).toBeVisible({ timeout: 15_000 })
   await expect(h1.first(), `${path} should not be the 404 page`).not.toHaveText(/Seite nicht gefunden|Not Found/i)
