@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 import RepeatingGroupSection from '../RepeatingGroupSection.vue'
 import type { CrfItem, CrfItemGroup } from '@/types/crf'
+import enMessages from '@/locales/en.json'
 
 // #19 — row deletion now goes through the useConfirm() modal instead of
 // window.confirm(). Mock the composable so the component doesn't need an
@@ -9,6 +11,15 @@ import type { CrfItem, CrfItemGroup } from '@/types/crf'
 // ConfirmDialog.test.ts.
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn(() => Promise.resolve(true)) }))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
+
+// #26 Slice 3 — a terminology-marked column renders TerminologyAutocomplete,
+// which queries the search endpoint. Stub it so the cell mounts cleanly.
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return { ...actual, apiGet: vi.fn().mockResolvedValue([]) }
+})
+
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en: enMessages } })
 
 const ITEMS_BY_OID: Record<string, CrfItem> = {
   I_EYE: {
@@ -112,5 +123,24 @@ describe('RepeatingGroupSection', () => {
     await flushPromises()
     expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ message: 'Are you sure?' }))
     expect(wrapper.emitted('delete-row')).toEqual([[2]])
+  })
+
+  it('#26 Slice 3 — renders TerminologyAutocomplete for a terminology-marked column', async () => {
+    const itemsByOid: Record<string, CrfItem> = {
+      RX_DRUG_TXMED: { oid: 'RX_DRUG_TXMED', label: 'Medikament', dataType: 'string', required: false } as CrfItem,
+      RX_DOSE: { oid: 'RX_DOSE', label: 'Dosis', dataType: 'string', required: false } as CrfItem,
+    }
+    const group: CrfItemGroup = {
+      oid: 'RX', label: 'Medikation', repeatMax: 5,
+      itemOids: ['RX_DRUG_TXMED', 'RX_DOSE'],
+      rows: [{ ordinal: 1, values: {} }],
+    }
+    const wrapper = mount(RepeatingGroupSection, {
+      props: { group, itemsByOid, ...I18N },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+    // The marked column cell hosts the autocomplete; the plain column doesn't.
+    expect(wrapper.findAll('[data-testid="terminology-autocomplete-input"]')).toHaveLength(1)
   })
 })

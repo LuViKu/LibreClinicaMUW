@@ -893,4 +893,26 @@ describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
     // The table item does NOT leak through as a lone scalar item.
     expect(items.some((i) => i.oid === 'MEDS' && !i.groupLabel)).toBe(false)
   })
+
+  it('encodes an autocomplete column system in its persisted OID', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'RX',
+      oid: 'RX',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'drug', label: 'Medikament', type: 'text', autocomplete: { system: 'medication', fills: [] } },
+          { key: 'dose', label: 'Dosis', type: 'number' },
+        ],
+      },
+    })
+    const payload = store.buildPayload() as { sections: { items: { oid: string }[] }[] }
+    const oids = payload.sections[0]!.items.map((i) => i.oid)
+    // The medication-bound text column carries the _TXMED marker; the plain
+    // numeric column does not.
+    expect(oids).toContain('RX_DRUG_TXMED')
+    expect(oids).toContain('RX_DOSE')
+  })
 })

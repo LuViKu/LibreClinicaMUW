@@ -23,6 +23,8 @@
 
 import { computed } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
+import TerminologyAutocomplete from '@/components/TerminologyAutocomplete.vue'
+import { terminologySystemFromOid } from '@/components/terminologyOid'
 import type { CrfItem, CrfItemGroup } from '@/types/crf'
 
 interface Props {
@@ -146,7 +148,19 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
               :key="item.oid"
               class="py-1.5 px-2 align-top"
             >
-              <template v-if="item.dataType === 'select-one' && item.options">
+              <!-- #26 Slice 3 — a terminology-bound column (system encoded in
+                   its OID) renders the live autocomplete at data entry. -->
+              <template v-if="terminologySystemFromOid(item.oid)">
+                <TerminologyAutocomplete
+                  :id="inputId(row.ordinal, item.oid)"
+                  :model-value="rawValueFor(row.ordinal, item.oid)"
+                  :system="terminologySystemFromOid(item.oid) as string"
+                  :disabled="disabled"
+                  @update:model-value="(v: string) => emit('set-value', { rowOrdinal: row.ordinal, itemOid: item.oid, value: v === '' ? null : v })"
+                />
+              </template>
+
+              <template v-else-if="item.dataType === 'select-one' && item.options">
                 <select
                   :id="inputId(row.ordinal, item.oid)"
                   :value="rawValueFor(row.ordinal, item.oid)"
