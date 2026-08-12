@@ -126,8 +126,39 @@ public record CrfVersionAuthoringRequest(
              * win over catalog defaults; null means the operator
              * authored the item free-form (legacy path, no catalog).
              */
-            String catalogCode
+            String catalogCode,
+            /**
+             * #26 Slice 3 (binding store) — optional terminology autocomplete
+             * binding (which code system + the property->field fill map). The
+             * backend persists it to {@code crf_item_terminology} keyed by
+             * (crf_version_id, name) and the eventCrfs fetch hydrates it back
+             * onto {@code CrfItemDto.autocomplete} for live entry. Null = plain
+             * field.
+             */
+            Autocomplete autocomplete
     ) {
+        /** #26 Slice 3 — terminology autocomplete binding on an item/column. */
+        public record Autocomplete(String system, java.util.List<Fill> fills) {
+            public record Fill(String fromProperty, String toKey) {}
+        }
+
+        /**
+         * 18-arg overload (pre-autocomplete, F3-era) — {@code autocomplete}
+         * defaults to {@code null}.
+         */
+        public Item(
+                String name, String oid, String descriptionLabel, String leftItemText,
+                String rightItemText, String units, String dataType, String defaultValue,
+                boolean required, ResponseSet responseSet, Validation validation,
+                String showItem, String parentItemOid, String header, String subHeader,
+                boolean pageBreak, String groupLabel, String catalogCode
+        ) {
+            this(name, oid, descriptionLabel, leftItemText, rightItemText, units,
+                    dataType, defaultValue, required, responseSet, validation,
+                    showItem, parentItemOid, header, subHeader, pageBreak, groupLabel,
+                    catalogCode, /* autocomplete */ null);
+        }
+
         /**
          * Backward-compat constructor — keeps the 17-arg callers (most
          * of the existing test suite + every {@code new
