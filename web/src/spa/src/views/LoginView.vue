@@ -155,12 +155,10 @@ function onSsoBounce() {
         </form>
       </details>
 
+      <!-- Terms/Privacy links removed until real legal pages exist (were dead
+           href="#"). Re-add with actual targets when the pages ship. -->
       <div class="mt-8 flex items-center justify-center gap-2 text-[11px] text-slate-400">
         <span>v{{ appVersion }}</span>
-        <span>·</span>
-        <a href="#" class="hover:text-slate-600">{{ t('login.terms') }}</a>
-        <span>·</span>
-        <a href="#" class="hover:text-slate-600">{{ t('login.privacy') }}</a>
       </div>
 
       <div class="mt-3 rounded-md bg-muw-blue-50 border border-muw-blue-100 px-3 py-2 text-[11px] text-muw-blue-900 flex items-start gap-2">

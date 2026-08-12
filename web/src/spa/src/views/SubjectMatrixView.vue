@@ -646,7 +646,6 @@ watch(eventColumns, async (next, prev) => {
 
         <div class="flex items-center justify-between px-3 py-2 text-[11px] text-slate-500 bg-slate-50/40 border-t border-slate-100">
           <span>{{ t('subjectMatrix.showingCount', { visible: subjects.visibleCount, total: subjects.totalCount }) }}</span>
-          <span>{{ t('subjectMatrix.rowsPerPage') }}: 25</span>
         </div>
       </div>
     </div>

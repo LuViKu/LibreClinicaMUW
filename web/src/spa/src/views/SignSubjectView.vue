@@ -186,7 +186,6 @@ async function onSign(payload: ESignaturePayload) {
         <section class="bg-white border border-slate-200 rounded-muw overflow-hidden mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t('signSubject.casebookHeading') }}</h2>
-            <a href="#" class="text-xs text-muw-blue hover:underline">{{ t('signSubject.casebookPdf') }}</a>
           </div>
           <DenseTable :bordered="false">
             <template #header>

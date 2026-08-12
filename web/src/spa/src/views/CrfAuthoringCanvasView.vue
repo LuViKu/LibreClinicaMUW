@@ -299,9 +299,6 @@ function onCancel(): void {
   void router.push({ name: 'crf-library' })
 }
 
-function onUseLegacyWizard(): void {
-  void router.push({ name: 'crf-library', query: { authorWizard: '1', crfOid: crfOid.value } })
-}
 </script>
 
 <template>
@@ -316,14 +313,6 @@ function onUseLegacyWizard(): void {
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button
-          type="button"
-          class="text-xs text-slate-600 hover:text-slate-800 underline"
-          data-testid="crf-canvas-use-legacy"
-          @click="onUseLegacyWizard"
-        >
-          {{ t('crfAuthoring.canvas.useLegacy') }}
-        </button>
         <button
           type="button"
           class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-100"

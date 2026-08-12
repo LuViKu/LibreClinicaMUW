@@ -111,6 +111,10 @@ async function submit() {
     // accepts empty strings on the optional fields.
     const patch: Record<string, string> = {}
     for (const key of Object.keys(form.value) as (keyof Form)[]) {
+      // protocolType's empty option is "Unverändert lassen" (leave unchanged),
+      // NOT "clear" — omit it from the patch when blank so a save doesn't wipe
+      // the study's existing protocol type.
+      if (key === 'protocolType' && (form.value.protocolType as string).trim() === '') continue
       patch[key] = (form.value[key] as string).trim()
     }
     const result = await studies.update(oid.value, patch as Partial<StudyIdentity>)
