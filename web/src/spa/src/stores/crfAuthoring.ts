@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { markTerminologyOid } from '@/components/terminologyOid'
 import type { CrfVersion } from '@/types/crfLibrary'
 
 /**
@@ -1377,7 +1378,13 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const baseOid = (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
     const groupLabel = baseOid
     return table.columns.map((col, i) => {
-      const colOid = `${baseOid}_${(col.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
+      // A terminology-bound text column encodes its system in the OID so the
+      // binding survives to live entry (see terminologyOid.ts). The fill map
+      // is not persistable in an OID and stays preview-only.
+      const rawColOid = `${baseOid}_${(col.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
+      const colOid = col.type === 'text' && col.autocomplete
+        ? markTerminologyOid(rawColOid, col.autocomplete.system)
+        : rawColOid
       const dataType: AuthoringDataType =
         col.type === 'number' ? 'REAL' : col.type === 'date' ? 'DATE' : 'ST'
       const label = col.label.trim() || col.key
