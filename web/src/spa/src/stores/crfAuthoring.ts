@@ -660,6 +660,27 @@ function nextUid(prefix: string): string {
 }
 
 /**
+ * Section/item UIDs (`sec-1`, `item-3`) come from {@link nextUid}, whose
+ * counter also resets to 0 on page load. A restored draft already holds UIDs,
+ * so without re-seeding, the next added item re-mints a colliding UID — two
+ * items sharing a UID break selection and drag-reorder, which key by UID.
+ * Advance the counter past the highest suffix any restored UID holds (the
+ * counter is shared across prefixes, so scan both sections and items).
+ */
+export function reseedUidCounter(d: AuthoringDraft): void {
+  let max = uidCounter
+  const bump = (uid: string | undefined): void => {
+    const m = /-(\d+)$/.exec(uid ?? '')
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  for (const section of d.sections ?? []) {
+    bump(section.uid)
+    for (const item of section.items ?? []) bump(item.uid)
+  }
+  uidCounter = max
+}
+
+/**
  * Convert the fork-from-version wire payload into an {@link AuthoringDraft}.
  * Defensive against missing/null fields. {@code versionName} is blanked
  * so the operator types a fresh name (the backend's unique-name check
@@ -878,6 +899,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     selectedItemUid.value = null
     error.value = null
     reseedTableColumnKeySeq(next)
+    reseedUidCounter(next)
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {

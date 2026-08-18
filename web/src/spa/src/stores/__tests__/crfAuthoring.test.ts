@@ -7,6 +7,7 @@ import {
   hasShowWhen,
   newRepeatingTableColumn,
   reseedTableColumnKeySeq,
+  reseedUidCounter,
   responseTypeRequiresOptions,
   useCrfAuthoringStore,
 } from '../crfAuthoring'
@@ -957,6 +958,24 @@ describe('reseedTableColumnKeySeq (draft restore — column-key collisions)', ()
     // silent cell-state mirroring across columns.
     expect(newRepeatingTableColumn('x').key).toBe('col_1000')
     expect(newRepeatingTableColumn('y').key).toBe('col_1001')
+  })
+})
+
+describe('reseedUidCounter (draft restore — item/section UID collisions)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('advances the UID counter past a restored draft so an added item never collides', () => {
+    // A restored draft holds sec-/item- UIDs minted before the page reload.
+    // Use suffixes no prior test could reach so the assertion is order-free.
+    const draft = {
+      sections: [{ uid: 'sec-4000', items: [{ uid: 'item-4200' }, { uid: 'item-7' }] }],
+    } as unknown as Parameters<typeof reseedUidCounter>[0]
+    reseedUidCounter(draft)
+    // Adding through a fresh store now mints a UID past the restored maximum.
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'fresh', oid: 'FRESH' })
+    const added = store.draft.sections[0]!.items.at(-1)!.uid
+    expect(Number(/-(\d+)$/.exec(added)![1])).toBeGreaterThan(4200)
   })
 })
 
