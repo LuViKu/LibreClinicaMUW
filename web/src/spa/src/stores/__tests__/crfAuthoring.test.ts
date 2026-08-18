@@ -957,6 +957,34 @@ describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
     expect(oids).toContain('RX_DOSE')
   })
 
+  it('persists the terminology binding (system + fill map, toKey → target OID)', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'DX',
+      oid: 'DX',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'diagnose', label: 'Diagnose', type: 'text', autocomplete: { system: 'icd10gm', fills: [{ fromProperty: 'code', toKey: 'icd' }] } },
+          { key: 'icd', label: 'ICD-Code', type: 'text' },
+        ],
+      },
+    })
+    const items = (store.buildPayload() as {
+      sections: { items: Record<string, unknown>[] }[]
+    }).sections[0]!.items
+    const diag = items.find((i) => i.oid === 'DX_DIAGNOSE_TXICD')!
+    // Full binding for the backend to persist; the fill's authoring key 'icd'
+    // is translated to the ICD-Code column's persisted OID.
+    expect(diag.autocomplete).toEqual({
+      system: 'icd10gm',
+      fills: [{ fromProperty: 'code', toKey: 'DX_ICD' }],
+    })
+    // A plain column carries no binding.
+    expect('autocomplete' in items.find((i) => i.oid === 'DX_ICD')!).toBe(false)
+  })
+
   it('persists a laterality column as a single-select over OD/OS/OU', () => {
     const store = useCrfAuthoringStore()
     store.addItem(0, {
@@ -1050,7 +1078,7 @@ describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, s
       sections: [{
         label: 'S1', title: 'Meds', ordinal: 1,
         items: [
-          { name: 'RX_DRUG_TXMED', oid: 'RX_DRUG_TXMED', descriptionLabel: 'Medikament', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'text' } },
+          { name: 'RX_DRUG_TXMED', oid: 'RX_DRUG_TXMED', descriptionLabel: 'Medikament', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'text' }, autocomplete: { system: 'medication', fills: [{ fromProperty: 'strength', toKey: 'RX_DOSE' }] } },
           { name: 'RX_DOSE', oid: 'RX_DOSE', descriptionLabel: 'Dosis', dataType: 'REAL', groupLabel: 'RX', responseSet: { type: 'text' } },
           { name: 'RX_EYE', oid: 'RX_EYE', descriptionLabel: 'Auge', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'single-select', options: [{ text: 'OD (rechts)', value: 'OD' }, { text: 'OS (links)', value: 'OS' }, { text: 'OU (beide)', value: 'OU' }] } },
         ],
@@ -1067,9 +1095,10 @@ describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, s
     const table = items[0]!.table!
     expect(table.columns.map((c) => c.type)).toEqual(['text', 'number', 'laterality'])
     expect(table.columns.map((c) => c.label)).toEqual(['Medikament', 'Dosis', 'Auge'])
-    // Autocomplete system decoded from the OID marker; fill-map not persisted.
+    // System recovered; fill map recovered with toKey translated from the
+    // persisted target OID (RX_DOSE) back to the reconstructed Dosis col key.
     expect(table.columns[0]!.autocomplete?.system).toBe('medication')
-    expect(table.columns[0]!.autocomplete?.fills).toEqual([])
+    expect(table.columns[0]!.autocomplete?.fills).toEqual([{ fromProperty: 'strength', toKey: table.columns[1]!.key }])
     // Row bounds recovered from wire groups[] (not the 1/20 default).
     expect(table.minRows).toBe(3)
     expect(table.maxRows).toBe(12)

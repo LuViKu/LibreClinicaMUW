@@ -465,6 +465,12 @@ interface ForkItemWire {
    */
   showItem?: string | null
   parentItemOid?: string | null
+  /**
+   * Fork recovery — the persisted terminology binding (from
+   * {@code crf_item_terminology}): system + fill map whose {@code toKey}s are
+   * target-column OIDs, translated back to reconstructed column keys.
+   */
+  autocomplete?: { system?: string; fills?: Array<{ fromProperty?: string; toKey?: string }> } | null
 }
 
 interface ForkResponseSetWire {
@@ -751,12 +757,20 @@ function forkSection(wire: ForkSectionWire, fallbackOrdinal: number, bounds: For
  * share a repeating-group label back into a single {@link RepeatingTableSpec}
  * item (the inverse of {@code buildTableItemPayloads}). Ungrouped items map
  * 1:1 via {@link forkItem}. The table item is placed where its group first
- * appears; columns keep wire order. The fill-map is NOT recovered — it is not
- * persisted (see terminologyOid.ts) — so bindings come back autocomplete-only.
+ * appears; columns keep wire order. The terminology binding (system + fill
+ * map) is recovered from the wire when present (persisted in
+ * crf_item_terminology), else the system alone from the OID marker. Fill
+ * {@code toKey}s are persisted as target-column OIDs and translated back to
+ * the reconstructed column keys.
  */
 function forkItems(wires: ForkItemWire[], bounds: ForkGroupBounds): AuthoringItem[] {
   const items: AuthoringItem[] = []
   const tableByLabel = new Map<string, AuthoringItem>()
+  // Per group label: persisted column OID → reconstructed column key, plus the
+  // columns whose fills still need their target OIDs translated (second pass,
+  // once every column key is known).
+  const oidToKey = new Map<string, Map<string, string>>()
+  const pending: Array<{ label: string; col: RepeatingTableColumn; fills: Array<{ fromProperty: string; toKey: string }> }> = []
   for (const w of wires) {
     const label = (w.groupLabel ?? '').trim()
     if (!label) {
@@ -767,9 +781,24 @@ function forkItems(wires: ForkItemWire[], bounds: ForkGroupBounds): AuthoringIte
     if (!table) {
       table = forkTableItem(label, bounds.get(label))
       tableByLabel.set(label, table)
+      oidToKey.set(label, new Map())
       items.push(table)
     }
-    table.table!.columns.push(forkTableColumn(w))
+    const col = forkTableColumn(w)
+    table.table!.columns.push(col)
+    oidToKey.get(label)!.set((w.oid ?? '').trim(), col.key)
+    const fills = w.autocomplete?.fills
+    if (col.autocomplete && fills && fills.length > 0) {
+      pending.push({ label, col, fills: fills.map((f) => ({ fromProperty: f.fromProperty ?? '', toKey: (f.toKey ?? '').trim() })) })
+    }
+  }
+  // Second pass — translate each fill's persisted target OID to the
+  // reconstructed column key; drop fills whose target column is gone.
+  for (const { label, col, fills } of pending) {
+    const map = oidToKey.get(label)!
+    col.autocomplete!.fills = fills
+      .map((f) => ({ fromProperty: f.fromProperty, toKey: map.get(f.toKey) ?? '' }))
+      .filter((f) => f.fromProperty !== '' && f.toKey !== '')
   }
   return items
 }
@@ -796,14 +825,15 @@ function forkTableItem(groupLabel: string, bounds?: { minRows: number; maxRows: 
   }
 }
 
-/** Reconstruct one repeating-table column from a persisted grouped item. */
+/** Reconstruct one repeating-table column from a persisted grouped item.
+ *  Fills are staged empty here and translated in {@link forkItems}' 2nd pass. */
 function forkTableColumn(w: ForkItemWire): RepeatingTableColumn {
   const label = (w.descriptionLabel ?? '').trim() || (w.leftItemText ?? '').trim() || (w.name ?? '').trim()
   const col = newRepeatingTableColumn(label)
   col.type = forkColumnType(w)
-  // A text column's terminology system was encoded in the OID marker; decode
-  // it. The fill map isn't persisted, so it comes back empty.
-  const system = terminologySystemFromOid(w.oid)
+  // System from the persisted binding when present (crf_item_terminology),
+  // else decoded from the OID marker.
+  const system = w.autocomplete?.system ?? terminologySystemFromOid(w.oid)
   if (col.type === 'text' && system) col.autocomplete = { system, fills: [] }
   return col
 }
@@ -1593,22 +1623,28 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
    * #26 Slice 3 persistence — expand a repeating-table item into its column
    * items. Each column becomes an item in the SAME flat repeating group
    * (groupLabel = the table's OID); the column type maps to a scalar data
-   * type. Terminology autocomplete bindings are NOT persisted here yet (no
-   * backend column) — they remain wizard/preview-only; a saved table renders
-   * as a plain repeating group at entry until that follow-up lands.
+   * type. A terminology-bound text column carries its binding two ways: the
+   * SYSTEM is encoded in the OID marker (survives even without the binding
+   * store — see terminologyOid.ts), and the FULL binding (system + fill map)
+   * is emitted as {@code autocomplete} so the backend persists it to
+   * {@code crf_item_terminology} and live entry auto-fills sibling cells. A
+   * fill's {@code toKey} (an authoring column key) is translated to the TARGET
+   * column's persisted OID — authoring keys are not persisted, so that OID is
+   * the identity entry fills against.
    */
   function buildTableItemPayloads(it: AuthoringItem): Record<string, unknown>[] {
     const table = it.table!
     const baseOid = tableBaseOid(it)
     const groupLabel = baseOid
-    return table.columns.map((col, i) => {
-      // A terminology-bound text column encodes its system in the OID so the
-      // binding survives to live entry (see terminologyOid.ts). The fill map
-      // is not persistable in an OID and stays preview-only.
-      const rawColOid = `${baseOid}_${(col.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
-      const colOid = col.type === 'text' && col.autocomplete
-        ? markTerminologyOid(rawColOid, col.autocomplete.system)
-        : rawColOid
+    // Persisted OID of every column up front, so a fill's toKey resolves to
+    // its target column's OID.
+    const colOidByKey: Record<string, string> = {}
+    table.columns.forEach((c, i) => {
+      const raw = `${baseOid}_${(c.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
+      colOidByKey[c.key] = c.type === 'text' && c.autocomplete ? markTerminologyOid(raw, c.autocomplete.system) : raw
+    })
+    return table.columns.map((col) => {
+      const colOid = colOidByKey[col.key]!
       const dataType: AuthoringDataType =
         col.type === 'number' ? 'REAL' : col.type === 'date' ? 'DATE' : 'ST'
       const label = col.label.trim() || col.key
@@ -1622,7 +1658,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
             options: LATERALITY_OPTIONS.map((o) => ({ text: o.label, value: o.value })),
           }
         : { type: 'text', label: `${colOid.toLowerCase()}_response` }
-      return {
+      const payload: Record<string, unknown> = {
         name: colOid,
         oid: colOid,
         descriptionLabel: label,
@@ -1635,6 +1671,19 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         groupLabel,
         responseSet,
       }
+      // #26 binding store — persist the terminology binding (system + fill map)
+      // so live entry auto-fills sibling cells; each fill's toKey resolves to
+      // the target column's persisted OID.
+      if (col.type === 'text' && col.autocomplete) {
+        payload.autocomplete = {
+          system: col.autocomplete.system,
+          fills: (col.autocomplete.fills ?? []).map((f) => ({
+            fromProperty: f.fromProperty,
+            toKey: colOidByKey[f.toKey] ?? f.toKey,
+          })),
+        }
+      }
+      return payload
     })
   }
 
@@ -1675,6 +1724,16 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     // picker is responsible for setting this on items it materialises.
     if (it.catalogCode && it.catalogCode.trim() !== '') {
       out.catalogCode = it.catalogCode.trim()
+    }
+    // #26 binding store — a FLAT item's terminology binding (system + fill map).
+    // Unlike a table column, a flat item's OID is operator-chosen (not marker-
+    // mangled), so the binding store carries the system too; fill toKeys are
+    // whatever target the operator set (persisted verbatim).
+    if (it.autocomplete) {
+      out.autocomplete = {
+        system: it.autocomplete.system,
+        fills: (it.autocomplete.fills ?? []).map((f) => ({ fromProperty: f.fromProperty, toKey: f.toKey })),
+      }
     }
     return out
   }

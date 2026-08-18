@@ -93,5 +93,6 @@
   <include  file="migration/lc-muw-2026-08-11-resync-seeded-sequences.xml"/>
   <include  file="migration/lc-muw-2026-08-12-grant-admin-default-study.xml"/>
   <include  file="migration/lc-muw-2026-08-12-terminology.xml"/>
+  <include  file="migration/lc-muw-2026-08-12-crf-item-terminology.xml"/>
 </databaseChangeLog>
 
