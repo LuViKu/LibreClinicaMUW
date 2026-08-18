@@ -18,6 +18,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -38,6 +39,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
@@ -45,6 +48,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
 
 import org.slf4j.Logger;
@@ -426,6 +431,20 @@ public class CrfsApiController {
             ifmByItemId.put(ifm.getItemId(), ifm);
         }
 
+        // Fork recovery — resolve each item's REPEATING-group label so the SPA
+        // can fold grouped items back into a repeating table (inverse of
+        // buildTableItemPayloads). Gate on isRepeatingGroup() exactly like the
+        // entry builder: ungrouped items belong to a default non-repeating
+        // "Ungrouped" bucket, and surfacing that label would let a re-save
+        // wrongly convert them into a real group. Label is item_group.name
+        // (where the SPA's groupLabel round-trips; the header column is blank).
+        Map<Integer, String> groupLabelByItemId = loadRepeatingGroupLabels(version.getId(), allIfms);
+
+        // Fork recovery — conditional-display rules from scd_item_metadata,
+        // keyed by item_id → [sourceItemOid, literal]. Populated onto the
+        // legacy showItem/parentItemOid fields the workbook adapter round-trips.
+        Map<Integer, String[]> scdByItemId = loadShowWhenRawByItemId(version.getId());
+
         List<CrfVersionAuthoringRequest.Section> sectionDtos = new ArrayList<>(sections.size());
         int sectionOrdinal = 0;
         for (SectionBean sb : sections) {
@@ -434,7 +453,13 @@ public class CrfsApiController {
                     itemDao.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
             List<CrfVersionAuthoringRequest.Item> itemDtos = new ArrayList<>(items.size());
             for (ItemBean ib : items) {
-                itemDtos.add(buildAuthoringItemDto(ib, ifmByItemId.get(ib.getId())));
+                String[] scd = scdByItemId.get(ib.getId());
+                itemDtos.add(buildAuthoringItemDto(
+                        ib,
+                        ifmByItemId.get(ib.getId()),
+                        groupLabelByItemId.get(ib.getId()),
+                        /* parentItemOid */ scd != null ? scd[0] : null,
+                        /* showItem (trigger literal) */ scd != null ? scd[1] : null));
             }
             sectionDtos.add(new CrfVersionAuthoringRequest.Section(
                     nullToEmpty(sb.getLabel()),
@@ -455,9 +480,15 @@ public class CrfsApiController {
      * Build one {@link CrfVersionAuthoringRequest.Item} from the persisted
      * row trio (item + item_form_metadata + response_set). Defensive
      * against missing IFM (older drafts may have orphan items).
+     *
+     * <p>Fork recovery — {@code groupLabel} (the item's repeating-group name,
+     * or null) lets the SPA fold grouped items back into a repeating table;
+     * {@code parentItemOid}/{@code showItem} (or null) carry a recovered
+     * conditional-display rule on the legacy fields the adapter round-trips.
      */
     private static CrfVersionAuthoringRequest.Item buildAuthoringItemDto(
-            ItemBean ib, ItemFormMetadataBean ifm) {
+            ItemBean ib, ItemFormMetadataBean ifm,
+            String groupLabel, String parentItemOid, String showItem) {
         // ItemDataType exposes a short codename via getName() (e.g.
         // "st", "int", "real", "date", "bl"). Upper-case before
         // surfacing so the SPA's AuthoringDataType enum match-arm
@@ -514,13 +545,94 @@ public class CrfsApiController {
                 /* required (legacy schema lacks this flag) */ false,
                 rs,
                 val,
-                /* showItem      */ null,
-                /* parentItemOid */ null,
+                showItem,
+                parentItemOid,
                 header,
                 subHeader,
                 /* pageBreak  */ false,
-                /* groupLabel */ null,
+                groupLabel,
                 /* catalogCode */ null);
+    }
+
+    /**
+     * Fork recovery — map each item_id to its REPEATING item-group name (the
+     * value the SPA's {@code groupLabel} round-trips into {@code item_group.name}
+     * on save). Items that are ungrouped, or in the default non-repeating
+     * "Ungrouped" bucket, map to nothing so the SPA keeps them as flat items —
+     * surfacing that bucket's label would let a re-save wrongly convert them
+     * into a real repeating group. Mirrors the entry builder's resolution
+     * ({@code EventCrfsApiController}); best-effort — a DAO failure is skipped
+     * and the item stays flat.
+     */
+    private Map<Integer, String> loadRepeatingGroupLabels(
+            int crfVersionId, List<ItemFormMetadataBean> allIfms) {
+        Map<Integer, String> out = new HashMap<>();
+        ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
+        ItemGroupMetadataDAO igmDAO = new ItemGroupMetadataDAO(dataSource);
+        Map<Integer, Boolean> repeatingByGroupId = new HashMap<>();
+        for (ItemFormMetadataBean ifm : allIfms) {
+            ItemGroupBean grp;
+            try {
+                grp = igDAO.findGroupByItemIdCrfVersionId(ifm.getItemId(), crfVersionId);
+            } catch (Exception e) {
+                continue;
+            }
+            if (grp == null || grp.getId() == 0) continue;
+            Boolean repeating = repeatingByGroupId.get(grp.getId());
+            if (repeating == null) {
+                boolean rep = false;
+                try {
+                    ArrayList<ItemGroupMetadataBean> metas =
+                            igmDAO.findMetaByGroupAndCrfVersion(grp.getId(), crfVersionId);
+                    rep = metas != null && !metas.isEmpty() && metas.get(0).isRepeatingGroup();
+                } catch (Exception e) {
+                    // best-effort — treat as non-repeating
+                }
+                repeating = rep;
+                repeatingByGroupId.put(grp.getId(), rep);
+            }
+            if (repeating && grp.getName() != null && !grp.getName().isBlank()) {
+                out.put(ifm.getItemId(), grp.getName());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Fork recovery — read conditional-display rules from {@code scd_item_metadata}
+     * for every item on the version, keyed by item_id → {@code [sourceItemOid,
+     * literal]}. Sibling of {@code EventCrfsApiController.loadShowWhenByItemId}
+     * but returns the raw pair (not the runtime JSON) since the fork surfaces it
+     * on the legacy {@code parentItemOid} / {@code showItem} DTO fields the
+     * workbook adapter round-trips. The legacy schema stores equality only, so
+     * the SPA re-hydrates comparator {@code "=="}. Best-effort: a missing table
+     * or SQL failure logs at WARN and yields an empty map (always-shown).
+     */
+    private Map<Integer, String[]> loadShowWhenRawByItemId(int crfVersionId) {
+        Map<Integer, String[]> out = new HashMap<>();
+        final String sql =
+                "SELECT ifm.item_id, scd.control_item_name, scd.option_value " +
+                "FROM scd_item_metadata scd " +
+                "JOIN item_form_metadata ifm " +
+                "  ON ifm.item_form_metadata_id = scd.scd_item_form_metadata_id " +
+                "WHERE ifm.crf_version_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int itemId = rs.getInt(1);
+                    String sourceOid = rs.getString(2);
+                    String literal = rs.getString(3);
+                    if (sourceOid == null || sourceOid.isBlank()) continue;
+                    out.put(itemId, new String[] { sourceOid, literal == null ? "" : literal });
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("loadShowWhenRawByItemId: crf_version {} — skipping show-when ({}). "
+                    + "Items will fall back to always-shown.", crfVersionId, ex.getMessage());
+        }
+        return out;
     }
 
     /* ----------------------------------------------------------------- */

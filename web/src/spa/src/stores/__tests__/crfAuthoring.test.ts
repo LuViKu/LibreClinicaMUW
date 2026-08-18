@@ -1001,3 +1001,57 @@ describe('findDuplicateOidItems (unique-OID guard)', () => {
     expect(findDuplicateOidItems(store.draft)).toEqual([])
   })
 })
+
+describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, show-when)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiGet).mockReset()
+  })
+
+  it('folds grouped items back into one table with decoded autocomplete + laterality', async () => {
+    vi.mocked(apiGet).mockResolvedValue({
+      sections: [{
+        label: 'S1', title: 'Meds', ordinal: 1,
+        items: [
+          { name: 'RX_DRUG_TXMED', oid: 'RX_DRUG_TXMED', descriptionLabel: 'Medikament', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'text' } },
+          { name: 'RX_DOSE', oid: 'RX_DOSE', descriptionLabel: 'Dosis', dataType: 'REAL', groupLabel: 'RX', responseSet: { type: 'text' } },
+          { name: 'RX_EYE', oid: 'RX_EYE', descriptionLabel: 'Auge', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'single-select', options: [{ text: 'OD (rechts)', value: 'OD' }, { text: 'OS (links)', value: 'OS' }, { text: 'OU (beide)', value: 'OU' }] } },
+        ],
+      }],
+    })
+    const store = useCrfAuthoringStore()
+    const ok = await store.loadFromVersion('CRF_X', 'CRF_X_V1')
+    expect(ok).toBe(true)
+    const items = store.draft.sections[0]!.items
+    // Three grouped items → ONE table item named after the group label.
+    expect(items).toHaveLength(1)
+    expect(items[0]!.oid).toBe('RX')
+    const table = items[0]!.table!
+    expect(table.columns.map((c) => c.type)).toEqual(['text', 'number', 'laterality'])
+    expect(table.columns.map((c) => c.label)).toEqual(['Medikament', 'Dosis', 'Auge'])
+    // Autocomplete system decoded from the OID marker; fill-map not persisted.
+    expect(table.columns[0]!.autocomplete?.system).toBe('medication')
+    expect(table.columns[0]!.autocomplete?.fills).toEqual([])
+  })
+
+  it('reattaches a show-when rule and keeps ungrouped items flat + in order', async () => {
+    vi.mocked(apiGet).mockResolvedValue({
+      sections: [{
+        label: 'S1', title: 'Visit', ordinal: 1,
+        items: [
+          { name: 'intro', oid: 'INTRO', dataType: 'ST', responseSet: { type: 'text' } },
+          { name: 'T_A', oid: 'T_A', descriptionLabel: 'A', dataType: 'ST', groupLabel: 'T', responseSet: { type: 'text' } },
+          { name: 'T_B', oid: 'T_B', descriptionLabel: 'B', dataType: 'DATE', groupLabel: 'T', responseSet: { type: 'text' } },
+          { name: 'reason', oid: 'REASON', dataType: 'ST', responseSet: { type: 'text' }, parentItemOid: 'INTRO', showItem: 'N' },
+        ],
+      }],
+    })
+    const store = useCrfAuthoringStore()
+    await store.loadFromVersion('CRF_X', 'CRF_X_V1')
+    const items = store.draft.sections[0]!.items
+    // Order preserved: flat, table (at group's first appearance), flat.
+    expect(items.map((i) => i.oid)).toEqual(['INTRO', 'T', 'REASON'])
+    expect(items[1]!.table!.columns.map((c) => c.type)).toEqual(['text', 'date'])
+    expect(items[2]!.showWhen).toEqual({ sourceItemOid: 'INTRO', comparator: '==', literal: 'N' })
+  })
+})

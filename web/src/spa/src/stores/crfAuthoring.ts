@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import { markTerminologyOid } from '@/components/terminologyOid'
+import { markTerminologyOid, terminologySystemFromOid } from '@/components/terminologyOid'
 import type { CrfVersion } from '@/types/crfLibrary'
 
 /**
@@ -448,6 +448,20 @@ interface ForkItemWire {
   required?: boolean
   responseSet?: ForkResponseSetWire | null
   validation?: { regexp?: string; errorMessage?: string } | null
+  /**
+   * Fork recovery — the item's repeating-group label. Items sharing a
+   * (non-blank) label are reconstructed into one repeating-table item
+   * (the inverse of {@code buildTableItemPayloads}).
+   */
+  groupLabel?: string | null
+  /**
+   * Fork recovery — conditional display, surfaced on the legacy fields the
+   * backend adapter round-trips: {@code parentItemOid} is the source item's
+   * OID, {@code showItem} the trigger literal (from {@code scd_item_metadata}).
+   * The legacy schema stores equality only, so we rehydrate comparator "==".
+   */
+  showItem?: string | null
+  parentItemOid?: string | null
 }
 
 interface ForkResponseSetWire {
@@ -713,8 +727,92 @@ function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringS
     title: wire.title?.trim() || `Section ${fallbackOrdinal}`,
     instructions: wire.instructions ?? '',
     ordinal: wire.ordinal ?? fallbackOrdinal,
-    items: (wire.items ?? []).map(forkItem),
+    items: forkItems(wire.items ?? []),
   }
+}
+
+/**
+ * Fork recovery — rebuild a section's items, folding every run of items that
+ * share a repeating-group label back into a single {@link RepeatingTableSpec}
+ * item (the inverse of {@code buildTableItemPayloads}). Ungrouped items map
+ * 1:1 via {@link forkItem}. The table item is placed where its group first
+ * appears; columns keep wire order. The fill-map is NOT recovered — it is not
+ * persisted (see terminologyOid.ts) — so bindings come back autocomplete-only.
+ */
+function forkItems(wires: ForkItemWire[]): AuthoringItem[] {
+  const items: AuthoringItem[] = []
+  const tableByLabel = new Map<string, AuthoringItem>()
+  for (const w of wires) {
+    const label = (w.groupLabel ?? '').trim()
+    if (!label) {
+      items.push(forkItem(w))
+      continue
+    }
+    let table = tableByLabel.get(label)
+    if (!table) {
+      table = forkTableItem(label)
+      tableByLabel.set(label, table)
+      items.push(table)
+    }
+    table.table!.columns.push(forkTableColumn(w))
+  }
+  return items
+}
+
+/** A fresh repeating-table item whose oid/name is the recovered group label. */
+function forkTableItem(groupLabel: string): AuthoringItem {
+  return {
+    uid: nextUid('item'),
+    name: groupLabel,
+    oid: groupLabel,
+    descriptionLabel: groupLabel,
+    leftItemText: '',
+    rightItemText: '',
+    units: '',
+    dataType: 'ST',
+    responseType: 'text',
+    defaultValue: '',
+    required: false,
+    responseSet: null,
+    validation: { regexp: '', errorMessage: '' },
+    // min/max are not persisted on save, so recover the authoring defaults.
+    table: { columns: [], minRows: 1, maxRows: 20 },
+  }
+}
+
+/** Reconstruct one repeating-table column from a persisted grouped item. */
+function forkTableColumn(w: ForkItemWire): RepeatingTableColumn {
+  const label = (w.descriptionLabel ?? '').trim() || (w.leftItemText ?? '').trim() || (w.name ?? '').trim()
+  const col = newRepeatingTableColumn(label)
+  col.type = forkColumnType(w)
+  // A text column's terminology system was encoded in the OID marker; decode
+  // it. The fill map isn't persisted, so it comes back empty.
+  const system = terminologySystemFromOid(w.oid)
+  if (col.type === 'text' && system) col.autocomplete = { system, fills: [] }
+  return col
+}
+
+/**
+ * Infer a recovered column's type from its persisted shape (inverse of
+ * {@code buildTableItemPayloads}): a single-select whose options are exactly
+ * OD/OS/OU is a laterality column; REAL/INT → number; DATE/PDATE → date;
+ * everything else (incl. terminology-bound text) → text.
+ */
+function forkColumnType(w: ForkItemWire): RepeatingTableColumnType {
+  if (w.responseSet?.type === 'single-select' && isLateralityOptionSet(w.responseSet.options)) {
+    return 'laterality'
+  }
+  const dt = (w.dataType ?? '').toUpperCase()
+  if (dt === 'REAL' || dt === 'INT' || dt === 'INTEGER') return 'number'
+  if (dt === 'DATE' || dt === 'PDATE') return 'date'
+  return 'text'
+}
+
+/** True when a response set's option values are a non-empty subset of OD/OS/OU. */
+function isLateralityOptionSet(options: Array<{ value?: string }> | undefined): boolean {
+  const allowed = new Set(LATERALITY_OPTIONS.map((o) => o.value))
+  const values = (options ?? []).map((o) => (o.value ?? '').trim().toUpperCase()).filter(Boolean)
+  return values.length > 0 && values.every((v) => allowed.has(v))
 }
 
 function forkItem(wire: ForkItemWire): AuthoringItem {
@@ -722,7 +820,7 @@ function forkItem(wire: ForkItemWire): AuthoringItem {
     wire.responseSet?.type && isAuthoringResponseType(wire.responseSet.type)
       ? wire.responseSet.type
       : 'text'
-  return {
+  const item: AuthoringItem = {
     uid: nextUid('item'),
     name: wire.name ?? '',
     oid: wire.oid ?? '',
@@ -740,6 +838,17 @@ function forkItem(wire: ForkItemWire): AuthoringItem {
       errorMessage: wire.validation?.errorMessage ?? '',
     },
   }
+  // Fork recovery — reattach a conditional-display rule when the backend
+  // surfaced one (source OID present). The legacy store is equality-only.
+  const parentOid = (wire.parentItemOid ?? '').trim()
+  if (parentOid !== '') {
+    item.showWhen = {
+      sourceItemOid: parentOid,
+      comparator: '==',
+      literal: wire.showItem ?? '',
+    }
+  }
+  return item
 }
 
 function forkResponseSet(wire: ForkResponseSetWire | null): AuthoringResponseSet {
