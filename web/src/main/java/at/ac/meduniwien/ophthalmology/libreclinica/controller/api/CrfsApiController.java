@@ -676,6 +676,10 @@ public class CrfsApiController {
         final String ins = "INSERT INTO crf_item_terminology "
                 + "(crf_version_id, item_name, code_system, fill_map) VALUES (?, ?, ?, ?::jsonb)";
         try (Connection c = dataSource.getConnection()) {
+            // A fill's toKey is the target column's authoring OID (== its item
+            // NAME); translate to the generated oc_oid so fork + live entry,
+            // which identify items by oc_oid, resolve the sibling cell.
+            Map<String, String> ocOidByName = loadItemOcOidByName(c, crfVersionId);
             try (PreparedStatement d = c.prepareStatement(del)) {
                 d.setInt(1, crfVersionId);
                 d.executeUpdate();
@@ -690,10 +694,19 @@ public class CrfsApiController {
                                 || it.name() == null || it.name().isBlank()) {
                             continue;
                         }
+                        List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills = new ArrayList<>();
+                        if (ac.fills() != null) {
+                            for (CrfVersionAuthoringRequest.Item.Autocomplete.Fill f : ac.fills()) {
+                                if (f == null) continue;
+                                String toKey = f.toKey() == null ? null
+                                        : ocOidByName.getOrDefault(f.toKey(), f.toKey());
+                                fills.add(new CrfVersionAuthoringRequest.Item.Autocomplete.Fill(
+                                        f.fromProperty(), toKey));
+                            }
+                        }
                         String fillJson;
                         try {
-                            fillJson = TERMINOLOGY_JSON.writeValueAsString(
-                                    ac.fills() == null ? java.util.List.of() : ac.fills());
+                            fillJson = TERMINOLOGY_JSON.writeValueAsString(fills);
                         } catch (Exception e) {
                             fillJson = "[]";
                         }
@@ -711,6 +724,29 @@ public class CrfsApiController {
             LOG.warn("writeItemTerminology: crf_version {} — binding not persisted ({}).",
                     crfVersionId, e.getMessage());
         }
+    }
+
+    /** #26 binding store — item NAME → generated oc_oid for a version, so a
+     *  fill's toKey (a target column's authoring name) can be translated to the
+     *  identity fork + entry use (oc_oid). */
+    private Map<String, String> loadItemOcOidByName(Connection c, int crfVersionId) throws SQLException {
+        Map<String, String> out = new HashMap<>();
+        final String sql = "SELECT i.name, i.oc_oid FROM item i "
+                + "JOIN item_form_metadata ifm ON ifm.item_id = i.item_id "
+                + "WHERE ifm.crf_version_id = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString(1);
+                    String ocOid = rs.getString(2);
+                    if (name != null && !name.isBlank() && ocOid != null && !ocOid.isBlank()) {
+                        out.put(name, ocOid);
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     /**
