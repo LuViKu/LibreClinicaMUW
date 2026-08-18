@@ -1622,7 +1622,20 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const v = buildValidationPayload(it.validation)
     if (v) out.validation = v
     const sw = buildShowWhenPayload(it)
-    if (sw) out.showWhen = sw
+    if (sw) {
+      out.showWhen = sw
+      // The workbook adapter persists conditional display from the legacy
+      // showItem/parentItemOid fields (→ scd_item_metadata), NOT from showWhen,
+      // so an equality rule is mirrored onto them here to actually save and
+      // round-trip through fork. scd is equality-only; non-"==" comparators
+      // can't be represented, so they stay display-only (showWhen) and are not
+      // persisted. showItem is the trigger value (the adapter reads it as the
+      // parentValue half of its "parentValue|message" expression).
+      if (it.showWhen!.comparator === '==') {
+        out.parentItemOid = it.showWhen!.sourceItemOid.trim()
+        out.showItem = it.showWhen!.literal
+      }
+    }
     // Phase E.6 ophth-field-catalog (2026-06-11): the backend adapter
     // back-fills blank fields from the matching catalog row when
     // catalogCode is present. Pass-through verbatim; the wizard's

@@ -635,7 +635,7 @@ describe('useCrfAuthoringStore', () => {
         },
       })
       const payload = store.buildPayload() as {
-        sections: Array<{ items: Array<{ showWhen?: Record<string, unknown> }> }>
+        sections: Array<{ items: Array<{ showWhen?: Record<string, unknown>; showItem?: unknown; parentItemOid?: unknown }> }>
       }
       const items = payload.sections[0]!.items
       expect(items[0]!.showWhen).toBeUndefined()
@@ -644,6 +644,28 @@ describe('useCrfAuthoringStore', () => {
         comparator: '==',
         literal: '1',
       })
+      // #26 — an equality rule is ALSO mirrored onto the legacy fields the
+      // workbook adapter persists (→ scd_item_metadata), so it survives save.
+      expect(items[1]!.parentItemOid).toBe('SPECTRALIS_DONE')
+      expect(items[1]!.showItem).toBe('1')
+    })
+
+    it('mirrors only equality rules onto showItem/parentItemOid (legacy scd is =-only)', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'SRC', descriptionLabel: 'src', dataType: 'INT' })
+      store.addItem(0, {
+        name: 'GT',
+        descriptionLabel: 'gt',
+        dataType: 'ST',
+        showWhen: { sourceItemOid: 'SRC', comparator: '>', literal: '5' },
+      })
+      const gt = (store.buildPayload() as {
+        sections: Array<{ items: Array<Record<string, unknown>> }>
+      }).sections[0]!.items[1]!
+      // Display-only: the rule is on showWhen but not the persisted fields.
+      expect(gt.showWhen).toEqual({ sourceItemOid: 'SRC', comparator: '>', literal: '5' })
+      expect('showItem' in gt).toBe(false)
+      expect('parentItemOid' in gt).toBe(false)
     })
 
     it('omits showWhen when undefined', () => {
