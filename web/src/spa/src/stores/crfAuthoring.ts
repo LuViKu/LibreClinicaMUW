@@ -263,6 +263,28 @@ export function reseedTableColumnKeySeq(d: AuthoringDraft): void {
   tableColumnKeySeq = max
 }
 
+/**
+ * Item OIDs must be unique across the whole CRF: the entry/preview store keys
+ * every item's value by its OID, so two items sharing one OID silently share a
+ * single slot — their cells mirror each other (observed live as a laterality
+ * pick bleeding into a sibling table). Returns the offending items (trimmed,
+ * non-empty OID appearing on more than one item); empty OIDs are left to
+ * required-field validation. Deterministic order: draft order.
+ */
+export function findDuplicateOidItems(d: AuthoringDraft): { uid: string; oid: string }[] {
+  const counts = new Map<string, number>()
+  const items: { uid: string; oid: string }[] = []
+  for (const section of d.sections ?? []) {
+    for (const item of section.items ?? []) {
+      const oid = item.oid.trim()
+      if (!oid) continue
+      items.push({ uid: item.uid, oid })
+      counts.set(oid, (counts.get(oid) ?? 0) + 1)
+    }
+  }
+  return items.filter((x) => (counts.get(x.oid) ?? 0) > 1)
+}
+
 /** Default two-column generic table seeded by the TABLE palette block. */
 export function defaultRepeatingTableSpec(): RepeatingTableSpec {
   return { columns: [newRepeatingTableColumn(''), newRepeatingTableColumn('')], minRows: 1, maxRows: 20 }

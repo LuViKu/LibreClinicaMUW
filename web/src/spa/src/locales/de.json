@@ -1390,7 +1390,8 @@
       "errorTitle": "Speichern fehlgeschlagen:",
       "errors": {
         "unknown": "Unbekannter Fehler.",
-        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen."
+        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen.",
+        "duplicateOid": "OID „{oid}“ wird von mehreren Items verwendet — Identifikatoren müssen eindeutig sein."
       },
       "palette": {
         "title": "Bausteine",

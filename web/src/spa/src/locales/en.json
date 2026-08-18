@@ -1390,7 +1390,8 @@
       "errorTitle": "Save failed:",
       "errors": {
         "unknown": "Unknown error.",
-        "validationFailed": "The inputs are incomplete or invalid — please check the highlighted fields below."
+        "validationFailed": "The inputs are incomplete or invalid — please check the highlighted fields below.",
+        "duplicateOid": "OID “{oid}” is used by more than one item — identifiers must be unique."
       },
       "palette": {
         "title": "Building blocks",

@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import {
   allowedResponseTypesForDataType,
   dataTypeIsBoolean,
+  findDuplicateOidItems,
   hasShowWhen,
   newRepeatingTableColumn,
   reseedTableColumnKeySeq,
@@ -956,5 +957,28 @@ describe('reseedTableColumnKeySeq (draft restore — column-key collisions)', ()
     // silent cell-state mirroring across columns.
     expect(newRepeatingTableColumn('x').key).toBe('col_1000')
     expect(newRepeatingTableColumn('y').key).toBe('col_1001')
+  })
+})
+
+describe('findDuplicateOidItems (unique-OID guard)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('flags every item whose OID collides; ignores unique and empty OIDs', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'drugs', oid: 'D' })
+    store.addItem(0, { name: 'diag', oid: 'D' })
+    store.addItem(0, { name: 'notes', oid: 'NOTES' })
+    store.addItem(0, { name: 'blank', oid: '' })
+    const dups = findDuplicateOidItems(store.draft)
+    // Both 'D' items are flagged; the unique and the empty OID are not.
+    expect(dups.map((d) => d.oid)).toEqual(['D', 'D'])
+    expect(dups.some((d) => d.oid === 'NOTES' || d.oid === '')).toBe(false)
+  })
+
+  it('trims before comparing and returns nothing when all OIDs are unique', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'a', oid: 'A' })
+    store.addItem(0, { name: 'b', oid: 'B ' })
+    expect(findDuplicateOidItems(store.draft)).toEqual([])
   })
 })

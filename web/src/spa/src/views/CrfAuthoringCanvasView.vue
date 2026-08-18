@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import PaletteRail from '@/components/crfAuthoring/PaletteRail.vue'
 import SectionCanvas from '@/components/crfAuthoring/SectionCanvas.vue'
 import PropertiesRail from '@/components/crfAuthoring/PropertiesRail.vue'
-import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
+import { findDuplicateOidItems, useCrfAuthoringStore } from '@/stores/crfAuthoring'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useCrfDraftPersistence } from '@/composables/useCrfDraftPersistence'
 import { useCrfPreviewStore } from '@/stores/crfPreview'
@@ -203,6 +203,19 @@ async function onValidate(): Promise<void> {
   isValidating.value = true
   lastValidationOk.value = null
   try {
+    // Local structural guard: two items sharing an OID silently merge into one
+    // entry-store slot (their cells mirror). The backend may or may not flag
+    // this clearly, so catch it here with a jump-to-item message before the
+    // round-trip. Keyed by OID → one entry per duplicated OID.
+    const dups = findDuplicateOidItems(store.draft)
+    if (dups.length > 0) {
+      lastValidationOk.value = false
+      const errs: Record<string, string> = {}
+      for (const d of dups) errs[d.oid] = t('crfAuthoring.canvas.errors.duplicateOid', { oid: d.oid })
+      submitFieldErrors.value = errs
+      formError.value = t('crfAuthoring.canvas.errors.validationFailed')
+      return
+    }
     const result = await store.preview(crfOid.value)
     if (result.ok) {
       lastValidationOk.value = true
