@@ -136,16 +136,24 @@ function onKeydown(e: KeyboardEvent) {
 
 function onFocus() { if (hits.value.length > 0) open.value = true }
 
-/** Pin the teleported list to the input's current on-screen rect. */
+/**
+ * Pin the teleported list to the input's current on-screen rect. The list is
+ * widened past the (often narrow) table cell — MIN_WIDTH — so a long display
+ * ("CONCOR COR 5MG FTBL") isn't truncated behind the leading code; clamped to
+ * the viewport so a right-edge cell doesn't push it off-screen.
+ */
+const MIN_DROPDOWN_WIDTH = 340
 function updatePosition() {
   const el = inputEl.value
   if (!el) return
   const r = el.getBoundingClientRect()
+  const width = Math.max(r.width, MIN_DROPDOWN_WIDTH)
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8))
   dropdownStyle.value = {
     position: 'fixed',
     top: `${r.bottom + 4}px`,
-    left: `${r.left}px`,
-    width: `${r.width}px`,
+    left: `${left}px`,
+    width: `${width}px`,
     zIndex: '80',
   }
 }
@@ -225,8 +233,8 @@ const inputClasses = computed(() => {
           @mousedown.prevent="pick(h)"
           @mouseenter="highlighted = i"
         >
-          <span class="font-mono text-[11px] text-slate-500 shrink-0">{{ h.code }}</span>
-          <span class="text-slate-800 truncate">{{ h.display }}</span>
+          <span class="font-mono text-[11px] text-slate-500 shrink-0 pt-0.5">{{ h.code }}</span>
+          <span class="text-slate-800 break-words">{{ h.display }}</span>
         </li>
       </ul>
     </Teleport>
