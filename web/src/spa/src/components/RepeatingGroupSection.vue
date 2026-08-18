@@ -23,7 +23,7 @@
 
 import { computed } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
-import TerminologyAutocomplete from '@/components/TerminologyAutocomplete.vue'
+import TerminologyAutocomplete, { type TermPick } from '@/components/TerminologyAutocomplete.vue'
 import { terminologySystemFromOid } from '@/components/terminologyOid'
 import type { CrfItem, CrfItemGroup } from '@/types/crf'
 
@@ -58,6 +58,22 @@ const emit = defineEmits<{
     payload: { rowOrdinal: number; itemOid: string; value: unknown },
   ): void
 }>()
+
+/**
+ * #26 binding store — when a terminology concept is picked, fan its properties
+ * into sibling cells of the SAME row per the item's persisted fill map. The
+ * picked cell itself is set via @update:model-value; here we only apply the
+ * fills. Each fill's toKey is the target column's item OID (persisted that way
+ * on save), so it addresses the sibling cell directly.
+ */
+function onPick(rowOrdinal: number, item: CrfItem, pick: TermPick): void {
+  for (const fill of item.autocomplete?.fills ?? []) {
+    const v = pick.properties[fill.fromProperty]
+    if (v != null && v !== '') {
+      emit('set-value', { rowOrdinal, itemOid: fill.toKey, value: v })
+    }
+  }
+}
 
 /** Items in render order — falls back to the group's declared item OIDs
  *  so the columns stay deterministic even if the parent's lookup table
@@ -157,6 +173,7 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
                   :system="terminologySystemFromOid(item.oid) as string"
                   :disabled="disabled"
                   @update:model-value="(v: string) => emit('set-value', { rowOrdinal: row.ordinal, itemOid: item.oid, value: v === '' ? null : v })"
+                  @pick="(p: TermPick) => onPick(row.ordinal, item, p)"
                 />
               </template>
 
