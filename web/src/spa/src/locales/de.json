@@ -1438,7 +1438,9 @@
         "fillHint": "Beim Auswählen eines Vorschlags werden Eigenschaften in andere Felder derselben Zeile übernommen.",
         "addFill": "+ Regel",
         "removeFill": "Regel entfernen",
-        "propertyPlaceholder": "Eigenschaft (z. B. strength)"
+        "propertyPlaceholder": "Eigenschaft wählen …",
+        "availableProps": "Verfügbare Felder aus dieser Quelle:",
+        "noProps": "Diese Quelle liefert keine automatisch befüllbaren Felder."
       },
       "canvas": {
         "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",

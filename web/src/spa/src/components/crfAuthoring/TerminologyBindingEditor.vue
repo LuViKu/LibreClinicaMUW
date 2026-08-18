@@ -33,6 +33,20 @@ const SYSTEMS: ReadonlyArray<{ value: TerminologySystem; labelKey: string }> = [
   { value: 'medication', labelKey: 'crfAuthoring.canvas.terminology.system.medication' },
 ]
 
+/**
+ * The flat properties each catalogue exposes on a search hit (mirrors the
+ * backend {@code TerminologyIngestService} profile). Surfaced in the editor
+ * so the operator can SEE + PICK a fill-map source field instead of guessing
+ * the name. ICD-10-GM diagnoses carry no auto-fillable satellite fields.
+ */
+const PROPERTIES_BY_SYSTEM: Record<string, string[]> = {
+  medication: ['strength', 'unit', 'form', 'atc', 'substance', 'name'],
+  icd10gm: [],
+}
+const availableProps = computed<string[]>(() =>
+  props.binding ? (PROPERTIES_BY_SYSTEM[props.binding.system] ?? []) : [],
+)
+
 const enabled = computed(() => props.binding != null)
 
 function onToggle(ev: Event): void {
@@ -98,12 +112,21 @@ function removeFill(i: number): void {
         >
           <option v-for="s in SYSTEMS" :key="s.value" :value="s.value">{{ t(s.labelKey) }}</option>
         </select>
+        <!-- Discoverability: which fields a hit from this source actually
+             carries, so the operator isn't guessing the fill property. -->
+        <p class="text-[10px] text-slate-500 mt-1 leading-snug" :data-testid="`${idPrefix}-terminology-available`">
+          <template v-if="availableProps.length > 0">
+            {{ t('crfAuthoring.canvas.terminology.availableProps') }}
+            <span class="font-mono text-slate-600">{{ availableProps.join(', ') }}</span>
+          </template>
+          <template v-else>{{ t('crfAuthoring.canvas.terminology.noProps') }}</template>
+        </p>
       </div>
 
       <!-- Fill rules — copy a picked concept's property into a sibling
-           field. Only meaningful for a source (e.g. medication) that
-           carries structured properties; harmless (no-op) otherwise. -->
-      <div v-if="targets.length > 0">
+           field. Only shown when the source exposes properties (medication);
+           ICD-10-GM has none, so the rule UI is hidden there. -->
+      <div v-if="targets.length > 0 && availableProps.length > 0">
         <div class="flex items-center justify-between mb-1">
           <span class="text-[10.5px] font-semibold text-slate-600">
             {{ t('crfAuthoring.canvas.terminology.fillLabel') }}
@@ -124,13 +147,14 @@ function removeFill(i: number): void {
           class="flex items-center gap-1 mb-1"
           :data-testid="`${idPrefix}-terminology-fill-${i}`"
         >
-          <input
-            type="text"
-            class="flex-1 min-w-0 text-[11px] font-mono border-slate-200 rounded px-1.5 py-1"
-            :placeholder="t('crfAuthoring.canvas.terminology.propertyPlaceholder')"
+          <select
+            class="flex-1 min-w-0 text-[11px] font-mono border-slate-200 rounded px-1 py-1"
             :value="fill.fromProperty"
-            @input="setFillProperty(i, ($event.target as HTMLInputElement).value)"
-          />
+            @change="setFillProperty(i, ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="" disabled>{{ t('crfAuthoring.canvas.terminology.propertyPlaceholder') }}</option>
+            <option v-for="p in availableProps" :key="p" :value="p">{{ p }}</option>
+          </select>
           <span class="text-slate-400 text-[11px]" aria-hidden="true">→</span>
           <select
             class="flex-1 min-w-0 text-[11px] border-slate-200 rounded px-1 py-1"

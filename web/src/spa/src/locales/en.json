@@ -1438,7 +1438,9 @@
         "fillHint": "When a suggestion is picked, properties are copied into other fields of the same row.",
         "addFill": "+ Rule",
         "removeFill": "Remove rule",
-        "propertyPlaceholder": "Property (e.g. strength)"
+        "propertyPlaceholder": "Choose a property …",
+        "availableProps": "Fields available from this source:",
+        "noProps": "This source provides no auto-fillable fields."
       },
       "canvas": {
         "dropHere": "Drag building blocks or presets from the left panel here.",

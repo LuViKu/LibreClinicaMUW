@@ -7,8 +7,8 @@
  * value AND the parsed properties (so a caller can fan strength/unit out
  * into sibling fields).
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 
 vi.mock('@/api/client', async () => {
@@ -28,6 +28,11 @@ function mountAuto(props: Record<string, unknown> = {}) {
     global: { plugins: [i18n] },
   })
 }
+
+// The results list is teleported to <body>; auto-unmount so each test's
+// teleported nodes are cleaned up before the next.
+enableAutoUnmount(afterEach)
+const body = () => new DOMWrapper(document.body)
 
 beforeEach(() => {
   vi.mocked(apiGet).mockReset()
@@ -53,7 +58,7 @@ describe('TerminologyAutocomplete', () => {
     await flushPromises()
 
     expect(apiGet).toHaveBeenCalledWith(expect.stringContaining('/terminology/search?system=medication&q=aspir'))
-    const list = w.find('[data-testid="terminology-autocomplete-list"]')
+    const list = body().find('[data-testid="terminology-autocomplete-list"]')
     expect(list.exists()).toBe(true)
     expect(list.text()).toContain('Acetylsalicylsäure')
   })
@@ -67,7 +72,7 @@ describe('TerminologyAutocomplete', () => {
     await new Promise((r) => setTimeout(r, 260))
     await flushPromises()
 
-    await w.find('[role="option"]').trigger('mousedown')
+    await body().find('[role="option"]').trigger('mousedown')
 
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['B01AC06 — Acetylsalicylsäure'])
     const pick = w.emitted('pick')?.at(-1)?.[0] as { code: string; value: string; properties: Record<string, string> }
@@ -84,7 +89,7 @@ describe('TerminologyAutocomplete', () => {
     await w.find('input').setValue('glauk')
     await new Promise((r) => setTimeout(r, 260))
     await flushPromises()
-    await w.find('[role="option"]').trigger('mousedown')
+    await body().find('[role="option"]').trigger('mousedown')
     const pick = w.emitted('pick')?.at(-1)?.[0] as { properties: Record<string, string> }
     expect(pick.properties).toEqual({})
   })

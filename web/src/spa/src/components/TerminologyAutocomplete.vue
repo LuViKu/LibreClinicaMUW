@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiGet } from '@/api/client'
 
@@ -11,6 +11,11 @@ import { apiGet } from '@/api/client'
  * human-readable, code-carrying value ("H40 — Glaukom") back through v-model,
  * so the stored eCRF value keeps both the code and its display. Free text is
  * always allowed — the catalogue assists, it doesn't gate.
+ *
+ * <p>The results list is TELEPORTED to {@code <body>} and positioned with
+ * {@code position: fixed} from the input's rect: the combobox is used inside
+ * repeating-table cells whose wrapper is {@code overflow-x-auto} (which per
+ * CSS also clips the y-axis), so an in-flow absolute dropdown was cut off.
  *
  * Used by the repeating-table item's terminology-bound columns (ICD-10-GM
  * diagnoses, ATC/drug), and reusable anywhere a coded free-text field helps.
@@ -73,6 +78,9 @@ const hits = ref<TermHit[]>([])
 const open = ref(false)
 const loading = ref(false)
 const highlighted = ref(0)
+const inputEl = ref<HTMLInputElement | null>(null)
+const dropdownEl = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
 let debounce: ReturnType<typeof setTimeout> | null = null
 let seq = 0 // guards against out-of-order async responses
 
@@ -126,18 +134,50 @@ function onKeydown(e: KeyboardEvent) {
   else if (e.key === 'Escape') { open.value = false }
 }
 
-// Close on click-outside.
-const vClickOutside = {
-  mounted(el: HTMLElement & { __co?: (ev: Event) => void }) {
-    el.__co = (ev: Event) => { if (!el.contains(ev.target as Node)) open.value = false }
-    document.addEventListener('pointerdown', el.__co, true)
-  },
-  unmounted(el: HTMLElement & { __co?: (ev: Event) => void }) {
-    if (el.__co) document.removeEventListener('pointerdown', el.__co, true)
-  },
+function onFocus() { if (hits.value.length > 0) open.value = true }
+
+/** Pin the teleported list to the input's current on-screen rect. */
+function updatePosition() {
+  const el = inputEl.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${r.bottom + 4}px`,
+    left: `${r.left}px`,
+    width: `${r.width}px`,
+    zIndex: '80',
+  }
 }
 
-function onFocus() { if (hits.value.length > 0) open.value = true }
+/** Close on outside pointerdown — but NOT when the target is the teleported
+ *  list (else the list unmounts before the option's mousedown → pick). */
+function onDocPointerDown(ev: Event) {
+  const target = ev.target as Node
+  if (inputEl.value?.contains(target)) return
+  if (dropdownEl.value?.contains(target)) return
+  open.value = false
+}
+
+watch(open, async (isOpen) => {
+  if (isOpen) {
+    await nextTick()
+    updatePosition()
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+    document.addEventListener('pointerdown', onDocPointerDown, true)
+  } else {
+    window.removeEventListener('scroll', updatePosition, true)
+    window.removeEventListener('resize', updatePosition)
+    document.removeEventListener('pointerdown', onDocPointerDown, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', updatePosition, true)
+  window.removeEventListener('resize', updatePosition)
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
+})
 
 const inputClasses = computed(() => {
   const base = 'w-full px-3 py-2 rounded-md focus:outline-none transition-colors muw-focus'
@@ -148,9 +188,10 @@ const inputClasses = computed(() => {
 </script>
 
 <template>
-  <div v-click-outside class="relative">
+  <div class="relative">
     <input
       :id="id"
+      ref="inputEl"
       :value="query"
       :disabled="disabled"
       :placeholder="placeholder"
@@ -166,25 +207,29 @@ const inputClasses = computed(() => {
       @keydown="onKeydown"
       @focus="onFocus"
     />
-    <ul
-      v-if="open"
-      class="absolute z-30 mt-1 w-full max-h-64 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg text-sm"
-      role="listbox"
-      data-testid="terminology-autocomplete-list"
-    >
-      <li
-        v-for="(h, i) in hits"
-        :key="h.code"
-        :class="['px-3 py-1.5 cursor-pointer flex gap-2', i === highlighted ? 'bg-muw-blue-50' : 'hover:bg-slate-50']"
-        role="option"
-        :aria-selected="i === highlighted"
-        @mousedown.prevent="pick(h)"
-        @mouseenter="highlighted = i"
+    <Teleport to="body">
+      <ul
+        v-if="open"
+        ref="dropdownEl"
+        :style="dropdownStyle"
+        class="max-h-64 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg text-sm"
+        role="listbox"
+        data-testid="terminology-autocomplete-list"
       >
-        <span class="font-mono text-[11px] text-slate-500 shrink-0">{{ h.code }}</span>
-        <span class="text-slate-800 truncate">{{ h.display }}</span>
-      </li>
-    </ul>
+        <li
+          v-for="(h, i) in hits"
+          :key="h.code"
+          :class="['px-3 py-1.5 cursor-pointer flex gap-2', i === highlighted ? 'bg-muw-blue-50' : 'hover:bg-slate-50']"
+          role="option"
+          :aria-selected="i === highlighted"
+          @mousedown.prevent="pick(h)"
+          @mouseenter="highlighted = i"
+        >
+          <span class="font-mono text-[11px] text-slate-500 shrink-0">{{ h.code }}</span>
+          <span class="text-slate-800 truncate">{{ h.display }}</span>
+        </li>
+      </ul>
+    </Teleport>
     <p v-if="loading" class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">{{ t('common.loading') }}</p>
   </div>
 </template>

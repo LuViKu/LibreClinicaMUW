@@ -7,8 +7,8 @@
  * fans its properties into the mapped sibling cells of the SAME row
  * (explicit property→field fill, the 2026-08-12 design decision).
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 
 vi.mock('@/api/client', async () => {
@@ -45,6 +45,7 @@ function mountTable(modelValue: Record<string, string>[] | null = null) {
   })
 }
 
+enableAutoUnmount(afterEach)
 beforeEach(() => vi.mocked(apiGet).mockReset())
 
 describe('RepeatingTablePreview', () => {
@@ -77,7 +78,8 @@ describe('RepeatingTablePreview', () => {
     await w.find('[data-testid="terminology-autocomplete-input"]').setValue('aspir')
     await new Promise((r) => setTimeout(r, 260))
     await flushPromises()
-    await w.find('[role="option"]').trigger('mousedown')
+    // The results list is teleported to <body>.
+    await new DOMWrapper(document.body).find('[role="option"]').trigger('mousedown')
 
     const rows = w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[]
     expect(rows[0]).toEqual({ med: 'B01AC06 — Acetylsalicylsäure', dose: '100', unit: 'mg' })
