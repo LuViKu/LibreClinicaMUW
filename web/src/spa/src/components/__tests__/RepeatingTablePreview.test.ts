@@ -45,6 +45,30 @@ function mountTable(modelValue: Record<string, string>[] | null = null) {
   })
 }
 
+// A diagnosis table: ICD-10 autocomplete → fills the code column, plus a
+// laterality column that should only apply to EYE diagnoses (ICD H00–H59).
+const DIAG_SPEC: RepeatingTableSpec = {
+  minRows: 1,
+  maxRows: 3,
+  columns: [
+    {
+      key: 'dx',
+      label: 'Diagnose',
+      type: 'text',
+      autocomplete: { system: 'icd10gm', fills: [{ fromProperty: 'code', toKey: 'icd' }] },
+    },
+    { key: 'icd', label: 'ICD-Code', type: 'text' },
+    { key: 'side', label: 'Auge', type: 'laterality' },
+  ],
+}
+
+function mountDiag(modelValue: Record<string, string>[] | null = null) {
+  return mount(RepeatingTablePreview, {
+    props: { spec: DIAG_SPEC, idPrefix: 'tbl', modelValue },
+    global: { plugins: [i18n] },
+  })
+}
+
 enableAutoUnmount(afterEach)
 beforeEach(() => vi.mocked(apiGet).mockReset())
 
@@ -83,5 +107,37 @@ describe('RepeatingTablePreview', () => {
 
     const rows = w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[]
     expect(rows[0]).toEqual({ med: 'Acetylsalicylsäure', dose: '100', unit: 'mg' })
+  })
+
+  it('disables the laterality cell until the row carries an eye ICD code', () => {
+    const w = mountDiag([{ dx: '', icd: '', side: '' }])
+    expect((w.get('#tbl-r0-side').element as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  it('enables the laterality cell for an eye ICD code (H00–H59)', () => {
+    const w = mountDiag([{ dx: 'Glaukom', icd: 'H40', side: 'OD' }])
+    const sel = w.get('#tbl-r0-side').element as HTMLSelectElement
+    expect(sel.disabled).toBe(false)
+    expect(sel.value).toBe('OD')
+  })
+
+  it('keeps the laterality cell disabled for a non-eye ICD code (e.g. ear H60+)', () => {
+    const w = mountDiag([{ dx: 'Otitis', icd: 'H66', side: '' }])
+    expect((w.get('#tbl-r0-side').element as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  it('clears the laterality cell when a non-eye diagnosis is picked', async () => {
+    vi.mocked(apiGet).mockResolvedValue([
+      { code: 'E11', display: 'Diabetes mellitus Typ 2', properties: '{}' },
+    ])
+    const w = mountDiag([{ dx: '', icd: '', side: 'OD' }])
+    await w.find('[data-testid="terminology-autocomplete-input"]').setValue('diab')
+    await new Promise((r) => setTimeout(r, 260))
+    await flushPromises()
+    await new DOMWrapper(document.body).find('[role="option"]').trigger('mousedown')
+
+    const rows = w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[]
+    expect(rows[0]!.icd).toBe('E11')
+    expect(rows[0]!.side).toBe('')
   })
 })

@@ -28,6 +28,7 @@ const COLUMN_TYPES: ReadonlyArray<{ value: RepeatingTableColumnType; labelKey: s
   { value: 'text', labelKey: 'crfAuthoring.canvas.table.columnType.text' },
   { value: 'number', labelKey: 'crfAuthoring.canvas.table.columnType.number' },
   { value: 'date', labelKey: 'crfAuthoring.canvas.table.columnType.date' },
+  { value: 'laterality', labelKey: 'crfAuthoring.canvas.table.columnType.laterality' },
 ]
 
 function commit(next: Partial<RepeatingTableSpec>): void {

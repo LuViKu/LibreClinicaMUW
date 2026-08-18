@@ -190,8 +190,23 @@ export interface AutocompleteBinding {
   fills: AutocompleteFill[]
 }
 
-/** Column value kind for a repeating-table cell. */
-export type RepeatingTableColumnType = 'text' | 'number' | 'date'
+/**
+ * Column value kind for a repeating-table cell. {@code laterality} is an
+ * ophthalmology fixed OD/OS/OU choice (right / left / both eyes) — useful on
+ * an eye-diagnosis or per-eye medication table.
+ */
+export type RepeatingTableColumnType = 'text' | 'number' | 'date' | 'laterality'
+
+/**
+ * Fixed OD/OS/OU choice for a {@code laterality} column. Value = the Latin
+ * standard code (persisted / stored); label carries the German gloss. See the
+ * ophthalmology laterality convention: OD = right eye, OS = left, OU = both.
+ */
+export const LATERALITY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'OD', label: 'OD (rechts)' },
+  { value: 'OS', label: 'OS (links)' },
+  { value: 'OU', label: 'OU (beide)' },
+]
 
 /**
  * One operator-defined column of a repeating-table item. A {@code text}
@@ -216,14 +231,36 @@ export interface RepeatingTableSpec {
   maxRows: number
 }
 
-/** Monotonic column-key source. Wizard-only (table isn't persisted), so a
- *  per-session counter never collides with a reloaded draft. */
+/** Monotonic column-key source (`col_1`, `col_2`, …). Module-level, so it
+ *  resets to 0 on every page load — {@link reseedTableColumnKeySeq} advances it
+ *  past a restored draft's existing keys so newly-minted keys never collide. */
 let tableColumnKeySeq = 0
 
 /** A fresh blank text column with a unique {@link RepeatingTableColumn.key}. */
 export function newRepeatingTableColumn(label = ''): RepeatingTableColumn {
   tableColumnKeySeq += 1
   return { key: `col_${tableColumnKeySeq}`, label, type: 'text' }
+}
+
+/**
+ * A restored draft already carries column keys minted in an earlier session,
+ * but the module counter resets to 0 on each page load. Without this, the next
+ * {@link newRepeatingTableColumn} would re-mint `col_1` and collide with a
+ * restored column — two columns sharing one key silently mirror each other's
+ * cell state (a table's row store is keyed by column key). Advance the counter
+ * past the highest `col_N` any restored table column holds.
+ */
+export function reseedTableColumnKeySeq(d: AuthoringDraft): void {
+  let max = tableColumnKeySeq
+  for (const section of d.sections ?? []) {
+    for (const item of section.items ?? []) {
+      for (const col of item.table?.columns ?? []) {
+        const m = /^col_(\d+)$/.exec(col.key)
+        if (m) max = Math.max(max, Number(m[1]))
+      }
+    }
+  }
+  tableColumnKeySeq = max
 }
 
 /** Default two-column generic table seeded by the TABLE palette block. */
@@ -818,6 +855,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     draft.value = next
     selectedItemUid.value = null
     error.value = null
+    reseedTableColumnKeySeq(next)
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
@@ -1388,6 +1426,16 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       const dataType: AuthoringDataType =
         col.type === 'number' ? 'REAL' : col.type === 'date' ? 'DATE' : 'ST'
       const label = col.label.trim() || col.key
+      // A laterality column persists as a single-select over OD/OS/OU so it
+      // round-trips to live entry as a dropdown (RepeatingGroupSection renders
+      // select-one columns natively). Other columns keep the open-text branch.
+      const responseSet: Record<string, unknown> = col.type === 'laterality'
+        ? {
+            type: 'single-select',
+            label: `${colOid.toLowerCase()}_laterality`,
+            options: LATERALITY_OPTIONS.map((o) => ({ text: o.label, value: o.value })),
+          }
+        : { type: 'text', label: `${colOid.toLowerCase()}_response` }
       return {
         name: colOid,
         oid: colOid,
@@ -1399,9 +1447,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         defaultValue: '',
         required: false,
         groupLabel,
-        // Open-text response for the column (the backend treats absence of
-        // options + the dataType as the open-entry branch).
-        responseSet: { type: 'text', label: `${colOid.toLowerCase()}_response` },
+        responseSet,
       }
     })
   }

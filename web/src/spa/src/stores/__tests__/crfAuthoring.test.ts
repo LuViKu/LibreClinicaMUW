@@ -4,6 +4,8 @@ import {
   allowedResponseTypesForDataType,
   dataTypeIsBoolean,
   hasShowWhen,
+  newRepeatingTableColumn,
+  reseedTableColumnKeySeq,
   responseTypeRequiresOptions,
   useCrfAuthoringStore,
 } from '../crfAuthoring'
@@ -914,5 +916,45 @@ describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
     // numeric column does not.
     expect(oids).toContain('RX_DRUG_TXMED')
     expect(oids).toContain('RX_DOSE')
+  })
+
+  it('persists a laterality column as a single-select over OD/OS/OU', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'DX',
+      oid: 'DX',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'dx', label: 'Diagnose', type: 'text' },
+          { key: 'eye', label: 'Auge', type: 'laterality' },
+        ],
+      },
+    })
+    const payload = store.buildPayload() as {
+      sections: { items: { oid: string; responseSet?: { type?: string; options?: { value: string }[] } }[] }[]
+    }
+    const eye = payload.sections[0]!.items.find((i) => i.oid === 'DX_EYE')!
+    expect(eye.responseSet?.type).toBe('single-select')
+    expect(eye.responseSet?.options?.map((o) => o.value)).toEqual(['OD', 'OS', 'OU'])
+  })
+})
+
+describe('reseedTableColumnKeySeq (draft restore — column-key collisions)', () => {
+  it('advances the key counter past a restored draft so new columns never reuse a key', () => {
+    // A draft restored from an earlier session carries high column keys, but
+    // the module counter resets to 0 on page load. Use a value no prior test
+    // could have reached so the assertion is order-independent.
+    const draft = {
+      sections: [
+        { items: [{ table: { columns: [{ key: 'col_999' }, { key: 'col_3' }] } }] },
+      ],
+    } as unknown as Parameters<typeof reseedTableColumnKeySeq>[0]
+    reseedTableColumnKeySeq(draft)
+    // The next minted key clears the restored maximum — no collision, no
+    // silent cell-state mirroring across columns.
+    expect(newRepeatingTableColumn('x').key).toBe('col_1000')
+    expect(newRepeatingTableColumn('y').key).toBe('col_1001')
   })
 })

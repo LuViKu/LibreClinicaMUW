@@ -1423,8 +1423,10 @@
         "columnType": {
           "text": "Text",
           "number": "Zahl",
-          "date": "Datum"
-        }
+          "date": "Datum",
+          "laterality": "Seite (OD/OS/OU)"
+        },
+        "lateralityEyeOnly": "Nur bei Augen-Diagnosen (ICD-10 H00–H59)"
       },
       "terminology": {
         "section": "Terminologie-Autocomplete",

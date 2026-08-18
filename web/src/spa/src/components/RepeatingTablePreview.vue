@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import TerminologyAutocomplete, { type TermPick } from '@/components/TerminologyAutocomplete.vue'
-import type { RepeatingTableSpec } from '@/stores/crfAuthoring'
+import { LATERALITY_OPTIONS, type RepeatingTableSpec } from '@/stores/crfAuthoring'
 
 /**
  * #26 (2026-08-12) — repeating-table renderer (preview + live entry).
@@ -68,7 +68,36 @@ function onPick(rowIndex: number, columnKey: string, pick: TermPick): void {
     const v = pick.properties[fill.fromProperty]
     if (v != null && v !== '') row[fill.toKey] = v
   }
+  // Eye-diagnosis gating: picking a NON-eye ICD diagnosis clears any
+  // laterality cells in the row (they don't apply).
+  if (col?.autocomplete?.system === 'icd10gm' && !isEyeIcdCode(pick.code)) {
+    for (const c of props.spec.columns) if (c.type === 'laterality') row[c.key] = ''
+  }
   commit(next)
+}
+
+/**
+ * ICD-10 chapter VII "Diseases of the eye and adnexa" = H00–H59 (H60+ is the
+ * ear, so a leading "H" alone is not enough). Matches "H40", "H40.0", …
+ */
+function isEyeIcdCode(code: string | undefined | null): boolean {
+  return /^H[0-5]\d/i.test((code ?? '').trim())
+}
+
+/** Does this table carry a diagnosis (ICD-10) autocomplete column? */
+const hasDiagnosisColumn = computed(() =>
+  props.spec.columns.some((c) => c.type === 'text' && c.autocomplete?.system === 'icd10gm'),
+)
+
+/**
+ * A laterality cell is active when the row is relevant: on a diagnosis table
+ * only for eye codes (H00–H59); elsewhere (e.g. a medication table, where a
+ * topical drug still needs OD/OS) it is always active.
+ */
+function lateralityActive(row: Row): boolean {
+  if (props.disabled) return false
+  if (!hasDiagnosisColumn.value) return true
+  return Object.values(row).some((v) => isEyeIcdCode(String(v ?? '')))
 }
 
 const canAddRow = computed(() => {
@@ -120,6 +149,18 @@ function cellId(rowIndex: number, key: string): string {
               @update:model-value="(v: string) => setCell(rowIndex, col.key, v)"
               @pick="(p: TermPick) => onPick(rowIndex, col.key, p)"
             />
+            <select
+              v-else-if="col.type === 'laterality'"
+              :id="cellId(rowIndex, col.key)"
+              :value="lateralityActive(row) ? (row[col.key] ?? '') : ''"
+              :disabled="!lateralityActive(row)"
+              :title="lateralityActive(row) ? undefined : t('crfAuthoring.canvas.table.lateralityEyeOnly')"
+              class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:outline-none focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+              @change="setCell(rowIndex, col.key, ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">—</option>
+              <option v-for="o in LATERALITY_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
             <input
               v-else
               :id="cellId(rowIndex, col.key)"
