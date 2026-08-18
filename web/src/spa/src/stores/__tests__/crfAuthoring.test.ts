@@ -892,6 +892,8 @@ describe('useCrfAuthoringStore', () => {
 })
 
 describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
   it('expands a table item into grouped column items sharing a groupLabel', () => {
     const store = useCrfAuthoringStore()
     store.addItem(0, {
@@ -918,6 +920,19 @@ describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
     expect(grouped.map((i) => i.descriptionLabel)).toEqual(['Medikament', 'Dosis', 'Beginn'])
     // The table item does NOT leak through as a lone scalar item.
     expect(items.some((i) => i.oid === 'MEDS' && !i.groupLabel)).toBe(false)
+  })
+
+  it('emits per-group row bounds so the operator min/max persists (not the 1/40 default)', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'MEDS',
+      oid: 'MEDS',
+      table: { minRows: 2, maxRows: 8, columns: [{ key: 'med', label: 'Medikament', type: 'text' }] },
+    })
+    const payload = store.buildPayload() as {
+      groups: { label: string; repeatNumber: number; repeatMax: number }[]
+    }
+    expect(payload.groups).toEqual([{ label: 'MEDS', repeatNumber: 2, repeatMax: 8 }])
   })
 
   it('encodes an autocomplete column system in its persisted OID', () => {
@@ -1040,6 +1055,7 @@ describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, s
           { name: 'RX_EYE', oid: 'RX_EYE', descriptionLabel: 'Auge', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'single-select', options: [{ text: 'OD (rechts)', value: 'OD' }, { text: 'OS (links)', value: 'OS' }, { text: 'OU (beide)', value: 'OU' }] } },
         ],
       }],
+      groups: [{ label: 'RX', repeatNumber: 3, repeatMax: 12 }],
     })
     const store = useCrfAuthoringStore()
     const ok = await store.loadFromVersion('CRF_X', 'CRF_X_V1')
@@ -1054,6 +1070,9 @@ describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, s
     // Autocomplete system decoded from the OID marker; fill-map not persisted.
     expect(table.columns[0]!.autocomplete?.system).toBe('medication')
     expect(table.columns[0]!.autocomplete?.fills).toEqual([])
+    // Row bounds recovered from wire groups[] (not the 1/20 default).
+    expect(table.minRows).toBe(3)
+    expect(table.maxRows).toBe(12)
   })
 
   it('reattaches a show-when rule and keeps ungrouped items flat + in order', async () => {

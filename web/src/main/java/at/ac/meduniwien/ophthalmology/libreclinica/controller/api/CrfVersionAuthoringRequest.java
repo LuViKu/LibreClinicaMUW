@@ -36,8 +36,28 @@ public record CrfVersionAuthoringRequest(
         String versionName,
         String versionDescription,
         String revisionNotes,
-        List<Section> sections
+        List<Section> sections,
+        /**
+         * #26 — repeating-group row bounds (min/max), matched to items by
+         * {@code label}. Lets a table's operator-set bounds round-trip on save
+         * and fork instead of the adapter's hardcoded 1/40. Null/empty for CRFs
+         * with no repeating groups; the 4-arg constructor defaults it to null.
+         */
+        List<Group> groups
 ) {
+    /** Backward-compat constructor — no group metadata (null groups). */
+    public CrfVersionAuthoringRequest(String versionName, String versionDescription,
+            String revisionNotes, List<Section> sections) {
+        this(versionName, versionDescription, revisionNotes, sections, null);
+    }
+
+    /**
+     * #26 — repeating-group row bounds for one group, matched to its member
+     * items by {@code label} (== the SPA table's group label / base OID).
+     */
+    @Schema(name = "CrfVersionAuthoringRequest.Group")
+    public record Group(String label, Integer repeatNumber, Integer repeatMax) { }
+
     /**
      * One section in the authored CRF. {@code label} is the short
      * identifier referenced by items; {@code title} is the

@@ -426,6 +426,9 @@ export interface ForkContentsWire {
   versionDescription?: string
   revisionNotes?: string
   sections?: ForkSectionWire[]
+  /** Fork recovery — per-group row bounds, matched to a reconstructed table
+   *  by {@code label} (== the group label its columns carry). */
+  groups?: Array<{ label?: string; repeatNumber?: number | null; repeatMax?: number | null }> | null
 }
 
 interface ForkSectionWire {
@@ -700,8 +703,20 @@ export function reseedUidCounter(d: AuthoringDraft): void {
  * so the operator types a fresh name (the backend's unique-name check
  * would otherwise reject the prior version's name).
  */
+/** Recovered row bounds for a reconstructed table, keyed by group label. */
+type ForkGroupBounds = Map<string, { minRows: number; maxRows: number }>
+
 function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
-  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1))
+  const bounds: ForkGroupBounds = new Map()
+  for (const g of wire.groups ?? []) {
+    const label = (g?.label ?? '').trim()
+    if (!label) continue
+    bounds.set(label, {
+      minRows: Math.max(1, g?.repeatNumber ?? 1),
+      maxRows: Math.max(1, g?.repeatMax ?? 20),
+    })
+  }
+  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1, bounds))
   if (sections.length === 0) {
     sections.push({
       uid: nextUid('sec'),
@@ -720,14 +735,14 @@ function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
   }
 }
 
-function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringSection {
+function forkSection(wire: ForkSectionWire, fallbackOrdinal: number, bounds: ForkGroupBounds): AuthoringSection {
   return {
     uid: nextUid('sec'),
     label: wire.label?.trim() || `S${fallbackOrdinal}`,
     title: wire.title?.trim() || `Section ${fallbackOrdinal}`,
     instructions: wire.instructions ?? '',
     ordinal: wire.ordinal ?? fallbackOrdinal,
-    items: forkItems(wire.items ?? []),
+    items: forkItems(wire.items ?? [], bounds),
   }
 }
 
@@ -739,7 +754,7 @@ function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringS
  * appears; columns keep wire order. The fill-map is NOT recovered — it is not
  * persisted (see terminologyOid.ts) — so bindings come back autocomplete-only.
  */
-function forkItems(wires: ForkItemWire[]): AuthoringItem[] {
+function forkItems(wires: ForkItemWire[], bounds: ForkGroupBounds): AuthoringItem[] {
   const items: AuthoringItem[] = []
   const tableByLabel = new Map<string, AuthoringItem>()
   for (const w of wires) {
@@ -750,7 +765,7 @@ function forkItems(wires: ForkItemWire[]): AuthoringItem[] {
     }
     let table = tableByLabel.get(label)
     if (!table) {
-      table = forkTableItem(label)
+      table = forkTableItem(label, bounds.get(label))
       tableByLabel.set(label, table)
       items.push(table)
     }
@@ -760,7 +775,7 @@ function forkItems(wires: ForkItemWire[]): AuthoringItem[] {
 }
 
 /** A fresh repeating-table item whose oid/name is the recovered group label. */
-function forkTableItem(groupLabel: string): AuthoringItem {
+function forkTableItem(groupLabel: string, bounds?: { minRows: number; maxRows: number }): AuthoringItem {
   return {
     uid: nextUid('item'),
     name: groupLabel,
@@ -775,8 +790,9 @@ function forkTableItem(groupLabel: string): AuthoringItem {
     required: false,
     responseSet: null,
     validation: { regexp: '', errorMessage: '' },
-    // min/max are not persisted on save, so recover the authoring defaults.
-    table: { columns: [], minRows: 1, maxRows: 20 },
+    // Recover the persisted row bounds (wire groups[]) when present; else the
+    // authoring defaults.
+    table: { columns: [], minRows: bounds?.minRows ?? 1, maxRows: bounds?.maxRows ?? 20 },
   }
 }
 
@@ -1553,7 +1569,24 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         // as itself.
         items: s.items.flatMap((it) => (it.table ? buildTableItemPayloads(it) : [buildItemPayload(it)])),
       })),
+      // #26 — per-group row bounds so the adapter persists the operator's
+      // min/max instead of its 1/40 default (and fork recovers them). One
+      // entry per repeating-table item, keyed by the same label its columns
+      // carry (tableBaseOid == groupLabel).
+      groups: draft.value.sections
+        .flatMap((s) => s.items)
+        .filter((it) => it.table)
+        .map((it) => ({
+          label: tableBaseOid(it),
+          repeatNumber: Math.max(1, it.table!.minRows ?? 1),
+          repeatMax: Math.max(1, it.table!.maxRows ?? 20),
+        })),
     }
+  }
+
+  /** The repeating-group label a table item's columns share (its base OID). */
+  function tableBaseOid(it: AuthoringItem): string {
+    return (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
   }
 
   /**
@@ -1566,7 +1599,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
    */
   function buildTableItemPayloads(it: AuthoringItem): Record<string, unknown>[] {
     const table = it.table!
-    const baseOid = (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
+    const baseOid = tableBaseOid(it)
     const groupLabel = baseOid
     return table.columns.map((col, i) => {
       // A terminology-bound text column encodes its system in the OID so the

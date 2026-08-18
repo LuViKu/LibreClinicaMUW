@@ -25,6 +25,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -431,14 +432,11 @@ public class CrfsApiController {
             ifmByItemId.put(ifm.getItemId(), ifm);
         }
 
-        // Fork recovery — resolve each item's REPEATING-group label so the SPA
-        // can fold grouped items back into a repeating table (inverse of
-        // buildTableItemPayloads). Gate on isRepeatingGroup() exactly like the
-        // entry builder: ungrouped items belong to a default non-repeating
-        // "Ungrouped" bucket, and surfacing that label would let a re-save
-        // wrongly convert them into a real group. Label is item_group.name
-        // (where the SPA's groupLabel round-trips; the header column is blank).
-        Map<Integer, String> groupLabelByItemId = loadRepeatingGroupLabels(version.getId(), allIfms);
+        // Fork recovery — resolve each item's REPEATING-group label (so the SPA
+        // folds grouped items back into a repeating table) plus per-group row
+        // bounds (so min/max recover instead of the adapter's 1/40 default).
+        RepeatingGroupInfo groupInfo = resolveRepeatingGroups(version.getId(), allIfms);
+        Map<Integer, String> groupLabelByItemId = groupInfo.labelByItemId();
 
         // Fork recovery — conditional-display rules from scd_item_metadata,
         // keyed by item_id → [sourceItemOid, literal]. Populated onto the
@@ -473,7 +471,8 @@ public class CrfsApiController {
                 clearVersionName ? "" : nullToEmpty(version.getName()),
                 nullToEmpty(version.getDescription()),
                 nullToEmpty(version.getRevisionNotes()),
-                sectionDtos);
+                sectionDtos,
+                groupInfo.groups());
     }
 
     /**
@@ -554,22 +553,33 @@ public class CrfsApiController {
                 /* catalogCode */ null);
     }
 
+    /** Fork recovery — per-item repeating-group label (for folding items back
+     *  into tables) plus one {@link CrfVersionAuthoringRequest.Group} per
+     *  distinct repeating group (so row bounds recover), resolved in one pass. */
+    private record RepeatingGroupInfo(
+            Map<Integer, String> labelByItemId,
+            List<CrfVersionAuthoringRequest.Group> groups) { }
+
     /**
-     * Fork recovery — map each item_id to its REPEATING item-group name (the
-     * value the SPA's {@code groupLabel} round-trips into {@code item_group.name}
-     * on save). Items that are ungrouped, or in the default non-repeating
-     * "Ungrouped" bucket, map to nothing so the SPA keeps them as flat items —
-     * surfacing that bucket's label would let a re-save wrongly convert them
-     * into a real repeating group. Mirrors the entry builder's resolution
-     * ({@code EventCrfsApiController}); best-effort — a DAO failure is skipped
-     * and the item stays flat.
+     * Fork recovery — resolve each item's REPEATING item-group in one pass:
+     * the group NAME (the value the SPA's {@code groupLabel} round-trips into
+     * {@code item_group.name}) keyed by item_id, plus a {@code Group(label,
+     * repeatNumber, repeatMax)} per distinct repeating group so a table's row
+     * bounds recover instead of the adapter's 1/40 default. Items that are
+     * ungrouped, or in the default non-repeating "Ungrouped" bucket, are
+     * skipped (gated on {@code isRepeatingGroup()}) so a re-save can't wrongly
+     * convert flat items into a group. Mirrors the entry builder's resolution
+     * ({@code EventCrfsApiController}); best-effort — a DAO failure is skipped.
      */
-    private Map<Integer, String> loadRepeatingGroupLabels(
+    private RepeatingGroupInfo resolveRepeatingGroups(
             int crfVersionId, List<ItemFormMetadataBean> allIfms) {
-        Map<Integer, String> out = new HashMap<>();
+        Map<Integer, String> labelByItemId = new HashMap<>();
         ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
         ItemGroupMetadataDAO igmDAO = new ItemGroupMetadataDAO(dataSource);
-        Map<Integer, Boolean> repeatingByGroupId = new HashMap<>();
+        // group id -> recovered Group (repeating only); LinkedHashMap keeps a
+        // stable first-seen order. `seen` also caches non-repeating groups.
+        Map<Integer, CrfVersionAuthoringRequest.Group> groupsById = new LinkedHashMap<>();
+        Map<Integer, Boolean> seen = new HashMap<>();
         for (ItemFormMetadataBean ifm : allIfms) {
             ItemGroupBean grp;
             try {
@@ -578,24 +588,28 @@ public class CrfsApiController {
                 continue;
             }
             if (grp == null || grp.getId() == 0) continue;
-            Boolean repeating = repeatingByGroupId.get(grp.getId());
-            if (repeating == null) {
-                boolean rep = false;
+            if (!seen.containsKey(grp.getId())) {
+                boolean repeating = false;
                 try {
                     ArrayList<ItemGroupMetadataBean> metas =
                             igmDAO.findMetaByGroupAndCrfVersion(grp.getId(), crfVersionId);
-                    rep = metas != null && !metas.isEmpty() && metas.get(0).isRepeatingGroup();
+                    if (metas != null && !metas.isEmpty() && metas.get(0).isRepeatingGroup()
+                            && grp.getName() != null && !grp.getName().isBlank()) {
+                        repeating = true;
+                        ItemGroupMetadataBean meta = metas.get(0);
+                        groupsById.put(grp.getId(), new CrfVersionAuthoringRequest.Group(
+                                grp.getName(), meta.getRepeatNum(), meta.getRepeatMax()));
+                    }
                 } catch (Exception e) {
                     // best-effort — treat as non-repeating
                 }
-                repeating = rep;
-                repeatingByGroupId.put(grp.getId(), rep);
+                seen.put(grp.getId(), repeating);
             }
-            if (repeating && grp.getName() != null && !grp.getName().isBlank()) {
-                out.put(ifm.getItemId(), grp.getName());
+            if (Boolean.TRUE.equals(seen.get(grp.getId()))) {
+                labelByItemId.put(ifm.getItemId(), grp.getName());
             }
         }
-        return out;
+        return new RepeatingGroupInfo(labelByItemId, new ArrayList<>(groupsById.values()));
     }
 
     /**
