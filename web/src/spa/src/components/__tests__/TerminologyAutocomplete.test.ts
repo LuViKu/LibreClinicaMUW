@@ -74,11 +74,13 @@ describe('TerminologyAutocomplete', () => {
 
     await body().find('[role="option"]').trigger('mousedown')
 
-    expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['B01AC06 — Acetylsalicylsäure'])
+    // The stored value is the drug name only; the code rides along as a `code`
+    // fill property (so it can populate a dedicated column instead).
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['Acetylsalicylsäure'])
     const pick = w.emitted('pick')?.at(-1)?.[0] as { code: string; value: string; properties: Record<string, string> }
     expect(pick.code).toBe('B01AC06')
-    expect(pick.value).toBe('B01AC06 — Acetylsalicylsäure')
-    expect(pick.properties).toEqual({ strength: '100', unit: 'mg' })
+    expect(pick.value).toBe('Acetylsalicylsäure')
+    expect(pick.properties).toEqual({ strength: '100', unit: 'mg', code: 'B01AC06' })
   })
 
   it('survives non-JSON / FHIR-array properties (no crash, empty props)', async () => {
@@ -91,6 +93,8 @@ describe('TerminologyAutocomplete', () => {
     await flushPromises()
     await body().find('[role="option"]').trigger('mousedown')
     const pick = w.emitted('pick')?.at(-1)?.[0] as { properties: Record<string, string> }
-    expect(pick.properties).toEqual({})
+    // No JSONB properties survive the non-object shape, but the code is still
+    // surfaced (the diagnosis ICD-code fill source).
+    expect(pick.properties).toEqual({ code: 'H40' })
   })
 })

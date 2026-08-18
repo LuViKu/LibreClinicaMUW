@@ -82,6 +82,6 @@ describe('RepeatingTablePreview', () => {
     await new DOMWrapper(document.body).find('[role="option"]').trigger('mousedown')
 
     const rows = w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[]
-    expect(rows[0]).toEqual({ med: 'B01AC06 — Acetylsalicylsäure', dose: '100', unit: 'mg' })
+    expect(rows[0]).toEqual({ med: 'Acetylsalicylsäure', dose: '100', unit: 'mg' })
   })
 })

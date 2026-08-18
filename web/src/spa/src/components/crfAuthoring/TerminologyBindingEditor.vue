@@ -41,7 +41,9 @@ const SYSTEMS: ReadonlyArray<{ value: TerminologySystem; labelKey: string }> = [
  */
 const PROPERTIES_BY_SYSTEM: Record<string, string[]> = {
   medication: ['strength', 'unit', 'form', 'atc', 'substance', 'name'],
-  icd10gm: [],
+  // The ICD code is surfaced as a fill field so a diagnosis pick can populate
+  // a dedicated ICD-Code column (rather than being combined into the text).
+  icd10gm: ['code'],
 }
 const availableProps = computed<string[]>(() =>
   props.binding ? (PROPERTIES_BY_SYSTEM[props.binding.system] ?? []) : [],

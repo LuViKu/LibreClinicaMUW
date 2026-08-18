@@ -73,6 +73,17 @@ const { t } = useI18n()
 const MAX = 10
 const DEBOUNCE_MS = 200
 
+/**
+ * Systems whose {@code code} is an opaque internal catalogue id (medication:
+ * the PZN-like "1130035") — hidden from the results list, where it's just
+ * noise. Diagnoses keep the code visible in the list (ICD-10 "H40" helps the
+ * clinician pick). Either way the code is NEVER combined into the stored
+ * value: it's surfaced as a {@code code} fill property so it can populate a
+ * dedicated column (ICD-Code) instead — mirroring strength → Dosis for drugs.
+ */
+const OPAQUE_CODE_SYSTEMS = new Set(['medication'])
+const showCodeInList = computed(() => !OPAQUE_CODE_SYSTEMS.has(props.system))
+
 const query = ref(props.modelValue ?? '')
 const hits = ref<TermHit[]>([])
 const open = ref(false)
@@ -118,10 +129,17 @@ async function runSearch(term: string) {
 }
 
 function pick(h: TermHit) {
-  const value = `${h.code} — ${h.display}`
+  // Store just the human term (drug name / diagnosis text). The code is
+  // exposed as a `code` fill property so a dedicated column can capture it.
+  const value = h.display
   query.value = value
   emit('update:modelValue', value)
-  emit('pick', { code: h.code, display: h.display, value, properties: parseProperties(h.properties) })
+  emit('pick', {
+    code: h.code,
+    display: h.display,
+    value,
+    properties: { ...parseProperties(h.properties), code: h.code },
+  })
   open.value = false
   hits.value = []
 }
@@ -233,7 +251,7 @@ const inputClasses = computed(() => {
           @mousedown.prevent="pick(h)"
           @mouseenter="highlighted = i"
         >
-          <span class="font-mono text-[11px] text-slate-500 shrink-0 pt-0.5">{{ h.code }}</span>
+          <span v-if="showCodeInList" class="font-mono text-[11px] text-slate-500 shrink-0 pt-0.5">{{ h.code }}</span>
           <span class="text-slate-800 break-words">{{ h.display }}</span>
         </li>
       </ul>
