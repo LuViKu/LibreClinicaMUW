@@ -51,6 +51,10 @@ function commit(next: Row[]): void {
 
 function setCell(rowIndex: number, key: string, value: string): void {
   const next = rows.value.map((r, i) => (i === rowIndex ? { ...r, [key]: value } : { ...r }))
+  // Hand-editing a diagnosis field invalidates the code we remembered from the
+  // last pick (see onPick) — otherwise a stale eye code would keep laterality on.
+  const col = props.spec.columns.find((c) => c.key === key)
+  if (col?.autocomplete?.system === 'icd10gm') delete next[rowIndex]![dxCodeKey(key)]
   commit(next)
 }
 
@@ -68,12 +72,23 @@ function onPick(rowIndex: number, columnKey: string, pick: TermPick): void {
     const v = pick.properties[fill.fromProperty]
     if (v != null && v !== '') row[fill.toKey] = v
   }
-  // Eye-diagnosis gating: picking a NON-eye ICD diagnosis clears any
-  // laterality cells in the row (they don't apply).
-  if (col?.autocomplete?.system === 'icd10gm' && !isEyeIcdCode(pick.code)) {
-    for (const c of props.spec.columns) if (c.type === 'laterality') row[c.key] = ''
+  // Eye-diagnosis gating. Remember the picked concept's ICD code in a hidden
+  // per-row slot so laterality can be gated even without a visible ICD-Code
+  // column, then clear laterality cells if the diagnosis is NOT an eye code.
+  if (col?.autocomplete?.system === 'icd10gm') {
+    row[dxCodeKey(columnKey)] = pick.code
+    if (!isEyeIcdCode(pick.code)) {
+      for (const c of props.spec.columns) if (c.type === 'laterality') row[c.key] = ''
+    }
   }
   commit(next)
+}
+
+/** Hidden per-row key remembering a diagnosis column's last picked ICD code.
+ *  Never a real column key (those are `col_N`); preview-only — persistence
+ *  walks spec.columns, so these never leak into a payload. */
+function dxCodeKey(columnKey: string): string {
+  return `__dxcode__${columnKey}`
 }
 
 /**
@@ -84,20 +99,38 @@ function isEyeIcdCode(code: string | undefined | null): boolean {
   return /^H[0-5]\d/i.test((code ?? '').trim())
 }
 
+/** Shape of any ICD-10 code (letter + two digits): H40, E11, H66, I10, … —
+ *  used to tell "a coded, non-eye diagnosis" apart from free text. */
+function isIcdCodeLike(v: string): boolean {
+  return /^[A-Z]\d\d/i.test(v.trim())
+}
+
 /** Does this table carry a diagnosis (ICD-10) autocomplete column? */
 const hasDiagnosisColumn = computed(() =>
   props.spec.columns.some((c) => c.type === 'text' && c.autocomplete?.system === 'icd10gm'),
 )
 
 /**
- * A laterality cell is active when the row is relevant: on a diagnosis table
- * only for eye codes (H00–H59); elsewhere (e.g. a medication table, where a
- * topical drug still needs OD/OS) it is always active.
+ * Is a laterality cell active for this row? On a non-diagnosis table (e.g. a
+ * per-eye medication) always — a topical drug still needs OD/OS. On a diagnosis
+ * table, gate on the ICD code, which may come from a filled ICD-Code column OR
+ * the code we remembered when the diagnosis was picked (so the column is
+ * optional):
+ *   - an eye code (H00–H59) anywhere → active;
+ *   - a coded but non-eye diagnosis → inactive;
+ *   - no code at all (diagnosis typed freehand, never picked) → active once
+ *     some diagnosis text is entered, since we can't classify it — better to
+ *     offer laterality than to block it.
  */
 function lateralityActive(row: Row): boolean {
   if (props.disabled) return false
   if (!hasDiagnosisColumn.value) return true
-  return Object.values(row).some((v) => isEyeIcdCode(String(v ?? '')))
+  const values = Object.values(row).map((v) => String(v ?? '').trim())
+  if (values.some(isEyeIcdCode)) return true
+  if (values.some(isIcdCodeLike)) return false
+  return props.spec.columns.some(
+    (c) => c.autocomplete?.system === 'icd10gm' && (row[c.key] ?? '').trim() !== '',
+  )
 }
 
 const canAddRow = computed(() => {

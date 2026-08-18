@@ -69,6 +69,25 @@ function mountDiag(modelValue: Record<string, string>[] | null = null) {
   })
 }
 
+// A diagnosis table with NO dedicated ICD-Code column — the code is never
+// stored in a visible cell, so eye-gating must lean on the code remembered
+// from the pick.
+const DIAG_NOCODE_SPEC: RepeatingTableSpec = {
+  minRows: 1,
+  maxRows: 3,
+  columns: [
+    { key: 'dx', label: 'Diagnose', type: 'text', autocomplete: { system: 'icd10gm', fills: [] } },
+    { key: 'side', label: 'Auge', type: 'laterality' },
+  ],
+}
+
+function mountNoCode(modelValue: Record<string, string>[] | null = null) {
+  return mount(RepeatingTablePreview, {
+    props: { spec: DIAG_NOCODE_SPEC, idPrefix: 'tbl', modelValue },
+    global: { plugins: [i18n] },
+  })
+}
+
 enableAutoUnmount(afterEach)
 beforeEach(() => vi.mocked(apiGet).mockReset())
 
@@ -139,5 +158,43 @@ describe('RepeatingTablePreview', () => {
     const rows = w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[]
     expect(rows[0]!.icd).toBe('E11')
     expect(rows[0]!.side).toBe('')
+  })
+
+  // --- Eye-gating WITHOUT a dedicated ICD-Code column (code remembered from
+  //     the pick) ---
+
+  it('enables laterality after picking an eye diagnosis, with no ICD-Code column', async () => {
+    vi.mocked(apiGet).mockResolvedValue([{ code: 'H40', display: 'Glaukom', properties: '{}' }])
+    const w = mountNoCode([{ dx: '', side: '' }])
+    await w.find('[data-testid="terminology-autocomplete-input"]').setValue('glauk')
+    await new Promise((r) => setTimeout(r, 260))
+    await flushPromises()
+    await new DOMWrapper(document.body).find('[role="option"]').trigger('mousedown')
+    // Feed the emitted rows back (controlled component) so the cell re-renders.
+    await w.setProps({ modelValue: w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[] })
+    expect((w.get('#tbl-r0-side').element as HTMLSelectElement).disabled).toBe(false)
+  })
+
+  it('disables + clears laterality after picking a non-eye diagnosis, with no ICD-Code column', async () => {
+    vi.mocked(apiGet).mockResolvedValue([{ code: 'E11', display: 'Diabetes mellitus Typ 2', properties: '{}' }])
+    const w = mountNoCode([{ dx: '', side: 'OD' }])
+    await w.find('[data-testid="terminology-autocomplete-input"]').setValue('diab')
+    await new Promise((r) => setTimeout(r, 260))
+    await flushPromises()
+    await new DOMWrapper(document.body).find('[role="option"]').trigger('mousedown')
+    const rows = w.emitted('update:modelValue')!.at(-1)![0] as Record<string, string>[]
+    expect(rows[0]!.side).toBe('')
+    await w.setProps({ modelValue: rows })
+    expect((w.get('#tbl-r0-side').element as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  it('leaves laterality available for a freehand diagnosis with no code', () => {
+    const w = mountNoCode([{ dx: 'Netzhautablösung (freihand)', side: '' }])
+    expect((w.get('#tbl-r0-side').element as HTMLSelectElement).disabled).toBe(false)
+  })
+
+  it('keeps laterality disabled until a diagnosis is entered (no code column)', () => {
+    const w = mountNoCode([{ dx: '', side: '' }])
+    expect((w.get('#tbl-r0-side').element as HTMLSelectElement).disabled).toBe(true)
   })
 })
