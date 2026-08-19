@@ -142,7 +142,7 @@ public class TerminologyIngestScheduler implements SmartInitializingSingleton {
 
         String upstreamSha = fetchContentSha256(metaUrl);
         if (upstreamSha == null) {
-            LOG.warn("Medication ingest: could not read content_sha256 from {} — skipping", metaUrl);
+            LOG.warn("Medication ingest: could not read content_sha256 from the upstream metadata endpoint — skipping");
             return;
         }
         String currentSha = currentSourceSha();
@@ -150,8 +150,8 @@ public class TerminologyIngestScheduler implements SmartInitializingSingleton {
             LOG.info("Medication ingest: upstream unchanged (sha={}) — nothing to do", shortSha(upstreamSha));
             return;
         }
-        LOG.info("Medication ingest: upstream changed (was={} now={}) — loading {}",
-                shortSha(currentSha), shortSha(upstreamSha), rawUrl);
+        LOG.info("Medication ingest: upstream changed (was={} now={}) — loading raw body",
+                shortSha(currentSha), shortSha(upstreamSha));
 
         HttpRequest rawReq = HttpRequest.newBuilder(URI.create(rawUrl))
                 .timeout(Duration.ofMinutes(10))
@@ -184,7 +184,7 @@ public class TerminologyIngestScheduler implements SmartInitializingSingleton {
                 .build();
         HttpResponse<Void> resp = http.send(req, HttpResponse.BodyHandlers.discarding());
         if (resp.statusCode() != 200) {
-            LOG.warn("Medication ingest: metadata HEAD HTTP {} for {}", resp.statusCode(), metaUrl);
+            LOG.warn("Medication ingest: metadata HEAD returned HTTP {}", resp.statusCode());
             return null;
         }
         return resp.headers().firstValue("x-gitlab-content-sha256").orElse(null);

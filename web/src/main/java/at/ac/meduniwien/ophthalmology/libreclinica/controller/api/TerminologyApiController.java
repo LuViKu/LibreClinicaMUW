@@ -102,10 +102,19 @@ public class TerminologyApiController {
                 }
             }
         } catch (Exception e) {
-            LOG.warn("Terminology search failed (system={} q={}): {}", system, query, e.getMessage());
+            LOG.warn("Terminology search failed (system={} q={}): {}", sanitizeForLog(system), sanitizeForLog(query), e.getMessage());
             return ResponseEntity.status(500).body(Map.of("message", "Terminology search failed"));
         }
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Strip line breaks from user-supplied values before they reach the log,
+     * so a crafted {@code q} / {@code system} can't forge extra log lines
+     * (CWE-117 log injection).
+     */
+    private static String sanitizeForLog(String s) {
+        return s == null ? null : s.replaceAll("[\\r\\n]", "_");
     }
 
     public record IngestRequest(String system, String path, String sourceUrl, String sourceSha) {}

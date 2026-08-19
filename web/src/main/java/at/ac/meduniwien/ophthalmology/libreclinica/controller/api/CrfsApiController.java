@@ -401,7 +401,7 @@ public class CrfsApiController {
         try {
             // Fork template: clear versionName so the operator types a fresh
             // one (re-submitting the prior name trips the unique-name check).
-            body = authoringRequestFromVersion(crf, version, /* clearVersionName */ true);
+            body = authoringRequestFromVersion(version, /* clearVersionName */ true);
         } catch (Exception e) {
             LOG.error("Failed to load version contents for crf_version {}", version.getId(), e);
             return ResponseEntity.internalServerError().body(Map.of("message",
@@ -421,7 +421,7 @@ public class CrfsApiController {
      *        template); {@code false} keeps it (round-trip / export).
      */
     private CrfVersionAuthoringRequest authoringRequestFromVersion(
-            CRFBean crf, CRFVersionBean version, boolean clearVersionName)
+            CRFVersionBean version, boolean clearVersionName)
             throws at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException {
         SectionDAO sectionDao = new SectionDAO(dataSource);
         ItemFormMetadataDAO ifmDao = new ItemFormMetadataDAO(dataSource);
@@ -1669,7 +1669,7 @@ public class CrfsApiController {
     private ResponseEntity<?> synthesizeVersionXls(CRFBean crf, CRFVersionBean version) {
         try {
             CrfVersionAuthoringRequest req =
-                    authoringRequestFromVersion(crf, version, /* clearVersionName */ false);
+                    authoringRequestFromVersion(version, /* clearVersionName */ false);
             Path workbook = workbookAdapter.synthesize(req, crf);
             try {
                 byte[] bytes = Files.readAllBytes(workbook);
