@@ -25,6 +25,8 @@
  * effects themselves.
  */
 
+import { i18n } from '@/i18n'
+
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown
@@ -96,7 +98,6 @@ interface RequestOptions {
  * If the WAR is ever renamed (e.g. to `/`), change this single
  * constant + the Vite proxy regex.
  */
-import { i18n } from '@/i18n'
 
 const CONTEXT_PATH = '/LibreClinica'
 

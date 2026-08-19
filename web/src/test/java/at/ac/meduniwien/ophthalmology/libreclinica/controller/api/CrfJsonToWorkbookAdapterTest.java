@@ -430,6 +430,20 @@ class CrfJsonToWorkbookAdapterTest {
         assertEquals("8", str(groups.getRow(1), 4));   // GROUP_REPEAT_MAX
     }
 
+    @Test
+    void groupRepeatMaxIsClampedToRepeatNumber() throws Exception {
+        var i1 = new CrfVersionAuthoringRequest.Item(
+                "DRUG_NAME", "DRUG_NAME", "Drug", "", "", "", "ST", "", false, null, null,
+                null, null, null, null, false, "MEDS");
+        var s1 = new CrfVersionAuthoringRequest.Section("S1", "Meds", "", 1, List.of(i1));
+        var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(s1),
+                List.of(new CrfVersionAuthoringRequest.Group("MEDS", 8, 2)));
+
+        HSSFSheet groups = sheet(synthesize(req), "Groups");
+        assertEquals("8", str(groups.getRow(1), 3));   // GROUP_REPEAT_NUMBER
+        assertEquals("8", str(groups.getRow(1), 4));   // GROUP_REPEAT_MAX clamped
+    }
+
     /* ----------------------------------------------------------------- */
     /* LEFT_ITEM_TEXT / RIGHT_ITEM_TEXT synthesis fallback               */
     /* ----------------------------------------------------------------- */

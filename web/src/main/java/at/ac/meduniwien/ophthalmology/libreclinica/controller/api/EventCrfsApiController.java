@@ -1765,7 +1765,9 @@ public class EventCrfsApiController {
                                     TERMINOLOGY_JSON.getTypeFactory().constructCollectionType(
                                             List.class, CrfEntryDto.AutocompleteFillDto.class));
                         } catch (Exception e) {
-                            // malformed fill map — surface system-only
+                            String logItemName = name.replace('\r', ' ').replace('\n', ' ');
+                            LOG.warn("loadTerminologyByItemName: crf_version {} item {} has malformed fill_map JSON; using system-only binding.",
+                                    crfVersionId, logItemName);
                         }
                     }
                     out.put(name, new CrfEntryDto.AutocompleteDto(system, fills));

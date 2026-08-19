@@ -606,11 +606,13 @@ public class CrfJsonToWorkbookAdapter {
                     ? bounds.repeatNumber() : 1;
             int repeatMax = bounds != null && bounds.repeatMax() != null
                     ? bounds.repeatMax() : 40;
+            int normalizedRepeatNumber = Math.max(1, repeatNumber);
+            int normalizedRepeatMax = Math.max(normalizedRepeatNumber, Math.max(1, repeatMax));
             setStringCell(row, 0, label);
             setStringCell(row, 1, "grid");
             setStringCell(row, 2, "");
-            setStringCell(row, 3, Integer.toString(Math.max(1, repeatNumber)));
-            setStringCell(row, 4, Integer.toString(Math.max(1, repeatMax)));
+            setStringCell(row, 3, Integer.toString(normalizedRepeatNumber));
+            setStringCell(row, 4, Integer.toString(normalizedRepeatMax));
             setStringCell(row, 5, "");
         }
     }

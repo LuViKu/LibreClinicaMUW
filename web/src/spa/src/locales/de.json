@@ -24,7 +24,8 @@
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
-    "signInLink": "Anmelden"
+    "signInLink": "Anmelden",
+    "sectionNavigation": "Bereichsnavigation"
   },
   "topBar": {
     "profile": {

@@ -24,7 +24,8 @@
   },
   "a11y": {
     "skipToMain": "Skip to main content",
-    "signInLink": "Sign in"
+    "signInLink": "Sign in",
+    "sectionNavigation": "Section navigation"
   },
   "topBar": {
     "profile": {
