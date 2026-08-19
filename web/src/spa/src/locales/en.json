@@ -1390,7 +1390,8 @@
       "errorTitle": "Save failed:",
       "errors": {
         "unknown": "Unknown error.",
-        "validationFailed": "The inputs are incomplete or invalid — please check the highlighted fields below."
+        "validationFailed": "The inputs are incomplete or invalid — please check the highlighted fields below.",
+        "duplicateOid": "OID “{oid}” is used by more than one item — identifiers must be unique."
       },
       "palette": {
         "title": "Building blocks",
@@ -1423,8 +1424,10 @@
         "columnType": {
           "text": "Text",
           "number": "Number",
-          "date": "Date"
-        }
+          "date": "Date",
+          "laterality": "Eye (OD/OS/OU)"
+        },
+        "lateralityEyeOnly": "Eye diagnoses only (ICD-10 H00–H59)"
       },
       "terminology": {
         "section": "Terminology autocomplete",
@@ -1438,7 +1441,9 @@
         "fillHint": "When a suggestion is picked, properties are copied into other fields of the same row.",
         "addFill": "+ Rule",
         "removeFill": "Remove rule",
-        "propertyPlaceholder": "Property (e.g. strength)"
+        "propertyPlaceholder": "Choose a property …",
+        "availableProps": "Fields available from this source:",
+        "noProps": "This source provides no auto-fillable fields."
       },
       "canvas": {
         "dropHere": "Drag building blocks or presets from the left panel here.",

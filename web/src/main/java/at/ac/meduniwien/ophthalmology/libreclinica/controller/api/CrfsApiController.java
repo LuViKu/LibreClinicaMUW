@@ -18,12 +18,14 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,6 +40,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
@@ -45,8 +49,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -119,6 +126,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class CrfsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(CrfsApiController.class);
+
+    /** #26 binding store — serialises/parses the terminology fill map (jsonb). */
+    private static final ObjectMapper TERMINOLOGY_JSON = new ObjectMapper();
 
     private final DataSource dataSource;
     private final CrfSpreadsheetParserService parserService;
@@ -426,6 +436,22 @@ public class CrfsApiController {
             ifmByItemId.put(ifm.getItemId(), ifm);
         }
 
+        // Fork recovery — resolve each item's REPEATING-group label (so the SPA
+        // folds grouped items back into a repeating table) plus per-group row
+        // bounds (so min/max recover instead of the adapter's 1/40 default).
+        RepeatingGroupInfo groupInfo = resolveRepeatingGroups(version.getId(), allIfms);
+        Map<Integer, String> groupLabelByItemId = groupInfo.labelByItemId();
+
+        // Fork recovery — conditional-display rules from scd_item_metadata,
+        // keyed by item_id → [sourceItemOid, literal]. Populated onto the
+        // legacy showItem/parentItemOid fields the workbook adapter round-trips.
+        Map<Integer, String[]> scdByItemId = loadShowWhenRawByItemId(version.getId());
+
+        // Fork recovery — terminology bindings (system + fill map) keyed by
+        // item name, so a picked concept still auto-fills sibling cells.
+        Map<String, CrfVersionAuthoringRequest.Item.Autocomplete> termByName =
+                loadItemTerminology(version.getId());
+
         List<CrfVersionAuthoringRequest.Section> sectionDtos = new ArrayList<>(sections.size());
         int sectionOrdinal = 0;
         for (SectionBean sb : sections) {
@@ -434,7 +460,14 @@ public class CrfsApiController {
                     itemDao.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
             List<CrfVersionAuthoringRequest.Item> itemDtos = new ArrayList<>(items.size());
             for (ItemBean ib : items) {
-                itemDtos.add(buildAuthoringItemDto(ib, ifmByItemId.get(ib.getId())));
+                String[] scd = scdByItemId.get(ib.getId());
+                itemDtos.add(buildAuthoringItemDto(
+                        ib,
+                        ifmByItemId.get(ib.getId()),
+                        groupLabelByItemId.get(ib.getId()),
+                        /* parentItemOid */ scd != null ? scd[0] : null,
+                        /* showItem (trigger literal) */ scd != null ? scd[1] : null,
+                        termByName.get(ib.getName())));
             }
             sectionDtos.add(new CrfVersionAuthoringRequest.Section(
                     nullToEmpty(sb.getLabel()),
@@ -448,16 +481,25 @@ public class CrfsApiController {
                 clearVersionName ? "" : nullToEmpty(version.getName()),
                 nullToEmpty(version.getDescription()),
                 nullToEmpty(version.getRevisionNotes()),
-                sectionDtos);
+                sectionDtos,
+                groupInfo.groups());
     }
 
     /**
      * Build one {@link CrfVersionAuthoringRequest.Item} from the persisted
      * row trio (item + item_form_metadata + response_set). Defensive
      * against missing IFM (older drafts may have orphan items).
+     *
+     * <p>Fork recovery — {@code groupLabel} (the item's repeating-group name,
+     * or null) lets the SPA fold grouped items back into a repeating table;
+     * {@code parentItemOid}/{@code showItem} (or null) carry a recovered
+     * conditional-display rule on the legacy fields the adapter round-trips;
+     * {@code autocomplete} (or null) the recovered terminology binding.
      */
     private static CrfVersionAuthoringRequest.Item buildAuthoringItemDto(
-            ItemBean ib, ItemFormMetadataBean ifm) {
+            ItemBean ib, ItemFormMetadataBean ifm,
+            String groupLabel, String parentItemOid, String showItem,
+            CrfVersionAuthoringRequest.Item.Autocomplete autocomplete) {
         // ItemDataType exposes a short codename via getName() (e.g.
         // "st", "int", "real", "date", "bl"). Upper-case before
         // surfacing so the SPA's AuthoringDataType enum match-arm
@@ -514,13 +556,236 @@ public class CrfsApiController {
                 /* required (legacy schema lacks this flag) */ false,
                 rs,
                 val,
-                /* showItem      */ null,
-                /* parentItemOid */ null,
+                showItem,
+                parentItemOid,
                 header,
                 subHeader,
                 /* pageBreak  */ false,
-                /* groupLabel */ null,
-                /* catalogCode */ null);
+                groupLabel,
+                /* catalogCode */ null,
+                autocomplete);
+    }
+
+    /** Fork recovery — per-item repeating-group label (for folding items back
+     *  into tables) plus one {@link CrfVersionAuthoringRequest.Group} per
+     *  distinct repeating group (so row bounds recover), resolved in one pass. */
+    private record RepeatingGroupInfo(
+            Map<Integer, String> labelByItemId,
+            List<CrfVersionAuthoringRequest.Group> groups) { }
+
+    /**
+     * Fork recovery — resolve each item's REPEATING item-group in one pass:
+     * the group NAME (the value the SPA's {@code groupLabel} round-trips into
+     * {@code item_group.name}) keyed by item_id, plus a {@code Group(label,
+     * repeatNumber, repeatMax)} per distinct repeating group so a table's row
+     * bounds recover instead of the adapter's 1/40 default. Items that are
+     * ungrouped, or in the default non-repeating "Ungrouped" bucket, are
+     * skipped (gated on {@code isRepeatingGroup()}) so a re-save can't wrongly
+     * convert flat items into a group. Mirrors the entry builder's resolution
+     * ({@code EventCrfsApiController}); best-effort — a DAO failure is skipped.
+     */
+    private RepeatingGroupInfo resolveRepeatingGroups(
+            int crfVersionId, List<ItemFormMetadataBean> allIfms) {
+        Map<Integer, String> labelByItemId = new HashMap<>();
+        ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
+        ItemGroupMetadataDAO igmDAO = new ItemGroupMetadataDAO(dataSource);
+        // group id -> recovered Group (repeating only); LinkedHashMap keeps a
+        // stable first-seen order. `seen` also caches non-repeating groups.
+        Map<Integer, CrfVersionAuthoringRequest.Group> groupsById = new LinkedHashMap<>();
+        Map<Integer, Boolean> seen = new HashMap<>();
+        for (ItemFormMetadataBean ifm : allIfms) {
+            ItemGroupBean grp;
+            try {
+                grp = igDAO.findGroupByItemIdCrfVersionId(ifm.getItemId(), crfVersionId);
+            } catch (Exception e) {
+                continue;
+            }
+            if (grp == null || grp.getId() == 0) continue;
+            if (!seen.containsKey(grp.getId())) {
+                boolean repeating = false;
+                try {
+                    ArrayList<ItemGroupMetadataBean> metas =
+                            igmDAO.findMetaByGroupAndCrfVersion(grp.getId(), crfVersionId);
+                    if (metas != null && !metas.isEmpty() && metas.get(0).isRepeatingGroup()
+                            && grp.getName() != null && !grp.getName().isBlank()) {
+                        repeating = true;
+                        ItemGroupMetadataBean meta = metas.get(0);
+                        groupsById.put(grp.getId(), new CrfVersionAuthoringRequest.Group(
+                                grp.getName(), meta.getRepeatNum(), meta.getRepeatMax()));
+                    }
+                } catch (Exception e) {
+                    // best-effort — treat as non-repeating
+                }
+                seen.put(grp.getId(), repeating);
+            }
+            if (Boolean.TRUE.equals(seen.get(grp.getId()))) {
+                labelByItemId.put(ifm.getItemId(), grp.getName());
+            }
+        }
+        return new RepeatingGroupInfo(labelByItemId, new ArrayList<>(groupsById.values()));
+    }
+
+    /**
+     * Fork recovery — read conditional-display rules from {@code scd_item_metadata}
+     * for every item on the version, keyed by item_id → {@code [sourceItemOid,
+     * literal]}. Sibling of {@code EventCrfsApiController.loadShowWhenByItemId}
+     * but returns the raw pair (not the runtime JSON) since the fork surfaces it
+     * on the legacy {@code parentItemOid} / {@code showItem} DTO fields the
+     * workbook adapter round-trips. The legacy schema stores equality only, so
+     * the SPA re-hydrates comparator {@code "=="}. Best-effort: a missing table
+     * or SQL failure logs at WARN and yields an empty map (always-shown).
+     */
+    private Map<Integer, String[]> loadShowWhenRawByItemId(int crfVersionId) {
+        Map<Integer, String[]> out = new HashMap<>();
+        final String sql =
+                "SELECT ifm.item_id, scd.control_item_name, scd.option_value " +
+                "FROM scd_item_metadata scd " +
+                "JOIN item_form_metadata ifm " +
+                "  ON ifm.item_form_metadata_id = scd.scd_item_form_metadata_id " +
+                "WHERE ifm.crf_version_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int itemId = rs.getInt(1);
+                    String sourceOid = rs.getString(2);
+                    String literal = rs.getString(3);
+                    if (sourceOid == null || sourceOid.isBlank()) continue;
+                    out.put(itemId, new String[] { sourceOid, literal == null ? "" : literal });
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("loadShowWhenRawByItemId: crf_version {} — skipping show-when ({}). "
+                    + "Items will fall back to always-shown.", crfVersionId, ex.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * #26 binding store — persist each item's terminology binding (system +
+     * fill map) to {@code crf_item_terminology}, keyed by (crf_version_id,
+     * item_name). Called after the version + items are created. Re-saves always
+     * create a NEW version (no update-in-place), so a delete-by-version keeps
+     * this idempotent if the same id is ever reused. Best-effort — a failure is
+     * logged; the CRF stays usable (autocomplete degrades to marker-only).
+     */
+    private void writeItemTerminology(int crfVersionId, CrfVersionAuthoringRequest body) {
+        if (body == null || body.sections() == null) return;
+        final String del = "DELETE FROM crf_item_terminology WHERE crf_version_id = ?";
+        final String ins = "INSERT INTO crf_item_terminology "
+                + "(crf_version_id, item_name, code_system, fill_map) VALUES (?, ?, ?, ?::jsonb)";
+        try (Connection c = dataSource.getConnection()) {
+            // A fill's toKey is the target column's authoring OID (== its item
+            // NAME); translate to the generated oc_oid so fork + live entry,
+            // which identify items by oc_oid, resolve the sibling cell.
+            Map<String, String> ocOidByName = loadItemOcOidByName(c, crfVersionId);
+            try (PreparedStatement d = c.prepareStatement(del)) {
+                d.setInt(1, crfVersionId);
+                d.executeUpdate();
+            }
+            try (PreparedStatement ps = c.prepareStatement(ins)) {
+                int n = 0;
+                for (CrfVersionAuthoringRequest.Section s : body.sections()) {
+                    if (s == null || s.items() == null) continue;
+                    for (CrfVersionAuthoringRequest.Item it : s.items()) {
+                        CrfVersionAuthoringRequest.Item.Autocomplete ac = it == null ? null : it.autocomplete();
+                        if (ac == null || ac.system() == null || ac.system().isBlank()
+                                || it.name() == null || it.name().isBlank()) {
+                            continue;
+                        }
+                        List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills = new ArrayList<>();
+                        if (ac.fills() != null) {
+                            for (CrfVersionAuthoringRequest.Item.Autocomplete.Fill f : ac.fills()) {
+                                if (f == null) continue;
+                                String toKey = f.toKey() == null ? null
+                                        : ocOidByName.getOrDefault(f.toKey(), f.toKey());
+                                fills.add(new CrfVersionAuthoringRequest.Item.Autocomplete.Fill(
+                                        f.fromProperty(), toKey));
+                            }
+                        }
+                        String fillJson;
+                        try {
+                            fillJson = TERMINOLOGY_JSON.writeValueAsString(fills);
+                        } catch (Exception e) {
+                            fillJson = "[]";
+                        }
+                        ps.setInt(1, crfVersionId);
+                        ps.setString(2, it.name().trim());
+                        ps.setString(3, ac.system().trim());
+                        ps.setString(4, fillJson);
+                        ps.addBatch();
+                        n++;
+                    }
+                }
+                if (n > 0) ps.executeBatch();
+            }
+        } catch (SQLException e) {
+            LOG.warn("writeItemTerminology: crf_version {} — binding not persisted ({}).",
+                    crfVersionId, e.getMessage());
+        }
+    }
+
+    /** #26 binding store — item NAME → generated oc_oid for a version, so a
+     *  fill's toKey (a target column's authoring name) can be translated to the
+     *  identity fork + entry use (oc_oid). */
+    private Map<String, String> loadItemOcOidByName(Connection c, int crfVersionId) throws SQLException {
+        Map<String, String> out = new HashMap<>();
+        final String sql = "SELECT i.name, i.oc_oid FROM item i "
+                + "JOIN item_form_metadata ifm ON ifm.item_id = i.item_id "
+                + "WHERE ifm.crf_version_id = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString(1);
+                    String ocOid = rs.getString(2);
+                    if (name != null && !name.isBlank() && ocOid != null && !ocOid.isBlank()) {
+                        out.put(name, ocOid);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * #26 binding store — read the terminology bindings for a version, keyed by
+     * item_name (== the authoring item name), for the fork/contents endpoint to
+     * re-hydrate {@code Item.autocomplete}. Best-effort — a failure yields an
+     * empty map (fork degrades to marker-only recovery).
+     */
+    private Map<String, CrfVersionAuthoringRequest.Item.Autocomplete> loadItemTerminology(int crfVersionId) {
+        Map<String, CrfVersionAuthoringRequest.Item.Autocomplete> out = new HashMap<>();
+        final String sql = "SELECT item_name, code_system, fill_map "
+                + "FROM crf_item_terminology WHERE crf_version_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString(1);
+                    String system = rs.getString(2);
+                    String fillJson = rs.getString(3);
+                    if (name == null || name.isBlank() || system == null || system.isBlank()) continue;
+                    List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills = new ArrayList<>();
+                    if (fillJson != null && !fillJson.isBlank()) {
+                        try {
+                            fills = TERMINOLOGY_JSON.readValue(fillJson,
+                                    TERMINOLOGY_JSON.getTypeFactory().constructCollectionType(
+                                            List.class, CrfVersionAuthoringRequest.Item.Autocomplete.Fill.class));
+                        } catch (Exception e) {
+                            // malformed fill map — recover system-only
+                        }
+                    }
+                    out.put(name, new CrfVersionAuthoringRequest.Item.Autocomplete(system, fills));
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("loadItemTerminology: crf_version {} — skipping bindings ({}).",
+                    crfVersionId, ex.getMessage());
+        }
+        return out;
     }
 
     /* ----------------------------------------------------------------- */
@@ -820,6 +1085,11 @@ public class CrfsApiController {
                         crfOid, persisted.getOid(), e.getMessage());
             }
         }
+
+        // #26 binding store — persist each item's terminology binding (system +
+        // fill map) now the version + items exist. Best-effort: a failure logs
+        // and leaves the CRF usable (autocomplete degrades to marker-only).
+        writeItemTerminology(persisted.getId(), body);
 
         LOG.info("Author CRF version (JSON): crfOid={} versionOid={} versionName={} sections={} items={} by user={}",
                 crfOid, persisted.getOid(), versionNameTrim,

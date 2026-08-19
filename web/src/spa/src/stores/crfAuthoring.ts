@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import { markTerminologyOid } from '@/components/terminologyOid'
+import { markTerminologyOid, terminologySystemFromOid } from '@/components/terminologyOid'
 import type { CrfVersion } from '@/types/crfLibrary'
 
 /**
@@ -190,8 +190,23 @@ export interface AutocompleteBinding {
   fills: AutocompleteFill[]
 }
 
-/** Column value kind for a repeating-table cell. */
-export type RepeatingTableColumnType = 'text' | 'number' | 'date'
+/**
+ * Column value kind for a repeating-table cell. {@code laterality} is an
+ * ophthalmology fixed OD/OS/OU choice (right / left / both eyes) — useful on
+ * an eye-diagnosis or per-eye medication table.
+ */
+export type RepeatingTableColumnType = 'text' | 'number' | 'date' | 'laterality'
+
+/**
+ * Fixed OD/OS/OU choice for a {@code laterality} column. Value = the Latin
+ * standard code (persisted / stored); label carries the German gloss. See the
+ * ophthalmology laterality convention: OD = right eye, OS = left, OU = both.
+ */
+export const LATERALITY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'OD', label: 'OD (rechts)' },
+  { value: 'OS', label: 'OS (links)' },
+  { value: 'OU', label: 'OU (beide)' },
+]
 
 /**
  * One operator-defined column of a repeating-table item. A {@code text}
@@ -216,14 +231,58 @@ export interface RepeatingTableSpec {
   maxRows: number
 }
 
-/** Monotonic column-key source. Wizard-only (table isn't persisted), so a
- *  per-session counter never collides with a reloaded draft. */
+/** Monotonic column-key source (`col_1`, `col_2`, …). Module-level, so it
+ *  resets to 0 on every page load — {@link reseedTableColumnKeySeq} advances it
+ *  past a restored draft's existing keys so newly-minted keys never collide. */
 let tableColumnKeySeq = 0
 
 /** A fresh blank text column with a unique {@link RepeatingTableColumn.key}. */
 export function newRepeatingTableColumn(label = ''): RepeatingTableColumn {
   tableColumnKeySeq += 1
   return { key: `col_${tableColumnKeySeq}`, label, type: 'text' }
+}
+
+/**
+ * A restored draft already carries column keys minted in an earlier session,
+ * but the module counter resets to 0 on each page load. Without this, the next
+ * {@link newRepeatingTableColumn} would re-mint `col_1` and collide with a
+ * restored column — two columns sharing one key silently mirror each other's
+ * cell state (a table's row store is keyed by column key). Advance the counter
+ * past the highest `col_N` any restored table column holds.
+ */
+export function reseedTableColumnKeySeq(d: AuthoringDraft): void {
+  let max = tableColumnKeySeq
+  for (const section of d.sections ?? []) {
+    for (const item of section.items ?? []) {
+      for (const col of item.table?.columns ?? []) {
+        const m = /^col_(\d+)$/.exec(col.key)
+        if (m) max = Math.max(max, Number(m[1]))
+      }
+    }
+  }
+  tableColumnKeySeq = max
+}
+
+/**
+ * Item OIDs must be unique across the whole CRF: the entry/preview store keys
+ * every item's value by its OID, so two items sharing one OID silently share a
+ * single slot — their cells mirror each other (observed live as a laterality
+ * pick bleeding into a sibling table). Returns the offending items (trimmed,
+ * non-empty OID appearing on more than one item); empty OIDs are left to
+ * required-field validation. Deterministic order: draft order.
+ */
+export function findDuplicateOidItems(d: AuthoringDraft): { uid: string; oid: string }[] {
+  const counts = new Map<string, number>()
+  const items: { uid: string; oid: string }[] = []
+  for (const section of d.sections ?? []) {
+    for (const item of section.items ?? []) {
+      const oid = item.oid.trim()
+      if (!oid) continue
+      items.push({ uid: item.uid, oid })
+      counts.set(oid, (counts.get(oid) ?? 0) + 1)
+    }
+  }
+  return items.filter((x) => (counts.get(x.oid) ?? 0) > 1)
 }
 
 /** Default two-column generic table seeded by the TABLE palette block. */
@@ -367,6 +426,9 @@ export interface ForkContentsWire {
   versionDescription?: string
   revisionNotes?: string
   sections?: ForkSectionWire[]
+  /** Fork recovery — per-group row bounds, matched to a reconstructed table
+   *  by {@code label} (== the group label its columns carry). */
+  groups?: Array<{ label?: string; repeatNumber?: number | null; repeatMax?: number | null }> | null
 }
 
 interface ForkSectionWire {
@@ -389,6 +451,26 @@ interface ForkItemWire {
   required?: boolean
   responseSet?: ForkResponseSetWire | null
   validation?: { regexp?: string; errorMessage?: string } | null
+  /**
+   * Fork recovery — the item's repeating-group label. Items sharing a
+   * (non-blank) label are reconstructed into one repeating-table item
+   * (the inverse of {@code buildTableItemPayloads}).
+   */
+  groupLabel?: string | null
+  /**
+   * Fork recovery — conditional display, surfaced on the legacy fields the
+   * backend adapter round-trips: {@code parentItemOid} is the source item's
+   * OID, {@code showItem} the trigger literal (from {@code scd_item_metadata}).
+   * The legacy schema stores equality only, so we rehydrate comparator "==".
+   */
+  showItem?: string | null
+  parentItemOid?: string | null
+  /**
+   * Fork recovery — the persisted terminology binding (from
+   * {@code crf_item_terminology}): system + fill map whose {@code toKey}s are
+   * target-column OIDs, translated back to reconstructed column keys.
+   */
+  autocomplete?: { system?: string; fills?: Array<{ fromProperty?: string; toKey?: string }> } | null
 }
 
 interface ForkResponseSetWire {
@@ -601,13 +683,46 @@ function nextUid(prefix: string): string {
 }
 
 /**
+ * Section/item UIDs (`sec-1`, `item-3`) come from {@link nextUid}, whose
+ * counter also resets to 0 on page load. A restored draft already holds UIDs,
+ * so without re-seeding, the next added item re-mints a colliding UID — two
+ * items sharing a UID break selection and drag-reorder, which key by UID.
+ * Advance the counter past the highest suffix any restored UID holds (the
+ * counter is shared across prefixes, so scan both sections and items).
+ */
+export function reseedUidCounter(d: AuthoringDraft): void {
+  let max = uidCounter
+  const bump = (uid: string | undefined): void => {
+    const m = /-(\d+)$/.exec(uid ?? '')
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  for (const section of d.sections ?? []) {
+    bump(section.uid)
+    for (const item of section.items ?? []) bump(item.uid)
+  }
+  uidCounter = max
+}
+
+/**
  * Convert the fork-from-version wire payload into an {@link AuthoringDraft}.
  * Defensive against missing/null fields. {@code versionName} is blanked
  * so the operator types a fresh name (the backend's unique-name check
  * would otherwise reject the prior version's name).
  */
+/** Recovered row bounds for a reconstructed table, keyed by group label. */
+type ForkGroupBounds = Map<string, { minRows: number; maxRows: number }>
+
 function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
-  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1))
+  const bounds: ForkGroupBounds = new Map()
+  for (const g of wire.groups ?? []) {
+    const label = (g?.label ?? '').trim()
+    if (!label) continue
+    bounds.set(label, {
+      minRows: Math.max(1, g?.repeatNumber ?? 1),
+      maxRows: Math.max(1, g?.repeatMax ?? 20),
+    })
+  }
+  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1, bounds))
   if (sections.length === 0) {
     sections.push({
       uid: nextUid('sec'),
@@ -626,15 +741,124 @@ function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
   }
 }
 
-function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringSection {
+function forkSection(wire: ForkSectionWire, fallbackOrdinal: number, bounds: ForkGroupBounds): AuthoringSection {
   return {
     uid: nextUid('sec'),
     label: wire.label?.trim() || `S${fallbackOrdinal}`,
     title: wire.title?.trim() || `Section ${fallbackOrdinal}`,
     instructions: wire.instructions ?? '',
     ordinal: wire.ordinal ?? fallbackOrdinal,
-    items: (wire.items ?? []).map(forkItem),
+    items: forkItems(wire.items ?? [], bounds),
   }
+}
+
+/**
+ * Fork recovery — rebuild a section's items, folding every run of items that
+ * share a repeating-group label back into a single {@link RepeatingTableSpec}
+ * item (the inverse of {@code buildTableItemPayloads}). Ungrouped items map
+ * 1:1 via {@link forkItem}. The table item is placed where its group first
+ * appears; columns keep wire order. The terminology binding (system + fill
+ * map) is recovered from the wire when present (persisted in
+ * crf_item_terminology), else the system alone from the OID marker. Fill
+ * {@code toKey}s are persisted as target-column OIDs and translated back to
+ * the reconstructed column keys.
+ */
+function forkItems(wires: ForkItemWire[], bounds: ForkGroupBounds): AuthoringItem[] {
+  const items: AuthoringItem[] = []
+  const tableByLabel = new Map<string, AuthoringItem>()
+  // Per group label: persisted column OID → reconstructed column key, plus the
+  // columns whose fills still need their target OIDs translated (second pass,
+  // once every column key is known).
+  const oidToKey = new Map<string, Map<string, string>>()
+  const pending: Array<{ label: string; col: RepeatingTableColumn; fills: Array<{ fromProperty: string; toKey: string }> }> = []
+  for (const w of wires) {
+    const label = (w.groupLabel ?? '').trim()
+    if (!label) {
+      items.push(forkItem(w))
+      continue
+    }
+    let table = tableByLabel.get(label)
+    if (!table) {
+      table = forkTableItem(label, bounds.get(label))
+      tableByLabel.set(label, table)
+      oidToKey.set(label, new Map())
+      items.push(table)
+    }
+    const col = forkTableColumn(w)
+    table.table!.columns.push(col)
+    oidToKey.get(label)!.set((w.oid ?? '').trim(), col.key)
+    const fills = w.autocomplete?.fills
+    if (col.autocomplete && fills && fills.length > 0) {
+      pending.push({ label, col, fills: fills.map((f) => ({ fromProperty: f.fromProperty ?? '', toKey: (f.toKey ?? '').trim() })) })
+    }
+  }
+  // Second pass — translate each fill's persisted target OID to the
+  // reconstructed column key; drop fills whose target column is gone.
+  for (const { label, col, fills } of pending) {
+    const map = oidToKey.get(label)!
+    col.autocomplete!.fills = fills
+      .map((f) => ({ fromProperty: f.fromProperty, toKey: map.get(f.toKey) ?? '' }))
+      .filter((f) => f.fromProperty !== '' && f.toKey !== '')
+  }
+  return items
+}
+
+/** A fresh repeating-table item whose oid/name is the recovered group label. */
+function forkTableItem(groupLabel: string, bounds?: { minRows: number; maxRows: number }): AuthoringItem {
+  return {
+    uid: nextUid('item'),
+    name: groupLabel,
+    oid: groupLabel,
+    descriptionLabel: groupLabel,
+    leftItemText: '',
+    rightItemText: '',
+    units: '',
+    dataType: 'ST',
+    responseType: 'text',
+    defaultValue: '',
+    required: false,
+    responseSet: null,
+    validation: { regexp: '', errorMessage: '' },
+    // Recover the persisted row bounds (wire groups[]) when present; else the
+    // authoring defaults.
+    table: { columns: [], minRows: bounds?.minRows ?? 1, maxRows: bounds?.maxRows ?? 20 },
+  }
+}
+
+/** Reconstruct one repeating-table column from a persisted grouped item.
+ *  Fills are staged empty here and translated in {@link forkItems}' 2nd pass. */
+function forkTableColumn(w: ForkItemWire): RepeatingTableColumn {
+  const label = (w.descriptionLabel ?? '').trim() || (w.leftItemText ?? '').trim() || (w.name ?? '').trim()
+  const col = newRepeatingTableColumn(label)
+  col.type = forkColumnType(w)
+  // System from the persisted binding when present (crf_item_terminology),
+  // else decoded from the OID marker.
+  const system = w.autocomplete?.system ?? terminologySystemFromOid(w.oid)
+  if (col.type === 'text' && system) col.autocomplete = { system, fills: [] }
+  return col
+}
+
+/**
+ * Infer a recovered column's type from its persisted shape (inverse of
+ * {@code buildTableItemPayloads}): a single-select whose options are exactly
+ * OD/OS/OU is a laterality column; REAL/INT → number; DATE/PDATE → date;
+ * everything else (incl. terminology-bound text) → text.
+ */
+function forkColumnType(w: ForkItemWire): RepeatingTableColumnType {
+  if (w.responseSet?.type === 'single-select' && isLateralityOptionSet(w.responseSet.options)) {
+    return 'laterality'
+  }
+  const dt = (w.dataType ?? '').toUpperCase()
+  if (dt === 'REAL' || dt === 'INT' || dt === 'INTEGER') return 'number'
+  if (dt === 'DATE' || dt === 'PDATE') return 'date'
+  return 'text'
+}
+
+/** True when a response set's option values are a non-empty subset of OD/OS/OU. */
+function isLateralityOptionSet(options: Array<{ value?: string }> | undefined): boolean {
+  const allowed = new Set(LATERALITY_OPTIONS.map((o) => o.value))
+  const values = (options ?? []).map((o) => (o.value ?? '').trim().toUpperCase()).filter(Boolean)
+  return values.length > 0 && values.every((v) => allowed.has(v))
 }
 
 function forkItem(wire: ForkItemWire): AuthoringItem {
@@ -642,7 +866,7 @@ function forkItem(wire: ForkItemWire): AuthoringItem {
     wire.responseSet?.type && isAuthoringResponseType(wire.responseSet.type)
       ? wire.responseSet.type
       : 'text'
-  return {
+  const item: AuthoringItem = {
     uid: nextUid('item'),
     name: wire.name ?? '',
     oid: wire.oid ?? '',
@@ -660,6 +884,17 @@ function forkItem(wire: ForkItemWire): AuthoringItem {
       errorMessage: wire.validation?.errorMessage ?? '',
     },
   }
+  // Fork recovery — reattach a conditional-display rule when the backend
+  // surfaced one (source OID present). The legacy store is equality-only.
+  const parentOid = (wire.parentItemOid ?? '').trim()
+  if (parentOid !== '') {
+    item.showWhen = {
+      sourceItemOid: parentOid,
+      comparator: '==',
+      literal: wire.showItem ?? '',
+    }
+  }
+  return item
 }
 
 function forkResponseSet(wire: ForkResponseSetWire | null): AuthoringResponseSet {
@@ -818,6 +1053,8 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     draft.value = next
     selectedItemUid.value = null
     error.value = null
+    reseedTableColumnKeySeq(next)
+    reseedUidCounter(next)
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
@@ -1362,33 +1599,66 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         // as itself.
         items: s.items.flatMap((it) => (it.table ? buildTableItemPayloads(it) : [buildItemPayload(it)])),
       })),
+      // #26 — per-group row bounds so the adapter persists the operator's
+      // min/max instead of its 1/40 default (and fork recovers them). One
+      // entry per repeating-table item, keyed by the same label its columns
+      // carry (tableBaseOid == groupLabel).
+      groups: draft.value.sections
+        .flatMap((s) => s.items)
+        .filter((it) => it.table)
+        .map((it) => ({
+          label: tableBaseOid(it),
+          repeatNumber: Math.max(1, it.table!.minRows ?? 1),
+          repeatMax: Math.max(1, it.table!.maxRows ?? 20),
+        })),
     }
+  }
+
+  /** The repeating-group label a table item's columns share (its base OID). */
+  function tableBaseOid(it: AuthoringItem): string {
+    return (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
   }
 
   /**
    * #26 Slice 3 persistence — expand a repeating-table item into its column
    * items. Each column becomes an item in the SAME flat repeating group
    * (groupLabel = the table's OID); the column type maps to a scalar data
-   * type. Terminology autocomplete bindings are NOT persisted here yet (no
-   * backend column) — they remain wizard/preview-only; a saved table renders
-   * as a plain repeating group at entry until that follow-up lands.
+   * type. A terminology-bound text column carries its binding two ways: the
+   * SYSTEM is encoded in the OID marker (survives even without the binding
+   * store — see terminologyOid.ts), and the FULL binding (system + fill map)
+   * is emitted as {@code autocomplete} so the backend persists it to
+   * {@code crf_item_terminology} and live entry auto-fills sibling cells. A
+   * fill's {@code toKey} (an authoring column key) is translated to the TARGET
+   * column's persisted OID — authoring keys are not persisted, so that OID is
+   * the identity entry fills against.
    */
   function buildTableItemPayloads(it: AuthoringItem): Record<string, unknown>[] {
     const table = it.table!
-    const baseOid = (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
+    const baseOid = tableBaseOid(it)
     const groupLabel = baseOid
-    return table.columns.map((col, i) => {
-      // A terminology-bound text column encodes its system in the OID so the
-      // binding survives to live entry (see terminologyOid.ts). The fill map
-      // is not persistable in an OID and stays preview-only.
-      const rawColOid = `${baseOid}_${(col.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
-      const colOid = col.type === 'text' && col.autocomplete
-        ? markTerminologyOid(rawColOid, col.autocomplete.system)
-        : rawColOid
+    // Persisted OID of every column up front, so a fill's toKey resolves to
+    // its target column's OID.
+    const colOidByKey: Record<string, string> = {}
+    table.columns.forEach((c, i) => {
+      const raw = `${baseOid}_${(c.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
+      colOidByKey[c.key] = c.type === 'text' && c.autocomplete ? markTerminologyOid(raw, c.autocomplete.system) : raw
+    })
+    return table.columns.map((col) => {
+      const colOid = colOidByKey[col.key]!
       const dataType: AuthoringDataType =
         col.type === 'number' ? 'REAL' : col.type === 'date' ? 'DATE' : 'ST'
       const label = col.label.trim() || col.key
-      return {
+      // A laterality column persists as a single-select over OD/OS/OU so it
+      // round-trips to live entry as a dropdown (RepeatingGroupSection renders
+      // select-one columns natively). Other columns keep the open-text branch.
+      const responseSet: Record<string, unknown> = col.type === 'laterality'
+        ? {
+            type: 'single-select',
+            label: `${colOid.toLowerCase()}_laterality`,
+            options: LATERALITY_OPTIONS.map((o) => ({ text: o.label, value: o.value })),
+          }
+        : { type: 'text', label: `${colOid.toLowerCase()}_response` }
+      const payload: Record<string, unknown> = {
         name: colOid,
         oid: colOid,
         descriptionLabel: label,
@@ -1399,10 +1669,21 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         defaultValue: '',
         required: false,
         groupLabel,
-        // Open-text response for the column (the backend treats absence of
-        // options + the dataType as the open-entry branch).
-        responseSet: { type: 'text', label: `${colOid.toLowerCase()}_response` },
+        responseSet,
       }
+      // #26 binding store — persist the terminology binding (system + fill map)
+      // so live entry auto-fills sibling cells; each fill's toKey resolves to
+      // the target column's persisted OID.
+      if (col.type === 'text' && col.autocomplete) {
+        payload.autocomplete = {
+          system: col.autocomplete.system,
+          fills: (col.autocomplete.fills ?? []).map((f) => ({
+            fromProperty: f.fromProperty,
+            toKey: colOidByKey[f.toKey] ?? f.toKey,
+          })),
+        }
+      }
+      return payload
     })
   }
 
@@ -1423,13 +1704,36 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const v = buildValidationPayload(it.validation)
     if (v) out.validation = v
     const sw = buildShowWhenPayload(it)
-    if (sw) out.showWhen = sw
+    if (sw) {
+      out.showWhen = sw
+      // The workbook adapter persists conditional display from the legacy
+      // showItem/parentItemOid fields (→ scd_item_metadata), NOT from showWhen,
+      // so an equality rule is mirrored onto them here to actually save and
+      // round-trip through fork. scd is equality-only; non-"==" comparators
+      // can't be represented, so they stay display-only (showWhen) and are not
+      // persisted. showItem is the trigger value (the adapter reads it as the
+      // parentValue half of its "parentValue|message" expression).
+      if (it.showWhen!.comparator === '==') {
+        out.parentItemOid = it.showWhen!.sourceItemOid.trim()
+        out.showItem = it.showWhen!.literal
+      }
+    }
     // Phase E.6 ophth-field-catalog (2026-06-11): the backend adapter
     // back-fills blank fields from the matching catalog row when
     // catalogCode is present. Pass-through verbatim; the wizard's
     // picker is responsible for setting this on items it materialises.
     if (it.catalogCode && it.catalogCode.trim() !== '') {
       out.catalogCode = it.catalogCode.trim()
+    }
+    // #26 binding store — a FLAT item's terminology binding (system + fill map).
+    // Unlike a table column, a flat item's OID is operator-chosen (not marker-
+    // mangled), so the binding store carries the system too; fill toKeys are
+    // whatever target the operator set (persisted verbatim).
+    if (it.autocomplete) {
+      out.autocomplete = {
+        system: it.autocomplete.system,
+        fills: (it.autocomplete.fills ?? []).map((f) => ({ fromProperty: f.fromProperty, toKey: f.toKey })),
+      }
     }
     return out
   }

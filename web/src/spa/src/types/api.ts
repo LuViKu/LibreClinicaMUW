@@ -4168,11 +4168,23 @@ export interface components {
             status?: string;
             uploadedAt?: string;
         };
+        Autocomplete: {
+            system?: string;
+            fills?: components["schemas"]["Fill"][];
+        };
         CrfVersionAuthoringRequest: {
             versionName?: string;
             versionDescription?: string;
             revisionNotes?: string;
             sections?: components["schemas"]["CrfVersionAuthoringRequest.Section"][];
+            groups?: components["schemas"]["CrfVersionAuthoringRequest.Group"][];
+        };
+        "CrfVersionAuthoringRequest.Group": {
+            label?: string;
+            /** Format: int32 */
+            repeatNumber?: number;
+            /** Format: int32 */
+            repeatMax?: number;
         };
         "CrfVersionAuthoringRequest.Item": {
             name?: string;
@@ -4193,6 +4205,7 @@ export interface components {
             pageBreak?: boolean;
             groupLabel?: string;
             catalogCode?: string;
+            autocomplete?: components["schemas"]["Autocomplete"];
         };
         "CrfVersionAuthoringRequest.ResponseSet": {
             type?: string;
@@ -4214,6 +4227,10 @@ export interface components {
         "CrfVersionAuthoringRequest.Validation": {
             regexp?: string;
             errorMessage?: string;
+        };
+        Fill: {
+            fromProperty?: string;
+            toKey?: string;
         };
         CrfValidateExpressionRequest: {
             expression?: string;
@@ -4591,6 +4608,14 @@ export interface components {
             repeating?: boolean;
             crfs?: components["schemas"]["EventCrfRowDto"][];
         };
+        AutocompleteDto: {
+            system?: string;
+            fills?: components["schemas"]["AutocompleteFillDto"][];
+        };
+        AutocompleteFillDto: {
+            fromProperty?: string;
+            toKey?: string;
+        };
         CrfEntryDto: {
             eventCrfOid?: string;
             subjectId?: string;
@@ -4630,6 +4655,7 @@ export interface components {
             max?: number;
             groupOid?: string;
             showWhen?: string;
+            autocomplete?: components["schemas"]["AutocompleteDto"];
         };
         CrfItemGroupDto: {
             oid?: string;

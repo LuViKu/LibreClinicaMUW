@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import TerminologyAutocomplete, { type TermPick } from '@/components/TerminologyAutocomplete.vue'
-import type { RepeatingTableSpec } from '@/stores/crfAuthoring'
+import { LATERALITY_OPTIONS, type RepeatingTableSpec } from '@/stores/crfAuthoring'
 
 /**
  * #26 (2026-08-12) — repeating-table renderer (preview + live entry).
@@ -51,6 +51,10 @@ function commit(next: Row[]): void {
 
 function setCell(rowIndex: number, key: string, value: string): void {
   const next = rows.value.map((r, i) => (i === rowIndex ? { ...r, [key]: value } : { ...r }))
+  // Hand-editing a diagnosis field invalidates the code we remembered from the
+  // last pick (see onPick) — otherwise a stale eye code would keep laterality on.
+  const col = props.spec.columns.find((c) => c.key === key)
+  if (col?.autocomplete?.system === 'icd10gm') delete next[rowIndex]![dxCodeKey(key)]
   commit(next)
 }
 
@@ -68,7 +72,65 @@ function onPick(rowIndex: number, columnKey: string, pick: TermPick): void {
     const v = pick.properties[fill.fromProperty]
     if (v != null && v !== '') row[fill.toKey] = v
   }
+  // Eye-diagnosis gating. Remember the picked concept's ICD code in a hidden
+  // per-row slot so laterality can be gated even without a visible ICD-Code
+  // column, then clear laterality cells if the diagnosis is NOT an eye code.
+  if (col?.autocomplete?.system === 'icd10gm') {
+    row[dxCodeKey(columnKey)] = pick.code
+    if (!isEyeIcdCode(pick.code)) {
+      for (const c of props.spec.columns) if (c.type === 'laterality') row[c.key] = ''
+    }
+  }
   commit(next)
+}
+
+/** Hidden per-row key remembering a diagnosis column's last picked ICD code.
+ *  Never a real column key (those are `col_N`); preview-only — persistence
+ *  walks spec.columns, so these never leak into a payload. */
+function dxCodeKey(columnKey: string): string {
+  return `__dxcode__${columnKey}`
+}
+
+/**
+ * ICD-10 chapter VII "Diseases of the eye and adnexa" = H00–H59 (H60+ is the
+ * ear, so a leading "H" alone is not enough). Matches "H40", "H40.0", …
+ */
+function isEyeIcdCode(code: string | undefined | null): boolean {
+  return /^H[0-5]\d/i.test((code ?? '').trim())
+}
+
+/** Shape of any ICD-10 code (letter + two digits): H40, E11, H66, I10, … —
+ *  used to tell "a coded, non-eye diagnosis" apart from free text. */
+function isIcdCodeLike(v: string): boolean {
+  return /^[A-Z]\d\d/i.test(v.trim())
+}
+
+/** Does this table carry a diagnosis (ICD-10) autocomplete column? */
+const hasDiagnosisColumn = computed(() =>
+  props.spec.columns.some((c) => c.type === 'text' && c.autocomplete?.system === 'icd10gm'),
+)
+
+/**
+ * Is a laterality cell active for this row? On a non-diagnosis table (e.g. a
+ * per-eye medication) always — a topical drug still needs OD/OS. On a diagnosis
+ * table, gate on the ICD code, which may come from a filled ICD-Code column OR
+ * the code we remembered when the diagnosis was picked (so the column is
+ * optional):
+ *   - an eye code (H00–H59) anywhere → active;
+ *   - a coded but non-eye diagnosis → inactive;
+ *   - no code at all (diagnosis typed freehand, never picked) → active once
+ *     some diagnosis text is entered, since we can't classify it — better to
+ *     offer laterality than to block it.
+ */
+function lateralityActive(row: Row): boolean {
+  if (props.disabled) return false
+  if (!hasDiagnosisColumn.value) return true
+  const values = Object.values(row).map((v) => String(v ?? '').trim())
+  if (values.some(isEyeIcdCode)) return true
+  if (values.some(isIcdCodeLike)) return false
+  return props.spec.columns.some(
+    (c) => c.autocomplete?.system === 'icd10gm' && (row[c.key] ?? '').trim() !== '',
+  )
 }
 
 const canAddRow = computed(() => {
@@ -120,6 +182,18 @@ function cellId(rowIndex: number, key: string): string {
               @update:model-value="(v: string) => setCell(rowIndex, col.key, v)"
               @pick="(p: TermPick) => onPick(rowIndex, col.key, p)"
             />
+            <select
+              v-else-if="col.type === 'laterality'"
+              :id="cellId(rowIndex, col.key)"
+              :value="lateralityActive(row) ? (row[col.key] ?? '') : ''"
+              :disabled="!lateralityActive(row)"
+              :title="lateralityActive(row) ? undefined : t('crfAuthoring.canvas.table.lateralityEyeOnly')"
+              class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:outline-none focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+              @change="setCell(rowIndex, col.key, ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">—</option>
+              <option v-for="o in LATERALITY_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
             <input
               v-else
               :id="cellId(rowIndex, col.key)"

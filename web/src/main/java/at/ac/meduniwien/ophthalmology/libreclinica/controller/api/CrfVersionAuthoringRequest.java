@@ -36,8 +36,28 @@ public record CrfVersionAuthoringRequest(
         String versionName,
         String versionDescription,
         String revisionNotes,
-        List<Section> sections
+        List<Section> sections,
+        /**
+         * #26 — repeating-group row bounds (min/max), matched to items by
+         * {@code label}. Lets a table's operator-set bounds round-trip on save
+         * and fork instead of the adapter's hardcoded 1/40. Null/empty for CRFs
+         * with no repeating groups; the 4-arg constructor defaults it to null.
+         */
+        List<Group> groups
 ) {
+    /** Backward-compat constructor — no group metadata (null groups). */
+    public CrfVersionAuthoringRequest(String versionName, String versionDescription,
+            String revisionNotes, List<Section> sections) {
+        this(versionName, versionDescription, revisionNotes, sections, null);
+    }
+
+    /**
+     * #26 — repeating-group row bounds for one group, matched to its member
+     * items by {@code label} (== the SPA table's group label / base OID).
+     */
+    @Schema(name = "CrfVersionAuthoringRequest.Group")
+    public record Group(String label, Integer repeatNumber, Integer repeatMax) { }
+
     /**
      * One section in the authored CRF. {@code label} is the short
      * identifier referenced by items; {@code title} is the
@@ -126,8 +146,39 @@ public record CrfVersionAuthoringRequest(
              * win over catalog defaults; null means the operator
              * authored the item free-form (legacy path, no catalog).
              */
-            String catalogCode
+            String catalogCode,
+            /**
+             * #26 Slice 3 (binding store) — optional terminology autocomplete
+             * binding (which code system + the property->field fill map). The
+             * backend persists it to {@code crf_item_terminology} keyed by
+             * (crf_version_id, name) and the eventCrfs fetch hydrates it back
+             * onto {@code CrfItemDto.autocomplete} for live entry. Null = plain
+             * field.
+             */
+            Autocomplete autocomplete
     ) {
+        /** #26 Slice 3 — terminology autocomplete binding on an item/column. */
+        public record Autocomplete(String system, java.util.List<Fill> fills) {
+            public record Fill(String fromProperty, String toKey) {}
+        }
+
+        /**
+         * 18-arg overload (pre-autocomplete) — {@code autocomplete} defaults
+         * to {@code null} (plain field, no binding).
+         */
+        public Item(
+                String name, String oid, String descriptionLabel, String leftItemText,
+                String rightItemText, String units, String dataType, String defaultValue,
+                boolean required, ResponseSet responseSet, Validation validation,
+                String showItem, String parentItemOid, String header, String subHeader,
+                boolean pageBreak, String groupLabel, String catalogCode
+        ) {
+            this(name, oid, descriptionLabel, leftItemText, rightItemText, units,
+                    dataType, defaultValue, required, responseSet, validation,
+                    showItem, parentItemOid, header, subHeader, pageBreak, groupLabel,
+                    catalogCode, /* autocomplete */ null);
+        }
+
         /**
          * Backward-compat constructor — keeps the 17-arg callers (most
          * of the existing test suite + every {@code new
