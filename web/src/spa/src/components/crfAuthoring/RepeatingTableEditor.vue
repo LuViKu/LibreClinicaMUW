@@ -80,12 +80,12 @@ function removeColumn(i: number): void {
 
 function onMinRows(value: string): void {
   const n = Math.max(0, Number(value) || 0)
-  commit({ minRows: n })
+  commit({ minRows: Math.min(n, props.spec.maxRows) })
 }
 
 function onMaxRows(value: string): void {
   const n = Math.max(1, Number(value) || 1)
-  commit({ maxRows: n })
+  commit({ maxRows: Math.max(props.spec.minRows, n) })
 }
 
 /** Sibling columns a fill rule on column {@code i} may target (all but itself). */
