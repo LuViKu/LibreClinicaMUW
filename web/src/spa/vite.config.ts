@@ -128,6 +128,13 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
+    // Hot-module-reload toggle. Default on (normal dev). Set
+    // VITE_DISABLE_HMR=1 to turn it off — Vite then never pushes an HMR
+    // patch or a full page reload when source files change, so an editing
+    // session in another window can't reload a browser tab that an
+    // automated agent (e.g. Claude-in-Chrome) is driving. Requires a dev
+    // server restart to take effect (changing this file already restarts it).
+    hmr: process.env.VITE_DISABLE_HMR === '1' ? false : true,
     proxy: {
       // Forward backend-bound calls to the Spring Boot WAR running in
       // Docker Compose. The SPA never talks to the backend through `/app/`;
@@ -155,10 +162,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/setupTests.ts'],
-    // tests/a11y/spa-routes.spec.ts + tests/manual/** are Playwright specs
-    // that pull in @playwright/test (a non-vitest runner). When vitest's
-    // default include picks them up the files fail to collect. Exclude
-    // here; Playwright runs out-of-band.
-    exclude: ['**/node_modules/**', '**/dist/**', 'tests/a11y/spa-routes.spec.ts', 'tests/manual/**'],
+    // Everything under tests/** is a Playwright spec/helper (@playwright/test,
+    // a non-vitest runner) — a11y, smoke, visual, manual + their support/.
+    // Vitest's unit specs live in src/**/__tests__; exclude the whole tests/
+    // tree so Playwright files don't fail collection here. Playwright runs
+    // out-of-band via `pnpm test:e2e` / `test:smoke:e2e` / `test:a11y:e2e`.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/**'],
   },
 })

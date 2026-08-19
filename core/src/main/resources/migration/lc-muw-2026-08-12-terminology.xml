@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        #26 — Terminology store backing the repeating-table item's autocomplete
+        (ICD-10-GM diagnoses, ATC/drug catalogue). Structure mirrors the MUW
+        .NET terminology-ingest worker's model so the Java ingest worker can
+        do the same change-detection + atomic-swap:
+
+          terminology_codesystem_version — one row per (code_system, ingest).
+            Holds the fingerprint the worker compares to decide "nothing to do":
+            source_sha (the pinned upstream commit/file hash) + pipeline_version
+            (bump to force a re-ingest when a derived column is added) +
+            concept_count. is_current marks the live version.
+
+          terminology_concept — the searchable rows. display is shown verbatim;
+            match_text is the normalised (lower, collapsed) search key; properties
+            keeps the source-specific extras (ICD classKind, ATC code, lieferbar…)
+            as jsonb. version_id ties a row to its ingest.
+
+        The worker COPYs into a `terminology_concept_staging` table (created at
+        run time LIKE this one INCLUDING ALL) and RENAME-swaps it in atomically,
+        so autocomplete readers never see a half-loaded catalogue.
+    -->
+    <changeSet id="lc-muw-2026-08-12-terminology-schema"
+               author="lukas.kuchernig@meduniwien.ac.at">
+        <sql splitStatements="true" endDelimiter=";">
+            CREATE TABLE terminology_codesystem_version (
+                id               BIGSERIAL PRIMARY KEY,
+                code_system      VARCHAR(32)  NOT NULL,
+                source_url       TEXT,
+                source_sha       VARCHAR(128),
+                pipeline_version INTEGER      NOT NULL DEFAULT 1,
+                concept_count    INTEGER      NOT NULL DEFAULT 0,
+                is_current       BOOLEAN      NOT NULL DEFAULT FALSE,
+                ingested_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX idx_termver_current ON terminology_codesystem_version (code_system, is_current);
+
+            CREATE TABLE terminology_concept (
+                id          BIGSERIAL PRIMARY KEY,
+                code_system VARCHAR(32) NOT NULL,
+                code        VARCHAR(64) NOT NULL,
+                display     TEXT        NOT NULL,
+                match_text  TEXT        NOT NULL,
+                properties  JSONB,
+                version_id  BIGINT
+            );
+            -- Lookup by exact code (resolve a stored value back to its display).
+            CREATE INDEX idx_termconcept_system_code ON terminology_concept (code_system, code);
+            -- Prefix autocomplete on the normalised key (text_pattern_ops makes
+            -- `match_text LIKE 'q%'` an index range scan without a trigram ext).
+            CREATE INDEX idx_termconcept_match ON terminology_concept (code_system, match_text text_pattern_ops);
+        </sql>
+        <rollback>
+            <sql>
+                DROP TABLE IF EXISTS terminology_concept;
+                DROP TABLE IF EXISTS terminology_codesystem_version;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

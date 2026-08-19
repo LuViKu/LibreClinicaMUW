@@ -13,6 +13,18 @@ import { useClientLogsStore } from '@/stores/clientLogs'
 // re-entering main.ts (which would create an import cycle).
 import { i18n } from '@/i18n'
 
+// 2026-07-06 — vendor the three MUW-branded typefaces at build time
+// via @fontsource-variable/* instead of loading from Google Fonts. The
+// eCRF runs in a clinical environment where every runtime fetch to a
+// public CDN leaks the operator's IP + Referer, and where an
+// air-gapped or CDN-blocked network would silently break the SPA's
+// typography. The variable-font packages ship a single OTC file per
+// family (~120 kB gzipped total for all three) covering every weight
+// + optical-size axis referenced by style.css's @font-face aliases.
+import '@fontsource-variable/inter'
+import '@fontsource-variable/newsreader'
+import '@fontsource-variable/jetbrains-mono'
+
 import './style.css'
 
 const app = createApp(App)

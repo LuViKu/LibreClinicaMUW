@@ -110,7 +110,7 @@ function hasExpandable(ev: AuditEvent): boolean {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6">
+    <div class="flex-1 px-8 py-6">
       <div class="mb-5">
         <div class="text-xs text-slate-500 mb-1">{{ t('auditLog.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('auditLog.title') }}</h1>
@@ -235,6 +235,6 @@ function hasExpandable(ev: AuditEvent): boolean {
           </TimelineEvent>
         </template>
       </Timeline>
-    </main>
+    </div>
   </div>
 </template>

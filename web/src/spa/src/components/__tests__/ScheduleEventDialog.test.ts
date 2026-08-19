@@ -87,7 +87,7 @@ describe('ScheduleEventDialog — nAMD interval handling', () => {
     const dateInput = document.body.querySelector(
       'input#schedule-event-date',
     ) as HTMLInputElement
-    dateInput.value = '2026-06-19'
+    dateInput.value = '19/06/2026'
     dateInput.dispatchEvent(new Event('input', { bubbles: true }))
     await flushPromises()
 
@@ -131,7 +131,7 @@ describe('ScheduleEventDialog — nAMD interval handling', () => {
     const dateInput = document.body.querySelector(
       'input#schedule-event-date',
     ) as HTMLInputElement
-    dateInput.value = '2026-06-19'
+    dateInput.value = '19/06/2026'
     dateInput.dispatchEvent(new Event('input', { bubbles: true }))
     const intervalInput = document.body.querySelector(
       'input#schedule-event-interval',
@@ -167,7 +167,7 @@ describe('ScheduleEventDialog — nAMD interval handling', () => {
     const dateInput = document.body.querySelector(
       'input#schedule-event-date',
     ) as HTMLInputElement
-    dateInput.value = '2026-06-19'
+    dateInput.value = '19/06/2026'
     dateInput.dispatchEvent(new Event('input', { bubbles: true }))
     const intervalInput = document.body.querySelector(
       'input#schedule-event-interval',

@@ -96,6 +96,21 @@ describe('SectionCanvas', () => {
     expect(store.selectedItemUid).toBe(store.draft.sections[0]!.items[0]!.uid)
   })
 
+  it('exposes a uid-stable testid that selects the item regardless of position', async () => {
+    const w = mountCanvas()
+    const store = useCrfAuthoringStore()
+    // Two items; the uid-keyed hook must address the SECOND independently of
+    // its index, so automation can't select the wrong item after reordering.
+    store.addItem(0, { name: 'A', oid: 'A' })
+    store.addItem(0, { name: 'B', oid: 'B' })
+    await flushPromises()
+    const bUid = store.draft.sections[0]!.items[1]!.uid
+    const hook = w.find(`[data-testid="crf-canvas-item-uid-${bUid}"]`)
+    expect(hook.exists()).toBe(true)
+    await hook.trigger('click')
+    expect(store.selectedItemUid).toBe(bUid)
+  })
+
   it('"Add section" extends the section list', async () => {
     const w = mountCanvas()
     const store = useCrfAuthoringStore()
@@ -114,5 +129,47 @@ describe('SectionCanvas', () => {
     expect(w.find('[data-testid="crf-canvas-section-bilateral-0"]').exists()).toBe(true)
     expect(w.find('[data-testid="crf-canvas-item-od-TEST"]').exists()).toBe(true)
     expect(w.find('[data-testid="crf-canvas-item-os-TEST"]').exists()).toBe(true)
+  })
+
+  it('seeds a dropped CHOICE_SINGLE block with two blank option rows', async () => {
+    const w = mountCanvas()
+    const store = useCrfAuthoringStore()
+    const section = w.find('[data-testid="crf-canvas-section-0"]')
+    section.element.dispatchEvent(makeDropEvent({ kind: 'primitive', value: 'CHOICE_SINGLE' }))
+    await flushPromises()
+    const item = store.draft.sections[0]!.items[0]!
+    expect(item.dataType).toBe('ST')
+    expect(item.responseType).toBe('single-select')
+    expect((item.responseSet as { options: unknown[] }).options).toHaveLength(2)
+  })
+
+  it('seeds a dropped TRISTATE_REASON block with the three canonical options', async () => {
+    const w = mountCanvas()
+    const store = useCrfAuthoringStore()
+    const section = w.find('[data-testid="crf-canvas-section-0"]')
+    section.element.dispatchEvent(makeDropEvent({ kind: 'primitive', value: 'TRISTATE_REASON' }))
+    await flushPromises()
+    const item = store.draft.sections[0]!.items[0]!
+    // Used to land as responseType 'text' with a null response set, and
+    // the rail offered no way to repair it.
+    expect(item.responseType).toBe('single-select')
+    expect((item.responseSet as { options: Array<{ value: string }> }).options.map((o) => o.value))
+      .toEqual(['JA', 'NEIN', 'UNBEKANNT'])
+  })
+
+  it('gives each dropped choice block its own options array', async () => {
+    const w = mountCanvas()
+    const store = useCrfAuthoringStore()
+    const section = w.find('[data-testid="crf-canvas-section-0"]')
+    section.element.dispatchEvent(makeDropEvent({ kind: 'primitive', value: 'CHOICE_SINGLE' }))
+    await flushPromises()
+    section.element.dispatchEvent(makeDropEvent({ kind: 'primitive', value: 'CHOICE_SINGLE' }))
+    await flushPromises()
+    const [a, b] = store.draft.sections[0]!.items
+    // Pins the seed-factory contract: a shared seed object would hand
+    // both items the SAME array, so editing one would edit both.
+    expect((a!.responseSet as { options: unknown[] }).options).not.toBe(
+      (b!.responseSet as { options: unknown[] }).options,
+    )
   })
 })

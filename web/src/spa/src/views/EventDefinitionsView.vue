@@ -12,6 +12,7 @@ import EventCrfAssignmentsDialog from '@/components/EventCrfAssignmentsDialog.vu
 
 import { useEventDefinitionsStore } from '@/stores/eventDefinitions'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { EventDefinition, EventType } from '@/types/eventDefinition'
 
 /**
@@ -29,6 +30,7 @@ import type { EventDefinition, EventType } from '@/types/eventDefinition'
 const { t } = useI18n()
 const eventDefs = useEventDefinitionsStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const canManage = computed(() => {
@@ -185,7 +187,7 @@ async function submitEdit() {
 
 async function onDisable(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.disableConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.disableConfirm', { name: row.name }), danger: true }))) return
   await eventDefs.disable(studyOid.value, row.oid)
 }
 
@@ -194,17 +196,17 @@ async function onDisable(row: EventDefinition) {
 const showRemoved = ref(false)
 async function onRestore(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.restoreConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.restoreConfirm', { name: row.name }), danger: false }))) return
   await eventDefs.restore(studyOid.value, row.oid)
 }
 async function onLock(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.lockConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.lockConfirm', { name: row.name }), danger: true }))) return
   await eventDefs.lock(studyOid.value, row.oid)
 }
 async function onUnlock(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!confirm(t('eventDefinitions.unlockConfirm', { name: row.name }))) return
+  if (!(await confirm({ message: t('eventDefinitions.unlockConfirm', { name: row.name }), danger: false }))) return
   await eventDefs.unlock(studyOid.value, row.oid)
 }
 
@@ -252,7 +254,7 @@ function openAssignments(row: EventDefinition) {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('eventDefinitions.subTrail') }}</div>
@@ -304,31 +306,31 @@ function openAssignments(row: EventDefinition) {
             <td class="px-3 py-2 text-right text-xs">
               <div v-if="canManage" class="inline-flex items-center gap-2">
                 <button
-                  class="text-slate-500 hover:text-muw-blue disabled:opacity-30"
+                  class="inline-flex items-center justify-center min-w-[24px] min-h-[24px] text-slate-500 hover:text-muw-blue disabled:opacity-30"
                   :disabled="idx === 0"
                   @click="moveUp(idx)"
                   :aria-label="t('eventDefinitions.moveUp')"
                 >↑</button>
                 <button
-                  class="text-slate-500 hover:text-muw-blue disabled:opacity-30"
+                  class="inline-flex items-center justify-center min-w-[24px] min-h-[24px] text-slate-500 hover:text-muw-blue disabled:opacity-30"
                   :disabled="idx === activeRows.length - 1"
                   @click="moveDown(idx)"
                   :aria-label="t('eventDefinitions.moveDown')"
                 >↓</button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-muw-blue hover:underline" @click="openEdit(row)">
                   {{ t('common.next') === 'Next' ? 'Edit' : 'Bearbeiten' }}
                 </button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-muw-blue hover:underline" @click="openAssignments(row)">
                   {{ t('eventDefinitions.manageCrfs') }}
                 </button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-rose-600 hover:underline" @click="onDisable(row)">
                   {{ t('eventDefinitions.disable') }}
                 </button>
                 <template v-if="canLifecycle">
-                  <span class="text-slate-300">·</span>
+                  <span class="text-slate-500">·</span>
                   <button
                     v-if="row.status !== 'locked'"
                     class="text-amber-700 hover:underline"
@@ -506,7 +508,7 @@ function openAssignments(row: EventDefinition) {
           >{{ isSavingEdit ? t('common.saving') : t('eventDefinitions.submitEdit') }}</button>
         </div>
       </div>
-    </main>
+    </div>
 
     <EventCrfAssignmentsDialog
       v-model:open="assignDialogOpen"

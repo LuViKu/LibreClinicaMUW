@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { markTerminologyOid, terminologySystemFromOid } from '@/components/terminologyOid'
 import type { CrfVersion } from '@/types/crfLibrary'
 
 /**
@@ -146,6 +147,149 @@ export interface ShowWhenRule {
  */
 export type AuthoringLaterality = 'OD' | 'OS' | 'OU'
 
+/**
+ * #26 (2026-08-12) — terminology data source for an autocomplete-bound
+ * text field. A loose string (not a closed union) so a new catalogue can
+ * be ingested and wired up without a code change; the known values are
+ * {@code 'icd10gm'} (ICD-10-GM diagnoses, ingested) and {@code 'medication'}
+ * (ATC/drug catalogue — Slice 2, carries strength/unit/form properties the
+ * fill map fans out).
+ */
+export type TerminologySystem = string
+
+/**
+ * One fill rule on an autocomplete binding: when the operator picks a
+ * catalogue suggestion, copy the concept's {@code fromProperty} (a key in
+ * the terminology row's JSONB properties, e.g. {@code 'strength'}) into a
+ * sibling field named by {@code toKey}.
+ *
+ * <p>{@code toKey} resolves against the SAME repeating-table row when the
+ * binding lives on a table column (matched by column {@link RepeatingTableColumn.key});
+ * on a flat item it names a sibling item OID in the same section. Explicit
+ * mapping (per the 2026-08-12 design decision) so it survives column
+ * reordering and works for both table + flat fields.
+ */
+export interface AutocompleteFill {
+  fromProperty: string
+  toKey: string
+}
+
+/**
+ * #26 — opt-in terminology autocomplete on a text field. Absent = plain
+ * text input. When present the field renders {@code TerminologyAutocomplete}
+ * against {@link system}; picking a suggestion writes "CODE — Display" into
+ * the field and fans {@link fills} out into sibling fields.
+ *
+ * <p>Wizard-only for now: NOT serialised by {@code buildItemPayload} (the
+ * workbook adapter has no column for it yet — that's the backend
+ * follow-up). Preview + live-entry rendering read it directly from the
+ * draft, so the behaviour is verifiable in-SPA today.
+ */
+export interface AutocompleteBinding {
+  system: TerminologySystem
+  fills: AutocompleteFill[]
+}
+
+/**
+ * Column value kind for a repeating-table cell. {@code laterality} is an
+ * ophthalmology fixed OD/OS/OU choice (right / left / both eyes) — useful on
+ * an eye-diagnosis or per-eye medication table.
+ */
+export type RepeatingTableColumnType = 'text' | 'number' | 'date' | 'laterality'
+
+/**
+ * Fixed OD/OS/OU choice for a {@code laterality} column. Value = the Latin
+ * standard code (persisted / stored); label carries the German gloss. See the
+ * ophthalmology laterality convention: OD = right eye, OS = left, OU = both.
+ */
+export const LATERALITY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'OD', label: 'OD (rechts)' },
+  { value: 'OS', label: 'OS (links)' },
+  { value: 'OU', label: 'OU (beide)' },
+]
+
+/**
+ * One operator-defined column of a repeating-table item. A {@code text}
+ * column may opt into terminology autocomplete via {@link autocomplete}.
+ */
+export interface RepeatingTableColumn {
+  /** Stable key — the per-row cell address and the fill-map {@code toKey} target. */
+  key: string
+  label: string
+  type: RepeatingTableColumnType
+  autocomplete?: AutocompleteBinding
+}
+
+/**
+ * #26 — a generic repeating-table item: the operator defines the columns
+ * and the clinician adds/removes rows at entry time (medication list,
+ * diagnosis list, …). Wizard-only metadata (see {@link AutocompleteBinding}).
+ */
+export interface RepeatingTableSpec {
+  columns: RepeatingTableColumn[]
+  minRows: number
+  maxRows: number
+}
+
+/** Monotonic column-key source (`col_1`, `col_2`, …). Module-level, so it
+ *  resets to 0 on every page load — {@link reseedTableColumnKeySeq} advances it
+ *  past a restored draft's existing keys so newly-minted keys never collide. */
+let tableColumnKeySeq = 0
+
+/** A fresh blank text column with a unique {@link RepeatingTableColumn.key}. */
+export function newRepeatingTableColumn(label = ''): RepeatingTableColumn {
+  tableColumnKeySeq += 1
+  return { key: `col_${tableColumnKeySeq}`, label, type: 'text' }
+}
+
+/**
+ * A restored draft already carries column keys minted in an earlier session,
+ * but the module counter resets to 0 on each page load. Without this, the next
+ * {@link newRepeatingTableColumn} would re-mint `col_1` and collide with a
+ * restored column — two columns sharing one key silently mirror each other's
+ * cell state (a table's row store is keyed by column key). Advance the counter
+ * past the highest `col_N` any restored table column holds.
+ */
+export function reseedTableColumnKeySeq(d: AuthoringDraft): void {
+  let max = tableColumnKeySeq
+  for (const section of d.sections ?? []) {
+    for (const item of section.items ?? []) {
+      for (const col of item.table?.columns ?? []) {
+        const m = /^col_(\d+)$/.exec(col.key)
+        if (m) max = Math.max(max, Number(m[1]))
+      }
+    }
+  }
+  tableColumnKeySeq = max
+}
+
+/**
+ * Item OIDs must be unique across the whole CRF: the entry/preview store keys
+ * every item's value by its OID, so two items sharing one OID silently share a
+ * single slot — their cells mirror each other (observed live as a laterality
+ * pick bleeding into a sibling table). Returns the offending items (trimmed,
+ * non-empty OID appearing on more than one item); empty OIDs are left to
+ * required-field validation. Deterministic order: draft order.
+ */
+export function findDuplicateOidItems(d: AuthoringDraft): { uid: string; oid: string }[] {
+  const counts = new Map<string, number>()
+  const items: { uid: string; oid: string }[] = []
+  for (const section of d.sections ?? []) {
+    for (const item of section.items ?? []) {
+      const oid = item.oid.trim()
+      if (!oid) continue
+      items.push({ uid: item.uid, oid })
+      counts.set(oid, (counts.get(oid) ?? 0) + 1)
+    }
+  }
+  return items.filter((x) => (counts.get(x.oid) ?? 0) > 1)
+}
+
+/** Default two-column generic table seeded by the TABLE palette block. */
+export function defaultRepeatingTableSpec(): RepeatingTableSpec {
+  return { columns: [newRepeatingTableColumn(''), newRepeatingTableColumn('')], minRows: 1, maxRows: 20 }
+}
+
 export interface AuthoringItem {
   /**
    * Stable client-side identity used by vuedraggable's `item-key` so the
@@ -194,6 +338,26 @@ export interface AuthoringItem {
    * they want to drift from the catalog defaults.
    */
   catalogCode?: string
+  /**
+   * #26 (2026-08-12) — opt-in terminology autocomplete on a FLAT text
+   * item (ST / text). When set the entry + preview render
+   * {@code TerminologyAutocomplete}; {@code fills[].toKey} names sibling
+   * item OIDs in the same section. Wizard-only (not persisted yet).
+   */
+  autocomplete?: AutocompleteBinding
+  /**
+   * #26 (2026-08-12) — when set, this item is a generic repeating table
+   * (operator-defined columns; clinician adds/removes rows). The scalar
+   * {@code dataType}/{@code responseType} are inert for a table item.
+   *
+   * <p>Persistence (Slice 3): {@code buildTableItemPayloads} expands this
+   * into one grouped item per column (shared {@code groupLabel}), which the
+   * backend materialises as an OpenClinica repeating item-group — so the
+   * table STRUCTURE round-trips and renders at entry via RepeatingGroupSection.
+   * The per-column terminology {@link AutocompleteBinding} is NOT persisted
+   * yet (no backend column) — it stays preview-only until that follow-up.
+   */
+  table?: RepeatingTableSpec
 }
 
 export interface AuthoringSection {
@@ -262,6 +426,9 @@ export interface ForkContentsWire {
   versionDescription?: string
   revisionNotes?: string
   sections?: ForkSectionWire[]
+  /** Fork recovery — per-group row bounds, matched to a reconstructed table
+   *  by {@code label} (== the group label its columns carry). */
+  groups?: Array<{ label?: string; repeatNumber?: number | null; repeatMax?: number | null }> | null
 }
 
 interface ForkSectionWire {
@@ -284,6 +451,26 @@ interface ForkItemWire {
   required?: boolean
   responseSet?: ForkResponseSetWire | null
   validation?: { regexp?: string; errorMessage?: string } | null
+  /**
+   * Fork recovery — the item's repeating-group label. Items sharing a
+   * (non-blank) label are reconstructed into one repeating-table item
+   * (the inverse of {@code buildTableItemPayloads}).
+   */
+  groupLabel?: string | null
+  /**
+   * Fork recovery — conditional display, surfaced on the legacy fields the
+   * backend adapter round-trips: {@code parentItemOid} is the source item's
+   * OID, {@code showItem} the trigger literal (from {@code scd_item_metadata}).
+   * The legacy schema stores equality only, so we rehydrate comparator "==".
+   */
+  showItem?: string | null
+  parentItemOid?: string | null
+  /**
+   * Fork recovery — the persisted terminology binding (from
+   * {@code crf_item_terminology}): system + fill map whose {@code toKey}s are
+   * target-column OIDs, translated back to reconstructed column keys.
+   */
+  autocomplete?: { system?: string; fills?: Array<{ fromProperty?: string; toKey?: string }> } | null
 }
 
 interface ForkResponseSetWire {
@@ -397,6 +584,94 @@ export function hasShowWhen(item: AuthoringItem): boolean {
   return item.showWhen != null && item.showWhen.sourceItemOid.trim() !== ''
 }
 
+/**
+ * Canonical Ja / Nein / Unbekannt trio backing {@link AuthoringDataType}
+ * {@code TRISTATE_REASON}.
+ *
+ * <p>The VALUES are the contract, not decoration — the conditional
+ * children generated by the IOP + imaging-acquisition presets compare
+ * against exactly these literals in their show-when rules (see
+ * {@code presets/iopPreset.ts}). The display texts are the German
+ * source-of-truth strings and stay operator-editable afterwards.
+ */
+export const TRISTATE_OPTION_VALUES = {
+  JA: 'JA',
+  NEIN: 'NEIN',
+  UNBEKANNT: 'UNBEKANNT',
+} as const
+
+export function tristateOptions(): ResponseSetOption[] {
+  return [
+    { text: 'Ja', value: TRISTATE_OPTION_VALUES.JA },
+    { text: 'Nein', value: TRISTATE_OPTION_VALUES.NEIN },
+    { text: 'Unbekannt', value: TRISTATE_OPTION_VALUES.UNBEKANNT },
+  ]
+}
+
+/**
+ * Two blank starter rows so the operator can see where to type. Blank
+ * rows are filtered out again at serialise time
+ * ({@link buildResponseSetPayload}) and never reach the wire.
+ */
+function blankOptionRows(): ResponseSetOption[] {
+  return [
+    { text: '', value: '' },
+    { text: '', value: '' },
+  ]
+}
+
+/**
+ * Bring {@code responseType} + {@code responseSet} into a shape the
+ * backend can accept, given the item's {@code dataType}. Idempotent;
+ * mutates in place.
+ *
+ * <p>This invariant used to live in a watcher inside the (now dead)
+ * {@code ItemEditor.vue}, which is precisely why the palette-drop path
+ * never got it: dropping a {@code TRISTATE_REASON} or {@code FILE}
+ * primitive left {@code responseType: 'text'} — out of the data type's
+ * allowed matrix — plus a null response set, and the properties rail
+ * then *disabled* the response-type select (singleton allowed set) while
+ * displaying a value the model didn't hold. The operator could not
+ * correct it and the item silently saved as open text.
+ *
+ * <p>Living in the store means the drop path ({@link addItem}) and the
+ * rail path ({@link setItemField}) cannot diverge again.
+ */
+export function reconcileItemResponseShape(item: AuthoringItem): void {
+  // 1. Clamp the response type into the data type's allowed matrix.
+  const allowed = allowedResponseTypesForDataType(item.dataType)
+  if (allowed.length > 0 && !allowed.includes(item.responseType)) {
+    item.responseType = allowed[0]!
+  }
+  // 2. BL pins a synthesised Yes/No at buildResponseSetPayload time —
+  //    never let an inline set linger underneath it.
+  if (dataTypeIsBoolean(item.dataType)) {
+    item.responseSet = null
+    return
+  }
+  // 3. Open-text / file branches carry no options.
+  if (!responseTypeRequiresOptions(item.responseType)) {
+    item.responseSet = null
+    return
+  }
+  const rs = item.responseSet
+  // 4. A catalog link is the operator's explicit choice — leave it be.
+  if (rs != null && 'ref' in rs) return
+  // 5. Seed an inline set so the rail's options editor always has rows
+  //    to bind against. Label stays blank on purpose: the per-item
+  //    label is derived at serialise time (see implicitChoiceLabel).
+  if (rs == null) {
+    item.responseSet = {
+      type: item.responseType,
+      label: '',
+      options: item.dataType === 'TRISTATE_REASON' ? tristateOptions() : blankOptionRows(),
+    }
+    return
+  }
+  // 6. Inline set already present — keep the operator's rows, sync type.
+  rs.type = item.responseType
+}
+
 function emptyValidation(): AuthoringValidation {
   return { regexp: '', errorMessage: '' }
 }
@@ -408,13 +683,47 @@ function nextUid(prefix: string): string {
 }
 
 /**
+ * Section/item UIDs (`sec-1`, `item-3`) come from {@link nextUid}, whose
+ * counter also resets to 0 on page load. A restored draft already holds UIDs,
+ * so without re-seeding, the next added item re-mints a colliding UID — two
+ * items sharing a UID break selection and drag-reorder, which key by UID.
+ * Advance the counter past the highest suffix any restored UID holds (the
+ * counter is shared across prefixes, so scan both sections and items).
+ */
+export function reseedUidCounter(d: AuthoringDraft): void {
+  let max = uidCounter
+  const bump = (uid: string | undefined): void => {
+    const m = /-(\d+)$/.exec(uid ?? '')
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  for (const section of d.sections ?? []) {
+    bump(section.uid)
+    for (const item of section.items ?? []) bump(item.uid)
+  }
+  uidCounter = max
+}
+
+/**
  * Convert the fork-from-version wire payload into an {@link AuthoringDraft}.
  * Defensive against missing/null fields. {@code versionName} is blanked
  * so the operator types a fresh name (the backend's unique-name check
  * would otherwise reject the prior version's name).
  */
+/** Recovered row bounds for a reconstructed table, keyed by group label. */
+type ForkGroupBounds = Map<string, { minRows: number; maxRows: number }>
+
 function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
-  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1))
+  const bounds: ForkGroupBounds = new Map()
+  for (const g of wire.groups ?? []) {
+    const label = (g?.label ?? '').trim()
+    if (!label) continue
+    const minRows = Math.max(1, g?.repeatNumber ?? 1)
+    bounds.set(label, {
+      minRows,
+      maxRows: Math.max(minRows, Math.max(1, g?.repeatMax ?? 20)),
+    })
+  }
+  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1, bounds))
   if (sections.length === 0) {
     sections.push({
       uid: nextUid('sec'),
@@ -433,15 +742,124 @@ function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
   }
 }
 
-function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringSection {
+function forkSection(wire: ForkSectionWire, fallbackOrdinal: number, bounds: ForkGroupBounds): AuthoringSection {
   return {
     uid: nextUid('sec'),
     label: wire.label?.trim() || `S${fallbackOrdinal}`,
     title: wire.title?.trim() || `Section ${fallbackOrdinal}`,
     instructions: wire.instructions ?? '',
     ordinal: wire.ordinal ?? fallbackOrdinal,
-    items: (wire.items ?? []).map(forkItem),
+    items: forkItems(wire.items ?? [], bounds),
   }
+}
+
+/**
+ * Fork recovery — rebuild a section's items, folding every run of items that
+ * share a repeating-group label back into a single {@link RepeatingTableSpec}
+ * item (the inverse of {@code buildTableItemPayloads}). Ungrouped items map
+ * 1:1 via {@link forkItem}. The table item is placed where its group first
+ * appears; columns keep wire order. The terminology binding (system + fill
+ * map) is recovered from the wire when present (persisted in
+ * crf_item_terminology), else the system alone from the OID marker. Fill
+ * {@code toKey}s are persisted as target-column OIDs and translated back to
+ * the reconstructed column keys.
+ */
+function forkItems(wires: ForkItemWire[], bounds: ForkGroupBounds): AuthoringItem[] {
+  const items: AuthoringItem[] = []
+  const tableByLabel = new Map<string, AuthoringItem>()
+  // Per group label: persisted column OID → reconstructed column key, plus the
+  // columns whose fills still need their target OIDs translated (second pass,
+  // once every column key is known).
+  const oidToKey = new Map<string, Map<string, string>>()
+  const pending: Array<{ label: string; col: RepeatingTableColumn; fills: Array<{ fromProperty: string; toKey: string }> }> = []
+  for (const w of wires) {
+    const label = (w.groupLabel ?? '').trim()
+    if (!label) {
+      items.push(forkItem(w))
+      continue
+    }
+    let table = tableByLabel.get(label)
+    if (!table) {
+      table = forkTableItem(label, bounds.get(label))
+      tableByLabel.set(label, table)
+      oidToKey.set(label, new Map())
+      items.push(table)
+    }
+    const col = forkTableColumn(w)
+    table.table!.columns.push(col)
+    oidToKey.get(label)!.set((w.oid ?? '').trim(), col.key)
+    const fills = w.autocomplete?.fills
+    if (col.autocomplete && fills && fills.length > 0) {
+      pending.push({ label, col, fills: fills.map((f) => ({ fromProperty: f.fromProperty ?? '', toKey: (f.toKey ?? '').trim() })) })
+    }
+  }
+  // Second pass — translate each fill's persisted target OID to the
+  // reconstructed column key; drop fills whose target column is gone.
+  for (const { label, col, fills } of pending) {
+    const map = oidToKey.get(label)!
+    col.autocomplete!.fills = fills
+      .map((f) => ({ fromProperty: f.fromProperty, toKey: map.get(f.toKey) ?? '' }))
+      .filter((f) => f.fromProperty !== '' && f.toKey !== '')
+  }
+  return items
+}
+
+/** A fresh repeating-table item whose oid/name is the recovered group label. */
+function forkTableItem(groupLabel: string, bounds?: { minRows: number; maxRows: number }): AuthoringItem {
+  return {
+    uid: nextUid('item'),
+    name: groupLabel,
+    oid: groupLabel,
+    descriptionLabel: groupLabel,
+    leftItemText: '',
+    rightItemText: '',
+    units: '',
+    dataType: 'ST',
+    responseType: 'text',
+    defaultValue: '',
+    required: false,
+    responseSet: null,
+    validation: { regexp: '', errorMessage: '' },
+    // Recover the persisted row bounds (wire groups[]) when present; else the
+    // authoring defaults.
+    table: { columns: [], minRows: bounds?.minRows ?? 1, maxRows: bounds?.maxRows ?? 20 },
+  }
+}
+
+/** Reconstruct one repeating-table column from a persisted grouped item.
+ *  Fills are staged empty here and translated in {@link forkItems}' 2nd pass. */
+function forkTableColumn(w: ForkItemWire): RepeatingTableColumn {
+  const label = (w.descriptionLabel ?? '').trim() || (w.leftItemText ?? '').trim() || (w.name ?? '').trim()
+  const col = newRepeatingTableColumn(label)
+  col.type = forkColumnType(w)
+  // System from the persisted binding when present (crf_item_terminology),
+  // else decoded from the OID marker.
+  const system = w.autocomplete?.system ?? terminologySystemFromOid(w.oid)
+  if (col.type === 'text' && system) col.autocomplete = { system, fills: [] }
+  return col
+}
+
+/**
+ * Infer a recovered column's type from its persisted shape (inverse of
+ * {@code buildTableItemPayloads}): a single-select whose options are exactly
+ * OD/OS/OU is a laterality column; REAL/INT → number; DATE/PDATE → date;
+ * everything else (incl. terminology-bound text) → text.
+ */
+function forkColumnType(w: ForkItemWire): RepeatingTableColumnType {
+  if (w.responseSet?.type === 'single-select' && isLateralityOptionSet(w.responseSet.options)) {
+    return 'laterality'
+  }
+  const dt = (w.dataType ?? '').toUpperCase()
+  if (dt === 'REAL' || dt === 'INT' || dt === 'INTEGER') return 'number'
+  if (dt === 'DATE' || dt === 'PDATE') return 'date'
+  return 'text'
+}
+
+/** True when a response set's option values are a non-empty subset of OD/OS/OU. */
+function isLateralityOptionSet(options: Array<{ value?: string }> | undefined): boolean {
+  const allowed = new Set(LATERALITY_OPTIONS.map((o) => o.value))
+  const values = (options ?? []).map((o) => (o.value ?? '').trim().toUpperCase()).filter(Boolean)
+  return values.length > 0 && values.every((v) => allowed.has(v))
 }
 
 function forkItem(wire: ForkItemWire): AuthoringItem {
@@ -449,7 +867,7 @@ function forkItem(wire: ForkItemWire): AuthoringItem {
     wire.responseSet?.type && isAuthoringResponseType(wire.responseSet.type)
       ? wire.responseSet.type
       : 'text'
-  return {
+  const item: AuthoringItem = {
     uid: nextUid('item'),
     name: wire.name ?? '',
     oid: wire.oid ?? '',
@@ -467,6 +885,17 @@ function forkItem(wire: ForkItemWire): AuthoringItem {
       errorMessage: wire.validation?.errorMessage ?? '',
     },
   }
+  // Fork recovery — reattach a conditional-display rule when the backend
+  // surfaced one (source OID present). The legacy store is equality-only.
+  const parentOid = (wire.parentItemOid ?? '').trim()
+  if (parentOid !== '') {
+    item.showWhen = {
+      sourceItemOid: parentOid,
+      comparator: '==',
+      literal: wire.showItem ?? '',
+    }
+  }
+  return item
 }
 
 function forkResponseSet(wire: ForkResponseSetWire | null): AuthoringResponseSet {
@@ -614,6 +1043,21 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     }
   }
 
+  /**
+   * Replace the whole draft with a restored copy (e.g. from the
+   * local autosave in {@code useCrfDraftPersistence}). Mirrors the
+   * wholesale replacement {@link loadFromVersion} does, clearing the
+   * canvas selection so the properties rail doesn't dangle on a uid
+   * that may no longer exist.
+   */
+  function hydrateDraft(next: AuthoringDraft): void {
+    draft.value = next
+    selectedItemUid.value = null
+    error.value = null
+    reseedTableColumnKeySeq(next)
+    reseedUidCounter(next)
+  }
+
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
     if (patch.versionName !== undefined) draft.value.versionName = patch.versionName
     if (patch.versionDescription !== undefined) draft.value.versionDescription = patch.versionDescription
@@ -671,7 +1115,12 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   function addItem(sectionIndex: number, seed?: Partial<AuthoringItem>): void {
     const section = draft.value.sections[sectionIndex]
     if (!section) return
-    section.items.push({ ...emptyItem(), ...seed })
+    const item: AuthoringItem = { ...emptyItem(), ...seed }
+    // Palette drops seed a dataType (and sometimes a responseType) but
+    // never a responseSet — reconcile fills in the rest so a dropped
+    // block is immediately valid and editable in the properties rail.
+    reconcileItemResponseShape(item)
+    section.items.push(item)
   }
 
   /**
@@ -854,6 +1303,29 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const item = section.items[itemIndex]
     if (!item) return
     item[field] = value
+    // Only the two shape-bearing fields trigger reconciliation. Editing
+    // a name or label on a preset-generated item must never disturb its
+    // authored options.
+    if (field === 'dataType' || field === 'responseType') {
+      reconcileItemResponseShape(item)
+    }
+  }
+
+  /**
+   * Replace an item's response set — the write-through used by the
+   * properties rail's options editor. Keeps {@code responseSet.type}
+   * slaved to {@code item.responseType}; the editor mutates options
+   * only, never the response type itself.
+   */
+  function setItemResponseSet(
+    sectionIndex: number,
+    itemIndex: number,
+    rs: AuthoringResponseSet,
+  ): void {
+    const item = draft.value.sections[sectionIndex]?.items[itemIndex]
+    if (!item) return
+    item.responseSet = rs
+    if (rs != null && !('ref' in rs)) rs.type = item.responseType
   }
 
   function removeItem(sectionIndex: number, itemIndex: number): void {
@@ -1121,9 +1593,102 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         title: s.title.trim(),
         instructions: s.instructions.trim(),
         ordinal: s.ordinal || idx + 1,
-        items: s.items.map((it) => buildItemPayload(it)),
+        // #26 Slice 3 persistence — a repeating-table item expands into one
+        // grouped item per column (shared groupLabel → the backend workbook
+        // adapter materialises an OpenClinica repeating item-group, which the
+        // runtime renders via RepeatingGroupSection). A plain item serialises
+        // as itself.
+        items: s.items.flatMap((it) => (it.table ? buildTableItemPayloads(it) : [buildItemPayload(it)])),
       })),
+      // #26 — per-group row bounds so the adapter persists the operator's
+      // min/max instead of its 1/40 default (and fork recovers them). One
+      // entry per repeating-table item, keyed by the same label its columns
+      // carry (tableBaseOid == groupLabel).
+      groups: draft.value.sections
+        .flatMap((s) => s.items)
+        .filter((it) => it.table)
+        .map((it) => {
+          const repeatNumber = Math.max(1, it.table!.minRows ?? 1)
+          return {
+            label: tableBaseOid(it),
+            repeatNumber,
+            repeatMax: Math.max(repeatNumber, Math.max(1, it.table!.maxRows ?? 20)),
+          }
+        }),
     }
+  }
+
+  /** The repeating-group label a table item's columns share (its base OID). */
+  function tableBaseOid(it: AuthoringItem): string {
+    return (it.oid.trim() || it.name.trim() || 'TABLE').replace(/[^A-Za-z0-9_]/g, '_')
+  }
+
+  /**
+   * #26 Slice 3 persistence — expand a repeating-table item into its column
+   * items. Each column becomes an item in the SAME flat repeating group
+   * (groupLabel = the table's OID); the column type maps to a scalar data
+   * type. A terminology-bound text column carries its binding two ways: the
+   * SYSTEM is encoded in the OID marker (survives even without the binding
+   * store — see terminologyOid.ts), and the FULL binding (system + fill map)
+   * is emitted as {@code autocomplete} so the backend persists it to
+   * {@code crf_item_terminology} and live entry auto-fills sibling cells. A
+   * fill's {@code toKey} (an authoring column key) is translated to the TARGET
+   * column's persisted OID — authoring keys are not persisted, so that OID is
+   * the identity entry fills against.
+   */
+  function buildTableItemPayloads(it: AuthoringItem): Record<string, unknown>[] {
+    const table = it.table!
+    const baseOid = tableBaseOid(it)
+    const groupLabel = baseOid
+    // Persisted OID of every column up front, so a fill's toKey resolves to
+    // its target column's OID.
+    const colOidByKey: Record<string, string> = {}
+    table.columns.forEach((c, i) => {
+      const raw = `${baseOid}_${(c.key || `COL${i + 1}`).replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`
+      colOidByKey[c.key] = c.type === 'text' && c.autocomplete ? markTerminologyOid(raw, c.autocomplete.system) : raw
+    })
+    return table.columns.map((col) => {
+      const colOid = colOidByKey[col.key]!
+      const dataType: AuthoringDataType =
+        col.type === 'number' ? 'REAL' : col.type === 'date' ? 'DATE' : 'ST'
+      const label = col.label.trim() || col.key
+      // A laterality column persists as a single-select over OD/OS/OU so it
+      // round-trips to live entry as a dropdown (RepeatingGroupSection renders
+      // select-one columns natively). Other columns keep the open-text branch.
+      const responseSet: Record<string, unknown> = col.type === 'laterality'
+        ? {
+            type: 'single-select',
+            label: `${colOid.toLowerCase()}_laterality`,
+            options: LATERALITY_OPTIONS.map((o) => ({ text: o.label, value: o.value })),
+          }
+        : { type: 'text', label: `${colOid.toLowerCase()}_response` }
+      const payload: Record<string, unknown> = {
+        name: colOid,
+        oid: colOid,
+        descriptionLabel: label,
+        leftItemText: label,
+        rightItemText: '',
+        units: '',
+        dataType,
+        defaultValue: '',
+        required: false,
+        groupLabel,
+        responseSet,
+      }
+      // #26 binding store — persist the terminology binding (system + fill map)
+      // so live entry auto-fills sibling cells; each fill's toKey resolves to
+      // the target column's persisted OID.
+      if (col.type === 'text' && col.autocomplete) {
+        payload.autocomplete = {
+          system: col.autocomplete.system,
+          fills: (col.autocomplete.fills ?? []).map((f) => ({
+            fromProperty: f.fromProperty,
+            toKey: colOidByKey[f.toKey] ?? f.toKey,
+          })),
+        }
+      }
+      return payload
+    })
   }
 
   function buildItemPayload(it: AuthoringItem): Record<string, unknown> {
@@ -1143,13 +1708,36 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const v = buildValidationPayload(it.validation)
     if (v) out.validation = v
     const sw = buildShowWhenPayload(it)
-    if (sw) out.showWhen = sw
+    if (sw) {
+      out.showWhen = sw
+      // The workbook adapter persists conditional display from the legacy
+      // showItem/parentItemOid fields (→ scd_item_metadata), NOT from showWhen,
+      // so an equality rule is mirrored onto them here to actually save and
+      // round-trip through fork. scd is equality-only; non-"==" comparators
+      // can't be represented, so they stay display-only (showWhen) and are not
+      // persisted. showItem is the trigger value (the adapter reads it as the
+      // parentValue half of its "parentValue|message" expression).
+      if (it.showWhen!.comparator === '==') {
+        out.parentItemOid = it.showWhen!.sourceItemOid.trim()
+        out.showItem = it.showWhen!.literal
+      }
+    }
     // Phase E.6 ophth-field-catalog (2026-06-11): the backend adapter
     // back-fills blank fields from the matching catalog row when
     // catalogCode is present. Pass-through verbatim; the wizard's
     // picker is responsible for setting this on items it materialises.
     if (it.catalogCode && it.catalogCode.trim() !== '') {
       out.catalogCode = it.catalogCode.trim()
+    }
+    // #26 binding store — a FLAT item's terminology binding (system + fill map).
+    // Unlike a table column, a flat item's OID is operator-chosen (not marker-
+    // mangled), so the binding store carries the system too; fill toKeys are
+    // whatever target the operator set (persisted verbatim).
+    if (it.autocomplete) {
+      out.autocomplete = {
+        system: it.autocomplete.system,
+        fills: (it.autocomplete.fills ?? []).map((f) => ({ fromProperty: f.fromProperty, toKey: f.toKey })),
+      }
     }
     return out
   }
@@ -1194,6 +1782,15 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     // dataType + the absence of options as the open-text branch.
     const rs = it.responseSet
     if (rs == null) {
+      if (responseTypeRequiresOptions(it.responseType)) {
+        // Unreachable through the canvas (reconcileItemResponseShape
+        // seeds an inline set), but a forked or legacy draft can still
+        // land here. Emit an explicit empty options[] so the backend
+        // answers with the actionable — and now localised — "requires at
+        // least one option" error instead of failing deep in the
+        // workbook parser with a raw message.
+        return { type: it.responseType, label: implicitChoiceLabel(it), options: [] }
+      }
       // The picker is omitted entirely; surface the implicit responseType
       // so the backend stamps the correct ResponseType on the synthesised
       // workbook (single source of truth = item.responseType).
@@ -1204,11 +1801,31 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     }
     return {
       type: rs.type,
-      label: rs.label.trim(),
+      label: rs.label.trim() || implicitChoiceLabel(it),
       options: rs.options
         .map((opt) => ({ text: opt.text.trim(), value: opt.value.trim() }))
         .filter((opt) => opt.text !== '' || opt.value !== ''),
     }
+  }
+
+  /**
+   * Per-item response-set label for choice types.
+   *
+   * <p>Load-bearing, not cosmetic. The synthesised workbook's parser
+   * enforces "same RESPONSE_LABEL ⇒ same RESPONSE_OPTIONS_TEXT" across
+   * the whole CRF (page_messages {@code resp_label_with_different_resp_options}),
+   * and {@code CrfJsonToWorkbookAdapter.resolveResponseSetCells} stamps a
+   * GENERIC {@code single_select_options} on every blank label. Two
+   * differently-optioned dropdowns in one CRF therefore collided and the
+   * entire version was rejected — so a CRF could hold at most one
+   * dropdown. Deriving from the (validator-unique) item name avoids it.
+   */
+  function implicitChoiceLabel(it: AuthoringItem): string {
+    const base = (it.name.trim() || it.oid.trim())
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+    return base ? `${base}_options` : 'choice_options'
   }
 
   function implicitBooleanLabel(it: AuthoringItem): string {
@@ -1411,6 +2028,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     selectItem,
     reset,
     loadFromVersion,
+    hydrateDraft,
     setMetadata,
     setVersionName,
     setVersionDescription,
@@ -1426,6 +2044,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     applyPresetAsSection,
     setSectionBilateralByUid,
     setItemField,
+    setItemResponseSet,
     removeItem,
     reorderItems,
     suggestOid,

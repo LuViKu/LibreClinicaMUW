@@ -55,8 +55,17 @@ const canMarkEventComplete = computed(() => {
   return s !== 'completed' && s !== 'signed' && s !== 'locked'
       && s !== 'stopped' && s !== 'skipped'
 })
+// Required-CRF gate — mirrors the server (EventsApiController.update): a
+// required CRF counts as done only when its status is 'completed' or
+// 'signed'. The button stays visible but disabled with a hint until every
+// required CRF is complete; the backend 409 is the authoritative gate.
+const incompleteRequiredCrfs = computed<EventCrfRowDto[]>(() =>
+  (event.value?.crfs ?? []).filter(
+    (c) => c.required && c.status !== 'completed' && c.status !== 'signed',
+  ),
+)
 async function onMarkEventComplete(): Promise<void> {
-  if (!event.value || !canMarkEventComplete.value) return
+  if (!event.value || !canMarkEventComplete.value || incompleteRequiredCrfs.value.length) return
   markEventCompleteError.value = null
   isMarkingEventComplete.value = true
   try {
@@ -204,7 +213,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <p v-if="store.isLoading && !event" class="text-slate-500 italic">
         {{ t('common.loading') }}
       </p>
@@ -234,9 +243,9 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
         <div class="mb-5">
           <div class="text-xs text-slate-500 mb-1">
             {{ event.studyName }}
-            <span class="text-slate-300"> / </span>
+            <span class="text-slate-500"> / </span>
             <RouterLink :to="`/subjects/${event.subjectLabel}`" class="underline">{{ event.subjectLabel }}</RouterLink>
-            <span class="text-slate-300"> / </span>
+            <span class="text-slate-500"> / </span>
             {{ event.eventDefinitionName }}
             <span v-if="event.repeating && event.ordinal > 1" class="text-slate-400">· #{{ event.ordinal }}</span>
           </div>
@@ -258,7 +267,8 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               v-if="canMarkEventComplete"
               type="button"
               class="text-xs px-3 py-1.5 rounded bg-muw-blue text-white hover:bg-muw-blue/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              :disabled="isMarkingEventComplete"
+              :disabled="isMarkingEventComplete || incompleteRequiredCrfs.length > 0"
+              :title="incompleteRequiredCrfs.length > 0 ? t('eventDetail.action.requiredIncomplete') : undefined"
               data-test="event-detail-mark-complete"
               @click="onMarkEventComplete"
             >
@@ -267,6 +277,13 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                   : t('eventDetail.action.markComplete') }}
             </button>
           </div>
+          <p
+            v-if="canMarkEventComplete && incompleteRequiredCrfs.length > 0"
+            class="mt-1.5 text-xs text-slate-500"
+            data-test="event-detail-required-incomplete-hint"
+          >
+            {{ t('eventDetail.action.requiredIncomplete') }}
+          </p>
           <div
             v-if="markEventCompleteError"
             class="mt-2 rounded-muw border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
@@ -321,7 +338,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 <th scope="col" class="px-5 py-2 font-medium">{{ t('eventDetail.table.crfName') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-32">{{ t('eventDetail.table.version') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('eventDetail.table.status') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-20 text-center">{{ t('eventDetail.table.required') }}</th>
+                <th scope="col" class="px-5 py-2 font-medium w-24 text-center cursor-help" :title="t('eventDetail.table.requiredHint')">{{ t('eventDetail.table.required') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44 text-right">{{ t('eventDetail.table.action') }}</th>
               </tr>
             </template>
@@ -409,6 +426,6 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           {{ t('eventDetail.back') }}
         </RouterLink>
       </template>
-    </main>
+    </div>
   </div>
 </template>

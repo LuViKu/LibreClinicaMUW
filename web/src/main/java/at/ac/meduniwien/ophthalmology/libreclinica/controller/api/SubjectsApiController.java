@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -67,6 +68,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -359,6 +361,7 @@ public class SubjectsApiController {
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = SignPreflightDto.class)))
     public ResponseEntity<?> preflightForSign(@PathVariable("studySubjectOid") String studySubjectOid,
+                                              @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
                                               HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
@@ -387,7 +390,8 @@ public class SubjectsApiController {
             ));
         }
 
-        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole, currentUser);
+        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole, currentUser,
+                resolveLocale(acceptLanguage));
 
         LOG.debug("Sign-preflight for {} (study {}, user {}): {} blocking, {} warnings",
                 ss.getOid(), currentStudy.getOid(), currentUser.getName(),
@@ -428,9 +432,34 @@ public class SubjectsApiController {
      *       Study Director; fail otherwise.</li>
      * </ul>
      */
+    /**
+     * #16 — best-effort {@code Accept-Language} → {@link Locale} (first tag,
+     * English fallback). Mirrors the parser in {@code CrfsApiController}.
+     */
+    private static Locale resolveLocale(String acceptLanguage) {
+        if (acceptLanguage == null || acceptLanguage.isBlank()) return Locale.ENGLISH;
+        try {
+            List<Locale.LanguageRange> ranges = Locale.LanguageRange.parse(acceptLanguage);
+            if (ranges.isEmpty()) return Locale.ENGLISH;
+            return Locale.forLanguageTag(ranges.get(0).getRange());
+        } catch (RuntimeException e) {
+            return Locale.ENGLISH;
+        }
+    }
+
+    /**
+     * #16 — pick the German string when the resolved locale is German, else
+     * English. The SPA is de-AT primary; these sign pre-flight rows are the
+     * only API strings the operator reads verbatim, so localise them at the
+     * source rather than translating on the client.
+     */
+    private static String msg(Locale locale, String en, String de) {
+        return locale != null && "de".equalsIgnoreCase(locale.getLanguage()) ? de : en;
+    }
+
     private SignPreflightDto computePreflight(StudySubjectBean ss, StudyBean currentStudy,
                                               StudyUserRoleBean currentRole,
-                                              UserAccountBean currentUser) {
+                                              UserAccountBean currentUser, Locale locale) {
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
 
@@ -465,20 +494,29 @@ public class SubjectsApiController {
         if (scheduledNotStarted > 0) {
             eventsCheck = new SignPreflightDto.CheckRow(
                     "events-complete", "fail",
-                    "Not all scheduled events have data entry",
-                    scheduledNotStarted + " of " + totalSchedulable + " events still scheduled with no data."
+                    msg(locale, "Not all scheduled events have data entry",
+                            "Nicht alle geplanten Visiten haben Dateneingaben"),
+                    msg(locale,
+                            scheduledNotStarted + " of " + totalSchedulable + " events still scheduled with no data.",
+                            scheduledNotStarted + " von " + totalSchedulable + " Visiten noch geplant ohne Daten.")
             );
         } else if (inProgressEvents > 0) {
             eventsCheck = new SignPreflightDto.CheckRow(
                     "events-complete", "warn",
-                    "Some scheduled events are still in progress",
-                    inProgressEvents + " of " + totalSchedulable + " events have data entry in progress."
+                    msg(locale, "Some scheduled events are still in progress",
+                            "Einige geplante Visiten sind noch in Bearbeitung"),
+                    msg(locale,
+                            inProgressEvents + " of " + totalSchedulable + " events have data entry in progress.",
+                            inProgressEvents + " von " + totalSchedulable + " Visiten mit laufender Dateneingabe.")
             );
         } else {
             eventsCheck = new SignPreflightDto.CheckRow(
                     "events-complete", "pass",
-                    "All scheduled events have at least one CRF completed",
-                    completedCount + " of " + totalSchedulable + " events complete or signed."
+                    msg(locale, "All scheduled events have at least one CRF completed",
+                            "Alle geplanten Visiten haben mindestens ein abgeschlossenes CRF"),
+                    msg(locale,
+                            completedCount + " of " + totalSchedulable + " events complete or signed.",
+                            completedCount + " von " + totalSchedulable + " Visiten abgeschlossen oder signiert.")
             );
         }
 
@@ -509,20 +547,27 @@ public class SubjectsApiController {
         if (totalCrfs == 0) {
             crfsCheck = new SignPreflightDto.CheckRow(
                     "crfs-complete", "fail",
-                    "No CRFs have been started yet",
-                    "Sign Subject requires at least one CRF with data entry complete."
+                    msg(locale, "No CRFs have been started yet", "Es wurde noch kein CRF begonnen"),
+                    msg(locale, "Sign Subject requires at least one CRF with data entry complete.",
+                            "Zum Signieren muss mindestens ein CRF vollständig ausgefüllt sein.")
             );
         } else if (inProgressCrfs > 0) {
             crfsCheck = new SignPreflightDto.CheckRow(
                     "crfs-complete", "warn",
-                    "Some CRFs still in initial data entry",
-                    completedCrfs + " of " + totalCrfs + " required CRFs marked complete."
+                    msg(locale, "Some CRFs still in initial data entry",
+                            "Einige CRFs sind noch in der Ersterfassung"),
+                    msg(locale,
+                            completedCrfs + " of " + totalCrfs + " required CRFs marked complete.",
+                            completedCrfs + " von " + totalCrfs + " erforderlichen CRFs als abgeschlossen markiert.")
             );
         } else {
             crfsCheck = new SignPreflightDto.CheckRow(
                     "crfs-complete", "pass",
-                    "All required CRFs are marked complete",
-                    completedCrfs + " of " + totalCrfs + " required CRFs in status Data entry complete."
+                    msg(locale, "All required CRFs are marked complete",
+                            "Alle erforderlichen CRFs sind als abgeschlossen markiert"),
+                    msg(locale,
+                            completedCrfs + " of " + totalCrfs + " required CRFs in status Data entry complete.",
+                            completedCrfs + " von " + totalCrfs + " erforderlichen CRFs im Status „Dateneingabe abgeschlossen“.")
             );
         }
 
@@ -536,14 +581,19 @@ public class SubjectsApiController {
         if (subjectOpenQueries == 0) {
             openQueriesCheck = new SignPreflightDto.CheckRow(
                     "open-queries", "pass",
-                    "No open discrepancies attached to this subject",
-                    "All queries resolved."
+                    msg(locale, "No open discrepancies attached to this subject",
+                            "Keine offenen Rückfragen zu diesem Teilnehmer"),
+                    msg(locale, "All queries resolved.", "Alle Rückfragen erledigt.")
             );
         } else {
             openQueriesCheck = new SignPreflightDto.CheckRow(
                     "open-queries", "warn",
-                    subjectOpenQueries + " open discrepancies attached to this subject",
-                    "Open queries do not block signing, but you should reconcile them first when possible."
+                    msg(locale,
+                            subjectOpenQueries + " open discrepancies attached to this subject",
+                            subjectOpenQueries + " offene Rückfragen zu diesem Teilnehmer"),
+                    msg(locale,
+                            "Open queries do not block signing, but you should reconcile them first when possible.",
+                            "Offene Rückfragen verhindern das Signieren nicht, sollten aber nach Möglichkeit zuerst geklärt werden.")
             );
         }
 
@@ -553,14 +603,18 @@ public class SubjectsApiController {
         if (alreadySigned) {
             signedCheck = new SignPreflightDto.CheckRow(
                     "subject-not-signed", "fail",
-                    "Subject is already signed",
-                    "Signing is a one-way action. To re-sign, an administrator must reset the subject first."
+                    msg(locale, "Subject is already signed", "Teilnehmer ist bereits signiert"),
+                    msg(locale,
+                            "Signing is a one-way action. To re-sign, an administrator must reset the subject first.",
+                            "Signieren ist einmalig. Für ein erneutes Signieren muss ein Administrator den Teilnehmer zuerst zurücksetzen.")
             );
         } else {
             signedCheck = new SignPreflightDto.CheckRow(
                     "subject-not-signed", "pass",
-                    "No previous signature on this subject",
-                    "This is a first signature, not a re-sign after administrator reset."
+                    msg(locale, "No previous signature on this subject",
+                            "Noch keine Signatur für diesen Teilnehmer"),
+                    msg(locale, "This is a first signature, not a re-sign after administrator reset.",
+                            "Dies ist eine Erstsignatur, kein erneutes Signieren nach Zurücksetzung.")
             );
         }
 
@@ -579,16 +633,22 @@ public class SubjectsApiController {
         if (canSign) {
             roleCheck = new SignPreflightDto.CheckRow(
                     "user-role-can-sign", "pass",
-                    "Your role allows signing this subject",
-                    "Signed in as " + currentUser.getName() + " (" + legacyRoleName + ")."
+                    msg(locale, "Your role allows signing this subject",
+                            "Ihre Rolle erlaubt das Signieren dieses Teilnehmers"),
+                    msg(locale,
+                            "Signed in as " + currentUser.getName() + " (" + legacyRoleName + ").",
+                            "Angemeldet als " + currentUser.getName() + " (" + legacyRoleName + ").")
             );
         } else {
             String detail = (legacyRoleName == null)
-                    ? "No study-scoped role bound — pick a study first."
-                    : "Your role (" + legacyRoleName + ") cannot sign subjects. Only Investigator and Study Director may sign.";
+                    ? msg(locale, "No study-scoped role bound — pick a study first.",
+                            "Keine studienbezogene Rolle — bitte zuerst eine Studie wählen.")
+                    : msg(locale,
+                            "Your role (" + legacyRoleName + ") cannot sign subjects. Only Investigator and Study Director may sign.",
+                            "Ihre Rolle (" + legacyRoleName + ") darf keine Teilnehmer signieren. Nur Prüfarzt/Prüfärztin und Studienleitung dürfen signieren.");
             roleCheck = new SignPreflightDto.CheckRow(
                     "user-role-can-sign", "fail",
-                    "Your role does not allow signing",
+                    msg(locale, "Your role does not allow signing", "Ihre Rolle erlaubt das Signieren nicht"),
                     detail
             );
         }
@@ -1378,6 +1438,7 @@ public class SubjectsApiController {
                  content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
     public ResponseEntity<?> sign(@PathVariable("studySubjectOid") String studySubjectOid,
                                   @RequestBody(required = false) SignSubjectRequest body,
+                                  @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
                                   HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
@@ -1456,7 +1517,8 @@ public class SubjectsApiController {
             ));
         }
 
-        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser);
+        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser,
+                resolveLocale(acceptLanguage));
         List<SignPreflightDto.CheckRow> blockingFails = new ArrayList<>();
         for (SignPreflightDto.CheckRow c : preflight.checks()) {
             // subject-not-signed:fail is the converse precondition of a
@@ -1989,6 +2051,14 @@ public class SubjectsApiController {
                     "Validation failed", errors));
         }
 
+        // 2026-07-13 — trial-blinding gate. Restrict who may move a
+        // subject between the AI_SHOWN / AI_HIDDEN arms, and when. Runs
+        // AFTER the generic roleMayEdit gate so non-AI group edits are
+        // unaffected.
+        ResponseEntity<?> cohortDenied = guardAiCohortChange(
+                assignmentStudy, ss.getId(), desired, roleId);
+        if (cohortDenied != null) return cohortDenied;
+
         int touched;
         try {
             touched = service.reconcile(ss.getId(), currentUser, desired,
@@ -2018,6 +2088,129 @@ public class SubjectsApiController {
         SubjectDetailDto dto = toDetailDto(refreshed, subj, currentStudy, studyEventDAO,
                 studyEventDefinitionDAO, eventCRFDAO, defCache, openQueriesByEvent);
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * 2026-07-13 — trial-blinding gate for the AI cohort
+     * ({@code AI_SHOWN} / {@code AI_HIDDEN}).
+     *
+     * <p>The nAMD study randomises subjects into an AI-shown vs an
+     * AI-hidden arm. Once a subject has a completed (or locked / signed)
+     * visit, moving them between arms would corrupt the RCT, so a change
+     * to the AI cohort is restricted beyond the generic
+     * {@link SubjectEditAuthorization} gate:
+     * <ul>
+     *   <li><strong>Before</strong> the first completed visit — the
+     *       study manager ({@link Role#STUDYDIRECTOR}, "Data Manager")
+     *       or an administrator may change the cohort, e.g. to fix a
+     *       mis-randomisation.</li>
+     *   <li><strong>After</strong> the first completed visit — only an
+     *       administrator may override.</li>
+     *   <li>Treating roles ({@link Role#INVESTIGATOR} /
+     *       {@link Role#COORDINATOR}) may never change the cohort.</li>
+     * </ul>
+     *
+     * <p>Returns a populated {@link ResponseEntity} (403 / 409 / 500)
+     * when the request would change the AI cohort and the actor is not
+     * permitted; returns {@code null} when the request does not touch
+     * the AI cohort — or the study has no AI cohort class — leaving the
+     * standard authorization gate authoritative. Fails <em>closed</em>
+     * (500) on any lookup error: a blinding-critical gate must never
+     * open by accident.
+     *
+     * @param assignmentStudy the top-level study that owns the group
+     *        classes (already resolved by the caller for multi-site).
+     * @param studySubjectId  the subject being edited.
+     * @param desired         the requested final assignment list.
+     * @param roleId          the actor's role id in the active study.
+     */
+    private ResponseEntity<?> guardAiCohortChange(
+            StudyBean assignmentStudy, int studySubjectId,
+            List<UpdateSubjectGroupsRequest.Assignment> desired, int roleId) {
+        try (Connection c = dataSource.getConnection()) {
+            // 1. Which group class carries the AI_SHOWN / AI_HIDDEN groups?
+            Integer aiClassId = null;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT sg.study_group_class_id "
+                            + "  FROM study_group sg "
+                            + "  JOIN study_group_class sgc "
+                            + "    ON sgc.study_group_class_id = sg.study_group_class_id "
+                            + " WHERE sgc.study_id = ? "
+                            + "   AND UPPER(sg.name) IN ('AI_SHOWN','AI_HIDDEN') "
+                            + " LIMIT 1")) {
+                ps.setInt(1, assignmentStudy.getId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) aiClassId = rs.getInt(1);
+                }
+            }
+            if (aiClassId == null) return null; // study has no AI cohort — nothing to guard.
+
+            // 2. Current AI group for the subject (0 = none active).
+            int currentAiGroupId = 0;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT study_group_id FROM subject_group_map "
+                            + " WHERE study_subject_id = ? AND study_group_class_id = ? "
+                            + "   AND status_id = 1 LIMIT 1")) {
+                ps.setInt(1, studySubjectId);
+                ps.setInt(2, aiClassId.intValue());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) currentAiGroupId = rs.getInt(1);
+                }
+            }
+
+            // 3. Desired AI group from the request. reconcile() treats a
+            //    class present-then-absent as a soft-delete, so an omitted
+            //    AI class that is currently active is ALSO a cohort change
+            //    (to none).
+            int desiredAiGroupId = 0;
+            boolean aiClassInRequest = false;
+            if (desired != null) {
+                for (UpdateSubjectGroupsRequest.Assignment a : desired) {
+                    if (a != null && a.groupClassId() == aiClassId.intValue()) {
+                        aiClassInRequest = true;
+                        desiredAiGroupId = a.groupId() == null ? 0 : a.groupId().intValue();
+                        break;
+                    }
+                }
+            }
+            boolean changed = aiClassInRequest
+                    ? desiredAiGroupId != currentAiGroupId
+                    : currentAiGroupId != 0;
+            if (!changed) return null; // AI cohort untouched — defer to the generic gate.
+
+            // 4. Role / visit gate on the cohort change.
+            if (roleId == Role.ADMIN.getId()) return null; // admin may always change.
+
+            if (roleId != Role.STUDYDIRECTOR.getId()) {
+                // Treating roles (Investigator / CRC) and everyone else.
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "Only the study manager may change a subject's AI cohort; "
+                        + "an administrator can override after the first completed visit."));
+            }
+
+            // Study manager — permitted only before the first completed
+            // (or locked / signed) visit.
+            boolean hasCompletedVisit;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT 1 FROM study_event "
+                            + " WHERE study_subject_id = ? "
+                            + "   AND subject_event_status_id IN (4, 7, 8) LIMIT 1")) {
+                ps.setInt(1, studySubjectId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    hasCompletedVisit = rs.next();
+                }
+            }
+            if (hasCompletedVisit) {
+                return ResponseEntity.status(409).body(Map.of("message",
+                        "This subject already has a completed visit — the AI cohort is "
+                        + "locked. An administrator must override to change it."));
+            }
+            return null; // study manager, pre-first-visit — allowed.
+        } catch (SQLException e) {
+            LOG.error("AI-cohort guard failed for ss={}: {}", studySubjectId, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Could not verify AI-cohort change permission — see server log."));
+        }
     }
 
     /**

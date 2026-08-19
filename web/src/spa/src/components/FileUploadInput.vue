@@ -156,13 +156,13 @@ function onClear(): void {
       <div class="flex items-center gap-2 shrink-0">
         <button
           type="button"
-          class="text-[11px] text-muw-blue hover:underline disabled:text-slate-300 disabled:no-underline"
+          class="text-[11px] text-muw-blue hover:underline disabled:text-slate-500 disabled:no-underline"
           :disabled="disabled || busy"
           @click="pickFile"
         >{{ replaceLabel }}</button>
         <button
           type="button"
-          class="text-[11px] text-rose-700 hover:underline disabled:text-slate-300 disabled:no-underline"
+          class="text-[11px] text-rose-700 hover:underline disabled:text-slate-500 disabled:no-underline"
           :disabled="disabled || busy"
           @click="onClear"
         >{{ removeLabel }}</button>
@@ -186,7 +186,7 @@ function onClear(): void {
       <span class="text-xs text-slate-600">{{ dropPromptLabel }}</span>
       <button
         type="button"
-        class="text-[11px] px-2.5 py-1 border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:text-slate-300"
+        class="text-[11px] px-2.5 py-1 border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:text-slate-500"
         :disabled="disabled || busy"
         @click.stop="pickFile"
       >

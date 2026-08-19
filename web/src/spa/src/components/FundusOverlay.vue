@@ -603,7 +603,7 @@ function regionFill(id: EtdrsRegion): string {
         :aria-pressed="biomarkerVisible[bm]"
         :title="t('retinal.biomarkerToggle.tooltip', { name: bm.toUpperCase() })"
         class="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-opacity"
-        :class="biomarkerVisible[bm] ? 'opacity-100 bg-slate-700/60 text-white' : 'opacity-50 bg-slate-800/40 text-slate-300 line-through'"
+        :class="biomarkerVisible[bm] ? 'opacity-100 bg-slate-700/60 text-white' : 'opacity-50 bg-slate-800/40 text-slate-500 line-through'"
         @click="biomarkerVisible[bm] = !biomarkerVisible[bm]"
       >
         <span

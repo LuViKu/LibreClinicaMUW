@@ -994,7 +994,7 @@ onBeforeUnmount(() => {
     <div
       v-if="status === 'loading'"
       data-testid="bscan-viewer-loading"
-      class="px-3 py-2 text-xs text-slate-300"
+      class="px-3 py-2 text-xs text-slate-500"
     >
       {{ t('retinal.bscanViewer.loading') }}
     </div>

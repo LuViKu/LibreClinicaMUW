@@ -123,6 +123,14 @@ const subjectSeqParam = computed<number | null>(() => {
 const resolvedJobId = ref<number | null>(null)
 const resolving = ref(false)
 const resolveError = ref<string | null>(null)
+/**
+ * NaN is the "not resolved yet" sentinel: on the per-subject deep link
+ * (/subjects/{label}/jobs/{n}) there is no jobId until the backend resolver
+ * returns. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
+ * ANY consumer that turns this into a request URL must guard with
+ * `Number.isFinite(jobId.value)` — NaN passes a bare `!= null` check and we
+ * shipped GET /retinal-jobs/NaN/segmentation for exactly that reason.
+ */
 const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
@@ -416,7 +424,11 @@ interface EtdrsRow {
  * surface_y data + the fundus geometry, matching the
  * raw-data-no-PNG architectural direction.
  */
-const segEnvelope = useSegmentationEnvelope(computed(() => jobId.value)).envelope
+// Pass `null` (not the NaN sentinel) while the per-subject deep link is still
+// resolving, so the composable doesn't fetch /retinal-jobs/NaN/segmentation.
+const segEnvelope = useSegmentationEnvelope(
+  computed(() => (Number.isFinite(jobId.value) ? jobId.value : null)),
+).envelope
 
 /**
  * Pre-derived per-(z, x) thickness in µm, packed as Float32Array. Returns
@@ -1033,7 +1045,7 @@ onBeforeUnmount(stopInflightPoll)
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 min-w-0 px-8 py-7">
+    <div class="flex-1 min-w-0 px-8 py-7">
       <div class="max-w-[1200px] mx-auto">
         <p v-if="(isLoading || resolving) && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
           {{ t('retinal.loading') }}
@@ -1090,11 +1102,11 @@ onBeforeUnmount(stopInflightPoll)
                 <span>{{ t('retinal.header.modelLabel') }}
                   <span class="font-mono text-slate-700">{{ job.modelVersion ?? '—' }}</span>
                 </span>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <span>{{ t('retinal.header.runLabel') }}
                   <span class="font-mono text-slate-700">{{ formatIsoDate(job.completedAt ?? job.enqueuedAt) }}</span>
                 </span>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <span class="inline-flex items-center gap-2">{{ t('retinal.header.confidenceLabel') }}
                   <span class="inline-flex items-center gap-1.5">
                     <span class="w-20 h-1.5 rounded-full bg-slate-200 overflow-hidden inline-block align-middle">
@@ -1544,6 +1556,6 @@ onBeforeUnmount(stopInflightPoll)
           </RouterLink>
         </template>
       </div>
-    </main>
+    </div>
   </div>
 </template>

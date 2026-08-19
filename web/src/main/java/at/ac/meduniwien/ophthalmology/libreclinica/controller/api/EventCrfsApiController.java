@@ -76,6 +76,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -159,6 +160,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventCrfsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(EventCrfsApiController.class);
+
+    /** #26 binding store — parses the terminology fill map (jsonb) at entry. */
+    private static final ObjectMapper TERMINOLOGY_JSON = new ObjectMapper();
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
@@ -310,6 +314,10 @@ public class EventCrfsApiController {
         // parses to drive hide/show. See {@link #loadShowWhenByItemId}.
         Map<Integer, String> showWhenByItemId = loadShowWhenByItemId(crfv.getId());
 
+        // #26 binding store — terminology bindings (system + fill map) keyed by
+        // item name, so a picked concept auto-fills sibling cells at entry.
+        Map<String, CrfEntryDto.AutocompleteDto> termByName = loadTerminologyByItemName(crfv.getId());
+
         List<CrfEntryDto.CrfSectionDto> sectionDtos = new ArrayList<>(sections.size());
         for (SectionBean sb : sections) {
             List<ItemBean> items = itemDAO.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
@@ -325,7 +333,8 @@ public class EventCrfsApiController {
                             .computeIfAbsent(grp.getId(), k -> new ArrayList<>())
                             .add(ib.getOid());
                 }
-                itemDtos.add(buildItemDto(ib, ifm, groupOid, showWhenByItemId.get(ib.getId())));
+                itemDtos.add(buildItemDto(ib, ifm, groupOid, showWhenByItemId.get(ib.getId()),
+                        termByName.get(ib.getName())));
             }
             sectionDtos.add(new CrfEntryDto.CrfSectionDto(
                     sb.getLabel(),
@@ -1682,7 +1691,8 @@ public class EventCrfsApiController {
      * group's row template instead of the top-level values map.
      */
     private static CrfEntryDto.CrfItemDto buildItemDto(ItemBean item, ItemFormMetadataBean ifm,
-                                                       String groupOid, String showWhen) {
+                                                       String groupOid, String showWhen,
+                                                       CrfEntryDto.AutocompleteDto autocomplete) {
         String label;
         boolean required = false;
         String helper = null;
@@ -1724,8 +1734,50 @@ public class EventCrfsApiController {
                 /* min */ null,
                 /* max */ null,
                 groupOid,
-                blankToNull(showWhen, null)
+                blankToNull(showWhen, null),
+                autocomplete
         );
+    }
+
+    /**
+     * #26 binding store — read terminology bindings (system + fill map) for a
+     * version, keyed by item name, so live entry surfaces the autocomplete +
+     * auto-fills sibling cells. Best-effort: a missing table or SQL failure
+     * logs at WARN and yields an empty map (fields stay plain).
+     */
+    private Map<String, CrfEntryDto.AutocompleteDto> loadTerminologyByItemName(int crfVersionId) {
+        Map<String, CrfEntryDto.AutocompleteDto> out = new HashMap<>();
+        final String sql = "SELECT item_name, code_system, fill_map "
+                + "FROM crf_item_terminology WHERE crf_version_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString(1);
+                    String system = rs.getString(2);
+                    String fillJson = rs.getString(3);
+                    if (name == null || name.isBlank() || system == null || system.isBlank()) continue;
+                    List<CrfEntryDto.AutocompleteFillDto> fills = new ArrayList<>();
+                    if (fillJson != null && !fillJson.isBlank()) {
+                        try {
+                            fills = TERMINOLOGY_JSON.readValue(fillJson,
+                                    TERMINOLOGY_JSON.getTypeFactory().constructCollectionType(
+                                            List.class, CrfEntryDto.AutocompleteFillDto.class));
+                        } catch (Exception e) {
+                            String logItemName = name.replace('\r', ' ').replace('\n', ' ');
+                            LOG.warn("loadTerminologyByItemName: crf_version {} item {} has malformed fill_map JSON; using system-only binding.",
+                                    crfVersionId, logItemName);
+                        }
+                    }
+                    out.put(name, new CrfEntryDto.AutocompleteDto(system, fills));
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("loadTerminologyByItemName: crf_version {} — skipping bindings ({}).",
+                    crfVersionId, ex.getMessage());
+        }
+        return out;
     }
 
     /**

@@ -10,6 +10,7 @@ import RoleDots from '@/components/RoleDots.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { RoleBinding, StudyUser, UserRole } from '@/types/user'
 
 /**
@@ -40,6 +41,7 @@ const emit = defineEmits<{ 'update:open': [v: boolean]; close: [] }>()
 const { t } = useI18n()
 const users = useUsersStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const bindings = ref<RoleBinding[]>([])
 const isLoading = ref(false)
@@ -196,7 +198,7 @@ async function onRemoveStudy(group: StudyGroup) {
     username: props.user.username,
     study: group.studyLabel,
   })
-  if (!confirm(msg)) return
+  if (!(await confirm({ message: msg, danger: true }))) return
   isSubmitting.value = true
   formError.value = null
   try {

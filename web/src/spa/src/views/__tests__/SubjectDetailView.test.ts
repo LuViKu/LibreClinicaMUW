@@ -324,9 +324,13 @@ describe('SubjectDetailView — modality baselines block', () => {
     apiGetMock.mockReset()
   })
 
+  // The panels are gated behind canSeeRetinalTables (Data Manager /
+  // Administrator) as part of AI-arm blinding — see the retinal-table gate
+  // below. These per-eye mounting tests therefore run as a role that can see
+  // the tables; the gate itself is covered by its own test.
   it('mounts one panel per in-scope eye (OU → both eyes)', async () => {
     const w = await mountAt({
-      role: 'Investigator',
+      role: 'Data Manager',
       detail: makeDetail({ studyEye: 'OU' }),
     })
     expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(true)
@@ -335,7 +339,7 @@ describe('SubjectDetailView — modality baselines block', () => {
 
   it('mounts a single panel for a single-eye subject (OD only)', async () => {
     const w = await mountAt({
-      role: 'Investigator',
+      role: 'Data Manager',
       detail: makeDetail({ studyEye: 'OD' as StudyEye }),
     })
     expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(true)
@@ -354,7 +358,7 @@ describe('SubjectDetailView — modality baselines block', () => {
       reason: 'Progression to GA',
     }
     const w = await mountAt({
-      role: 'Investigator',
+      role: 'Data Manager',
       // OD has transitioned away to GA — current studyEye is now OS only,
       // but the OD historic baselines should still surface.
       detail: makeDetail({ studyEye: 'OS' as StudyEye, eyeTransitions: [transition] }),
@@ -365,13 +369,26 @@ describe('SubjectDetailView — modality baselines block', () => {
 
   it('skips eyes with neither in-scope nor transitioned-away (null studyEye, no transitions)', async () => {
     const w = await mountAt({
-      role: 'Investigator',
+      role: 'Data Manager',
       detail: makeDetail({ studyEye: null, eyeTransitions: [] }),
     })
     expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(false)
     expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(false)
     // The block wrapper isn't rendered either when there's nothing to show.
     expect(w.find('[data-testid="modality-baselines-block"]').exists()).toBe(false)
+  })
+
+  it('hides the whole block for roles without retinal-table access (blinding gate)', async () => {
+    // Both eyes are in scope, but an Investigator cannot see the retinal
+    // tables — the modality-baselines block is gated on canSeeRetinalTables
+    // (Data Manager / Administrator) to enforce AI-arm blinding.
+    const w = await mountAt({
+      role: 'Investigator',
+      detail: makeDetail({ studyEye: 'OU' }),
+    })
+    expect(w.find('[data-testid="modality-baselines-block"]').exists()).toBe(false)
+    expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(false)
+    expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(false)
   })
 })
 

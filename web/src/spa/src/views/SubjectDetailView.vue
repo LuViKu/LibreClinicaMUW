@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -32,6 +32,7 @@ import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
 import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import { useConfirm } from '@/composables/useConfirm'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -39,6 +40,7 @@ const router = useRouter()
 const subjects = useSubjectsStore()
 const events = useEventsStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 /**
  * 2026-06-21 round 6 follow-up — local click-outside directive used by
@@ -86,7 +88,7 @@ const canRemove = computed(() => {
 
 async function onRemove() {
   if (!subject.value) return
-  if (!confirm(t('subjectDetail.actions.removeConfirm', { id: subject.value.id }))) return
+  if (!(await confirm({ message: t('subjectDetail.actions.removeConfirm', { id: subject.value.id }), danger: true }))) return
   const ok = await subjects.removeSubject(subject.value.id)
   if (ok) router.push('/subjects')
 }
@@ -104,6 +106,20 @@ const canEdit = computed(() => {
   const role = auth.user?.role ?? null
   return !!role && canEditSubject(role)
 })
+
+/*
+ * 2026-07-13 — cohort-edit gate (trial blinding, defense-in-depth).
+ * The group-assignment dialog is the surface that moves a subject
+ * between the AI_SHOWN / AI_HIDDEN arms, so restrict the affordance to
+ * the study manager (Data Manager) + Administrator. Treating roles
+ * (Investigator / CRC) and Monitors do not see the pencil. The server
+ * (SubjectsApiController.guardAiCohortChange) is authoritative and also
+ * enforces the "before the first completed visit / admin override
+ * after" rule — this is only the UX layer.
+ */
+const canEditCohort = computed(
+  () => auth.hasRole('Data Manager') || auth.hasRole('Administrator'),
+)
 
 interface EditForm {
   secondaryId: string
@@ -318,9 +334,9 @@ function openEditEvent(ev: {
   }
 }
 
-function unlockEditEvent() {
+async function unlockEditEvent() {
   if (!editEvent.value) return
-  if (!confirm(t('subjectDetail.event.editConfirm'))) return
+  if (!(await confirm({ message: t('subjectDetail.event.editConfirm'), danger: false }))) return
   editEvent.value.unlocked = true
 }
 
@@ -395,9 +411,54 @@ function onCancelEvent(ev: { eventId: string; label: string }) {
  */
 const openMenuEventId = ref<string | null>(null)
 
-function toggleEventMenu(eventId: string): void {
-  openMenuEventId.value = openMenuEventId.value === eventId ? null : eventId
+/**
+ * 2026-07-13 — kebab-menu popover position, in viewport coordinates.
+ * The events table lives inside an `overflow-x-auto` wrapper, and CSS
+ * forces `overflow-y` to `auto` whenever `overflow-x` is `auto`, so the
+ * old `absolute` popover was clipped by the wrapper and spawned a stray
+ * vertical scrollbar. We now render the popover `position: fixed`
+ * (which escapes the scroll container's clip WITHOUT leaving the DOM
+ * subtree, so the v-click-outside directive keeps working) and anchor
+ * it to the trigger button's bounding rect.
+ */
+const menuPos = ref<{ top: number; right: number } | null>(null)
+
+function toggleEventMenu(eventId: string, evt?: MouseEvent): void {
+  if (openMenuEventId.value === eventId) {
+    openMenuEventId.value = null
+    return
+  }
+  const btn = evt?.currentTarget as HTMLElement | undefined
+  if (btn) {
+    const r = btn.getBoundingClientRect()
+    // Right-align to the button (mirrors the old `right-0`), open below.
+    menuPos.value = { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) }
+  }
+  openMenuEventId.value = eventId
 }
+
+/**
+ * A fixed popover does not track the trigger on scroll/resize, so close
+ * it instead of letting it drift away from the ⋮ button. Listeners are
+ * bound only while a menu is open (see the watcher) and torn down on
+ * unmount.
+ */
+function closeEventMenuOnViewportShift(): void {
+  openMenuEventId.value = null
+}
+watch(openMenuEventId, (open) => {
+  if (open) {
+    window.addEventListener('scroll', closeEventMenuOnViewportShift, true)
+    window.addEventListener('resize', closeEventMenuOnViewportShift)
+  } else {
+    window.removeEventListener('scroll', closeEventMenuOnViewportShift, true)
+    window.removeEventListener('resize', closeEventMenuOnViewportShift)
+  }
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', closeEventMenuOnViewportShift, true)
+  window.removeEventListener('resize', closeEventMenuOnViewportShift)
+})
 
 function onMenuEdit(ev: {
   eventId: string
@@ -533,7 +594,7 @@ const canUnlock = computed(() => canRemove.value && subject.value?.locked)
 
 async function onLock() {
   if (!subject.value) return
-  if (!confirm(t('subjectDetail.actions.lockConfirm', { id: subject.value.id }))) return
+  if (!(await confirm({ message: t('subjectDetail.actions.lockConfirm', { id: subject.value.id }), danger: true }))) return
   await subjects.lockSubject(subject.value.id)
 }
 
@@ -729,6 +790,16 @@ const shouldShowRetinalTab = computed(() =>
     && retinalJobCount.value > 0,
 )
 
+// 2026-07-13 — the retinal-history + baseline tables ("Retinal-Verlauf",
+// "Bisherige Auswertungen", "Erstmessungen") are a study-management surface,
+// not a treating-clinician one: they expose AI quantification + link into the
+// job view. Show them only to Data Manager (study manager) + Administrator;
+// hidden from Investigator (physician), CRC, and Monitor. The feeding
+// endpoints also mask AI server-side for treating roles (defense-in-depth).
+const canSeeRetinalTables = computed(() =>
+  auth.hasRole('Data Manager') || auth.hasRole('Administrator'),
+)
+
 watch(
   () => retinalNumericId.value,
   async (id) => {
@@ -830,7 +901,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <p v-if="isLoading && !subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <template v-else-if="!subject">
@@ -891,6 +962,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   </template>
                 </span>
                 <button
+                  v-if="canEditCohort"
                   type="button"
                   data-testid="subject-detail-edit-groups"
                   :title="t('subjectGroupEdit.openButton')"
@@ -1273,11 +1345,12 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                         class="cursor-pointer px-1.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 select-none"
                         :aria-label="t('subjectDetail.event.moreActions')"
                         :aria-expanded="openMenuEventId === ev.eventId"
-                        @click="toggleEventMenu(ev.eventId)"
+                        @click="toggleEventMenu(ev.eventId, $event)"
                       >⋮</button>
                       <div
-                        v-if="openMenuEventId === ev.eventId"
-                        class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-lg z-50 py-1 text-left"
+                        v-if="openMenuEventId === ev.eventId && menuPos"
+                        class="fixed min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-lg z-50 py-1 text-left"
+                        :style="{ top: menuPos.top + 'px', right: menuPos.right + 'px' }"
                       >
                         <button
                           v-if="canEditEv(ev.status)"
@@ -1402,7 +1475,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              endpoints (keyed by the numeric id, not the OID) work
              directly. -->
         <SubjectRetinalTab
-          v-if="shouldShowRetinalTab && retinalNumericId != null"
+          v-if="shouldShowRetinalTab && retinalNumericId != null && canSeeRetinalTables"
           data-testid="subject-retinal-tab-mount"
           :subject-id="retinalNumericId"
           :subject-label="subject.id"
@@ -1420,7 +1493,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              so OD vs OS stay visually distinct without an extra label
              row. -->
         <div
-          v-if="baselinePanelEyes.length"
+          v-if="baselinePanelEyes.length && canSeeRetinalTables"
           data-testid="modality-baselines-block"
         >
           <ModalityBaselinesPanel
@@ -1500,7 +1573,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           </div>
         </div>
       </template>
-    </main>
+    </div>
 
     <!-- Phase E.6 — Schedule-event dialog (mounted regardless of
          data-load state so the open binding can stay simple). -->

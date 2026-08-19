@@ -296,7 +296,7 @@ function toggleEtdrsRings(): void {
           <span class="font-semibold uppercase tracking-[0.1em] text-white/55">{{ side.tag }}</span>
           <span v-if="side.visit" class="font-semibold text-white">{{ side.visit.label }}</span>
           <span v-if="side.visit" class="text-white/50">{{ side.visit.date || '—' }}</span>
-          <span v-if="side.visit" class="ml-auto tabular-nums text-white/50">
+          <span v-if="side.visit && aiVisible" class="ml-auto tabular-nums text-white/50">
             IRF {{ side.visit.irf }} · SRF {{ side.visit.srf }} · PED {{ side.visit.ped }} nL
           </span>
         </div>
@@ -305,6 +305,7 @@ function toggleEtdrsRings(): void {
           :visit="side.visit"
           :prev-visit="side.prev"
           :eye="props.data.patient.eye"
+          :ai-visible="aiVisible"
           :n-slices="nSlices"
           :slice="side.slice"
           :mask="mask"
@@ -391,6 +392,7 @@ function toggleEtdrsRings(): void {
           :visit="side.visit"
           :prev-visit="side.prev"
           :eye="props.data.patient.eye"
+          :ai-visible="aiVisible"
           :n-slices="nSlices"
           :slice="side.slice"
           :mask="mask"
@@ -406,8 +408,9 @@ function toggleEtdrsRings(): void {
         >
           {{ t('studyModules.namd.viewer.empty') }}
         </div>
+        <!-- Trial blinding — IRF/SRF/PED fluid mini-stats are AI quantification. -->
         <div
-          v-if="side.visit"
+          v-if="side.visit && aiVisible"
           class="mt-3 grid grid-cols-3 gap-2 text-center"
         >
           <div

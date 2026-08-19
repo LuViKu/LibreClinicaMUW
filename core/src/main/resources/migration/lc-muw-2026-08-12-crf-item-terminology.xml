@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        #26 Slice 3 (binding store) — per-item terminology autocomplete binding.
+
+        OpenClinica items have no native "terminology autocomplete" concept, so
+        the SPA-authored binding (which code system + the property->field fill
+        map) is stored here, keyed by (crf_version_id, item_name). item_name is
+        the operator/SPA-chosen item NAME (== the authoring `oid`), which is
+        unique within a CRF version and known at save time — unlike the
+        generated oc_oid. The eventCrfs fetch joins on the same key
+        (ItemBean.getName()) to hydrate CrfItemDto.autocomplete for live entry.
+
+        Scope beyond the OID-suffix marker (which already carries the SYSTEM for
+        table columns): this table also carries the FILL MAP (so a medication
+        pick fans strength/unit into sibling cells at entry) and covers flat
+        (non-table) items whose operator-chosen OID must not be marker-mangled.
+
+        No FK to crf_version (mirrors the loose terminology_* tables + avoids
+        cascade coupling on the heritage schema); crf_version_id is indexed for
+        the fetch-time join and rows are pruned by version id on re-save.
+    -->
+    <changeSet id="lc-muw-2026-08-12-crf-item-terminology"
+               author="lukas.kuchernig@meduniwien.ac.at">
+        <sql splitStatements="true" endDelimiter=";">
+            CREATE TABLE crf_item_terminology (
+                id             BIGSERIAL PRIMARY KEY,
+                crf_version_id INTEGER      NOT NULL,
+                item_name      VARCHAR(255) NOT NULL,
+                code_system    VARCHAR(32)  NOT NULL,
+                fill_map       JSONB,
+                CONSTRAINT uq_crf_item_terminology UNIQUE (crf_version_id, item_name)
+            );
+            CREATE INDEX idx_crf_item_terminology_version ON crf_item_terminology (crf_version_id);
+        </sql>
+        <rollback>
+            <sql>DROP TABLE IF EXISTS crf_item_terminology;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -940,6 +940,31 @@ public class EventsApiController {
                             + " — edit blocked until un-signed / unlocked"));
         }
 
+        // 2026-07-13 — required-CRF gate for the manual "Visite abschließen".
+        // The manual completion button (2026-06-21 user-feedback round 5)
+        // replaced the auto-cascade but dropped its precondition: legacy
+        // OpenClinica only flipped a visit to COMPLETED once every *required*
+        // CRF was complete. Restore that precondition here — a signed/locked
+        // event_crf counts as complete. The SPA mirrors this so the button is
+        // disabled with a hint, but the server is the authoritative gate.
+        if (newStatusId != null
+                && newStatusId.intValue() == SubjectEventStatus.COMPLETED.getId()
+                && (current == null || current.getId() != SubjectEventStatus.COMPLETED.getId())) {
+            StudyBean owningStudy = (ss.getStudyId() == currentStudy.getId())
+                    ? currentStudy
+                    : (StudyBean) new StudyDAO(dataSource).findByPK(ss.getStudyId());
+            if (owningStudy == null || owningStudy.getId() == 0) owningStudy = currentStudy;
+            List<String> incompleteRequired = incompleteRequiredCrfNames(ev, owningStudy);
+            if (!incompleteRequired.isEmpty()) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "message",
+                        "Visite kann nicht abgeschlossen werden — folgende Pflicht-CRFs sind noch nicht "
+                                + "vollständig: " + String.join(", ", incompleteRequired) + ".",
+                        "code", "REQUIRED_CRFS_INCOMPLETE",
+                        "incompleteRequiredCrfs", incompleteRequired));
+            }
+        }
+
         // Phase B2 (2026-06-10) — failure-audit wrap on the update +
         // audit-emit block. Field-level audit_log_event rows for each
         // changed column flow through unchanged; if anything in the
@@ -1701,6 +1726,68 @@ public class EventsApiController {
             case 7 -> "signed";
             default -> "not-started";
         };
+    }
+
+    /**
+     * Required-CRF completion check for the manual "Visite abschließen"
+     * gate. Mirrors the roster-matching in {@link #getEventDetail} +
+     * {@link #statusForEventCrf}: for every {@code event_definition_crf}
+     * flagged {@code required_crf}, resolve its {@code event_crf} row and
+     * treat it as done only when its status is {@code completed} or
+     * {@code signed}. Returns the display names of the required CRFs that
+     * are NOT yet complete (empty list ⇒ the visit may be completed).
+     */
+    private List<String> incompleteRequiredCrfNames(StudyEventBean ev, StudyBean owningStudy) {
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean def =
+                (StudyEventDefinitionBean) sedDao.findByPK(ev.getStudyEventDefinitionId());
+        if (def == null || def.getId() == 0) return List.of();
+
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        CRFVersionDAO crfvDao = new CRFVersionDAO(dataSource);
+        CRFDAO crfDao = new CRFDAO(dataSource);
+
+        List<EventDefinitionCRFBean> edcs = edcDao.findAllByEventDefinitionId(owningStudy, def.getId());
+        if (edcs == null) edcs = List.of();
+
+        Map<Integer, EventCRFBean> existingByVersion = new HashMap<>();
+        ArrayList<EventCRFBean> existing = ecDao.findAllByStudyEvent(ev);
+        if (existing != null) {
+            for (EventCRFBean ec : existing) {
+                if (ec == null || ec.getId() == 0) continue;
+                if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
+                existingByVersion.put(ec.getCRFVersionId(), ec);
+            }
+        }
+
+        List<String> incomplete = new ArrayList<>();
+        for (EventDefinitionCRFBean edc : edcs) {
+            if (!edc.isRequiredCRF()) continue;
+            CRFVersionBean cv = (edc.getDefaultVersionId() > 0)
+                    ? (CRFVersionBean) crfvDao.findByPK(edc.getDefaultVersionId())
+                    : null;
+            // Prefer the row on the default version; else any row of the
+            // same CRF (operators can swap versions per row). Same fallback
+            // getEventDetail uses so the check matches the rendered roster.
+            EventCRFBean ec = (cv != null) ? existingByVersion.get(cv.getId()) : null;
+            if (ec == null && existing != null) {
+                for (EventCRFBean candidate : existing) {
+                    if (candidate == null || candidate.getId() == 0) continue;
+                    if (candidate.getStatus() != null && candidate.getStatus().equals(Status.DELETED)) continue;
+                    CRFVersionBean cvCand = (CRFVersionBean) crfvDao.findByPK(candidate.getCRFVersionId());
+                    if (cvCand != null && cvCand.getCrfId() == edc.getCrfId()) { ec = candidate; break; }
+                }
+            }
+            String status = statusForEventCrf(ec);
+            if (!("completed".equals(status) || "signed".equals(status))) {
+                String name = (edc.getCrfName() == null || edc.getCrfName().isBlank())
+                        ? lookupCrfName(crfDao, edc.getCrfId(), cv)
+                        : edc.getCrfName();
+                incomplete.add(nullToEmpty(name));
+            }
+        }
+        return incomplete;
     }
 
     private static String statusForSubjectEventStatus(SubjectEventStatus s) {

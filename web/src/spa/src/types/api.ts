@@ -420,6 +420,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terminology/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ingest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects": {
         parameters: {
             query?: never;
@@ -1922,6 +1938,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["bindParkedJob"];
+        trace?: never;
+    };
+    "/api/v1/terminology/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/subjects/{subjectLabel}/retinal-jobs/{seq}": {
@@ -3467,6 +3499,12 @@ export interface components {
         ResetPasswordRequest: {
             sendEmail?: boolean;
         };
+        IngestRequest: {
+            system?: string;
+            path?: string;
+            sourceUrl?: string;
+            sourceSha?: string;
+        };
         AddSubjectRequest: {
             id?: string;
             secondaryId?: string;
@@ -4130,11 +4168,23 @@ export interface components {
             status?: string;
             uploadedAt?: string;
         };
+        Autocomplete: {
+            system?: string;
+            fills?: components["schemas"]["Fill"][];
+        };
         CrfVersionAuthoringRequest: {
             versionName?: string;
             versionDescription?: string;
             revisionNotes?: string;
             sections?: components["schemas"]["CrfVersionAuthoringRequest.Section"][];
+            groups?: components["schemas"]["CrfVersionAuthoringRequest.Group"][];
+        };
+        "CrfVersionAuthoringRequest.Group": {
+            label?: string;
+            /** Format: int32 */
+            repeatNumber?: number;
+            /** Format: int32 */
+            repeatMax?: number;
         };
         "CrfVersionAuthoringRequest.Item": {
             name?: string;
@@ -4155,6 +4205,7 @@ export interface components {
             pageBreak?: boolean;
             groupLabel?: string;
             catalogCode?: string;
+            autocomplete?: components["schemas"]["Autocomplete"];
         };
         "CrfVersionAuthoringRequest.ResponseSet": {
             type?: string;
@@ -4176,6 +4227,10 @@ export interface components {
         "CrfVersionAuthoringRequest.Validation": {
             regexp?: string;
             errorMessage?: string;
+        };
+        Fill: {
+            fromProperty?: string;
+            toKey?: string;
         };
         CrfValidateExpressionRequest: {
             expression?: string;
@@ -4553,6 +4608,14 @@ export interface components {
             repeating?: boolean;
             crfs?: components["schemas"]["EventCrfRowDto"][];
         };
+        AutocompleteDto: {
+            system?: string;
+            fills?: components["schemas"]["AutocompleteFillDto"][];
+        };
+        AutocompleteFillDto: {
+            fromProperty?: string;
+            toKey?: string;
+        };
         CrfEntryDto: {
             eventCrfOid?: string;
             subjectId?: string;
@@ -4592,6 +4655,7 @@ export interface components {
             max?: number;
             groupOid?: string;
             showWhen?: string;
+            autocomplete?: components["schemas"]["AutocompleteDto"];
         };
         CrfItemGroupDto: {
             oid?: string;
@@ -5707,6 +5771,30 @@ export interface operations {
             };
         };
     };
+    ingest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     list_1: {
         parameters: {
             query?: {
@@ -5778,7 +5866,9 @@ export interface operations {
     sign: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
             path: {
                 studySubjectOid: string;
             };
@@ -8461,6 +8551,30 @@ export interface operations {
             };
         };
     };
+    search: {
+        parameters: {
+            query: {
+                system: string;
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     getJobBySubjectSeq: {
         parameters: {
             query?: never;
@@ -8487,7 +8601,9 @@ export interface operations {
     preflightForSign: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
             path: {
                 studySubjectOid: string;
             };

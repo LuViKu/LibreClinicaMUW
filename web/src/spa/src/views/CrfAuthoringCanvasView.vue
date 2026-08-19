@@ -6,7 +6,9 @@ import { useRoute, useRouter } from 'vue-router'
 import PaletteRail from '@/components/crfAuthoring/PaletteRail.vue'
 import SectionCanvas from '@/components/crfAuthoring/SectionCanvas.vue'
 import PropertiesRail from '@/components/crfAuthoring/PropertiesRail.vue'
-import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
+import { findDuplicateOidItems, useCrfAuthoringStore } from '@/stores/crfAuthoring'
+import { useNotificationsStore } from '@/stores/notifications'
+import { useCrfDraftPersistence } from '@/composables/useCrfDraftPersistence'
 import { useCrfPreviewStore } from '@/stores/crfPreview'
 import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
 import { CrfAuthoringErrorsKey } from '@/components/crfAuthoring/errorsInjection'
@@ -46,6 +48,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfAuthoringStore()
+const notifications = useNotificationsStore()
 
 /**
  * 2026-06-21 user-feedback batch — preview button + overlay. The
@@ -72,6 +75,39 @@ const crfName = computed(() => {
   if (Array.isArray(raw)) return raw[0] ?? ''
   return (raw as string | undefined) ?? ''
 })
+
+/**
+ * CRF-builder draft autosave/restore (2026-08). The draft is otherwise
+ * in-memory only and wiped by store.reset() on every mount, so an idle
+ * logout / reload / crash silently loses unsaved work. This debounced
+ * autosave to localStorage + the restore banner below are the safety net.
+ */
+const draftPersistence = useCrfDraftPersistence(crfOid)
+const showRestoreBanner = ref(false)
+const restoreSavedAtLabel = computed(() => {
+  const iso = draftPersistence.savedDraft.value?.savedAt
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('de-AT')
+})
+
+/** Snapshot any prior on-disk draft (for the banner) and begin autosaving.
+ *  Called after the mount-time reset()/loadFromVersion() so the snapshot is
+ *  the previous session's work, not the freshly-reset draft. */
+function initDraftPersistence(): void {
+  draftPersistence.start()
+  showRestoreBanner.value = draftPersistence.savedDraft.value !== null
+}
+
+function onRestoreDraft(): void {
+  draftPersistence.restore()
+  showRestoreBanner.value = false
+}
+
+function onDiscardDraft(): void {
+  draftPersistence.discard()
+  showRestoreBanner.value = false
+}
 
 const formError = ref<string | null>(null)
 const submitParseErrors = ref<string[]>([])
@@ -152,9 +188,11 @@ onMounted(async () => {
     } finally {
       isForking.value = false
     }
+    initDraftPersistence()
     return
   }
   store.reset()
+  initDraftPersistence()
 })
 
 async function onValidate(): Promise<void> {
@@ -165,6 +203,19 @@ async function onValidate(): Promise<void> {
   isValidating.value = true
   lastValidationOk.value = null
   try {
+    // Local structural guard: two items sharing an OID silently merge into one
+    // entry-store slot (their cells mirror). The backend may or may not flag
+    // this clearly, so catch it here with a jump-to-item message before the
+    // round-trip. Keyed by OID → one entry per duplicated OID.
+    const dups = findDuplicateOidItems(store.draft)
+    if (dups.length > 0) {
+      lastValidationOk.value = false
+      const errs: Record<string, string> = {}
+      for (const d of dups) errs[d.oid] = t('crfAuthoring.canvas.errors.duplicateOid', { oid: d.oid })
+      submitFieldErrors.value = errs
+      formError.value = t('crfAuthoring.canvas.errors.validationFailed')
+      return
+    }
     const result = await store.preview(crfOid.value)
     if (result.ok) {
       lastValidationOk.value = true
@@ -246,6 +297,12 @@ async function onSave(): Promise<void> {
   lastValidationOk.value = null
   const result = await store.submit(crfOid.value)
   if (result.ok) {
+    // Version is now persisted server-side — drop the local autosave so the
+    // restore banner doesn't resurrect an already-saved draft next time.
+    draftPersistence.clear()
+    // #11/#15 — confirm the save; the redirect away used to be the only
+    // signal that anything happened.
+    notifications.success(t('crfAuthoring.canvas.saveSuccess', { name: result.version.name }))
     // Land back on the CRF library so the operator can verify the new
     // version is listed.
     void router.push({ name: 'crf-library' })
@@ -260,9 +317,6 @@ function onCancel(): void {
   void router.push({ name: 'crf-library' })
 }
 
-function onUseLegacyWizard(): void {
-  void router.push({ name: 'crf-library', query: { authorWizard: '1', crfOid: crfOid.value } })
-}
 </script>
 
 <template>
@@ -277,14 +331,6 @@ function onUseLegacyWizard(): void {
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button
-          type="button"
-          class="text-xs text-slate-600 hover:text-slate-800 underline"
-          data-testid="crf-canvas-use-legacy"
-          @click="onUseLegacyWizard"
-        >
-          {{ t('crfAuthoring.canvas.useLegacy') }}
-        </button>
         <button
           type="button"
           class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
@@ -348,6 +394,38 @@ function onUseLegacyWizard(): void {
       data-testid="crf-canvas-fork-failed"
     >
       {{ t('crfAuthoring.canvas.fork.failed') }}
+    </div>
+
+    <!-- Draft-restore banner — a previous session's unsaved work was found
+         in local autosave (e.g. after an idle logout). Non-destructive:
+         the operator chooses to restore it or discard it. -->
+    <div
+      v-if="showRestoreBanner"
+      class="flex items-center gap-3 px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900"
+      role="alert"
+      data-testid="crf-canvas-draft-restore-banner"
+    >
+      <span class="flex-1">
+        {{ restoreSavedAtLabel
+            ? t('crfAuthoring.canvas.draftRestore.messageAt', { time: restoreSavedAtLabel })
+            : t('crfAuthoring.canvas.draftRestore.message') }}
+      </span>
+      <button
+        type="button"
+        class="shrink-0 rounded-md bg-muw-blue px-2.5 py-1 text-white hover:bg-muw-blue/90"
+        data-testid="crf-canvas-draft-restore"
+        @click="onRestoreDraft"
+      >
+        {{ t('crfAuthoring.canvas.draftRestore.restore') }}
+      </button>
+      <button
+        type="button"
+        class="shrink-0 rounded-md border border-amber-300 px-2.5 py-1 text-amber-900 hover:bg-amber-100"
+        data-testid="crf-canvas-draft-discard"
+        @click="onDiscardDraft"
+      >
+        {{ t('crfAuthoring.canvas.draftRestore.discard') }}
+      </button>
     </div>
 
     <!-- Validate-only success toast — disappears on the next change. -->

@@ -23,7 +23,7 @@ const props = defineProps<Props>()
 </script>
 
 <template>
-  <span v-if="props.laterality === null" class="text-slate-300">—</span>
+  <span v-if="props.laterality === null" class="text-slate-500">—</span>
   <span v-else class="inline-flex items-center gap-1.5">
     <span
       class="inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold"

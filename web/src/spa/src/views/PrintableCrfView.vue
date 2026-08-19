@@ -112,10 +112,12 @@ onMounted(async () => {
       </div>
     </header>
 
-    <main v-if="ready && store.entry" class="px-6 py-6 max-w-3xl mx-auto text-sm">
+    <div v-if="ready && store.entry" class="px-6 py-6 max-w-3xl mx-auto text-sm">
       <h1 class="text-base font-semibold mb-1">{{ store.entry.schema.name }}<span v-if="store.entry.schema.version" class="text-slate-400 font-normal text-xs ml-2">{{ store.entry.schema.version }}</span></h1>
 
       <div class="text-[11px] text-slate-500 mb-6 grid grid-cols-3 gap-2">
+        <div v-if="store.entry.subjectId"><dt class="inline text-slate-400">{{ t('printableCrf.subject') }}:</dt> <dd class="inline ml-1 font-medium text-slate-700">{{ store.entry.subjectId }}</dd></div>
+        <div v-if="store.entry.eventLabel"><dt class="inline text-slate-400">{{ t('printableCrf.event') }}:</dt> <dd class="inline ml-1">{{ store.entry.eventLabel }}</dd></div>
         <div><dt class="inline text-slate-400">{{ t('printableCrf.eventCrfId') }}:</dt> <dd class="inline ml-1">{{ store.entry.eventCrfOid }}</dd></div>
         <div><dt class="inline text-slate-400">{{ t('printableCrf.status') }}:</dt> <dd class="inline ml-1">{{ store.entry.status }}</dd></div>
         <div v-if="store.entry.lastSavedAt"><dt class="inline text-slate-400">{{ t('printableCrf.lastSaved') }}:</dt> <dd class="inline ml-1">{{ new Date(store.entry.lastSavedAt).toLocaleString() }}</dd></div>
@@ -156,7 +158,7 @@ onMounted(async () => {
         <span>{{ t('printableCrf.footerBrand') }}</span>
         <span>{{ new Date().toLocaleString() }}</span>
       </footer>
-    </main>
+    </div>
 
     <div v-else-if="ready && store.error" class="px-6 py-10 text-sm text-rose-700">{{ store.error }}</div>
     <div v-else class="px-6 py-10 text-xs text-slate-500">{{ t('common.loading') }}</div>

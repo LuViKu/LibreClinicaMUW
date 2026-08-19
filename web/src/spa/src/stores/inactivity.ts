@@ -33,12 +33,18 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 /**
- * Default — 10 minutes (in ms). Override at build time via
+ * Default — 30 minutes (in ms). Override at build time via
  * {@code VITE_INACTIVITY_TIMEOUT_MS}. The store clamps to a sane
  * minimum (60 s) so a misconfigured value can't lock the operator
  * out on every blink.
+ *
+ * <p>Raised from 10 → 30 min (2026-08) so the client no longer logs out
+ * ~6× sooner than the server session (60 min, {@code maxInactiveInterval}
+ * in datainfo.properties). The old 10-min value silently killed
+ * long-running authoring work; the CRF-builder draft autosave
+ * ({@code useCrfDraftPersistence}) is the belt to this suspenders.
  */
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
+const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000
 
 /** How often the watcher polls the last-activity timestamp. */
 const TICK_INTERVAL_MS = 30 * 1000

@@ -13,12 +13,14 @@ import UserRolesDialog from '@/components/UserRolesDialog.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { StudyUser, UserAuth, UserRole } from '@/types/user'
 import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const users = useUsersStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 onMounted(() => { if (users.rows.length === 0) users.load() })
 
@@ -43,14 +45,14 @@ const isLifecycleBusy = ref<string | null>(null)
 const restoredPanel = ref<{ username: string; password: string | null; kind: 'restore' | 'reset' | 'unlock' } | null>(null)
 
 async function onDisable(u: StudyUser) {
-  if (!confirm(t('manageUsers.lifecycle.disableConfirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.lifecycle.disableConfirm', { username: u.username }), danger: true }))) return
   isLifecycleBusy.value = u.username
   try { await users.disableUser(u.username) }
   finally { isLifecycleBusy.value = null }
 }
 
 async function onRestore(u: StudyUser) {
-  if (!confirm(t('manageUsers.lifecycle.restoreConfirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.lifecycle.restoreConfirm', { username: u.username }), danger: false }))) return
   isLifecycleBusy.value = u.username
   try {
     const result = await users.restoreUser(u.username)
@@ -72,7 +74,7 @@ function canResetPassword(u: StudyUser): boolean {
 }
 
 async function onResetPassword(u: StudyUser) {
-  if (!confirm(t('manageUsers.resetPassword.confirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.resetPassword.confirm', { username: u.username }), danger: true }))) return
   isLifecycleBusy.value = u.username
   try {
     const result = await users.resetPassword(u.username)
@@ -90,7 +92,7 @@ function canUnlock(u: StudyUser): boolean {
 }
 
 async function onUnlock(u: StudyUser) {
-  if (!confirm(t('manageUsers.lifecycle.unlockConfirm', { username: u.username }))) return
+  if (!(await confirm({ message: t('manageUsers.lifecycle.unlockConfirm', { username: u.username }), danger: false }))) return
   isLifecycleBusy.value = u.username
   try {
     const result = await users.unlock(u.username)
@@ -169,7 +171,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6">
+    <div class="flex-1 px-8 py-6">
       <div class="flex items-end justify-between mb-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('manageUsers.subTrail') }}</div>
@@ -186,6 +188,24 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
           </svg>
           {{ t('manageUsers.inviteAction') }}
         </button>
+      </div>
+
+      <!-- Surface user-lifecycle failures (disable / restore / reset-password /
+           unlock). The store sets `error` on failure but the view previously
+           never rendered it, so a failed action was silent. Dismissible. -->
+      <div
+        v-if="users.error"
+        class="mb-4 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        role="alert"
+        data-testid="manage-users-error"
+      >
+        <span class="flex-1">{{ users.error }}</span>
+        <button
+          type="button"
+          class="shrink-0 text-rose-500 hover:text-rose-700"
+          :aria-label="t('common.dismiss')"
+          @click="users.error = null"
+        >✕</button>
       </div>
 
       <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
@@ -207,13 +227,13 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
         </div>
 
         <div class="w-44">
-          <SelectInput id="users-role-filter" :model-value="users.roleFilter" @update:model-value="(v) => users.roleFilter = v as 'all' | UserRole">
+          <SelectInput id="users-role-filter" :aria-label="t('manageUsers.roleFilter')" :model-value="users.roleFilter" @update:model-value="(v) => users.roleFilter = v as 'all' | UserRole">
             <option v-for="o in roleOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
           </SelectInput>
         </div>
 
         <div class="w-48">
-          <SelectInput id="users-auth-filter" :model-value="users.authFilter" @update:model-value="(v) => users.authFilter = v as 'all' | UserAuth">
+          <SelectInput id="users-auth-filter" :aria-label="t('manageUsers.authFilter')" :model-value="users.authFilter" @update:model-value="(v) => users.authFilter = v as 'all' | UserAuth">
             <option v-for="o in authOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
           </SelectInput>
         </div>
@@ -246,7 +266,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
             <th scope="col" class="px-3 py-2 font-medium w-32">{{ t('manageUsers.column.auth') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('manageUsers.column.lastLogin') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('manageUsers.column.active') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium text-right w-16"></th>
+            <th scope="col" class="px-3 py-2 font-medium text-right w-16"><span class="sr-only">{{ t('common.actions') }}</span></th>
           </tr>
         </template>
 
@@ -293,7 +313,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
               >
                 {{ t('manageUsers.editRow') }}
               </button>
-              <span class="text-slate-300">·</span>
+              <span class="text-slate-500">·</span>
               <button
                 v-if="u.active"
                 class="text-rose-600 hover:underline disabled:opacity-50"
@@ -311,7 +331,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
                 {{ t('manageUsers.lifecycle.restore') }}
               </button>
               <template v-if="canResetPassword(u)">
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button
                   class="text-amber-700 hover:underline disabled:opacity-50"
                   :disabled="isLifecycleBusy === u.username"
@@ -321,7 +341,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
                 </button>
               </template>
               <template v-if="canUnlock(u)">
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button
                   class="text-amber-700 hover:underline disabled:opacity-50"
                   :disabled="isLifecycleBusy === u.username"
@@ -330,7 +350,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
                   {{ t('manageUsers.lifecycle.unlock') }}
                 </button>
               </template>
-              <span class="text-slate-300">·</span>
+              <span class="text-slate-500">·</span>
               <button
                 class="text-muw-blue hover:underline disabled:opacity-50"
                 :disabled="isLifecycleBusy === u.username"
@@ -384,7 +404,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
           </button>
         </div>
       </div>
-    </main>
+    </div>
 
     <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
     <EditUserDialog v-model:open="editOpen" :user="editTarget" />
