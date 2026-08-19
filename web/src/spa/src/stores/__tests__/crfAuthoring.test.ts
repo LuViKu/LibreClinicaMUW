@@ -935,6 +935,19 @@ describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
     expect(payload.groups).toEqual([{ label: 'MEDS', repeatNumber: 2, repeatMax: 8 }])
   })
 
+  it('clamps emitted group repeatMax so it cannot fall below repeatNumber', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'MEDS',
+      oid: 'MEDS',
+      table: { minRows: 10, maxRows: 3, columns: [{ key: 'med', label: 'Medikament', type: 'text' }] },
+    })
+    const payload = store.buildPayload() as {
+      groups: { label: string; repeatNumber: number; repeatMax: number }[]
+    }
+    expect(payload.groups).toEqual([{ label: 'MEDS', repeatNumber: 10, repeatMax: 10 }])
+  })
+
   it('encodes an autocomplete column system in its persisted OID', () => {
     const store = useCrfAuthoringStore()
     store.addItem(0, {
@@ -1102,6 +1115,24 @@ describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, s
     // Row bounds recovered from wire groups[] (not the 1/20 default).
     expect(table.minRows).toBe(3)
     expect(table.maxRows).toBe(12)
+  })
+
+  it('clamps recovered table bounds so maxRows cannot fall below minRows', async () => {
+    vi.mocked(apiGet).mockResolvedValue({
+      sections: [{
+        label: 'S1', title: 'Visit', ordinal: 1,
+        items: [
+          { name: 'rx_med', oid: 'RX_MED', descriptionLabel: 'Medikament', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'text' } },
+        ],
+      }],
+      groups: [{ label: 'RX', repeatNumber: 5, repeatMax: 3 }],
+    })
+    const store = useCrfAuthoringStore()
+    const ok = await store.loadFromVersion('CRF', 'v2')
+    expect(ok).toBe(true)
+    const table = store.draft.sections[0]!.items[0]!.table!
+    expect(table.minRows).toBe(5)
+    expect(table.maxRows).toBe(5)
   })
 
   it('reattaches a show-when rule and keeps ungrouped items flat + in order', async () => {

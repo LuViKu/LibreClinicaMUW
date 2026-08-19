@@ -717,9 +717,10 @@ function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
   for (const g of wire.groups ?? []) {
     const label = (g?.label ?? '').trim()
     if (!label) continue
+    const minRows = Math.max(1, g?.repeatNumber ?? 1)
     bounds.set(label, {
-      minRows: Math.max(1, g?.repeatNumber ?? 1),
-      maxRows: Math.max(1, g?.repeatMax ?? 20),
+      minRows,
+      maxRows: Math.max(minRows, Math.max(1, g?.repeatMax ?? 20)),
     })
   }
   const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1, bounds))
@@ -1606,11 +1607,14 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       groups: draft.value.sections
         .flatMap((s) => s.items)
         .filter((it) => it.table)
-        .map((it) => ({
-          label: tableBaseOid(it),
-          repeatNumber: Math.max(1, it.table!.minRows ?? 1),
-          repeatMax: Math.max(1, it.table!.maxRows ?? 20),
-        })),
+        .map((it) => {
+          const repeatNumber = Math.max(1, it.table!.minRows ?? 1)
+          return {
+            label: tableBaseOid(it),
+            repeatNumber,
+            repeatMax: Math.max(repeatNumber, Math.max(1, it.table!.maxRows ?? 20)),
+          }
+        }),
     }
   }
 
