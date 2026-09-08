@@ -8,7 +8,7 @@
     <parent>
         <groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
         <artifactId>LibreClinica</artifactId>
-  		<version>1.5.0-beta.6-muw</version>
+  		<version>1.5.0-beta.7-muw</version>
     </parent>
 
     <dependencies>

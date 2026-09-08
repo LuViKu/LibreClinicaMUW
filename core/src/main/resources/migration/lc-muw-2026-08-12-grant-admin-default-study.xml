@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        manual_admin is a global sysadmin whose only study_user_role row has a
+        NULL study_id, so it is not a member of any study. The SPA's study-scoped
+        admin surfaces (study settings / parameters / sites) require an active
+        study, so the demo Administrator could never reach them.
+
+        (The 2026-06-28 seed intended to bind manual_admin to Default Study, but
+        its changeSet was MARK_RAN-skipped because manual_admin already existed
+        from an earlier seed — so the study_id=1 binding never inserted.)
+
+        Bind manual_admin as Administrator (role 'admin') on Default Study
+        (study_id=1) so the admin study-lifecycle workflow is exercisable.
+        Idempotent via the preCondition. demo context only.
+    -->
+    <changeSet id="lc-muw-2026-08-12-grant-admin-default-study"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM user_account WHERE user_name = 'manual_admin';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM study_user_role
+                    WHERE user_name = 'manual_admin' AND study_id = 1;
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="admin"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-08-12"/>
+            <column name="user_name" value="manual_admin"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

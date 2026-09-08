@@ -19,6 +19,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { nextTick } from 'vue'
 
+// #19 — role removal now confirms via the useConfirm() modal. Mock it so
+// the awaited confirmation resolves without a mounted ConfirmDialog.
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn(() => Promise.resolve(true)) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
+
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
   return {
@@ -226,7 +231,7 @@ describe('UserRolesDialog — per-study multi-select', () => {
       .mockResolvedValueOnce([BINDING_S1_INV, BINDING_S1_DM])
       .mockResolvedValueOnce([])
     vi.mocked(apiPut).mockResolvedValueOnce([])
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    confirmMock.mockResolvedValueOnce(true)
 
     const wrapper = mountDialog()
     await flushPromises()
@@ -238,12 +243,11 @@ describe('UserRolesDialog — per-study multi-select', () => {
     removeBtn.click()
     await flushPromises()
 
-    expect(confirmSpy).toHaveBeenCalled()
+    expect(confirmMock).toHaveBeenCalled()
     expect(apiPut).toHaveBeenCalledTimes(1)
     const [, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[] }]
     expect(payload.roles).toEqual([])
 
-    confirmSpy.mockRestore()
     wrapper.unmount()
   })
 

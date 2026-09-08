@@ -3,7 +3,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import {
   allowedResponseTypesForDataType,
   dataTypeIsBoolean,
+  findDuplicateOidItems,
   hasShowWhen,
+  newRepeatingTableColumn,
+  reseedTableColumnKeySeq,
+  reseedUidCounter,
   responseTypeRequiresOptions,
   useCrfAuthoringStore,
 } from '../crfAuthoring'
@@ -631,7 +635,7 @@ describe('useCrfAuthoringStore', () => {
         },
       })
       const payload = store.buildPayload() as {
-        sections: Array<{ items: Array<{ showWhen?: Record<string, unknown> }> }>
+        sections: Array<{ items: Array<{ showWhen?: Record<string, unknown>; showItem?: unknown; parentItemOid?: unknown }> }>
       }
       const items = payload.sections[0]!.items
       expect(items[0]!.showWhen).toBeUndefined()
@@ -640,6 +644,28 @@ describe('useCrfAuthoringStore', () => {
         comparator: '==',
         literal: '1',
       })
+      // #26 — an equality rule is ALSO mirrored onto the legacy fields the
+      // workbook adapter persists (→ scd_item_metadata), so it survives save.
+      expect(items[1]!.parentItemOid).toBe('SPECTRALIS_DONE')
+      expect(items[1]!.showItem).toBe('1')
+    })
+
+    it('mirrors only equality rules onto showItem/parentItemOid (legacy scd is =-only)', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'SRC', descriptionLabel: 'src', dataType: 'INT' })
+      store.addItem(0, {
+        name: 'GT',
+        descriptionLabel: 'gt',
+        dataType: 'ST',
+        showWhen: { sourceItemOid: 'SRC', comparator: '>', literal: '5' },
+      })
+      const gt = (store.buildPayload() as {
+        sections: Array<{ items: Array<Record<string, unknown>> }>
+      }).sections[0]!.items[1]!
+      // Display-only: the rule is on showWhen but not the persisted fields.
+      expect(gt.showWhen).toEqual({ sourceItemOid: 'SRC', comparator: '>', literal: '5' })
+      expect('showItem' in gt).toBe(false)
+      expect('parentItemOid' in gt).toBe(false)
     })
 
     it('omits showWhen when undefined', () => {
@@ -663,5 +689,470 @@ describe('useCrfAuthoringStore', () => {
       }
       expect('showWhen' in payload.sections[0]!.items[0]!).toBe(false)
     })
+  })
+
+  /**
+   * Response-shape reconciliation — the invariant that used to live in a
+   * watcher inside the (dead) ItemEditor.vue, which is why the palette
+   * drop path never got it.
+   */
+  describe('reconcileItemResponseShape', () => {
+    type Inline = { type: string; label: string; options: Array<{ text: string; value: string }> }
+    const inlineOf = (store: ReturnType<typeof useCrfAuthoringStore>, i = 0): Inline =>
+      store.draft.sections[0]!.items[i]!.responseSet as unknown as Inline
+
+    it('seeds the Ja/Nein/Unbekannt trio for a bare TRISTATE_REASON drop', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'TRISTATE_REASON' })
+      const item = store.draft.sections[0]!.items[0]!
+      // Previously left at 'text' — out of the matrix — with a null set,
+      // which the rail then rendered as an uncorrectable disabled select.
+      expect(item.responseType).toBe('single-select')
+      expect(inlineOf(store).options.map((o) => o.value)).toEqual(['JA', 'NEIN', 'UNBEKANNT'])
+    })
+
+    it('clamps a bare FILE drop to the file response type', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'FILE' })
+      const item = store.draft.sections[0]!.items[0]!
+      expect(item.responseType).toBe('file')
+      expect(item.responseSet).toBeNull()
+    })
+
+    it('leaves BL without an inline set (Yes/No is synthesised at wire time)', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'BL' })
+      const item = store.draft.sections[0]!.items[0]!
+      expect(item.responseType).toBe('single-select')
+      expect(item.responseSet).toBeNull()
+    })
+
+    it('seeds two blank rows when the response type gains options', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0)
+      store.setItemField(0, 0, 'responseType', 'single-select')
+      expect(inlineOf(store).options).toHaveLength(2)
+      expect(inlineOf(store).options.every((o) => o.text === '' && o.value === '')).toBe(true)
+    })
+
+    it('clears the inline set when the response type drops options again', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0)
+      store.setItemField(0, 0, 'responseType', 'single-select')
+      store.setItemField(0, 0, 'responseType', 'text')
+      expect(store.draft.sections[0]!.items[0]!.responseSet).toBeNull()
+    })
+
+    it('preserves authored options across a compatible data-type change', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'A', value: '1' }] },
+      })
+      // single-select is in INT's allowed matrix, so nothing is lost.
+      store.setItemField(0, 0, 'dataType', 'INT')
+      expect(inlineOf(store).options).toEqual([{ text: 'A', value: '1' }])
+    })
+
+    it('clears options when the new data type cannot carry them', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'A', value: '1' }] },
+      })
+      store.setItemField(0, 0, 'dataType', 'DATE')
+      const item = store.draft.sections[0]!.items[0]!
+      expect(item.responseType).toBe('text')
+      expect(item.responseSet).toBeNull()
+    })
+
+    it('does not disturb options when an unrelated field is edited', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { dataType: 'TRISTATE_REASON' })
+      store.setItemField(0, 0, 'name', 'SMOKER')
+      expect(inlineOf(store).options).toHaveLength(3)
+    })
+
+    it('leaves a catalog-linked (ref) response set untouched', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        responseType: 'radio',
+        responseSet: { ref: { label: 'yes_no' } },
+      })
+      expect(store.draft.sections[0]!.items[0]!.responseSet).toEqual({ ref: { label: 'yes_no' } })
+    })
+
+    it('preserves preset-supplied inline options verbatim', () => {
+      const store = useCrfAuthoringStore()
+      const options = [
+        { text: 'Ja', value: 'JA' },
+        { text: 'Nein', value: 'NEIN' },
+      ]
+      store.addItem(0, {
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: 'iop_tristate', options },
+      })
+      expect(inlineOf(store).label).toBe('iop_tristate')
+      expect(inlineOf(store).options).toEqual(options)
+    })
+  })
+
+  describe('buildPayload — choice response sets', () => {
+    const CHOICE_TYPES = ['radio', 'single-select', 'multi-select', 'checkbox'] as const
+
+    it.each(CHOICE_TYPES)('always emits an options array for %s', (rt) => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'Q1', responseType: rt })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { type: string; options?: unknown } }> }>
+      }
+      const rs = payload.sections[0]!.items[0]!.responseSet
+      expect(rs.type).toBe(rt)
+      // Regression guard: the canvas used to ship a choice type with no
+      // options key at all, which the backend rejected with an
+      // unlocalised "requires at least one option".
+      expect(Array.isArray(rs.options)).toBe(true)
+    })
+
+    it('gives two blank-labelled dropdowns distinct response-set labels', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'CONSENT',
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'Ja', value: 'JA' }] },
+      })
+      store.addItem(0, {
+        name: 'SEX',
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: '', options: [{ text: 'W', value: 'F' }] },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { label: string } }> }>
+      }
+      const [first, second] = payload.sections[0]!.items
+      // Both used to serialise with a blank label, which the adapter
+      // stamped as a shared `single_select_options` token — and the
+      // parser then rejected the whole version because one label carried
+      // two different option lists. A CRF could hold only ONE dropdown.
+      expect(first!.responseSet.label).toBe('consent_options')
+      expect(second!.responseSet.label).toBe('sex_options')
+      expect(first!.responseSet.label).not.toBe(second!.responseSet.label)
+    })
+
+    it('lets an operator-typed label win over the derived one', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'CONSENT',
+        responseType: 'single-select',
+        responseSet: { type: 'single-select', label: 'ja_nein', options: [{ text: 'Ja', value: 'JA' }] },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { label: string } }> }>
+      }
+      expect(payload.sections[0]!.items[0]!.responseSet.label).toBe('ja_nein')
+    })
+
+    it('filters blank starter rows off the wire', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'Q1', responseType: 'single-select' })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet: { options: unknown[] } }> }>
+      }
+      expect(payload.sections[0]!.items[0]!.responseSet.options).toEqual([])
+    })
+
+    it('emits the full four-option dropdown the HealthAEye CRF needs', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'CHILDBEARING', responseType: 'single-select' })
+      store.setItemResponseSet(0, 0, {
+        type: 'single-select',
+        label: '',
+        options: [
+          { text: 'Ja', value: 'JA' },
+          { text: 'Nein', value: 'NEIN' },
+          { text: 'Nicht zutreffend', value: 'NICHT_ZUTREFFEND' },
+          { text: 'Unbekannt', value: 'UNBEKANNT' },
+        ],
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{
+          items: Array<{ responseSet: { label: string; options: Array<{ value: string }> } }>
+        }>
+      }
+      const rs = payload.sections[0]!.items[0]!.responseSet
+      expect(rs.label).toBe('childbearing_options')
+      expect(rs.options.map((o) => o.value)).toEqual([
+        'JA',
+        'NEIN',
+        'NICHT_ZUTREFFEND',
+        'UNBEKANNT',
+      ])
+    })
+  })
+})
+
+describe('buildPayload — repeating-table persistence (#26 Slice 3)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('expands a table item into grouped column items sharing a groupLabel', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'MEDS',
+      oid: 'MEDS',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'med', label: 'Medikament', type: 'text' },
+          { key: 'dose', label: 'Dosis', type: 'number' },
+          { key: 'start', label: 'Beginn', type: 'date' },
+        ],
+      },
+    })
+    const payload = store.buildPayload() as {
+      sections: { items: { oid: string; dataType: string; descriptionLabel: string; groupLabel?: string }[] }[]
+    }
+    const items = payload.sections[0]!.items
+    const grouped = items.filter((i) => i.groupLabel === 'MEDS')
+    expect(grouped).toHaveLength(3)
+    expect(grouped.map((i) => i.oid)).toEqual(['MEDS_MED', 'MEDS_DOSE', 'MEDS_START'])
+    expect(grouped.map((i) => i.dataType)).toEqual(['ST', 'REAL', 'DATE'])
+    expect(grouped.map((i) => i.descriptionLabel)).toEqual(['Medikament', 'Dosis', 'Beginn'])
+    // The table item does NOT leak through as a lone scalar item.
+    expect(items.some((i) => i.oid === 'MEDS' && !i.groupLabel)).toBe(false)
+  })
+
+  it('emits per-group row bounds so the operator min/max persists (not the 1/40 default)', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'MEDS',
+      oid: 'MEDS',
+      table: { minRows: 2, maxRows: 8, columns: [{ key: 'med', label: 'Medikament', type: 'text' }] },
+    })
+    const payload = store.buildPayload() as {
+      groups: { label: string; repeatNumber: number; repeatMax: number }[]
+    }
+    expect(payload.groups).toEqual([{ label: 'MEDS', repeatNumber: 2, repeatMax: 8 }])
+  })
+
+  it('clamps emitted group repeatMax so it cannot fall below repeatNumber', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'MEDS',
+      oid: 'MEDS',
+      table: { minRows: 10, maxRows: 3, columns: [{ key: 'med', label: 'Medikament', type: 'text' }] },
+    })
+    const payload = store.buildPayload() as {
+      groups: { label: string; repeatNumber: number; repeatMax: number }[]
+    }
+    expect(payload.groups).toEqual([{ label: 'MEDS', repeatNumber: 10, repeatMax: 10 }])
+  })
+
+  it('encodes an autocomplete column system in its persisted OID', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'RX',
+      oid: 'RX',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'drug', label: 'Medikament', type: 'text', autocomplete: { system: 'medication', fills: [] } },
+          { key: 'dose', label: 'Dosis', type: 'number' },
+        ],
+      },
+    })
+    const payload = store.buildPayload() as { sections: { items: { oid: string }[] }[] }
+    const oids = payload.sections[0]!.items.map((i) => i.oid)
+    // The medication-bound text column carries the _TXMED marker; the plain
+    // numeric column does not.
+    expect(oids).toContain('RX_DRUG_TXMED')
+    expect(oids).toContain('RX_DOSE')
+  })
+
+  it('persists the terminology binding (system + fill map, toKey → target OID)', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'DX',
+      oid: 'DX',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'diagnose', label: 'Diagnose', type: 'text', autocomplete: { system: 'icd10gm', fills: [{ fromProperty: 'code', toKey: 'icd' }] } },
+          { key: 'icd', label: 'ICD-Code', type: 'text' },
+        ],
+      },
+    })
+    const items = (store.buildPayload() as {
+      sections: { items: Record<string, unknown>[] }[]
+    }).sections[0]!.items
+    const diag = items.find((i) => i.oid === 'DX_DIAGNOSE_TXICD')!
+    // Full binding for the backend to persist; the fill's authoring key 'icd'
+    // is translated to the ICD-Code column's persisted OID.
+    expect(diag.autocomplete).toEqual({
+      system: 'icd10gm',
+      fills: [{ fromProperty: 'code', toKey: 'DX_ICD' }],
+    })
+    // A plain column carries no binding.
+    expect('autocomplete' in items.find((i) => i.oid === 'DX_ICD')!).toBe(false)
+  })
+
+  it('persists a laterality column as a single-select over OD/OS/OU', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, {
+      name: 'DX',
+      oid: 'DX',
+      table: {
+        minRows: 1,
+        maxRows: 5,
+        columns: [
+          { key: 'dx', label: 'Diagnose', type: 'text' },
+          { key: 'eye', label: 'Auge', type: 'laterality' },
+        ],
+      },
+    })
+    const payload = store.buildPayload() as {
+      sections: { items: { oid: string; responseSet?: { type?: string; options?: { value: string }[] } }[] }[]
+    }
+    const eye = payload.sections[0]!.items.find((i) => i.oid === 'DX_EYE')!
+    expect(eye.responseSet?.type).toBe('single-select')
+    expect(eye.responseSet?.options?.map((o) => o.value)).toEqual(['OD', 'OS', 'OU'])
+  })
+})
+
+describe('reseedTableColumnKeySeq (draft restore — column-key collisions)', () => {
+  it('advances the key counter past a restored draft so new columns never reuse a key', () => {
+    // A draft restored from an earlier session carries high column keys, but
+    // the module counter resets to 0 on page load. Use a value no prior test
+    // could have reached so the assertion is order-independent.
+    const draft = {
+      sections: [
+        { items: [{ table: { columns: [{ key: 'col_999' }, { key: 'col_3' }] } }] },
+      ],
+    } as unknown as Parameters<typeof reseedTableColumnKeySeq>[0]
+    reseedTableColumnKeySeq(draft)
+    // The next minted key clears the restored maximum — no collision, no
+    // silent cell-state mirroring across columns.
+    expect(newRepeatingTableColumn('x').key).toBe('col_1000')
+    expect(newRepeatingTableColumn('y').key).toBe('col_1001')
+  })
+})
+
+describe('reseedUidCounter (draft restore — item/section UID collisions)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('advances the UID counter past a restored draft so an added item never collides', () => {
+    // A restored draft holds sec-/item- UIDs minted before the page reload.
+    // Use suffixes no prior test could reach so the assertion is order-free.
+    const draft = {
+      sections: [{ uid: 'sec-4000', items: [{ uid: 'item-4200' }, { uid: 'item-7' }] }],
+    } as unknown as Parameters<typeof reseedUidCounter>[0]
+    reseedUidCounter(draft)
+    // Adding through a fresh store now mints a UID past the restored maximum.
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'fresh', oid: 'FRESH' })
+    const added = store.draft.sections[0]!.items.at(-1)!.uid
+    expect(Number(/-(\d+)$/.exec(added)![1])).toBeGreaterThan(4200)
+  })
+})
+
+describe('findDuplicateOidItems (unique-OID guard)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('flags every item whose OID collides; ignores unique and empty OIDs', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'drugs', oid: 'D' })
+    store.addItem(0, { name: 'diag', oid: 'D' })
+    store.addItem(0, { name: 'notes', oid: 'NOTES' })
+    store.addItem(0, { name: 'blank', oid: '' })
+    const dups = findDuplicateOidItems(store.draft)
+    // Both 'D' items are flagged; the unique and the empty OID are not.
+    expect(dups.map((d) => d.oid)).toEqual(['D', 'D'])
+    expect(dups.some((d) => d.oid === 'NOTES' || d.oid === '')).toBe(false)
+  })
+
+  it('trims before comparing and returns nothing when all OIDs are unique', () => {
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'a', oid: 'A' })
+    store.addItem(0, { name: 'b', oid: 'B ' })
+    expect(findDuplicateOidItems(store.draft)).toEqual([])
+  })
+})
+
+describe('loadFromVersion (fork recovery — tables, autocomplete, laterality, show-when)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiGet).mockReset()
+  })
+
+  it('folds grouped items back into one table with decoded autocomplete + laterality', async () => {
+    vi.mocked(apiGet).mockResolvedValue({
+      sections: [{
+        label: 'S1', title: 'Meds', ordinal: 1,
+        items: [
+          { name: 'RX_DRUG_TXMED', oid: 'RX_DRUG_TXMED', descriptionLabel: 'Medikament', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'text' }, autocomplete: { system: 'medication', fills: [{ fromProperty: 'strength', toKey: 'RX_DOSE' }] } },
+          { name: 'RX_DOSE', oid: 'RX_DOSE', descriptionLabel: 'Dosis', dataType: 'REAL', groupLabel: 'RX', responseSet: { type: 'text' } },
+          { name: 'RX_EYE', oid: 'RX_EYE', descriptionLabel: 'Auge', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'single-select', options: [{ text: 'OD (rechts)', value: 'OD' }, { text: 'OS (links)', value: 'OS' }, { text: 'OU (beide)', value: 'OU' }] } },
+        ],
+      }],
+      groups: [{ label: 'RX', repeatNumber: 3, repeatMax: 12 }],
+    })
+    const store = useCrfAuthoringStore()
+    const ok = await store.loadFromVersion('CRF_X', 'CRF_X_V1')
+    expect(ok).toBe(true)
+    const items = store.draft.sections[0]!.items
+    // Three grouped items → ONE table item named after the group label.
+    expect(items).toHaveLength(1)
+    expect(items[0]!.oid).toBe('RX')
+    const table = items[0]!.table!
+    expect(table.columns.map((c) => c.type)).toEqual(['text', 'number', 'laterality'])
+    expect(table.columns.map((c) => c.label)).toEqual(['Medikament', 'Dosis', 'Auge'])
+    // System recovered; fill map recovered with toKey translated from the
+    // persisted target OID (RX_DOSE) back to the reconstructed Dosis col key.
+    expect(table.columns[0]!.autocomplete?.system).toBe('medication')
+    expect(table.columns[0]!.autocomplete?.fills).toEqual([{ fromProperty: 'strength', toKey: table.columns[1]!.key }])
+    // Row bounds recovered from wire groups[] (not the 1/20 default).
+    expect(table.minRows).toBe(3)
+    expect(table.maxRows).toBe(12)
+  })
+
+  it('clamps recovered table bounds so maxRows cannot fall below minRows', async () => {
+    vi.mocked(apiGet).mockResolvedValue({
+      sections: [{
+        label: 'S1', title: 'Visit', ordinal: 1,
+        items: [
+          { name: 'rx_med', oid: 'RX_MED', descriptionLabel: 'Medikament', dataType: 'ST', groupLabel: 'RX', responseSet: { type: 'text' } },
+        ],
+      }],
+      groups: [{ label: 'RX', repeatNumber: 5, repeatMax: 3 }],
+    })
+    const store = useCrfAuthoringStore()
+    const ok = await store.loadFromVersion('CRF', 'v2')
+    expect(ok).toBe(true)
+    const table = store.draft.sections[0]!.items[0]!.table!
+    expect(table.minRows).toBe(5)
+    expect(table.maxRows).toBe(5)
+  })
+
+  it('reattaches a show-when rule and keeps ungrouped items flat + in order', async () => {
+    vi.mocked(apiGet).mockResolvedValue({
+      sections: [{
+        label: 'S1', title: 'Visit', ordinal: 1,
+        items: [
+          { name: 'intro', oid: 'INTRO', dataType: 'ST', responseSet: { type: 'text' } },
+          { name: 'T_A', oid: 'T_A', descriptionLabel: 'A', dataType: 'ST', groupLabel: 'T', responseSet: { type: 'text' } },
+          { name: 'T_B', oid: 'T_B', descriptionLabel: 'B', dataType: 'DATE', groupLabel: 'T', responseSet: { type: 'text' } },
+          { name: 'reason', oid: 'REASON', dataType: 'ST', responseSet: { type: 'text' }, parentItemOid: 'INTRO', showItem: 'N' },
+        ],
+      }],
+    })
+    const store = useCrfAuthoringStore()
+    await store.loadFromVersion('CRF_X', 'CRF_X_V1')
+    const items = store.draft.sections[0]!.items
+    // Order preserved: flat, table (at group's first appearance), flat.
+    expect(items.map((i) => i.oid)).toEqual(['INTRO', 'T', 'REASON'])
+    expect(items[1]!.table!.columns.map((c) => c.type)).toEqual(['text', 'date'])
+    expect(items[2]!.showWhen).toEqual({ sourceItemOid: 'INTRO', comparator: '==', literal: 'N' })
   })
 })

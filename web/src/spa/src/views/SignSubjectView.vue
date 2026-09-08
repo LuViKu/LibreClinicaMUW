@@ -152,7 +152,7 @@ async function onSign(payload: ESignaturePayload) {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-4xl px-8 py-6">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <p v-if="subjects.isLoadingSelected || subjects.isLoadingPreflight" class="text-slate-500 italic">
         {{ t('common.loading') }}
       </p>
@@ -186,7 +186,6 @@ async function onSign(payload: ESignaturePayload) {
         <section class="bg-white border border-slate-200 rounded-muw overflow-hidden mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t('signSubject.casebookHeading') }}</h2>
-            <a href="#" class="text-xs text-muw-blue hover:underline">{{ t('signSubject.casebookPdf') }}</a>
           </div>
           <DenseTable :bordered="false">
             <template #header>
@@ -252,6 +251,6 @@ async function onSign(payload: ESignaturePayload) {
           {{ t('signSubject.signedToast', { id: subject.id }) }}
         </div>
       </template>
-    </main>
+    </div>
   </div>
 </template>

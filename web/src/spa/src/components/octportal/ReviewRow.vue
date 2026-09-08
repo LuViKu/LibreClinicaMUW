@@ -120,12 +120,12 @@ const scanDateTimeLabel = computed(() => {
         v-if="props.row.scan?.patientId"
         class="font-mono text-[12px] font-medium text-slate-700"
       >{{ props.row.scan.patientId }}</span>
-      <span v-else class="text-slate-300">—</span>
+      <span v-else class="text-slate-500">—</span>
     </div>
 
     <div class="w-[150px] shrink-0 text-[12px] text-slate-500 relative z-10">
       <span v-if="scanDateTimeLabel">{{ scanDateTimeLabel }}</span>
-      <span v-else class="text-slate-300">—</span>
+      <span v-else class="text-slate-500">—</span>
     </div>
 
     <div class="w-[68px] shrink-0 relative z-10">

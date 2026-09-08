@@ -17,6 +17,11 @@ interface PrefixRule {
   key: string
 }
 
+interface SuffixRule {
+  suffix: string
+  key: string
+}
+
 const EXACT_RULES: ExactRule[] = [
   { source: 'Item name is required',                key: 'crfAuthoring.canvas.validation.itemNameRequired' },
   { source: 'Description label is required',        key: 'crfAuthoring.canvas.validation.descriptionRequired' },
@@ -38,6 +43,24 @@ const EXACT_RULES: ExactRule[] = [
     key: 'crfAuthoring.canvas.validation.fileResponseSetRequired' },
   { source: 'Item name must contain only letters, digits and underscores',
     key: 'crfAuthoring.canvas.validation.itemNameInvalidChars' },
+  { source: "Response type 'file' requires data type FILE",
+    key: 'crfAuthoring.canvas.validation.fileResponseTypeRequired' },
+  { source: "Data type FILE requires response type 'file'",
+    key: 'crfAuthoring.canvas.validation.fileDataTypeRequired' },
+]
+
+/**
+ * Suffix tier, evaluated between EXACT and PREFIX.
+ *
+ * <p>Needed because the options message is parameterised on the response
+ * type ("Response type 'single-select' requires at least one option"), so
+ * an exact rule can't match it — and a {@code "Response type '"} PREFIX
+ * rule would wrongly swallow the two FILE pairing messages above, which
+ * share that prefix but mean something else entirely.
+ */
+const SUFFIX_RULES: SuffixRule[] = [
+  { suffix: 'requires at least one option',
+    key: 'crfAuthoring.canvas.validation.optionsRequired' },
 ]
 
 const PREFIX_RULES: PrefixRule[] = [
@@ -60,6 +83,9 @@ export function humanizeValidationError(
 
   for (const rule of EXACT_RULES) {
     if (rule.source === trimmed) return t(rule.key)
+  }
+  for (const rule of SUFFIX_RULES) {
+    if (trimmed.endsWith(rule.suffix)) return t(rule.key)
   }
   for (const rule of PREFIX_RULES) {
     if (trimmed.startsWith(rule.prefix)) return t(rule.key)

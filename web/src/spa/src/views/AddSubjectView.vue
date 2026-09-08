@@ -356,7 +356,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-3xl px-8 py-8">
+    <div class="flex-1 max-w-3xl px-8 py-8">
       <div class="mb-6">
         <div class="text-xs text-slate-500 mb-1">{{ form.siteLabel }} · {{ t('addSubject.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('addSubject.title') }}</h1>
@@ -534,7 +534,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
              rendered as one-eye when the scope is OD or OS). -->
         <section>
           <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-            Ophthalmology
+            {{ t('ophth.sectionHeading') }}
           </h2>
 
           <div class="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -595,9 +595,12 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           </RouterLink>
 
           <div class="flex items-center gap-2">
+            <!-- Clear action hierarchy: schedule = primary (below), finish =
+                 secondary (bordered), add-next = tertiary (ghost) so the two
+                 non-primary actions no longer compete as look-alike buttons. -->
             <button
               type="button"
-              class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
+              class="px-3 py-2 text-xs rounded-md text-slate-600 hover:text-muw-blue hover:bg-slate-50 disabled:opacity-50"
               :disabled="subjects.isLoading"
               @click="submit('addNext')"
             >
@@ -605,7 +608,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
             </button>
             <button
               type="submit"
-              class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
+              class="px-3 py-2 text-xs border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
               :disabled="subjects.isLoading"
             >
               {{ t('addSubject.action.saveAndFinish') }}
@@ -632,6 +635,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
         </svg>
         <p class="leading-relaxed">{{ t('addSubject.modesHelp') }}</p>
       </div>
-    </main>
+    </div>
   </div>
 </template>

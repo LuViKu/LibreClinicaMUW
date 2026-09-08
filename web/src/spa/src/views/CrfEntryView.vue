@@ -31,11 +31,13 @@ import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 import { parseShowWhen } from '@/components/showWhen'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import { useConfirm } from '@/composables/useConfirm'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
@@ -44,6 +46,8 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
+const confirm = useConfirm()
+const notifications = useNotificationsStore()
 const advanced = useCrfEntryAdvancedStore()
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
@@ -330,7 +334,7 @@ async function onUploadFile(itemOid: string, file: File): Promise<void> {
 }
 
 async function onClearFile(itemOid: string): Promise<void> {
-  if (!confirm(t('crfEntry.file.removeConfirm'))) return
+  if (!(await confirm({ message: t('crfEntry.file.removeConfirm'), danger: true }))) return
   await store.deleteFile(itemOid)
 }
 
@@ -348,7 +352,7 @@ const saveBlockedByRfc = computed(
   () => store.requiresReasonForChange && store.itemsAwaitingReason.length > 0,
 )
 
-function onSave() {
+async function onSave() {
   submitAttempted.value = true
   // If the operator clicks Save on a post-complete entry without
   // every reason staged, route through the modal rather than firing
@@ -358,12 +362,18 @@ function onSave() {
     store.missingReasonItemOids = [...store.itemsAwaitingReason]
     return
   }
-  void store.save()
+  // #11/#15 — confirm the save. Silent success previously left the
+  // operator unsure anything happened (only the passive "last saved"
+  // timestamp changed).
+  const ok = await store.save()
+  if (ok) notifications.success(t('crfEntry.saveSuccess'))
 }
 async function onMarkComplete() {
   submitAttempted.value = true
   await store.markComplete()
   if (store.status === 'complete') {
+    // #11/#15 — the toast survives the navigation below (app-level store).
+    notifications.success(t('crfEntry.markCompleteSuccess'))
     // 2026-06-21 user-feedback round 5 — return to the parent visit
     // view rather than the subject casebook. The operator was just
     // working through a CRF for a specific visit; landing them back
@@ -399,7 +409,7 @@ async function onMarkComplete() {
  * `isReadOnly` / `isSaving` chain.
  */
 async function onReopen() {
-  if (!confirm(t('crfEntry.action.reopenConfirm'))) return
+  if (!(await confirm({ message: t('crfEntry.action.reopenConfirm'), danger: false }))) return
   await store.reopen()
 }
 
@@ -593,7 +603,7 @@ function onPrefillApply(values: Record<string, string>) {
       </nav>
     </SideRail>
 
-    <main class="flex-1 max-w-3xl px-8 py-8">
+    <div class="flex-1 max-w-3xl px-8 py-8">
       <div class="mb-6">
         <div class="text-xs text-slate-500 mb-1" v-if="store.entry">
           {{ store.entry.subjectId }} · {{ store.entry.eventLabel }}
@@ -1035,7 +1045,7 @@ function onPrefillApply(values: Record<string, string>) {
           </div>
         </div>
       </form>
-    </main>
+    </div>
 
     <NewNoteDialog
       v-if="newNoteDialogState"

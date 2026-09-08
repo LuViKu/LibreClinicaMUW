@@ -96,6 +96,18 @@ LABEL org.opencontainers.image.vendor="Department of Ophthalmology and Optometry
 LABEL org.opencontainers.image.licenses="LGPL-2.1-or-later"
 LABEL org.opencontainers.image.source="https://github.com/LuViKu/LibreClinicaMUW"
 
+# 2026-07-10 — curl for the HEALTHCHECK below. The tomcat:10.1-jdk25-temurin
+# base does NOT ship curl: the Java 21→25 bump swapped the base image and the
+# old "curl is preinstalled" assumption silently broke, so the container
+# reported `unhealthy` forever while the app served fine (observed on the
+# 1.5.0-beta.6-muw production deploy). Install it explicitly — the same way
+# retinal-inference/Dockerfile does — so the probe never depends on whatever
+# the upstream base happens to include.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl; \
+    rm -rf /var/lib/apt/lists/*
+
 RUN set -eux; \
     # set up redirection to application when accessing tomcat root
     mkdir /usr/local/tomcat/webapps/ROOT; \
@@ -152,7 +164,9 @@ COPY --from=builder \
 # negatives on a cold start. interval/timeout/retries match the
 # retinal-inference sidecar (retinal-inference/Dockerfile:12-13).
 #
-# curl is preinstalled in the tomcat:10.1-jdk25-temurin (Debian) base — verified
-# 2026-06-10 — so no apt-get layer needed.
+# curl is installed explicitly in the runtime stage above. Do NOT assume the
+# base image ships it — tomcat:10.1-jdk25-temurin does not, and the previous
+# "preinstalled, no apt-get layer needed" note silently went stale when the
+# Java 25 bump changed the base (see the apt-get block above).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD curl -fsS http://localhost:8080/LibreClinica/actuator/health || exit 1

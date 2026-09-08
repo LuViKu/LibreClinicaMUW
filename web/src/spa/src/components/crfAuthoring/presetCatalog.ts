@@ -4,7 +4,8 @@
  * drop handler does likewise when an entry is dragged into a section.
  */
 
-import type { AuthoringItem, AuthoringDataType } from '@/stores/crfAuthoring'
+import type { AuthoringItem } from '@/stores/crfAuthoring'
+import { defaultRepeatingTableSpec } from '@/stores/crfAuthoring'
 import { IOP_PRESET_ID, generateIopPresetItems } from './presets/iopPreset'
 import {
   OPHTH_EXAM_PRESET_ID,
@@ -231,20 +232,70 @@ export function findPreset(id: string): PresetDescriptor | undefined {
  * visible.
  */
 export interface PalettePrimitive {
-  /** Data type the primitive materialises. */
-  dataType: AuthoringDataType
+  /**
+   * Stable palette id — the drag payload value and the test-id suffix.
+   * Equal to the {@code dataType} for the original single-data-type
+   * blocks, so existing drag payloads and test ids keep working; the
+   * choice blocks introduce ids that are NOT data types
+   * ({@code CHOICE_SINGLE}, {@code CHOICE_MULTI}).
+   */
+  id: string
   /** i18n label key. */
   labelKey: string
   /** i18n description key. */
   descriptionKey: string
+  /**
+   * Fresh seed per drop. A factory rather than a static object because a
+   * shared seed would hand every dropped item the SAME options array
+   * reference — editing one item's options would silently edit them all.
+   *
+   * <p>Seeds deliberately carry no {@code responseSet}: the store's
+   * {@code reconcileItemResponseShape} fills it on {@link addItem}, so
+   * the drop path and the properties-rail path produce identical items.
+   */
+  seed(): Partial<AuthoringItem>
+}
+
+const PRIM_KEY = 'crfAuthoring.canvas.palette.prim'
+
+function primitive(
+  id: string,
+  seed: () => Partial<AuthoringItem>,
+): PalettePrimitive {
+  return {
+    id,
+    labelKey: `${PRIM_KEY}.${id}.label`,
+    descriptionKey: `${PRIM_KEY}.${id}.description`,
+    seed,
+  }
 }
 
 export const PALETTE_PRIMITIVES: ReadonlyArray<PalettePrimitive> = [
-  { dataType: 'ST', labelKey: 'crfAuthoring.canvas.palette.prim.ST.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.ST.description' },
-  { dataType: 'INT', labelKey: 'crfAuthoring.canvas.palette.prim.INT.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.INT.description' },
-  { dataType: 'REAL', labelKey: 'crfAuthoring.canvas.palette.prim.REAL.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.REAL.description' },
-  { dataType: 'DATE', labelKey: 'crfAuthoring.canvas.palette.prim.DATE.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.DATE.description' },
-  { dataType: 'BL', labelKey: 'crfAuthoring.canvas.palette.prim.BL.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.BL.description' },
-  { dataType: 'TRISTATE_REASON', labelKey: 'crfAuthoring.canvas.palette.prim.TRISTATE_REASON.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.TRISTATE_REASON.description' },
-  { dataType: 'FILE', labelKey: 'crfAuthoring.canvas.palette.prim.FILE.label', descriptionKey: 'crfAuthoring.canvas.palette.prim.FILE.description' },
+  primitive('ST', () => ({ dataType: 'ST', responseType: 'text' })),
+  primitive('INT', () => ({ dataType: 'INT', responseType: 'text' })),
+  primitive('REAL', () => ({ dataType: 'REAL', responseType: 'text' })),
+  primitive('DATE', () => ({ dataType: 'DATE', responseType: 'text' })),
+  primitive('PDATE', () => ({ dataType: 'PDATE', responseType: 'text' })),
+  // Choice blocks. Only two: radio and checkbox are one dropdown click
+  // away in the properties rail once the item exists, and four palette
+  // entries for the same concept would be clutter. The distinction the
+  // operator actually makes is "one answer" vs "several answers".
+  primitive('CHOICE_SINGLE', () => ({ dataType: 'ST', responseType: 'single-select' })),
+  primitive('CHOICE_MULTI', () => ({ dataType: 'ST', responseType: 'multi-select' })),
+  primitive('BL', () => ({ dataType: 'BL', responseType: 'single-select' })),
+  primitive('TRISTATE_REASON', () => ({
+    dataType: 'TRISTATE_REASON',
+    responseType: 'single-select',
+  })),
+  primitive('FILE', () => ({ dataType: 'FILE', responseType: 'file' })),
+  // #26 (2026-08-12) — generic repeating table. Seeds a two-column table
+  // the operator fleshes out in the properties rail (add columns, set
+  // types, opt any text column into terminology autocomplete). The scalar
+  // dataType is inert for a table item but kept as ST so the item stays
+  // well-formed if the table spec is ever cleared.
+  primitive('TABLE', () => ({ dataType: 'ST', responseType: 'text', table: defaultRepeatingTableSpec() })),
 ]
+
+export function findPalettePrimitive(id: string): PalettePrimitive | undefined {
+  return PALETTE_PRIMITIVES.find((p) => p.id === id)
+}

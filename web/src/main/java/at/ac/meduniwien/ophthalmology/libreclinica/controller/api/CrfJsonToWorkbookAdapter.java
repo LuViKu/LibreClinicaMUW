@@ -571,6 +571,17 @@ public class CrfJsonToWorkbookAdapter {
         setStringCell(header, 4, "GROUP_REPEAT_MAX");
         setStringCell(header, 5, "GROUP_DISPLAY_STATUS");
 
+        // #26 — operator-set row bounds per group label (null when absent).
+        java.util.Map<String, CrfVersionAuthoringRequest.Group> boundsByLabel =
+                new java.util.HashMap<>();
+        if (request.groups() != null) {
+            for (CrfVersionAuthoringRequest.Group g : request.groups()) {
+                if (g != null && g.label() != null && !g.label().trim().isEmpty()) {
+                    boundsByLabel.putIfAbsent(g.label().trim(), g);
+                }
+            }
+        }
+
         // M-C: one row per distinct authored groupLabel, first-seen
         // order. The parser dedupes by name on persistence so a stable
         // first-seen ordering keeps SQL output deterministic.
@@ -589,11 +600,19 @@ public class CrfJsonToWorkbookAdapter {
         int rowIdx = 1;
         for (String label : labels) {
             HSSFRow row = sheet.createRow(rowIdx++);
+            // Operator-set bounds when supplied; else the legacy 1/40 defaults.
+            CrfVersionAuthoringRequest.Group bounds = boundsByLabel.get(label);
+            int repeatNumber = bounds != null && bounds.repeatNumber() != null
+                    ? bounds.repeatNumber() : 1;
+            int repeatMax = bounds != null && bounds.repeatMax() != null
+                    ? bounds.repeatMax() : 40;
+            int normalizedRepeatNumber = Math.max(1, repeatNumber);
+            int normalizedRepeatMax = Math.max(normalizedRepeatNumber, Math.max(1, repeatMax));
             setStringCell(row, 0, label);
             setStringCell(row, 1, "grid");
             setStringCell(row, 2, "");
-            setStringCell(row, 3, "1");
-            setStringCell(row, 4, "40");
+            setStringCell(row, 3, Integer.toString(normalizedRepeatNumber));
+            setStringCell(row, 4, Integer.toString(normalizedRepeatMax));
             setStringCell(row, 5, "");
         }
     }

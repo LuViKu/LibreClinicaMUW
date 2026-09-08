@@ -92,7 +92,11 @@ const router = createRouter({
       path: '/notes',
       name: 'notes',
       component: () => import('@/views/NotesDiscrepanciesView.vue'),
-      meta: { title: 'Notes & Discrepancies', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
+      // Investigator + CRC respond to queries on their own subjects, so the
+      // Notes view is cross-role — matching the HomeView notes card's
+      // allowedRoles. (Previously the card showed for Investigator/CRC but the
+      // route bounced them.)
+      meta: { title: 'Notes & Discrepancies', role: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     {
       path: '/audit-log',
@@ -191,7 +195,10 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: () => import('@/views/SitesView.vue'),
-      meta: { title: 'Sites', role: 'Administrator' as const },
+      // Site (location) management is a study-build task the Data Manager /
+      // study director owns alongside CRFs, visits, rules and groups — not
+      // just a system Administrator concern.
+      meta: { title: 'Sites', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.6 — subject group classes (Arms, families, etc.). */
     {
@@ -324,7 +331,11 @@ const router = createRouter({
       component: () => import('@/views/RetinalMetricsView.vue'),
       meta: {
         title: 'Retinal scan metrics',
-        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+        // Trial blinding — the standalone job view is NOT a treating-clinician
+        // surface. Investigator + CRC are excluded (CRC inherits Investigator,
+        // so dropping Investigator blocks both); they see OCT scans only inside
+        // the nAMD module, cohort-gated. Server-side masking backs this up.
+        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
     /* 2026-06-26 — per-subject deep link to a retinal job. Same view as
@@ -339,7 +350,8 @@ const router = createRouter({
       component: () => import('@/views/RetinalMetricsView.vue'),
       meta: {
         title: 'Retinal scan metrics',
-        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+        // Trial blinding — see /retinal-jobs/:jobId above. Not a physician surface.
+        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
     /* 2026-06-19 — Administrator-only cross-study parked-scans admin.

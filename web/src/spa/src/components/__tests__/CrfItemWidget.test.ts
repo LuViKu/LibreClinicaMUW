@@ -184,11 +184,14 @@ describe('CrfItemWidget — DATE / PDATE rendering', () => {
       global: { plugins: [mkI18n('de')] },
       props: { item, modelValue: '', suppressLabel: true },
     })
-    const input = wrapper.find<HTMLInputElement>('input[type="date"]')
-    await input.setValue('2026-06-07')
+    // The visible field is the DD/MM/YYYY masked text input; the native
+    // calendar picker (hidden input[type=date]) emits ISO on change.
+    const picker = wrapper.find<HTMLInputElement>('input[type="date"]')
+    picker.element.value = '2026-06-07'
+    await picker.trigger('change')
     const emits = wrapper.emitted('update:modelValue')
     expect(emits).toBeTruthy()
-    expect(emits?.[0][0]).toBe('2026-06-07')
+    expect(emits?.[emits.length - 1][0]).toBe('2026-06-07')
   })
 
   it('renders a constrained text input for dataType="partial-date"', () => {

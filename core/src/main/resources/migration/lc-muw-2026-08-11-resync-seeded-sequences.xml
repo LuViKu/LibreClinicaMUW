@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Re-run of lc-muw-2026-06-05-bump-seeded-sequences.
+
+        That earlier changeset realigned the CRF-authoring sequences after
+        the ophth visit/CRF seed, but Liquibase runs a changeSet only once
+        (by id) — so the seed changesets added AFTER it (the nAMD visit/CRF
+        seeds through 2026-07-13) inserted more explicit numeric ids without
+        bumping the sequences again. The drift returned: on a freshly seeded
+        DB the item sequence trailed MAX(item_id) by ~27, so the FIRST attempt
+        to author a new CRF version 500'd with
+
+            duplicate key value violates unique constraint "item_pkey"
+
+        deep in NewCRFBean.insertToDB (via CrfSpreadsheetParserService).
+
+        Realign every sequence on the CRF-authoring persistence path to
+        setval(MAX(id)). Placed LAST in master.xml so it runs after all
+        current seeds. Idempotent (setval to the live MAX), harmless on a
+        healthy prod DB (sequences already at MAX), and safe to keep at the
+        tail for future seeds to sit in front of. Mirrors the id list of the
+        2026-06-05 changeset.
+    -->
+
+    <changeSet id="lc-muw-2026-08-11-resync-seeded-sequences"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="!demo-skip-seq-bump">
+        <sql splitStatements="true" endDelimiter=";">
+            SELECT setval('crf_crf_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(crf_id), 0), 1) FROM crf));
+            SELECT setval('crf_version_crf_version_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(crf_version_id), 0), 1) FROM crf_version));
+            SELECT setval('section_section_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(section_id), 0), 1) FROM section));
+            SELECT setval('response_set_response_set_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(response_set_id), 0), 1) FROM response_set));
+            SELECT setval('item_item_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_id), 0), 1) FROM item));
+            SELECT setval('item_form_metadata_item_form_metadata_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_form_metadata_id), 0), 1) FROM item_form_metadata));
+            SELECT setval('item_group_item_group_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_group_id), 0), 1) FROM item_group));
+            SELECT setval('item_group_metadata_item_group_metadata_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_group_metadata_id), 0), 1) FROM item_group_metadata));
+        </sql>
+        <rollback/>
+    </changeSet>
+
+</databaseChangeLog>

@@ -92,11 +92,11 @@ onMounted(load)
       <section class="rounded-md border border-slate-200 bg-white p-4">
         <h2 class="text-sm font-medium mb-2">{{ t('adminSystemStatus.jvmHeading') }}</h2>
         <dl class="space-y-1">
-          <div class="flex justify-between"><dt class="text-slate-500">Java</dt><dd>{{ data.jvm.javaVersion }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">{{ t('adminSystemStatus.jvmJava') }}</dt><dd>{{ data.jvm.javaVersion }}</dd></div>
           <div class="flex justify-between"><dt class="text-slate-500">VM</dt><dd class="text-right truncate ml-2">{{ data.jvm.vmName }}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Heap used</dt><dd>{{ data.jvm.heapUsedMb }} / {{ data.jvm.heapMaxMb }} MB</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">Threads</dt><dd>{{ data.jvm.threadCount }}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">CPUs</dt><dd>{{ data.jvm.availableProcessors }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">{{ t('adminSystemStatus.jvmHeapUsed') }}</dt><dd>{{ data.jvm.heapUsedMb }} / {{ data.jvm.heapMaxMb }} MB</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">{{ t('adminSystemStatus.jvmThreads') }}</dt><dd>{{ data.jvm.threadCount }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">{{ t('adminSystemStatus.jvmCpus') }}</dt><dd>{{ data.jvm.availableProcessors }}</dd></div>
         </dl>
       </section>
 

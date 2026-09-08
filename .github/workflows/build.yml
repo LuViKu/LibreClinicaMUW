@@ -435,6 +435,44 @@ jobs:
           fi
           echo "OK — api.ts matches the live OpenAPI spec."
 
+      # Phase E.9.2 — browser e2e against the live compose stack. The smoke
+      # image is built SKIP_SPA=true (no SPA assets in the WAR), so the SPA is
+      # served by the Vite dev server, which proxies /LibreClinica/* to the
+      # backend on :8080. Specs log in as the seeded demo roles (compose
+      # defaults LIQUIBASE_CONTEXTS=demo). Node + pnpm + SPA deps are already
+      # set up by the OpenAPI-codegen steps above.
+      - name: Install Playwright chromium
+        working-directory: web/src/spa
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start Vite dev server (proxies API to the compose backend)
+        working-directory: web/src/spa
+        run: |
+          nohup pnpm dev > /tmp/vite-e2e.log 2>&1 &
+          curl --retry 40 --retry-delay 1 --retry-connrefused --silent --output /dev/null http://127.0.0.1:5173/
+          echo "Vite dev server is up on :5173"
+
+      # Gate: the per-role smoke journeys must pass (login, role routing, CRF
+      # authoring persistence — the 2026-08 sequence-drift 500 regression, etc.).
+      - name: E2E smoke flows (gate)
+        working-directory: web/src/spa
+        run: pnpm test:smoke:e2e
+
+      # Gate: the WCAG 2.2 AA backlog (contrast, landmarks, control names,
+      # target-size) was cleared 2026-08, so axe must stay at zero violations
+      # across the scanned route-level pages.
+      - name: E2E accessibility scan (gate)
+        working-directory: web/src/spa
+        run: pnpm test:a11y:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report
+          path: web/src/spa/playwright-report
+          retention-days: 7
+
       - name: Compose down
         if: always()
         run: docker compose down --volumes --remove-orphans

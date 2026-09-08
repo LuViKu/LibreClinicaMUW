@@ -334,10 +334,13 @@ function printReport() {
           <tr class="text-left text-slate-500 border-b border-slate-200">
             <th class="py-1.5 px-2 font-medium">Visite</th>
             <th class="py-1.5 px-2 font-medium">Datum</th>
-            <th class="py-1.5 px-2 font-medium text-right">IRF</th>
-            <th class="py-1.5 px-2 font-medium text-right">SRF</th>
-            <th class="py-1.5 px-2 font-medium text-right">PED</th>
-            <th class="py-1.5 px-2 font-medium text-right">CST</th>
+            <!-- Trial blinding — IRF/SRF/PED/CST are AI quantification. -->
+            <template v-if="aiVisible">
+              <th class="py-1.5 px-2 font-medium text-right">IRF</th>
+              <th class="py-1.5 px-2 font-medium text-right">SRF</th>
+              <th class="py-1.5 px-2 font-medium text-right">PED</th>
+              <th class="py-1.5 px-2 font-medium text-right">CST</th>
+            </template>
             <th class="py-1.5 px-2 font-medium text-right">BCVA</th>
             <th class="py-1.5 px-2 font-medium">Injektion</th>
           </tr>
@@ -368,10 +371,12 @@ function printReport() {
             >
               <span v-if="visit.dateMismatch" class="inline-block mr-1" aria-hidden="true">⚠</span>{{ visit.date || '—' }}
             </td>
-            <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.irf }}</td>
-            <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.srf }}</td>
-            <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.ped }}</td>
-            <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.crt || '—' }}</td>
+            <template v-if="aiVisible">
+              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.irf }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.srf }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.ped }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.crt || '—' }}</td>
+            </template>
             <td class="py-1.5 px-2 text-right tabular-nums">
               <span>{{ visit.bcva || '—' }}</span>
               <span v-if="visit.bcvaRaw" class="block text-[10px] text-slate-400">

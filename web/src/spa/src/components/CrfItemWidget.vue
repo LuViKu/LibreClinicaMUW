@@ -843,17 +843,17 @@ function fileRef(): { filename: string; bytes: number } | null {
           inputmode="numeric"
           placeholder="20"
           :disabled="disabled"
-          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-300"
+          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-500"
           @input="(e) => onSnellenInput('n', e)"
         />
-        <span class="text-[24px] leading-none text-slate-300 font-light -translate-y-px select-none">/</span>
+        <span class="text-[24px] leading-none text-slate-500 font-light -translate-y-px select-none">/</span>
         <input
           :value="snellenD"
           type="text"
           inputmode="numeric"
           placeholder="40"
           :disabled="disabled"
-          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-300"
+          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-500"
           @input="(e) => onSnellenInput('d', e)"
         />
       </div>

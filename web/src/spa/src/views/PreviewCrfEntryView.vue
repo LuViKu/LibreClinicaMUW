@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -29,6 +29,8 @@ import ErrorText from '@/components/ErrorText.vue'
 import CheckboxArrayInput from '@/components/CheckboxArrayInput.vue'
 import BilateralItemGroup from '@/components/BilateralItemGroup.vue'
 import CrfItemWidget from '@/components/CrfItemWidget.vue'
+import RepeatingTablePreview from '@/components/RepeatingTablePreview.vue'
+import TerminologyAutocomplete, { type TermPick } from '@/components/TerminologyAutocomplete.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 
 import { useCrfPreviewStore } from '@/stores/crfPreview'
@@ -95,6 +97,19 @@ function parentValueFor(item: CrfItem): unknown {
   return store.values[parentOid]
 }
 
+/**
+ * #26 (2026-08-12) — flat-item terminology pick. Writes the picked value
+ * into the item, then fans each fill rule's concept property into the
+ * named sibling item OID in the same CRF (explicit property→field map).
+ */
+function onFlatPick(item: CrfItem, pick: TermPick): void {
+  store.setValue(item.oid, pick.value)
+  for (const fill of item.autocomplete?.fills ?? []) {
+    const v = pick.properties[fill.fromProperty]
+    if (v != null && v !== '') store.setValue(fill.toKey, v)
+  }
+}
+
 function statusVariant(s: CrfEntryStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (s) {
     case 'complete':
@@ -113,7 +128,12 @@ function statusLabel(s: CrfEntryStatus): string {
   return t(`crfEntry.status.${s}`)
 }
 
+// Required-field errors are only surfaced after the operator attempts to
+// save / mark complete — don't flag empty required fields on first render.
+const submitted = ref(false)
+
 function showError(item: CrfItem): string | null {
+  if (!submitted.value) return null
   return store.itemErrors[item.oid] ?? null
 }
 
@@ -181,11 +201,13 @@ function hasBilateralRow(rows: BilateralRow[]): boolean {
 function onSaveStub(): void {
   // No-op stub: flips local in-memory status only (per Phase E.6
   // preview spec — Save and Mark complete render their flow without
-  // persisting anything).
+  // persisting anything). Attempting either surfaces required-field errors.
+  submitted.value = true
   store.save()
 }
 
 function onMarkCompleteStub(): void {
+  submitted.value = true
   store.markComplete()
 }
 
@@ -299,7 +321,27 @@ const rootClass = computed(() =>
                   :is="'div'"
                   v-bind="{}"
                 >
-                  <template v-if="row.item.dataType === 'select-one' && row.item.options">
+                  <!-- #26 — repeating table (operator-defined columns). -->
+                  <template v-if="row.item.table">
+                    <RepeatingTablePreview
+                      :spec="row.item.table"
+                      :id-prefix="`preview-item-${row.item.oid}`"
+                      :model-value="(store.values[row.item.oid] as Record<string, string>[] | null | undefined)"
+                      @update:model-value="(rows) => store.setValue(row.item.oid, rows)"
+                    />
+                  </template>
+                  <!-- #26 — flat text field with terminology autocomplete. -->
+                  <template v-else-if="row.item.autocomplete">
+                    <TerminologyAutocomplete
+                      :id="`preview-item-${row.item.oid}`"
+                      :model-value="(store.values[row.item.oid] == null ? '' : String(store.values[row.item.oid]))"
+                      :system="row.item.autocomplete.system"
+                      :error="showError(row.item) != null"
+                      @update:model-value="(v: string) => store.setValue(row.item.oid, v)"
+                      @pick="(p: TermPick) => onFlatPick(row.item, p)"
+                    />
+                  </template>
+                  <template v-else-if="row.item.dataType === 'select-one' && row.item.options">
                     <SelectInput v-bind="inputBindings(row.item)">
                       <option :value="undefined">— {{ t('common.search') }} —</option>
                       <option v-for="opt in row.item.options" :key="opt.code" :value="opt.code">

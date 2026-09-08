@@ -179,7 +179,100 @@ RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/se
   then set `RETINAL_INFERENCE_PR_PYEXTRA=/scratch/$USER/ri/pyextra` (use
   `--no-deps` so it holds only sklearn, not a numpy that would shadow the `.sif`'s).
 - Persistence: `nohup`/`tmux` to start; a `systemd --user` unit if your admin
-  permits a long-lived service on the node.
+  permits a long-lived service on the node. **Prefer §3b — don't hand-roll the
+  env block.**
+
+## 3b. Persistent launch (recommended — use the tracked script)
+
+The env block above is long, and two of its values are load-bearing and easy to
+lose. Use [`scripts/start-cluster-server.sh`](../scripts/start-cluster-server.sh)
+instead of retyping it:
+
+```sh
+export RETINAL_INFERENCE_AUTH_TOKEN='<shared-secret>'   # = app VM's remotePushToken
+retinal-inference/scripts/start-cluster-server.sh --check    # env + DR-024 invariant
+retinal-inference/scripts/start-cluster-server.sh            # restart + verify
+```
+
+The script:
+- **Derives `BM_LD_LIBRARY_PATH` from the LMOD modules** rather than hardcoding
+  the ~2 KB path, and does it in a **subshell** — loading `Python/3.8.2` into the
+  launch shell would shadow the conda 3.11 interpreter uvicorn runs under.
+- **Asserts every expected task is registered** after startup
+  (`bm fluid ga layers onl pr`) and exits non-zero otherwise.
+- Enforces the DR-024 invariant (`muw-e2e-converter` must be absent).
+
+> **Why this exists.** On 2026-07-10 the cluster server was down (its `nohup`
+> process had died) and every OCT job failed with
+> `Remote /run returned null`. The launcher then lived only in an untracked
+> `~/start_sidecar.sh` whose `BM_LD_LIBRARY_PATH` was a **TODO comment** — so
+> restarting it silently came up without the `bm` and `layers` tasks. Both
+> failure modes are now impossible: the path is derived, and a short
+> `supported_tasks` is a hard error.
+
+### Survive logout + reboot
+
+`nohup` dies on logout and on node reboot. Install the tracked unit:
+
+```sh
+mkdir -p ~/.config/systemd/user ~/.config/retinal-inference
+printf 'RETINAL_INFERENCE_AUTH_TOKEN=<shared-secret>\n' > ~/.config/retinal-inference/env
+chmod 600 ~/.config/retinal-inference/env
+cp retinal-inference/deploy/retinal-inference-cluster.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now retinal-inference-cluster.service
+loginctl enable-linger "$USER"      # without this it stops when you log out
+```
+Check with `systemctl --user status retinal-inference-cluster.service`; logs via
+`journalctl --user -u retinal-inference-cluster.service -f`. If the admin
+disallows `systemd --user`/lingering on compute nodes, `tmux` is the fallback
+(survives logout, **not** reboot):
+```sh
+tmux new -d -s ri 'retinal-inference/scripts/start-cluster-server.sh --foreground'
+```
+
+## 3c. Keep it alive: watchdog + monitoring
+
+> **cn5 is a shared, memory-pressured compute node.** Other users' jobs are
+> routinely OOM-killed on it (`dmesg`: `Memory cgroup out of memory … mriqc`)
+> and load sits around 5–15, so a resident server can be OOM-killed or cleaned
+> up at any time. On **2026-07-10** it died — `uptime` showed no reboot and
+> `KillUserProcesses` is `no`, so it was neither a reboot nor a logout kill —
+> and every OCT job failed with `Remote /run returned null` until it was
+> restarted by hand. `systemd --user` is **unavailable** on the node (`Failed
+> to get D-Bus connection`) and lingering isn't granted, so **cron is the only
+> self-healing mechanism available to an unprivileged user.**
+
+**On cn5 — self-heal** with [`scripts/cluster-watchdog.sh`](../scripts/cluster-watchdog.sh):
+
+```sh
+mkdir -p ~/.config/retinal-inference
+printf 'RETINAL_INFERENCE_AUTH_TOKEN=<shared-secret>\n' > ~/.config/retinal-inference/env
+chmod 600 ~/.config/retinal-inference/env
+crontab -e
+```
+```cron
+*/5 * * * * $HOME/libreclinicamuw/retinal-inference/scripts/cluster-watchdog.sh
+@reboot sleep 60; $HOME/libreclinicamuw/retinal-inference/scripts/cluster-watchdog.sh
+```
+It restarts only when the **process is absent** — never on a failed `/health`.
+A health-keyed watchdog would `pkill` the server *mid-segmentation* if a long
+`.sif` run ever made `/health` slow, destroying a clinician's job. The token is
+read from the `chmod 600` env file, so it never appears in `ps` or the crontab.
+
+**On the app VM — know about it** with [`deploy/check-retinal-cluster.sh`](../../deploy/check-retinal-cluster.sh):
+
+```cron
+*/5 * * * * /opt/libreclinica/deploy/check-retinal-cluster.sh
+```
+It alerts when the cluster is unreachable **or degraded** (`supported_tasks`
+missing `bm`/`layers` — the silent-failure mode §3b guards against), prints
+nothing while healthy, and re-mails only ~hourly during a sustained outage.
+
+> Both are stopgaps. The structural fix is **SLURM mode** (§4): the resident
+> process becomes a thin dispatcher and each `/run` executes as an `srun` job,
+> so the long-lived footprint on a contended node disappears. Chase the SLURM
+> account.
 
 ## 4. Flip to SLURM (production, after an account is granted)
 ```sh

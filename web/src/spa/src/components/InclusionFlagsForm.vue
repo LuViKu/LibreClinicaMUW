@@ -65,7 +65,7 @@ const checkedCounts = computed(() =>
         <button type="button" class="text-muw-blue hover:underline" @click="expandAll">
           {{ t('createDataset.expandAll') }}
         </button>
-        <span class="text-slate-300" aria-hidden="true">|</span>
+        <span class="text-slate-500" aria-hidden="true">|</span>
         <button type="button" class="text-muw-blue hover:underline" @click="collapseAll">
           {{ t('createDataset.collapseAll') }}
         </button>

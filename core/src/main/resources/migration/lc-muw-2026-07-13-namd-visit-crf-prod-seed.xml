@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-07-13 — nAMD F_NAMD_VISIT CRF: PRODUCTION seed.
+
+        The nAMD clinical-flags card (POST /study-events/{id}/namd-clinical-flags)
+        looks up a crf_version whose crf.oc_oid = 'F_NAMD_VISIT' and 500s with
+        "F_NAMD_VISIT CRF version not found" when none exists. The CRF is seeded
+        only by lc-muw-2026-06-20-namd-visit-crf-seed.xml +
+        lc-muw-2026-06-30-namd-clinical-flags.xml, both gated to
+        context="demo" — so production (LIQUIBASE_CONTEXTS empty) never got it,
+        and saving a "new retinal hemorrhage" fails for every clinician.
+
+        This changeset seeds the MINIMAL structure that endpoint needs, in ALL
+        contexts: the F_NAMD_VISIT crf + version, the S_NAMD_CLINICAL_FLAGS
+        section, a yes/no response set, and the four per-eye flag items
+        (NAMD_OD/OS_NEW_HEMORRHAGE, NAMD_OD/OS_BCVA_LOSS_NAMD_ATTRIBUTED) with
+        their item_form_metadata.
+
+        Why a DO block with MAX+1 instead of replaying the demo changesets:
+        the demo seed uses HARDCODED ids (crf_id=3, crf_version_id=21,
+        item_id 62-65, …). Production's own migrations advanced these id spaces
+        independently, so those ids may already be taken — replaying them would
+        PK-collide and break boot. Dynamic MAX+1 ids are collision-safe on any
+        database.
+
+        Idempotent: the preCondition MARK_RANs when F_NAMD_VISIT already exists,
+        so it is a no-op on a demo database (where the demo seed created it) and
+        on re-runs.
+
+        NOTE: the full demo CRF also carries the treatment/decision items
+        (I_NAMD_DECISION_*, items 66-73). Those back the treatment-decision
+        panel, not the clinical-flags card, and are intentionally NOT seeded
+        here — this changeset fixes the reported flags-save bug with the
+        smallest possible footprint. If the decision panel is exercised in
+        production, add those items to this crf_version in a follow-up.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-07-13-namd-visit-crf-prod-seed" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM crf WHERE oc_oid = 'F_NAMD_VISIT'
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed F_NAMD_VISIT crf + version + clinical-flags section/items for non-demo (production) deployments, with collision-safe dynamic ids.</comment>
+        <sql splitStatements="false" stripComments="false"><![CDATA[
+DO $$
+DECLARE
+    v_crf int;
+    v_cv  int;
+    v_sec int;
+    v_rs  int;
+    v_ib  int;  -- item id base (max existing item_id)
+    v_fb  int;  -- item_form_metadata id base
+BEGIN
+    -- Guard again inside the block (belt + suspenders with the preCondition).
+    IF EXISTS (SELECT 1 FROM crf WHERE oc_oid = 'F_NAMD_VISIT') THEN
+        RAISE NOTICE 'F_NAMD_VISIT already present — skipping production seed.';
+        RETURN;
+    END IF;
+
+    SELECT COALESCE(MAX(crf_id), 0) + 1 INTO v_crf FROM crf;
+    INSERT INTO crf (crf_id, status_id, name, description, owner_id, date_created, oc_oid)
+    VALUES (v_crf, 1, 'nAMD Treat-and-Extend Visit',
+            'Per-visit nAMD treat-and-extend CRF. Production seed of the F_NAMD_VISIT CRF the nAMD clinical-flags card writes to.',
+            1, DATE '2026-07-13', 'F_NAMD_VISIT');
+
+    SELECT COALESCE(MAX(crf_version_id), 0) + 1 INTO v_cv FROM crf_version;
+    INSERT INTO crf_version (crf_version_id, crf_id, name, description, status_id, date_created, owner_id, oc_oid)
+    VALUES (v_cv, v_crf, 'v1.0',
+            'Initial nAMD Treat-and-Extend Visit version — MUW Department of Ophthalmology & Optometry.',
+            1, DATE '2026-07-13', 1, 'F_NAMD_VISIT_V1');
+
+    SELECT COALESCE(MAX(section_id), 0) + 1 INTO v_sec FROM section;
+    INSERT INTO section (section_id, crf_version_id, status_id, label, title, instructions, ordinal, date_created, owner_id)
+    VALUES (v_sec, v_cv, 1, 'S_NAMD_CLINICAL_FLAGS', 'Clinical observation flags',
+            'Per-eye observation flags that feed the treat-and-extend rule engine.',
+            1, DATE '2026-07-13', 1);
+
+    SELECT COALESCE(MAX(response_set_id), 0) + 1 INTO v_rs FROM response_set;
+    INSERT INTO response_set (response_set_id, response_type_id, label, options_text, options_values, version_id)
+    VALUES (v_rs, 5, 'namd_yes_no', 'No,Yes', 'false,true', v_cv);
+
+    SELECT COALESCE(MAX(item_id), 0) INTO v_ib FROM item;
+    INSERT INTO item (item_id, name, description, units, phi_status, item_data_type_id, status_id, owner_id, date_created, oc_oid) VALUES
+        (v_ib + 1, 'NAMD_OD_NEW_HEMORRHAGE',
+            'New retinal hemorrhage observed on the current OCT, right eye (OD).',
+            '', false, 1, 1, 1, DATE '2026-07-13', 'I_NAMD_OD_NEW_HEMORRHAGE'),
+        (v_ib + 2, 'NAMD_OS_NEW_HEMORRHAGE',
+            'New retinal hemorrhage observed on the current OCT, left eye (OS).',
+            '', false, 1, 1, 1, DATE '2026-07-13', 'I_NAMD_OS_NEW_HEMORRHAGE'),
+        (v_ib + 3, 'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',
+            'Visual-acuity loss clinically attributable to nAMD activity, right eye (OD).',
+            '', false, 1, 1, 1, DATE '2026-07-13', 'I_NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED'),
+        (v_ib + 4, 'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED',
+            'Visual-acuity loss clinically attributable to nAMD activity, left eye (OS).',
+            '', false, 1, 1, 1, DATE '2026-07-13', 'I_NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED');
+
+    SELECT COALESCE(MAX(item_form_metadata_id), 0) INTO v_fb FROM item_form_metadata;
+    INSERT INTO item_form_metadata
+        (item_form_metadata_id, item_id, crf_version_id, section_id, response_set_id, left_item_text, right_item_text, ordinal, required, show_item) VALUES
+        (v_fb + 1, v_ib + 1, v_cv, v_sec, v_rs, 'Right eye (OD) — new retinal hemorrhage', '', 1, false, true),
+        (v_fb + 2, v_ib + 2, v_cv, v_sec, v_rs, 'Left eye (OS) — new retinal hemorrhage', '', 2, false, true),
+        (v_fb + 3, v_ib + 3, v_cv, v_sec, v_rs, 'Right eye (OD) — BCVA loss attributable to nAMD', '', 3, false, true),
+        (v_fb + 4, v_ib + 4, v_cv, v_sec, v_rs, 'Left eye (OS) — BCVA loss attributable to nAMD', '', 4, false, true);
+
+    RAISE NOTICE 'Seeded F_NAMD_VISIT (crf_id=%, crf_version_id=%).', v_crf, v_cv;
+END $$;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DELETE FROM item_form_metadata
+ WHERE crf_version_id IN (SELECT crf_version_id FROM crf_version WHERE oc_oid = 'F_NAMD_VISIT_V1');
+DELETE FROM item
+ WHERE oc_oid IN ('I_NAMD_OD_NEW_HEMORRHAGE','I_NAMD_OS_NEW_HEMORRHAGE',
+                  'I_NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED','I_NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED');
+DELETE FROM response_set
+ WHERE label = 'namd_yes_no'
+   AND version_id IN (SELECT crf_version_id FROM crf_version WHERE oc_oid = 'F_NAMD_VISIT_V1');
+DELETE FROM section
+ WHERE crf_version_id IN (SELECT crf_version_id FROM crf_version WHERE oc_oid = 'F_NAMD_VISIT_V1');
+DELETE FROM crf_version WHERE oc_oid = 'F_NAMD_VISIT_V1';
+DELETE FROM crf WHERE oc_oid = 'F_NAMD_VISIT';
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

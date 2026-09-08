@@ -10,6 +10,8 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useSitesStore } from '@/stores/sites'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
+import SkeletonList from '@/components/SkeletonList.vue'
 import type { StudyIdentity } from '@/types/study'
 
 /**
@@ -27,6 +29,7 @@ import type { StudyIdentity } from '@/types/study'
 const { t } = useI18n()
 const sites = useSitesStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const parentOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const canManage = computed(() => {
@@ -112,7 +115,7 @@ async function submitCreate() {
 
 async function onDisable(site: StudyIdentity) {
   if (!parentOid.value) return
-  if (!confirm(t('sites.disableConfirm', { name: site.name }))) return
+  if (!(await confirm({ message: t('sites.disableConfirm', { name: site.name }), danger: true }))) return
   await sites.disable(parentOid.value, site.oid)
 }
 
@@ -132,7 +135,7 @@ const visibleRows = computed(() => sites.rows)
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-6">
+    <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('sites.subTrail') }}</div>
@@ -148,8 +151,21 @@ const visibleRows = computed(() => sites.rows)
         </button>
       </div>
 
-      <p v-if="sites.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
-      <p v-else-if="sites.error" class="text-rose-700">{{ sites.error }}</p>
+      <!-- Error as a dismissible banner ABOVE the list — a failed disable/
+           restore no longer replaces (unmounts) the whole site list. -->
+      <div
+        v-if="sites.error"
+        class="mb-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        role="alert"
+        data-testid="sites-error"
+      >
+        <span class="flex-1">{{ sites.error }}</span>
+        <button type="button" class="shrink-0 text-rose-500 hover:text-rose-700" :aria-label="t('common.dismiss')" @click="sites.error = null">✕</button>
+      </div>
+      <template v-if="sites.isLoading">
+        <span class="sr-only" role="status">{{ t('common.loading') }}</span>
+        <SkeletonList :rows="3" />
+      </template>
       <p v-else-if="visibleRows.length === 0" class="text-slate-500 italic">{{ t('sites.empty') }}</p>
 
       <ul v-else class="space-y-2">
@@ -233,6 +249,6 @@ const visibleRows = computed(() => sites.rows)
           >{{ isCreating ? t('common.saving') : t('sites.submitCreate') }}</button>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>

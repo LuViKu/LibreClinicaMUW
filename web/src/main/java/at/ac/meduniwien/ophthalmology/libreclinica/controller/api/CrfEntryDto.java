@@ -170,8 +170,29 @@ public record CrfEntryDto(
             Double min,
             Double max,
             String groupOid,
-            String showWhen
-    ) {}
+            String showWhen,
+            /**
+             * #26 binding store — terminology autocomplete binding (system +
+             * property→field fill map). Null for a plain field. Drives the
+             * live-entry TerminologyAutocomplete + sibling-cell auto-fill.
+             */
+            AutocompleteDto autocomplete
+    ) {
+        /** Backward-compat constructor — no terminology binding. */
+        public CrfItemDto(String oid, String label, String dataType, boolean required,
+                List<ResponseOptionDto> options, String helper, Double min, Double max,
+                String groupOid, String showWhen) {
+            this(oid, label, dataType, required, options, helper, min, max, groupOid, showWhen, null);
+        }
+    }
+
+    /** #26 binding store — terminology autocomplete binding surfaced at entry. */
+    @Schema(name = "AutocompleteDto")
+    public record AutocompleteDto(String system, List<AutocompleteFillDto> fills) {}
+
+    /** One property→field fill; {@code toKey} is the target item's OID (same row). */
+    @Schema(name = "AutocompleteFillDto")
+    public record AutocompleteFillDto(String fromProperty, String toKey) {}
 
     /** Single allowed option for {@code select-one} / {@code select-multi}. */
     @Schema(name = "ResponseOptionDto")

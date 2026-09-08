@@ -10,6 +10,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
+import { useConfirm } from '@/composables/useConfirm'
 import type { EventCrfAssignment, EventCrfAssignmentInput, SdvRequirement } from '@/types/crfLibrary'
 import type { EventDefinition } from '@/types/eventDefinition'
 
@@ -36,6 +37,7 @@ const emit = defineEmits<{ 'update:open': [v: boolean]; close: [] }>()
 
 const { t } = useI18n()
 const lib = useCrfLibraryStore()
+const confirm = useConfirm()
 
 const assignments = ref<EventCrfAssignment[]>([])
 const isLoading = ref(false)
@@ -230,7 +232,7 @@ async function submitEdit() {
 
 async function onRemove(a: EventCrfAssignment) {
   if (!props.studyOid || !props.eventDef) return
-  if (!confirm(t('assignCrfs.removeConfirm', { crf: a.crfName, event: props.eventDef.name }))) return
+  if (!(await confirm({ message: t('assignCrfs.removeConfirm', { crf: a.crfName, event: props.eventDef.name }), danger: true }))) return
   const ok = await lib.removeAssignment(props.studyOid, props.eventDef.oid, a.crfOid)
   if (ok) await refresh()
 }
@@ -305,7 +307,7 @@ const activeAssignments = computed(() =>
                 <button class="text-muw-blue hover:underline" @click="openEdit(a)">
                   {{ t('assignCrfs.edit') }}
                 </button>
-                <span class="text-slate-300">·</span>
+                <span class="text-slate-500">·</span>
                 <button class="text-rose-600 hover:underline" @click="onRemove(a)">
                   {{ t('assignCrfs.remove') }}
                 </button>

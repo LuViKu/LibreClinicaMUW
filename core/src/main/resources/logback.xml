@@ -582,6 +582,11 @@
     <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.PublicOctUploadController" level="DEBUG">
         <appender-ref ref="CONSOLE_RAW"/>
     </logger>
+    <!-- #26 Slice 2: surface the scheduled/first-boot medication ingest on the
+         console so operators can see the nightly refresh + first-boot load. -->
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.TerminologyIngestScheduler" level="INFO">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
 
   <!-- Phase E.0 (2026-05-30): permanent root → CONSOLE at INFO. This
        was previously commented out, hiding all framework init logs;

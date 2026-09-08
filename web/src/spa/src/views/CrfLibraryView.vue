@@ -11,6 +11,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 import type { Crf } from '@/types/crfLibrary'
 
 /**
@@ -32,6 +33,7 @@ const { t } = useI18n()
 const router = useRouter()
 const lib = useCrfLibraryStore()
 const auth = useAuthStore()
+const confirm = useConfirm()
 
 const canManage = computed(() => {
   const role = auth.user?.role
@@ -48,6 +50,9 @@ const createOpen = ref(false)
 const createForm = ref({ name: '', description: '' })
 const createErrors = ref<Record<string, string>>({})
 const createFormError = ref<string | null>(null)
+// Surfaces per-action failures (hard-remove, .xls download) in a dismissible
+// banner instead of a native alert() — consistent with the app's error UI.
+const actionError = ref<string | null>(null)
 const isCreating = ref(false)
 
 function openCreate() {
@@ -196,12 +201,12 @@ const vClickOutside = {
 }
 
 async function onDisableCrf(crf: Crf) {
-  if (!confirm(t('crfLibrary.disableConfirm', { name: crf.name }))) return
+  if (!(await confirm({ message: t('crfLibrary.disableConfirm', { name: crf.name }), danger: true }))) return
   await lib.disableCrf(crf.oid)
 }
 
 async function onDisableVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.disableVersionConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.disableVersionConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   await lib.disableVersion(crf.oid, versionOid)
 }
 
@@ -214,17 +219,17 @@ async function onDisableVersion(crf: Crf, versionOid: string, versionName: strin
 const isSysadmin = computed(() => auth.user?.role === 'Administrator')
 
 async function onLockVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.lockConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.lockConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   await lib.lockVersion(crf.oid, versionOid)
 }
 
 async function onUnlockVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.unlockConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.unlockConfirm', { name: crf.name, version: versionName }), danger: false }))) return
   await lib.unlockVersion(crf.oid, versionOid)
 }
 
 async function onRestoreVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.restoreConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.restoreConfirm', { name: crf.name, version: versionName }), danger: false }))) return
   await lib.restoreVersion(crf.oid, versionOid)
 }
 
@@ -234,7 +239,7 @@ const hardRemoveBlocker = ref<{
 } | null>(null)
 
 async function onHardRemoveVersion(crf: Crf, versionOid: string, versionName: string) {
-  if (!confirm(t('crfLibrary.hardRemoveConfirm', { name: crf.name, version: versionName }))) return
+  if (!(await confirm({ message: t('crfLibrary.hardRemoveConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   const result = await lib.hardRemoveVersion(crf.oid, versionOid)
   if (result.ok) {
     // success — list patched in-place.
@@ -244,13 +249,13 @@ async function onHardRemoveVersion(crf: Crf, versionOid: string, versionName: st
     hardRemoveBlocker.value = { crfName: crf.name, report: result.blocker }
     return
   }
-  alert(result.message)
+  actionError.value = result.message ?? null
 }
 
 async function onDownloadXls(crf: Crf, versionOid: string) {
   const result = await lib.downloadVersionXls(crf.oid, versionOid)
   if (!result.ok) {
-    alert(t('crfLibrary.downloadXlsFailed', { message: result.message }))
+    actionError.value = t('crfLibrary.downloadXlsFailed', { message: result.message })
     return
   }
   // Trigger browser download via a transient anchor.
@@ -277,7 +282,7 @@ const visibleRows = computed(() =>
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-6">
+    <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('crfLibrary.subTrail') }}</div>
@@ -297,6 +302,21 @@ const visibleRows = computed(() =>
             {{ t('crfLibrary.createAction') }}
           </button>
         </div>
+      </div>
+
+      <div
+        v-if="actionError"
+        class="mb-4 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        role="alert"
+        data-testid="crf-library-action-error"
+      >
+        <span class="flex-1">{{ actionError }}</span>
+        <button
+          type="button"
+          class="shrink-0 text-rose-500 hover:text-rose-700"
+          :aria-label="t('common.dismiss')"
+          @click="actionError = null"
+        >✕</button>
       </div>
 
       <!-- 2026-06-21 user-feedback batch — the XLSX-parser hint banner
@@ -352,7 +372,7 @@ const visibleRows = computed(() =>
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2">
-                <h3 class="font-medium text-slate-900">{{ crf.name }}</h3>
+                <h2 class="font-medium text-slate-900">{{ crf.name }}</h2>
                 <span class="text-[10px] text-slate-400 font-mono">{{ crf.oid }}</span>
                 <StatusPill
                   v-if="crf.status === 'removed'"
@@ -413,7 +433,7 @@ const visibleRows = computed(() =>
                   </button>
                 </div>
               </div>
-              <span class="text-slate-300">·</span>
+              <span class="text-slate-500">·</span>
               <button class="text-rose-600 hover:underline" @click="onDisableCrf(crf)">
                 {{ t('crfLibrary.disable') }}
               </button>
@@ -522,7 +542,7 @@ const visibleRows = computed(() =>
           >{{ isUploading ? t('common.saving') : t('crfLibrary.submitUpload') }}</button>
         </div>
       </div>
-    </main>
+    </div>
 
     <!-- Hard-remove blocker modal — renders the 409 VersionUsageReport
          when a hard-remove can't proceed. Migrate-dialog wiring lives

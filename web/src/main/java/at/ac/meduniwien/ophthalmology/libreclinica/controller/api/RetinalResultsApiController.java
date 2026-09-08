@@ -337,9 +337,10 @@ public class RetinalResultsApiController {
 
         Map<String, Object> outputPayload = parsePayload(row.outputPayloadJson);
         PrimaryMetric pm = primaryMetric(row.primaryMetricValue, row.primaryMetricUnit);
+        Double confidence = row.confidence;
 
-        // nAMD Slice 6 — resolve the subject's arm via groupAssignments
-        // so the SPA can honour-system-gate the AI panels for Arm B.
+        // nAMD Slice 6 — resolve the subject's arm via groupAssignments so the
+        // trial-blinding gate can withhold AI output for AI_HIDDEN subjects.
         String subjectArm = null;
         try (Connection c = dataSource.getConnection()) {
             int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
@@ -347,6 +348,19 @@ public class RetinalResultsApiController {
         } catch (SQLException sqlEx) {
             LOG.warn("subjectArm lookup failed for job {} (ecrf={}, sev={}): {}",
                     jobId, row.eventCrfId, row.studyEventId, sqlEx.getMessage());
+        }
+
+        // Trial blinding — strip AI-derived output for a treating clinician
+        // viewing an AI_HIDDEN subject. The raw scan (companions +
+        // fundus/geometry/bscan URLs) is retained so the physician still sees
+        // the unannotated OCT/fundus; only the quantification + AI artifact list
+        // are withheld. Authoritative enforcement — the SPA hides these panels
+        // too, but that is bypassable.
+        if (maskAiForArm(subjectArm, session)) {
+            outputPayload = Map.of();
+            pm = null;
+            artifactNames = List.of();
+            confidence = null;
         }
 
         RetinalJobDetailDto dto = new RetinalJobDetailDto(
@@ -361,7 +375,7 @@ public class RetinalResultsApiController {
                 e2eUuid,
                 pm,
                 outputPayload,
-                row.confidence,
+                confidence,
                 artifactNames,
                 companions,
                 fundusUrl,
@@ -445,6 +459,27 @@ public class RetinalResultsApiController {
      * <p>The match is case-insensitive on the group name to absorb
      * institutional capitalisation variants.
      */
+    /**
+     * Resolve the AI arm (AI_SHOWN / AI_HIDDEN / null) directly from a
+     * {@code study_subject_id}, for the subject-scoped endpoints (per-subject
+     * job list, retinal-trends, crt-timeline) that have no job/event context.
+     */
+    private static String resolveSubjectArmBySubject(Connection c, int studySubjectId) throws SQLException {
+        if (studySubjectId <= 0) return null;
+        String sql = "SELECT sg.name FROM subject_group_map sgm "
+                + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                + " WHERE sgm.study_subject_id = ? AND sgm.status_id = 1 "
+                + "   AND UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') LIMIT 1";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                String name = rs.getString(1);
+                return name == null ? null : name.toUpperCase();
+            }
+        }
+    }
+
     private static String resolveSubjectArm(Connection c, int eventCrfId, int studyEventId) throws SQLException {
         // 2026-07-02 — retinal jobs from the public OCT-upload portal +
         // Wave-2 pipeline attach directly via {@code study_event_id}
@@ -603,6 +638,24 @@ public class RetinalResultsApiController {
                     studySubjectId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to list retinal jobs: " + sqlEx.getMessage()));
+        }
+
+        // Trial blinding — strip the AI primary metric (fluid volume etc.) from
+        // every row for a treating clinician on an AI_HIDDEN subject. The rest
+        // of the row (task / eye / status / date / seq) is not AI-derived.
+        if (isTreatingRole(session)) {
+            String arm = null;
+            try (Connection c = dataSource.getConnection()) {
+                arm = resolveSubjectArmBySubject(c, studySubjectId);
+            } catch (SQLException e) {
+                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+            }
+            if (maskAiForArm(arm, session)) {
+                out = out.stream().map(s -> new RetinalJobSummaryDto(
+                        s.jobId(), s.task(), s.laterality(), s.status(), s.modelVersion(),
+                        s.completedAt(), s.visitDate(), s.acquisitionDate(), s.studyEventId(),
+                        null, s.subjectSeq())).toList();
+            }
         }
         return ResponseEntity.ok(out);
     }
@@ -1109,6 +1162,20 @@ public class RetinalResultsApiController {
                 "study_subject " + studySubjectId + " is outside your site visibility");
         if (visGuard != null) return visGuard;
 
+        // Trial blinding — CRT/CST is derived from the AI layer segmentation;
+        // a treating clinician on an AI_HIDDEN subject gets an empty timeline.
+        if (isTreatingRole(session)) {
+            String arm = null;
+            try (Connection c = dataSource.getConnection()) {
+                arm = resolveSubjectArmBySubject(c, studySubjectId);
+            } catch (SQLException e) {
+                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+            }
+            if (maskAiForArm(arm, session)) {
+                return ResponseEntity.ok(List.of());
+            }
+        }
+
         // Pull every study_event the subject has where at least one
         // CRT-source done job exists. 2026-06-25 — the supported source
         // tasks are now {layers, ga, bm}: the consolidated `layers` task
@@ -1237,6 +1304,20 @@ public class RetinalResultsApiController {
                 "study_subject " + studySubjectId + " belongs to a different study");
         if (visGuard != null) return visGuard;
 
+        // Trial blinding — biomarker trends are pure AI output; a treating
+        // clinician on an AI_HIDDEN subject gets an empty series.
+        if (isTreatingRole(session)) {
+            String arm = null;
+            try (Connection c = dataSource.getConnection()) {
+                arm = resolveSubjectArmBySubject(c, studySubjectId);
+            } catch (SQLException e) {
+                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+            }
+            if (maskAiForArm(arm, session)) {
+                return ResponseEntity.ok(List.of());
+            }
+        }
+
         List<RetinalTrendsPointDto> out = new ArrayList<>();
         // 2026-06-23 — resolve study_subject via either the event_crf
         // chain or the direct study_event_id binding, mirroring the
@@ -1318,6 +1399,14 @@ public class RetinalResultsApiController {
 
         Path target;
         boolean isCompanion = COMPANION_NAMES.contains(name);
+        // Trial blinding — a treating clinician viewing an AI_HIDDEN subject may
+        // fetch the raw scan companions (bscan.dcm / fundus.png / geometry.json)
+        // but NOT the AI segmentation artifacts (masks / CSVs under
+        // bscan_masks_dir).
+        if (!isCompanion && maskAiForArm(armForJobRow(row), session)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "AI output is not available for this subject"));
+        }
         try {
             if (isCompanion) {
                 String e2eUuid = e2eUuidFromPath(row.e2ePath);
@@ -1421,6 +1510,13 @@ public class RetinalResultsApiController {
         }
         ResponseEntity<?> visGuard = guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
+
+        // Trial blinding — the segmentation envelope is pure AI output; withhold
+        // it from a treating clinician viewing an AI_HIDDEN subject.
+        if (maskAiForArm(armForJobRow(row), session)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "AI output is not available for this subject"));
+        }
 
         if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
             return ResponseEntity.status(404).body(Map.of(
@@ -2992,6 +3088,13 @@ public class RetinalResultsApiController {
         ResponseEntity<?> visGuard = guardJobVisibility(current, session);
         if (visGuard != null) return visGuard;
 
+        // Trial blinding — the visit-to-visit comparison is AI quantification;
+        // withhold it from a treating clinician viewing an AI_HIDDEN subject.
+        if (maskAiForArm(armForJobRow(current), session)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "AI output is not available for this subject"));
+        }
+
         Map<String, Object> currentMetrics = parsePayload(current.outputPayloadJson);
         PreviousJobView previous;
         try (Connection c = dataSource.getConnection()) {
@@ -3209,6 +3312,55 @@ public class RetinalResultsApiController {
         if (currentRole == null || currentRole.getRole() == null) return false;
         Role r = currentRole.getRole();
         return r.equals(Role.STUDYDIRECTOR) || r.equals(Role.INVESTIGATOR);
+    }
+
+    /* ====================================================================== */
+    /* Trial blinding — server-side AI masking for the AI_HIDDEN arm          */
+    /* ====================================================================== */
+
+    /**
+     * Treating-clinician roles that must NOT see AI output for a subject in the
+     * {@code AI_HIDDEN} arm: Investigator (the treating physician) and Study
+     * Coordinator (CRC), who is clinical-facing and inherits Investigator in the
+     * role hierarchy. Data Manager (Study Director), Monitor, and Administrator
+     * keep full access — they are not making the masked treatment decision.
+     */
+    private static boolean isTreatingRole(HttpSession session) {
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (currentRole == null || currentRole.getRole() == null) return false;
+        Role r = currentRole.getRole();
+        return r.equals(Role.INVESTIGATOR) || r.equals(Role.COORDINATOR);
+    }
+
+    /**
+     * The authoritative trial-blinding gate: withhold AI output when the subject
+     * is in the {@code AI_HIDDEN} arm AND the requester is a treating clinician.
+     * The SPA's arm-based hiding is defense-in-depth only — it is bypassable via
+     * a pasted URL / curl, so THIS is the enforcement point. Applied to the job
+     * DTO (AI fields stripped), {@code /segmentation}, AI {@code /artifacts},
+     * {@code /compare-previous}, the per-subject list, retinal-trends, and
+     * crt-timeline. The raw scan companions (bscan.dcm / fundus.png /
+     * geometry.json) are NOT masked — the physician still sees the unannotated
+     * scan, per the clinical requirement.
+     *
+     * <p>Masking triggers only on an explicitly-resolved {@code AI_HIDDEN} arm.
+     * A null arm (non-arm study, or a subject not yet randomised) is not masked;
+     * randomisation happens at enrolment, before any scan exists, so a job-owning
+     * subject in an AI-arm study is already assigned by the time this is reached.
+     */
+    private static boolean maskAiForArm(String subjectArm, HttpSession session) {
+        return "AI_HIDDEN".equals(subjectArm) && isTreatingRole(session);
+    }
+
+    /** Resolve the AI arm (AI_SHOWN / AI_HIDDEN / null) for a loaded job row. */
+    private String armForJobRow(JobRow row) {
+        try (Connection c = dataSource.getConnection()) {
+            int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
+            return resolveSubjectArm(c, row.eventCrfId, sev);
+        } catch (SQLException e) {
+            LOG.warn("arm lookup failed for job {}: {}", row.jobId, e.getMessage());
+            return null;
+        }
     }
 
     /**

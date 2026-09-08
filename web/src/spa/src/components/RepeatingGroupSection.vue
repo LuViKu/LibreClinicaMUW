@@ -22,6 +22,9 @@
  */
 
 import { computed } from 'vue'
+import { useConfirm } from '@/composables/useConfirm'
+import TerminologyAutocomplete, { type TermPick } from '@/components/TerminologyAutocomplete.vue'
+import { terminologySystemFromOid } from '@/components/terminologyOid'
 import type { CrfItem, CrfItemGroup } from '@/types/crf'
 
 interface Props {
@@ -45,6 +48,8 @@ const props = withDefaults(defineProps<Props>(), {
   busy: false,
 })
 
+const confirm = useConfirm()
+
 const emit = defineEmits<{
   (e: 'add-row'): void
   (e: 'delete-row', rowOrdinal: number): void
@@ -53,6 +58,22 @@ const emit = defineEmits<{
     payload: { rowOrdinal: number; itemOid: string; value: unknown },
   ): void
 }>()
+
+/**
+ * #26 binding store — when a terminology concept is picked, fan its properties
+ * into sibling cells of the SAME row per the item's persisted fill map. The
+ * picked cell itself is set via @update:model-value; here we only apply the
+ * fills. Each fill's toKey is the target column's item OID (persisted that way
+ * on save), so it addresses the sibling cell directly.
+ */
+function onPick(rowOrdinal: number, item: CrfItem, pick: TermPick): void {
+  for (const fill of item.autocomplete?.fills ?? []) {
+    const v = pick.properties[fill.fromProperty]
+    if (v != null && v !== '') {
+      emit('set-value', { rowOrdinal, itemOid: fill.toKey, value: v })
+    }
+  }
+}
 
 /** Items in render order — falls back to the group's declared item OIDs
  *  so the columns stay deterministic even if the parent's lookup table
@@ -88,9 +109,9 @@ function onChangeValue(
   emit('set-value', { rowOrdinal, itemOid, value })
 }
 
-function onDeleteRow(rowOrdinal: number): void {
+async function onDeleteRow(rowOrdinal: number): Promise<void> {
   if (props.disabled || props.busy) return
-  if (typeof window !== 'undefined' && !window.confirm(props.deleteRowConfirm)) return
+  if (!(await confirm({ message: props.deleteRowConfirm, danger: true }))) return
   emit('delete-row', rowOrdinal)
 }
 
@@ -143,7 +164,20 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
               :key="item.oid"
               class="py-1.5 px-2 align-top"
             >
-              <template v-if="item.dataType === 'select-one' && item.options">
+              <!-- #26 Slice 3 — a terminology-bound column (system encoded in
+                   its OID) renders the live autocomplete at data entry. -->
+              <template v-if="terminologySystemFromOid(item.oid)">
+                <TerminologyAutocomplete
+                  :id="inputId(row.ordinal, item.oid)"
+                  :model-value="rawValueFor(row.ordinal, item.oid)"
+                  :system="terminologySystemFromOid(item.oid) as string"
+                  :disabled="disabled"
+                  @update:model-value="(v: string) => emit('set-value', { rowOrdinal: row.ordinal, itemOid: item.oid, value: v === '' ? null : v })"
+                  @pick="(p: TermPick) => onPick(row.ordinal, item, p)"
+                />
+              </template>
+
+              <template v-else-if="item.dataType === 'select-one' && item.options">
                 <select
                   :id="inputId(row.ordinal, item.oid)"
                   :value="rawValueFor(row.ordinal, item.oid)"
@@ -199,7 +233,7 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
             <td class="py-1.5 pl-2 align-top">
               <button
                 type="button"
-                class="text-[11px] text-rose-700 hover:underline disabled:text-slate-300 disabled:no-underline"
+                class="text-[11px] text-rose-700 hover:underline disabled:text-slate-500 disabled:no-underline"
                 :disabled="disabled || busy"
                 :aria-label="deleteRowLabel"
                 @click="onDeleteRow(row.ordinal)"
@@ -215,7 +249,7 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
     <div class="mt-3 flex items-center gap-3">
       <button
         type="button"
-        class="text-xs px-3 py-1.5 border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:text-slate-300 disabled:bg-slate-50/50"
+        class="text-xs px-3 py-1.5 border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:text-slate-500 disabled:bg-slate-50/50"
         :disabled="!canAddRow || busy"
         @click="emit('add-row')"
       >

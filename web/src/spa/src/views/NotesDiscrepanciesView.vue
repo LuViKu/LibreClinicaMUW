@@ -185,7 +185,7 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6">
+    <div class="flex-1 px-8 py-6">
       <div class="mb-5">
         <div class="text-xs text-slate-500 mb-1">{{ t('notes.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('notes.title') }}</h1>
@@ -233,13 +233,13 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
         </div>
 
         <div class="w-44">
-          <SelectInput id="notes-status-filter" :model-value="notes.statusFilter" @update:model-value="(v) => notes.statusFilter = v as 'all' | 'open' | NoteStatus">
+          <SelectInput id="notes-status-filter" :aria-label="t('notes.statusFilter')" :model-value="notes.statusFilter" @update:model-value="(v) => notes.statusFilter = v as 'all' | 'open' | NoteStatus">
             <option v-for="o in statusOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
           </SelectInput>
         </div>
 
         <div class="w-44">
-          <SelectInput id="notes-type-filter" :model-value="notes.typeFilter" @update:model-value="(v) => notes.typeFilter = v as 'all' | NoteType">
+          <SelectInput id="notes-type-filter" :aria-label="t('notes.typeFilter')" :model-value="notes.typeFilter" @update:model-value="(v) => notes.typeFilter = v as 'all' | NoteType">
             <option v-for="o in typeOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
           </SelectInput>
         </div>
@@ -433,6 +433,6 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
           <span>{{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}</span>
         </template>
       </DenseTable>
-    </main>
+    </div>
   </div>
 </template>

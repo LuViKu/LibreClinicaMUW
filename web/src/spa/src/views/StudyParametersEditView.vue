@@ -181,7 +181,7 @@ const enumLabel = (group: string, value: string) =>
   <div class="grid grid-cols-[260px_1fr] min-h-screen bg-white">
     <SideRail />
 
-    <main class="px-6 py-5">
+    <div class="px-6 py-5">
       <div class="flex items-baseline justify-between mb-5">
         <h1 class="text-base font-medium text-slate-800">
           {{ t('studyParameters.title') }}
@@ -369,6 +369,6 @@ const enumLabel = (group: string, value: string) =>
           {{ store.isSaving ? t('common.saving') : t('studyParameters.save') }}
         </button>
       </div>
-    </main>
+    </div>
   </div>
 </template>

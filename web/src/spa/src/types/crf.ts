@@ -24,6 +24,7 @@
 
 import type { components } from './api'
 import type { DdeBlock } from './dde'
+import type { AutocompleteBinding, RepeatingTableSpec } from '@/stores/crfAuthoring'
 
 export type ItemDataType =
   | 'string'
@@ -64,6 +65,20 @@ export type CrfItem =
      * payload via {@link evaluateShowWhen}.
      */
     showWhen?: string | null
+    /**
+     * #26 (2026-08-12) — preview/entry carry-through of the CRF-authoring
+     * terminology-autocomplete binding on a flat text item. Populated by
+     * {@code draftToPreviewSchema}; the runtime {@code eventCrfs} fetch
+     * doesn't emit it yet (backend follow-up), so it's optional and
+     * preview-only for now.
+     */
+    autocomplete?: AutocompleteBinding
+    /**
+     * #26 (2026-08-12) — preview/entry carry-through of a repeating-table
+     * item spec (operator-defined columns). Preview-only for now (see
+     * {@link autocomplete}).
+     */
+    table?: RepeatingTableSpec
   }
 
 export type CrfSection =

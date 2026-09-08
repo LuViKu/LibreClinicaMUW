@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 /**
  * Phase E.3 primitive — Side rail.
  *
@@ -16,6 +18,7 @@
  *   - An optional `metrics` slot anchors a divider + custom action
  *     (e.g. "Studien-Statistik Details") right above the version line.
  */
+const { t } = useI18n()
 const appVersion = __APP_VERSION__
 const buildHash = __BUILD_HASH__
 // The define ships ISO yyyy-MM-dd; render it as DD-MM-YYYY (e.g. 25-06-2026).
@@ -26,14 +29,17 @@ const buildDate = /^\d{4}-\d{2}-\d{2}$/.test(rawBuildDate)
 </script>
 
 <template>
+  <!-- Complementary region (implicit for <aside>). It previously carried
+       role="navigation", which is not an allowed role on <aside> (axe
+       aria-allowed-role) AND created a second navigation landmark alongside
+       the inner <nav> (axe landmark-unique). The <nav> below is the single
+       navigation landmark; the <aside> stays complementary. -->
   <aside
     class="w-56 shrink-0 border-r border-slate-200 bg-slate-50 text-sm sticky top-14 self-start flex flex-col"
     style="min-height: calc(100vh - 3.5rem);"
-    role="navigation"
-    aria-label="Side rail"
   >
     <div class="flex-1 px-3 py-4 overflow-y-auto">
-      <nav class="space-y-0.5">
+      <nav class="space-y-0.5" :aria-label="t('a11y.sectionNavigation')">
         <slot />
       </nav>
 

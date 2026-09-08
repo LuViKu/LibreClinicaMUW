@@ -198,7 +198,7 @@ function shortIsoDate(iso: string | null | undefined): string {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-6">
+    <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
         <div>
           <h1 class="text-xl font-semibold tracking-tight">
@@ -322,7 +322,7 @@ function shortIsoDate(iso: string | null | undefined): string {
           <td class="px-3 py-2 font-mono text-xs text-slate-600">#{{ row.jobId }}</td>
           <td class="px-3 py-2 font-mono text-[12px]">
             <span v-if="row.patientId">{{ row.patientId }}</span>
-            <span v-else class="text-slate-300 italic">{{ t('retinalParked.unknownPatient') }}</span>
+            <span v-else class="text-slate-500 italic">{{ t('retinalParked.unknownPatient') }}</span>
           </td>
           <td class="px-3 py-2 font-mono text-xs">{{ row.laterality }}</td>
           <td class="px-3 py-2 text-slate-600 text-xs">{{ row.task || '—' }}</td>
@@ -340,7 +340,7 @@ function shortIsoDate(iso: string | null | undefined): string {
           </td>
         </tr>
       </DenseTable>
-    </main>
+    </div>
 
     <AssignParkedDialog
       v-if="activeJobIds"

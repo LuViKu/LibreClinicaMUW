@@ -105,6 +105,119 @@ describe('PropertiesRail', () => {
     expect(store.draft.sections[0]!.items[1]!.showWhen).toBeUndefined()
   })
 
+  it('surfaces the options editor for a choice response type', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'SEX', responseType: 'single-select' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    expect(w.find('[data-testid="crf-canvas-properties-options-host"]').exists()).toBe(true)
+    expect(w.findAll('[data-testid="crf-canvas-properties-options-row"]')).toHaveLength(2)
+  })
+
+  it('hides the options editor for open-text and BL items', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'NOTES' })
+    store.addItem(0, { name: 'CONSENT', dataType: 'BL' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    expect(w.find('[data-testid="crf-canvas-properties-options-host"]').exists()).toBe(false)
+    store.selectItem(store.draft.sections[0]!.items[1]!.uid)
+    await flushPromises()
+    expect(w.find('[data-testid="crf-canvas-properties-options-host"]').exists()).toBe(false)
+    expect(w.find('[data-testid="crf-canvas-properties-options-bl-hint"]').exists()).toBe(true)
+  })
+
+  it('reveals the options editor when the response type gains options', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'SEX' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    expect(w.find('[data-testid="crf-canvas-properties-options-host"]').exists()).toBe(false)
+    const rtSelect = w.find('[data-testid="crf-canvas-properties-responseType"]')
+    ;(rtSelect.element as HTMLSelectElement).value = 'single-select'
+    await rtSelect.trigger('change')
+    await flushPromises()
+    expect(w.find('[data-testid="crf-canvas-properties-options-host"]').exists()).toBe(true)
+  })
+
+  it('writes option edits through to the store', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'SEX', responseType: 'single-select' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    const textInput = w.find('[data-testid="crf-canvas-properties-options-text-0"]')
+    ;(textInput.element as HTMLInputElement).value = 'Weiblich'
+    await textInput.trigger('input')
+    const rs = store.draft.sections[0]!.items[0]!.responseSet as {
+      options: Array<{ text: string; value: string }>
+    }
+    expect(rs.options[0]).toEqual({ text: 'Weiblich', value: 'WEIBLICH' })
+  })
+
+  it('grows the store option array from the add button', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'SEX', responseType: 'single-select' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    await w.find('[data-testid="crf-canvas-properties-options-add"]').trigger('click')
+    const rs = store.draft.sections[0]!.items[0]!.responseSet as { options: unknown[] }
+    expect(rs.options).toHaveLength(3)
+  })
+
+  it('renders localised type labels rather than raw union codes', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'AGE', dataType: 'INT' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    const dtText = w.find('[data-testid="crf-canvas-properties-dataType"]').text()
+    expect(dtText).toContain('Ganzzahl (INT)')
+    expect(dtText).not.toMatch(/^INT/)
+    const rtText = w.find('[data-testid="crf-canvas-properties-responseType"]').text()
+    expect(rtText).toContain('Einfachauswahl-Liste')
+  })
+
+  it('renders a German label for TRISTATE_REASON', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'SMOKER', dataType: 'TRISTATE_REASON' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    expect(w.find('[data-testid="crf-canvas-properties-dataType"]').text()).toContain(
+      'Ja / Nein / Unbekannt (+ Grund)',
+    )
+  })
+
+  it('builds the four-option HealthAEye dropdown end to end', async () => {
+    const w = mountRail()
+    const store = useCrfAuthoringStore()
+    store.addItem(0, { name: 'CHILDBEARING', responseType: 'single-select' })
+    store.selectItem(store.draft.sections[0]!.items[0]!.uid)
+    await flushPromises()
+    // Two blank rows are seeded; the CRF needs four.
+    await w.find('[data-testid="crf-canvas-properties-options-add"]').trigger('click')
+    await w.find('[data-testid="crf-canvas-properties-options-add"]').trigger('click')
+    const labels = ['Ja', 'Nein', 'Nicht zutreffend', 'Unbekannt']
+    for (const [i, label] of labels.entries()) {
+      const input = w.find(`[data-testid="crf-canvas-properties-options-text-${i}"]`)
+      ;(input.element as HTMLInputElement).value = label
+      await input.trigger('input')
+    }
+    const payload = store.buildPayload() as {
+      sections: Array<{
+        items: Array<{ responseSet: { label: string; options: Array<{ text: string }> } }>
+      }>
+    }
+    const rs = payload.sections[0]!.items[0]!.responseSet
+    expect(rs.options.map((o) => o.text)).toEqual(labels)
+    expect(rs.label).toBe('childbearing_options')
+  })
+
   it('Clear selection drops the store selection', async () => {
     const w = mountRail()
     const store = useCrfAuthoringStore()

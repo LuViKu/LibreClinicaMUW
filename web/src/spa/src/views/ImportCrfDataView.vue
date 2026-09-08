@@ -126,7 +126,7 @@ function variantFor(s: ImportCrfPreviewRow['status']): 'success' | 'warning' | '
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-5xl px-8 py-6">
+    <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-5">
         <div class="text-xs text-slate-500 mb-1">{{ t('importCrf.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('importCrf.title') }}</h1>
@@ -328,6 +328,6 @@ function variantFor(s: ImportCrfPreviewRow['status']): 'success' | 'warning' | '
           </section>
         </template>
       </Wizard>
-    </main>
+    </div>
   </div>
 </template>

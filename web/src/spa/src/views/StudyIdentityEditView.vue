@@ -99,10 +99,31 @@ onMounted(async () => {
   }
 })
 
+// #7/#12 — required identity fields (uniqueProtocolId is create-only, so
+// it's not part of the edit form). Validated client-side before the PUT so
+// the operator gets immediate inline feedback rather than a backend round-trip.
+const REQUIRED: (keyof Form)[] = ['name', 'briefSummary', 'principalInvestigator', 'sponsor']
+
+function validate(): boolean {
+  const errors: Record<string, string> = {}
+  for (const key of REQUIRED) {
+    if (form.value[key].trim() === '') errors[key] = t('studyForm.requiredField')
+  }
+  fieldErrors.value = errors
+  const firstMissing = REQUIRED.find((k) => errors[k])
+  if (firstMissing) {
+    formError.value = t('studyForm.validationSummary')
+    document.getElementById(`study-${firstMissing === 'principalInvestigator' ? 'pi' : firstMissing === 'briefSummary' ? 'summary' : firstMissing}`)?.focus()
+    return false
+  }
+  return true
+}
+
 async function submit() {
   fieldErrors.value = {}
   formError.value = null
   savedAt.value = null
+  if (!validate()) return
   isSubmitting.value = true
   try {
     // Phase E.6: send EVERY field, not just non-blank ones. The form
@@ -111,6 +132,10 @@ async function submit() {
     // accepts empty strings on the optional fields.
     const patch: Record<string, string> = {}
     for (const key of Object.keys(form.value) as (keyof Form)[]) {
+      // protocolType's empty option is "Unverändert lassen" (leave unchanged),
+      // NOT "clear" — omit it from the patch when blank so a save doesn't wipe
+      // the study's existing protocol type.
+      if (key === 'protocolType' && (form.value.protocolType as string).trim() === '') continue
       patch[key] = (form.value[key] as string).trim()
     }
     const result = await studies.update(oid.value, patch as Partial<StudyIdentity>)
@@ -151,7 +176,7 @@ function cancel() {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-3xl px-8 py-6">
+    <div class="flex-1 max-w-3xl px-8 py-6">
       <div class="mb-4">
         <div class="text-xs text-slate-500 mb-1">{{ t('studyForm.edit.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('studyForm.edit.title') }}</h1>
@@ -235,8 +260,18 @@ function cancel() {
           >
             {{ isSubmitting ? t('common.saving') : t('studyForm.edit.submit') }}
           </button>
+          <!-- #7/#12 discoverability — modules are enabled on the Study
+               Parameters page, which was hard to find. Surface a direct
+               link from the identity-edit flow. -->
+          <RouterLink
+            :to="`/studies/${oid}/parameters`"
+            class="ml-auto px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue font-medium"
+            data-testid="study-edit-parameters-link"
+          >
+            {{ t('studyForm.edit.parametersLink') }} →
+          </RouterLink>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>

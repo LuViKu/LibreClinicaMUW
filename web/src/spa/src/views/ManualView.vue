@@ -153,7 +153,7 @@ const printManual = () => window.print()
       </aside>
 
       <!-- ░░ CONTENT ░░ -->
-      <main class="min-w-0 flex-1 max-w-[860px]">
+      <div class="min-w-0 flex-1 max-w-[860px]">
         <!-- cover -->
         <header class="pb-8 border-b border-slate-200">
           <div class="flex items-center justify-between gap-4 flex-wrap">
@@ -338,7 +338,7 @@ const printManual = () => window.print()
         <footer class="py-12 mt-4 border-t border-slate-200 text-[12px] text-slate-400">
           <span class="mono">{{ manual.meta.version }} · {{ manual.meta.build }}</span>
         </footer>
-      </main>
+      </div>
     </div>
   </div>
 </template>

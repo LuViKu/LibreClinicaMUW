@@ -10,7 +10,7 @@ import {
   type AuthoringItem,
   type AuthoringSection,
 } from '@/stores/crfAuthoring'
-import { findPreset } from './presetCatalog'
+import { findPalettePrimitive, findPreset } from './presetCatalog'
 
 /**
  * Middle canvas — renders each draft section as a drop-target card.
@@ -131,7 +131,14 @@ function onSectionDrop(ev: DragEvent, sectionIndex: number): void {
   const section = store.draft.sections[sectionIndex]
   if (!section) return
   if (payload.kind === 'primitive') {
-    store.addItem(sectionIndex, { dataType: payload.value as AuthoringItem['dataType'] })
+    // Resolve via the palette registry so choice blocks (whose id is NOT
+    // a data type) seed correctly. Fall back to the bare {dataType}
+    // shape for any older drag source still emitting a raw type code.
+    const prim = findPalettePrimitive(payload.value)
+    store.addItem(
+      sectionIndex,
+      prim ? prim.seed() : { dataType: payload.value as AuthoringItem['dataType'] },
+    )
     // Select the freshly added item so the properties rail fills in.
     const last = section.items[section.items.length - 1]
     if (last) store.selectItem(last.uid)
@@ -201,7 +208,11 @@ function onNewSectionDrop(ev: DragEvent): void {
   const newIndex = store.draft.sections.findIndex((s) => s.uid === newSectionUid)
   if (newIndex < 0) return
   if (payload.kind === 'primitive') {
-    store.addItem(newIndex, { dataType: payload.value as AuthoringItem['dataType'] })
+    const prim = findPalettePrimitive(payload.value)
+    store.addItem(
+      newIndex,
+      prim ? prim.seed() : { dataType: payload.value as AuthoringItem['dataType'] },
+    )
     const section = store.draft.sections[newIndex]
     const last = section?.items[section.items.length - 1]
     if (last) store.selectItem(last.uid)
@@ -528,12 +539,20 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
                     <circle cx="15" cy="18" r="1.2" fill="currentColor" />
                   </svg>
                 </span>
-                <div class="flex-1 min-w-0">
+                <!-- uid-stable selection hook. The positional
+                     crf-canvas-item-<s>-<i> testid on the row shifts when
+                     items are added/reordered, which makes index-based
+                     automation select the wrong item; this uid-keyed testid
+                     is stable for the item's lifetime. A click here bubbles to
+                     the row's @click and selects by uid. -->
+                <div class="flex-1 min-w-0" :data-testid="`crf-canvas-item-uid-${item.uid}`">
                   <div class="text-[12px] font-medium text-slate-800 truncate">
                     {{ item.name || item.oid || t('crfAuthoring.canvas.canvas.untitled') }}
                   </div>
                   <div class="text-[10px] font-mono text-slate-500 truncate">
-                    {{ item.oid || '—' }} · {{ item.dataType }}
+                    {{ item.oid || '—' }} ·
+                    <template v-if="item.table">{{ t('crfAuthoring.canvas.table.section') }} ({{ item.table.columns.length }})</template>
+                    <template v-else>{{ item.dataType }}<template v-if="item.autocomplete"> · ⌕</template></template>
                   </div>
                   <div
                     v-if="errorForItem(item.oid)"

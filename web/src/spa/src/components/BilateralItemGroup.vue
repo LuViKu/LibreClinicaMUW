@@ -160,7 +160,7 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
               disabled
               tabindex="-1"
               :aria-label="t('crfEntry.bilateral.compoundSlotMissing', { subKey: sub.subKey })"
-              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-300 text-[14px] cursor-not-allowed"
+              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-500 text-[14px] cursor-not-allowed"
               placeholder="—"
             />
           </div>
@@ -185,7 +185,7 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
               disabled
               tabindex="-1"
               :aria-label="t('crfEntry.bilateral.compoundSlotMissing', { subKey: sub.subKey })"
-              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-300 text-[14px] cursor-not-allowed"
+              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-500 text-[14px] cursor-not-allowed"
               placeholder="—"
             />
           </div>

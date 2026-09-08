@@ -14,6 +14,11 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 import { nextTick } from 'vue'
 
+// #19 — delete now confirms via the useConfirm() modal. Mock it; per-test
+// control of accept/cancel via confirmMock.mockResolvedValue(true|false).
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn(() => Promise.resolve(true)) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
+
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
   return {
@@ -128,6 +133,8 @@ describe('ModalitiesView', () => {
     setActivePinia(createPinia())
     vi.mocked(apiGet).mockReset()
     vi.mocked(apiDelete).mockReset()
+    confirmMock.mockReset()
+    confirmMock.mockResolvedValue(true)
     document.body.innerHTML = ''
   })
 
@@ -177,7 +184,7 @@ describe('ModalitiesView', () => {
   })
 
   it('Delete button fires confirm() then store.remove + DELETEs the right path', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    confirmMock.mockResolvedValue(true)
     vi.mocked(apiDelete).mockResolvedValueOnce(undefined as never)
     // load() called twice — initial onMounted, then post-delete refresh.
     vi.mocked(apiGet).mockResolvedValue([FIXTURE[1]])
@@ -186,28 +193,26 @@ describe('ModalitiesView', () => {
     await wrapper.find('[data-testid="modality-delete-11"]').trigger('click')
     await flushPromises()
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(confirmMock).toHaveBeenCalledTimes(1)
     expect(apiDelete).toHaveBeenCalledWith('/pages/api/v1/modalities/11')
 
-    confirmSpy.mockRestore()
     wrapper.unmount()
   })
 
   it('cancelled confirm() skips the DELETE call', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    confirmMock.mockResolvedValue(false)
     const wrapper = await mountView()
     await wrapper.find('[data-testid="modality-delete-11"]').trigger('click')
     await flushPromises()
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(confirmMock).toHaveBeenCalledTimes(1)
     expect(apiDelete).not.toHaveBeenCalled()
 
-    confirmSpy.mockRestore()
     wrapper.unmount()
   })
 
   it('Delete uses the store action — store.remove is observable via the wire', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    confirmMock.mockResolvedValue(true)
     vi.mocked(apiDelete).mockResolvedValueOnce(undefined as never)
     vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE).mockResolvedValueOnce([FIXTURE[1]])
 
@@ -219,7 +224,6 @@ describe('ModalitiesView', () => {
     // The post-DELETE load lands a 1-row list — confirms the wire went through.
     expect(store.list.length).toBe(1)
 
-    confirmSpy.mockRestore()
     wrapper.unmount()
   })
 })

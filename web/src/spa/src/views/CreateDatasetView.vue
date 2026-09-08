@@ -35,7 +35,7 @@ const blurbKey = computed(() => (editId.value ? 'createDataset.editBlurb' : 'cre
 </script>
 
 <template>
-  <main class="px-6 py-6 max-w-5xl mx-auto space-y-6">
+  <div class="px-6 py-6 max-w-5xl mx-auto space-y-6">
     <header>
       <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('createDataset.eyebrow') }}</p>
       <h1 class="text-xl font-semibold text-slate-900">{{ t(headerKey) }}</h1>
@@ -43,5 +43,5 @@ const blurbKey = computed(() => (editId.value ? 'createDataset.editBlurb' : 'cre
     </header>
 
     <CreateDatasetWizard :edit-id="editId" />
-  </main>
+  </div>
 </template>

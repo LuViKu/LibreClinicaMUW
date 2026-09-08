@@ -16,6 +16,9 @@ interface Props {
   disabled?: boolean
   readonly?: boolean
   error?: boolean
+  /** Accessible name when the select has no visible <label for> (e.g. a
+   *  compact filter dropdown). Required for WCAG 4.1.2 / axe select-name. */
+  ariaLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -23,6 +26,7 @@ const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   readonly: false,
   error: false,
+  ariaLabel: undefined,
 })
 
 const emit = defineEmits<{
@@ -51,6 +55,7 @@ const selectClasses = computed(() => {
       :id="id"
       :value="modelValue ?? ''"
       :disabled="disabled || readonly"
+      :aria-label="ariaLabel"
       :aria-invalid="error || undefined"
       :class="selectClasses"
       @change="onChange"

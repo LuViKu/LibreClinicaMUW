@@ -1,124 +1,51 @@
 /**
- * Phase E.9 — Browser-level a11y harness.
+ * @a11y — Browser-level accessibility harness.
  *
- * Runs against the SPA served by Vite (`pnpm dev` at port 5173). Each
- * route is loaded with the dev role-switcher mock identity so guards
- * pass, then `@axe-core/playwright` scans the page for WCAG 2.2 AA
- * violations including colour contrast (the dimension Vitest cannot
- * see in jsdom).
+ * Logs in against the real backend (mock-mode auth was removed in milestone
+ * 13) and runs `@axe-core/playwright` over each reachable route, asserting no
+ * WCAG 2.2 AA violations — including colour contrast, which jsdom-based Vitest
+ * cannot see. Route-level pages only; record-detail a11y (a specific CRF-entry
+ * / signing screen) is a follow-up once those views have stable seeded ids.
  *
- * Run locally:
- *   pnpm dev            # in one terminal
- *   pnpm test:a11y:e2e  # in another
- *
- * In CI: spin Vite + run this spec as a smoke gate per Phase E.9 §
- * Verification gates.
+ * Runs against the SPA on the Vite dev server (base `/`, proxying the backend);
+ * see playwright.config.ts + tests/support/auth.ts.
  */
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { login, type Role } from '../support/auth'
 
-const BASE = 'http://127.0.0.1:5173/LibreClinica/app'
-
-/**
- * Pin a mock user into sessionStorage before navigating so the
- * router guard treats the visit as authenticated. The role determines
- * which role-gated routes are reachable.
- */
-async function loginAs(page: Parameters<typeof test>[0]['page'] extends infer P ? P : never, role: 'Investigator' | 'Monitor' | 'Data Manager') {
-  await page.goto(BASE + '/login', { waitUntil: 'load' })
-  await page.evaluate((r) => {
-    const presets: Record<string, unknown> = {
-      Investigator:  { username: 'user_demo', displayName: 'Dr. user_demo', email: 'user_demo@meduniwien.ac.at', role: 'Investigator', siteLabel: 'München', source: 'sso', mfaSatisfied: true, profileComplete: true },
-      Monitor:       { username: 'monitor_demo', displayName: 'Mona Demo', email: 'monitor_demo@example.org', role: 'Monitor', siteLabel: null, source: 'local', mfaSatisfied: false, profileComplete: true },
-      'Data Manager':{ username: 'dm_demo', displayName: 'Dora Manager', email: 'dm_demo@meduniwien.ac.at', role: 'Data Manager', siteLabel: null, source: 'sso', mfaSatisfied: true, profileComplete: true },
-    }
-    window.sessionStorage.setItem('libreclinica.mock_user', JSON.stringify(presets[r]))
-  }, role)
-}
-
-async function scan(page: Parameters<typeof test>[0]['page'] extends infer P ? P : never) {
+async function scan(page: import('@playwright/test').Page) {
   return new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag22aa', 'best-practice'])
     .analyze()
 }
 
-test.describe('@a11y — Anonymous routes', () => {
-  test('LoginView passes WCAG 2.2 AA', async ({ page }) => {
-    await page.goto(BASE + '/login')
-    const results = await scan(page)
-    expect(results.violations).toEqual([])
+/** (role, path, label) tuples covering the reachable route-level surface. */
+const CASES: { role: Role | null; path: string; label: string }[] = [
+  { role: null, path: '/login', label: 'Login' },
+  { role: 'investigator', path: '/', label: 'Home (landing tiles)' },
+  { role: 'investigator', path: '/subjects', label: 'Subject Matrix' },
+  { role: 'investigator', path: '/subjects/new', label: 'Add Subject' },
+  { role: 'monitor', path: '/notes', label: 'Notes & Discrepancies' },
+  { role: 'dataManager', path: '/crf-library', label: 'CRF Library' },
+  { role: 'dataManager', path: '/build-study', label: 'Build Study' },
+  { role: 'dataManager', path: '/event-definitions', label: 'Event Definitions' },
+  { role: 'admin', path: '/manage-users', label: 'Manage Users' },
+  { role: 'admin', path: '/sites', label: 'Sites' },
+  { role: 'admin', path: '/studies/new', label: 'Create Study' },
+]
+
+for (const { role, path, label } of CASES) {
+  test(`@a11y ${label} passes WCAG 2.2 AA`, async ({ page }) => {
+    if (role) await login(page.context(), role)
+    await page.goto(path, { waitUntil: 'domcontentloaded' })
+    // Guard against silently scanning a login-bounce (a clean page) and
+    // reporting false coverage: a role-gated route must actually render.
+    if (role) await expect(page, `${label} should be reachable by ${role}`).not.toHaveURL(/\/login/)
+    // Let async view data paint before the scan.
+    await page.waitForLoadState('load')
+    await page.waitForTimeout(800)
+    const { violations } = await scan(page)
+    expect(violations, `${label}: ${violations.map((v) => v.id).join(', ')}`).toEqual([])
   })
-})
-
-test.describe('@a11y — Investigator workflow', () => {
-  test.beforeEach(async ({ page }) => loginAs(page, 'Investigator'))
-
-  test('Home (landing tiles)', async ({ page }) => {
-    await page.goto(BASE + '/')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Subject Matrix', async ({ page }) => {
-    await page.goto(BASE + '/subjects')
-    await page.waitForSelector('table')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Add Subject', async ({ page }) => {
-    await page.goto(BASE + '/subjects/new')
-    await page.waitForSelector('form')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('CRF Entry', async ({ page }) => {
-    await page.goto(BASE + '/event-crfs/EC_M001_V1_DEMO')
-    await page.waitForSelector('form')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Sign Subject', async ({ page }) => {
-    await page.goto(BASE + '/subjects/M-001/sign')
-    expect((await scan(page)).violations).toEqual([])
-  })
-})
-
-test.describe('@a11y — Monitor workflow', () => {
-  test.beforeEach(async ({ page }) => loginAs(page, 'Monitor'))
-
-  test('SDV table', async ({ page }) => {
-    await page.goto(BASE + '/sdv')
-    await page.waitForSelector('table')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Notes & Discrepancies', async ({ page }) => {
-    await page.goto(BASE + '/notes')
-    await page.waitForSelector('table')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Study Audit Log', async ({ page }) => {
-    await page.goto(BASE + '/audit-log')
-    expect((await scan(page)).violations).toEqual([])
-  })
-})
-
-test.describe('@a11y — Data Manager workflow', () => {
-  test.beforeEach(async ({ page }) => loginAs(page, 'Data Manager'))
-
-  test('Build Study', async ({ page }) => {
-    await page.goto(BASE + '/build-study')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Manage Users', async ({ page }) => {
-    await page.goto(BASE + '/manage-users')
-    await page.waitForSelector('table')
-    expect((await scan(page)).violations).toEqual([])
-  })
-
-  test('Import CRF Data wizard', async ({ page }) => {
-    await page.goto(BASE + '/import-crf-data')
-    expect((await scan(page)).violations).toEqual([])
-  })
-})
+}

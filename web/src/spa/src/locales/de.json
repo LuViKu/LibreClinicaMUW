@@ -24,7 +24,8 @@
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
-    "signInLink": "Anmelden"
+    "signInLink": "Anmelden",
+    "sectionNavigation": "Bereichsnavigation"
   },
   "topBar": {
     "profile": {
@@ -134,6 +135,7 @@
     "switchStudyDesc": "Andere Studie auswählen, der Sie zugeordnet sind. Nur Ihre zugeordneten Studien werden angezeigt."
   },
   "common": {
+    "actions": "Aktionen",
     "loading": "Wird geladen…",
     "saving": "Wird gespeichert…",
     "save": "Speichern",
@@ -146,6 +148,8 @@
     "filter": "Filter",
     "clear": "Zurücksetzen",
     "dismiss": "Schließen",
+    "confirm": "Bestätigen",
+    "confirmTitle": "Bestätigung erforderlich",
     "export": "Export",
     "eye": {
       "od": "rechts",
@@ -174,6 +178,8 @@
     "title": "Druckvorschau",
     "printAgain": "Erneut drucken",
     "back": "Zurück",
+    "subject": "Teilnehmer-ID",
+    "event": "Visite",
     "eventCrfId": "Event-CRF",
     "status": "Status",
     "lastSaved": "Zuletzt gespeichert",
@@ -208,6 +214,10 @@
     "refreshedAt": "Aktualisiert um {ts}",
     "loadFailed": "Systemstatus konnte nicht geladen werden.",
     "jvmHeading": "JVM",
+    "jvmJava": "Java",
+    "jvmHeapUsed": "Heap belegt",
+    "jvmThreads": "Threads",
+    "jvmCpus": "CPUs",
     "dbHeading": "Datenbank",
     "appHeading": "Anwendung",
     "reachable": "Erreichbar",
@@ -461,6 +471,8 @@
   },
   "notes": {
     "title": "Rückfragen & Diskrepanzen",
+    "statusFilter": "Nach Status filtern",
+    "typeFilter": "Nach Art filtern",
     "subTrail": "Alle Standorte",
     "searchPlaceholder": "Teilnehmer, Item oder Beschreibung suchen…",
     "showingCount": "{visible} von {total} sichtbar",
@@ -595,6 +607,8 @@
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",
     "notSavedYet": "Noch nicht gespeichert",
+    "saveSuccess": "Gespeichert.",
+    "markCompleteSuccess": "CRF als abgeschlossen markiert.",
     "cancelLink": "Abbrechen — zurück zur Übersicht",
     "status": {
       "not-started": "Nicht begonnen",
@@ -798,7 +812,7 @@
     "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
-    "parametersAction": "Parameter",
+    "parametersAction": "Parameter & Module",
     "statusAction": "Status ändern…",
     "statusTarget": {
       "AVAILABLE": "Verfügbar",
@@ -1254,6 +1268,7 @@
       "PDATE": "Teildatum (PDATE)",
       "FILE": "Dateianhang (FILE)",
       "BL": "Boolean (BL)",
+      "TRISTATE_REASON": "Ja / Nein / Unbekannt (+ Grund)",
       "BLHelper": "Boolean-Items werden als einzelne Checkbox dargestellt (Ja = 1 / Nein = 0). Das Antwortset ist fest vorgegeben, daher wird die Optionen-Auswahl ausgeblendet.",
       "BLPreviewHeading": "Vorschau",
       "BLPlaceholder": "Boolean-Item"
@@ -1354,11 +1369,18 @@
       "validate": "Validieren",
       "validating": "Validiere …",
       "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "saveSuccess": "Version „{name}“ gespeichert.",
       "fork": {
         "loading": "Inhalte der Vorversion werden geladen …",
         "loaded": "Inhalte der Vorversion übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
         "loadedNamed": "Inhalte aus Version „{name}\" übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
         "failed": "Vorversion konnte nicht geladen werden — Entwurf wurde mit einer leeren Sektion gestartet."
+      },
+      "draftRestore": {
+        "message": "Ein nicht gespeicherter Entwurf wurde gefunden. Wiederherstellen oder verwerfen?",
+        "messageAt": "Ein nicht gespeicherter Entwurf von {time} wurde gefunden. Wiederherstellen oder verwerfen?",
+        "restore": "Wiederherstellen",
+        "discard": "Verwerfen"
       },
       "preview": "Vorschau",
       "previewing": "Erzeuge Vorschau …",
@@ -1369,7 +1391,8 @@
       "errorTitle": "Speichern fehlgeschlagen:",
       "errors": {
         "unknown": "Unbekannter Fehler.",
-        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen."
+        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen.",
+        "duplicateOid": "OID „{oid}“ wird von mehreren Items verwendet — Identifikatoren müssen eindeutig sein."
       },
       "palette": {
         "title": "Bausteine",
@@ -1382,8 +1405,46 @@
           "DATE": { "label": "Datum", "description": "Vollständiges Datum (TT.MM.JJJJ)." },
           "BL": { "label": "Boolean", "description": "Ja / Nein als einzelne Checkbox." },
           "TRISTATE_REASON": { "label": "Ja / Nein / Unbekannt + Grund", "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld." },
-          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
+          "PDATE": { "label": "Teildatum", "description": "Jahr oder Monat und Jahr." },
+          "CHOICE_SINGLE": { "label": "Auswahlliste", "description": "Einfachauswahl aus eigenen Optionen." },
+          "CHOICE_MULTI": { "label": "Mehrfachauswahl", "description": "Mehrere Optionen gleichzeitig auswählbar." },
+          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." },
+          "TABLE": { "label": "Wiederholbare Tabelle", "description": "Spalten selbst definieren; Anwender fügt Zeilen hinzu (z. B. Medikamente, Diagnosen)." }
         }
+      },
+      "table": {
+        "section": "Tabellenspalten",
+        "minRows": "Min. Zeilen",
+        "maxRows": "Max. Zeilen",
+        "addColumn": "Spalte hinzufügen",
+        "removeColumn": "Spalte entfernen",
+        "columnLabelPlaceholder": "Spaltenüberschrift",
+        "untitledColumn": "(ohne Titel)",
+        "addRow": "Zeile hinzufügen",
+        "removeRow": "Zeile entfernen",
+        "columnType": {
+          "text": "Text",
+          "number": "Zahl",
+          "date": "Datum",
+          "laterality": "Seite (OD/OS/OU)"
+        },
+        "lateralityEyeOnly": "Nur bei Augen-Diagnosen (ICD-10 H00–H59)"
+      },
+      "terminology": {
+        "section": "Terminologie-Autocomplete",
+        "enable": "Autocomplete für dieses Textfeld aktivieren",
+        "sourceLabel": "Datenquelle",
+        "system": {
+          "icd10gm": "Diagnosen (ICD-10-GM)",
+          "medication": "Medikamente"
+        },
+        "fillLabel": "Felder automatisch befüllen",
+        "fillHint": "Beim Auswählen eines Vorschlags werden Eigenschaften in andere Felder derselben Zeile übernommen.",
+        "addFill": "+ Regel",
+        "removeFill": "Regel entfernen",
+        "propertyPlaceholder": "Eigenschaft wählen …",
+        "availableProps": "Verfügbare Felder aus dieser Quelle:",
+        "noProps": "Diese Quelle liefert keine automatisch befüllbaren Felder."
       },
       "canvas": {
         "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",
@@ -1407,6 +1468,11 @@
       },
       "properties": {
         "title": "Eigenschaften",
+        "options": {
+          "fromCatalog": "Aus Katalog übernehmen …",
+          "refNotice": "Verknüpftes Antwortset — zum Bearbeiten in eigene Optionen umwandeln.",
+          "detach": "In eigene Optionen umwandeln"
+        },
         "clear": "Auswahl aufheben",
         "noSelection": "Wählen Sie ein Item im Canvas, um seine Eigenschaften zu bearbeiten.",
         "labelField": "Item-Name",
@@ -1467,7 +1533,10 @@
         "itemNameInvalidChars": "Item-Name darf nur Buchstaben, Ziffern und Unterstriche enthalten.",
         "dataTypeUnsupported": "Datentyp wird vom Server nicht akzeptiert.",
         "responseTypeUnsupported": "Antworttyp wird vom Server nicht akzeptiert.",
-        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben."
+        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben.",
+        "optionsRequired": "Mindestens eine Antwortoption ist erforderlich.",
+        "fileResponseTypeRequired": "Der Antworttyp „Datei-Upload“ setzt den Datentyp FILE voraus.",
+        "fileDataTypeRequired": "Items vom Datentyp FILE benötigen den Antworttyp „Datei-Upload“."
       }
     },
     "presets": {
@@ -1796,6 +1865,8 @@
     "protocolType_Interventional": "Interventionell",
     "protocolType_Observational": "Beobachtend",
     "phase": "Phase",
+    "requiredField": "Pflichtfeld",
+    "validationSummary": "Bitte die markierten Pflichtfelder ausfüllen.",
     "create": {
       "title": "Neue Studie anlegen",
       "subTrail": "Studienaufbau",
@@ -1808,11 +1879,14 @@
       "intro": "Pflichtfelder sind mit einem Sternchen markiert. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit altem und neuem Wert.",
       "submit": "Änderungen speichern",
       "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
-      "leaveUnchanged": "— Unverändert lassen —"
+      "leaveUnchanged": "— Unverändert lassen —",
+      "parametersLink": "Parameter & Module"
     }
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
+    "roleFilter": "Nach Rolle filtern",
+    "authFilter": "Nach Authentifizierung filtern",
     "subTrail": "Plattform-Nutzerverwaltung",
     "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
     "showingCount": "{visible} von {total} sichtbar",
@@ -2524,7 +2598,8 @@
       "crfName": "CRF",
       "version": "Version",
       "status": "Status",
-      "required": "Pfl.",
+      "required": "Pflicht",
+      "requiredHint": "Pflicht-CRF — muss für den Abschluss der Visite ausgefüllt werden",
       "action": ""
     },
     "action": {
@@ -2532,7 +2607,8 @@
       "startSpa": "Datenerfassung starten →",
       "starting": "Wird gestartet…",
       "markComplete": "Visite abschließen",
-      "completing": "Wird abgeschlossen…"
+      "completing": "Wird abgeschlossen…",
+      "requiredIncomplete": "Alle Pflicht-CRFs müssen abgeschlossen sein, bevor die Visite abgeschlossen werden kann."
     },
     "error": {
       "notFound": "Visite nicht gefunden.",
@@ -2581,6 +2657,7 @@
     }
   },
   "ophth": {
+    "sectionHeading": "Ophthalmologie",
     "studyEye": {
       "label": "Studienauge",
       "helper": "Auf welches Auge sich die Studien-Endpunkte beziehen. Bei nicht-ophthalmologischen Studien leer lassen.",

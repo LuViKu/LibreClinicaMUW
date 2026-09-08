@@ -6,6 +6,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
+import SkeletonRow from '@/components/SkeletonRow.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useStudyStore } from '@/stores/study'
@@ -147,6 +148,54 @@ const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'n
 }
 
 const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${status}`)
+
+/**
+ * Client-side CSV export of the *currently filtered* matrix — the columns the
+ * table shows (subject, gender, study-eye, group, enrolment, one column per
+ * visit with its status, aggregate signed). No backend round-trip; honours the
+ * active filter/search. (Per-subject ODM/CSV/PDF snapshots remain the row-level
+ * SubjectExportButton.) Previously this button had no handler at all.
+ */
+function csvCell(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+function exportCsv(): void {
+  const rows = subjects.filtered
+  if (rows.length === 0) return
+  const evCols = eventColumns.value
+  const header = [
+    t('subjectMatrix.column.subject'),
+    t('subjectMatrix.column.gender'),
+    t('ophth.studyEye.column'),
+    t('subjectMatrix.column.group'),
+    t('subjectMatrix.column.enrolled'),
+    ...evCols.map((c) => c.title || c.label),
+    t('subjectMatrix.column.signed'),
+  ]
+  const lines = [header.map(csvCell).join(',')]
+  for (const s of rows) {
+    lines.push([
+      s.id,
+      s.gender ?? '',
+      s.studyEye ?? '',
+      s.groupLabel ?? '',
+      s.enrolledOn ?? '',
+      ...evCols.map((_c, i) => (s.events[i] ? statusLabel(s.events[i]!.status) : '')),
+      s.signed ? t('subjectMatrix.signed') : '',
+    ].map(csvCell).join(','))
+  }
+  // Prepend a UTF-8 BOM so Excel reads the umlauts correctly.
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `subjects-${auth.user?.activeStudy?.oid ?? 'study'}-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
 
 type Filter =
   | 'all'
@@ -298,7 +347,7 @@ watch(eventColumns, async (next, prev) => {
       </template>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6 min-w-0">
+    <div class="flex-1 px-8 py-6 min-w-0">
       <!-- Phase E.6 — schedule-visit hint from HomeView's
            "Schedule visit" card. The actual dialog lives on
            SubjectDetailView; this banner tells the operator to drill
@@ -324,7 +373,13 @@ watch(eventColumns, async (next, prev) => {
           <h1 class="text-xl font-semibold tracking-tight">{{ t('subjectMatrix.title') }}</h1>
         </div>
         <div class="flex items-center gap-2">
-          <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
+          <button
+            data-testid="subject-matrix-export"
+            :disabled="subjects.filtered.length === 0"
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="subjects.filtered.length === 0 ? t('subjectMatrix.empty') : t('common.export')"
+            @click="exportCsv"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -504,15 +559,16 @@ watch(eventColumns, async (next, prev) => {
                   scope="col"
                   class="sticky right-0 z-20 bg-slate-50 px-3 py-2 border-b border-slate-200 text-right whitespace-nowrap"
                   style="box-shadow: -1px 0 0 #e2e8f0"
-                />
+                >
+                  <span class="sr-only">{{ t('common.actions') }}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="subjects.isLoading">
-                <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-slate-500 italic">
-                  {{ t('common.loading') }}
-                </td>
-              </tr>
+              <template v-if="subjects.isLoading">
+                <tr class="sr-only"><td :colspan="7 + eventColumns.length" role="status">{{ t('common.loading') }}</td></tr>
+                <SkeletonRow :columns="7 + eventColumns.length" :rows="6" />
+              </template>
               <tr v-else-if="subjects.error">
                 <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-rose-700">
                   {{ subjects.error }}
@@ -567,7 +623,7 @@ watch(eventColumns, async (next, prev) => {
                       {{ subject.events[idx]!.openQueries }}
                     </span>
                   </div>
-                  <span v-else class="text-slate-300 text-center block">—</span>
+                  <span v-else class="text-slate-500 text-center block">—</span>
                 </td>
 
                 <td class="px-3 py-2 border-t border-slate-100 whitespace-nowrap">
@@ -590,10 +646,9 @@ watch(eventColumns, async (next, prev) => {
 
         <div class="flex items-center justify-between px-3 py-2 text-[11px] text-slate-500 bg-slate-50/40 border-t border-slate-100">
           <span>{{ t('subjectMatrix.showingCount', { visible: subjects.visibleCount, total: subjects.totalCount }) }}</span>
-          <span>{{ t('subjectMatrix.rowsPerPage') }}: 25</span>
         </div>
       </div>
-    </main>
+    </div>
 
     <StudyMetricsModal :open="metricsModalOpen" @close="metricsModalOpen = false" />
   </div>

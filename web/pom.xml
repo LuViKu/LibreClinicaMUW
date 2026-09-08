@@ -8,7 +8,7 @@
 	<parent>
 		<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 		<artifactId>LibreClinica</artifactId>
-		<version>1.5.0-beta.6-muw</version>
+		<version>1.5.0-beta.7-muw</version>
 	</parent>
 
 	<properties>
@@ -481,12 +481,15 @@
 			<groupId>org.seleniumhq.selenium</groupId>
 			<artifactId>selenium-java</artifactId>
 		</dependency>
-      <!--
+		<!-- #26 terminology ingest streams FHIR via Jackson's low-level
+		     JsonParser/JsonFactory (com.fasterxml.jackson.core) directly, so
+		     jackson-core must be a DECLARED direct dependency — analyze-only
+		     fails the build on "used undeclared" otherwise. Version managed by
+		     the Spring/Jackson BOM. -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-core</artifactId>
 		</dependency>
-      -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>

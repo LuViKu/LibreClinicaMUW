@@ -3,9 +3,11 @@
  *
  * Owns the per-file row state machine that drives the three-artboard
  * SPA view (ready → parsing → review). Each {@link ReviewRow} is keyed
- * by a synthetic `rowId` (uuid-ish) so the operator can drop the same
- * file twice and we'll show two rows; we never use `File.name` as the
- * identity.
+ * by a synthetic `rowId` (uuid-ish); we never use `File.name` as the
+ * identity. A re-dropped file is collapsed on its content identity
+ * ({@code (sha256, scanIndex)}) once hashed — see
+ * {@link dedupSessionRows} — so dropping the same file/folder twice in
+ * one session does not spawn colliding review rows.
  *
  * State machine per row:
  *
@@ -98,6 +100,14 @@ export interface ReviewRow {
    * landed previously. Undefined for non-duplicate rows.
    */
   existingJobId?: number
+  /**
+   * 2026-07-13 — SHA-256 of the row's file bytes, stamped once the
+   * hash has been computed during {@link resolveSurvivors}. Cached on
+   * the row so the session-level dedup can collapse re-added scans on
+   * {@code (fileHash, scan.scanIndex)} without re-hashing large files.
+   * Undefined until hashing completes (or when hashing failed).
+   */
+  fileHash?: string
 }
 
 /** UUID generator that works in jsdom (where crypto.randomUUID is
@@ -287,6 +297,9 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     // the original flow (commit-time uniqueness still gates the
     // race). Hash compute is awaited sequentially per file so the
     // browser doesn't OOM on a parade of large .e2e's.
+    // Hash pass — compute each file's SHA-256 once and stamp it onto
+    // every review row for that file, so both the session-dedup below
+    // and the preflight gate can reuse it without re-hashing.
     const seenFileHash = new Map<File, string>()
     for (const r of allTargets) {
       let hash = seenFileHash.get(r.file)
@@ -295,13 +308,35 @@ export const useOctPortalStore = defineStore('octPortal', () => {
           hash = await sha256OfFile(r.file)
           seenFileHash.set(r.file, hash)
         } catch {
-          // Hash compute failed — skip preflight for this file; commit
-          // path will still catch the duplicate at unique-index time.
+          // Hash compute failed — leave fileHash unset; this row can't
+          // be deduped or preflighted, but the commit-time unique index
+          // still gates the race.
           continue
         }
       }
+      const idx = rows.value.findIndex((x) => x.rowId === r.rowId)
+      if (idx !== -1 && rows.value[idx].fileHash !== hash) {
+        rows.value[idx] = { ...rows.value[idx], fileHash: hash }
+      }
+    }
+
+    // 2026-07-13 — session-level dedup. Collapse re-added scans on
+    // (fileHash, scanIndex): keep the FIRST live row for each scan and
+    // drop any later re-drop of the same file. This is independent of
+    // the backend preflight below (which dedups against ALREADY-
+    // COMMITTED jobs in the DB) — it catches the common case of the
+    // operator dropping the same file/folder twice in one session,
+    // which previously spawned colliding review rows.
+    dedupSessionRows()
+
+    // Preflight only the rows that survived the session-dedup and are
+    // still awaiting resolution with a known hash.
+    const preflightTargets = rows.value.filter(
+      (r) => r.state === 'parsing' && r.scan && r.fileHash != null,
+    )
+    for (const r of preflightTargets) {
       try {
-        const pf = await preflightSha256(hash, r.scan!.scanIndex)
+        const pf = await preflightSha256(r.fileHash!, r.scan!.scanIndex)
         if (pf.exists && pf.jobId != null) {
           const idx = rows.value.findIndex((x) => x.rowId === r.rowId)
           if (idx !== -1) {
@@ -395,6 +430,35 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     rows.value[idx] = { ...rows.value[idx], state: 'error', error: message }
   }
 
+  /**
+   * 2026-07-13 — collapse duplicate review rows on
+   * {@code (fileHash, scan.scanIndex)}. Walks {@code rows} in drop
+   * order, keeping the first row seen for each scan identity and
+   * dropping every later re-add. Rows without a computed hash (hashing
+   * failed, or still pending) carry a null key and are always kept —
+   * we never drop a row we can't positively identify as a duplicate.
+   *
+   * <p>Called from {@link resolveSurvivors} right after the hash pass,
+   * so a re-dropped file never reaches /preflight, /resolve or /commit
+   * as a second row. The backend's own {@code (e2e_sha256, scan_index)}
+   * unique index is the last-resort guard for the cross-session /
+   * concurrent-operator race.
+   */
+  function dedupSessionRows(): void {
+    const seen = new Set<string>()
+    const keep: ReviewRow[] = []
+    for (const r of rows.value) {
+      const key =
+        r.fileHash != null && r.scan ? `${r.fileHash}::${r.scan.scanIndex}` : null
+      if (key !== null) {
+        if (seen.has(key)) continue // drop this re-add
+        seen.add(key)
+      }
+      keep.push(r)
+    }
+    if (keep.length !== rows.value.length) rows.value = keep
+  }
+
   /** Confirm a single row — calls /commit with the pre-selected event,
    *  flips state to `committing` while in flight, then `committed`.
    *
@@ -448,6 +512,17 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     parkFlag: boolean,
   ): Promise<void> {
     if (!row.scan) return
+    // 2026-07-13 — the backend accepts EXACTLY ONE of
+    // {park, eventCrfId, studyEventId} (PublicOctUploadController:264).
+    // A resolved visit that already has an open CRF carries BOTH
+    // eventCrfId and studyEventId, so passing them straight through
+    // tripped "park, eventCrfId and studyEventId are mutually
+    // exclusive". Collapse here: prefer eventCrfId (binds the concrete
+    // CRF); drop studyEventId when it is present. Planned visits
+    // (eventCrfId null) fall through to studyEventId; the park flow
+    // passes both null.
+    const boundEventCrfId = parkFlag ? null : eventCrfId
+    const boundStudyEventId = parkFlag || boundEventCrfId != null ? null : studyEventId
     flipRowState(row.rowId, 'committing')
     // Reset progress to 0; the XHR.upload events drive it from there.
     uploadPct.value.set(row.rowId, 0)
@@ -459,8 +534,8 @@ export const useOctPortalStore = defineStore('octPortal', () => {
           scanDate: isoLocalDate(row.scan.scanDate),
           laterality: row.scan.laterality,
           scanIndex: row.scan.scanIndex,
-          eventCrfId,
-          studyEventId,
+          eventCrfId: boundEventCrfId,
+          studyEventId: boundStudyEventId,
           park: parkFlag,
         },
         (pct) => {

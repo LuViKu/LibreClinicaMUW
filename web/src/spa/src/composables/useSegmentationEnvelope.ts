@@ -143,7 +143,12 @@ export function useSegmentationEnvelope(jobId: Ref<number | null>): {
 
   async function refresh(): Promise<void> {
     const id = jobId.value
-    if (id == null) {
+    // 2026-07-10 — also reject NaN, not just null. RetinalMetricsView resolves
+    // the per-subject deep link (/subjects/{label}/jobs/{n}) asynchronously and
+    // uses NaN as its "unresolved jobId" sentinel; NaN passes a bare `== null`
+    // check, so we were firing GET /retinal-jobs/NaN/segmentation on every
+    // deep-link mount (400 + a spurious audit row + a console error toast).
+    if (id == null || !Number.isFinite(id)) {
       envelope.value = null
       return
     }
