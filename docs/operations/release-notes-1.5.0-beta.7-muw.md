@@ -18,6 +18,7 @@ The dominant theme is **#26 — coded terminology (diagnoses + medications) acro
 - **Binding persistence** (`crf_item_terminology`). The full binding — code system **+ fill map** — persists per item, so a saved table **auto-fills sibling cells at live entry**: pick a diagnosis and the ICD-Code fills; pick a medication and Dosis/Einheit fill. Fill targets are stored as the generated item oc_oid so fork and entry resolve the sibling cell identically.
 - **Fork-from-version recovery.** Forking a CRF to a new version now recovers its **repeating tables, terminology bindings (system + fill map), conditional-display (show-when) rules, and row bounds (min/max)** — all previously dropped by the fork endpoint.
 - **Save-side correctness.** SPA-authored equality show-when rules now persist to `scd_item_metadata`; the builder flags **duplicate item OIDs** at Validieren (two items sharing an OID silently merged before); draft-restore reseeds the UID + column-key counters so a restored draft plus a newly-added item can't collide.
+- **Repeating-table row bounds are enforced, not just stored.** Min/max row counts are clamped in the table editor and the invariant (`1 ≤ min ≤ max`) is enforced in the authoring store, so a table cannot be authored with bounds the runtime would reject.
 
 ### Accessibility · UX · permissions · tests
 
@@ -27,6 +28,10 @@ The dominant theme is **#26 — coded terminology (diagnoses + medications) acro
 - **CRF-builder resilience** — draft **autosave** guards against idle-logout data loss; **.xls export** works for in-app-authored CRFs.
 - **Dependencies** — 13 Dependabot advisories patched via package-manager overrides.
 - **e2e** — eCRF fill+save, real-login smoke + a11y suites, cross-role visual-capture journey, CI wiring.
+
+### Security
+
+- **CodeQL alerts cleared.** Five code-scanning alerts raised against the #26 terminology code are resolved: **log injection** (CWE-117) in the terminology-search failure path — the user-provided query and code system are no longer logged at all, only the exception message; **sensitive-info-in-logs** (3×, HIGH) in the medication-ingest scheduler, where the config-derived GitLab URL is no longer interpolated into log messages (it is the public ELGA termgit endpoint and carries no credential, so this was a false positive, but the taint flow was removed rather than dismissed); and an unused `CRFBean` parameter on `authoringRequestFromVersion`.
 
 ## Migrations
 
