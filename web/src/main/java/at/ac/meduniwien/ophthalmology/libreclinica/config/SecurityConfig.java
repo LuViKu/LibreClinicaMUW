@@ -164,6 +164,11 @@ public class SecurityConfig {
                         // trust-the-reverse-proxy gate; nurses don't have
                         // accounts. See PublicBcvaEntryController.
                         "/pages/api/v1/public/bcva-entry/**",
+                        // DR-025 — internal DICOM ingest handoff from the
+                        // dicom-scp sidecar. Trust-the-reverse-proxy exposure +
+                        // a shared-secret X-MUW-Dicom-Token gate in
+                        // DicomIngestApiController; never expose publicly.
+                        "/pages/api/v1/internal/dicom-ingest/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",
