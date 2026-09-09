@@ -2895,6 +2895,28 @@
     "submit": "Save",
     "submitting": "Saving …"
   },
+  "imagePortal": {
+    "brandSuffix": "MUW",
+    "portalLabel": "Image Upload",
+    "noLoginRequired": "No login required",
+    "heroTitle": "Upload a fundus image",
+    "heroSubtitle": "Drag the image here or ",
+    "heroBrowse": "choose a file",
+    "formatNote": "JPEG or PNG · max 64 MB",
+    "patientIdLabel": "Patient ID (optional)",
+    "patientIdPlaceholder": "e.g. HAE-001",
+    "lateralityLabel": "Eye (optional)",
+    "dateLabel": "Capture date (optional)",
+    "uploadButton": "Upload",
+    "uploading": "Uploading …",
+    "successTitle": "Image uploaded",
+    "successBody": "The image has been submitted and is ready for reconciliation.",
+    "uploadAnother": "Upload another image",
+    "errorTitle": "Upload failed",
+    "patientFound": "Patient found: {label} ({study})",
+    "patientNotFound": "No matching patient ID found",
+    "patientAmbiguous": "Multiple matches — resolve during reconciliation"
+  },
   "octPortal": {
     "topbar": {
       "brandSuffix": "MUW",

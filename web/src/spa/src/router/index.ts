@@ -386,6 +386,17 @@ const router = createRouter({
       component: () => import('@/views/OctUploadPortalView.vue'),
       meta: { public: true, title: 'OCT-Upload-Portal' },
     },
+    /* DR-025 — public Remidio image-upload portal. Same posture as the
+       OCT/BCVA portals: the institutional reverse proxy is the only access
+       gate; the backend whitelists /pages/api/v1/public/image-upload/**
+       under permitAll(). Operators bookmark /app/image-upload and upload
+       the FOP fundus JPEG/PNG. */
+    {
+      path: '/image-upload',
+      name: 'image-upload-portal',
+      component: () => import('@/views/ImageUploadPortalView.vue'),
+      meta: { public: true, title: 'Bild-Upload-Portal' },
+    },
     /**
      * 2026-06-24 user-feedback round — public BCVA-entry portal.
      * Same posture as the OCT-upload portal (DR-022 sibling): the

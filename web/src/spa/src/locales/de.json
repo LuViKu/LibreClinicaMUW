@@ -2895,6 +2895,28 @@
     "submit": "Speichern",
     "submitting": "Speichere …"
   },
+  "imagePortal": {
+    "brandSuffix": "MUW",
+    "portalLabel": "Bild-Upload",
+    "noLoginRequired": "Kein Login erforderlich",
+    "heroTitle": "Fundusbild hochladen",
+    "heroSubtitle": "Bild hierher ziehen oder ",
+    "heroBrowse": "Datei wählen",
+    "formatNote": "JPEG oder PNG · max. 64 MB",
+    "patientIdLabel": "Patienten-ID (optional)",
+    "patientIdPlaceholder": "z. B. HAE-001",
+    "lateralityLabel": "Auge (optional)",
+    "dateLabel": "Aufnahmedatum (optional)",
+    "uploadButton": "Hochladen",
+    "uploading": "Wird hochgeladen …",
+    "successTitle": "Bild hochgeladen",
+    "successBody": "Das Bild wurde übermittelt und steht zur Zuordnung bereit.",
+    "uploadAnother": "Weiteres Bild hochladen",
+    "errorTitle": "Upload fehlgeschlagen",
+    "patientFound": "Patient gefunden: {label} ({study})",
+    "patientNotFound": "Keine passende Patienten-ID gefunden",
+    "patientAmbiguous": "Mehrere Treffer — bei der Zuordnung auflösen"
+  },
   "octPortal": {
     "topbar": {
       "brandSuffix": "MUW",
