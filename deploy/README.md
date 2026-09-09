@@ -281,6 +281,24 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    `LIBRECLINICA_RETINAL_IMAGE_TAG` is also set in the env file (it pins
    the sidecar independently of the app).
 
+3. If the release adds new `datainfo.properties` keys, re-run the setup
+   script so they land in `/opt/libreclinica/config/datainfo.properties`.
+   It is idempotent, and the config merge only ever APPENDS keys the file
+   lacks — existing values (SMTP, adminEmail, dbPass, retinal URLs) are
+   left untouched:
+   ```sh
+   sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh
+   sudo systemctl restart libreclinica
+   ```
+   Use the copy under `/opt/libreclinica/deploy/` — it is refreshed from git
+   on every run. The `/root/libreclinica-setup/` bootstrap copy is frozen at
+   first-install and skips newer config logic.
+
+   Skipping this is not fatal but it is silent: a key missing from the host
+   file makes the app fall back to the calling code's hardcoded default, so
+   a new feature flag reads as "off" with nothing in the log to explain it.
+   The release notes call out when a release adds keys.
+
 ### Rebuild a single image without cutting a release
 
 For ad-hoc rebuilds (e.g. dep CVE refresh on the sidecar, no app change):
