@@ -21,6 +21,9 @@
 !/retinal-inference
 !/muw-e2e-converter
 
+# DR-025 — the dicom-scp sidecar Dockerfile also builds from the repo root.
+!/dicom-scp
+
 # ignore build files
 /*/target
 

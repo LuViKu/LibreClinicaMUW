@@ -58,6 +58,10 @@ services:
       # The viewer's artifact-stream endpoint reads them back. Shared with
       # the retinal-preprocess service at the same in-container path.
       - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
+      # DR-025: shared DICOM ingest store — the dicom-scp sidecar writes the
+      # received Part-10 + preview here; the app records the paths and (in the
+      # reconciliation inbox) reads them back through the same bind.
+      - ./docker/dicom-ingest:/var/lib/libreclinica/dicom-ingest
     develop:
       watch:
         # restart on config file changes
@@ -221,6 +225,34 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # DR-025 — DICOM C-STORE receiver for the Optomed fundus modality. Opt-in via
+  # the `dicom` profile; publishes the DICOM port so the device can push, and
+  # shares the ingest store with the app. Not started by default.
+  dicom-scp:
+    build:
+      context: .
+      dockerfile: dicom-scp/Dockerfile
+    image: libreclinica-muw-dicom-scp:latest
+    container_name: libreclinica-muw-dicom-scp-1
+    profiles: ["dicom"]
+    ports:
+      # DICOM C-STORE listener — the modality connects here.
+      - "11112:11112"
+    environment:
+      DICOM_SCP_AE_TITLE: ${DICOM_SCP_AE_TITLE:-LIBRECLINICA}
+      DICOM_SCP_PORT: "11112"
+      # Empty = accept any calling AE (TEST ONLY); set to the Optomed's AE title.
+      DICOM_SCP_ALLOWED_CALLING_AE_TITLES: ${DICOM_SCP_ALLOWED_CALLING_AE_TITLES:-}
+      DICOM_SCP_STORE_PATH: /var/lib/libreclinica/dicom-ingest
+      DICOM_SCP_INGEST_URL: ${DICOM_SCP_INGEST_URL:-http://libreclinica:8080/LibreClinica/pages/api/v1/internal/dicom-ingest}
+      # Must match core.dicom.ingest.token on the app; blank leaves the sidecar
+      # unable to start (both must be set together to exercise the DICOM path).
+      DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
+    volumes:
+      # Shared ingest store — the sidecar writes, the app reads (same bind).
+      - ./docker/dicom-ingest:/var/lib/libreclinica/dicom-ingest
+    restart: on-failure
 
   # Fluid model-runner (RetInsight fluidseg, IRF/SRF/PED). Behind the `optima`
   # compose profile because its image needs vendor wheels (runners/fluid/wheels/)
