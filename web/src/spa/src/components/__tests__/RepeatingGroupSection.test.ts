@@ -145,6 +145,34 @@ describe('RepeatingGroupSection', () => {
     expect(wrapper.findAll('[data-testid="terminology-autocomplete-input"]')).toHaveLength(1)
   })
 
+  it('renders TerminologyAutocomplete from the persisted binding on an UNMARKED oid', async () => {
+    // Regression: the cell used to gate solely on the OID marker
+    // (terminologySystemFromOid), so a CRF whose binding lives in
+    // crf_item_terminology — anything authored through the JSON versions
+    // endpoint rather than the canvas — hydrated `autocomplete` correctly and
+    // then still rendered a plain text box. The autocomplete appeared in the
+    // builder preview but never at data entry.
+    const itemsByOid: Record<string, CrfItem> = {
+      OCON_DIAG: {
+        oid: 'OCON_DIAG', label: 'Diagnose', dataType: 'string', required: false,
+        autocomplete: { system: 'icd10gm', fills: [{ fromProperty: 'code', toKey: 'OCON_CODE' }] },
+      } as CrfItem,
+      OCON_CODE: { oid: 'OCON_CODE', label: 'ICD-10 Code', dataType: 'string', required: false } as CrfItem,
+    }
+    const group: CrfItemGroup = {
+      oid: 'OCON_TBL', label: 'Ocular conditions', repeatMax: 20,
+      itemOids: ['OCON_DIAG', 'OCON_CODE'],
+      rows: [{ ordinal: 1, values: {} }],
+    }
+    const wrapper = mount(RepeatingGroupSection, {
+      props: { group, itemsByOid, ...I18N },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="terminology-autocomplete-input"]')).toHaveLength(1)
+    expect(wrapper.findComponent(TerminologyAutocomplete).props('system')).toBe('icd10gm')
+  })
+
   it('#26 binding store — a pick fans fill-map properties into sibling cells', async () => {
     const itemsByOid: Record<string, CrfItem> = {
       RX_DRUG_TXMED: {

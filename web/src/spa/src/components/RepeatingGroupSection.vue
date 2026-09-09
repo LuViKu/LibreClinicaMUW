@@ -66,6 +66,19 @@ const emit = defineEmits<{
  * fills. Each fill's toKey is the target column's item OID (persisted that way
  * on save), so it addresses the sibling cell directly.
  */
+/**
+ * The code system bound to a column, or null when it is a plain field.
+ *
+ * <p>Prefers the persisted binding (`crf_item_terminology`, hydrated onto
+ * `item.autocomplete` by the event-CRF fetch) and falls back to the legacy
+ * OID marker so pre-binding-store CRFs keep their autocomplete.
+ */
+function terminologySystemFor(item: CrfItem): string | null {
+  const bound = item.autocomplete?.system
+  if (bound && bound.trim() !== '') return bound.trim()
+  return terminologySystemFromOid(item.oid)
+}
+
 function onPick(rowOrdinal: number, item: CrfItem, pick: TermPick): void {
   for (const fill of item.autocomplete?.fills ?? []) {
     const v = pick.properties[fill.fromProperty]
@@ -164,13 +177,25 @@ function rawValueFor(rowOrdinal: number, itemOid: string): string {
               :key="item.oid"
               class="py-1.5 px-2 align-top"
             >
-              <!-- #26 Slice 3 — a terminology-bound column (system encoded in
-                   its OID) renders the live autocomplete at data entry. -->
-              <template v-if="terminologySystemFromOid(item.oid)">
+              <!-- A terminology-bound column renders the live autocomplete at
+                   data entry. The binding store (#26 Slice 3) is authoritative:
+                   `item.autocomplete.system` comes from `crf_item_terminology`
+                   via the event-CRF fetch and also carries the fill map that
+                   `onPick` fans out into sibling cells.
+
+                   The OID marker (`_TXMED` / `_TXICD`) is the older Slice-3
+                   stopgap and stays as a fallback so CRFs authored before the
+                   binding store keep working. Gating on the marker ALONE was a
+                   bug: a CRF whose binding lives in `crf_item_terminology` —
+                   anything authored through the JSON versions endpoint rather
+                   than the canvas — hydrated `autocomplete` correctly and then
+                   rendered a plain text box, so the autocomplete showed in the
+                   builder preview but never at data entry. -->
+              <template v-if="terminologySystemFor(item)">
                 <TerminologyAutocomplete
                   :id="inputId(row.ordinal, item.oid)"
                   :model-value="rawValueFor(row.ordinal, item.oid)"
-                  :system="terminologySystemFromOid(item.oid) as string"
+                  :system="terminologySystemFor(item) as string"
                   :disabled="disabled"
                   @update:model-value="(v: string) => emit('set-value', { rowOrdinal: row.ordinal, itemOid: item.oid, value: v === '' ? null : v })"
                   @pick="(p: TermPick) => onPick(row.ordinal, item, p)"
