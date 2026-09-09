@@ -580,6 +580,29 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 
 ---
 
+## DR-025 — DICOM C-STORE receiver for handheld fundus cameras
+
+**Date:** 2026-09-09
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-024; `StudySubjectFinder` / `EventCandidate` (`core/.../service/retinal/`); `dicom_ingest` (`migration/lc-muw-2026-09-09-dicom-ingest.xml`); `RetinalArtifactStorageService`; `RetinalResultsApiController`; HealthAEye CRF (#26). Implementation plan: [dicom-fundus-receiver.md](dicom-fundus-receiver.md).
+
+**Context.** MedUni Wien wants handheld fundus cameras (HealthAEye) to send images to the platform over DICOM — for testing first, then routine capture. The camera is a Storage SCU that pushes objects via C-STORE; the platform must offer a Storage SCP (receiver), which does not exist today. These are 2-D **fundus photographs** — a distinct, simpler modality than the OCT `bscan.dcm` path (DR-024): they need storing + attaching to a subject/event/CRF, not GPU inference. The platform already has the reusable pieces — `StudySubjectFinder` matches an image to a subject + event, and `retinal_inference_job` is a proven persisted queue.
+
+**Decision.** Add a DICOM **C-STORE Storage SCP** as an **app-VM sidecar** (`dicom-scp`), alongside the existing `retinal-preprocess` posture — not the stateless GPU cluster, since this receiver persists. It reuses the sidecar's Python DICOM stack (`pydicom` + **`pynetdicom`** — chosen over in-process `dcm4che` to keep the raw DICOM socket out of Tomcat and reuse existing Python tooling). On C-STORE it writes the Part-10 object + a rendered preview to an ingest store, extracts identity/exam tags, and hands off to the app over a shared-secret internal endpoint, which inserts a row into a new **`dicom_ingest`** queue with **nullable** binding. Binding is **reconciliation-queue-first** — an operator links each unbound image to a subject/event/CRF in a new SPA inbox — then a later slice adds **PatientID/AccessionNumber auto-match** on receipt via the same finder. PatientName/ID are kept (images stay on-prem; the platform is the trusted custodian — no redaction, unlike DR-022's outbound path).
+
+**Consequences.**
+
+- A new opt-in sidecar + the `dicom_ingest` table (migration `lc-muw-2026-09-09-dicom-ingest.xml`); all gated behind `core.dicom.scp.enabled` — unset is a no-op for existing deploys (mirrors DR-022's opt-in discipline).
+- The receiver runs on the app VM (persists PHI, reaches the camera network); the GPU-sidecar "never persists" invariant is untouched, and no fundus image reaches the GPU cluster.
+- Operator workflow gains a "DICOM inbox" reconciliation view with audited bind/dismiss.
+
+**Reversible** — `core.dicom.scp.enabled=false` + not deploying the sidecar; the `dicom_ingest` table is additive and unused when off. No change to the retinal or CRF paths.
+
+**Out of scope (for this DR).** MWL SCP; MPPS; C-FIND/C-MOVE query-retrieve; DICOM-TLS (single-site internal for v1); OCT/SEG creation (the DR-022 follow-up); PACS forwarding; multi-institution AE-title management.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
