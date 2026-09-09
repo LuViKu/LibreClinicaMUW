@@ -44,8 +44,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * <p>The {@code dicom-scp} sidecar (pynetdicom Storage SCP) receives a fundus
  * image the HealthAEye camera pushes, writes the Part-10 object + a rendered
  * preview into the <em>shared</em> ingest store, then POSTs the DICOM metadata
- * plus those (shared-volume) paths here. We INSERT one {@code dicom_ingest} row
- * in {@code UNBOUND} state for the SPA reconciliation inbox (Slice 2).
+ * plus those (shared-volume) paths here. We INSERT one {@code image_ingest} row
+ * ({@code source_kind='dicom'}) in {@code UNBOUND} state for the SPA
+ * reconciliation inbox (Slice 2). The Remidio upload page is the sibling
+ * {@code source_kind='upload'} ingress into the same queue.
  *
  * <p>This is NOT a browser endpoint. It is whitelisted {@code permitAll} in
  * {@code SecurityConfig} and gated instead by the shared-secret
@@ -142,11 +144,15 @@ public class DicomIngestApiController {
 
     private long insert(Connection c, DicomIngestRequest r) throws SQLException {
         LocalDate studyDate = parseIsoDateOrNull(r.studyDate());
-        String sql = "INSERT INTO dicom_ingest ("
+        // source_kind + content_type are literals here — this endpoint is the
+        // DICOM ingress. The Remidio upload path INSERTs source_kind='upload'.
+        String sql = "INSERT INTO image_ingest ("
+                + "source_kind, content_type, "
                 + "sop_instance_uid, sop_class_uid, study_instance_uid, series_instance_uid, "
                 + "modality, patient_id, patient_name, accession_number, study_date, laterality, "
-                + "source_ae_title, dicom_path, preview_png_path, received_at, status"
-                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNBOUND')";
+                + "source_ae_title, stored_path, preview_png_path, received_at, status"
+                + ") VALUES ('dicom', 'application/dicom', "
+                + "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNBOUND')";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, r.sopInstanceUid());
             ps.setString(2, r.sopClassUid());
@@ -176,7 +182,7 @@ public class DicomIngestApiController {
 
     private Long findBySopInstanceUid(Connection c, String sopInstanceUid) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT dicom_ingest_id FROM dicom_ingest WHERE sop_instance_uid = ?")) {
+                "SELECT image_ingest_id FROM image_ingest WHERE sop_instance_uid = ?")) {
             ps.setString(1, sopInstanceUid);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getLong(1) : null;

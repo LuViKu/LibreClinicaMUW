@@ -1,6 +1,8 @@
 # DICOM C-STORE receiver for handheld fundus cameras (HealthAEye)
 
-**Status:** Accepted as [DR-025](decision-record.md#dr-025--dicom-c-store-receiver-for-handheld-fundus-cameras) (2026-09-09) — implementation started; **Slice 0 (schema + config) landed**. Q1 resolved: **pynetdicom sidecar**. This doc is the living implementation plan.
+**Status:** Accepted as [DR-025](decision-record.md) (2026-09-09) — in progress.
+
+> **Design updated 2026-09-09.** "HealthAEye" is the *study*, not a camera. Two devices, different capabilities: **Remidio FOP** (an iPhone + browser → a **web upload page**, no DICOM) and **Optomed** (a full **DICOM modality** → **C-STORE**; a Modality Worklist SCP so images auto-identify is **deferred**). One source-agnostic **`image_ingest`** queue (`source_kind` = `upload` | `dicom`) + one reconciliation inbox serves both. **Landed:** Slice 0 (schema + config), Slice 1a (DICOM ingest endpoint), schema generalized to `image_ingest`. Sections below still read DICOM-first and are being generalized as slices land.
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Purpose:** Let handheld fundus cameras (HealthAEye) push images into the platform over a DICOM interface, for testing first, then routine capture.
 
