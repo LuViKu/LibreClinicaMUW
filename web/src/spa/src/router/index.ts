@@ -375,6 +375,16 @@ const router = createRouter({
       component: () => import('@/views/PatientsOverviewView.vue'),
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
+    /* DR-025 — authenticated fundus-image reconciliation inbox. Staff bind
+       UNBOUND image_ingest rows (Optomed C-STORE + Remidio upload) to a
+       subject/event/CRF. Role-gated here (advisory); the backend enforces
+       role + site visibility. */
+    {
+      path: '/image-inbox',
+      name: 'image-ingest-inbox',
+      component: () => import('@/views/ImageInboxView.vue'),
+      meta: { title: 'Bild-Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
+    },
     /* Phase E retinal-inference (Wave C) — public OCT-upload portal.
        Unauthenticated drag-and-drop ingest at /app/oct-upload; the
        backend whitelists /pages/api/v1/public/oct-upload/** under

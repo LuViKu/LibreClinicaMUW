@@ -95,5 +95,6 @@
   <include  file="migration/lc-muw-2026-08-12-terminology.xml"/>
   <include  file="migration/lc-muw-2026-08-12-crf-item-terminology.xml"/>
   <include  file="migration/lc-muw-2026-09-09-image-ingest.xml"/>
+  <include  file="migration/lc-muw-2026-09-09-audit-event-type-image-ingest.xml"/>
 </databaseChangeLog>
 

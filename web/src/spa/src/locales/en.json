@@ -2895,6 +2895,21 @@
     "submit": "Save",
     "submitting": "Saving …"
   },
+  "imageInbox": {
+    "title": "Image inbox",
+    "cardDesc": "Assign incoming fundus images to patients and visits.",
+    "subtitle": "{count} unbound images",
+    "loading": "Loading …",
+    "empty": "No unbound images.",
+    "noPreview": "No preview",
+    "patientId": "Patient ID",
+    "eye": "Eye",
+    "suggestion": "Suggestion: {label} ({study})",
+    "bindSuggested": "Bind suggestion",
+    "bind": "Bind …",
+    "dismiss": "Dismiss",
+    "dismissConfirm": "Really dismiss this image?"
+  },
   "imagePortal": {
     "brandSuffix": "MUW",
     "portalLabel": "Image Upload",

@@ -2895,6 +2895,21 @@
     "submit": "Speichern",
     "submitting": "Speichere …"
   },
+  "imageInbox": {
+    "title": "Bild-Eingang",
+    "cardDesc": "Eingehende Fundusbilder Patienten und Visiten zuordnen.",
+    "subtitle": "{count} nicht zugeordnete Bilder",
+    "loading": "Wird geladen …",
+    "empty": "Keine nicht zugeordneten Bilder.",
+    "noPreview": "Keine Vorschau",
+    "patientId": "Patienten-ID",
+    "eye": "Auge",
+    "suggestion": "Vorschlag: {label} ({study})",
+    "bindSuggested": "Vorschlag zuordnen",
+    "bind": "Zuordnen …",
+    "dismiss": "Verwerfen",
+    "dismissConfirm": "Dieses Bild wirklich verwerfen?"
+  },
   "imagePortal": {
     "brandSuffix": "MUW",
     "portalLabel": "Bild-Upload",
