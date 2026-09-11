@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from pynetdicom import AE, AllStoragePresentationContexts, evt
+from pynetdicom import AE, AllStoragePresentationContexts, VerificationPresentationContexts, evt
 
 from . import config, store, tags
 from .ingest_client import post_ingest
@@ -50,8 +50,10 @@ def build_ae() -> AE:
     settings = config.settings
     ae = AE(ae_title=settings.ae_title)
     # Accept every storage SOP class — we don't know the exact class the Optomed
-    # emits until a real sample; the ingest is object-agnostic anyway.
-    ae.supported_contexts = AllStoragePresentationContexts
+    # emits until a real sample; the ingest is object-agnostic anyway. Plus
+    # Verification (C-ECHO) so a modality's "test connection" succeeds — pynetdicom
+    # auto-responds to C-ECHO on a supported Verification context.
+    ae.supported_contexts = AllStoragePresentationContexts + VerificationPresentationContexts
     allowed = settings.allowed_calling_aes
     if allowed:
         ae.require_calling_aet = list(allowed)
