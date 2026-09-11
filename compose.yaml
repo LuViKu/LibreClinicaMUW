@@ -246,6 +246,9 @@ services:
       DICOM_SCP_ALLOWED_CALLING_AE_TITLES: ${DICOM_SCP_ALLOWED_CALLING_AE_TITLES:-}
       DICOM_SCP_STORE_PATH: /var/lib/libreclinica/dicom-ingest
       DICOM_SCP_INGEST_URL: ${DICOM_SCP_INGEST_URL:-http://libreclinica:8080/LibreClinica/pages/api/v1/internal/dicom-ingest}
+      # Modality Worklist source (C-FIND) — the Lumo pulls scheduled visits from
+      # here, then C-STOREs the study carrying our accession → auto-bound.
+      DICOM_SCP_WORKLIST_URL: ${DICOM_SCP_WORKLIST_URL:-http://libreclinica:8080/LibreClinica/pages/api/v1/internal/dicom-worklist}
       # Must match core.dicom.ingest.token on the app; blank leaves the sidecar
       # unable to start (both must be set together to exercise the DICOM path).
       DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}

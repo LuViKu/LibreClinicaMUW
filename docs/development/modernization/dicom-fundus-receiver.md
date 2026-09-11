@@ -2,7 +2,7 @@
 
 **Status:** Accepted as [DR-025](decision-record.md) (2026-09-09) — in progress.
 
-> **Design updated 2026-09-09.** "HealthAEye" is the *study*, not a camera. Two devices, different capabilities: **Remidio FOP** (an iPhone + browser → a **web upload page**, no DICOM) and **Optomed** (a full **DICOM modality** → **C-STORE**; a Modality Worklist SCP so images auto-identify is **deferred**). One source-agnostic **`image_ingest`** queue (`source_kind` = `upload` | `dicom`) + one reconciliation inbox serves both. **Landed:** Slice 0 (schema + config), Slice 1a (DICOM ingest endpoint), schema generalized to `image_ingest`. Sections below still read DICOM-first and are being generalized as slices land.
+> **Design updated 2026-09-09.** "HealthAEye" is the *study*, not a camera. Two devices, different capabilities: **Remidio FOP** (an iPhone + browser → a **web upload page**, no DICOM) and **Optomed Lumo** (a full **DICOM modality** → **Modality Worklist + C-STORE**: it pulls our worklist, then stores the study carrying accession `LC<study_event_id>`, which the ingest endpoint auto-binds to the visit — MWL was un-deferred 2026-09-11 after a live capture showed the Lumo won't send an association without a worklist). One source-agnostic **`image_ingest`** queue (`source_kind` = `upload` | `dicom`) + one reconciliation inbox serves both. **Landed:** Slice 0 (schema + config), Slice 1a (DICOM ingest endpoint), schema generalized to `image_ingest`. Sections below still read DICOM-first and are being generalized as slices land.
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Purpose:** Let handheld fundus cameras (HealthAEye) push images into the platform over a DICOM interface, for testing first, then routine capture.
 
@@ -238,5 +238,5 @@ core.dicom.ingest.token=                     # shared secret, sidecar → app ha
 
 ### Deferred / out of scope
 
-MWL SCP · MPPS · C-FIND/C-MOVE query-retrieve · DICOM-TLS · OCT/SEG (DR-022
+MPPS · image Query/Retrieve (study-root C-FIND/C-MOVE) · DICOM-TLS · OCT/SEG (DR-022
 follow-up) · PACS forwarding · multi-institution AE management.

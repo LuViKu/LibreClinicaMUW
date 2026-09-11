@@ -20,6 +20,8 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.sql.DataSource;
 
@@ -47,7 +49,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * plus those (shared-volume) paths here. We INSERT one {@code image_ingest} row
  * ({@code source_kind='dicom'}) in {@code UNBOUND} state for the SPA
  * reconciliation inbox (Slice 2). The Remidio upload page is the sibling
- * {@code source_kind='upload'} ingress into the same queue.
+ * {@code source_kind='upload'} ingress into the same queue. A study that carries
+ * our Modality Worklist accession ({@code LC<study_event_id>}, issued by
+ * {@link DicomWorklistApiController} via the sidecar) is instead landed already
+ * {@code BOUND} to that visit ({@code match_policy='worklist'}).
  *
  * <p>This is NOT a browser endpoint. It is whitelisted {@code permitAll} in
  * {@code SecurityConfig} and gated instead by the shared-secret
@@ -120,9 +125,9 @@ public class DicomIngestApiController {
                 // Re-sent C-STORE — idempotent, return the existing row.
                 return ResponseEntity.ok(dupBody(existing));
             }
-            long id = insert(c, req);
-            LOG.info("DICOM ingest: enqueued dicom_ingest_id={}", id);
-            return ResponseEntity.status(201).body(Map.of("dicomIngestId", id, "status", "UNBOUND"));
+            Inserted ins = insert(c, req);
+            LOG.info("DICOM ingest: image_ingest_id={} status={}", ins.id(), ins.status());
+            return ResponseEntity.status(201).body(Map.of("imageIngestId", ins.id(), "status", ins.status()));
         } catch (SQLException e) {
             // Race on the sop_instance_uid unique index — treat as idempotent.
             if ("23505".equals(e.getSQLState())) {
@@ -139,20 +144,61 @@ public class DicomIngestApiController {
     }
 
     private static Map<String, Object> dupBody(long id) {
-        return Map.of("dicomIngestId", id, "status", "UNBOUND", "duplicate", true);
+        return Map.of("imageIngestId", id, "duplicate", true);
     }
 
-    private long insert(Connection c, DicomIngestRequest r) throws SQLException {
+    /** Worklist-issued accession shape ({@code LC<study_event_id>}) — see dicom_scp.worklist. */
+    private static final Pattern WORKLIST_ACCESSION = Pattern.compile("^LC(\\d{1,9})$");
+
+    private record WorklistTarget(int studySubjectId, int studyEventId, Integer eventCrfId) {}
+
+    private record Inserted(long id, String status) {}
+
+    /**
+     * Resolve a worklist accession to its visit: the study_event's subject plus its
+     * first live event_crf (null when the CRF hasn't been opened yet — a planned
+     * visit binds at event level). Returns null for foreign / unknown accessions.
+     */
+    private WorklistTarget resolveWorklistTarget(Connection c, String accession) throws SQLException {
+        if (accession == null) return null;
+        Matcher m = WORKLIST_ACCESSION.matcher(accession.trim());
+        if (!m.matches()) return null;
+        int studyEventId = Integer.parseInt(m.group(1));
+        String sql = "SELECT se.study_subject_id, ec.event_crf_id "
+                + "  FROM study_event se "
+                + "  LEFT JOIN event_crf ec ON ec.study_event_id = se.study_event_id "
+                + "   AND ec.status_id NOT IN (5, 7) "
+                + " WHERE se.study_event_id = ? AND se.subject_event_status_id NOT IN (5, 7) "
+                + " ORDER BY ec.event_crf_id ASC NULLS LAST LIMIT 1";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int ss = rs.getInt("study_subject_id");
+                int ecf = rs.getInt("event_crf_id");
+                Integer eventCrfId = rs.wasNull() ? null : ecf;
+                return new WorklistTarget(ss, studyEventId, eventCrfId);
+            }
+        }
+    }
+
+    private Inserted insert(Connection c, DicomIngestRequest r) throws SQLException {
         LocalDate studyDate = parseIsoDateOrNull(r.studyDate());
+        // A study answering one of our worklist items comes back with our accession
+        // → land it BOUND to that visit. Anything else lands UNBOUND for the inbox.
+        WorklistTarget target = resolveWorklistTarget(c, r.accessionNumber());
+        String status = target != null ? "BOUND" : "UNBOUND";
         // source_kind + content_type are literals here — this endpoint is the
         // DICOM ingress. The Remidio upload path INSERTs source_kind='upload'.
         String sql = "INSERT INTO image_ingest ("
                 + "source_kind, content_type, "
                 + "sop_instance_uid, sop_class_uid, study_instance_uid, series_instance_uid, "
                 + "modality, patient_id, patient_name, accession_number, study_date, laterality, "
-                + "source_ae_title, stored_path, preview_png_path, received_at, status"
+                + "source_ae_title, stored_path, preview_png_path, received_at, "
+                + "status, match_policy, bound_study_subject_id, bound_study_event_id, "
+                + "bound_event_crf_id, bound_at"
                 + ") VALUES ('dicom', 'application/dicom', "
-                + "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNBOUND')";
+                + "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, r.sopInstanceUid());
             ps.setString(2, r.sopClassUid());
@@ -171,11 +217,30 @@ public class DicomIngestApiController {
             ps.setString(11, r.sourceAeTitle());
             ps.setString(12, r.dicomPath());
             ps.setString(13, r.previewPngPath());
-            ps.setTimestamp(14, Timestamp.from(Instant.now()));
+            Timestamp now = Timestamp.from(Instant.now());
+            ps.setTimestamp(14, now);
+            ps.setString(15, status);
+            if (target == null) {
+                ps.setNull(16, Types.VARCHAR);
+                ps.setNull(17, Types.INTEGER);
+                ps.setNull(18, Types.INTEGER);
+                ps.setNull(19, Types.INTEGER);
+                ps.setNull(20, Types.TIMESTAMP);
+            } else {
+                ps.setString(16, "worklist");
+                ps.setInt(17, target.studySubjectId());
+                ps.setInt(18, target.studyEventId());
+                if (target.eventCrfId() == null) {
+                    ps.setNull(19, Types.INTEGER);
+                } else {
+                    ps.setInt(19, target.eventCrfId());
+                }
+                ps.setTimestamp(20, now);
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) return keys.getLong(1);
-                throw new SQLException("dicom_ingest INSERT returned no PK");
+                if (keys.next()) return new Inserted(keys.getLong(1), status);
+                throw new SQLException("image_ingest INSERT returned no PK");
             }
         }
     }

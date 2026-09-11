@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 
 from pynetdicom import AE, AllStoragePresentationContexts, VerificationPresentationContexts, evt
+from pynetdicom.sop_class import ModalityWorklistInformationFind
 
-from . import config, store, tags
+from . import config, store, tags, worklist
 from .ingest_client import post_ingest
 
 LOG = logging.getLogger("dicom_scp.server")
@@ -46,6 +47,40 @@ def _handle_store(event) -> int:
     return _SUCCESS
 
 
+def _handle_find(event):
+    """Modality Worklist C-FIND: serve LibreClinica's scheduled visits.
+
+    pynetdicom C-FIND handlers are generators yielding (status, identifier):
+    0xFF00 per match, 0xFE00 on cancel; returning ends with 0x0000 Success.
+    """
+    settings = config.settings
+    calling_ae = _calling_ae(event)
+    if not settings.worklist_url:
+        LOG.warning("worklist C-FIND from AE '%s' but DICOM_SCP_WORKLIST_URL is unset", calling_ae)
+        yield 0xC000, None  # Failure: unable to process
+        return
+
+    query = event.identifier
+    day_from, day_to = worklist.requested_date_range(query)
+    try:
+        entries = worklist.fetch_entries(
+            settings.worklist_url, settings.ingest_token, day_from, day_to,
+            settings.worklist_timeout_s)
+    except Exception as exc:  # noqa: BLE001 — never let a fetch error kill the SCP
+        LOG.error("worklist fetch failed (%s) — answering C-FIND with failure", type(exc).__name__)
+        yield 0xC000, None
+        return
+
+    matches = worklist.filter_entries(entries, query)
+    LOG.info("worklist C-FIND from AE '%s' for %s..%s: %d of %d entries match",
+             calling_ae, day_from, day_to, len(matches), len(entries))
+    for entry in matches:
+        if event.is_cancelled:
+            yield 0xFE00, None
+            return
+        yield 0xFF00, worklist.build_item(entry, calling_ae)
+
+
 def build_ae() -> AE:
     settings = config.settings
     ae = AE(ae_title=settings.ae_title)
@@ -54,6 +89,9 @@ def build_ae() -> AE:
     # Verification (C-ECHO) so a modality's "test connection" succeeds — pynetdicom
     # auto-responds to C-ECHO on a supported Verification context.
     ae.supported_contexts = AllStoragePresentationContexts + VerificationPresentationContexts
+    # Modality Worklist — the Lumo pulls its scheduled patients from us (C-FIND)
+    # and then C-STOREs the study carrying that identity.
+    ae.add_supported_context(ModalityWorklistInformationFind)
     allowed = settings.allowed_calling_aes
     if allowed:
         ae.require_calling_aet = list(allowed)
@@ -69,5 +107,9 @@ def serve() -> None:
     LOG.info("dicom-scp Storage SCP listening on %s:%s as AE '%s' (allow-list: %s)",
              settings.host, settings.port, settings.ae_title,
              ", ".join(sorted(settings.allowed_calling_aes)) or "any")
+    LOG.info("Modality Worklist: %s",
+             f"serving from {settings.worklist_url}" if settings.worklist_url
+             else "DISABLED (DICOM_SCP_WORKLIST_URL unset)")
     ae.start_server((settings.host, settings.port), block=True,
-                    evt_handlers=[(evt.EVT_C_STORE, _handle_store)])
+                    evt_handlers=[(evt.EVT_C_STORE, _handle_store),
+                                  (evt.EVT_C_FIND, _handle_find)])

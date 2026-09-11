@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     ingest_token: str = ""
     ingest_timeout_s: int = 30
 
+    # --- Modality Worklist (C-FIND) source — the app's internal worklist endpoint ---
+    # The Optomed Lumo's DICOM flow is worklist-driven. Optional: when blank the
+    # SCP still advertises the MWL context but answers C-FIND with a failure.
+    # Shares ingest_token as the secret.
+    worklist_url: str = ""
+    worklist_timeout_s: int = 15
+
     @property
     def allowed_calling_aes(self) -> set[str]:
         return {t.strip() for t in self.allowed_calling_ae_titles.split(",") if t.strip()}

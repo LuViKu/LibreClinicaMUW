@@ -8,9 +8,13 @@ shared ingest store, and hands them to the app's internal ingest endpoint
 enqueues an `image_ingest` row (`source_kind='dicom'`) for the SPA reconciliation
 inbox.
 
-Plain C-STORE only. A **Modality Worklist SCP** — so images auto-identify from a
-worklist we issue instead of landing in the inbox — is a deferred follow-up.
-The Remidio FOP (an iPhone + browser) has no DICOM export and uses the separate
+It also serves a **Modality Worklist** (C-FIND): the Optomed Lumo's standard-DICOM
+integration is worklist-driven — the camera pulls the scheduled patient/exam
+from us, then C-STOREs the study carrying our accession (`LC<study_event_id>`)
+and a deterministic StudyInstanceUID, so the ingest endpoint **auto-binds** it
+to that visit (no reconciliation needed). Worklist entries come from the app's
+`GET /pages/api/v1/internal/dicom-worklist?from=&to=` (scheduled `study_event`
+rows). The Remidio FOP (an iPhone + browser) has no DICOM and uses the separate
 upload page instead.
 
 ## Configuration (`DICOM_SCP_*`)
@@ -23,6 +27,7 @@ upload page instead.
 | `DICOM_SCP_STORE_PATH` | `/var/lib/libreclinica/dicom-ingest` | shared ingest store (also mounted by the app) |
 | `DICOM_SCP_INGEST_URL` | *(required)* | the app internal ingest endpoint |
 | `DICOM_SCP_INGEST_TOKEN` | *(required)* | shared secret; must equal `core.dicom.ingest.token` on the app |
+| `DICOM_SCP_WORKLIST_URL` | *(optional)* | the app internal worklist endpoint; blank = C-FIND answers failure |
 
 `INGEST_URL` + `INGEST_TOKEN` are required — the SCP refuses to start without them.
 

@@ -173,6 +173,10 @@ public class SecurityConfig {
                         // a shared-secret X-MUW-Dicom-Token gate in
                         // DicomIngestApiController; never expose publicly.
                         "/pages/api/v1/internal/dicom-ingest/**",
+                        // DR-025 — Modality Worklist source for the sidecar
+                        // (same shared-secret gate; the Lumo pulls scheduled
+                        // visits via the sidecar's C-FIND).
+                        "/pages/api/v1/internal/dicom-worklist/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",
