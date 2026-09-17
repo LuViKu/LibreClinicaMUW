@@ -123,6 +123,51 @@ jobs:
             echo "::endgroup::"
           done
 
+  sidecar-tests:
+    # 2026-09-17 — until now NO Python test ran in CI: the sidecars
+    # (`dicom-scp`, `muw-e2e-converter`, `retinal-inference`) all ship
+    # pytest suites that were only ever run by hand. The DR-025 DICOM
+    # receiver in particular is the seam a medical device talks to, so
+    # its handler tests belong in the gate. Independent of the Maven
+    # jobs — no `needs:` — so it fails fast and in parallel.
+    name: Python sidecar tests (${{ matrix.pkg }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [dicom-scp, muw-e2e-converter, retinal-inference]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # retinal-inference's preprocess tests import the converter package
+      # (DR-024 keeps them separate so the GPU cluster can skip it), so it
+      # is installed alongside. Editable installs keep `src/` layouts importable.
+      - name: Install ${{ matrix.pkg }}
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.pkg }}" = "retinal-inference" ]; then
+            pip install -e ./muw-e2e-converter
+          fi
+          pip install -e ./${{ matrix.pkg }}
+          pip install 'pytest==8.3.3'
+
+      - name: Run ${{ matrix.pkg }} tests
+        run: python -m pytest ${{ matrix.pkg }}/tests -q --junitxml=pytest-${{ matrix.pkg }}.xml
+
+      - name: Upload pytest report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.pkg }}
+          path: pytest-${{ matrix.pkg }}.xml
+          retention-days: 7
+
   integration-tests:
     # Runs the DB-dependent tests excluded from the default surefire run
     # (DAO + rule-service tests extending HibernateOcDbTestCase / OcDbTestCase).
