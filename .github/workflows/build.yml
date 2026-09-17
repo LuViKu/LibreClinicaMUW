@@ -59,6 +59,56 @@ jobs:
           fi
           echo "OK — no active mock-code reintroductions."
 
+      # DR-025 — no patient-identifying strings in logs.
+      #
+      # The DICOM worklist and both upload portals handle subject labels,
+      # patient names and patient IDs that arrive from a camera or an operator.
+      # A log line carrying one puts identifying data into a file that is
+      # rotated, shipped and read by people with no clinical role, and it is
+      # the kind of thing that gets added in a hurry while debugging a device
+      # on a clinic bench. Counts and ids are fine; the values are not.
+      #
+      # Mark a deliberate exception with a trailing `// phi-safe:` comment
+      # explaining why the value is not identifying.
+      - name: No patient identifiers in log statements
+        run: |
+          set +e
+          matches=$(grep -rnE \
+            'LOG\.(trace|debug|info|warn|error)\(.*(patientId|patientName|subjectLabel|PatientName|PatientID)' \
+            web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api \
+            --include='*.java' | grep -v 'phi-safe:')
+          py=$(grep -rnE \
+            '(logger|log|LOG)\.(debug|info|warning|error)\(.*(PatientName|PatientID|patient_name|patient_id)' \
+            dicom-scp/src | grep -v 'phi-safe:')
+          set -e
+          if [ -n "$matches" ] || [ -n "$py" ]; then
+            echo "::error::A log statement carries a patient identifier:"
+            echo "$matches"
+            echo "$py"
+            echo
+            echo "Log a count or an internal id instead. If the value really is not"
+            echo "identifying, append a '// phi-safe:' comment saying why."
+            exit 1
+          fi
+          echo "OK — no patient identifiers in log statements."
+
+      # The nAMD workspace can render fabricated visits for development. A URL
+      # parameter that fills a clinical screen with invented fluid volumes must
+      # not survive into a production bundle, so every read of it stays behind
+      # import.meta.env.DEV, which Vite resolves at build time.
+      - name: Mock-data query parameter stays development-only
+        run: |
+          set +e
+          matches=$(grep -rn 'query\.mock' web/src/spa/src \
+            --include='*.ts' --include='*.vue' | grep -v '__tests__' | grep -v 'import\.meta\.env\.DEV')
+          set -e
+          if [ -n "$matches" ]; then
+            echo "::error::A mock-data query parameter is readable in a production build:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "OK — mock-data query parameter is development-only."
+
       - name: Maven package (with unit tests)
         run: mvn -B -ntp -DskipTests=false package
 
