@@ -136,6 +136,14 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         // nAMD Slice 3 (#229, 2026-06-20) — item_data source tracking.
         this.setTypeExpected(13, TypeNames.STRING); // source_kind
         this.setTypeExpected(14, TypeNames.LONG);   // source_retinal_job_id (BIGINT)
+        // DR-025 P1-5 (2026-09-18) — which ingested image ticked this value.
+        //
+        // These positions mirror the physical column order of item_data, and
+        // the queries here are SELECT *. A column added to the table without a
+        // line added here makes every read of item_data fail with "column
+        // index N is not within the allowed range" — which surfaces far away
+        // from the migration, in the audit log and the CRF screens.
+        this.setTypeExpected(15, TypeNames.LONG);   // source_image_ingest_id (BIGINT)
     }
 
     @Override
