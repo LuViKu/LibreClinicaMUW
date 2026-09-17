@@ -20,8 +20,6 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.sql.DataSource;
 
@@ -126,6 +124,12 @@ public class DicomIngestApiController {
                 return ResponseEntity.ok(dupBody(existing));
             }
             Inserted ins = insert(c, req);
+            if (ins.boundStudyEventId() != null) {
+                // Nobody clicked "bind" — the worklist accession did. Leave a
+                // trail so a bound image can always be explained.
+                ImageIngestBinding.writeSystemBindAudit(
+                        dataSource, ins.id(), "worklist", ins.boundStudyEventId());
+            }
             LOG.info("DICOM ingest: image_ingest_id={} status={}", ins.id(), ins.status());
             return ResponseEntity.status(201).body(Map.of("imageIngestId", ins.id(), "status", ins.status()));
         } catch (SQLException e) {
@@ -147,46 +151,25 @@ public class DicomIngestApiController {
         return Map.of("imageIngestId", id, "duplicate", true);
     }
 
-    /** Worklist-issued accession shape ({@code LC<study_event_id>}) — see dicom_scp.worklist. */
-    private static final Pattern WORKLIST_ACCESSION = Pattern.compile("^LC(\\d{1,9})$");
-
-    private record WorklistTarget(int studySubjectId, int studyEventId, Integer eventCrfId) {}
-
-    private record Inserted(long id, String status) {}
+    private record Inserted(long id, String status, Integer boundStudyEventId) {}
 
     /**
-     * Resolve a worklist accession to its visit: the study_event's subject plus its
-     * first live event_crf (null when the CRF hasn't been opened yet — a planned
-     * visit binds at event level). Returns null for foreign / unknown accessions.
+     * Resolve a worklist accession to its visit. Shared with the upload portal
+     * via {@link ImageIngestBinding}; foreign or stale accessions resolve to
+     * null and the image lands UNBOUND for the inbox.
      */
-    private WorklistTarget resolveWorklistTarget(Connection c, String accession) throws SQLException {
-        if (accession == null) return null;
-        Matcher m = WORKLIST_ACCESSION.matcher(accession.trim());
-        if (!m.matches()) return null;
-        int studyEventId = Integer.parseInt(m.group(1));
-        String sql = "SELECT se.study_subject_id, ec.event_crf_id "
-                + "  FROM study_event se "
-                + "  LEFT JOIN event_crf ec ON ec.study_event_id = se.study_event_id "
-                + "   AND ec.status_id NOT IN (5, 7) "
-                + " WHERE se.study_event_id = ? AND se.subject_event_status_id NOT IN (5, 7) "
-                + " ORDER BY ec.event_crf_id ASC NULLS LAST LIMIT 1";
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, studyEventId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                int ss = rs.getInt("study_subject_id");
-                int ecf = rs.getInt("event_crf_id");
-                Integer eventCrfId = rs.wasNull() ? null : ecf;
-                return new WorklistTarget(ss, studyEventId, eventCrfId);
-            }
-        }
+    private ImageIngestBinding.EventTarget resolveWorklistTarget(Connection c, String accession)
+            throws SQLException {
+        Integer studyEventId = ImageIngestBinding.studyEventIdFromAccession(accession);
+        return studyEventId == null ? null
+                : ImageIngestBinding.resolveEventTarget(c, studyEventId);
     }
 
     private Inserted insert(Connection c, DicomIngestRequest r) throws SQLException {
         LocalDate studyDate = parseIsoDateOrNull(r.studyDate());
         // A study answering one of our worklist items comes back with our accession
         // → land it BOUND to that visit. Anything else lands UNBOUND for the inbox.
-        WorklistTarget target = resolveWorklistTarget(c, r.accessionNumber());
+        ImageIngestBinding.EventTarget target = resolveWorklistTarget(c, r.accessionNumber());
         String status = target != null ? "BOUND" : "UNBOUND";
         // source_kind + content_type are literals here — this endpoint is the
         // DICOM ingress. The Remidio upload path INSERTs source_kind='upload'.
@@ -239,7 +222,10 @@ public class DicomIngestApiController {
             }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) return new Inserted(keys.getLong(1), status);
+                if (keys.next()) {
+                    return new Inserted(keys.getLong(1), status,
+                            target == null ? null : target.studyEventId());
+                }
                 throw new SQLException("image_ingest INSERT returned no PK");
             }
         }

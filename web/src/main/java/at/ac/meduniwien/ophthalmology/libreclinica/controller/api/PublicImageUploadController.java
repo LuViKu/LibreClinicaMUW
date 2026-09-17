@@ -153,7 +153,8 @@ public class PublicImageUploadController {
             @RequestPart("file") MultipartFile file,
             @RequestParam(value = "patientId", required = false) String patientId,
             @RequestParam(value = "laterality", required = false) String laterality,
-            @RequestParam(value = "studyDate", required = false) String studyDate) {
+            @RequestParam(value = "studyDate", required = false) String studyDate,
+            @RequestParam(value = "studyEventId", required = false) Integer studyEventId) {
 
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
@@ -183,10 +184,31 @@ public class PublicImageUploadController {
         }
 
         try (Connection c = dataSource.getConnection()) {
+            // When the operator picked a visit on the form, file the image
+            // straight against it instead of queueing it for reconciliation.
+            // The event id alone cannot be trusted on an unauthenticated form,
+            // so the visit must be live, scheduled or in data entry, AND on the
+            // acquisition date submitted — otherwise this is a 400, not a
+            // silent fall back to UNBOUND (the operator asked for a binding and
+            // deserves to know it did not happen).
+            ImageIngestBinding.EventTarget target = null;
+            if (studyEventId != null) {
+                target = ImageIngestBinding.resolveEventTargetForPortal(c, studyEventId, sd);
+                if (target == null) {
+                    deleteQuietly(saved);
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "that visit is not scheduled for the submitted date"));
+                }
+            }
             long id = insert(c, saved.toString(), file.getOriginalFilename(), contentType,
-                    blankToNull(patientId), lat, sd);
-            LOG.info("public image upload: enqueued image_ingest_id={}", id);
-            return ResponseEntity.status(201).body(Map.of("imageIngestId", id, "status", "UNBOUND"));
+                    blankToNull(patientId), lat, sd, target);
+            if (target != null) {
+                ImageIngestBinding.writeSystemBindAudit(dataSource, id, "portal", target.studyEventId());
+            }
+            LOG.info("public image upload: enqueued image_ingest_id={} status={}",
+                    id, target == null ? "UNBOUND" : "BOUND");
+            return ResponseEntity.status(201).body(Map.of(
+                    "imageIngestId", id, "status", target == null ? "UNBOUND" : "BOUND"));
         } catch (SQLException e) {
             deleteQuietly(saved);
             LOG.error("public image upload: INSERT failed: {}", e.getMessage());
@@ -195,12 +217,17 @@ public class PublicImageUploadController {
     }
 
     private long insert(Connection c, String storedPath, String originalFilename, String contentType,
-                        String patientId, String laterality, LocalDate studyDate) throws SQLException {
+                        String patientId, String laterality, LocalDate studyDate,
+                        ImageIngestBinding.EventTarget target) throws SQLException {
         // The uploaded JPEG/PNG is itself viewable, so preview_png_path = stored_path.
+        // A visit-picked upload lands BOUND with match_policy='portal' and no
+        // bound_by_user_id — the form has no user; the audit row carries the trail.
         String sql = "INSERT INTO image_ingest ("
                 + "source_kind, stored_path, preview_png_path, original_filename, content_type, "
-                + "patient_id, laterality, study_date, received_at, status"
-                + ") VALUES ('upload', ?, ?, ?, ?, ?, ?, ?, ?, 'UNBOUND')";
+                + "patient_id, laterality, study_date, received_at, status, "
+                + "match_policy, bound_study_subject_id, bound_study_event_id, "
+                + "bound_event_crf_id, bound_at"
+                + ") VALUES ('upload', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, storedPath);
             ps.setString(2, storedPath);
@@ -213,7 +240,26 @@ public class PublicImageUploadController {
             } else {
                 ps.setObject(7, studyDate);
             }
-            ps.setTimestamp(8, Timestamp.from(Instant.now()));
+            Timestamp now = Timestamp.from(Instant.now());
+            ps.setTimestamp(8, now);
+            ps.setString(9, target == null ? "UNBOUND" : "BOUND");
+            if (target == null) {
+                ps.setNull(10, Types.VARCHAR);
+                ps.setNull(11, Types.INTEGER);
+                ps.setNull(12, Types.INTEGER);
+                ps.setNull(13, Types.INTEGER);
+                ps.setNull(14, Types.TIMESTAMP);
+            } else {
+                ps.setString(10, "portal");
+                ps.setInt(11, target.studySubjectId());
+                ps.setInt(12, target.studyEventId());
+                if (target.eventCrfId() == null) {
+                    ps.setNull(13, Types.INTEGER);
+                } else {
+                    ps.setInt(13, target.eventCrfId());
+                }
+                ps.setTimestamp(14, now);
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getLong(1);

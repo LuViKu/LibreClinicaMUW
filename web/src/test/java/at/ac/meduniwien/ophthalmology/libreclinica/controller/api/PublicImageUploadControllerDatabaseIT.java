@@ -82,10 +82,17 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
 
     @AfterEach
     void cleanRows() throws Exception {
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "DELETE FROM image_ingest WHERE source_kind = 'upload'")) {
-            ps.executeUpdate();
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            // Audit rows first — they reference the ingest rows by id, and a
+            // leftover row would make the next test's audit assertion ambiguous.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM audit_log_event WHERE audit_table = 'image_ingest'")) {
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM image_ingest WHERE source_kind = 'upload'")) {
+                ps.executeUpdate();
+            }
         }
     }
 
@@ -237,6 +244,100 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
             assertTrue(stored.startsWith(STORE_ROOT), "file must stay inside the ingest store");
             assertTrue(Files.exists(stored), "the image bytes should be on disk");
         }
+    }
+
+    /* ---------------- /commit with a picked visit ---------------- */
+
+    /**
+     * When the operator picks the visit on the form, the image is filed against
+     * it directly — the reconciliation inbox is for images that arrive without
+     * one, not the default path.
+     */
+    @Test
+    void commit_withPickedVisit_landsBoundAndAudited() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "fundus.png", "image/png", PNG);
+        // study_event 3 = M-001 / V3 Day 90 / 2021-01-04, status 3.
+        mockMvc().perform(multipart("/api/v1/public/image-upload/commit")
+                .file(file)
+                .param("patientId", "M-001")
+                .param("studyDate", "2021-01-04")
+                .param("studyEventId", "3"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("BOUND"));
+
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT image_ingest_id, status, match_policy, bound_study_subject_id, "
+                             + "bound_study_event_id, bound_event_crf_id, bound_by_user_id, bound_at "
+                             + "FROM image_ingest WHERE source_kind = 'upload'");
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next());
+            assertEquals("BOUND", rs.getString("status"));
+            assertEquals("portal", rs.getString("match_policy"));
+            assertEquals(1, rs.getInt("bound_study_subject_id"));
+            assertEquals(3, rs.getInt("bound_study_event_id"));
+            assertEquals(3, rs.getInt("bound_event_crf_id"));
+            rs.getInt("bound_by_user_id");
+            assertTrue(rs.wasNull(), "a form with no login must not claim an operator");
+            assertNotNull(rs.getTimestamp("bound_at"));
+
+            long id = rs.getLong("image_ingest_id");
+            try (PreparedStatement a = c.prepareStatement(
+                    "SELECT user_id, new_value FROM audit_log_event "
+                            + "WHERE audit_table = 'image_ingest' AND entity_id = ? "
+                            + "AND audit_log_event_type_id = ?")) {
+                a.setInt(1, (int) id);
+                a.setInt(2, AuditTypeIds.IMAGE_BIND);
+                try (ResultSet ars = a.executeQuery()) {
+                    assertTrue(ars.next(), "a system bind must still leave an audit row");
+                    ars.getInt("user_id");
+                    assertTrue(ars.wasNull(), "the system bind has no user");
+                    assertTrue(ars.getString("new_value").contains("match_policy=portal"),
+                            "the audit row should record how the bind happened");
+                }
+            }
+        }
+    }
+
+    /**
+     * The form is unauthenticated, so a bare event id cannot be trusted: it must
+     * belong to a live visit on the date being filed. A mismatch is refused
+     * outright rather than silently degraded to UNBOUND — the operator asked for
+     * a binding and needs to know it did not happen.
+     */
+    @Test
+    void commit_withVisitOnADifferentDate_is400AndStoresNothing() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "fundus.png", "image/png", PNG);
+        mockMvc().perform(multipart("/api/v1/public/image-upload/commit")
+                .file(file)
+                .param("studyDate", "1999-01-01")
+                .param("studyEventId", "3"))
+                .andExpect(status().isBadRequest());
+        assertEquals(0, uploadRowCount());
+    }
+
+    /** A completed visit is not a filing target either. */
+    @Test
+    void commit_withCompletedVisit_is400() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "fundus.png", "image/png", PNG);
+        // study_event 1 = M-001 / V1 / 2020-10-06, status 4 (completed).
+        mockMvc().perform(multipart("/api/v1/public/image-upload/commit")
+                .file(file)
+                .param("studyDate", "2020-10-06")
+                .param("studyEventId", "1"))
+                .andExpect(status().isBadRequest());
+        assertEquals(0, uploadRowCount());
+    }
+
+    @Test
+    void commit_withUnknownVisit_is400() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "fundus.png", "image/png", PNG);
+        mockMvc().perform(multipart("/api/v1/public/image-upload/commit")
+                .file(file)
+                .param("studyDate", "2021-01-04")
+                .param("studyEventId", "999999"))
+                .andExpect(status().isBadRequest());
+        assertEquals(0, uploadRowCount());
     }
 
     /** A camera that uploads without hints still gets its image queued. */
