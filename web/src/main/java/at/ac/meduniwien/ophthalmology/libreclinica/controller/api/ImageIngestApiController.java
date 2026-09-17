@@ -201,9 +201,11 @@ public class ImageIngestApiController {
 
         String previewPath;
         String contentType;
+        Integer boundSubjectId = null;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT preview_png_path, content_type FROM image_ingest WHERE image_ingest_id = ?")) {
+                     "SELECT preview_png_path, content_type, bound_study_subject_id "
+                     + "FROM image_ingest WHERE image_ingest_id = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
@@ -211,10 +213,22 @@ public class ImageIngestApiController {
                 }
                 previewPath = rs.getString("preview_png_path");
                 contentType = rs.getString("content_type");
+                int ss = rs.getInt("bound_study_subject_id");
+                if (!rs.wasNull()) boundSubjectId = ss;
             }
         } catch (SQLException e) {
             LOG.error("image preview lookup failed for {}: {}", id, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "preview lookup failed"));
+        }
+        // An UNBOUND image belongs to no study yet — the reconciliation inbox is
+        // cross-study by design (reconcile role gate above). Once BOUND, the image
+        // is that subject's data: enforce the same site/study visibility as
+        // RetinalResultsApiController.streamArtifact does for OCT artifacts, so
+        // ids can't be enumerated across studies.
+        if (boundSubjectId != null) {
+            ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId(boundSubjectId), session,
+                    "This image belongs to a study you cannot access");
+            if (visGuard != null) return visGuard;
         }
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for image " + id));
