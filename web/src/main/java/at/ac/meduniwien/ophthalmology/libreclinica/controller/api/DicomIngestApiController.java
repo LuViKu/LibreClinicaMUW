@@ -27,6 +27,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -129,6 +131,11 @@ public class DicomIngestApiController {
                 // trail so a bound image can always be explained.
                 ImageIngestBinding.writeSystemBindAudit(
                         dataSource, ins.id(), "worklist", ins.boundStudyEventId());
+                // The image on the visit is the evidence that this camera was
+                // used on it. No operator is involved in a worklist bind, so
+                // the tick is attributed to the system service account.
+                ImageIngestBinding.tickPerformed(
+                        dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(), null);
             }
             LOG.info("DICOM ingest: image_ingest_id={} status={}", ins.id(), ins.status());
             return ResponseEntity.status(201).body(Map.of("imageIngestId", ins.id(), "status", ins.status()));
@@ -151,7 +158,17 @@ public class DicomIngestApiController {
         return Map.of("imageIngestId", id, "duplicate", true);
     }
 
-    private record Inserted(long id, String status, Integer boundStudyEventId) {}
+    private record Inserted(long id, String status, Integer boundStudyEventId,
+                            ImageIngestBinding.EventTarget target, String deviceKey) {}
+
+    /**
+     * Which camera sent this. The calling AE title is the device's own
+     * identifier and is what the performed-item map is keyed on; lower-cased so
+     * a device that presents itself inconsistently is still one device.
+     */
+    private static String deviceKeyOf(DicomIngestRequest r) {
+        return IngestPerformedItemPopulator.normaliseDeviceKey(r.sourceAeTitle());
+    }
 
     /**
      * Resolve a worklist accession to its visit. Shared with the upload portal
@@ -174,57 +191,62 @@ public class DicomIngestApiController {
         // source_kind + content_type are literals here — this endpoint is the
         // DICOM ingress. The Remidio upload path INSERTs source_kind='upload'.
         String sql = "INSERT INTO image_ingest ("
-                + "source_kind, content_type, "
+                + "source_kind, content_type, device, "
                 + "sop_instance_uid, sop_class_uid, study_instance_uid, series_instance_uid, "
                 + "modality, patient_id, patient_name, accession_number, study_date, laterality, "
                 + "source_ae_title, stored_path, preview_png_path, received_at, "
                 + "status, match_policy, bound_study_subject_id, bound_study_event_id, "
                 + "bound_event_crf_id, bound_at"
-                + ") VALUES ('dicom', 'application/dicom', "
+                + ") VALUES ('dicom', 'application/dicom', ?, "
                 + "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, r.sopInstanceUid());
-            ps.setString(2, r.sopClassUid());
-            ps.setString(3, r.studyInstanceUid());
-            ps.setString(4, r.seriesInstanceUid());
-            ps.setString(5, r.modality());
-            ps.setString(6, r.patientId());
-            ps.setString(7, r.patientName());
-            ps.setString(8, r.accessionNumber());
+            // `device` is the one column that always answers "which camera",
+            // whichever ingress an image came through. For DICOM that is the
+            // calling AE title; source_ae_title keeps the raw DICOM value.
+            ps.setString(1, deviceKeyOf(r));
+            ps.setString(2, r.sopInstanceUid());
+            ps.setString(3, r.sopClassUid());
+            ps.setString(4, r.studyInstanceUid());
+            ps.setString(5, r.seriesInstanceUid());
+            ps.setString(6, r.modality());
+            ps.setString(7, r.patientId());
+            ps.setString(8, r.patientName());
+            ps.setString(9, r.accessionNumber());
             if (studyDate == null) {
-                ps.setNull(9, Types.DATE);
+                ps.setNull(10, Types.DATE);
             } else {
-                ps.setObject(9, studyDate);
+                ps.setObject(10, studyDate);
             }
-            ps.setString(10, r.laterality());
-            ps.setString(11, r.sourceAeTitle());
-            ps.setString(12, r.dicomPath());
-            ps.setString(13, r.previewPngPath());
+            ps.setString(11, r.laterality());
+            ps.setString(12, r.sourceAeTitle());
+            ps.setString(13, r.dicomPath());
+            ps.setString(14, r.previewPngPath());
             Timestamp now = Timestamp.from(Instant.now());
-            ps.setTimestamp(14, now);
-            ps.setString(15, status);
+            ps.setTimestamp(15, now);
+            ps.setString(16, status);
             if (target == null) {
-                ps.setNull(16, Types.VARCHAR);
-                ps.setNull(17, Types.INTEGER);
+                ps.setNull(17, Types.VARCHAR);
                 ps.setNull(18, Types.INTEGER);
                 ps.setNull(19, Types.INTEGER);
-                ps.setNull(20, Types.TIMESTAMP);
+                ps.setNull(20, Types.INTEGER);
+                ps.setNull(21, Types.TIMESTAMP);
             } else {
-                ps.setString(16, "worklist");
-                ps.setInt(17, target.studySubjectId());
-                ps.setInt(18, target.studyEventId());
+                ps.setString(17, "worklist");
+                ps.setInt(18, target.studySubjectId());
+                ps.setInt(19, target.studyEventId());
                 if (target.eventCrfId() == null) {
-                    ps.setNull(19, Types.INTEGER);
+                    ps.setNull(20, Types.INTEGER);
                 } else {
-                    ps.setInt(19, target.eventCrfId());
+                    ps.setInt(20, target.eventCrfId());
                 }
-                ps.setTimestamp(20, now);
+                ps.setTimestamp(21, now);
             }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
                     return new Inserted(keys.getLong(1), status,
-                            target == null ? null : target.studyEventId());
+                            target == null ? null : target.studyEventId(),
+                            target, deviceKeyOf(r));
                 }
                 throw new SQLException("image_ingest INSERT returned no PK");
             }

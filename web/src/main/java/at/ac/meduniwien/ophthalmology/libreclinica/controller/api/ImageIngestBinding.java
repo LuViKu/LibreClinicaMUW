@@ -21,6 +21,8 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
+
 /**
  * Shared "which visit does this image belong to" resolution for the DR-025
  * ingress paths, plus the audit row for binds that no operator performed.
@@ -152,5 +154,62 @@ final class ImageIngestBinding {
             LOG.warn("could not audit the system bind of image_ingest {}: {}",
                     imageIngestId, e.getMessage());
         }
+    }
+
+    /**
+     * Tick the visit's "this modality was performed" box for a bind that just
+     * happened. See {@link IngestPerformedItemPopulator} for what it will and
+     * will not overwrite.
+     *
+     * <p>Called from all three bind paths so the behaviour cannot diverge
+     * between an operator reconciling in the inbox, a worklist auto-bind and a
+     * portal upload that carried its visit.
+     *
+     * <p>Never throws. The image is bound, which is the outcome that matters
+     * clinically; an un-ticked checklist box is visible on the form and can be
+     * ticked by hand.
+     *
+     * @param actorUserId the binding user, or {@code null} for a machine bind —
+     *                    which is then attributed to the locked {@code system}
+     *                    account rather than to a person
+     */
+    static void tickPerformed(DataSource dataSource, long imageIngestId, EventTarget target,
+                              String sourceKind, String deviceKey, Integer actorUserId) {
+        if (target == null || target.eventCrfId() == null) return;
+        try {
+            Integer studyId = studyIdOfSubject(dataSource, target.studySubjectId());
+            if (studyId == null) return;
+            int actor = actorUserId != null && actorUserId > 0
+                    ? actorUserId
+                    : resolveSystemActor(dataSource);
+            if (actor <= 0) {
+                LOG.warn("performed-tick skipped for image {}: no system service account to attribute it to",
+                        imageIngestId);
+                return;
+            }
+            new IngestPerformedItemPopulator(dataSource).markPerformed(
+                    imageIngestId, target.eventCrfId(), sourceKind, deviceKey, studyId, actor);
+        } catch (RuntimeException e) {
+            LOG.warn("performed-tick failed for image {}: {}", imageIngestId, e.getMessage());
+        }
+    }
+
+    private static Integer studyIdOfSubject(DataSource dataSource, int studySubjectId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_id FROM study_subject WHERE study_subject_id = ?")) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : null;
+            }
+        } catch (SQLException e) {
+            LOG.warn("could not resolve the study of study_subject {}: {}", studySubjectId, e.getMessage());
+            return null;
+        }
+    }
+
+    private static int resolveSystemActor(DataSource dataSource) {
+        Integer id = IngestPerformedItemPopulator.systemUserId(dataSource);
+        return id == null ? 0 : id;
     }
 }

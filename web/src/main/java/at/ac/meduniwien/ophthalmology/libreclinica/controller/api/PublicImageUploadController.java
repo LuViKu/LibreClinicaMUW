@@ -155,7 +155,8 @@ public class PublicImageUploadController {
             @RequestParam(value = "patientId", required = false) String patientId,
             @RequestParam(value = "laterality", required = false) String laterality,
             @RequestParam(value = "studyDate", required = false) String studyDate,
-            @RequestParam(value = "studyEventId", required = false) Integer studyEventId) {
+            @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
+            @RequestParam(value = "device", required = false) String device) {
 
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
@@ -201,10 +202,16 @@ public class PublicImageUploadController {
                             "that visit is not scheduled for the submitted date"));
                 }
             }
+            String dev = normaliseDevice(device);
             long id = insert(c, saved.toString(), file.getOriginalFilename(), contentType,
-                    blankToNull(patientId), lat, sd, target);
+                    blankToNull(patientId), lat, sd, dev, target);
             if (target != null) {
                 ImageIngestBinding.writeSystemBindAudit(dataSource, id, "portal", target.studyEventId());
+                // The image on the visit is the evidence that this camera was
+                // used on it, so tick the visit's checklist box for this
+                // device. Nobody is logged in here — the write is attributed to
+                // the system service account, not to a person.
+                ImageIngestBinding.tickPerformed(dataSource, id, target, "upload", dev, null);
             }
             LOG.info("public image upload: enqueued image_ingest_id={} status={}",
                     id, target == null ? "UNBOUND" : "BOUND");
@@ -218,48 +225,49 @@ public class PublicImageUploadController {
     }
 
     private long insert(Connection c, String storedPath, String originalFilename, String contentType,
-                        String patientId, String laterality, LocalDate studyDate,
+                        String patientId, String laterality, LocalDate studyDate, String device,
                         ImageIngestBinding.EventTarget target) throws SQLException {
         // The uploaded JPEG/PNG is itself viewable, so preview_png_path = stored_path.
         // A visit-picked upload lands BOUND with match_policy='portal' and no
         // bound_by_user_id — the form has no user; the audit row carries the trail.
         String sql = "INSERT INTO image_ingest ("
-                + "source_kind, stored_path, preview_png_path, original_filename, content_type, "
+                + "source_kind, device, stored_path, preview_png_path, original_filename, content_type, "
                 + "patient_id, laterality, study_date, received_at, status, "
                 + "match_policy, bound_study_subject_id, bound_study_event_id, "
                 + "bound_event_crf_id, bound_at"
-                + ") VALUES ('upload', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + ") VALUES ('upload', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, storedPath);
+            ps.setString(1, device);
             ps.setString(2, storedPath);
-            ps.setString(3, originalFilename);
-            ps.setString(4, contentType);
-            ps.setString(5, patientId);
-            ps.setString(6, laterality);
+            ps.setString(3, storedPath);
+            ps.setString(4, originalFilename);
+            ps.setString(5, contentType);
+            ps.setString(6, patientId);
+            ps.setString(7, laterality);
             if (studyDate == null) {
-                ps.setNull(7, Types.DATE);
+                ps.setNull(8, Types.DATE);
             } else {
-                ps.setObject(7, studyDate);
+                ps.setObject(8, studyDate);
             }
             Timestamp now = Timestamp.from(Instant.now());
-            ps.setTimestamp(8, now);
-            ps.setString(9, target == null ? "UNBOUND" : "BOUND");
+            ps.setTimestamp(9, now);
+            ps.setString(10, target == null ? "UNBOUND" : "BOUND");
             if (target == null) {
-                ps.setNull(10, Types.VARCHAR);
-                ps.setNull(11, Types.INTEGER);
+                ps.setNull(11, Types.VARCHAR);
                 ps.setNull(12, Types.INTEGER);
                 ps.setNull(13, Types.INTEGER);
-                ps.setNull(14, Types.TIMESTAMP);
+                ps.setNull(14, Types.INTEGER);
+                ps.setNull(15, Types.TIMESTAMP);
             } else {
-                ps.setString(10, "portal");
-                ps.setInt(11, target.studySubjectId());
-                ps.setInt(12, target.studyEventId());
+                ps.setString(11, "portal");
+                ps.setInt(12, target.studySubjectId());
+                ps.setInt(13, target.studyEventId());
                 if (target.eventCrfId() == null) {
-                    ps.setNull(13, Types.INTEGER);
+                    ps.setNull(14, Types.INTEGER);
                 } else {
-                    ps.setInt(13, target.eventCrfId());
+                    ps.setInt(14, target.eventCrfId());
                 }
-                ps.setTimestamp(14, now);
+                ps.setTimestamp(15, now);
             }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -270,6 +278,29 @@ public class PublicImageUploadController {
     }
 
     // ----- helpers -----
+
+    /**
+     * Which camera an upload came from.
+     *
+     * <p>This page is the Remidio InstaFOP's route into the platform — the
+     * device exports a JPEG and has no DICOM — so that is the default. The
+     * parameter exists so a second file-export camera can share the page
+     * without the two becoming indistinguishable in the record.
+     *
+     * <p>Lower-cased: the value is matched against the performed-item map, and
+     * a device that spells itself differently on different days is still one
+     * device.
+     */
+    static final String DEFAULT_DEVICE = "remidio";
+
+    private static String normaliseDevice(String raw) {
+        if (raw == null || raw.isBlank()) return DEFAULT_DEVICE;
+        String trimmed = raw.trim();
+        // Bounded by the column width; the value is configuration-like, not
+        // free text, and is never logged.
+        if (trimmed.length() > 64) trimmed = trimmed.substring(0, 64);
+        return trimmed.toLowerCase(java.util.Locale.ROOT);
+    }
 
     private static String storeDir() {
         try {
