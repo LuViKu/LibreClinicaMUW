@@ -338,6 +338,15 @@ public class DatasetsApiController {
 
         try {
             ExportRunResult result = runExport(db, fmt, currentStudy, me);
+            if (result.archivedFileId <= 0) {
+                // The legacy pipeline signals failure by returning no
+                // archived-file id. Reporting that as a success handed the
+                // operator a download link to nothing — the way the SAS branch
+                // behaved for years.
+                LOG.error("Export produced no file for dataset id={} format={}", datasetId, fmt);
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Export produced no file — see the server log for the cause"));
+            }
             return ResponseEntity.ok(new ExportTriggerResponse(
                     result.archivedFileId,
                     downloadUrlFor(result.archivedFileId)));
@@ -687,10 +696,11 @@ public class DatasetsApiController {
                 fileId = firstValueOrZero(answer);
             }
             case SAS -> {
-                long elapsed = System.currentTimeMillis() - sysTimeBegin;
-                String name = sanitizedName + "_sas.sas";
-                fileId = extractService.createFile(name, runDir, "", db,
-                        elapsed, ExportFormatBean.TXTFILE, true, me);
+                // Was: a zero-byte file recorded as a successful export. The
+                // SAS artefacts come from the packaged stylesheets over a
+                // clinical_data ODM — the same route the scheduled export job
+                // has always used.
+                fileId = extractService.createSasFile(db, eb, study, sysTimeBegin, runDir, me);
             }
             case SPSS -> {
                 at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.SPSSReportBean answer =

@@ -191,15 +191,20 @@ public class ExportDatasetServlet extends SecureController {
             long sysTimeBegin = System.currentTimeMillis();
             int fId = 0;
             if ("sas".equalsIgnoreCase(action)) {
-                // generateReport =
-                // dsdao.generateDataset(db,
-                // ExtractBean.SAS_FORMAT,
-                // currentStudy,
-                // parentStudy);
-                long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
-                String SASFileName = db.getName() + "_sas.sas";
-                // logger.info("found data set: "+generateReport);
-                generateFileService.createFile(SASFileName, generalFileDir, generateReport, db, sysTimeEnd, ExportFormatBean.TXTFILE, true, ub);
+                // 2026-09-18 — this used to write `generateReport`, which is
+                // the empty string three lines up: the screen reported a
+                // successful SAS export and the download was a zero-byte file.
+                // The real artefacts (SAS_MAP.xml, SAS_DATA.xml,
+                // SAS_FORMAT.sas) come from the packaged stylesheets over a
+                // clinical_data ODM — see
+                // GenerateExtractFileService.createSasFile.
+                String SASFileName = db.getName() + "_sas.zip";
+                fId = generateFileService.createSasFile(db, eb, currentStudy, sysTimeBegin, generalFileDir, ub);
+                if (fId <= 0) {
+                    addPageMessage(respage.getString("error_generating_export_file"));
+                    forwardPage(Page.EXPORT_DATASETS);
+                    return;
+                }
                 logger.info("created sas file");
                 request.setAttribute("generate", generalFileDir + SASFileName);
                 finalTarget.setFileName(generalFileDir + SASFileName);

@@ -583,18 +583,79 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
     }
 
     /**
-     * Pins the known SAS defect so the P1-7 work has a failing-to-passing
-     * signal: today the branch writes an empty file, which this asserts
-     * explicitly rather than pretending it works.
+     * SAS export produces the three artefacts SAS needs, not an empty file.
+     *
+     * <p>Replaces a defect pin: until P1-7 every route except the Quartz
+     * scheduled job wrote a zero-byte file and recorded it as a successful
+     * export, so the operator got a download link to nothing.
+     *
+     * <p>The entry names are asserted exactly because
+     * {@code xml_convert_sas_format.xsl} writes {@code FILENAME} statements
+     * naming the other two files literally — renaming one produces a script
+     * that cannot find its own data.
      */
     @Test
-    void sasExport_currentlyProducesAnEmptyPayload() throws Exception {
+    void sasExport_zipCarriesMapDataAndFormat() throws Exception {
         DatasetBean ds = persistDataset("IT_SAS_" + System.nanoTime());
-        var result = materializer().materialize(ds, "sas", 1);
+        Path archive = archivePathFor(idFromResult(materializer().materialize(ds, "sas", 1)));
 
-        String text = readArchive(archivePathFor(idFromResult(result)));
-        // Only the zip entry header, no SAS syntax — see plan item P1-7.
-        assertTrue(!text.contains("PROC ") && !text.contains("INFILE"),
-                "SAS export unexpectedly has content — update P1-7 and this characterisation");
+        assertTrue(archive.getFileName().toString().endsWith(".zip"),
+                "SAS export should be a zip of three artefacts, got " + archive.getFileName());
+
+        var entries = readZipEntries(archive);
+        assertEquals(java.util.Set.of("SAS_MAP.xml", "SAS_DATA.xml", "SAS_FORMAT.sas"),
+                entries.keySet(), "unexpected SAS archive contents");
+
+        assertTrue(entries.get("SAS_MAP.xml").contains("SXLEMAP"),
+                "the map should be an SXLEMAP document");
+        assertTrue(entries.get("SAS_DATA.xml").contains("M-001"),
+                "the data document should carry the seeded subject");
+        String format = entries.get("SAS_FORMAT.sas");
+        assertTrue(format.contains("LIBNAME"), "the syntax file should declare a library");
+        assertTrue(format.contains("SAS_DATA.xml") && format.contains("SAS_MAP.xml"),
+                "the syntax file should reference both companion files by name");
+    }
+
+    /**
+     * The generated ODM is scaffolding for the stylesheets, not a deliverable:
+     * it must not be left in the run directory and must not appear as a second
+     * archived file the operator could download by mistake.
+     */
+    @Test
+    void sasExport_doesNotLeaveTheIntermediateOdmBehind() throws Exception {
+        DatasetBean ds = persistDataset("IT_SASTMP_" + System.nanoTime());
+        int fileId = idFromResult(materializer().materialize(ds, "sas", 1));
+        Path archive = archivePathFor(fileId);
+
+        try (var s = Files.list(archive.getParent())) {
+            var leftovers = s.map(p -> p.getFileName().toString())
+                    .filter(n -> n.endsWith(".xml"))
+                    .toList();
+            assertTrue(leftovers.isEmpty(), "intermediate files left in the run directory: " + leftovers);
+        }
+
+        try (var c = DATA_SOURCE.getConnection();
+             var ps = c.prepareStatement(
+                     "SELECT count(*) FROM archived_dataset_file WHERE dataset_id = ?")) {
+            ps.setInt(1, ds.getId());
+            try (var rs = ps.executeQuery()) {
+                rs.next();
+                assertEquals(1, rs.getInt(1), "SAS export should record exactly one archived file");
+            }
+        }
+    }
+
+    /** Zip entry name to content, for archives whose entries are asserted individually. */
+    private static java.util.Map<String, String> readZipEntries(Path path) throws Exception {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        try (ZipFile zip = new ZipFile(path.toFile())) {
+            var entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry e = entries.nextElement();
+                out.put(e.getName(),
+                        new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+            }
+        }
+        return out;
     }
 }

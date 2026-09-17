@@ -273,6 +273,96 @@ public class GenerateExtractFileService {
         return answerMap;
     }
 
+    /**
+     * SAS export: the ODM document plus the three packaged stylesheets.
+     *
+     * <p>Until 2026-09 every caller outside the Quartz scheduled-job screens
+     * wrote a zero-byte file here — the SPA's dataset export, the asynchronous
+     * export runner and the legacy Extract Data servlet all had a SAS branch
+     * that produced an {@code archived_dataset_file} row over empty content. An
+     * operator saw a successful export and downloaded nothing.
+     *
+     * <p>What SAS actually needs is three artefacts, and they are generated the
+     * same way the scheduled job generates them (see {@code extract.10} in
+     * extract.properties):
+     *
+     * <ul>
+     *   <li>{@code SAS_DATA.xml} — the data, as an XML document</li>
+     *   <li>{@code SAS_MAP.xml} — an SXLEMAP telling SAS how to read it</li>
+     *   <li>{@code SAS_FORMAT.sas} — the syntax that reads both in and applies
+     *       the code lists as SAS formats</li>
+     * </ul>
+     *
+     * <p>The names are fixed rather than derived from the dataset, because
+     * {@code xml_convert_sas_format.xsl} writes {@code FILENAME} statements
+     * that name the other two files literally. Renaming an entry would produce
+     * a script that cannot find its own data.
+     *
+     * <p>The intermediate ODM is generated with {@code odmType=clinical_data}
+     * (what the stylesheets expect) and is deliberately not recorded in
+     * {@code archived_dataset_file} — it is scaffolding, not a deliverable. It
+     * is removed after the transform unless {@code dataset_file_delete} is
+     * configured off, matching how the other multi-file exports treat their
+     * intermediates.
+     *
+     * @return the archived_dataset_file id of the zip, or 0 if nothing was written
+     */
+    public int createSasFile(DatasetBean datasetBean, ExtractBean eb, StudyBean currentStudy,
+            long sysTimeBegin, String generalFileDir, UserAccountBean userBean) {
+
+        HashMap<String, Integer> odmAnswer = createODMFile(
+                "oc1.3", sysTimeBegin, generalFileDir, datasetBean, currentStudy, "", eb,
+                currentStudy.getId(), currentStudy.getParentStudyId(), "99",
+                false /* zipped */, false /* saveToDB — scaffolding, not a deliverable */,
+                false /* deleteOld */, "clinical_data", userBean);
+
+        String odmName = null;
+        if (odmAnswer != null && !odmAnswer.isEmpty()) {
+            odmName = odmAnswer.keySet().iterator().next();
+        }
+        if (odmName == null || odmName.isBlank()) {
+            logger.error("SAS export: ODM generation produced no file name for dataset {}", datasetBean.getId());
+            return 0;
+        }
+        File odmFile = new File(generalFileDir, odmName.replaceAll(" ", "_"));
+
+        ArrayList<String> contents;
+        try {
+            contents = new ArrayList<>(OdmXsltTransformer.transform(odmFile, SAS_STYLESHEETS));
+        } catch (Exception e) {
+            // Deliberately not swallowed into an empty export: a failed
+            // transform must not look like a successful one. The caller turns
+            // a 0 return into an error for the operator.
+            logger.error("SAS export: stylesheet run failed for dataset " + datasetBean.getId(), e);
+            deleteIntermediate(odmFile);
+            return 0;
+        }
+
+        long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
+        int fId = createFile(datasetBean.getName() + "_sas", new ArrayList<>(SAS_EXPORT_NAMES),
+                generalFileDir, contents, datasetBean, sysTimeEnd, ExportFormatBean.TXTFILE, true, userBean);
+        deleteIntermediate(odmFile);
+        return fId;
+    }
+
+    /** Stylesheets for the SAS export — mirrors {@code extract.10.file}. */
+    private static final List<String> SAS_STYLESHEETS = List.of(
+            "xml_convert_sas_map.xsl", "xml_convert_sas_data.xsl", "xml_convert_sas_format.xsl");
+
+    /** Zip entry names — mirrors {@code extract.10.exportname}; see createSasFile. */
+    private static final List<String> SAS_EXPORT_NAMES = List.of(
+            "SAS_MAP.xml", "SAS_DATA.xml", "SAS_FORMAT.sas");
+
+    private static void deleteIntermediate(File f) {
+        String flag = CoreResources.getField("dataset_file_delete");
+        if (flag != null && "false".equalsIgnoreCase(flag.trim())) {
+            return;
+        }
+        if (f != null && f.isFile() && !f.delete()) {
+            logger.warn("could not delete intermediate extract file {}", f.getName());
+        }
+    }
+
     public int createFile(String zipName, ArrayList<String> names, String dir, ArrayList<String> contents, DatasetBean datasetBean, long time,
             ExportFormatBean efb, boolean saveToDB, UserAccountBean userBean) {
         ArchivedDatasetFileBean fbFinal = new ArchivedDatasetFileBean();
