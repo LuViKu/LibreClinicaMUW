@@ -525,6 +525,64 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
     }
 
     /**
+     * A saved filter must actually restrict the export.
+     *
+     * <p>Until 2026-09-18 the wizard's filter step was decorative: the rows were
+     * validated and previewed ("12 of 40 subjects match"), then dropped — the
+     * export returned all 40. This writes a filter that only one subject
+     * satisfies and checks the other is absent from the output.
+     */
+    @Test
+    void savedFilterRestrictsTheExportToMatchingSubjects() throws Exception {
+        // I_CONSENT_SIGNED (item 2) — give M-001 a value no other subject has.
+        final String marker = "IT-ONLY-M001";
+        Integer restored;
+        try (var c = DATA_SOURCE.getConnection()) {
+            try (var ps = c.prepareStatement(
+                    "SELECT id.item_data_id FROM item_data id "
+                            + "JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id "
+                            + "JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                            + "WHERE id.item_id = 2 AND se.study_subject_id = 1 LIMIT 1");
+                 var rs = ps.executeQuery()) {
+                assertTrue(rs.next(), "fixture assumption: M-001 has a value for item 2");
+                restored = rs.getInt(1);
+            }
+            try (var ps = c.prepareStatement(
+                    "UPDATE item_data SET value = ? WHERE item_data_id = ?")) {
+                ps.setString(1, marker);
+                ps.setInt(2, restored);
+                ps.executeUpdate();
+            }
+        }
+        try {
+            DatasetBean ds = persistDataset("IT_FILTER_" + System.nanoTime(),
+                    java.util.List.of(1, 2, 3, 5));
+            // Save the filter the way the controller does: JSON, via the
+            // heritage filter / dataset_filter_map tables.
+            var owner = (UserAccountBean) new UserAccountDAO(DATA_SOURCE).findByPK(1);
+            new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetFilterDAO(DATA_SOURCE)
+                    .replaceAll(ds.getId(), owner, java.util.List.of(
+                            new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract
+                                    .DatasetFilterDAO.PersistableFilter(
+                                    "I_CONSENT_SIGNED =", "",
+                                    "{\"itemOid\":\"I_CONSENT_SIGNED\",\"operator\":\"=\",\"value\":\""
+                                            + marker + "\",\"values\":[]}")));
+
+            String text = readArchive(archivePathFor(idFromResult(materializer().materialize(ds, "tab", 1))));
+            assertTrue(text.contains("M-001"), "the matching subject should be exported");
+            assertTrue(!text.contains("M-002"),
+                    "a subject the filter excludes must not appear in the export");
+        } finally {
+            try (var c = DATA_SOURCE.getConnection();
+                 var ps = c.prepareStatement(
+                         "UPDATE item_data SET value = 'restored-by-it' WHERE item_data_id = ?")) {
+                ps.setInt(1, restored);
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    /**
      * Pins the known SAS defect so the P1-7 work has a failing-to-passing
      * signal: today the branch writes an empty file, which this asserts
      * explicitly rather than pretending it works.

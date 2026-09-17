@@ -58,6 +58,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetFilterDAO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -1172,6 +1174,8 @@ public class DatasetsApiController {
                     "Failed to persist dataset"));
         }
 
+        persistFilters(persisted.getId(), body.filters(), pf.me);
+
         LOG.info("Create dataset: id={} name={} study={} by user={}",
                 persisted.getId(), persisted.getName(), studyOid, pf.me.getName());
 
@@ -1262,11 +1266,47 @@ public class DatasetsApiController {
         if (target.getStatus() == null) target.setStatus(Status.AVAILABLE);
 
         datasetDao.updateAll(target);
+        persistFilters(target.getId(), body.filters(), me);
 
         LOG.info("Update dataset: id={} name={} study={} by user={}",
                 target.getId(), target.getName(), parentStudy.getOid(), me.getName());
 
         return ResponseEntity.ok(toWizardDto(target));
+    }
+
+    /**
+     * Save the wizard's filter step.
+     *
+     * <p>Until 2026-09-18 this step was decorative: the rows were validated and
+     * previewed ("12 of 40 subjects match") and then dropped on the floor, so
+     * the export returned all 40. They are now persisted through the existing
+     * {@code filter} / {@code dataset_filter_map} tables and applied at extract
+     * time by {@code DatasetFilterSubjectResolver}.
+     *
+     * <p>Stored as JSON rather than SQL: the predicate is re-validated and
+     * re-rendered from its parts at extract time, so nothing that came off the
+     * wire is ever executed as a stored SQL string. An edit replaces the whole
+     * set — the wizard has no notion of editing one row.
+     */
+    private void persistFilters(int datasetId, List<DatasetFilterDto> filters, UserAccountBean owner) {
+        try {
+            List<DatasetFilterDAO.PersistableFilter> rows = new ArrayList<>();
+            if (filters != null) {
+                ObjectMapper mapper = new ObjectMapper();
+                for (DatasetFilterDto f : filters) {
+                    if (f == null || f.itemOid() == null || f.operator() == null) continue;
+                    rows.add(new DatasetFilterDAO.PersistableFilter(
+                            f.itemOid() + " " + f.operator(),
+                            "",
+                            mapper.writeValueAsString(f)));
+                }
+            }
+            new DatasetFilterDAO(dataSource).replaceAll(datasetId, owner, rows);
+        } catch (Exception e) {
+            // The dataset itself is already saved; losing the filters would
+            // silently widen every later export, so this is logged loudly.
+            LOG.error("could not persist filters for dataset {}: {}", datasetId, e.getMessage());
+        }
     }
 
     /**

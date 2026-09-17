@@ -2265,11 +2265,37 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
         String sql = eb.getDataset().getSQLStatement();
         String[] os = sql.split("'");
         if ("postgres".equalsIgnoreCase(dbName)) {
-            dateConstraint = 
-            		String.format(" (date(study_subject.enrollment_date) >= date('%s')) and (date(study_subject.enrollment_date) <= date('%s'))", 
+            dateConstraint =
+            		String.format(" (date(study_subject.enrollment_date) >= date('%s')) and (date(study_subject.enrollment_date) <= date('%s'))",
             				os[1], os[3]);
         }
-        
+
+        // 2026-09-18 — apply the dataset's saved item filters.
+        //
+        // Every subject sub-select in the extract splices this fragment in, and
+        // study_subject is in scope at each, so restricting the subject set here
+        // applies the filters to all formats at once. The ids are resolved
+        // server-side by DatasetFilterSubjectResolver and are plain integers, so
+        // there is nothing to inject; the date literals above are untouched
+        // because callers (and this method) parse the dataset SQL positionally
+        // on the quote character.
+        //
+        // Without this the wizard's filter step was decorative: an operator
+        // could author predicates, see "12 of 40 subjects match", save, export —
+        // and get all 40.
+        List<Integer> filterSubjectIds = eb.getDataset().getFilterSubjectIds();
+        if (filterSubjectIds != null) {
+            StringBuilder ids = new StringBuilder();
+            for (Integer id : filterSubjectIds) {
+                if (ids.length() > 0) ids.append(',');
+                ids.append(id.intValue());
+            }
+            // An empty match set must export nothing, not everything.
+            dateConstraint = dateConstraint
+                    + " AND study_subject.study_subject_id IN ("
+                    + (ids.length() == 0 ? "-1" : ids) + ") ";
+        }
+
         return dateConstraint;
     }
 

@@ -594,6 +594,18 @@ public class GenerateExtractFileService {
         eb.setStudy(currentStudy);
         eb.setParentStudy(parentStudy);
         eb.setDateCreated(new java.util.Date());
+
+        // 2026-09-18 — resolve the dataset's saved item filters into the subject
+        // set the extract restricts to. Every producer builds its ExtractBean
+        // here, so doing it once covers ODM, tab, CSV and SPSS alike. Null means
+        // "no filters"; see EntityDAO.genDatabaseDateConstraint for where the
+        // restriction is applied.
+        if (dsetBean != null && dsetBean.getId() > 0 && currentStudy != null) {
+            int scopeStudyId = currentStudy.getParentStudyId() > 0
+                    ? currentStudy.getParentStudyId() : currentStudy.getId();
+            dsetBean.setFilterSubjectIds(
+                    new DatasetFilterSubjectResolver(ds).resolve(dsetBean.getId(), scopeStudyId));
+        }
         return eb;
     }
 
