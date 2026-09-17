@@ -111,41 +111,36 @@ function hit(
   return { key, bucket, value, threshold }
 }
 
-/** Build the rationale line from the top-priority fired trigger. */
-function rationaleFor(top: NamdTriggerHit | undefined): string {
-  if (!top) return 'Stabile Befundlage.'
+/**
+ * The rationale line for the top-priority fired trigger, as a translation key
+ * and its parameters.
+ *
+ * Returns the structure rather than a sentence so the card can render it in
+ * the reader's language. Values are rounded here, where the unit is known, so
+ * the translation never has to do arithmetic.
+ */
+function rationaleFor(
+  top: NamdTriggerHit | undefined,
+): { key: string; params: Record<string, string | number> } | null {
+  const base = 'studyModules.namd.recommendation.rationale.'
+  if (!top) return { key: base + 'STABLE', params: {} }
+
+  const params: Record<string, string | number> = {
+    value: top.value != null ? Math.round(top.value) : 0,
+    threshold: top.threshold != null ? Math.round(top.threshold) : 0,
+  }
+
   switch (top.key) {
-    case 'DE_NOVO_IRF':
-      return 'Neu aufgetretene intraretinale Flüssigkeit — Intervall verkürzen.'
-    case 'IRF_INCREASE':
-      return `IRF um ${Math.round(top.value ?? 0)} nL gestiegen (Schwelle ${top.threshold} nL).`
-    case 'IRF_DECREASE_INSUFFICIENT':
-      return 'IRF rückläufig um weniger als 50 % vs. Vorbesuch — Intervall verkürzen.'
-    case 'DE_NOVO_CENTRAL_SRF':
-      return 'Neu aufgetretene zentrale subretinale Flüssigkeit (1 mm).'
-    case 'CENTRAL_SRF_INCREASE':
-      return `Zentrale SRF um ${Math.round(top.value ?? 0)} nL gestiegen (Schwelle ${top.threshold} nL).`
-    case 'SRF_RING_1_3_INCREASE':
-      return `SRF im 1–3 mm Ring um ${Math.round(top.value ?? 0)} nL gestiegen.`
-    case 'NEW_HEMORRHAGE':
-      return 'Neue retinale Blutung — Intervall verkürzen.'
-    case 'BCVA_LOSS_5_LETTERS':
-      return 'Visusverlust ≥ 5 Buchstaben, nAMD-attribuiert.'
-    case 'RESIDUAL_IRF_HALVED':
-      return 'IRF um ≥ 50 % zurückgegangen, jedoch noch vorhanden — Intervall halten.'
-    case 'RESIDUAL_IRF_STABLE':
-      return 'Stabile residuelle IRF — Intervall halten.'
-    case 'CENTRAL_SRF_IMPROVING':
-      return 'Zentrale SRF stabil oder rückläufig, jedoch noch vorhanden.'
-    case 'ACTIVITY_IMPROVING':
-      return 'Aktivität insgesamt rückläufig — Intervall halten.'
+    // The four EXTEND-eligibility triggers share one sentence: none of them is
+    // a finding, they are the absence of findings.
     case 'IRF_ABSENT':
     case 'CENTRAL_SRF_ABSENT':
     case 'NO_HEMORRHAGE_OR_BCVA_LOSS':
     case 'SRF_ISOLATED_1_3_STABLE':
-      return 'Trockener, stabiler Befund — Intervall verlängern.'
+      return { key: base + 'DRY_STABLE', params }
+    default:
+      return { key: base + top.key, params }
   }
-  return ''
 }
 
 // ─── Public API ───────────────────────────────────────────────────

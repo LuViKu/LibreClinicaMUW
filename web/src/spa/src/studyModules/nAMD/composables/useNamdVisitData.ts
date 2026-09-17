@@ -159,7 +159,7 @@ function buildMockData(): NamdWorkspaceData {
   const ai: NamdAiRecommendation = {
     rec: 'SHORTEN',
     intervalWeeks: 6,
-    rationale: 'Reaktivierung mit Anstieg der Gesamtflüssigkeit — Intervall verkürzen.',
+    rationale: { key: 'studyModules.namd.recommendation.rationale.IRF_INCREASE', params: { value: 12, threshold: 200 } },
     triggersFired: [],
   }
   return { patient, visits, current, prev, ai, nSlices: 49, subjectArm: 'study' }

@@ -165,6 +165,22 @@
         "firedTriggers": "Auslösende Befunde",
         "thresholdSet": "Schwellenwert-Satz {version}.",
         "disclaimer": "Diese Empfehlung folgt dem Studienprotokoll. Die klinische Entscheidung trifft der Behandelnde.",
+        "rationale": {
+          "STABLE": "Stabile Befundlage.",
+          "DE_NOVO_IRF": "Neu aufgetretene intraretinale Flüssigkeit — Intervall verkürzen.",
+          "IRF_INCREASE": "IRF um {value} nL gestiegen (Schwelle {threshold} nL) — Intervall verkürzen.",
+          "IRF_DECREASE_INSUFFICIENT": "IRF rückläufig um weniger als 50 % gegenüber dem Vorbesuch — Intervall verkürzen.",
+          "DE_NOVO_CENTRAL_SRF": "Neu aufgetretene zentrale subretinale Flüssigkeit (1 mm) — Intervall verkürzen.",
+          "CENTRAL_SRF_INCREASE": "Zentrale SRF um {value} nL gestiegen (Schwelle {threshold} nL) — Intervall verkürzen.",
+          "SRF_RING_1_3_INCREASE": "SRF im 1–3 mm Ring um {value} nL gestiegen — Intervall verkürzen.",
+          "NEW_HEMORRHAGE": "Neue retinale Blutung — Intervall verkürzen.",
+          "BCVA_LOSS_5_LETTERS": "Visusverlust von mindestens 5 Buchstaben, nAMD-attribuiert — Intervall verkürzen.",
+          "RESIDUAL_IRF_HALVED": "IRF um mindestens 50 % zurückgegangen, jedoch noch vorhanden — Intervall halten.",
+          "RESIDUAL_IRF_STABLE": "Stabile residuelle IRF — Intervall halten.",
+          "CENTRAL_SRF_IMPROVING": "Zentrale SRF stabil oder rückläufig, jedoch noch vorhanden — Intervall halten.",
+          "ACTIVITY_IMPROVING": "Aktivität insgesamt rückläufig — Intervall halten.",
+          "DRY_STABLE": "Trockener, stabiler Befund — Intervall verlängern."
+        },
         "triggers": {
           "DE_NOVO_IRF": "Neu aufgetretene intraretinale Flüssigkeit",
           "IRF_INCREASE": "IRF um +{value} nL über der Schwelle ({threshold} nL)",

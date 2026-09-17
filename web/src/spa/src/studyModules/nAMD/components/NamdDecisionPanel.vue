@@ -198,7 +198,13 @@ async function confirm() {
     const snapshot = props.aiRec ? JSON.stringify({
       rec: props.aiRec.rec,
       intervalWeeks: props.aiRec.intervalWeeks,
-      rationale: props.aiRec.rationale,
+      // Both forms deliberately: the key stays interpretable when the wording
+      // is revised, and the resolved sentence means a reader of this audit
+      // years from now does not need the translation bundle to know why.
+      rationaleKey: props.aiRec.rationale?.key ?? null,
+      rationale: props.aiRec.rationale
+        ? t(props.aiRec.rationale.key, props.aiRec.rationale.params)
+        : '',
       triggersFired: props.aiRec.triggersFired,
       thresholdsVersion: NAMD_THRESHOLDS_VERSION,
     }) : ''
