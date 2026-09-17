@@ -135,7 +135,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [dicom-scp, muw-e2e-converter, retinal-inference]
+        # `extra` names the package's own test extra — installing that rather
+        # than a bare pytest is what pulls each suite's test-only deps (e.g.
+        # retinal-inference's httpx, which starlette.testclient needs).
+        include:
+          - pkg: dicom-scp
+            extra: test
+          - pkg: muw-e2e-converter
+            extra: dev
+          - pkg: retinal-inference
+            extra: dev
     steps:
       - uses: actions/checkout@v5
 
@@ -154,8 +163,7 @@ jobs:
           if [ "${{ matrix.pkg }}" = "retinal-inference" ]; then
             pip install -e ./muw-e2e-converter
           fi
-          pip install -e ./${{ matrix.pkg }}
-          pip install 'pytest==8.3.3'
+          pip install -e "./${{ matrix.pkg }}[${{ matrix.extra }}]"
 
       - name: Run ${{ matrix.pkg }} tests
         run: python -m pytest ${{ matrix.pkg }}/tests -q --junitxml=pytest-${{ matrix.pkg }}.xml
