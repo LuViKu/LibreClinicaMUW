@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-025 — external-image ingest queue (fundus imaging).
+
+        image_ingest — one row per fundus image received from an external
+        device, from EITHER ingress path (source_kind):
+
+          'upload' — the Remidio FOP (an iPhone + browser) has no DICOM export;
+                     the operator uploads the captured JPEG/PNG through a public
+                     upload page (no LibreClinica account — reverse-proxy gated).
+          'dicom'  — the Optomed device is a full DICOM modality; it C-STOREs
+                     images to the dicom-scp sidecar (pynetdicom Storage SCP),
+                     which writes the Part-10 + preview and hands off here.
+                     (A Modality Worklist SCP so images auto-identify is a
+                     deferred follow-up — plain C-STORE first.)
+
+        Both sources land UNBOUND for the SPA reconciliation inbox; an operator
+        links each image to a subject/event/CRF. DICOM-specific columns are
+        nullable (an upload has no SOP Instance UID); generic file columns carry
+        the stored artifact + preview for either source. No GPU inference — these
+        are 2-D fundus photos, distinct from the OCT bscan.dcm path (DR-024).
+
+        status / match_policy enums live in Java (decoder-only to extend), so no
+        CHECK constraint — mirroring the retinal_inference_job discriminator.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-09-09-image-ingest">
+        <createTable tableName="image_ingest">
+            <column autoIncrement="true" name="image_ingest_id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <!-- Ingress discriminator: 'upload' | 'dicom'. -->
+            <column name="source_kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Stored artifacts (paths, not blobs — mirrors the retinal store). -->
+            <column name="stored_path" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="preview_png_path" type="VARCHAR(500)"/>
+            <column name="original_filename" type="VARCHAR(255)"/>
+            <column name="content_type" type="VARCHAR(100)"/>
+            <!-- DICOM identity / dedup — populated for source_kind='dicom' only,
+                 so nullable; a UNIQUE that permits multiple NULLs (Postgres). -->
+            <column name="sop_instance_uid" type="VARCHAR(128)">
+                <constraints unique="true"/>
+            </column>
+            <column name="sop_class_uid" type="VARCHAR(128)"/>
+            <column name="study_instance_uid" type="VARCHAR(128)"/>
+            <column name="series_instance_uid" type="VARCHAR(128)"/>
+            <column name="modality" type="VARCHAR(16)"/>
+            <column name="source_ae_title" type="VARCHAR(32)"/>
+            <!-- Identity/exam tags for matching (either source may carry some). -->
+            <column name="patient_id" type="VARCHAR(128)"/>
+            <column name="patient_name" type="VARCHAR(255)"/>
+            <column name="accession_number" type="VARCHAR(64)"/>
+            <column name="study_date" type="DATE"/>
+            <column name="laterality" type="VARCHAR(2)"/>
+            <column name="received_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Reconciliation state: UNBOUND / BOUND / DISMISSED. -->
+            <column name="status" type="VARCHAR(16)" defaultValue="UNBOUND">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_message" type="TEXT"/>
+            <column name="match_policy" type="VARCHAR(16)"/>
+            <!-- Nullable bindings — set at reconciliation / auto-match / worklist. -->
+            <column name="bound_study_subject_id" type="INT"/>
+            <column name="bound_study_event_id" type="INT"/>
+            <column name="bound_event_crf_id" type="INT"/>
+            <column name="bound_item_id" type="INT"/>
+            <column name="bound_by_user_id" type="INT"/>
+            <column name="bound_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="image_ingest" baseColumnNames="bound_study_subject_id"
+                                 constraintName="fk_image_ingest_study_subject"
+                                 referencedTableName="study_subject" referencedColumnNames="study_subject_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="image_ingest" baseColumnNames="bound_study_event_id"
+                                 constraintName="fk_image_ingest_study_event"
+                                 referencedTableName="study_event" referencedColumnNames="study_event_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="image_ingest" baseColumnNames="bound_event_crf_id"
+                                 constraintName="fk_image_ingest_event_crf"
+                                 referencedTableName="event_crf" referencedColumnNames="event_crf_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="image_ingest" baseColumnNames="bound_item_id"
+                                 constraintName="fk_image_ingest_item"
+                                 referencedTableName="item" referencedColumnNames="item_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="image_ingest" baseColumnNames="bound_by_user_id"
+                                 constraintName="fk_image_ingest_user"
+                                 referencedTableName="user_account" referencedColumnNames="user_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+
+        <createIndex tableName="image_ingest" indexName="idx_image_ingest_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="image_ingest" indexName="idx_image_ingest_patient_date">
+            <column name="patient_id"/>
+            <column name="study_date"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="image_ingest"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

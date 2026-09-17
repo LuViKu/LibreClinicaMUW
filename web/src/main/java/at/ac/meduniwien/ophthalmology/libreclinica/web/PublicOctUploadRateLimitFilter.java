@@ -62,8 +62,30 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     /** Buckets older than 1 h with no activity get dropped. */
     static final long IDLE_BUCKET_TTL_MS = 3_600_000L;
 
-    /** Path prefix the filter polices. */
+    /** Path prefix the filter polices (the original OCT portal). */
     static final String GUARDED_PREFIX = "/pages/api/v1/public/oct-upload/";
+
+    /**
+     * Every unauthenticated portal gets the same bucket policy. 2026-09-17 —
+     * the DR-025 Remidio image-upload page and the BCVA entry page were added
+     * as {@code permitAll} siblings of the OCT portal without any throttle;
+     * they are the same trust boundary. Buckets are keyed per (client, portal)
+     * so one portal's burst can't starve another.
+     */
+    static final String[] GUARDED_PREFIXES = {
+            GUARDED_PREFIX,
+            "/pages/api/v1/public/image-upload/",
+            "/pages/api/v1/public/bcva-entry/",
+    };
+
+    /** The guarded prefix a URI falls under, or null when the filter should not police it. */
+    static String guardedPrefixFor(String uri) {
+        if (uri == null) return null;
+        for (String p : GUARDED_PREFIXES) {
+            if (uri.startsWith(p)) return p;
+        }
+        return null;
+    }
 
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
@@ -117,13 +139,13 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain)
             throws ServletException, IOException {
-        String uri = request.getRequestURI();
-        if (uri == null || !uri.startsWith(GUARDED_PREFIX)) {
+        String prefix = guardedPrefixFor(request.getRequestURI());
+        if (prefix == null) {
             chain.doFilter(request, response);
             return;
         }
 
-        String key = clientIp(request);
+        String key = clientIp(request) + "|" + prefix;
         long now = nowMs();
         Bucket bucket = buckets.computeIfAbsent(
                 key, k -> new Bucket(MAX_REQUESTS_PER_HOUR, now));
@@ -206,9 +228,14 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         return System.currentTimeMillis();
     }
 
-    /** Test seam — inspect bucket state without exposing the map. */
-    int currentTokens(String key) {
-        Bucket b = buckets.get(key);
+    /** Test seam — the OCT-portal bucket of a client IP. */
+    int currentTokens(String clientIp) {
+        return currentTokens(clientIp, GUARDED_PREFIX);
+    }
+
+    /** Test seam — inspect a (client, portal) bucket without exposing the map. */
+    int currentTokens(String clientIp, String prefix) {
+        Bucket b = buckets.get(clientIp + "|" + prefix);
         return b == null ? MAX_REQUESTS_PER_HOUR : b.tokens.get();
     }
 }

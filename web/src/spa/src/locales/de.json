@@ -2895,6 +2895,43 @@
     "submit": "Speichern",
     "submitting": "Speichere …"
   },
+  "imageInbox": {
+    "title": "Bild-Eingang",
+    "cardDesc": "Eingehende Fundusbilder Patienten und Visiten zuordnen.",
+    "subtitle": "{count} nicht zugeordnete Bilder",
+    "loading": "Wird geladen …",
+    "empty": "Keine nicht zugeordneten Bilder.",
+    "noPreview": "Keine Vorschau",
+    "patientId": "Patienten-ID",
+    "eye": "Auge",
+    "suggestion": "Vorschlag: {label} ({study})",
+    "bindSuggested": "Vorschlag zuordnen",
+    "bind": "Zuordnen …",
+    "dismiss": "Verwerfen",
+    "dismissConfirm": "Dieses Bild wirklich verwerfen?"
+  },
+  "imagePortal": {
+    "brandSuffix": "MUW",
+    "portalLabel": "Bild-Upload",
+    "noLoginRequired": "Kein Login erforderlich",
+    "heroTitle": "Fundusbild hochladen",
+    "heroSubtitle": "Bild hierher ziehen oder ",
+    "heroBrowse": "Datei wählen",
+    "formatNote": "JPEG oder PNG · max. 64 MB",
+    "patientIdLabel": "Patienten-ID (optional)",
+    "patientIdPlaceholder": "z. B. HAE-001",
+    "lateralityLabel": "Auge (optional)",
+    "dateLabel": "Aufnahmedatum (optional)",
+    "uploadButton": "Hochladen",
+    "uploading": "Wird hochgeladen …",
+    "successTitle": "Bild hochgeladen",
+    "successBody": "Das Bild wurde übermittelt und steht zur Zuordnung bereit.",
+    "uploadAnother": "Weiteres Bild hochladen",
+    "errorTitle": "Upload fehlgeschlagen",
+    "patientFound": "Patient gefunden: {label} ({study})",
+    "patientNotFound": "Keine passende Patienten-ID gefunden",
+    "patientAmbiguous": "Mehrere Treffer — bei der Zuordnung auflösen"
+  },
   "octPortal": {
     "topbar": {
       "brandSuffix": "MUW",

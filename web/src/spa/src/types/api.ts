@@ -1284,7 +1284,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/public/bcva-entry/commit": {
+    "/api/v1/public/image-upload/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/image-upload/commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -1294,6 +1310,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["commit_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/bcva-entry/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commit_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1348,6 +1380,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/internal/dicom-ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ingest_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import": {
         parameters: {
             query?: never;
@@ -1374,6 +1422,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["commitImport_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/image-ingest/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/image-ingest/{id}/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bind"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2532,6 +2612,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/internal/dicom-worklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["worklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import/{token}/rows": {
         parameters: {
             query?: never;
@@ -2540,6 +2636,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listRows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/image-ingest/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/image-ingest/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["inbox"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3879,6 +4007,21 @@ export interface components {
         ActiveStudyRequest: {
             oid?: string;
         };
+        DicomIngestRequest: {
+            sopInstanceUid?: string;
+            sopClassUid?: string;
+            studyInstanceUid?: string;
+            seriesInstanceUid?: string;
+            modality?: string;
+            patientId?: string;
+            patientName?: string;
+            accessionNumber?: string;
+            studyDate?: string;
+            laterality?: string;
+            sourceAeTitle?: string;
+            dicomPath?: string;
+            previewPngPath?: string;
+        };
         ImportCrfPreviewDto: {
             /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
             previewToken?: string;
@@ -3979,6 +4122,17 @@ export interface components {
              * @description Active study id at commit time (helper for the SPA audit-trail link).
              */
             auditLogStudyId?: number;
+        };
+        DismissRequest: {
+            reason?: string;
+        };
+        BindRequest: {
+            /** Format: int32 */
+            studySubjectId?: number;
+            /** Format: int32 */
+            studyEventId?: number;
+            /** Format: int32 */
+            eventCrfId?: number;
         };
         ScheduleEventRequest: {
             subjectId?: string;
@@ -4299,10 +4453,6 @@ export interface components {
         BugReportResponse: {
             delivered?: boolean;
             ticketId?: string;
-        };
-        BindRequest: {
-            /** Format: int32 */
-            eventCrfId?: number;
         };
         EventCellDto: {
             eventDefinitionOid?: string;
@@ -7316,7 +7466,62 @@ export interface operations {
             };
         };
     };
+    resolve_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     commit_1: {
+        parameters: {
+            query?: {
+                patientId?: string;
+                laterality?: string;
+                studyDate?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    commit_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -7432,6 +7637,32 @@ export interface operations {
             };
         };
     };
+    ingest_1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-MUW-Dicom-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DicomIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     uploadImport_1: {
         parameters: {
             query?: never;
@@ -7481,6 +7712,58 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ImportCrfCommitResult"];
+                };
+            };
+        };
+    };
+    dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DismissRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    bind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -9405,6 +9688,31 @@ export interface operations {
             };
         };
     };
+    worklist: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: {
+                "X-MUW-Dicom-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     listRows: {
         parameters: {
             query?: {
@@ -9426,6 +9734,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PreviewRowsPageDto"];
+                };
+            };
+        };
+    };
+    preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    inbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };

@@ -213,6 +213,14 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
   {
+    id: 'image-inbox',
+    to: { name: 'image-ingest-inbox' },
+    titleKey: 'imageInbox.title',
+    descKey: 'imageInbox.cardDesc',
+    allowedRoles: ['Data Manager', 'Investigator'],
+    scope: 'study-scoped',
+  },
+  {
     id: 'import-crf-data',
     to: { name: 'import-crf-data' },
     titleKey: 'importCrf.title',
