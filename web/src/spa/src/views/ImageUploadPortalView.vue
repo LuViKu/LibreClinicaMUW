@@ -5,14 +5,27 @@
  * The Remidio FOP is an iPhone + browser with no DICOM export, so the operator
  * uploads the captured fundus JPEG/PNG here. Unauthenticated (reverse-proxy
  * gated), phone-friendly. Mirrors the OCT/BCVA portals' posture; the image
- * lands in image_ingest(source_kind='upload', UNBOUND) for the reconciliation
- * inbox. An optional PatientID is stored as a match hint (confirmed on-page via
- * the resolve endpoint) but nothing binds here.
+ * lands in image_ingest(source_kind='upload').
+ *
+ * The operator can identify the visit in two ways, because in a clinic both
+ * happen: pick it from the day's scheduled visits (when the institution has
+ * enabled that list), or type the subject label and accept the visit the
+ * backend finds for that date. Either way the image is filed against the visit
+ * on arrival. Typing a label with no visit still works and queues the image in
+ * the reconciliation inbox — an image that reached the server is never refused
+ * for want of an identity.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ImageDropzone from '@/components/imageportal/ImageDropzone.vue'
-import { commitImage, resolvePatient, type ResolveState } from '@/api/imagePortal'
+import TodaysVisitsPicker from '@/components/imageportal/TodaysVisitsPicker.vue'
+import {
+  commitImage,
+  resolvePatient,
+  type EventCandidate,
+  type PortalVisit,
+  type ResolveState,
+} from '@/api/imagePortal'
 
 const { t } = useI18n()
 
@@ -28,6 +41,10 @@ const error = ref<string | null>(null)
 const resolveState = ref<ResolveState | null>(null)
 const resolveLabel = ref('')
 const resolveStudy = ref('')
+/** The visit found for the typed label on the chosen date, if any. */
+const suggestedEvent = ref<EventCandidate | null>(null)
+/** The visit the image will be filed against — set by either path. */
+const studyEventId = ref<number | null>(null)
 
 function onFileSelected(f: File): void {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
@@ -38,6 +55,7 @@ function onFileSelected(f: File): void {
 
 async function onPatientBlur(): Promise<void> {
   resolveState.value = null
+  suggestedEvent.value = null
   const pid = patientId.value.trim()
   if (!pid) return
   try {
@@ -46,9 +64,29 @@ async function onPatientBlur(): Promise<void> {
     if (r.candidates.length > 0) {
       resolveLabel.value = r.candidates[0].subjectLabel
       resolveStudy.value = r.candidates[0].studyName
+      // Only when exactly one subject matched. Offering a visit for one of
+      // several same-prefix subjects invites filing against the wrong one.
+      if (r.state === 'suggested' && r.candidates.length === 1) {
+        suggestedEvent.value = r.candidates[0].matchingEvent
+      }
     }
   } catch {
     resolveState.value = null // resolve is best-effort — never block the upload
+  }
+}
+
+/** Accept the visit the backend found for the typed label. */
+function acceptSuggestedVisit(): void {
+  if (suggestedEvent.value) studyEventId.value = suggestedEvent.value.studyEventId
+}
+
+function onVisitChosen(v: PortalVisit | null): void {
+  // Picking from the list supersedes anything typed — one image belongs to one
+  // visit, and two half-set identities is how the wrong one gets used.
+  if (v) {
+    patientId.value = v.subjectLabel
+    resolveState.value = null
+    suggestedEvent.value = null
   }
 }
 
@@ -63,6 +101,7 @@ async function onUpload(): Promise<void> {
       patientId: patientId.value.trim() || undefined,
       laterality: laterality.value || undefined,
       studyDate: studyDate.value || undefined,
+      studyEventId: studyEventId.value ?? undefined,
     })
     done.value = true
   } catch (e) {
@@ -79,6 +118,8 @@ function reset(): void {
   patientId.value = ''
   laterality.value = ''
   studyDate.value = ''
+  studyEventId.value = null
+  suggestedEvent.value = null
   resolveState.value = null
   done.value = false
   error.value = null
@@ -118,10 +159,25 @@ function reset(): void {
           </div>
 
           <div class="mt-5 space-y-4">
+            <TodaysVisitsPicker
+              v-model="studyEventId"
+              :date="studyDate"
+              @visit-chosen="onVisitChosen"
+            />
+
             <div>
               <label class="block text-[13px] font-medium text-slate-600 mb-1" for="ip-patient">{{ t('imagePortal.patientIdLabel') }}</label>
               <input id="ip-patient" v-model="patientId" type="text" inputmode="text" autocomplete="off" :placeholder="t('imagePortal.patientIdPlaceholder')" class="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100" @blur="onPatientBlur" />
               <p v-if="resolveState === 'suggested' || resolveState === 'novisit'" class="mt-1.5 text-[12px] text-muw-teal-700" data-testid="resolve-found">{{ t('imagePortal.patientFound', { label: resolveLabel, study: resolveStudy }) }}</p>
+              <button
+                v-if="suggestedEvent && studyEventId === null"
+                type="button"
+                class="mt-1.5 block text-[12px] font-medium text-muw-blue hover:text-muw-blue-700 underline"
+                data-testid="accept-suggested-visit"
+                @click="acceptSuggestedVisit"
+              >
+                {{ t('imagePortal.attachToVisit', { visit: suggestedEvent.definitionLabel }) }}
+              </button>
               <p v-else-if="resolveState === 'ambiguous'" class="mt-1.5 text-[12px] text-amber-700">{{ t('imagePortal.patientAmbiguous') }}</p>
               <p v-else-if="resolveState === 'nopatient'" class="mt-1.5 text-[12px] text-slate-500">{{ t('imagePortal.patientNotFound') }}</p>
             </div>

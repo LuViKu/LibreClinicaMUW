@@ -2532,6 +2532,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/image-upload/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["visits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/image-upload/patients/search": {
         parameters: {
             query?: never;
@@ -7529,6 +7545,7 @@ export interface operations {
                 laterality?: string;
                 studyDate?: string;
                 studyEventId?: number;
+                device?: string;
             };
             header?: never;
             path?: never;
@@ -9591,6 +9608,28 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    visits: {
+        parameters: {
+            query?: {
+                date?: string;
             };
             header?: never;
             path?: never;

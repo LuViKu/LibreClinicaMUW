@@ -385,6 +385,101 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
         }
     }
 
+    /* ---------------- /visits : the today's-visits picker ---------------- */
+
+    private static void setTodaysVisits(String value) throws Exception {
+        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
+        f.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) f.get(null);
+        if (value == null) live.remove("core.ingest.portal.todaysVisits");
+        else live.setProperty("core.ingest.portal.todaysVisits", value);
+    }
+
+    /**
+     * A list of the day's patients on a page that needs no login is a
+     * disclosure in its own right, so it must stay off until someone turns it
+     * on — and the path must not announce itself while it is off.
+     */
+    @Test
+    void visits_areNotServedUnlessTheFeatureIsOn() throws Exception {
+        setTodaysVisits(null);
+        mockMvc().perform(get("/api/v1/public/image-upload/visits"))
+                .andExpect(status().isNotFound());
+        setTodaysVisits("false");
+        try {
+            mockMvc().perform(get("/api/v1/public/image-upload/visits"))
+                    .andExpect(status().isNotFound());
+        } finally {
+            setTodaysVisits(null);
+        }
+    }
+
+    @Test
+    void visits_whenOn_listTheDaysOpenVisits() throws Exception {
+        setTodaysVisits("true");
+        try {
+            mockMvc().perform(get("/api/v1/public/image-upload/visits").param("date", "2021-01-04"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.date").value("2021-01-04"))
+                    .andExpect(jsonPath("$.visits.length()").value(1))
+                    .andExpect(jsonPath("$.visits[0].studyEventId").value(3))
+                    .andExpect(jsonPath("$.visits[0].subjectLabel").value("M-001"))
+                    .andExpect(jsonPath("$.visits[0].eventLabel").value("V3 Day 90"));
+        } finally {
+            setTodaysVisits(null);
+        }
+    }
+
+    /**
+     * The picker shows the label, the visit and the study. Sex and date of
+     * birth are on the DICOM worklist because a modality needs them; they have
+     * no business on an unauthenticated web page.
+     */
+    @Test
+    void visits_exposeNoIdentifyingFieldsBeyondTheLabel() throws Exception {
+        setTodaysVisits("true");
+        try {
+            mockMvc().perform(get("/api/v1/public/image-upload/visits").param("date", "2021-01-04"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.visits[0].gender").doesNotExist())
+                    .andExpect(jsonPath("$.visits[0].dateOfBirth").doesNotExist())
+                    .andExpect(jsonPath("$.visits[0].patientId").doesNotExist());
+        } finally {
+            setTodaysVisits(null);
+        }
+    }
+
+    /** The portal's study scope applies here too, or the list leaks across studies. */
+    @Test
+    void visits_honourThePortalStudyScope() throws Exception {
+        setTodaysVisits("true");
+        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
+        f.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) f.get(null);
+        live.setProperty("core.ingest.portal.studyOids", "S_SOME_OTHER_STUDY");
+        try {
+            mockMvc().perform(get("/api/v1/public/image-upload/visits").param("date", "2021-01-04"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.visits.length()").value(0));
+        } finally {
+            live.remove("core.ingest.portal.studyOids");
+            setTodaysVisits(null);
+        }
+    }
+
+    /** A completed visit is closed; offering it invites filing against the wrong encounter. */
+    @Test
+    void visits_excludeClosedVisits() throws Exception {
+        setTodaysVisits("true");
+        try {
+            mockMvc().perform(get("/api/v1/public/image-upload/visits").param("date", "2020-11-05"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.visits.length()").value(0));
+        } finally {
+            setTodaysVisits(null);
+        }
+    }
+
     private int uploadRowCount() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(

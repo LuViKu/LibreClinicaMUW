@@ -10,12 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -67,6 +62,8 @@ public class DicomWorklistApiController {
     private static final String TOKEN_HEADER = "X-MUW-Dicom-Token";
     /** Widest window a single query may span — a wildcard C-FIND can't dump the schedule. */
     private static final int MAX_WINDOW_DAYS = 31;
+    /** Hard row cap — a 31-day window on a busy study is still one response. */
+    private static final int MAX_ENTRIES = 2000;
     private static final DateTimeFormatter TM = DateTimeFormatter.ofPattern("HHmmss");
 
     private final DataSource dataSource;
@@ -106,7 +103,6 @@ public class DicomWorklistApiController {
             d1 = d0.plusDays(MAX_WINDOW_DAYS);
         }
 
-        // Scheduled (1) / data-entry-started (3) visits of non-removed subjects.
         // 2026-09-18 — restrict to the studies this device may see.
         //
         // A worklist hands the camera subject labels, sex and dates of birth
@@ -115,48 +111,27 @@ public class DicomWorklistApiController {
         // displays the nAMD study's schedule. `core.dicom.worklist.studyOids`
         // names what it may offer; blank keeps the previous unrestricted
         // behaviour for single-study dev instances.
-        String studyScope = StudyScopeConfig.inClauseOrNull(
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY));
+        java.util.Set<Integer> allowed =
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY);
+        String studyScope = StudyScopeConfig.inClauseOrNull(allowed);
 
-        String sql = "SELECT se.study_event_id, ss.label, sub.gender, sub.date_of_birth, sub.dob_collected, "
-                + "       se.date_start, se.start_time_flag, se.sample_ordinal, "
-                + "       sed.name AS definition_name, s.name AS study_name "
-                + "  FROM study_event se "
-                + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
-                + "  JOIN subject sub ON sub.subject_id = ss.subject_id "
-                + "  JOIN study s ON s.study_id = ss.study_id "
-                + "  JOIN study_event_definition sed "
-                + "    ON sed.study_event_definition_id = se.study_event_definition_id "
-                + " WHERE date(se.date_start) BETWEEN ? AND ? "
-                + "   AND se.subject_event_status_id IN (1, 3) "
-                + "   AND ss.status_id NOT IN (5, 7) "
-                + (studyScope == null ? "" : "   AND ss.study_id IN " + studyScope + " ")
-                + " ORDER BY se.date_start, ss.label";
+        // One query, shared with the upload page's visit picker — the two must
+        // never disagree about which visits are open. See ScheduledVisitQuery.
         List<WorklistEntry> entries = new ArrayList<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setDate(1, Date.valueOf(d0));
-            ps.setDate(2, Date.valueOf(d1));
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    Timestamp start = rs.getTimestamp("date_start");
-                    boolean timeMeaningful = rs.getBoolean("start_time_flag");
-                    boolean dobCollected = rs.getBoolean("dob_collected");
-                    Date dob = rs.getDate("date_of_birth");
-                    String defName = rs.getString("definition_name");
-                    int ordinal = rs.getInt("sample_ordinal");
-                    String eventLabel = ordinal > 1 ? defName + " (#" + ordinal + ")" : defName;
-                    entries.add(new WorklistEntry(
-                            rs.getInt("study_event_id"),
-                            rs.getString("label"),
-                            rs.getString("gender"),
-                            (dobCollected && dob != null) ? dob.toLocalDate().toString() : null,
-                            start != null ? start.toLocalDateTime().toLocalDate().toString() : null,
-                            (timeMeaningful && start != null) ? start.toLocalDateTime().format(TM) : null,
-                            eventLabel,
-                            rs.getString("study_name"),
-                            "OP"));
-                }
+        try {
+            for (ScheduledVisitQuery.ScheduledVisit v :
+                    ScheduledVisitQuery.query(dataSource, d0, d1, allowed, MAX_ENTRIES)) {
+                entries.add(new WorklistEntry(
+                        v.studyEventId(),
+                        v.subjectLabel(),
+                        v.gender(),
+                        v.dateOfBirth(),
+                        v.date(),
+                        // DICOM TM, which is what the sidecar puts on the wire.
+                        v.time() == null ? null : v.time().format(TM),
+                        v.eventLabel(),
+                        v.studyName(),
+                        "OP"));
             }
         } catch (SQLException e) {
             LOG.error("DICOM worklist query failed: {}", e.getMessage());

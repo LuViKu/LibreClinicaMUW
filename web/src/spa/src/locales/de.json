@@ -2911,6 +2911,12 @@
     "dismissConfirm": "Dieses Bild wirklich verwerfen?"
   },
   "imagePortal": {
+    "visitPickerLabel": "Visite wählen",
+    "visitFilterPlaceholder": "Nach Kennung oder Visite filtern",
+    "visitLoading": "Visiten werden geladen …",
+    "visitNone": "Keine passende Visite für heute",
+    "visitClear": "Auswahl aufheben",
+    "attachToVisit": "An Visite „{visit}“ anhängen",
     "brandSuffix": "MUW",
     "portalLabel": "Bild-Upload",
     "noLoginRequired": "Kein Login erforderlich",

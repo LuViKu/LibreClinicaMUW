@@ -2911,6 +2911,12 @@
     "dismissConfirm": "Really dismiss this image?"
   },
   "imagePortal": {
+    "visitPickerLabel": "Choose a visit",
+    "visitFilterPlaceholder": "Filter by label or visit",
+    "visitLoading": "Loading visits …",
+    "visitNone": "No matching visit today",
+    "visitClear": "Clear selection",
+    "attachToVisit": "Attach to visit \u201c{visit}\u201d",
     "brandSuffix": "MUW",
     "portalLabel": "Image Upload",
     "noLoginRequired": "No login required",

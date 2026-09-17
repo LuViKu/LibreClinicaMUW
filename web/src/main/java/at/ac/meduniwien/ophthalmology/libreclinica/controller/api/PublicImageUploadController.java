@@ -118,6 +118,68 @@ public class PublicImageUploadController {
                 StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
     }
 
+    /**
+     * One visit on the picker, and nothing more than the operator needs to
+     * recognise it.
+     *
+     * <p>Deliberately narrower than the DICOM worklist's entry, which carries
+     * sex and date of birth: this page is unauthenticated, so the projection is
+     * the label, the visit and the study.
+     */
+    public record PortalVisit(int studyEventId, String subjectLabel, String eventLabel,
+                              String studyName, String time) {}
+
+    /**
+     * The visits scheduled for one day, so the operator can pick the patient
+     * from a list instead of typing a label — the same thing the camera's own
+     * worklist screen shows.
+     *
+     * <p><strong>Off by default.</strong> A list of today's patients on a page
+     * that needs no login is a disclosure in its own right, even though it
+     * shows only pseudonymised labels. It ships behind
+     * {@code core.ingest.portal.todaysVisits} so it cannot be enabled by
+     * accident, and honours the portal's study scope when it is.
+     *
+     * @return 404 when the feature is off — the path should not announce itself
+     */
+    @GetMapping(value = "/visits", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> visits(@RequestParam(value = "date", required = false) String date) {
+        if (!todaysVisitsEnabled()) {
+            return ResponseEntity.status(404).body(Map.of("message", "not found"));
+        }
+        LocalDate day = parseIsoDateOrNull(date);
+        if (day == null) day = LocalDate.now();
+
+        try {
+            List<PortalVisit> out = new ArrayList<>();
+            for (ScheduledVisitQuery.ScheduledVisit v : ScheduledVisitQuery.query(
+                    dataSource, day, day,
+                    StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY),
+                    MAX_VISITS)) {
+                out.add(new PortalVisit(v.studyEventId(), v.subjectLabel(), v.eventLabel(),
+                        v.studyName(), v.time() == null ? null : v.time().toString()));
+            }
+            // Count only — the labels are patient data.
+            LOG.info("public image upload: served {} visits for one day", out.size());
+            return ResponseEntity.ok(Map.of("date", day.toString(), "visits", out));
+        } catch (SQLException e) {
+            LOG.error("public image upload: visit list failed: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not load visits"));
+        }
+    }
+
+    /** Hard cap: a picker is for choosing, not for exporting a day's schedule. */
+    private static final int MAX_VISITS = 200;
+
+    private static boolean todaysVisitsEnabled() {
+        try {
+            return "true".equalsIgnoreCase(
+                    String.valueOf(CoreResources.getField("core.ingest.portal.todaysVisits")).trim());
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     @PostMapping(value = "/resolve", consumes = MediaType.APPLICATION_JSON_VALUE,
                  produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> resolve(@RequestBody ResolveRequest req) {
