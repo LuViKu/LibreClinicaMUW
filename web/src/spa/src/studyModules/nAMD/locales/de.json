@@ -155,6 +155,7 @@
         },
         "intervalProposed": "Vorgeschlagen: {weeks} Wochen",
         "firedTriggers": "Auslösende Befunde",
+        "thresholdSet": "Schwellenwert-Satz {version}.",
         "disclaimer": "Diese Empfehlung folgt dem Studienprotokoll. Die klinische Entscheidung trifft der Behandelnde.",
         "triggers": {
           "DE_NOVO_IRF": "Neu aufgetretene intraretinale Flüssigkeit",

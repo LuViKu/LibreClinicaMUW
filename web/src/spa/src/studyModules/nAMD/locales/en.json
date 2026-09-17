@@ -155,6 +155,7 @@
         },
         "intervalProposed": "[NEEDS_REVIEW] Proposed: {weeks} weeks",
         "firedTriggers": "[NEEDS_REVIEW] Fired triggers",
+        "thresholdSet": "Threshold set {version}.",
         "disclaimer": "[NEEDS_REVIEW] This recommendation follows the study protocol. The treating physician makes the clinical decision.",
         "triggers": {
           "DE_NOVO_IRF": "[NEEDS_REVIEW] New-onset intraretinal fluid",

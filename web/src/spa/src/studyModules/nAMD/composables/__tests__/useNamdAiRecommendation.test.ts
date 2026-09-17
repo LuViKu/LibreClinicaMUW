@@ -2,6 +2,12 @@
  * 2026-06-30 — Rule-engine trigger matrix for the nAMD
  * treat-and-extend recommendation. One test per protocol trigger plus
  * precedence cases.
+ *
+ * 2026-09-18 — every fluid figure here was multiplied by ten when the mm³ → nL
+ * conversion was corrected (it multiplied by 100 instead of 1000) and the
+ * thresholds were scaled to match. The volumes each case represents are
+ * unchanged; they are now written in real nanolitres. BCVA letters and CRT
+ * micrometres are untouched — only fluid was in the wrong unit.
  */
 import { computed } from 'vue'
 import { describe, it, expect } from 'vitest'
@@ -52,38 +58,38 @@ describe('useNamdAiRecommendation — first-visit fall-through', () => {
 
 describe('useNamdAiRecommendation — SHORTEN triggers', () => {
   it('DE_NOVO_IRF when prev=0 → cur>0', () => {
-    const rec = run(visit({ irf: 30 }), visit({ irf: 0 }))
+    const rec = run(visit({ irf: 300 }), visit({ irf: 0 }))
     expect(rec?.rec).toBe('SHORTEN')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('DE_NOVO_IRF')
   })
   it('IRF_INCREASE above threshold', () => {
-    const rec = run(visit({ irf: 60 }), visit({ irf: 30 }))
+    const rec = run(visit({ irf: 600 }), visit({ irf: 300 }))
     expect(rec?.rec).toBe('SHORTEN')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('IRF_INCREASE')
   })
   it('IRF_DECREASE_INSUFFICIENT when drop <50%', () => {
-    const rec = run(visit({ irf: 70 }), visit({ irf: 100 }))
+    const rec = run(visit({ irf: 700 }), visit({ irf: 1000 }))
     expect(rec?.rec).toBe('SHORTEN')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('IRF_DECREASE_INSUFFICIENT')
   })
   it('DE_NOVO_CENTRAL_SRF when prev central=0 → cur>0', () => {
     const rec = run(
-      visit({ srf: 5, fluidByRegion: { c1: { irf: 0, srf: 5, ped: 0 }, c3: { irf: 0, srf: 5, ped: 0 }, c6: { irf: 0, srf: 5, ped: 0 } } }),
+      visit({ srf: 50, fluidByRegion: { c1: { irf: 0, srf: 50, ped: 0 }, c3: { irf: 0, srf: 50, ped: 0 }, c6: { irf: 0, srf: 50, ped: 0 } } }),
       visit(),
     )
     expect(rec?.rec).toBe('SHORTEN')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('DE_NOVO_CENTRAL_SRF')
   })
   it('CENTRAL_SRF_INCREASE above strict threshold', () => {
-    const cur = visit({ fluidByRegion: { c1: { irf: 0, srf: 30, ped: 0 }, c3: { irf: 0, srf: 30, ped: 0 }, c6: { irf: 0, srf: 30, ped: 0 } } })
-    const prev = visit({ fluidByRegion: { c1: { irf: 0, srf: 10, ped: 0 }, c3: { irf: 0, srf: 10, ped: 0 }, c6: { irf: 0, srf: 10, ped: 0 } } })
+    const cur = visit({ fluidByRegion: { c1: { irf: 0, srf: 300, ped: 0 }, c3: { irf: 0, srf: 300, ped: 0 }, c6: { irf: 0, srf: 300, ped: 0 } } })
+    const prev = visit({ fluidByRegion: { c1: { irf: 0, srf: 100, ped: 0 }, c3: { irf: 0, srf: 100, ped: 0 }, c6: { irf: 0, srf: 100, ped: 0 } } })
     const rec = run(cur, prev)
     expect(rec?.rec).toBe('SHORTEN')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('CENTRAL_SRF_INCREASE')
   })
-  it('SRF_RING_1_3_INCREASE when (c3-c1) jumps ≥10 nL', () => {
-    const cur = visit({ fluidByRegion: { c1: { irf: 0, srf: 5, ped: 0 }, c3: { irf: 0, srf: 25, ped: 0 }, c6: { irf: 0, srf: 25, ped: 0 } } })
-    const prev = visit({ fluidByRegion: { c1: { irf: 0, srf: 5, ped: 0 }, c3: { irf: 0, srf: 10, ped: 0 }, c6: { irf: 0, srf: 10, ped: 0 } } })
+  it('SRF_RING_1_3_INCREASE when (c3-c1) jumps ≥100 nL', () => {
+    const cur = visit({ fluidByRegion: { c1: { irf: 0, srf: 50, ped: 0 }, c3: { irf: 0, srf: 250, ped: 0 }, c6: { irf: 0, srf: 250, ped: 0 } } })
+    const prev = visit({ fluidByRegion: { c1: { irf: 0, srf: 50, ped: 0 }, c3: { irf: 0, srf: 100, ped: 0 }, c6: { irf: 0, srf: 100, ped: 0 } } })
     const rec = run(cur, prev)
     expect(rec?.rec).toBe('SHORTEN')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('SRF_RING_1_3_INCREASE')
@@ -106,14 +112,14 @@ describe('useNamdAiRecommendation — SHORTEN triggers', () => {
 
 describe('useNamdAiRecommendation — KEEP triggers', () => {
   it('RESIDUAL_IRF_HALVED when drop ≥50% but still present', () => {
-    const rec = run(visit({ irf: 30 }), visit({ irf: 80 }))
+    const rec = run(visit({ irf: 300 }), visit({ irf: 800 }))
     expect(rec?.rec).toBe('KEEP')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('RESIDUAL_IRF_HALVED')
   })
   it('RESIDUAL_IRF_STABLE when small upward drift (no decrease + no SHORTEN trigger)', () => {
-    // cur slightly higher than prev — under IRF_INCREASE_NL=20 so no SHORTEN
+    // cur slightly higher than prev — under IRF_INCREASE_NL=200 so no SHORTEN
     // fires; cur > 0 + prev > 0 so RESIDUAL_IRF_STABLE qualifies.
-    const rec = run(visit({ irf: 32 }), visit({ irf: 30 }))
+    const rec = run(visit({ irf: 320 }), visit({ irf: 300 }))
     expect(rec?.rec).toBe('KEEP')
     expect(rec?.triggersFired.map((t) => t.key)).toContain('RESIDUAL_IRF_STABLE')
   })
@@ -140,6 +146,6 @@ describe('useNamdAiRecommendation — precedence', () => {
     expect(keys).toContain('IRF_ABSENT')
   })
   it('KEEP suppresses EXTEND when residual IRF still present', () => {
-    expect(run(visit({ irf: 30 }), visit({ irf: 80 }))?.rec).toBe('KEEP')
+    expect(run(visit({ irf: 300 }), visit({ irf: 800 }))?.rec).toBe('KEEP')
   })
 })

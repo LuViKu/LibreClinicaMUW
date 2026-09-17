@@ -43,22 +43,47 @@
  * card.
  */
 
+// Rule specification, thresholds in both units, and the sign-off record:
+// docs/development/study-modules/namd-treat-and-extend-rules.md
 import { computed, type ComputedRef } from 'vue'
 import type { NamdAiRecommendation, NamdTriggerHit, NamdVisit } from '../types'
 
 // ─── Tunable thresholds ────────────────────────────────────────────
+//
+// 2026-09-18 — every threshold below was multiplied by ten when the mm³ → nL
+// conversion in useNamdVisitData was corrected (it multiplied by 100 instead
+// of 1000). The two changes cancel: the volumes these fire at are exactly the
+// volumes they fired at before, so no recommendation changes. What changed is
+// that the numbers are now stated in real nanolitres.
+//
+// These are therefore the values the rules have always used, not a clinical
+// decision. The literal figures in the rule specification are ten times
+// smaller. Lowering them to the specification is a clinical call for the study
+// lead; when that happens, bump NAMD_THRESHOLDS_VERSION and record the
+// decision in the rules document, because every stored recommendation has to
+// stay interpretable against the thresholds that produced it.
+//
+// See docs/development/study-modules/namd-treat-and-extend-rules.md.
+
+/**
+ * Identifies the threshold set a recommendation was produced under. Shown on
+ * the recommendation card and written into the decision audit, so a decision
+ * made last year can still be read against the rules of last year.
+ */
+export const NAMD_THRESHOLDS_VERSION = 'v1-2026-09'
+
 /** SHORTEN: total IRF increase (nL) above this is "above threshold". */
-export const IRF_INCREASE_NL = 20
+export const IRF_INCREASE_NL = 200
 /** SHORTEN: central-1mm SRF increase (nL) above this is "above strict threshold". */
-export const CENTRAL_SRF_STRICT_INCREASE_NL = 10
+export const CENTRAL_SRF_STRICT_INCREASE_NL = 100
 /** SHORTEN: SRF in the 1–3 mm ring rises by ≥ this many nL vs prev OR cumulatively vs reference/nadir. */
-export const SRF_RING_1_3_INCREASE_NL = 10
+export const SRF_RING_1_3_INCREASE_NL = 100
 /** SHORTEN: IRF dropped vs prev but by < this fraction (i.e. < 50 %). */
 export const IRF_DECREASE_SUFFICIENT_PCT = 0.5
 /** SHORTEN: ≥ this BCVA-letters drop vs prev (combined with the attribution flag) triggers BCVA_LOSS. */
 export const BCVA_LOSS_LETTERS = 5
 /** KEEP / EXTEND: max activity (nL) considered "absent" — covers measurement noise around 0. */
-export const ABSENT_NL = 1
+export const ABSENT_NL = 10
 /** Default interval shift when shortening / extending (weeks). */
 export const SHIFT_WEEKS = 2
 /** Loading-phase interval (weeks). */

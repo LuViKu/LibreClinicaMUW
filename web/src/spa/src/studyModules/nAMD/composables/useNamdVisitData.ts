@@ -71,13 +71,26 @@ export interface UseNamdVisitDataResult {
   setEye: (eye: Laterality) => void
 }
 
-/** mm³ → nL (1 mm³ = 1 µL = 1000 nL — but the design's "nL" scale fits
- *  reasonable fluid volumes between 0 and 100 when 1 mm³ ≈ 100 nL is
- *  used as the display scaling. Match the design's range so the activity
- *  threshold of 20 still reads sensibly). */
+/**
+ * mm³ → nanolitres. 1 mm³ = 1 µL = 1000 nL.
+ *
+ * This used to multiply by 100, which is not a unit — it was chosen so the
+ * numbers landed in the range the design mockup showed. The consequence was
+ * that every figure labelled "nL" on the nAMD workspace was ten times too
+ * small, and the thresholds written in nL fired at ten times the volume they
+ * claimed. Numbers on a clinical screen have to mean what their unit says.
+ *
+ * Rounding to whole nanolitres discards anything below 0.0005 mm³, which is
+ * below the segmentation's own resolution.
+ *
+ * The thresholds in useNamdAiRecommendation were multiplied by ten in the same
+ * change, so recommendations are unchanged by this correction — see
+ * NAMD_THRESHOLDS_VERSION and
+ * docs/development/study-modules/namd-treat-and-extend-rules.md.
+ */
 function mm3ToNl(v: number | null | undefined): number {
   if (v == null) return 0
-  return Math.round(v * 100)
+  return Math.round(v * 1000)
 }
 
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
