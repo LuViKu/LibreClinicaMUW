@@ -1976,7 +1976,23 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 + "       WHERE  " + "           event_crf.study_event_id IN  " + "           ( "
                 + "               SELECT study_event_id FROM study_event  " + "               WHERE "
                 + "                   study_event.study_event_definition_id IN " + sedin + "                  AND  "
-                + "                   (   study_event.sample_ordinal IS NOT NULL AND " + "                       study_event.location IS NOT NULL AND "
+                + "                   (   study_event.sample_ordinal IS NOT NULL AND "
+                // 2026-09-18 — `study_event.location IS NOT NULL` removed here.
+                //
+                // The sibling getSQLDatasetBASE_EVENTSIDE dropped this predicate
+                // when location became nullable ("JN: starting 3.1
+                // study_event.location can be null", see the commented-out line
+                // in that method) — but this query kept it, and the two have
+                // been out of sync ever since.
+                //
+                // ExtractBean.addStudyEventData walks the item-data,
+                // event-side and item-group collections in lockstep by index.
+                // Any visit without a location was therefore present on the
+                // event side and absent on the item-group side, the lists ended
+                // up different lengths, and the extract died with
+                // IndexOutOfBoundsException instead of producing a file.
+                // Location is optional in the UI, so in practice this hit
+                // almost every dataset: 29 of 38 seeded visits have none.
                 + "                       study_event.date_start IS NOT NULL  " + "                   ) " + "                  AND "
                 + "                   study_event.study_subject_id IN " + "                  ( "
                 + "                   SELECT DISTINCT study_subject.study_subject_id " + "                    FROM   study_subject   "

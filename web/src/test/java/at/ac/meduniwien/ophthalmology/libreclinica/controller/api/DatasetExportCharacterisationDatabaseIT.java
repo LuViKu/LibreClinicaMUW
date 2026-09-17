@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -354,8 +355,97 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
             throw new AssertionError("the item-group query FAILED (swallowed SQLException): "
                     + dao.getFailureDetails());
         }
-        System.out.println("[diagnostic] item-group loader succeeded; "
-                + "an empty result set would be a data-shape problem, not a SQL error");
+
+        // Both loaders reported success — so report what each actually filled.
+        // addStudyEventData walks aBASE_ITEMDATAID and indexes the other two at
+        // the same offset, so any inequality here is the crash.
+        System.out.println("[diagnostic] sizes"
+                + " itemDataIds=" + sizeOfField(eb, "aBASE_ITEMDATAID")
+                + " eventSide=" + sizeOfField(eb, "hBASE_EVENTSIDE")
+                + " itemGroupSide=" + sizeOfField(eb, "hBASE_ITEMGROUPSIDE"));
+
+        // The outer join needs an item_group_metadata row on
+        // (item_id, crf_version_id) matching the event_crf's version. Report
+        // both sides so a mismatch is visible instead of inferred.
+        try (var c = DATA_SOURCE.getConnection(); var st = c.createStatement()) {
+            try (var rs = st.executeQuery(
+                    "SELECT ec.crf_version_id, count(*) FROM item_data id "
+                            + "JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id "
+                            + "WHERE id.item_id BETWEEN 1 AND 5 GROUP BY 1 ORDER BY 1")) {
+                while (rs.next()) {
+                    System.out.println("[diagnostic] item_data live under crf_version_id="
+                            + rs.getInt(1) + " rows=" + rs.getInt(2));
+                }
+            }
+            try (var rs = st.executeQuery(
+                    "SELECT crf_version_id, count(*) FROM item_group_metadata "
+                            + "WHERE item_id BETWEEN 1 AND 5 GROUP BY 1 ORDER BY 1")) {
+                while (rs.next()) {
+                    System.out.println("[diagnostic] item_group_metadata for crf_version_id="
+                            + rs.getInt(1) + " rows=" + rs.getInt(2));
+                }
+            }
+        }
+
+        // Build the query exactly as the loader does — using the DAO's own
+        // status constraints — and count its rows directly. That separates
+        // "the SQL matches nothing" from "the row processor drops them".
+        Class<?> entityDao = Class.forName(
+                "at.ac.meduniwien.ophthalmology.libreclinica.dao.core.EntityDAO");
+        int statusId = ds.getDatasetItemStatus().getId();
+        String ec = (String) invokeHidden(entityDao, dao, "getECStatusConstraint", new Class<?>[]{int.class}, statusId);
+        String it = (String) invokeHidden(entityDao, dao, "getItemDataStatusConstraint", new Class<?>[]{int.class}, statusId);
+        String dateConstraint = (String) invokeHidden(entityDao, dao, "genDatabaseDateConstraint",
+                new Class<?>[]{at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExtractBean.class}, eb);
+        String realSql = (String) invokeHidden(entityDao, dao, "getSQLDatasetBASE_ITEMGROUPSIDE",
+                new Class<?>[]{int.class, int.class, String.class, String.class, String.class,
+                        String.class, String.class},
+                1, 1, sedIn, itemIn, dateConstraint, ec, it);
+        try (var c = DATA_SOURCE.getConnection();
+             var st = c.createStatement();
+             var rs = st.executeQuery("SELECT count(*) FROM (" + realSql.replaceAll("(?i)ORDER BY itemdataid asc\\s*$", "") + ") AS probe")) {
+            rs.next();
+            System.out.println("[diagnostic] the loader's own SQL returns " + rs.getInt(1) + " rows");
+        }
+
+        // Ruled out: event_crf.status_id. Forcing every row to 2 (the value the
+        // query's crf_version join names) leaves the result at 0.
+        try (var c = DATA_SOURCE.getConnection(); var st = c.createStatement()) {
+            st.executeUpdate("UPDATE event_crf SET status_id = 2 WHERE status_id = 1");
+            try (var rs = st.executeQuery("SELECT count(*) FROM ("
+                    + realSql.replaceAll("(?i)ORDER BY itemdataid asc\\s*$", "") + ") AS probe")) {
+                rs.next();
+                System.out.println("[diagnostic] with event_crf.status_id=2 the same SQL returns "
+                        + rs.getInt(1) + " rows");
+            }
+            st.executeUpdate("UPDATE event_crf SET status_id = 1 WHERE status_id = 2");
+        }
+
+        // Dump both loaders' SQL so the differing predicate can be read off
+        // directly — the event side matches 30 rows against the same data.
+        String eventSql = (String) invokeHidden(entityDao, dao, "getSQLDatasetBASE_EVENTSIDE",
+                new Class<?>[]{int.class, int.class, String.class, String.class, String.class,
+                        String.class, String.class},
+                1, 1, sedIn, itemIn, dateConstraint, ec, it);
+        java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/itemgroupside.sql"), realSql);
+        java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/eventside.sql"), eventSql);
+        System.out.println("[diagnostic] wrote /tmp/itemgroupside.sql (" + realSql.length()
+                + " chars) and /tmp/eventside.sql (" + eventSql.length() + " chars)");
+    }
+
+    private static Object invokeHidden(Class<?> owner, Object target, String name,
+                                       Class<?>[] sig, Object... args) throws Exception {
+        java.lang.reflect.Method m = owner.getDeclaredMethod(name, sig);
+        m.setAccessible(true);
+        return m.invoke(target, args);
+    }
+
+    /** Reads one of ExtractBean's parallel collections reflectively. */
+    private static int sizeOfField(Object bean, String field) throws Exception {
+        java.lang.reflect.Field f = bean.getClass().getDeclaredField(field);
+        f.setAccessible(true);
+        Object v = f.get(bean);
+        return v == null ? -1 : ((java.util.Collection<?>) v).size();
     }
 
     /**
@@ -374,20 +464,64 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
      * that still needs pinning before the extract can be trusted.
      */
     @Test
-    void tabExport_forSeededStudy_currentlyThrows() {
+    void tabExport_containsTheSeededSubjects() throws Exception {
         DatasetBean ds = persistDataset("IT_TAB_" + System.nanoTime(),
                 java.util.List.of(1, 2, 3, 5));
-        org.junit.jupiter.api.Assertions.assertThrows(IndexOutOfBoundsException.class,
-                () -> materializer().materialize(ds, "tab", 1));
+        String text = readArchive(archivePathFor(idFromResult(materializer().materialize(ds, "tab", 1))));
+        assertTrue(text.contains("M-001"), "tab export should list the seeded subjects");
     }
 
-    /** CSV goes through a different report bean but dies in the same place. */
+    /** CSV goes through a different report bean; it died in the same place. */
     @Test
-    void csvExport_forSeededStudy_currentlyThrows() {
+    void csvExport_containsTheSeededSubjects() throws Exception {
         DatasetBean ds = persistDataset("IT_CSV_" + System.nanoTime(),
                 java.util.List.of(1, 2, 3, 5));
-        org.junit.jupiter.api.Assertions.assertThrows(IndexOutOfBoundsException.class,
-                () -> materializer().materialize(ds, "csv", 1));
+        String text = readArchive(archivePathFor(idFromResult(materializer().materialize(ds, "csv", 1))));
+        assertTrue(text.contains("M-001"), "csv export should list the seeded subjects");
+    }
+
+    /**
+     * The regression guard for the desync itself: visits without a location
+     * (29 of the 38 seeded ones, since location is optional in the UI) must
+     * appear on both sides of the extract. If the item-group query ever regains
+     * a predicate the event-side query lacks, the lists drift apart again and
+     * the extract dies on an index rather than reporting anything useful.
+     */
+    @Test
+    void extractSidesStayInLockstepForVisitsWithoutALocation() throws Exception {
+        try (var c = DATA_SOURCE.getConnection();
+             var st = c.createStatement();
+             var rs = st.executeQuery(
+                     "SELECT count(*) FROM study_event WHERE location IS NULL")) {
+            rs.next();
+            assertTrue(rs.getInt(1) > 0,
+                    "fixture assumption: the seed has visits with no location");
+        }
+
+        DatasetBean ds = persistDataset("IT_LOCKSTEP_" + System.nanoTime(),
+                java.util.List.of(1, 2, 3, 5));
+        var eb = new at.ac.meduniwien.ophthalmology.libreclinica.service.extract
+                .GenerateExtractFileService(DATA_SOURCE, Mockito.mock(CoreResources.class),
+                        Mockito.mock(RuleSetRuleDao.class))
+                .generateExtractBean(ds,
+                        (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
+                                new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy
+                                        .StudyDAO(DATA_SOURCE).findByPK(1),
+                        new at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean());
+
+        var dao = new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO(DATA_SOURCE);
+        String sql = ds.getSQLStatement();
+        String sedIn = dao.parseSQLDataset(sql, true, true);
+        String itemIn = dao.parseSQLDataset(sql, false, true);
+        dao.loadBASE_EVENTINSIDEHashMap(1, 1, sedIn, itemIn, eb);
+        dao.loadBASE_ITEMGROUPSIDEHashMap(1, 1, sedIn, itemIn, eb);
+
+        int itemDataIds = sizeOfField(eb, "aBASE_ITEMDATAID");
+        int eventSide = sizeOfField(eb, "hBASE_EVENTSIDE");
+        int itemGroupSide = sizeOfField(eb, "hBASE_ITEMGROUPSIDE");
+        assertTrue(itemDataIds > 0, "the fixture should extract some item data");
+        assertEquals(itemDataIds, eventSide, "event side is out of step with the item data");
+        assertEquals(itemDataIds, itemGroupSide, "item-group side is out of step with the item data");
     }
 
     /**
