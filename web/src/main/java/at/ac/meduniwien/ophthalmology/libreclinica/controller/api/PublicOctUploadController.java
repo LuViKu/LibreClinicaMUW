@@ -805,6 +805,18 @@ public class PublicOctUploadController {
      *       CRF exists yet.</li>
      * </ul>
      */
+    /**
+     * Label-prefix subject lookup for the portal's patient-search dialog.
+     * See {@link PublicSubjectSearch} for the deliberate narrowing (minimum
+     * prefix, row cap, label-only projection) relative to the staff endpoint.
+     */
+    @GetMapping(path = "/patients/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> searchPatientsPublic(
+            @RequestParam("q") String q,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return PublicSubjectSearch.search(studySubjectFinder, q, limit);
+    }
+
     @GetMapping(path = "/patients/{studySubjectId:[0-9]+}/events",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listPatientEventsPublic(
@@ -876,18 +888,12 @@ public class PublicOctUploadController {
      * completed / signed / locked / stopped / skipped / removed).
      */
     private static String statusForSubjectEventStatusId(int id) {
-        return switch (id) {
-            case 1 -> "scheduled";
-            case 2 -> "data-entry-started";
-            case 4 -> "completed";
-            case 5 -> "stopped";
-            case 6 -> "skipped";
-            case 7 -> "locked";
-            case 8 -> "signed";
-            case 9 -> "scheduled"; // not_scheduled — treat as scheduled for portal
-            case 10 -> "removed";
-            default -> "scheduled";
-        };
+        // 2026-09-18: delegated to the canonical mapper. The copy that used to
+        // live here disagreed with SubjectEventStatus on ids 2 and 3 — it
+        // reported "data-entry-started" for a not-scheduled visit and, having
+        // no case for 3, reported a genuinely started visit as "scheduled" —
+        // and invented ids 9/10 that the enum does not define.
+        return EventsApiController.statusForSubjectEventStatusId(id);
     }
 
     /* ====================================================================== */

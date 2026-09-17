@@ -42,6 +42,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -102,6 +103,19 @@ public class PublicImageUploadController {
                                     EventCandidate matchingEvent) {}
 
     public record ResolveResponse(String patientId, List<ResolveCandidate> candidates, String state) {}
+
+    /**
+     * Label-prefix subject lookup for the Remidio page's patient-search dialog
+     * — the sibling of {@code /public/oct-upload/patients/search}. See
+     * {@link PublicSubjectSearch} for the narrowing relative to the staff
+     * endpoint.
+     */
+    @GetMapping(value = "/patients/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> searchPatientsPublic(
+            @RequestParam("q") String q,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return PublicSubjectSearch.search(studySubjectFinder, q, limit);
+    }
 
     @PostMapping(value = "/resolve", consumes = MediaType.APPLICATION_JSON_VALUE,
                  produces = MediaType.APPLICATION_JSON_VALUE)

@@ -22,16 +22,28 @@ import { useI18n } from 'vue-i18n'
 import Modal from '@/components/Modal.vue'
 import { ApiError, ApiNetworkError } from '@/api/client'
 import { searchStudySubjects, type StudySubjectSearchHit } from '@/api/retinal'
+import { searchPatientsPublic } from '@/api/octPortal'
 
 interface Props {
   open: boolean
   /** Pre-fills the search field — typically the unresolved PatientId
    *  from the row's parsed scan. */
   initialQuery?: string
+  /**
+   * 2026-09-18 — set on the unauthenticated upload portals.
+   *
+   * The default lookup is the staff endpoint
+   * {@code GET /api/v1/study-subjects/search}, which requires a session: on a
+   * portal page it returned 401 and the dialog silently stayed empty. With this
+   * flag the modal calls the public label-prefix endpoint instead, which
+   * returns only label + study/site. Mirrors VisitPickerModal's `publicContext`.
+   */
+  publicContext?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   initialQuery: '',
+  publicContext: false,
 })
 
 const emit = defineEmits<{
@@ -73,12 +85,25 @@ function scheduleSearch(): void {
 async function runSearch(): Promise<void> {
   const requestId = ++activeRequestId
   const q = queryTrimmed.value
-  if (q.length < 2) {
+  // The public endpoint requires 3 characters (a shorter prefix would
+  // enumerate the register rather than look a subject up).
+  const minLength = props.publicContext ? 3 : 2
+  if (q.length < minLength) {
     isSearching.value = false
     return
   }
   try {
-    const hits = await searchStudySubjects(q, 10)
+    const hits: StudySubjectSearchHit[] = props.publicContext
+      ? (await searchPatientsPublic(q, 10)).map((h) => ({
+          studySubjectId: h.studySubjectId,
+          label: h.label,
+          // The public projection carries no studyId; the portal rows only
+          // render label + study/site, so a sentinel keeps the shape intact.
+          studyId: 0,
+          studyName: h.studyName,
+          siteName: h.siteName,
+        }))
+      : await searchStudySubjects(q, 10)
     if (requestId !== activeRequestId) return
     results.value = hits
   } catch (e) {

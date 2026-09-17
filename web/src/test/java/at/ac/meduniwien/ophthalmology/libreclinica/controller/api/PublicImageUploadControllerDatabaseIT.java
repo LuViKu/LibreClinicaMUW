@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -142,6 +143,65 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"studyDate\":\"2021-01-04\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    /* ---------------- /patients/search ---------------- */
+
+    /**
+     * The portal's patient-search dialog needs a lookup it can actually call:
+     * it used to hit the session-gated staff endpoint and get 401.
+     */
+    @Test
+    void search_byLabelPrefix_returnsMatchingSubjects() throws Exception {
+        mockMvc().perform(get("/api/v1/public/image-upload/patients/search").param("q", "M-00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects").isArray())
+                .andExpect(jsonPath("$.subjects[0].label").exists())
+                .andExpect(jsonPath("$.subjects[0].studySubjectId").isNumber());
+    }
+
+    /**
+     * Label-only projection: an unauthenticated caller must not be able to read
+     * demographics off the search, however it is queried.
+     */
+    @Test
+    void search_neverExposesDemographics() throws Exception {
+        String body = mockMvc().perform(
+                get("/api/v1/public/image-upload/patients/search").param("q", "M-00"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        for (String forbidden : new String[]{"dateOfBirth", "date_of_birth", "gender",
+                "uniqueIdentifier", "unique_identifier", "enrollmentDate", "studyOid"}) {
+            assertTrue(!body.contains(forbidden),
+                    "public search leaked '" + forbidden + "': " + body);
+        }
+    }
+
+    /** A one- or two-character prefix would enumerate the register, not look a subject up. */
+    @Test
+    void search_withTooShortPrefix_is400() throws Exception {
+        mockMvc().perform(get("/api/v1/public/image-upload/patients/search").param("q", "M"))
+                .andExpect(status().isBadRequest());
+        mockMvc().perform(get("/api/v1/public/image-upload/patients/search").param("q", "M-"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** The row cap is the endpoint's, not the caller's. */
+    @Test
+    void search_limitIsCappedRegardlessOfRequest() throws Exception {
+        mockMvc().perform(get("/api/v1/public/image-upload/patients/search")
+                .param("q", "M-0").param("limit", "5000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()")
+                        .value(org.hamcrest.Matchers.lessThanOrEqualTo(10)));
+    }
+
+    /** An unknown prefix resolves to nothing, not an error and not a hint. */
+    @Test
+    void search_unknownPrefix_isEmpty() throws Exception {
+        mockMvc().perform(get("/api/v1/public/image-upload/patients/search").param("q", "ZZZZ"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(0));
     }
 
     /* ---------------- /commit ---------------- */

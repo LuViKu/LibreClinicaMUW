@@ -1791,8 +1791,26 @@ public class EventsApiController {
     }
 
     private static String statusForSubjectEventStatus(SubjectEventStatus s) {
-        if (s == null) return "not-scheduled";
-        return switch (s.getId()) {
+        return s == null ? "not-scheduled" : statusForSubjectEventStatusId(s.getId());
+    }
+
+    /**
+     * Canonical projection of {@code study_event.subject_event_status_id} onto
+     * the wire vocabulary, keyed by the ids in
+     * {@link SubjectEventStatus} (1 scheduled, 2 not_scheduled,
+     * 3 data_entry_started, 4 completed, 5 stopped, 6 skipped, 7 locked,
+     * 8 signed).
+     *
+     * <p>Package-private so the unauthenticated portals project the same way:
+     * {@code PublicOctUploadController} used to carry its own copy that mapped
+     * 2 → "data-entry-started", had no case for 3 (so real data-entry-started
+     * visits fell through to "scheduled") and invented ids 9 and 10.
+     *
+     * <p>"removed" is not a subject-event status — deletion is carried by
+     * {@code study_event.status_id}, handled by the callers that need it.
+     */
+    static String statusForSubjectEventStatusId(int id) {
+        return switch (id) {
             case 1 -> "scheduled";
             case 2 -> "not-scheduled";
             case 3 -> "data-entry-started";

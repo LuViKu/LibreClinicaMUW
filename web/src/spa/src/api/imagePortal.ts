@@ -99,3 +99,34 @@ export async function commitImage(file: File, meta: CommitMeta): Promise<CommitR
   }
   return body as CommitResult
 }
+
+/**
+ * One hit from the public label-prefix lookup — label plus enough study/site
+ * context to disambiguate, and nothing else (the page is unauthenticated).
+ */
+export interface PublicSubjectHit {
+  studySubjectId: number
+  label: string
+  studyName: string
+  siteName: string | null
+}
+
+/**
+ * 2026-09-18 — label-prefix subject lookup via the anonymous portal path, the
+ * sibling of the OCT portal's. Minimum 3-character prefix, at most 10 rows.
+ */
+export async function searchPatientsPublic(q: string, limit = 10): Promise<PublicSubjectHit[]> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  const res = await fetch(`${BASE}/patients/search?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new ImagePortalError(res.status, messageFrom(body, `patients/search → ${res.status}`), body)
+  }
+  return ((body as { subjects?: PublicSubjectHit[] } | null)?.subjects ?? [])
+}
