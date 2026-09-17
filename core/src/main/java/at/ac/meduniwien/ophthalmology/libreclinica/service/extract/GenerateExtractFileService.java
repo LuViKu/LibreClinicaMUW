@@ -120,9 +120,19 @@ public class GenerateExtractFileService {
     public HashMap<String, Integer> createODMFile(String odmVersion, long sysTimeBegin, String generalFileDir, DatasetBean datasetBean,
             StudyBean currentStudy, String generalFileDirCopy,ExtractBean eb,
             Integer currentStudyId, Integer parentStudyId, String studySubjectNumber, UserAccountBean userBean) {
-        // default zipped - true
+        // 2026-09-18 — zipped=false, deliberately.
+        //
+        // OdmFileCreation does not zip: the call that would is commented out
+        // there ("Zipped in the next stage"), because the Quartz XsltTransformJob
+        // zips the ODM itself after its stylesheet run. It passes zipped through
+        // for that later stage. Callers of THIS bridge (the SPA's dataset export,
+        // the async export materializer, the legacy /ExportDataset servlet) have
+        // no such later stage, so passing true only made the archived_dataset_file
+        // row claim a "<name>.xml.zip" that was never written — the export
+        // appeared to succeed and its download was a dead link. Recording the
+        // file that actually exists makes the download work.
         return createODMFile(odmVersion, sysTimeBegin, generalFileDir, datasetBean,
-                currentStudy, generalFileDirCopy, eb, currentStudyId, parentStudyId, studySubjectNumber, true, true, true, null, userBean);
+                currentStudy, generalFileDirCopy, eb, currentStudyId, parentStudyId, studySubjectNumber, false, true, true, null, userBean);
     }
     /**
      * createODMfile, added by tbh, 01/2009

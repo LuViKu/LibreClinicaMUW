@@ -215,7 +215,20 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
 
     /** Reads the produced archive back as text (extract output is zipped). */
     private static String readArchive(Path path) throws Exception {
-        assertTrue(Files.isRegularFile(path), "expected an archive at " + path);
+        if (!Files.isRegularFile(path)) {
+            // Show what the run actually produced — the recorded file_reference
+            // and the file on disk have disagreed before.
+            StringBuilder seen = new StringBuilder();
+            Path dir = path.getParent();
+            if (dir != null && Files.isDirectory(dir)) {
+                try (var s = Files.list(dir)) {
+                    s.forEach(p -> seen.append("\n  ").append(p.getFileName()));
+                }
+            } else {
+                seen.append("\n  (run directory ").append(dir).append(" does not exist)");
+            }
+            throw new AssertionError("no archive at " + path + "\nrun directory contains:" + seen);
+        }
         if (!path.getFileName().toString().endsWith(".zip")) {
             return Files.readString(path, StandardCharsets.UTF_8);
         }
@@ -273,30 +286,30 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
      * for the full item set once the seeded width_decimal values are corrected.
      */
     @Test
-    void odmExport_forSeededCrfWidthDecimal_currentlyThrows() throws Exception {
+    void odmExport_succeedsForACrfWhoseWidthDecimalUsesTheSqlSpelling() throws Exception {
         assertTrue(hasWidthDecimal(4), "fixture assumption: item 4 carries a width_decimal");
-        DatasetBean ds = persistDataset("IT_ODM_DEFECT_" + System.nanoTime(),
+        DatasetBean ds = persistDataset("IT_ODM_SQLWD_" + System.nanoTime(),
                 java.util.List.of(1, 2, 3, 4, 5));
 
-        NumberFormatException thrown = org.junit.jupiter.api.Assertions.assertThrows(
-                NumberFormatException.class, () -> materializer().materialize(ds, "odm", 1));
-        assertTrue(thrown.getMessage().contains(","),
-                "expected the comma-formatted width_decimal to be the cause, got: " + thrown.getMessage());
+        String text = readArchive(archivePathFor(idFromResult(materializer().materialize(ds, "odm", 1))));
+        assertTrue(text.contains("ODM"), "expected an ODM document, got " + text.length() + " chars");
+        assertTrue(text.contains("M-001"), "the seeded subject should appear in the ODM export");
     }
 
     /**
-     * Selecting only items without a width_decimal does NOT avoid the defect:
-     * ODM metadata is collected per CRF version, not per selected item, so one
-     * bad value anywhere in the CRF fails every export that touches it. Pinning
-     * this is what makes the blast radius explicit — for the nAMD visit CRF it
-     * means no ODM export of that study can succeed, whatever the operator picks.
+     * The defect this guards was not avoidable by deselecting the offending
+     * item — ODM metadata is collected per CRF version, not per selected item —
+     * so this exercises the other half of the blast radius: a dataset that does
+     * not name the bad item still pulls its CRF's metadata.
      */
     @Test
-    void odmExport_isNotSavedByDeselectingTheOffendingItem() {
+    void odmExport_succeedsWhenTheOffendingItemIsNotSelected() throws Exception {
         DatasetBean ds = persistDataset("IT_ODM_" + System.nanoTime(),
                 java.util.List.of(1, 2, 3, 5));
-        org.junit.jupiter.api.Assertions.assertThrows(NumberFormatException.class,
-                () -> materializer().materialize(ds, "odm", 1));
+
+        String text = readArchive(archivePathFor(idFromResult(materializer().materialize(ds, "odm", 1))));
+        assertTrue(text.contains("ODM"), "expected an ODM document, got " + text.length() + " chars");
+        assertTrue(text.contains("M-001"), "the seeded subject should appear in the ODM export");
     }
 
     /**

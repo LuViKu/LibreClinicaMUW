@@ -1906,35 +1906,76 @@ public class OdmExtractDAO extends DatasetDAO {
         metadata.setSectionIds(sectionIds);
     }
 
+    /**
+     * 2026-09-18 — the SQL-ish {@code (w,d)} spelling.
+     *
+     * <p>The documented OpenClinica width/decimal format is {@code w(d)}, and
+     * the two parsers below implement exactly that. Several Liquibase-seeded
+     * CRFs (the demo Demographics form, Ophthalmology Visit and the nAMD
+     * Treat-and-Extend Visit) instead store {@code (4,1)} — the shape of a SQL
+     * {@code NUMERIC(4,1)} declaration. That fell into the "(d)" branch, so the
+     * parser tried {@code Integer.parseInt("4,1")} and threw, aborting the
+     * whole ODM export: metadata is collected per CRF version, so a single bad
+     * value made every ODM export of that study impossible, whichever items the
+     * operator selected. Recognising the spelling fixes existing rows without
+     * editing deployed changesets, and covers any future seed that uses it.
+     */
+    private static final java.util.regex.Pattern SQL_STYLE_WIDTH_DECIMAL =
+            java.util.regex.Pattern.compile("^\\(?\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)?$");
+
     public int parseWidth(String widthDecimal) {
+        if (widthDecimal == null) return 0;
+        String raw = widthDecimal.trim();
+        java.util.regex.Matcher sqlStyle = SQL_STYLE_WIDTH_DECIMAL.matcher(raw);
+        if (sqlStyle.matches()) {
+            return parseIntOrZero(sqlStyle.group(1), raw);
+        }
         String w = "";
-        widthDecimal = widthDecimal.trim();
-        if (widthDecimal.startsWith("(")) {
-        } else if (widthDecimal.contains("(")) {
-            w = widthDecimal.split("\\(")[0];
+        if (raw.startsWith("(")) {
+        } else if (raw.contains("(")) {
+            w = raw.split("\\(")[0];
         } else {
-            w = widthDecimal;
+            w = raw;
         }
         if (w.length() > 0) {
-            return "w".equalsIgnoreCase(w) ? 0 : Integer.parseInt(w);
+            return "w".equalsIgnoreCase(w) ? 0 : parseIntOrZero(w, raw);
         }
         return 0;
     }
 
     public int parseDecimal(String widthDecimal) {
+        if (widthDecimal == null) return 0;
+        String raw = widthDecimal.trim();
+        java.util.regex.Matcher sqlStyle = SQL_STYLE_WIDTH_DECIMAL.matcher(raw);
+        if (sqlStyle.matches()) {
+            return parseIntOrZero(sqlStyle.group(2), raw);
+        }
         String d = "";
-        widthDecimal = widthDecimal.trim();
-        if (widthDecimal.startsWith("(")) {
-            d = widthDecimal.substring(1, widthDecimal.length() - 1);
-        } else if (widthDecimal.contains("(")) {
-            d = widthDecimal.split("\\(")[1].trim();
+        if (raw.startsWith("(")) {
+            d = raw.substring(1, raw.length() - 1);
+        } else if (raw.contains("(")) {
+            d = raw.split("\\(")[1].trim();
             d = d.substring(0, d.length() - 1);
 
         }
         if (d.length() > 0) {
-            return "d".equalsIgnoreCase(d) ? 0 : Integer.parseInt(d);
+            return "d".equalsIgnoreCase(d) ? 0 : parseIntOrZero(d, raw);
         }
         return 0;
+    }
+
+    /**
+     * Width/decimal is presentation metadata: a malformed value should cost the
+     * ODM its {@code SignificantDigits} hint, not cost the study its export.
+     */
+    private int parseIntOrZero(String value, String original) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            logger.warn("Unparseable item_form_metadata.width_decimal '{}' — exporting it as 0",
+                    original);
+            return 0;
+        }
     }
 
     public void getAdminData(StudyBean study, DatasetBean dataset, OdmAdminDataBean data, String odmVersion) {
