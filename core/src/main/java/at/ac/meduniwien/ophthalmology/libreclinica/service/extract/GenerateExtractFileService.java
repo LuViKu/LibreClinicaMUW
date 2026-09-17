@@ -54,6 +54,8 @@ public class GenerateExtractFileService {
 
     private static final Logger logger = LoggerFactory.getLogger(GenerateExtractFileService.class);
     private final DataSource ds;
+    private final CoreResources coreResources;
+    private final RuleSetRuleDao ruleSetRuleDao;
     private HttpServletRequest request;
     public static ResourceBundle resword;
 
@@ -63,6 +65,8 @@ public class GenerateExtractFileService {
             RuleSetRuleDao ruleSetRuleDao) {
         this.ds = ds;
         this.request = request;
+        this.coreResources = coreResources;
+        this.ruleSetRuleDao = ruleSetRuleDao;
     }
 
     public GenerateExtractFileService(DataSource ds, CoreResources coreResources,RuleSetRuleDao ruleSetRuleDao) {
@@ -129,17 +133,31 @@ public class GenerateExtractFileService {
             StudyBean currentStudy, String generalFileDirCopy,ExtractBean eb,
             Integer currentStudyId, Integer parentStudyId, String studySubjectNumber, boolean zipped, boolean saveToDB, boolean deleteOld, String odmType, UserAccountBean userBean){
 
-        // OdmFileCreation has no DI-aware constructor and the default
-        // ctor leaves dataSource/ruleSetRuleDao/coreResources null.
-        // This service's own constructor accepted coreResources +
-        // ruleSetRuleDao but never stored them, so we only have `ds`
-        // to forward. The CDISC OdmDataCollector chain dereferences ds
-        // immediately (StudyDAO.findByPK → ds.getConnection), so at
-        // minimum forward what we have. Callers that need rules
-        // resolution or CoreResources should call OdmFileCreation
-        // directly with the full set of deps wired.
+        // OdmFileCreation has no DI-aware constructor, so its three
+        // collaborators are set explicitly here.
+        //
+        // 2026-09-18: this used to forward only `ds`. The constructor
+        // accepted coreResources + ruleSetRuleDao and silently dropped
+        // them, leaving both null on every ODM export that does not go
+        // through the Quartz XsltTransformJob (which resolves the
+        // fully-wired `odmFileCreation` bean itself) — i.e. the SPA's
+        // Quick-ODM, POST /datasets/{id}/export?format=odm, the async
+        // export materializer and the legacy /ExportDataset servlet.
+        // MetadataUnit.collectMetaDataVersion dereferences the rules dao,
+        // so that was a latent NPE; all four callers already pass both
+        // dependencies in, they just needed keeping.
+        //
+        // Scope note: wiring these does NOT by itself make ODM export
+        // work for the Liquibase-seeded CRFs. Those carry width_decimal
+        // in "(w,d)" form while OdmExtractDAO.parseDecimal expects
+        // OpenClinica's "w(d)", so metadata collection throws
+        // NumberFormatException before the rules lookup is ever reached
+        // (verified 2026-09-18 by running the export with and without
+        // this change — see DatasetExportCharacterisationDatabaseIT).
         OdmFileCreation ofc = new OdmFileCreation();
         ofc.setDataSource(ds);
+        ofc.setCoreResources(coreResources);
+        ofc.setRuleSetRuleDao(ruleSetRuleDao);
         return ofc.createODMFile(odmVersion, sysTimeBegin, generalFileDir, datasetBean,
                 currentStudy, generalFileDirCopy, eb,
                 currentStudyId, parentStudyId, studySubjectNumber, zipped, saveToDB, deleteOld, odmType, userBean);
