@@ -45,6 +45,13 @@ const i18n = createI18n({
 // Minimal router stub — HomeView's <LandingCard> uses RouterLink, which
 // needs a router context to resolve <to>. We don't navigate anywhere;
 // memory history is fine.
+//
+// NOTE: this list must carry every route name the HomeView CATALOG points
+// at. A card whose target is missing here makes vue-router throw
+// "No match for {name: …}" during render, which surfaces as several
+// unrelated-looking catalogue assertions failing at once (that is how the
+// image-ingest-inbox card was caught on 2026-09-17). Add the route here in
+// the same commit that adds the card.
 function makeRouter() {
   return createRouter({
     history: createMemoryHistory(),
@@ -69,6 +76,7 @@ function makeRouter() {
       { path: '/export', name: 'data-export', component: { template: '<div />' } },
       { path: '/modalities', name: 'modalities', component: { template: '<div />' } },
       { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
+      { path: '/image-inbox', name: 'image-ingest-inbox', component: { template: '<div />' } },
     ],
   })
 }
