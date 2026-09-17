@@ -186,6 +186,52 @@ class DicomWorklistApiControllerDatabaseIT extends AbstractApiControllerDatabase
                 .andExpect(jsonPath("$.entries[0].studyEventId").value(3));
     }
 
+    /* ---------------- study scoping ---------------- */
+
+    /**
+     * A worklist hands the camera subject labels, sex and dates of birth. A
+     * handheld on a clinic bench is shared between studies, so a camera
+     * enrolled for one study must not be shown another's schedule.
+     */
+    @Test
+    void worklist_isScopedToTheConfiguredStudies() throws Exception {
+        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
+        f.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) f.get(null);
+
+        // Unrestricted (the default): the seeded visit is offered.
+        mockMvc().perform(get("/api/v1/internal/dicom-worklist")
+                .param("from", "2021-01-04").param("to", "2021-01-04")
+                .header("X-MUW-Dicom-Token", TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries.length()").value(1));
+
+        // Scoped to a study that is not the seeded one → nothing is offered.
+        live.setProperty("core.dicom.worklist.studyOids", "S_SOME_OTHER_STUDY");
+        try {
+            mockMvc().perform(get("/api/v1/internal/dicom-worklist")
+                    .param("from", "2021-01-04").param("to", "2021-01-04")
+                    .header("X-MUW-Dicom-Token", TOKEN))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.entries.length()").value(0));
+        } finally {
+            live.remove("core.dicom.worklist.studyOids");
+        }
+
+        // Scoped to the seeded study → offered again.
+        live.setProperty("core.dicom.worklist.studyOids", "S_DEFAULTS1");
+        try {
+            mockMvc().perform(get("/api/v1/internal/dicom-worklist")
+                    .param("from", "2021-01-04").param("to", "2021-01-04")
+                    .header("X-MUW-Dicom-Token", TOKEN))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.entries.length()").value(1))
+                    .andExpect(jsonPath("$.entries[0].subjectLabel").value("M-001"));
+        } finally {
+            live.remove("core.dicom.worklist.studyOids");
+        }
+    }
+
     /** Unparseable dates fall back to the default window instead of 400/500. */
     @Test
     void worklist_garbageDates_fallBackToToday() throws Exception {

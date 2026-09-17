@@ -114,7 +114,8 @@ public class PublicImageUploadController {
     public ResponseEntity<?> searchPatientsPublic(
             @RequestParam("q") String q,
             @RequestParam(value = "limit", required = false) Integer limit) {
-        return PublicSubjectSearch.search(studySubjectFinder, q, limit);
+        return PublicSubjectSearch.search(studySubjectFinder, q, limit,
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
     }
 
     @PostMapping(value = "/resolve", consumes = MediaType.APPLICATION_JSON_VALUE,

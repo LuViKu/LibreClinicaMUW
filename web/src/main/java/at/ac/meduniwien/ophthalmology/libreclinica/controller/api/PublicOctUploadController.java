@@ -814,7 +814,8 @@ public class PublicOctUploadController {
     public ResponseEntity<?> searchPatientsPublic(
             @RequestParam("q") String q,
             @RequestParam(value = "limit", required = false) Integer limit) {
-        return PublicSubjectSearch.search(studySubjectFinder, q, limit);
+        return PublicSubjectSearch.search(studySubjectFinder, q, limit,
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
     }
 
     @GetMapping(path = "/patients/{studySubjectId:[0-9]+}/events",

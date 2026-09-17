@@ -107,6 +107,17 @@ public class DicomWorklistApiController {
         }
 
         // Scheduled (1) / data-entry-started (3) visits of non-removed subjects.
+        // 2026-09-18 — restrict to the studies this device may see.
+        //
+        // A worklist hands the camera subject labels, sex and dates of birth
+        // for every visit in the window. A handheld on a clinic bench is a
+        // shared device, so without this a camera enrolled for HealthAEye also
+        // displays the nAMD study's schedule. `core.dicom.worklist.studyOids`
+        // names what it may offer; blank keeps the previous unrestricted
+        // behaviour for single-study dev instances.
+        String studyScope = StudyScopeConfig.inClauseOrNull(
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY));
+
         String sql = "SELECT se.study_event_id, ss.label, sub.gender, sub.date_of_birth, sub.dob_collected, "
                 + "       se.date_start, se.start_time_flag, se.sample_ordinal, "
                 + "       sed.name AS definition_name, s.name AS study_name "
@@ -119,6 +130,7 @@ public class DicomWorklistApiController {
                 + " WHERE date(se.date_start) BETWEEN ? AND ? "
                 + "   AND se.subject_event_status_id IN (1, 3) "
                 + "   AND ss.status_id NOT IN (5, 7) "
+                + (studyScope == null ? "" : "   AND ss.study_id IN " + studyScope + " ")
                 + " ORDER BY se.date_start, ss.label";
         List<WorklistEntry> entries = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
@@ -150,7 +162,10 @@ public class DicomWorklistApiController {
             LOG.error("DICOM worklist query failed: {}", e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "worklist query failed"));
         }
-        LOG.info("DICOM worklist served: {} entries for {}..{}", entries.size(), d0, d1);
+        // The scope is logged because an unset key on a multi-study instance
+        // means the camera is being shown every study's schedule.
+        LOG.info("DICOM worklist served: {} entries for {}..{} (study scope: {})",
+                entries.size(), d0, d1, studyScope == null ? "ALL STUDIES" : studyScope);
         return ResponseEntity.ok(Map.of("from", d0.toString(), "to", d1.toString(), "entries", entries));
     }
 

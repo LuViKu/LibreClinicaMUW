@@ -62,6 +62,16 @@ final class PublicSubjectSearch {
      * @return 200 with {@code {"subjects": [...]}}, or 400 when the prefix is too short
      */
     static ResponseEntity<?> search(StudySubjectFinder finder, String q, Integer limit) {
+        return search(finder, q, limit, null);
+    }
+
+    /**
+     * @param allowedStudyIds studies this portal may resolve against, or
+     *                        {@code null} for every study. See
+     *                        {@link StudyScopeConfig}.
+     */
+    static ResponseEntity<?> search(StudySubjectFinder finder, String q, Integer limit,
+                                    java.util.Set<Integer> allowedStudyIds) {
         String prefix = q == null ? "" : q.trim();
         if (prefix.length() < MIN_PREFIX_LENGTH) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -69,9 +79,14 @@ final class PublicSubjectSearch {
         }
         int clamped = limit == null ? MAX_LIMIT : Math.max(1, Math.min(MAX_LIMIT, limit));
 
+        // Fetch a wider page before filtering, so a scoped portal still fills
+        // its row cap when other studies' subjects share the prefix.
+        int fetch = allowedStudyIds == null ? clamped : Math.min(MAX_LIMIT * 5, clamped * 5);
         List<Hit> hits = new ArrayList<>();
-        for (StudySubjectMatch m : finder.findByLabelPrefix(prefix, clamped)) {
+        for (StudySubjectMatch m : finder.findByLabelPrefix(prefix, fetch)) {
+            if (allowedStudyIds != null && !allowedStudyIds.contains(m.studyId())) continue;
             hits.add(new Hit(m.studySubjectId(), m.subjectLabel(), m.studyName(), m.siteName()));
+            if (hits.size() >= clamped) break;
         }
         return ResponseEntity.ok(Map.of("subjects", hits));
     }
