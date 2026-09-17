@@ -2910,6 +2910,23 @@
     "dismiss": "Dismiss",
     "dismissConfirm": "Really dismiss this image?"
   },
+  "dueVisits": {
+    "title": "Due visits",
+    "cardDesc": "Upcoming and overdue visits across the studies you can see.",
+    "intro": "Open visits in the chosen window. Overdue ones come first.",
+    "from": "From",
+    "to": "To",
+    "reload": "Refresh",
+    "loading": "Loading …",
+    "empty": "No open visits in this window.",
+    "overdue": "overdue",
+    "overdueCount": "{count} overdue",
+    "colDate": "Date",
+    "colSubject": "Subject",
+    "colVisit": "Visit",
+    "colStudy": "Study",
+    "colStatus": "Status"
+  },
   "imagePortal": {
     "visitPickerLabel": "Choose a visit",
     "visitFilterPlaceholder": "Filter by label or visit",
