@@ -177,7 +177,7 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
     }
 
     private DatasetBean persistDataset(String name, java.util.List<Integer> itemIds) {
-        UserAccountBean root = (UserAccountBean) new UserAccountDAO(DATA_SOURCE).findByPK(1);
+        UserAccountBean root = new UserAccountDAO(DATA_SOURCE).findByPK(1);
         DatasetBean ds = new DatasetBean();
         ds.setStudyId(1);
         ds.setName(name);
@@ -329,8 +329,7 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
         DatasetBean ds = persistDataset("IT_DIAG_" + System.nanoTime(),
                 java.util.List.of(1, 2, 3, 5));
         var studyDao = new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO(DATA_SOURCE);
-        var study = (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
-                studyDao.findByPK(1);
+        var study = studyDao.findByPK(1);
 
         var extractService = new at.ac.meduniwien.ophthalmology.libreclinica.service.extract
                 .GenerateExtractFileService(DATA_SOURCE, Mockito.mock(CoreResources.class),
@@ -504,9 +503,8 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
                 .GenerateExtractFileService(DATA_SOURCE, Mockito.mock(CoreResources.class),
                         Mockito.mock(RuleSetRuleDao.class))
                 .generateExtractBean(ds,
-                        (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
-                                new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy
-                                        .StudyDAO(DATA_SOURCE).findByPK(1),
+                        new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy
+                                .StudyDAO(DATA_SOURCE).findByPK(1),
                         new at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean());
 
         var dao = new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO(DATA_SOURCE);
@@ -559,7 +557,7 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
                     java.util.List.of(1, 2, 3, 5));
             // Save the filter the way the controller does: JSON, via the
             // heritage filter / dataset_filter_map tables.
-            var owner = (UserAccountBean) new UserAccountDAO(DATA_SOURCE).findByPK(1);
+            var owner = new UserAccountDAO(DATA_SOURCE).findByPK(1);
             new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetFilterDAO(DATA_SOURCE)
                     .replaceAll(ds.getId(), owner, java.util.List.of(
                             new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract

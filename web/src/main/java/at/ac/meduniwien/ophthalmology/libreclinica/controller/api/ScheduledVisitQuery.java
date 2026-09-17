@@ -65,7 +65,8 @@ final class ScheduledVisitQuery {
      */
     record ScheduledVisit(int studyEventId, int studySubjectId, String subjectLabel,
                           String gender, String dateOfBirth, String date, java.time.LocalTime time,
-                          String eventLabel, String studyName, Integer eventCrfId) {}
+                          String eventLabel, String studyName, Integer eventCrfId,
+                          int subjectEventStatusId, int studyId) {}
 
     /**
      * @param studyIds null for every study; an empty set for none
@@ -74,7 +75,8 @@ final class ScheduledVisitQuery {
     static List<ScheduledVisit> query(DataSource dataSource, LocalDate from, LocalDate to,
                                       Set<Integer> studyIds, int limit) throws SQLException {
         String scope = StudyScopeConfig.inClauseOrNull(studyIds);
-        String sql = "SELECT se.study_event_id, ss.study_subject_id, ss.label, "
+        String sql = "SELECT se.study_event_id, ss.study_subject_id, ss.label, ss.study_id, "
+                + "       se.subject_event_status_id, "
                 + "       sub.gender, sub.date_of_birth, sub.dob_collected, "
                 + "       se.date_start, se.start_time_flag, se.sample_ordinal, "
                 + "       sed.name AS definition_name, s.name AS study_name, "
@@ -123,7 +125,9 @@ final class ScheduledVisitQuery {
                                     ? start.toLocalDateTime().toLocalTime().withNano(0) : null,
                             ordinal > 1 ? defName + " (#" + ordinal + ")" : defName,
                             rs.getString("study_name"),
-                            eventCrfId));
+                            eventCrfId,
+                            rs.getInt("subject_event_status_id"),
+                            rs.getInt("study_id")));
                 }
             }
         }

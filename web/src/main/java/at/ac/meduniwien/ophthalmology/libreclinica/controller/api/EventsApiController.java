@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -1793,6 +1794,109 @@ public class EventsApiController {
     private static String statusForSubjectEventStatus(SubjectEventStatus s) {
         return s == null ? "not-scheduled" : statusForSubjectEventStatusId(s.getId());
     }
+
+    /* ================================================================== */
+    /*  GET /api/v1/events/due — what is coming, and what was missed      */
+    /* ================================================================== */
+
+    /** One row of the due-visits list. */
+    public record DueVisitDto(int studyEventId, int studySubjectId, String subjectLabel,
+                              String studyName, String eventLabel, String date, String time,
+                              String status, boolean overdue) {}
+
+    /** Widest window a single request may span. */
+    private static final int DUE_MAX_WINDOW_DAYS = 92;
+    /** Default window when the caller names none. */
+    private static final int DUE_DEFAULT_WINDOW_DAYS = 14;
+    /** Hard row cap. */
+    private static final int DUE_MAX_ROWS = 1000;
+
+    /**
+     * Visits that are open in a date window — what is coming, and what was
+     * already due and never happened.
+     *
+     * <p>Without this there is no list of who is expected: a visit that nobody
+     * schedules a patient for simply does not happen, and in a treat-and-extend
+     * study a missed visit is a missed injection. Overdue rows are the point,
+     * not a side effect, so the window starts in the past by default.
+     *
+     * <p>Scoped to the studies the session can see, so a monitor with
+     * site-only grants does not learn the other sites' schedules. Optionally
+     * narrowed further to one study by OID.
+     */
+    @GetMapping(value = "/due", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> due(@RequestParam(value = "from", required = false) String from,
+                                 @RequestParam(value = "to", required = false) String to,
+                                 @RequestParam(value = "studyOid", required = false) String studyOid,
+                                 HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+
+        java.time.LocalDate d0 = parseIsoDateOrNullForDue(from);
+        java.time.LocalDate d1 = parseIsoDateOrNullForDue(to);
+        if (d0 == null) d0 = java.time.LocalDate.now().minusDays(DUE_DEFAULT_WINDOW_DAYS);
+        if (d1 == null) d1 = java.time.LocalDate.now().plusDays(DUE_DEFAULT_WINDOW_DAYS);
+        if (d1.isBefore(d0)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "'to' is before 'from'"));
+        }
+        if (d1.isAfter(d0.plusDays(DUE_MAX_WINDOW_DAYS))) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "window may not exceed " + DUE_MAX_WINDOW_DAYS + " days"));
+        }
+
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(ub, currentStudy, currentRole);
+        if (studyOid != null && !studyOid.isBlank()) {
+            StudyBean named = new StudyDAO(dataSource).findByOid(studyOid.trim());
+            if (named == null || named.getId() == 0) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No study with oid '" + studyOid + "'"));
+            }
+            // Intersect rather than replace: naming a study you cannot see
+            // must narrow to nothing, not widen.
+            visible = visible.contains(named.getId())
+                    ? Set.of(named.getId())
+                    : Set.of();
+        }
+
+        java.time.LocalDate today = java.time.LocalDate.now();
+        List<DueVisitDto> out = new ArrayList<>();
+        try {
+            for (ScheduledVisitQuery.ScheduledVisit v :
+                    ScheduledVisitQuery.query(dataSource, d0, d1, visible, DUE_MAX_ROWS)) {
+                boolean overdue = v.date() != null
+                        && java.time.LocalDate.parse(v.date()).isBefore(today);
+                out.add(new DueVisitDto(
+                        v.studyEventId(), v.studySubjectId(), v.subjectLabel(),
+                        v.studyName(), v.eventLabel(), v.date(),
+                        v.time() == null ? null : v.time().toString(),
+                        statusForSubjectEventStatusId(v.subjectEventStatusId()),
+                        overdue));
+            }
+        } catch (java.sql.SQLException e) {
+            LOG.error("due-visits query failed: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not load visits"));
+        }
+        return ResponseEntity.ok(Map.of(
+                "from", d0.toString(), "to", d1.toString(), "visits", out));
+    }
+
+    private static java.time.LocalDate parseIsoDateOrNullForDue(String iso) {
+        if (iso == null || iso.isBlank()) return null;
+        try {
+            return java.time.LocalDate.parse(iso.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
 
     /**
      * Canonical projection of {@code study_event.subject_event_status_id} onto
