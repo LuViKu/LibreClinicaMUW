@@ -3325,7 +3325,7 @@ public class RetinalResultsApiController {
      * role hierarchy. Data Manager (Study Director), Monitor, and Administrator
      * keep full access — they are not making the masked treatment decision.
      */
-    private static boolean isTreatingRole(HttpSession session) {
+    static boolean isTreatingRole(HttpSession session) {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         if (currentRole == null || currentRole.getRole() == null) return false;
         Role r = currentRole.getRole();
@@ -3348,7 +3348,7 @@ public class RetinalResultsApiController {
      * randomisation happens at enrolment, before any scan exists, so a job-owning
      * subject in an AI-arm study is already assigned by the time this is reached.
      */
-    private static boolean maskAiForArm(String subjectArm, HttpSession session) {
+    static boolean maskAiForArm(String subjectArm, HttpSession session) {
         return "AI_HIDDEN".equals(subjectArm) && isTreatingRole(session);
     }
 
