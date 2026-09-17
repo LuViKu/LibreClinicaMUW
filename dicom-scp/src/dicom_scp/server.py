@@ -1,10 +1,11 @@
-"""pynetdicom Storage SCP: accept a fundus C-STORE, persist it, hand off to the
-app. Plain C-STORE — no Modality Worklist (deferred, DR-025)."""
+"""pynetdicom SCP: Modality Worklist (C-FIND) + Storage (C-STORE) for the fundus
+cameras — persist each received object and hand off to the app (DR-025)."""
 from __future__ import annotations
 
 import logging
 
-from pynetdicom import AE, AllStoragePresentationContexts, VerificationPresentationContexts, evt
+from pynetdicom import (AE, ALL_TRANSFER_SYNTAXES, AllStoragePresentationContexts,
+                        VerificationPresentationContexts, evt)
 from pynetdicom.sop_class import ModalityWorklistInformationFind
 
 from . import config, store, tags, worklist
@@ -84,11 +85,16 @@ def _handle_find(event):
 def build_ae() -> AE:
     settings = config.settings
     ae = AE(ae_title=settings.ae_title)
-    # Accept every storage SOP class — we don't know the exact class the Optomed
-    # emits until a real sample; the ingest is object-agnostic anyway. Plus
-    # Verification (C-ECHO) so a modality's "test connection" succeeds — pynetdicom
-    # auto-responds to C-ECHO on a supported Verification context.
-    ae.supported_contexts = AllStoragePresentationContexts + VerificationPresentationContexts
+    # Accept every storage SOP class in EVERY transfer syntax, compressed ones
+    # included — we persist the object as received (no transcoding), and the
+    # Optomed Lumo sends Ophthalmic Photography 8 Bit Image Storage as
+    # JPEG Baseline (Process 1), which pynetdicom's default (uncompressed-only)
+    # context list rejects with "Transfer Syntax Not Supported". Plus
+    # Verification (C-ECHO) so a modality's "test connection" succeeds —
+    # pynetdicom auto-responds to C-ECHO on a supported Verification context.
+    ae.supported_contexts = VerificationPresentationContexts
+    for cx in AllStoragePresentationContexts:
+        ae.add_supported_context(cx.abstract_syntax, ALL_TRANSFER_SYNTAXES)
     # Modality Worklist — the Lumo pulls its scheduled patients from us (C-FIND)
     # and then C-STOREs the study carrying that identity.
     ae.add_supported_context(ModalityWorklistInformationFind)

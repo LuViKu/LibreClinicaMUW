@@ -28,6 +28,11 @@ upload page instead.
 | `DICOM_SCP_INGEST_URL` | *(required)* | the app internal ingest endpoint |
 | `DICOM_SCP_INGEST_TOKEN` | *(required)* | shared secret; must equal `core.dicom.ingest.token` on the app |
 | `DICOM_SCP_WORKLIST_URL` | *(optional)* | the app internal worklist endpoint; blank = C-FIND answers failure |
+| `DICOM_SCP_LOG_LEVEL` | `INFO` | `DEBUG` dumps every A-ASSOCIATE-RQ (proposed SOP classes / transfer syntaxes) and DIMSE message — the way to see what a modality negotiates when its UI only says "failed". At `INFO`, pynetdicom's per-dataset dumps (which include PatientID) are suppressed. |
+
+### Verified against the Optomed Lumo (2026-09-17)
+
+Calling AE `OPTOMEDLUMO`, station AE `LUMO`. Flow: C-ECHO → MWL C-FIND (keys: SPS start date, station AE; charset `ISO_IR 192`; also proposes Study-Root Q/R MOVE, which we reject) → C-STORE of *Ophthalmic Photography 8 Bit Image Storage* in **JPEG Baseline (Process 1)**, one object per eye. Storage contexts are therefore offered with every transfer syntax (no transcoding — the object is persisted as received; Pillow decodes JPEG Baseline for the preview). Note the Lumo flushes its **entire** stored-study backlog once a storage target answers.
 
 `INGEST_URL` + `INGEST_TOKEN` are required — the SCP refuses to start without them.
 

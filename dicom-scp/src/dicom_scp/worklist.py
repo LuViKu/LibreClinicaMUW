@@ -151,7 +151,8 @@ def build_item(entry: dict, calling_ae: str) -> Dataset:
     acc = accession_for(sid)
 
     ds = Dataset()
-    ds.SpecificCharacterSet = "ISO_IR 100"
+    # UTF-8 — the Optomed Lumo queries with ISO_IR 192; answer in kind.
+    ds.SpecificCharacterSet = "ISO_IR 192"
     ds.PatientName = label
     ds.PatientID = label
     ds.PatientBirthDate = _da(entry.get("dateOfBirth"))
