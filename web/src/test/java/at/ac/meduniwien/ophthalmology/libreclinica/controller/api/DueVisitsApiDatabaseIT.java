@@ -8,7 +8,9 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,7 +27,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
 /**
  * P2-6 — the due-visits list.
@@ -48,7 +49,7 @@ class DueVisitsApiDatabaseIT extends AbstractApiControllerDatabaseIT {
                 // The interval calculator is only touched by the scheduling
                 // endpoints, which this file does not exercise.
                 .standaloneSetup(new EventsApiController(
-                        DATA_SOURCE, filter, (VisitIntervalCalculator) null))
+                        DATA_SOURCE, filter, null))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -167,5 +168,101 @@ class DueVisitsApiDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .session(session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visits.length()").value(0));
+    }
+
+    /* ---------------- P2-5: duplicate scheduling ---------------- */
+
+    /**
+     * A second request for a visit that is already scheduled is refused.
+     *
+     * <p>Scheduling is now triggered from the treat-and-extend decision panel,
+     * where a double click, a retried request or two clinicians acting on the
+     * same decision would otherwise put the same patient on the calendar twice
+     * for the same day. In a study where a visit means an injection, a
+     * duplicate appointment is a real harm.
+     *
+     * <p>The pending visit is inserted directly: creating one through the
+     * endpoint needs a Spring context for the rules listener, which a
+     * standalone MockMvc setup does not have. What matters here is that the
+     * guard sees an existing row and refuses, naming the visit it found.
+     */
+    @Test
+    void schedulingAVisitThatIsAlreadyOnTheCalendarIsRefused() throws Exception {
+        String date = "2027-03-15";
+        int existing = insertScheduledVisit(date);
+        try {
+            mockMvcWith(Set.of(102)).perform(post("/api/v1/events")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"subjectId\":\"EIAMD139\",\"eventDefinitionOid\":\"SE_RIS_VISIT\","
+                            + "\"dateStarted\":\"" + date + "\"}")
+                    .session(sessionFor(102, "S_RIS_DEMO")))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.studyEventId").value(existing));
+        } finally {
+            exec("DELETE FROM study_event WHERE study_event_id = " + existing);
+        }
+    }
+
+    /**
+     * The same definition on a different day is a second visit, not a
+     * duplicate, and must not be refused by this guard. It fails later for an
+     * unrelated reason (the rules listener needs a Spring context), so the
+     * assertion is only that it is not a 409.
+     */
+    @Test
+    void theSameVisitOnAnotherDayIsNotTreatedAsADuplicate() throws Exception {
+        int existing = insertScheduledVisit("2027-03-15");
+        try {
+            mockMvcWith(Set.of(102)).perform(post("/api/v1/events")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"subjectId\":\"EIAMD139\",\"eventDefinitionOid\":\"SE_RIS_VISIT\","
+                            + "\"dateStarted\":\"2027-04-19\"}")
+                    .session(sessionFor(102, "S_RIS_DEMO")))
+                    .andExpect(result -> assertEquals(false,
+                            result.getResponse().getStatus() == 409,
+                            "a visit on another day is not a duplicate"));
+        } finally {
+            exec("DELETE FROM study_event WHERE study_event_id = " + existing);
+        }
+    }
+
+    /** A pending visit of the seeded repeating definition, on the given day. */
+    private int insertScheduledVisit(String isoDate) throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO study_event (study_event_definition_id, study_subject_id, location, "
+                             + " sample_ordinal, date_start, owner_id, status_id, "
+                             + " subject_event_status_id, date_created, start_time_flag, end_time_flag) "
+                             + "SELECT sed.study_event_definition_id, ss.study_subject_id, '', "
+                             + "       COALESCE((SELECT MAX(sample_ordinal) FROM study_event se2 "
+                             + "                  WHERE se2.study_subject_id = ss.study_subject_id "
+                             + "                    AND se2.study_event_definition_id = sed.study_event_definition_id), 0) + 1, "
+                             + "       ?::date, 1, 1, 1, NOW(), false, false "
+                             + "  FROM study_event_definition sed, study_subject ss "
+                             + " WHERE sed.oc_oid = 'SE_RIS_VISIT' AND ss.label = 'EIAMD139' "
+                             + "RETURNING study_event_id")) {
+            ps.setString(1, isoDate);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    private void exec(String sql) throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.executeUpdate();
+        }
+    }
+
+    /** Session bound to a named study, for definitions that live outside the default one. */
+    private MockHttpSession sessionFor(int studyId, String oid) {
+        MockHttpSession s = session();
+        StudyBean study = new StudyBean();
+        study.setId(studyId);
+        study.setOid(oid);
+        s.setAttribute("study", study);
+        return s;
     }
 }

@@ -147,6 +147,14 @@
       "overview2": {
         "crtDeltaAria": "Veränderung der zentralen Netzhautdicke gegenüber der Vorvisite"
       },
+      "schedule": {
+        "title": "Nächste Visite planen",
+        "body": "Die Entscheidung sieht ein Intervall von {weeks} Wochen vor — das ergibt den {date}.",
+        "confirm": "Visite anlegen",
+        "saving": "Wird angelegt …",
+        "skip": "Später",
+        "alreadyPlanned": "Eine Visite ist bereits für den {date} geplant."
+      },
       "recommendation": {
         "headline": {
           "SHORTEN": "Intervall verkürzen",

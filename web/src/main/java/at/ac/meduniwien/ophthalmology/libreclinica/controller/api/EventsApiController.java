@@ -715,6 +715,25 @@ public class EventsApiController {
                     "Event definition '" + def.getOid() + "' is not repeating — already scheduled for this subject"));
         }
 
+        // P2-5 — refuse an exact duplicate.
+        //
+        // Scheduling is now triggered from the treat-and-extend decision panel,
+        // where a double click, a retried request or two clinicians acting on
+        // the same decision would otherwise put the same patient on the
+        // calendar twice for the same day. Duplicate appointments are a real
+        // harm in a study where a visit means an injection.
+        //
+        // Only an identical (subject, definition, date) that is still merely
+        // scheduled is refused. A repeating visit on a different day, and a
+        // re-scheduling after the first one was completed or stopped, both go
+        // through.
+        Integer duplicateId = findScheduledDuplicate(ss.getId(), def.getId(), startDate);
+        if (duplicateId != null) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "That visit is already scheduled for this subject on that date",
+                    "studyEventId", duplicateId));
+        }
+
         StudyEventBean ev = new StudyEventBean();
         ev.setStudyEventDefinitionId(def.getId());
         ev.setStudySubjectId(ss.getId());
@@ -1793,6 +1812,33 @@ public class EventsApiController {
 
     private static String statusForSubjectEventStatus(SubjectEventStatus s) {
         return s == null ? "not-scheduled" : statusForSubjectEventStatusId(s.getId());
+    }
+
+    /**
+     * An existing, still-pending visit of the same definition on the same day.
+     *
+     * @return its id, or null when there is none
+     */
+    private Integer findScheduledDuplicate(int studySubjectId, int definitionId, Date dateStarted) {
+        String sql = "SELECT study_event_id FROM study_event "
+                + " WHERE study_subject_id = ? AND study_event_definition_id = ? "
+                + "   AND date(date_start) = ? "
+                + "   AND subject_event_status_id = 1 "
+                + " ORDER BY study_event_id LIMIT 1";
+        try (java.sql.Connection c = dataSource.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            ps.setInt(2, definitionId);
+            ps.setDate(3, new java.sql.Date(dateStarted.getTime()));
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Integer.valueOf(rs.getInt(1)) : null;
+            }
+        } catch (java.sql.SQLException e) {
+            // Never block scheduling over the duplicate check: a visit that
+            // does not get scheduled is worse than one scheduled twice.
+            LOG.warn("duplicate-visit check failed for subject {}: {}", studySubjectId, e.getMessage());
+            return null;
+        }
     }
 
     /* ================================================================== */

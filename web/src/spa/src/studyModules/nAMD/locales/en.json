@@ -147,6 +147,14 @@
       "overview2": {
         "crtDeltaAria": "[NEEDS_REVIEW] Change in central retinal thickness vs previous visit"
       },
+      "schedule": {
+        "title": "Schedule the next visit",
+        "body": "The decision sets an interval of {weeks} weeks, which falls on {date}.",
+        "confirm": "Create visit",
+        "saving": "Creating …",
+        "skip": "Later",
+        "alreadyPlanned": "A visit is already scheduled for {date}."
+      },
       "recommendation": {
         "headline": {
           "SHORTEN": "[NEEDS_REVIEW] Shorten interval",
