@@ -14,7 +14,7 @@ cp -R nAMD myProtocol
 In `myProtocol/index.ts` change three things:
 
 ```ts
-protocolType: 'MYPROTOCOL',          // matches study.protocol_type
+protocolType: 'MYPROTOCOL',          // the module id; a study is enrolled in it by that id
 labelKey: 'studyModules.myProtocol.label',
 routes: [{ path: '', name: 'myProtocol-workspace', component: ... }],
 ```
@@ -23,7 +23,8 @@ That's it — `studyModules/registry.ts` discovers the new folder via `import.me
 
 Verify locally:
 
-1. Set a study's protocol type: `UPDATE study SET protocol_type = 'MYPROTOCOL' WHERE oc_oid = 'S_DEFAULTS1';`
+1. Enrol a study in the module: `PUT /api/v1/studies/S_DEFAULTS1/modules/MYPROTOCOL` as an administrator, or insert the row directly:
+   `INSERT INTO study_module_enrollment (study_id, module_id, enrolled_by) VALUES (1, 'MYPROTOCOL', 1);`
 2. `pnpm exec vitest run src/studyModules/myProtocol/` — copy nAMD's specs as templates.
 3. Bring up compose, pick the study, navigate to `/studies/S_DEFAULTS1/modules/myprotocol`.
 
@@ -31,18 +32,21 @@ Verify locally:
 
 ```ts
 interface StudyModuleManifest {
-  protocolType: string                            // matches study.protocol_type (case-insensitive, trimmed)
+  protocolType: string                            // the module id a study is enrolled in (case-insensitive, trimmed)
   labelKey: string                                // i18n key for the module name
   routes: RouteRecordRaw[]                        // prefixed by the framework
   injections?: Partial<Record<InjectionSlotId, InjectionEntry[]>>
   loadI18n?: () => Promise<{ de, en }>            // lazy bundle merge
-  visitScheduler?: (ctx) => VisitSchedulerHint | null   // optional T&E hook
 }
 ```
 
 ### Activation
 
-A manifest activates when `auth.user.activeStudy.protocolType` matches `manifest.protocolType` (case-insensitive, whitespace-trimmed). The `useStudyModuleStore()` Pinia store re-derives `activeModule` on every study switch. Re-activation skips lazy i18n re-loads — bundles persist for the session.
+A manifest activates when the active study is **enrolled** in it — `activeStudy.enabledModules` contains the manifest's `protocolType`, compared case-insensitively. Enrollment is administered per study at `PUT /api/v1/studies/{oid}/modules/{moduleId}`; sites inherit their parent study's enrollments.
+
+`study.protocol_type` is **not** consulted. It is free-form text with no admin-visible toggle, which is why enrollment replaced it; the manifest field kept its name.
+
+The `useStudyModuleStore()` Pinia store re-derives `activeModule` on every study switch. Re-activation skips lazy i18n re-loads — bundles persist for the session.
 
 ### Uniqueness
 
@@ -63,7 +67,7 @@ becomes `/studies/:studyOid/modules/myprotocol` and `/studies/:studyOid/modules/
 
 The router guard verifies two invariants on every navigation:
 
-1. `auth.activeStudy.protocolType` matches `meta.studyModule` (the framework stamps this from the manifest).
+1. The active study is enrolled in `meta.studyModule` (the framework stamps this from the manifest).
 2. The URL's `:studyOid` matches `auth.activeStudy.oid` — prevents bookmarked URLs from landing in the wrong study's data.
 
 Either failure redirects to home with a toast.
@@ -80,18 +84,18 @@ Declare per-route role gates the same way the rest of the SPA does:
 
 ## Injection slots
 
-Six slots are available today. Each host view passes a typed context that your `predicate` receives:
+Six slot ids exist. **Three of them are rendered by a host today** — an entry declared for one of the others is accepted, stored and never displayed, so check this column before relying on one:
 
-| Slot id                       | Host view                | Context type             | Notes |
-|-------------------------------|--------------------------|--------------------------|-------|
-| `subject-detail.workspace`    | SubjectDetailView        | `SubjectDetail \| null`  | Top-of-view CTA (e.g. "Open workspace") |
-| `subject-detail.tabs`         | SubjectDetailView        | `SubjectDetail \| null`  | Extra tab — host doesn't yet consume this; mount via your own template |
-| `event-detail.panels`         | EventDetailView          | `EventDetailDto \| null` | Below-form panels per visit — predicate gates by status / definition |
-| `event-detail.actions`        | EventDetailView          | `EventDetailDto \| null` | Header action buttons — slot declared, host doesn't yet consume |
-| `crf-entry.banner`            | CrfEntryView             | `null`                   | Top-of-form banner — no context |
-| `nav.modules`                 | TopBar                   | `null`                   | Entry in primary nav — mounts whenever your module is active |
+| Slot id                       | Host view                | Context type             | Rendered? | Notes |
+|-------------------------------|--------------------------|--------------------------|-----------|-------|
+| `subject-detail.workspace`    | SubjectDetailView        | `SubjectDetail \| null`  | yes | Top-of-view CTA (e.g. "Open workspace") |
+| `event-detail.panels`         | EventDetailView          | `EventDetailDto \| null` | yes | Below-form panels per visit — predicate gates by status / definition |
+| `crf-entry.banner`            | CrfEntryView             | `null`                   | yes | Top-of-form banner — no context |
+| `subject-detail.tabs`         | SubjectDetailView        | `SubjectDetail \| null`  | no  | Declared, not mounted — put the tab in your own template for now |
+| `event-detail.actions`        | EventDetailView          | `EventDetailDto \| null` | no  | Declared, not mounted |
+| `nav.modules`                 | TopBar                   | `null`                   | no  | The TopBar consumer was removed on 2026-06-21; modules are reached through the subject-detail CTA. The id is reserved for a future surface |
 
-The framework only surfaces entries from the **active** module — when a study with `protocolType !== 'MYPROTOCOL'` is active, your entries don't render anywhere. No per-view gating needed.
+The framework only surfaces entries from an **active** module — when the active study is not enrolled in your module, your entries do not render anywhere. No per-view gating needed.
 
 Predicates are typed against `SlotContextMap[slotId]`:
 

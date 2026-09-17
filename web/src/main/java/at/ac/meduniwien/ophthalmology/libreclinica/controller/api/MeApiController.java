@@ -200,8 +200,12 @@ public class MeApiController {
             // purpose.
             java.util.List<String> enabledModules;
             try {
+                // Sites inherit their parent's modules — see
+                // StudyModuleEnrollmentApiController. A site session that did
+                // not inherit saw no modules at all.
                 enabledModules = StudyModuleEnrollmentApiController
-                        .loadEnrolledModuleIds(dataSource, currentStudy.getId());
+                        .loadEnrolledModuleIds(dataSource, currentStudy.getId(),
+                                currentStudy.getParentStudyId());
             } catch (Exception e) {
                 LOG.warn("Failed to load module enrollments for study={}: {}",
                         currentStudy.getOid(), e.getMessage());
