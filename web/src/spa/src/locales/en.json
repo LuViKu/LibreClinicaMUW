@@ -2089,6 +2089,12 @@
       "missingOid": "Provide at least one of OD OID / OS OID.",
       "network": "Could not save the modality — please try again."
     }
+  ,
+
+    "tab": {
+      "measurements": "Measurements (platform)",
+      "imaging": "Imaging (study)"
+    }
   },
   "patientDetail": {
     "heading": "Patient",
@@ -2910,52 +2916,86 @@
     "dismiss": "Dismiss",
     "dismissConfirm": "Really dismiss this image?"
   },
+  "ingestInbox": {
+    "title": "Ingest inbox",
+    "cardDesc": "File inbound acquisitions — fundus images and OCT scans — to patients and visits.",
+    "subtitle": "{count} files",
+    "loading": "Loading …",
+    "empty": "No files in this view.",
+    "filters": "Filters",
+    "kindAll": "All",
+    "kind": {
+      "e2e": "OCT scan",
+      "dicom": "DICOM image",
+      "image": "Fundus image",
+      "other": "Other file"
+    },
+    "statusLabel": "Status",
+    "status": {
+      "UNBOUND": "Unreconciled",
+      "BOUND": "Filed",
+      "DISMISSED": "Dismissed"
+    },
+    "searchLabel": "Search",
+    "searchPlaceholder": "Patient ID or filename",
+    "apply": "Apply",
+    "selectOne": "Select file",
+    "selected": "{n} selected",
+    "bindSelected": "File selection …",
+    "clearSelection": "Clear selection",
+    "someSkipped": "{n} file(s) were skipped — they had already been dealt with.",
+    "patientId": "Patient ID",
+    "eye": "Eye",
+    "suggestion": "Suggested: {label} ({study})",
+    "bindSuggested": "Accept suggestion",
+    "bind": "File …",
+    "unbind": "Undo filing",
+    "unbindConfirm": "Undo this filing? The CRF value it set is removed too, unless another file from the same device still evidences the visit.",
+    "dismiss": "Dismiss",
+    "dismissConfirm": "Dismiss this file?"
+  },
 
-    "ingestInbox": {
-      "title": "Ingest inbox",
-      "cardDesc": "File inbound acquisitions — fundus images and OCT scans — to patients and visits.",
-      "subtitle": "{count} files",
-      "loading": "Loading …",
-      "empty": "No files in this view.",
-      "filters": "Filters",
-      "kindAll": "All",
-      "kind": {
-        "e2e": "OCT scan",
-        "dicom": "DICOM image",
-        "image": "Fundus image",
-        "other": "Other file"
-      },
-      "statusLabel": "Status",
-      "status": {
-        "UNBOUND": "Unreconciled",
-        "BOUND": "Filed",
-        "DISMISSED": "Dismissed"
-      },
-      "searchLabel": "Search",
-      "searchPlaceholder": "Patient ID or filename",
-      "apply": "Apply",
-      "selectOne": "Select file",
-      "selected": "{n} selected",
-      "bindSelected": "File selection …",
-      "clearSelection": "Clear selection",
-      "someSkipped": "{n} file(s) were skipped — they had already been dealt with.",
-      "patientId": "Patient ID",
+    "imagingModalities": {
+      "intro": "Which acquisitions this study performs, on which device — and which CRF box a filed file ticks.",
+      "noStudy": "No active study. Pick a study first.",
+      "empty": "No acquisitions configured for this study yet.",
+      "code": "Code",
+      "label": "Label",
+      "labelDe": "Label (DE)",
+      "labelEn": "Label (EN)",
+      "device": "Device",
+      "kinds": "File kinds",
+      "bindings": "CRF items",
+      "ordinal": "Order",
+      "aeTitle": "DICOM AE title",
+      "lateralityRequired": "Eye required",
+      "checklistOnly": "checklist only",
+      "noBindings": "no item bound",
+      "kindsHint": "Leave empty for a checklist-only row (e.g. BCVA) — no file ever arrives for it.",
+      "autoMatchHint": "Images from this AE title are classified as this acquisition automatically.",
+      "addTitle": "Add an acquisition",
+      "add": "Add",
+      "addBinding": "CRF item …",
+      "roleLabel": "Role",
       "eye": "Eye",
-      "suggestion": "Suggested: {label} ({study})",
-      "bindSuggested": "Accept suggestion",
-      "bind": "File …",
-      "unbind": "Undo filing",
-      "unbindConfirm": "Undo this filing? The CRF value it set is removed too, unless another file from the same device still evidences the visit.",
-      "dismiss": "Dismiss",
-      "dismissConfirm": "Dismiss this file?"
+      "itemOid": "Item OID",
+      "itemOidPlaceholder": "e.g. I_HEALT_OCT_PERFORMED",
+      "codedYes": "Coded yes",
+      "retire": "Retire",
+      "retired": "retired",
+      "retireConfirm": "Retire acquisition “{code}”? It will stop ticking its CRF box.",
+      "role": {
+        "performed": "performed",
+        "not_performed_reason": "reason",
+        "initials": "initials"
+      }
     },
-
-    "subjectUnboundItems": {
-      "title": "Unfiled arrivals",
-      "loading": "Loading …",
-      "subtitle": "{count} file(s) waiting in the inbox to be filed.",
-      "openInbox": "File them in the inbox →"
-    },
+  "subjectUnboundItems": {
+    "title": "Unfiled arrivals",
+    "loading": "Loading …",
+    "subtitle": "{count} file(s) waiting in the inbox to be filed.",
+    "openInbox": "File them in the inbox →"
+  },
   "dueVisits": {
     "title": "Due visits",
     "cardDesc": "Upcoming and overdue visits across the studies you can see.",

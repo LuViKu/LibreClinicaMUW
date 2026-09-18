@@ -399,4 +399,18 @@ public final class AuditTypeIds {
      * {@code lc-muw-2026-10-05-audit-types-ingest.xml}. 129 is the auto-tick.
      */
     public static final int INGEST_UNBIND                    = 130;
+
+    // ------------------------------------------------------------------
+    // P3.4 — the per-study imaging catalogue (ImagingModalitiesApiController)
+    //
+    // Configuration rather than clinical data, but it decides what the
+    // platform writes into a CRF without anybody typing it: a binding edited
+    // to point at a different item silently changes which box a camera ticks
+    // from that moment on. Seeded by
+    // lc-muw-2026-11-02-audit-types-imaging-modality.xml.
+    // ------------------------------------------------------------------
+
+    public static final int IMAGING_MODALITY_CREATED         = 131;
+    public static final int IMAGING_MODALITY_UPDATED         = 132;
+    public static final int IMAGING_MODALITY_BINDING_CHANGED = 133;
 }
