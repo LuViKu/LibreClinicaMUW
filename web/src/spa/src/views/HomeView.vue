@@ -224,9 +224,9 @@ const CATALOG = computed<CatalogEntry[]>(() => [
   },
   {
     id: 'image-inbox',
-    to: { name: 'image-ingest-inbox' },
-    titleKey: 'imageInbox.title',
-    descKey: 'imageInbox.cardDesc',
+    to: { name: 'ingest-inbox' },
+    titleKey: 'ingestInbox.title',
+    descKey: 'ingestInbox.cardDesc',
     allowedRoles: ['Data Manager', 'Investigator'],
     scope: 'study-scoped',
   },

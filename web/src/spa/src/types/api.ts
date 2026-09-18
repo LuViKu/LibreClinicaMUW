@@ -1396,6 +1396,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/{id}/unbind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unbind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/{id}/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/bulk-bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bulkBind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import": {
         parameters: {
             query?: never;
@@ -1437,7 +1501,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["dismiss"];
+        post: operations["dismiss_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1453,7 +1517,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["bind"];
+        post: operations["bind_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2676,6 +2740,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["one"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["inbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/inbox/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import/{token}/rows": {
         parameters: {
             query?: never;
@@ -2699,7 +2827,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["preview"];
+        get: operations["preview_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2715,7 +2843,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["inbox"];
+        get: operations["inbox_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4086,6 +4214,19 @@ export interface components {
             dicomPath?: string;
             previewPngPath?: string;
         };
+        DismissRequest: {
+            reason?: string;
+        };
+        BindRequest: {
+            /** Format: int32 */
+            studySubjectId?: number;
+            /** Format: int32 */
+            studyEventId?: number;
+            /** Format: int32 */
+            eventCrfId?: number;
+            modalityCode?: string;
+            laterality?: string;
+        };
         ImportCrfPreviewDto: {
             /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
             previewToken?: string;
@@ -4186,17 +4327,6 @@ export interface components {
              * @description Active study id at commit time (helper for the SPA audit-trail link).
              */
             auditLogStudyId?: number;
-        };
-        DismissRequest: {
-            reason?: string;
-        };
-        BindRequest: {
-            /** Format: int32 */
-            studySubjectId?: number;
-            /** Format: int32 */
-            studyEventId?: number;
-            /** Format: int32 */
-            eventCrfId?: number;
         };
         ScheduleEventRequest: {
             subjectId?: string;
@@ -7729,6 +7859,104 @@ export interface operations {
             };
         };
     };
+    unbind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DismissRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    bind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    bulkBind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkBindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     uploadImport_1: {
         parameters: {
             query?: never;
@@ -7782,7 +8010,7 @@ export interface operations {
             };
         };
     };
-    dismiss: {
+    dismiss_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -7808,7 +8036,7 @@ export interface operations {
             };
         };
     };
-    bind: {
+    bind_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -9847,15 +10075,12 @@ export interface operations {
             };
         };
     };
-    listRows: {
+    one: {
         parameters: {
-            query?: {
-                offset?: number;
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path: {
-                token: string;
+                id: number;
             };
             cookie?: never;
         };
@@ -9867,7 +10092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PreviewRowsPageDto"];
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -9895,6 +10120,101 @@ export interface operations {
         };
     };
     inbox: {
+        parameters: {
+            query?: {
+                kind?: string;
+                source?: string;
+                device?: string;
+                q?: string;
+                candidateStudySubjectId?: number;
+                status?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listRows: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PreviewRowsPageDto"];
+                };
+            };
+        };
+    };
+    preview_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    inbox_1: {
         parameters: {
             query?: never;
             header?: never;

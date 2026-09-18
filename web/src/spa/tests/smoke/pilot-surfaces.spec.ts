@@ -12,12 +12,12 @@ import { loginAndGoto } from '../support/auth'
 
 test.describe('@smoke Image reconciliation inbox', () => {
   test('a data manager can open it', async ({ page }) => {
-    await loginAndGoto(page, 'dataManager', '/image-inbox')
+    await loginAndGoto(page, 'dataManager', '/ingest-inbox')
     await expect(page.getByText(/Seite nicht gefunden/i)).toHaveCount(0)
     // Either rows or the empty state — both mean the view loaded and the
     // backend answered. A spinner that never resolves does not.
     await expect(
-      page.locator('[data-testid="image-inbox-row"], [data-testid="image-inbox-empty"], table, p'),
+      page.locator('[data-testid="ingest-row"], [data-testid="inbox-empty"], [data-testid="inbox-grid"], p'),
     ).not.toHaveCount(0, { timeout: 15_000 })
   })
 })

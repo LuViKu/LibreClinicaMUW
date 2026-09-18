@@ -380,11 +380,15 @@ const router = createRouter({
        subject/event/CRF. Role-gated here (advisory); the backend enforces
        role + site visibility. */
     {
-      path: '/image-inbox',
-      name: 'image-ingest-inbox',
-      component: () => import('@/views/ImageInboxView.vue'),
-      meta: { title: 'Bild-Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
+      path: '/ingest-inbox',
+      name: 'ingest-inbox',
+      component: () => import('@/views/IngestInboxView.vue'),
+      meta: { title: 'Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
     },
+    /* P3.2 — the image inbox became the one inbox. Kept as a redirect for a
+       release: the old path is in people's bookmarks and in the operator test
+       script, and a 404 would read as "the feature was removed". */
+    { path: '/image-inbox', redirect: { name: 'ingest-inbox' } },
     /* P2-6 — open visits in a date window, reaching into the past so a
        visit that was due and never happened is visible. Role-gated here
        (advisory); the backend scopes the list to the studies the session

@@ -2910,6 +2910,45 @@
     "dismiss": "Verwerfen",
     "dismissConfirm": "Dieses Bild wirklich verwerfen?"
   },
+
+    "ingestInbox": {
+      "title": "Eingang",
+      "cardDesc": "Eingehende Dateien – Fundusbilder und OCT-Scans – Patienten und Visiten zuordnen.",
+      "subtitle": "{count} Dateien",
+      "loading": "Wird geladen …",
+      "empty": "Keine Dateien in dieser Ansicht.",
+      "filters": "Filter",
+      "kindAll": "Alle",
+      "kind": {
+        "e2e": "OCT-Scan",
+        "dicom": "DICOM-Bild",
+        "image": "Fundusbild",
+        "other": "Andere Datei"
+      },
+      "statusLabel": "Status",
+      "status": {
+        "UNBOUND": "Nicht zugeordnet",
+        "BOUND": "Zugeordnet",
+        "DISMISSED": "Verworfen"
+      },
+      "searchLabel": "Suche",
+      "searchPlaceholder": "Patienten-ID oder Dateiname",
+      "apply": "Anwenden",
+      "selectOne": "Datei auswählen",
+      "selected": "{n} ausgewählt",
+      "bindSelected": "Auswahl zuordnen …",
+      "clearSelection": "Auswahl aufheben",
+      "someSkipped": "{n} Datei(en) wurden übersprungen – sie waren bereits bearbeitet.",
+      "patientId": "Patienten-ID",
+      "eye": "Auge",
+      "suggestion": "Vorschlag: {label} ({study})",
+      "bindSuggested": "Vorschlag zuordnen",
+      "bind": "Zuordnen …",
+      "unbind": "Zuordnung aufheben",
+      "unbindConfirm": "Zuordnung wirklich aufheben? Der dadurch gesetzte CRF-Wert wird ebenfalls entfernt, sofern keine weitere Datei desselben Geräts die Visite belegt.",
+      "dismiss": "Verwerfen",
+      "dismissConfirm": "Diese Datei wirklich verwerfen?"
+    },
   "dueVisits": {
     "title": "Fällige Visiten",
     "cardDesc": "Anstehende und überfällige Visiten der sichtbaren Studien.",

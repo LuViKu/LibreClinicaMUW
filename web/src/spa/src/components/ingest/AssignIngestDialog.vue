@@ -1,6 +1,10 @@
 <script setup lang="ts">
 /**
- * DR-025 — two-step bind wizard for the fundus-image reconciliation inbox.
+ * DR-025 / P3.2 — two-step bind wizard for the ingest reconciliation inbox.
+ *
+ * P3.2 — was AssignImageDialog. Nothing about it was image-specific; it
+ * carries an id through a subject pick and a visit pick, and the queue it
+ * serves now holds OCT volumes too.
  *
  * Clones the retinal AssignParkedDialog, reusing the OCT-portal
  * PatientSearchModal (subject typeahead → /study-subjects/search) and
@@ -17,7 +21,7 @@ import type { StudySubjectSearchHit } from '@/api/retinal'
 
 interface Props {
   open: boolean
-  imageIngestId: number
+  ingestItemId: number
   /** Pre-fills the subject search from the row's PatientID hint. */
   initialPatientId: string
 }
@@ -25,7 +29,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'bind', payload: {
-    imageIngestId: number
+    ingestItemId: number
     studySubjectId: number
     studyEventId: number | null
     eventCrfId: number | null
@@ -54,7 +58,7 @@ function onSubjectPicked(subject: StudySubjectSearchHit): void {
 function onEventPicked(evt: PickedEvent): void {
   if (!pickedSubject.value) return
   emit('bind', {
-    imageIngestId: props.imageIngestId,
+    ingestItemId: props.ingestItemId,
     studySubjectId: pickedSubject.value.studySubjectId,
     studyEventId: evt.studyEventId,
     eventCrfId: evt.eventCrfId,

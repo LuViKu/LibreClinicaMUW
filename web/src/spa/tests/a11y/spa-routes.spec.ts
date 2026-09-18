@@ -38,7 +38,7 @@ const CASES: { role: Role | null; path: string; label: string }[] = [
   // is running the clinic that day, so their accessibility is not optional.
   { role: null, path: '/image-upload', label: 'Image upload portal (no login)' },
   { role: null, path: '/oct-upload', label: 'OCT upload portal (no login)' },
-  { role: 'dataManager', path: '/image-inbox', label: 'Image reconciliation inbox' },
+  { role: 'dataManager', path: '/ingest-inbox', label: 'Ingest reconciliation inbox' },
   { role: 'investigator', path: '/due-visits', label: 'Due visits' },
   { role: 'dataManager', path: '/datasets', label: 'Datasets' },
 ]
