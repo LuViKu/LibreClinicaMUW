@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.1 — the ingest audit vocabulary stops saying "fundus image".
+
+        127 and 128 were seeded when the queue only ever held fundus
+        photographs. Once an OCT volume can be bound through the same path,
+        an audit trail reading "Fundus image bound to subject/event" against a
+        200 MB .e2e is wrong in the one record that is supposed to be
+        authoritative about what happened.
+
+        The ids and the machine-readable names are untouched. Only the
+        display_name changes, so existing rows re-render correctly rather than
+        needing a data migration — the name is looked up, not copied.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-05-audit-types-ingest-rename" dbms="postgresql">
+        <comment>Broaden the 127/128 labels: the queue is no longer image-only.</comment>
+        <sql splitStatements="true" endDelimiter=";">
+            UPDATE audit_log_event_type
+               SET display_name = 'Ingested file bound to subject/event'
+             WHERE audit_log_event_type_id = 127;
+            UPDATE audit_log_event_type
+               SET display_name = 'Ingested file dismissed'
+             WHERE audit_log_event_type_id = 128;
+        </sql>
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";">
+                UPDATE audit_log_event_type
+                   SET display_name = 'Fundus image bound to subject/event'
+                 WHERE audit_log_event_type_id = 127;
+                UPDATE audit_log_event_type
+                   SET display_name = 'Fundus image dismissed'
+                 WHERE audit_log_event_type_id = 128;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        130 — unbind.
+
+        Binding was recordable and reversing it was not, because there was no
+        way to reverse it: the inbox could bind or dismiss, and a mis-bind was
+        fixed by editing the row. P3.2 adds an unbind that also cancels any
+        inference jobs the bind started and reverses the modality tick it
+        wrote, which is a clinically meaningful amount of undoing to leave
+        unrecorded.
+
+        129 is already taken by the P1-5 auto-tick.
+    -->
+    <!--
+        The locator on existing audit rows.
+
+        audit_log_event.audit_table names the table the audited entity lives
+        in; with entity_id it is how "show me everything that happened to this
+        row" is answered. P3.1 moved those rows to ingest_item, so every
+        existing trail became unreachable from the only name the application
+        now knows.
+
+        This updates the locator, and nothing else. No old_value, new_value,
+        user_id, timestamp or event type is touched — what happened, who did
+        it and when are exactly as recorded. The distinction matters: the
+        audit trail's integrity is about the observations it holds, and a
+        pointer to a table that no longer exists does not preserve an
+        observation, it loses one.
+
+        Scoped by entity id range implicitly — audit_table is specific enough
+        that no other table's rows can match.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-audit-rows-ingest-item-locator" dbms="postgresql">
+        <comment>Repoint existing ingest audit rows at the renamed table.</comment>
+        <sql>
+            UPDATE audit_log_event
+               SET audit_table = 'ingest_item'
+             WHERE audit_table = 'image_ingest';
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE audit_log_event
+                   SET audit_table = 'image_ingest'
+                 WHERE audit_table = 'ingest_item';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-05-audit-type-ingest-unbind" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 130;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit type 130 — ingest_unbind.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="130"/>
+            <column name="name" value="ingest_unbind"/>
+            <column name="display_name" value="Ingested file unbound from subject/event"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 130</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

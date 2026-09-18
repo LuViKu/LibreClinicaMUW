@@ -32,6 +32,8 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
@@ -61,7 +63,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * {@code PublicOctUploadController} / {@code PublicBcvaEntryController} posture:
  * no LibreClinica account, whitelisted {@code permitAll} in SecurityConfig, and
  * the institutional reverse proxy is the only access gate (must NOT be exposed
- * to the public internet). The uploaded image lands in {@code image_ingest}
+ * to the public internet). The uploaded image lands in {@code ingest_item}
  * ({@code source_kind='upload'}, {@code UNBOUND}) for the SPA reconciliation
  * inbox — the operator links it to a subject/event/CRF there. Any PatientID the
  * operator types is stored as a match hint; nothing binds here.
@@ -73,7 +75,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/v1/public/image-upload")
 @Tag(name = "Public image upload",
-     description = "Remidio FOP fundus JPEG/PNG upload → image_ingest (source_kind='upload').")
+     description = "Remidio FOP fundus JPEG/PNG upload → ingest_item (source_kind='upload').")
 public class PublicImageUploadController {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublicImageUploadController.class);
@@ -272,7 +274,7 @@ public class PublicImageUploadController {
                 // the system service account, not to a person.
                 ImageIngestBinding.tickPerformed(dataSource, id, target, "upload", dev, null);
             }
-            LOG.info("public image upload: enqueued image_ingest_id={} status={}",
+            LOG.info("public image upload: enqueued ingest_item_id={} status={}",
                     id, target == null ? "UNBOUND" : "BOUND");
             return ResponseEntity.status(201).body(Map.of(
                     "imageIngestId", id, "status", target == null ? "UNBOUND" : "BOUND"));
@@ -286,54 +288,26 @@ public class PublicImageUploadController {
     private long insert(Connection c, String storedPath, String originalFilename, String contentType,
                         String patientId, String laterality, LocalDate studyDate, String device,
                         ImageIngestBinding.EventTarget target) throws SQLException {
-        // The uploaded JPEG/PNG is itself viewable, so preview_png_path = stored_path.
-        // A visit-picked upload lands BOUND with match_policy='portal' and no
-        // bound_by_user_id — the form has no user; the audit row carries the trail.
-        String sql = "INSERT INTO image_ingest ("
-                + "source_kind, device, stored_path, preview_png_path, original_filename, content_type, "
-                + "patient_id, laterality, study_date, received_at, status, "
-                + "match_policy, bound_study_subject_id, bound_study_event_id, "
-                + "bound_event_crf_id, bound_at"
-                + ") VALUES ('upload', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, device);
-            ps.setString(2, storedPath);
-            ps.setString(3, storedPath);
-            ps.setString(4, originalFilename);
-            ps.setString(5, contentType);
-            ps.setString(6, patientId);
-            ps.setString(7, laterality);
-            if (studyDate == null) {
-                ps.setNull(8, Types.DATE);
-            } else {
-                ps.setObject(8, studyDate);
-            }
-            Timestamp now = Timestamp.from(Instant.now());
-            ps.setTimestamp(9, now);
-            ps.setString(10, target == null ? "UNBOUND" : "BOUND");
-            if (target == null) {
-                ps.setNull(11, Types.VARCHAR);
-                ps.setNull(12, Types.INTEGER);
-                ps.setNull(13, Types.INTEGER);
-                ps.setNull(14, Types.INTEGER);
-                ps.setNull(15, Types.TIMESTAMP);
-            } else {
-                ps.setString(11, "portal");
-                ps.setInt(12, target.studySubjectId());
-                ps.setInt(13, target.studyEventId());
-                if (target.eventCrfId() == null) {
-                    ps.setNull(14, Types.INTEGER);
-                } else {
-                    ps.setInt(14, target.eventCrfId());
-                }
-                ps.setTimestamp(15, now);
-            }
-            ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) return keys.getLong(1);
-                throw new SQLException("image_ingest INSERT returned no PK");
-            }
+        // P3.1 — the statement lives in IngestItemRepository, shared with the
+        // DICOM ingress.
+        //
+        // The uploaded JPEG/PNG is itself viewable, so preview_png_path =
+        // stored_path. A visit-picked upload lands BOUND with
+        // match_policy='portal' and no bound_by_user_id — the form has no
+        // logged-in user; the audit row carries the trail.
+        var item = IngestItemRepository
+                .newItem(IngestArtifactStore.Kind.IMAGE, "upload", storedPath)
+                .device(device)
+                .previewPngPath(storedPath)
+                .originalFilename(originalFilename)
+                .contentType(contentType)
+                .patientId(patientId)
+                .laterality(laterality)
+                .acquisitionDate(studyDate);
+        if (target != null) {
+            item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "portal");
         }
+        return item.insert(c);
     }
 
     // ----- helpers -----

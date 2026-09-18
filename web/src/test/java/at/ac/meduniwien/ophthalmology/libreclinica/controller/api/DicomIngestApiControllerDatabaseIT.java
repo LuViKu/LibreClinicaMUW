@@ -79,7 +79,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     void cleanIngestRows() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "DELETE FROM image_ingest WHERE sop_instance_uid LIKE ?")) {
+                     "DELETE FROM ingest_item WHERE sop_instance_uid LIKE ?")) {
             ps.setString(1, UID_PREFIX + "%");
             ps.executeUpdate();
         }
@@ -116,13 +116,13 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     private Row readRow(String sopUid) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT image_ingest_id, status, match_policy, bound_study_subject_id, "
+                     "SELECT ingest_item_id, status, match_policy, bound_study_subject_id, "
                              + "bound_study_event_id, bound_event_crf_id, bound_at, bound_by_user_id, "
                              + "source_kind, content_type "
-                             + "FROM image_ingest WHERE sop_instance_uid = ?")) {
+                             + "FROM ingest_item WHERE sop_instance_uid = ?")) {
             ps.setString(1, sopUid);
             try (ResultSet rs = ps.executeQuery()) {
-                assertTrue(rs.next(), "expected an image_ingest row for " + sopUid);
+                assertTrue(rs.next(), "expected an ingest_item row for " + sopUid);
                 assertEquals("dicom", rs.getString("source_kind"));
                 assertEquals("application/dicom", rs.getString("content_type"));
                 int ss = rs.getInt("bound_study_subject_id");
@@ -133,7 +133,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 Integer ecV = rs.wasNull() ? null : ec;
                 int by = rs.getInt("bound_by_user_id");
                 Integer byV = rs.wasNull() ? null : by;
-                return new Row(rs.getLong("image_ingest_id"), rs.getString("status"),
+                return new Row(rs.getLong("ingest_item_id"), rs.getString("status"),
                         rs.getString("match_policy"), ssV, seV, ecV,
                         rs.getTimestamp("bound_at") != null, byV);
             }
@@ -143,7 +143,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     private int countRows(String sopUid) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT count(*) FROM image_ingest WHERE sop_instance_uid = ?")) {
+                     "SELECT count(*) FROM ingest_item WHERE sop_instance_uid = ?")) {
             ps.setString(1, sopUid);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();

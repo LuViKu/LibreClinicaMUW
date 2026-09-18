@@ -13,7 +13,7 @@
 # then checks in the database that the stored image was bound to the visit
 # rather than landing in the reconciliation inbox. Everything it creates it
 # removes again: the run leaves one audit trail entry per bind, which is the
-# point, and no image_ingest row and no file.
+# point, and no ingest_item row and no file.
 #
 # It talks to the sidecar from inside the sidecar's own container, so it tests
 # the service rather than the firewall. Confirm separately that the camera VLAN
@@ -233,7 +233,7 @@ if [ -z "$SOP_UID" ]; then
 else
   ROW="$(psql_q "SELECT status || '|' || COALESCE(match_policy,'') || '|' ||
                         COALESCE(bound_study_event_id::text,'')
-                   FROM image_ingest WHERE sop_instance_uid = '$SOP_UID'")"
+                   FROM ingest_item WHERE sop_instance_uid = '$SOP_UID'")"
   if [ -z "$ROW" ]; then
     bad "the stored image did not reach the database"
     note "Check DICOM_SCP_INGEST_TOKEN against core.dicom.ingest.token, and the sidecar log."
@@ -260,7 +260,7 @@ fi
 # than by the recorded path, so a run whose ingest was rejected — the row never
 # existed, but the sidecar had already written the files — is cleaned up too.
 if [ -n "$SOP_UID" ]; then
-  psql_q "DELETE FROM image_ingest WHERE sop_instance_uid = '$SOP_UID'" >/dev/null
+  psql_q "DELETE FROM ingest_item WHERE sop_instance_uid = '$SOP_UID'" >/dev/null
   "${COMPOSE[@]}" exec -T dicom-scp sh -c \
     'find "${DICOM_SCP_STORE_PATH:-/var/lib/libreclinica/dicom-ingest}" -name "'"$SOP_UID"'.*" -delete' \
     >/dev/null 2>&1

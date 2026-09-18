@@ -366,20 +366,20 @@ public final class AuditTypeIds {
     public static final int SUBJECT_RANDOMIZATION_OVERRIDDEN = 126;
 
     /**
-     * DR-025 — a staff member bound an UNBOUND {@code image_ingest} row (a
+     * DR-025 — a staff member bound an UNBOUND {@code ingest_item} row (a
      * fundus image received via C-STORE or the Remidio upload page) to a
      * subject/event/CRF through the reconciliation inbox. Writer is
-     * {@code ImageIngestApiController.bind}; auditTable = {@code image_ingest},
-     * entityId = image_ingest_id, old_value = {@code "UNBOUND"}. Analog of
+     * {@code ImageIngestApiController.bind}; auditTable = {@code ingest_item},
+     * entityId = ingest_item_id, old_value = {@code "UNBOUND"}. Analog of
      * {@link #RETINAL_PARK_BIND}.
      */
     public static final int IMAGE_BIND                       = 127;
 
     /**
-     * DR-025 — a staff member dismissed an UNBOUND {@code image_ingest} row in
+     * DR-025 — a staff member dismissed an UNBOUND {@code ingest_item} row in
      * the reconciliation inbox (a duplicate / unusable capture). Writer is
-     * {@code ImageIngestApiController.dismiss}; auditTable = {@code image_ingest},
-     * entityId = image_ingest_id, old_value = {@code "UNBOUND"}.
+     * {@code ImageIngestApiController.dismiss}; auditTable = {@code ingest_item},
+     * entityId = ingest_item_id, old_value = {@code "UNBOUND"}.
      */
     public static final int IMAGE_DISMISS                    = 128;
 }

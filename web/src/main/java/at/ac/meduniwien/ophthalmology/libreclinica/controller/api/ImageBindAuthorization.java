@@ -12,7 +12,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 
 /**
  * DR-025 — authorization gate for the fundus-image reconciliation inbox
- * ({@code ImageIngestApiController}: bind / dismiss an UNBOUND image_ingest row).
+ * ({@code ImageIngestApiController}: bind / dismiss an UNBOUND ingest_item row).
  *
  * <p>Reconciliation is a data-management task — linking an inbound image to the
  * correct subject/visit. Permitted roles mirror {@link CrfReopenAuthorization}:

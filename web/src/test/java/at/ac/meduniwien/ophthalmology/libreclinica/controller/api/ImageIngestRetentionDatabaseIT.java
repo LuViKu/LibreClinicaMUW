@@ -44,12 +44,12 @@ class ImageIngestRetentionDatabaseIT extends AbstractApiControllerDatabaseIT {
     void cleanUp() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "DELETE FROM image_ingest WHERE original_filename LIKE 'retention-it-%'")) {
+                     "DELETE FROM ingest_item WHERE original_filename LIKE 'retention-it-%'")) {
             ps.executeUpdate();
         }
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "DELETE FROM audit_log_event WHERE audit_table = 'image_ingest' "
+                     "DELETE FROM audit_log_event WHERE audit_table = 'ingest_item' "
                              + "AND entity_name = 'Retention sweep'")) {
             ps.executeUpdate();
         }
@@ -66,12 +66,12 @@ class ImageIngestRetentionDatabaseIT extends AbstractApiControllerDatabaseIT {
         if (preview != null) Files.writeString(preview, "preview bytes");
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO image_ingest (source_kind, content_type, stored_path, "
+                     "INSERT INTO ingest_item (kind, source_kind, content_type, stored_path, "
                              + "preview_png_path, original_filename, received_at, status, bound_at) "
-                             + "VALUES ('upload', 'image/png', ?, ?, ?, "
+                             + "VALUES ('image', 'upload', 'image/png', ?, ?, ?, "
                              + "        now() - (? * INTERVAL '1 day'), ?, "
                              + "        now() - (? * INTERVAL '1 day')) "
-                             + "RETURNING image_ingest_id")) {
+                             + "RETURNING ingest_item_id")) {
             ps.setString(1, stored.toString());
             ps.setString(2, preview == null ? null : preview.toString());
             ps.setString(3, "retention-it-" + System.nanoTime());
@@ -88,7 +88,7 @@ class ImageIngestRetentionDatabaseIT extends AbstractApiControllerDatabaseIT {
     private boolean rowExists(long id) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT count(*) FROM image_ingest WHERE image_ingest_id = ?")) {
+                     "SELECT count(*) FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -100,7 +100,7 @@ class ImageIngestRetentionDatabaseIT extends AbstractApiControllerDatabaseIT {
     private int sweepAuditRows() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT count(*) FROM audit_log_event WHERE audit_table = 'image_ingest' "
+                     "SELECT count(*) FROM audit_log_event WHERE audit_table = 'ingest_item' "
                              + "AND entity_name = 'Retention sweep' AND user_id IS NULL")) {
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -209,11 +209,11 @@ class ImageIngestRetentionDatabaseIT extends AbstractApiControllerDatabaseIT {
         long id;
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO image_ingest (source_kind, content_type, stored_path, "
+                     "INSERT INTO ingest_item (kind, source_kind, content_type, stored_path, "
                              + "original_filename, received_at, status, bound_at) "
-                             + "VALUES ('upload', 'image/png', ?, ?, now() - INTERVAL '45 days', "
+                             + "VALUES ('image', 'upload', 'image/png', ?, ?, now() - INTERVAL '45 days', "
                              + "        'DISMISSED', now() - INTERVAL '45 days') "
-                             + "RETURNING image_ingest_id")) {
+                             + "RETURNING ingest_item_id")) {
             ps.setString(1, traversal.toString());
             ps.setString(2, "retention-it-traversal");
             try (ResultSet rs = ps.executeQuery()) {

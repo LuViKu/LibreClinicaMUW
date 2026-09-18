@@ -51,7 +51,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDa
  * </ul>
  *
  * <p>Writes carry {@code source_kind='ingest'} and the originating
- * {@code image_ingest_id}, so the SPA can explain the value and a later unbind
+ * {@code ingest_item_id}, so the SPA can explain the value and a later unbind
  * can reverse exactly what this caused.
  */
 public class IngestPerformedItemPopulator {
@@ -96,7 +96,7 @@ public class IngestPerformedItemPopulator {
      * @param eventCrfId    the CRF instance on the visit; {@code null} when the
      *                      CRF has not been started, in which case nothing is
      *                      written
-     * @param sourceKind    {@code image_ingest.source_kind}
+     * @param sourceKind    {@code ingest_item.source_kind}
      * @param deviceKey     the camera's AE title, or the portal's device field
      * @param studyId       the bound subject's study, for a study-specific map row
      * @param actorUserId   who to record as the author — the binding user, or

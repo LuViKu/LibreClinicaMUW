@@ -142,7 +142,7 @@ final class ImageIngestBinding {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, AuditTypeIds.IMAGE_BIND);
-            ps.setString(2, "image_ingest");
+            ps.setString(2, "ingest_item");
             ps.setInt(3, (int) imageIngestId);
             ps.setString(4, "status");
             ps.setString(5, "UNBOUND");
@@ -151,7 +151,7 @@ final class ImageIngestBinding {
             ps.setString(6, "BOUND;match_policy=" + matchPolicy + ";study_event_id=" + studyEventId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            LOG.warn("could not audit the system bind of image_ingest {}: {}",
+            LOG.warn("could not audit the system bind of ingest_item {}: {}",
                     imageIngestId, e.getMessage());
         }
     }

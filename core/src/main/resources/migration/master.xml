@@ -97,5 +97,7 @@
   <include  file="migration/lc-muw-2026-09-09-image-ingest.xml"/>
   <include  file="migration/lc-muw-2026-09-09-audit-event-type-image-ingest.xml"/>
   <include  file="migration/lc-muw-2026-09-18-ingest-performed-item-map.xml"/>
+  <include  file="migration/lc-muw-2026-10-05-ingest-item.xml"/>
+  <include  file="migration/lc-muw-2026-10-05-audit-types-ingest.xml"/>
 </databaseChangeLog>
 

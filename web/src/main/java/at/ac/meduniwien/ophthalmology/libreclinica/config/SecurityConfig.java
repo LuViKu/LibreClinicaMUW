@@ -166,7 +166,7 @@ public class SecurityConfig {
                         "/pages/api/v1/public/bcva-entry/**",
                         // DR-025 — public Remidio image-upload portal (no
                         // account; reverse-proxy gated like the OCT/BCVA ones).
-                        // Lands in image_ingest(source_kind='upload').
+                        // Lands in ingest_item(source_kind='upload').
                         "/pages/api/v1/public/image-upload/**",
                         // DR-025 — internal DICOM ingest handoff from the
                         // dicom-scp sidecar. Trust-the-reverse-proxy exposure +

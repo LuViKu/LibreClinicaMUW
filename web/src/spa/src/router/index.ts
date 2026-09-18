@@ -376,7 +376,7 @@ const router = createRouter({
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     /* DR-025 — authenticated fundus-image reconciliation inbox. Staff bind
-       UNBOUND image_ingest rows (Optomed C-STORE + Remidio upload) to a
+       UNBOUND ingest_item rows (Optomed C-STORE + Remidio upload) to a
        subject/event/CRF. Role-gated here (advisory); the backend enforces
        role + site visibility. */
     {

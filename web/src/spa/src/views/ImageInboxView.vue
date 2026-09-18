@@ -2,7 +2,7 @@
 /**
  * DR-025 — fundus-image reconciliation inbox (authenticated, staff).
  *
- * Lists UNBOUND image_ingest rows from BOTH ingress paths (Optomed C-STORE +
+ * Lists UNBOUND ingest_item rows from BOTH ingress paths (Optomed C-STORE +
  * Remidio upload), shows each preview, and lets a Data Manager / Investigator
  * bind it to a subject/event/CRF — one-click when the PatientID resolves to a
  * single visible subject, otherwise via the two-step AssignImageDialog — or

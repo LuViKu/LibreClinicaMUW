@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.1 — image_ingest becomes ingest_item.
+
+        The platform has two intake queues for the same activity. A file
+        arrives from a device, somebody says which patient's visit it belongs
+        to, and it becomes study data — but an OCT volume goes through the
+        retinal pipeline's "parked" jobs and a fundus photo goes through the
+        image inbox, with separate list endpoints, separate bind APIs and
+        separate SPA views. An operator has to know which queue a file landed
+        in before they can look for it, and study #3 would need a third.
+
+        This is the first step of merging them: the table stops being about
+        images. The rename is not cosmetic — P3.2 puts OCT .e2e uploads in
+        this table, and a column called image_ingest_id on a row describing a
+        200 MB OCT volume would be a lie that every later reader inherits.
+
+        What this changeset does NOT do is move any data. The retinal jobs
+        stay where they are until P3.3 backfills them, behind a flag, with the
+        parked rows kept rather than deleted.
+
+        NOTE FOR ROLLBACK. This is the first change in DR-025 that a previous
+        WAR cannot survive: an older build queries image_ingest, which no
+        longer exists, and its entire ingest surface fails. Rolling the
+        application back therefore means restoring the pre-deploy dump, per
+        docs/operations/deploy-runbook.md §rollback — not just redeploying the
+        old image. The Liquibase rollback below is complete and tested, but it
+        is the database half only.
+    -->
+
+    <!--
+        Postgres rewrites dependent objects on a rename: foreign keys, indexes
+        and the sequence default all reference the table by OID, so they keep
+        working. Only their NAMES go stale, which is why the next changesets
+        rename them too — a constraint called fk_image_ingest_study_subject on
+        a table called ingest_item is the kind of detail that costs somebody an
+        hour at the wrong moment.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-rename-table">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="image_ingest"/>
+        </preConditions>
+        <comment>Rename image_ingest to ingest_item; the queue is no longer image-only.</comment>
+
+        <renameTable oldTableName="image_ingest" newTableName="ingest_item"/>
+        <renameColumn tableName="ingest_item"
+                      oldColumnName="image_ingest_id" newColumnName="ingest_item_id"
+                      columnDataType="BIGINT"/>
+
+        <rollback>
+            <renameColumn tableName="ingest_item"
+                          oldColumnName="ingest_item_id" newColumnName="image_ingest_id"
+                          columnDataType="BIGINT"/>
+            <renameTable oldTableName="ingest_item" newTableName="image_ingest"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The identity sequence, the primary key and the five foreign keys. All
+        IF EXISTS / guarded, so a database that was built after this file
+        landed (fresh install, test container) passes through unchanged rather
+        than failing on a name that was never there.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-rename-constraints" dbms="postgresql">
+        <comment>Bring constraint, index and sequence names in line with the table.</comment>
+        <sql splitStatements="true" endDelimiter=";">
+            ALTER SEQUENCE IF EXISTS image_ingest_image_ingest_id_seq
+                RENAME TO ingest_item_ingest_item_id_seq;
+
+            ALTER TABLE ingest_item RENAME CONSTRAINT image_ingest_pkey TO ingest_item_pkey;
+            ALTER TABLE ingest_item RENAME CONSTRAINT image_ingest_sop_instance_uid_key
+                TO ingest_item_sop_instance_uid_key;
+            ALTER TABLE ingest_item RENAME CONSTRAINT fk_image_ingest_study_subject
+                TO fk_ingest_item_study_subject;
+            ALTER TABLE ingest_item RENAME CONSTRAINT fk_image_ingest_study_event
+                TO fk_ingest_item_study_event;
+            ALTER TABLE ingest_item RENAME CONSTRAINT fk_image_ingest_event_crf
+                TO fk_ingest_item_event_crf;
+            ALTER TABLE ingest_item RENAME CONSTRAINT fk_image_ingest_item
+                TO fk_ingest_item_bound_item;
+            ALTER TABLE ingest_item RENAME CONSTRAINT fk_image_ingest_user
+                TO fk_ingest_item_user;
+
+            ALTER INDEX IF EXISTS idx_image_ingest_status RENAME TO idx_ingest_item_status;
+            ALTER INDEX IF EXISTS idx_image_ingest_patient_date RENAME TO idx_ingest_item_patient_date;
+        </sql>
+
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";">
+                ALTER SEQUENCE IF EXISTS ingest_item_ingest_item_id_seq
+                    RENAME TO image_ingest_image_ingest_id_seq;
+
+                ALTER TABLE ingest_item RENAME CONSTRAINT ingest_item_pkey TO image_ingest_pkey;
+                ALTER TABLE ingest_item RENAME CONSTRAINT ingest_item_sop_instance_uid_key
+                    TO image_ingest_sop_instance_uid_key;
+                ALTER TABLE ingest_item RENAME CONSTRAINT fk_ingest_item_study_subject
+                    TO fk_image_ingest_study_subject;
+                ALTER TABLE ingest_item RENAME CONSTRAINT fk_ingest_item_study_event
+                    TO fk_image_ingest_study_event;
+                ALTER TABLE ingest_item RENAME CONSTRAINT fk_ingest_item_event_crf
+                    TO fk_image_ingest_event_crf;
+                ALTER TABLE ingest_item RENAME CONSTRAINT fk_ingest_item_bound_item
+                    TO fk_image_ingest_item;
+                ALTER TABLE ingest_item RENAME CONSTRAINT fk_ingest_item_user
+                    TO fk_image_ingest_user;
+
+                ALTER INDEX IF EXISTS idx_ingest_item_status RENAME TO idx_image_ingest_status;
+                ALTER INDEX IF EXISTS idx_ingest_item_patient_date RENAME TO idx_image_ingest_patient_date;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        study_date is DICOM's name for "the date the exam happened". In this
+        schema "study" means a clinical trial, so the column reads as the date
+        of the trial, and every reader has to know it does not mean that.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-acquisition-date">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="ingest_item" columnName="study_date"/>
+        </preConditions>
+        <comment>study_date means the acquisition date, not a trial's date. Say so.</comment>
+
+        <renameColumn tableName="ingest_item"
+                      oldColumnName="study_date" newColumnName="acquisition_date"
+                      columnDataType="DATE"/>
+
+        <rollback>
+            <renameColumn tableName="ingest_item"
+                          oldColumnName="acquisition_date" newColumnName="study_date"
+                          columnDataType="DATE"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The columns the unified queue needs.
+
+        kind is what the file IS, as opposed to source_kind, which is how it
+        arrived. They were the same thing while every row was a fundus photo;
+        they stop being the same the moment an .e2e lands here, since one
+        arrives by C-STORE and by upload, and an upload carries either.
+
+        sha256 / byte_size were already computed by IngestArtifactStore on the
+        way to disk and then discarded. Recording them is what lets P3.3 dedup
+        the retinal backfill without re-reading a few hundred gigabytes.
+
+        scan_index exists because one .e2e holds several scans, each of which
+        becomes its own inference job; the dedup key is therefore the pair, not
+        the digest alone.
+
+        candidate_study_subject_id is the suggestion the resolver already made
+        at upload time and then threw away, leaving the operator to search for
+        a subject the platform had in fact already identified.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-columns">
+        <comment>Columns the unified queue needs: kind, digest, size, scan index, candidate.</comment>
+
+        <addColumn tableName="ingest_item">
+            <!-- 'e2e' | 'dicom' | 'image' | 'other'. Decoded in Java, no CHECK
+                 constraint — same reasoning as status and match_policy: a new
+                 value must not require a migration. -->
+            <column name="kind" type="VARCHAR(16)"/>
+            <column name="sha256" type="VARCHAR(64)"/>
+            <column name="byte_size" type="BIGINT"/>
+            <!-- Which scan within a multi-scan file; NULL for single-artifact
+                 kinds. Zero-based, matching retinal_inference_job.scan_index. -->
+            <column name="scan_index" type="INT"/>
+            <!-- Who the platform thinks this belongs to, before anyone confirms
+                 it. Distinct from bound_study_subject_id, which is a decision. -->
+            <column name="candidate_study_subject_id" type="INT"/>
+            <!-- Populated from PR B onward, where the FK is added with the
+                 catalogue it points at. Nullable and unread until then. -->
+            <column name="imaging_modality_id" type="INT"/>
+        </addColumn>
+
+        <addForeignKeyConstraint baseTableName="ingest_item" baseColumnNames="candidate_study_subject_id"
+                                 constraintName="fk_ingest_item_candidate_subject"
+                                 referencedTableName="study_subject" referencedColumnNames="study_subject_id"
+                                 onDelete="SET NULL" onUpdate="RESTRICT"/>
+
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="ingest_item"
+                                      constraintName="fk_ingest_item_candidate_subject"/>
+            <dropColumn tableName="ingest_item" columnName="imaging_modality_id"/>
+            <dropColumn tableName="ingest_item" columnName="candidate_study_subject_id"/>
+            <dropColumn tableName="ingest_item" columnName="scan_index"/>
+            <dropColumn tableName="ingest_item" columnName="byte_size"/>
+            <dropColumn tableName="ingest_item" columnName="sha256"/>
+            <dropColumn tableName="ingest_item" columnName="kind"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Every existing row is a fundus photo: a DICOM one from the Optomed, or
+        an uploaded JPEG from the Remidio. That maps cleanly, so the backfill
+        is exact rather than a guess, and kind can be NOT NULL from the start —
+        a row that does not say what it is would have to be opened to find out.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-kind-backfill" dbms="postgresql">
+        <comment>Backfill kind from source_kind; every existing row is a fundus image.</comment>
+        <sql>
+            UPDATE ingest_item
+               SET kind = CASE WHEN lower(source_kind) = 'dicom' THEN 'dicom' ELSE 'image' END
+             WHERE kind IS NULL;
+        </sql>
+        <rollback>
+            <sql>UPDATE ingest_item SET kind = NULL;</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-kind-not-null">
+        <comment>kind is how the queue routes a row; it cannot be absent.</comment>
+        <addNotNullConstraint tableName="ingest_item" columnName="kind"
+                              columnDataType="VARCHAR(16)" defaultNullValue="other"/>
+        <rollback>
+            <dropNotNullConstraint tableName="ingest_item" columnName="kind"
+                                   columnDataType="VARCHAR(16)"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Dedup.
+
+        A device that re-sends, a sidecar that retries, an operator who uploads
+        the same file twice — all produce a second row for one acquisition, and
+        two rows in the inbox for one event is how an image gets bound to a
+        visit twice. DICOM already had sop_instance_uid for this; nothing else
+        did.
+
+        Partial, because sha256 is NULL for every row that predates this and
+        for anything stored before the digest was recorded. COALESCE on
+        scan_index so the single-artifact case (NULL) compares equal to itself
+        — Postgres treats NULLs as distinct, so without it the index would
+        permit unlimited duplicates of exactly the rows it exists to catch.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-dedup" dbms="postgresql">
+        <comment>One row per (digest, scan) — a re-sent file must not queue twice.</comment>
+        <sql>
+            CREATE UNIQUE INDEX u_ingest_item_sha_scan
+                ON ingest_item (sha256, COALESCE(scan_index, -1))
+             WHERE sha256 IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS u_ingest_item_sha_scan;</sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The inbox's own query: unbound rows, newest first, optionally narrowed
+        by what sort of file it is. idx_ingest_item_status alone stops helping
+        once .e2e rows join the fundus photos in the same table.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-05-ingest-item-inbox-index" dbms="postgresql">
+        <comment>Index the unified inbox's list query.</comment>
+        <sql>
+            CREATE INDEX idx_ingest_item_status_kind_received
+                ON ingest_item (status, kind, received_at DESC);
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_ingest_item_status_kind_received;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

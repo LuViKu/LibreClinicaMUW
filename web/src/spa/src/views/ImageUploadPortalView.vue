@@ -5,7 +5,7 @@
  * The Remidio FOP is an iPhone + browser with no DICOM export, so the operator
  * uploads the captured fundus JPEG/PNG here. Unauthenticated (reverse-proxy
  * gated), phone-friendly. Mirrors the OCT/BCVA portals' posture; the image
- * lands in image_ingest(source_kind='upload').
+ * lands in ingest_item(source_kind='upload').
  *
  * The operator can identify the visit in two ways, because in a clinic both
  * happen: pick it from the day's scheduled visits (when the institution has

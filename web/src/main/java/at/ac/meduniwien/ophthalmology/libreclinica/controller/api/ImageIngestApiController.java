@@ -63,7 +63,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * DR-025 — reconciliation inbox for inbound fundus images.
  *
  * <p>Both ingress paths (the Optomed C-STORE sidecar and the Remidio upload
- * page) land an {@code image_ingest} row in {@code UNBOUND} state. Here staff
+ * page) land an {@code ingest_item} row in {@code UNBOUND} state. Here staff
  * (Data Manager / Investigator / CRC / Admin) list those rows, view the
  * preview, and bind each to a subject/event/CRF — or dismiss it. Modelled on
  * the retinal parked-job flow; reuses {@link StudySubjectFinder} (for a
@@ -139,16 +139,16 @@ public class ImageIngestApiController {
 
         Set<Integer> visible = access().visibleStudyIds(session);
         List<InboxRow> rows = new ArrayList<>();
-        String sql = "SELECT image_ingest_id, source_kind, patient_id, laterality, study_date, "
+        String sql = "SELECT ingest_item_id, source_kind, patient_id, laterality, acquisition_date, "
                 + "modality, original_filename, received_at, preview_png_path "
-                + "FROM image_ingest WHERE status = 'UNBOUND' ORDER BY received_at DESC LIMIT " + INBOX_LIMIT;
+                + "FROM ingest_item WHERE status = 'UNBOUND' ORDER BY received_at DESC LIMIT " + INBOX_LIMIT;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                long id = rs.getLong("image_ingest_id");
+                long id = rs.getLong("ingest_item_id");
                 String patientId = rs.getString("patient_id");
-                String studyDate = rs.getString("study_date");
+                String studyDate = rs.getString("acquisition_date");
                 Timestamp received = rs.getTimestamp("received_at");
                 rows.add(new InboxRow(
                         id,
@@ -217,11 +217,11 @@ public class ImageIngestApiController {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT preview_png_path, content_type, bound_study_subject_id "
-                     + "FROM image_ingest WHERE image_ingest_id = ?")) {
+                     + "FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
-                    return ResponseEntity.status(404).body(Map.of("message", "no image_ingest " + id));
+                    return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
                 }
                 previewPath = rs.getString("preview_png_path");
                 contentType = rs.getString("content_type");
@@ -302,9 +302,9 @@ public class ImageIngestApiController {
         try (Connection c = dataSource.getConnection()) {
             int n;
             try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE image_ingest SET status='BOUND', match_policy='manual', "
+                    "UPDATE ingest_item SET status='BOUND', match_policy='manual', "
                             + "bound_study_subject_id=?, bound_study_event_id=?, bound_event_crf_id=?, "
-                            + "bound_by_user_id=?, bound_at=? WHERE image_ingest_id=? AND status='UNBOUND'")) {
+                            + "bound_by_user_id=?, bound_at=? WHERE ingest_item_id=? AND status='UNBOUND'")) {
                 ps.setInt(1, req.studySubjectId());
                 if (req.studyEventId() == null) ps.setNull(2, Types.INTEGER); else ps.setInt(2, req.studyEventId());
                 if (req.eventCrfId() == null) ps.setNull(3, Types.INTEGER); else ps.setInt(3, req.eventCrfId());
@@ -317,7 +317,7 @@ public class ImageIngestApiController {
                 return ResponseEntity.status(409).body(Map.of("message", "image " + id + " is not UNBOUND (already reconciled)"));
             }
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.IMAGE_BIND,
-                    user, study, null, "fundus image bound", "image_ingest", (int) id, "status", "UNBOUND", "BOUND");
+                    user, study, null, "fundus image bound", "ingest_item", (int) id, "status", "UNBOUND", "BOUND");
             // The image on the visit is the evidence that this camera was used
             // on it, so tick the visit's checklist box for this device. The
             // operator who bound it is the author of that value.
@@ -330,7 +330,7 @@ public class ImageIngestApiController {
                             dev.sourceKind(), dev.deviceKey(), user.getId());
                 }
             }
-            LOG.info("image_ingest {} bound to study_subject {}", id, req.studySubjectId());
+            LOG.info("ingest_item {} bound to study_subject {}", id, req.studySubjectId());
             return ResponseEntity.ok(Map.of("imageIngestId", id, "status", "BOUND"));
         } catch (SQLException e) {
             LOG.error("image bind failed for {}: {}", id, e.getMessage());
@@ -357,8 +357,8 @@ public class ImageIngestApiController {
         try (Connection c = dataSource.getConnection()) {
             int n;
             try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE image_ingest SET status='DISMISSED', status_message=?, "
-                            + "bound_by_user_id=?, bound_at=? WHERE image_ingest_id=? AND status='UNBOUND'")) {
+                    "UPDATE ingest_item SET status='DISMISSED', status_message=?, "
+                            + "bound_by_user_id=?, bound_at=? WHERE ingest_item_id=? AND status='UNBOUND'")) {
                 ps.setString(1, reason);
                 ps.setInt(2, user.getId());
                 ps.setTimestamp(3, Timestamp.from(Instant.now()));
@@ -369,7 +369,7 @@ public class ImageIngestApiController {
                 return ResponseEntity.status(409).body(Map.of("message", "image " + id + " is not UNBOUND"));
             }
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.IMAGE_DISMISS,
-                    user, study, null, "fundus image dismissed", "image_ingest", (int) id, "status", "UNBOUND", "DISMISSED");
+                    user, study, null, "fundus image dismissed", "ingest_item", (int) id, "status", "UNBOUND", "DISMISSED");
             return ResponseEntity.ok(Map.of("imageIngestId", id, "status", "DISMISSED"));
         } catch (SQLException e) {
             LOG.error("image dismiss failed for {}: {}", id, e.getMessage());
@@ -390,7 +390,7 @@ public class ImageIngestApiController {
     private static Device readDevice(Connection c, long imageIngestId) {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT source_kind, COALESCE(device, source_ae_title) AS device_key "
-                        + "FROM image_ingest WHERE image_ingest_id = ?")) {
+                        + "FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, imageIngestId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;

@@ -65,9 +65,9 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
                 ps.executeUpdate();
             }
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO image_ingest (source_kind, device, stored_path, original_filename, "
-                            + "received_at, status) VALUES ('dicom', ?, '/tmp/it.dcm', 'tick-it', now(), 'BOUND') "
-                            + "RETURNING image_ingest_id")) {
+                    "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
+                            + "received_at, status) VALUES ('dicom', 'dicom', ?, '/tmp/it.dcm', 'tick-it', now(), 'BOUND') "
+                            + "RETURNING ingest_item_id")) {
                 ps.setString(1, DEVICE);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();
@@ -81,7 +81,7 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
     void cleanUp() throws Exception {
         exec("DELETE FROM audit_log_event WHERE audit_log_event_type_id = 129 AND entity_id = " + imageId);
         exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + ITEM_ID);
-        exec("DELETE FROM image_ingest WHERE original_filename = 'tick-it'");
+        exec("DELETE FROM ingest_item WHERE original_filename = 'tick-it'");
         exec("DELETE FROM ingest_performed_item_map WHERE device_key IN ('" + DEVICE + "', 'other-camera')");
     }
 
