@@ -395,7 +395,7 @@ public final class AuditTypeIds {
      * an unrelated file was unbound.
      *
      * <p>Writers: {@code IngestBindService.unbind} and
-     * {@code IngestPerformedItemPopulator.clearPerformed}. Seeded by
+     * {@code PerformedItemAutoTicker.clearPerformed}. Seeded by
      * {@code lc-muw-2026-10-05-audit-types-ingest.xml}. 129 is the auto-tick.
      */
     public static final int INGEST_UNBIND                    = 130;

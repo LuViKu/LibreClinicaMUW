@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
 /**
  * P3.2 — what happens when somebody says whose visit a file belongs to.
@@ -115,8 +115,8 @@ public final class IngestBindService {
      * what binding <em>means</em>, not who is allowed to ask.
      *
      * @param eventCrfId the visit's CRF instance, or null when it has not been
-     *                   started; the tick is skipped in that case, because
-     *                   there is no form to tick
+     *                   started; the checklist tick still happens, because the
+     *                   ticker starts the form that carries the box
      */
     public Result bind(long ingestItemId, int studySubjectId, Integer studyEventId,
                        Integer eventCrfId, String matchPolicy, Actor actor) {
@@ -143,12 +143,16 @@ public final class IngestBindService {
             // The file on the visit is the evidence that this device was used
             // on it, so the checklist box follows from the bind rather than
             // being typed again.
-            if (eventCrfId != null) {
+            //
+            // P3.4 — a visit is enough; the ticker starts the form carrying the
+            // box when nobody has opened it. Requiring a started CRF meant the
+            // checklist silently disagreed with the files until somebody did.
+            if (studyEventId != null) {
                 Device dev = readDevice(c, ingestItemId);
                 if (dev != null) {
                     ImageIngestBinding.tickPerformed(dataSource, ingestItemId,
                             new ImageIngestBinding.EventTarget(studySubjectId, studyEventId, eventCrfId),
-                            dev.sourceKind(), dev.deviceKey(), actor.userId());
+                            dev.sourceKind(), dev.deviceKey(), dev.laterality(), actor.userId());
                 }
             }
             LOG.info("ingest_item {} bound to study_subject {} ({})",
@@ -177,9 +181,9 @@ public final class IngestBindService {
         // fails, the form is left asserting something with no file behind it;
         // in the other order a failure leaves a bound file, which is merely the
         // state the operator was already trying to correct.
-        IngestPerformedItemPopulator.ClearOutcome cleared =
-                new IngestPerformedItemPopulator(dataSource).clearPerformed(ingestItemId, actorId);
-        if (cleared == IngestPerformedItemPopulator.ClearOutcome.FAILED) {
+        PerformedItemAutoTicker.ClearOutcome cleared =
+                new PerformedItemAutoTicker(dataSource).clearPerformed(ingestItemId, actorId);
+        if (cleared == PerformedItemAutoTicker.ClearOutcome.FAILED) {
             return Result.FAILED;
         }
 
@@ -263,8 +267,8 @@ public final class IngestBindService {
         if (v == null) ps.setNull(idx, Types.INTEGER); else ps.setInt(idx, v);
     }
 
-    /** Which ingress a file came through, and which device sent it. */
-    private record Device(String sourceKind, String deviceKey) {}
+    /** Which ingress a file came through, which device sent it, and for which eye. */
+    private record Device(String sourceKind, String deviceKey, String laterality) {}
 
     /**
      * Falls back to the DICOM calling AE title for rows written before
@@ -273,12 +277,13 @@ public final class IngestBindService {
      */
     private static Device readDevice(Connection c, long ingestItemId) {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT source_kind, COALESCE(device, source_ae_title) AS device_key "
-                        + "FROM ingest_item WHERE ingest_item_id = ?")) {
+                "SELECT source_kind, COALESCE(device, source_ae_title) AS device_key, laterality "
+                        + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, ingestItemId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
-                return new Device(rs.getString("source_kind"), rs.getString("device_key"));
+                return new Device(rs.getString("source_kind"), rs.getString("device_key"),
+                        rs.getString("laterality"));
             }
         } catch (SQLException e) {
             LOG.warn("could not read the device of ingest_item {}: {}", ingestItemId, e.getMessage());
@@ -287,7 +292,7 @@ public final class IngestBindService {
     }
 
     private int systemActorId() {
-        Integer id = IngestPerformedItemPopulator.systemUserId(dataSource);
+        Integer id = PerformedItemAutoTicker.systemUserId(dataSource);
         return id == null ? 0 : id;
     }
 

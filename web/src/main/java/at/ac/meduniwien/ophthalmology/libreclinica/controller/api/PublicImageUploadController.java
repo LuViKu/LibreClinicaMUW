@@ -272,7 +272,7 @@ public class PublicImageUploadController {
                 // used on it, so tick the visit's checklist box for this
                 // device. Nobody is logged in here — the write is attributed to
                 // the system service account, not to a person.
-                ImageIngestBinding.tickPerformed(dataSource, id, target, "upload", dev, null);
+                ImageIngestBinding.tickPerformed(dataSource, id, target, "upload", dev, laterality, null);
             }
             LOG.info("public image upload: enqueued ingest_item_id={} status={}",
                     id, target == null ? "UNBOUND" : "BOUND");

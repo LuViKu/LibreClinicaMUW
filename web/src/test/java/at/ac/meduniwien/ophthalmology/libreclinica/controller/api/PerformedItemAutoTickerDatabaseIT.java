@@ -21,8 +21,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator.Outcome;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker.Outcome;
 
 /**
  * DR-025 P1-5 — the automatic "this modality was performed" tick.
@@ -38,11 +38,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerforme
  * empty on this event_crf, so the cleanup here never removes seeded rows that
  * sibling tests in the same container depend on.
  */
-class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDatabaseIT {
+class PerformedItemAutoTickerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Seeded: study_event 3 of study 1, first live event_crf, crf_version 1. */
     private static final int EVENT_CRF_ID = 3;
     private static final int STUDY_ID = 1;
+    /** The visit event_crf 3 belongs to, so the ticker can start a form. */
+    private static final int STUDY_EVENT_ID = 3;
     private static final int ITEM_ID = 5;
     private static final String ITEM_OID = "I_BLOOD_PRESSURE_SYS";
     /** A second empty item, for the study-override case. */
@@ -53,14 +55,31 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
 
     private long imageId;
 
+    private int modalityId;
+
     @BeforeEach
     void seed() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection()) {
+            // P3.4 — configuration, not a hard-coded map row: a study's
+            // catalogue says which acquisition a device performs and which box
+            // on the form that ticks.
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO ingest_performed_item_map "
-                            + "(study_id, source_kind, device_key, item_oid, performed_value, owner_id) "
-                            + "VALUES (NULL, 'dicom', ?, ?, '1', 1)")) {
-                ps.setString(1, DEVICE);
+                    "INSERT INTO imaging_modality (study_id, code, label_de, label_en, device, "
+                            + "kinds_accepted, laterality_required, ordinal, status_id, created_by_user_id) "
+                            + "VALUES (?, 'TICK_IT', 'Testgerät', 'Test device', ?, 'dicom', false, 1, 1, 1) "
+                            + "RETURNING imaging_modality_id")) {
+                ps.setInt(1, STUDY_ID);
+                ps.setString(2, DEVICE);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    modalityId = rs.getInt(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO imaging_modality_item_binding "
+                            + "(imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id) "
+                            + "VALUES (?, 'performed', 'OU', ?, '1', 1)")) {
+                ps.setInt(1, modalityId);
                 ps.setString(2, ITEM_OID);
                 ps.executeUpdate();
             }
@@ -82,7 +101,8 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
         exec("DELETE FROM audit_log_event WHERE audit_log_event_type_id = 129 AND entity_id = " + imageId);
         exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + ITEM_ID);
         exec("DELETE FROM ingest_item WHERE original_filename = 'tick-it'");
-        exec("DELETE FROM ingest_performed_item_map WHERE device_key IN ('" + DEVICE + "', 'other-camera')");
+        exec("DELETE FROM imaging_modality WHERE study_id = " + STUDY_ID
+                + " AND code IN ('TICK_IT', 'TICK_IT_OTHER')");
     }
 
     private void exec(String sql) throws Exception {
@@ -92,8 +112,15 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
         }
     }
 
-    private IngestPerformedItemPopulator populator() {
-        return new IngestPerformedItemPopulator(DATA_SOURCE);
+    private PerformedItemAutoTicker ticker() {
+        return new PerformedItemAutoTicker(DATA_SOURCE);
+    }
+
+    /** Fire the tick the way a bind does. */
+    private PerformedItemAutoTicker.Outcome tick(Integer eventCrfId, String sourceKind,
+                                                 String device) {
+        return ticker().markPerformed(imageId, eventCrfId, STUDY_EVENT_ID,
+                sourceKind, device, null, STUDY_ID, ACTOR);
     }
 
     private record Row(String value, String sourceKind, Long sourceImageId, int count) {}
@@ -101,7 +128,7 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
     private Row readItemData() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT value, source_kind, source_image_ingest_id FROM item_data "
+                     "SELECT value, source_kind, source_ingest_item_id FROM item_data "
                              + "WHERE event_crf_id = ? AND item_id = ? ORDER BY item_data_id")) {
             ps.setInt(1, EVENT_CRF_ID);
             ps.setInt(2, ITEM_ID);
@@ -141,7 +168,7 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
     @Test
     void bindingAnImage_ticksTheModalityPerformedBox() throws Exception {
         assertEquals(Outcome.WRITTEN,
-                populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", DEVICE, STUDY_ID, ACTOR));
+                tick(EVENT_CRF_ID, "dicom", DEVICE));
 
         Row row = readItemData();
         assertEquals(1, row.count());
@@ -153,46 +180,59 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
 
     @Test
     void aSecondBindOfTheSameDevice_leavesOneRowAndNoSecondAudit() throws Exception {
-        populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", DEVICE, STUDY_ID, ACTOR);
+        tick(EVENT_CRF_ID, "dicom", DEVICE);
         assertEquals(Outcome.ALREADY_SET,
-                populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", DEVICE, STUDY_ID, ACTOR));
+                tick(EVENT_CRF_ID, "dicom", DEVICE));
 
         assertEquals(1, readItemData().count());
         assertEquals(1, auditRows());
     }
 
+    /**
+     * P3.4 — a per-eye binding beats the both-eyes one.
+     *
+     * <p>A CRF that grows a box per eye should start using it without the
+     * OU row having to be removed first, or a study mid-revision would have
+     * a window where nothing ticks at all.
+     */
     @Test
-    void aStudySpecificMapRow_winsOverTheGlobalOne() throws Exception {
-        // A study whose CRF names the item differently overrides globally.
+    void aPerEyeBinding_winsOverTheBothEyesOne() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO ingest_performed_item_map "
-                             + "(study_id, source_kind, device_key, item_oid, performed_value, owner_id) "
-                             + "VALUES (?, 'dicom', ?, '" + OVERRIDE_ITEM_OID + "', 'Y', 1)")) {
-            ps.setInt(1, STUDY_ID);
-            ps.setString(2, DEVICE);
+                     "INSERT INTO imaging_modality_item_binding "
+                             + "(imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id) "
+                             + "VALUES (?, 'performed', 'OD', ?, 'Y', 1)")) {
+            ps.setInt(1, modalityId);
+            ps.setString(2, OVERRIDE_ITEM_OID);
             ps.executeUpdate();
         }
         try {
-            assertEquals(Outcome.WRITTEN,
-                    populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", DEVICE, STUDY_ID, ACTOR));
+            assertEquals(Outcome.WRITTEN, ticker().markPerformed(
+                    imageId, EVENT_CRF_ID, STUDY_EVENT_ID, "dicom", DEVICE, "OD", STUDY_ID, ACTOR));
 
-            assertEquals(0, readItemData().count(), "the global row's item must not be written");
+            assertEquals(0, readItemData().count(), "the both-eyes item must not be written");
             try (Connection c = DATA_SOURCE.getConnection();
                  PreparedStatement ps = c.prepareStatement(
                          "SELECT value FROM item_data WHERE event_crf_id = ? AND item_id = ?")) {
                 ps.setInt(1, EVENT_CRF_ID);
                 ps.setInt(2, OVERRIDE_ITEM_ID);
                 try (ResultSet rs = ps.executeQuery()) {
-                    assertTrue(rs.next(), "the study row's item should carry the value");
-                    assertEquals("Y", rs.getString(1), "the study row's coded yes value should be used");
+                    assertTrue(rs.next(), "the eye's own item should carry the value");
+                    assertEquals("Y", rs.getString(1), "with that binding's coded yes value");
                 }
             }
         } finally {
             exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID
                     + " AND item_id = " + OVERRIDE_ITEM_ID);
-            exec("DELETE FROM ingest_performed_item_map WHERE study_id = " + STUDY_ID);
         }
+    }
+
+    /** A file whose eye has no binding still ticks the both-eyes box. */
+    @Test
+    void anEyeWithNoBindingOfItsOwn_fallsBackToBothEyes() throws Exception {
+        assertEquals(Outcome.WRITTEN, ticker().markPerformed(
+                imageId, EVENT_CRF_ID, STUDY_EVENT_ID, "dicom", DEVICE, "OS", STUDY_ID, ACTOR));
+        assertEquals(1, readItemData().count());
     }
 
     /* ---------------- the refusals ---------------- */
@@ -212,7 +252,7 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
         }
 
         assertEquals(Outcome.OPERATOR_VALUE_KEPT,
-                populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", DEVICE, STUDY_ID, ACTOR));
+                tick(EVENT_CRF_ID, "dicom", DEVICE));
 
         Row row = readItemData();
         assertEquals("0", row.value(), "the operator's value must stand");
@@ -223,36 +263,56 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
     @Test
     void anUnknownDevice_writesNothing() throws Exception {
         assertEquals(Outcome.NOT_APPLICABLE,
-                populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", "no-such-camera", STUDY_ID, ACTOR));
+                tick(EVENT_CRF_ID, "dicom", "no-such-camera"));
         assertEquals(0, readItemData().count());
     }
 
     @Test
     void anItemMissingFromTheVisitsCrfVersion_isSkippedRatherThanGuessed() throws Exception {
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO ingest_performed_item_map "
-                             + "(study_id, source_kind, device_key, item_oid, performed_value, owner_id) "
-                             + "VALUES (NULL, 'dicom', 'other-camera', 'I_NOT_IN_THIS_CRF', '1', 1)")) {
-            ps.executeUpdate();
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            int other;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO imaging_modality (study_id, code, label_de, label_en, device, "
+                            + "kinds_accepted, laterality_required, ordinal, status_id, created_by_user_id) "
+                            + "VALUES (?, 'TICK_IT_OTHER', 'Anderes', 'Other', 'other-camera', "
+                            + "'dicom', false, 2, 1, 1) RETURNING imaging_modality_id")) {
+                ps.setInt(1, STUDY_ID);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    other = rs.getInt(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO imaging_modality_item_binding "
+                            + "(imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id) "
+                            + "VALUES (?, 'performed', 'OU', 'I_NOT_IN_ANY_CRF_ANYWHERE', '1', 1)")) {
+                ps.setInt(1, other);
+                ps.executeUpdate();
+            }
         }
         assertEquals(Outcome.NOT_APPLICABLE,
-                populator().markPerformed(imageId, EVENT_CRF_ID, "dicom", "other-camera", STUDY_ID, ACTOR));
+                tick(EVENT_CRF_ID, "dicom", "other-camera"));
         assertEquals(0, readItemData().count());
     }
 
+    /**
+     * P3.4 — a visit whose form nobody has opened still gets its box ticked.
+     *
+     * <p>This previously wrote nothing, which meant the checklist silently
+     * disagreed with the files until an operator happened to open the CRF.
+     * The ticker starts the form that carries the box.
+     */
     @Test
-    void aVisitWithoutAStartedCrf_writesNothing() throws Exception {
-        assertEquals(Outcome.NOT_APPLICABLE,
-                populator().markPerformed(imageId, null, "dicom", DEVICE, STUDY_ID, ACTOR));
-        assertEquals(0, readItemData().count());
+    void aVisitWhoseFormIsNotStarted_getsItStarted() throws Exception {
+        assertEquals(Outcome.WRITTEN, tick(null, "dicom", DEVICE));
+        assertEquals(1, readItemData().count(),
+                "the platform already knew this; not recording it helps nobody");
     }
 
     @Test
     void theDeviceKeyMatchesRegardlessOfCase() throws Exception {
         assertEquals(Outcome.WRITTEN,
-                populator().markPerformed(imageId, EVENT_CRF_ID, "DICOM",
-                        DEVICE.toUpperCase(java.util.Locale.ROOT), STUDY_ID, ACTOR));
+                tick(EVENT_CRF_ID, "DICOM", DEVICE.toUpperCase(java.util.Locale.ROOT)));
         assertEquals(1, readItemData().count());
     }
 
@@ -260,7 +320,7 @@ class IngestPerformedItemPopulatorDatabaseIT extends AbstractApiControllerDataba
 
     @Test
     void theSystemAccountExistsAndCannotLogIn() throws Exception {
-        Integer id = IngestPerformedItemPopulator.systemUserId(DATA_SOURCE);
+        Integer id = PerformedItemAutoTicker.systemUserId(DATA_SOURCE);
         assertNotNull(id, "machine writes need an account that is not a person");
 
         try (Connection c = DATA_SOURCE.getConnection();

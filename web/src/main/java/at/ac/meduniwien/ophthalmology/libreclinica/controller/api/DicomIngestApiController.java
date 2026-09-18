@@ -22,7 +22,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,7 +132,8 @@ public class DicomIngestApiController {
                 // used on it. No operator is involved in a worklist bind, so
                 // the tick is attributed to the system service account.
                 ImageIngestBinding.tickPerformed(
-                        dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(), null);
+                        dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(),
+                        req.laterality(), null);
             }
             LOG.info("DICOM ingest: ingest_item_id={} status={}", ins.id(), ins.status());
             return ResponseEntity.status(201).body(Map.of("imageIngestId", ins.id(), "status", ins.status()));
@@ -164,7 +165,7 @@ public class DicomIngestApiController {
      * a device that presents itself inconsistently is still one device.
      */
     private static String deviceKeyOf(DicomIngestRequest r) {
-        return IngestPerformedItemPopulator.normaliseDeviceKey(r.sourceAeTitle());
+        return PerformedItemAutoTicker.normaliseDeviceKey(r.sourceAeTitle());
     }
 
     /**
@@ -203,6 +204,9 @@ public class DicomIngestApiController {
                 .seriesInstanceUid(r.seriesInstanceUid())
                 .modality(r.modality())
                 .sourceAeTitle(r.sourceAeTitle())
+                // P3.4 — a camera that identifies itself classifies its own
+                // images: no operator has to say which acquisition this is.
+                .imagingModalityId(modalityForAeTitle(c, deviceKeyOf(r), target))
                 .patientId(r.patientId())
                 .patientName(r.patientName())
                 .accessionNumber(r.accessionNumber())
@@ -215,6 +219,40 @@ public class DicomIngestApiController {
         return new Inserted(id, status,
                 target == null ? null : target.studyEventId(),
                 target, deviceKeyOf(r));
+    }
+
+    /**
+     * The study's modality whose {@code auto_match_ae_title} is this camera.
+     *
+     * <p>Scoped to the study the worklist bound the image to; an unbound image
+     * belongs to no study yet, so nothing is claimed about it. Site studies
+     * inherit their parent's catalogue.
+     *
+     * @return null when the image is unbound, no catalogue row matches, or the
+     *         lookup fails — in every case the ticker falls back to the device
+     */
+    private static Integer modalityForAeTitle(Connection c, String aeTitle,
+                                              ImageIngestBinding.EventTarget target) {
+        if (aeTitle == null || aeTitle.isBlank() || target == null) return null;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT im.imaging_modality_id "
+                        + "  FROM imaging_modality im "
+                        + "  JOIN study_subject ss ON ss.study_subject_id = ? "
+                        + " WHERE im.status_id = 1 "
+                        + "   AND lower(im.auto_match_ae_title) = lower(?) "
+                        + "   AND im.study_id IN (ss.study_id, "
+                        + "         COALESCE((SELECT parent_study_id FROM study "
+                        + "                    WHERE study_id = ss.study_id), -1)) "
+                        + " ORDER BY im.imaging_modality_id LIMIT 1")) {
+            ps.setInt(1, target.studySubjectId());
+            ps.setString(2, aeTitle);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Integer.valueOf(rs.getInt(1)) : null;
+            }
+        } catch (SQLException e) {
+            LOG.warn("modality auto-match lookup failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private Long findBySopInstanceUid(Connection c, String sopInstanceUid) throws SQLException {

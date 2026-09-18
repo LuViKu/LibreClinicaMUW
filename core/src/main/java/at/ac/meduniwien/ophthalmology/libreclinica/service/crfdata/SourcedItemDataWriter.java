@@ -55,7 +55,7 @@ public final class SourcedItemDataWriter {
         RETINAL_INFERENCE("retinal_inference", "source_retinal_job_id"),
 
         /** The "modality performed" tick that follows binding an image. */
-        INGEST("ingest", "source_image_ingest_id");
+        INGEST("ingest", "source_ingest_item_id");
 
         private final String kind;
         private final String column;

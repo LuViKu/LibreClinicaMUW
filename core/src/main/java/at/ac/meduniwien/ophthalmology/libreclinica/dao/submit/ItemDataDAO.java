@@ -143,7 +143,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         // line added here makes every read of item_data fail with "column
         // index N is not within the allowed range" — which surfaces far away
         // from the migration, in the audit log and the CRF screens.
-        this.setTypeExpected(15, TypeNames.LONG);   // source_image_ingest_id (BIGINT)
+        this.setTypeExpected(15, TypeNames.LONG);   // source_ingest_item_id (BIGINT)
     }
 
     @Override

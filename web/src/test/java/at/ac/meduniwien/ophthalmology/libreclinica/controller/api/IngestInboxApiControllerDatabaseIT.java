@@ -70,7 +70,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 + "AND audit_log_event_type_id IN (127, 128, 129, 130)");
         exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + ITEM_ID);
         exec("DELETE FROM ingest_item WHERE original_filename LIKE '" + MARKER + "%'");
-        exec("DELETE FROM ingest_performed_item_map WHERE device_key = '" + DEVICE + "'");
+        exec("DELETE FROM imaging_modality WHERE code = 'INBOX_IT'");
     }
 
     private void exec(String sql) throws Exception {
@@ -130,16 +130,36 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         }
     }
 
-    /** Make this device tick a checklist item, so a bind has something to do. */
+    /**
+     * Put this device on the study's imaging catalogue with a performed
+     * binding, so filing a file from it has a box to tick.
+     *
+     * <p>P3.4 — this used to write an ingest_performed_item_map row. What a
+     * device ticks is per-study configuration now.
+     */
     private void mapDeviceToItem() throws Exception {
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO ingest_performed_item_map "
-                             + "(study_id, source_kind, device_key, item_oid, performed_value, owner_id) "
-                             + "VALUES (NULL, 'dicom', ?, ?, '1', 1)")) {
-            ps.setString(1, DEVICE);
-            ps.setString(2, ITEM_OID);
-            ps.executeUpdate();
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            int modalityId;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO imaging_modality (study_id, code, label_de, label_en, device, "
+                            + "kinds_accepted, laterality_required, ordinal, status_id, created_by_user_id) "
+                            + "VALUES (?, 'INBOX_IT', 'Testgerät', 'Test device', ?, 'dicom', "
+                            + "false, 1, 1, 1) RETURNING imaging_modality_id")) {
+                ps.setInt(1, 1);
+                ps.setString(2, DEVICE);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    modalityId = rs.getInt(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO imaging_modality_item_binding "
+                            + "(imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id) "
+                            + "VALUES (?, 'performed', 'OU', ?, '1', 1)")) {
+                ps.setInt(1, modalityId);
+                ps.setString(2, ITEM_OID);
+                ps.executeUpdate();
+            }
         }
     }
 
@@ -160,7 +180,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     private Tick tick() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT value, source_image_ingest_id FROM item_data "
+                     "SELECT value, source_ingest_item_id FROM item_data "
                              + " WHERE event_crf_id = ? AND item_id = ?")) {
             ps.setInt(1, EVENT_CRF_ID);
             ps.setInt(2, ITEM_ID);

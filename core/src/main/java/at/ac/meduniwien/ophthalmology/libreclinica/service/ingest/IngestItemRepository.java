@@ -126,6 +126,19 @@ public final class IngestItemRepository {
          * the raw DICOM value alongside.
          */
         public Builder device(String v) { return set("device", v, Types.VARCHAR); }
+
+        /**
+         * P3.4 — which acquisition on the study's plan this file is.
+         *
+         * <p>Set when something already knows: a DICOM whose calling AE title
+         * matches a modality's {@code auto_match_ae_title}, or an operator who
+         * chose while filing. Left null otherwise — the ticker then matches on
+         * the device, and the inbox shows the file unclassified rather than
+         * guessing.
+         */
+        public Builder imagingModalityId(Integer v) {
+            return set("imaging_modality_id", v, Types.INTEGER);
+        }
         public Builder sourceAeTitle(String v) { return set("source_ae_title", v, Types.VARCHAR); }
         public Builder modality(String v) { return set("modality", v, Types.VARCHAR); }
 
