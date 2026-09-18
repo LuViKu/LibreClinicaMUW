@@ -126,9 +126,9 @@ For per-phase detail and exit criteria, scroll to the corresponding `## Phase X`
     - `org.xmlunit:xmlunit-core` 2.10 + `xmlunit-matchers` 2.10 in dependencyManagement (test scope) per [DR-006](docs/development/modernization/decision-record.md#dr-006--castor-replacement-jakarta-jaxb). Direct deps in `core/pom.xml`.
     - `**/odm/characterisation/*IT.java` excluded from default surefire (need live Postgres); they run under `mvn -P integration-tests test`.
 
-  **Still pending for Phase B.0 to exit** (the two DB-driven export paths — the framework supports them, they just need multi-entity DBUnit fixtures):
-  - `OdmMetadataExportCharacterisationIT` — `ODMMetadataRestResource` against a study fixture. Extends `CastorCharacterisationIT`. Needs Study + StudyEventDefinition + CRF + CRFVersion + ItemGroup + Item rows in a DBUnit fixture.
-  - `OdmClinicalDataExportCharacterisationIT` — `ODMClinicalDataController` against the same fixture plus EventCRF + ItemData rows.
+  **Closed 2026-09-18** by the pilot-readiness work, along a different route than planned. Rather than DBUnit fixtures for the two REST export resources, `DatasetExportCharacterisationDatabaseIT` (web, `integration-tests`) materialises a real dataset over the seeded study in each format and opens the produced archive. That covers the same ground and exercises the path an operator actually takes.
+
+  It was worth doing: the characterisation found the ODM export broken in six independent ways, none of which the original plan predicted — `width_decimal` stored in SQL notation, a recorded file reference to a zip that was never written, a stale predicate in one of two sibling extract queries, a filter DAO binding the wrong primary key, dataset filters that were never persisted or applied, and a latent null dereference. See [release-notes-1.5.0-beta.8-muw.md](docs/operations/release-notes-1.5.0-beta.8-muw.md).
 
   **Counts:** unit suite 33 → 39 (+4 password + 2 framework); integration suite 67 → 74 (+3 audit-user-login extensions; the +4 from ConfigurationDaoTest were counted in the earlier 63 → 67).
 
