@@ -128,16 +128,16 @@ function reset(): void {
 
 <template>
   <div class="min-h-screen flex flex-col bg-slate-50">
-    <header class="h-14 border-b border-slate-200 bg-white flex items-center px-4 sm:px-6 shrink-0">
+    <div class="h-14 border-b border-slate-200 bg-white flex items-center px-4 sm:px-6 shrink-0">
       <span class="muw-display font-semibold text-muw-blue tracking-tight text-[17px]">LibreClinica<em class="not-italic font-medium text-muw-coral-700 text-[0.66em] uppercase tracking-[0.08em] ml-1.5 align-middle">{{ t('imagePortal.brandSuffix') }}</em></span>
-      <span class="ml-2 pl-3 border-l border-slate-200 text-[13px] font-medium text-slate-500">{{ t('imagePortal.portalLabel') }}</span>
+      <h1 class="ml-2 pl-3 border-l border-slate-200 text-[13px] font-medium text-slate-500">{{ t('imagePortal.portalLabel') }}</h1>
       <span class="ml-auto hidden sm:inline-flex items-center gap-1.5 rounded-full bg-muw-teal-50 text-muw-teal-700 text-[12px] font-medium px-2.5 py-1">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect width="14" height="9" x="5" y="11" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>
         {{ t('imagePortal.noLoginRequired') }}
       </span>
-    </header>
+    </div>
 
-    <main class="flex-1 flex items-start justify-center px-4 py-6">
+    <div class="flex-1 flex items-start justify-center px-4 py-6">
       <div class="w-full max-w-lg">
         <div v-if="done" class="bg-white rounded-2xl ring-1 ring-slate-200 p-8 text-center" data-testid="upload-success">
           <div class="w-14 h-14 rounded-full bg-muw-teal-50 text-muw-teal-700 flex items-center justify-center mx-auto mb-4">
@@ -205,7 +205,7 @@ function reset(): void {
           </button>
         </form>
       </div>
-    </main>
+    </div>
 
     <footer class="border-t border-slate-200 bg-white px-4 sm:px-6 py-3 text-[12px] text-slate-400 shrink-0">
       {{ t('imagePortal.formatNote') }}

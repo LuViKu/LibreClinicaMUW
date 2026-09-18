@@ -215,6 +215,51 @@ public class RetinalResultItemDataPopulator {
     }
 
     /**
+     * Record an AI-derived value in the audit timeline.
+     *
+     * <p>Audit type 120 has existed since the nAMD work — the migration that
+     * seeds it says the timeline should show "AI value populated from job X" —
+     * but nothing ever wrote it. So fluid volumes appeared in a CRF with no
+     * entry in the trail a monitor reads, their only lineage being a foreign
+     * key column nobody browses. One row per written value, which is how an
+     * operator's own edit is recorded too.
+     *
+     * <p>Best-effort: a failure here does not roll back the value. The
+     * {@code source_retinal_job_id} column still carries the lineage.
+     */
+    private void writeAutoPopulateAuditRow(Connection c, int eventCrfId, String itemOid,
+                                           String oldValue, String newValue,
+                                           long sourceJobId, int operatorUserId) {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                        + "  user_id, audit_table, entity_id, entity_name, old_value, new_value, "
+                        + "  event_crf_id) "
+                        + "VALUES (120, NOW(), ?, 'item_data', ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, operatorUserId);
+            ps.setInt(2, eventCrfId);
+            ps.setString(3, itemOid);
+            ps.setString(4, oldValue);
+            ps.setString(5, newValue + " (from job " + sourceJobId + ")");
+            ps.setInt(6, eventCrfId);
+            ps.executeUpdate();
+        } catch (SQLException sqlEx) {
+            LOG.warn("RETINAL_INFERENCE_AUTOPOPULATE audit-write failed for ecrf={} item={}: {}",
+                    eventCrfId, itemOid, sqlEx.getMessage());
+        }
+    }
+
+    /** The value an item_data row currently carries, for the audit's old_value. */
+    private static String readItemValue(Connection c, int itemDataId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT value FROM item_data WHERE item_data_id = ?")) {
+            ps.setInt(1, itemDataId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
+
+    /**
      * Write the {@code RETINAL_CRT_AUTOPOPULATE} audit_log_event row.
      * Best-effort — a write failure here doesn't roll back the
      * item_data row (the source_retinal_job_id column already
@@ -330,11 +375,14 @@ public class RetinalResultItemDataPopulator {
                     ps.setLong(6, sourceJobId);
                     ps.executeUpdate();
                 }
+                writeAutoPopulateAuditRow(c, eventCrfId, itemOid, null, valueStr,
+                        sourceJobId, operatorUserId);
             } else {
                 // Only auto-overwrite when the existing row came from
                 // THIS source (re-run with new metrics) or from an
                 // earlier auto-populate. Operator-entered rows are
                 // never overwritten by the auto-populator.
+                String previousValue = readItemValue(c, existingId);
                 Long existingSourceJob = readSourceJobId(c, existingId);
                 if (existingSourceJob == null) {
                     LOG.info("Skip auto-overwrite: ecrf={} item={} carries operator value",
@@ -356,6 +404,8 @@ public class RetinalResultItemDataPopulator {
                     ps.setInt(5, existingId);
                     ps.executeUpdate();
                 }
+                writeAutoPopulateAuditRow(c, eventCrfId, itemOid, previousValue, valueStr,
+                        sourceJobId, operatorUserId);
             }
         }
     }
