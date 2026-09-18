@@ -103,5 +103,6 @@
   <include  file="migration/lc-muw-2026-11-02-imaging-modality.xml"/>
   <include  file="migration/lc-muw-2026-11-02-audit-types-imaging-modality.xml"/>
   <include  file="migration/lc-muw-2026-11-02-seed-imaging-modalities.xml"/>
+  <include  file="migration/lc-muw-2026-11-16-study-setting.xml"/>
 </databaseChangeLog>
 

@@ -37,21 +37,70 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  * panels by arm, but that is defence in depth — it is bypassable with a pasted
  * URL or curl. Anything the server will not send cannot be un-hidden.
  *
- * <p>P3.5 moves the two names into {@code study_setting} so a study declares
- * its own arms. Keeping them here is what makes that a one-file change.
+ * <p><strong>P3.5 — the names are per study now.</strong> A trial randomises
+ * on groups it named itself, and a second AI study would otherwise have to
+ * adopt this one's vocabulary. {@link #armNamesFor} reads
+ * {@code study_setting}; the constants below are the fallback, so a study
+ * that has said nothing is blinded exactly as before. That fallback is not
+ * laziness — silently changing which group is hidden is the worst behaviour
+ * change this codebase could make by accident.
  */
 public final class AiArmPolicy {
 
-    /** The arm that sees AI output. */
+    /**
+     * The two states, and the default group names.
+     *
+     * <p>P3.5 — these serve double duty. A study may call its groups anything
+     * ({@code ai.arm.shownGroup} / {@code ai.arm.hiddenGroup}); the lookups
+     * below translate whatever it uses into one of these two tokens, so every
+     * caller compares against a fixed vocabulary and none of them has to know
+     * what a particular trial named its arms. A study that has configured
+     * nothing uses these as its names too, which is why the translation is
+     * invisible on an instance that never sets them.
+     */
     public static final String ARM_SHOWN = "AI_SHOWN";
-
-    /** The arm that must not. */
     public static final String ARM_HIDDEN = "AI_HIDDEN";
 
-    /** Both, for the {@code IN (...)} clauses that look up the arm. */
-    private static final String ARM_NAMES_SQL = "('" + ARM_SHOWN + "', '" + ARM_HIDDEN + "')";
-
     private AiArmPolicy() {}
+
+    /**
+     * The group names a study randomises AI visibility on.
+     *
+     * @return {shown, hidden} — the study's own, or the platform defaults when
+     *         it has not said. Never null, and never empty: a blank setting
+     *         falls back rather than disabling the gate, because a study that
+     *         mis-types a group name must not thereby unblind itself.
+     */
+    public static String[] armNamesFor(Connection c, int studyId) {
+        String shown = setting(c, studyId, "ai.arm.shownGroup");
+        String hidden = setting(c, studyId, "ai.arm.hiddenGroup");
+        return new String[] {
+                shown == null || shown.isBlank() ? ARM_SHOWN : shown.trim(),
+                hidden == null || hidden.isBlank() ? ARM_HIDDEN : hidden.trim(),
+        };
+    }
+
+    /** A study's setting, its parent's, or null. Failure reads as "unset". */
+    private static String setting(Connection c, int studyId, String key) {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT s.value FROM study_setting s "
+                        + " WHERE s.setting_key = ? "
+                        + "   AND s.study_id IN (?, COALESCE((SELECT parent_study_id FROM study "
+                        + "                                    WHERE study_id = ?), -1)) "
+                        + " ORDER BY CASE WHEN s.study_id = ? THEN 0 ELSE 1 END LIMIT 1")) {
+            ps.setString(1, key);
+            ps.setInt(2, studyId);
+            ps.setInt(3, studyId);
+            ps.setInt(4, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        } catch (SQLException lookupFailed) {
+            // Falling back to the constants keeps the gate closed, which is the
+            // safe direction for a blinding rule.
+            return null;
+        }
+    }
 
     /* ------------------------------------------------------------------ */
     /* Who is blinded                                                      */
@@ -107,16 +156,45 @@ public final class AiArmPolicy {
      */
     public static String armForSubject(Connection c, int studySubjectId) throws SQLException {
         if (studySubjectId <= 0) return null;
+        // P3.5 — matched against the names this subject's own study uses. The
+        // sub-select resolves them inline rather than in a second round trip,
+        // and COALESCEs to the platform defaults so a study that has said
+        // nothing behaves exactly as before.
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT sg.name FROM subject_group_map sgm "
+                "SELECT " + canonicalCase("sg.name", "ss.study_id") + " "
+                        + "  FROM subject_group_map sgm "
                         + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                        + "  JOIN study_subject ss ON ss.study_subject_id = sgm.study_subject_id "
                         + " WHERE sgm.study_subject_id = ? AND sgm.status_id = 1 "
-                        + "   AND UPPER(sg.name) IN " + ARM_NAMES_SQL + " LIMIT 1")) {
+                        + "   AND UPPER(sg.name) IN (UPPER(" + armNameSql("shown", "ss.study_id") + "), "
+                        + "                          UPPER(" + armNameSql("hidden", "ss.study_id") + ")) "
+                        + " LIMIT 1")) {
             ps.setInt(1, studySubjectId);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? upper(rs.getString(1)) : null;
+                return rs.next() ? rs.getString(1) : null;
             }
         }
+    }
+
+    /**
+     * SQL for "the name this study calls one of its arms", defaulting to the
+     * platform constant.
+     *
+     * <p>Inlined rather than parameterised because it is composed into three
+     * different queries at different parameter positions; the only values
+     * interpolated are this class's own constants and a column name it also
+     * owns, never anything a caller supplies.
+     */
+    private static String armNameSql(String which, String studyIdExpr) {
+        String key = "shown".equals(which) ? "ai.arm.shownGroup" : "ai.arm.hiddenGroup";
+        String fallback = "shown".equals(which) ? ARM_SHOWN : ARM_HIDDEN;
+        return "COALESCE((SELECT st.value FROM study_setting st "
+                + "         WHERE st.setting_key = '" + key + "' "
+                + "           AND st.study_id IN (" + studyIdExpr + ", "
+                + "                 COALESCE((SELECT parent_study_id FROM study "
+                + "                            WHERE study_id = " + studyIdExpr + "), -1)) "
+                + "         ORDER BY CASE WHEN st.study_id = " + studyIdExpr + " THEN 0 ELSE 1 END "
+                + "         LIMIT 1), '" + fallback + "')";
     }
 
     /**
@@ -133,18 +211,36 @@ public final class AiArmPolicy {
                 ? "ev.study_event_id = ? "
                 : "ev.study_event_id IN (SELECT study_event_id FROM event_crf WHERE event_crf_id = ?) ";
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT sg.name "
+                "SELECT " + canonicalCase("sg.name", "ss.study_id") + " "
                         + "  FROM study_event ev "
                         + "  JOIN subject_group_map sgm "
                         + "    ON sgm.study_subject_id = ev.study_subject_id AND sgm.status_id = 1 "
                         + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
-                        + " WHERE UPPER(sg.name) IN " + ARM_NAMES_SQL
+                        + "  JOIN study_subject ss ON ss.study_subject_id = ev.study_subject_id "
+                        + " WHERE UPPER(sg.name) IN (UPPER(" + armNameSql("shown", "ss.study_id") + "), "
+                        + "                          UPPER(" + armNameSql("hidden", "ss.study_id") + ")) "
                         + "   AND " + subject + " LIMIT 1")) {
             ps.setInt(1, studyEventId > 0 ? studyEventId : eventCrfId);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? upper(rs.getString(1)) : null;
+                return rs.next() ? rs.getString(1) : null;
             }
         }
+    }
+
+    /**
+     * SQL mapping whatever a study calls a group onto one of the two tokens.
+     *
+     * <p>This is the whole point of P3.5's arm handling: the vocabulary is
+     * translated once, at the boundary, so the seven masking call sites keep
+     * comparing against {@link #ARM_HIDDEN} and none of them can be wrong for
+     * a study that renamed its groups. Doing it the other way — handing the
+     * raw name outward and expecting every caller to resolve it — is how a
+     * renamed group silently unblinds a trial.
+     */
+    private static String canonicalCase(String nameExpr, String studyIdExpr) {
+        return "CASE WHEN UPPER(" + nameExpr + ") = UPPER("
+                + armNameSql("hidden", studyIdExpr) + ") THEN '" + ARM_HIDDEN + "' "
+                + "     ELSE '" + ARM_SHOWN + "' END";
     }
 
     /**
@@ -158,7 +254,9 @@ public final class AiArmPolicy {
                         + "  JOIN study_group_class sgc "
                         + "    ON sgc.study_group_class_id = sg.study_group_class_id "
                         + " WHERE sgc.study_id = ? "
-                        + "   AND UPPER(sg.name) IN " + ARM_NAMES_SQL + " LIMIT 1")) {
+                        + "   AND UPPER(sg.name) IN (UPPER(" + armNameSql("shown", "sgc.study_id") + "), "
+                        + "                          UPPER(" + armNameSql("hidden", "sgc.study_id") + ")) "
+                        + " LIMIT 1")) {
             ps.setInt(1, studyId);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Integer.valueOf(rs.getInt(1)) : null;
