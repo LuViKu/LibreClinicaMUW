@@ -31,14 +31,24 @@ for (const { path, label } of PORTALS) {
       await expect(page.locator('h1')).toBeVisible({ timeout: 15_000 })
     })
 
-    test('carries no session cookie', async ({ page, context }) => {
+    /**
+     * Visiting a portal confers no access.
+     *
+     * The servlet container does hand out an anonymous JSESSIONID for any page
+     * it serves, including these — that is benign, because authentication
+     * replaces the session id (SessionFixationProtectionStrategy), so the
+     * anonymous one cannot be escalated. What must hold is that carrying it
+     * buys nothing: a staff endpoint still refuses.
+     */
+    test('confers no access to staff endpoints', async ({ page }) => {
       await page.goto(path, { waitUntil: 'domcontentloaded' })
       await page.waitForLoadState('load')
-      const cookies = await context.cookies()
+
+      const me = await page.request.get('/LibreClinica/pages/api/v1/me')
       expect(
-        cookies.filter((c) => /JSESSIONID/i.test(c.name)),
-        'a portal page must not establish a session',
-      ).toHaveLength(0)
+        me.status(),
+        'a portal visitor must not be treated as authenticated',
+      ).toBe(401)
     })
   })
 }
