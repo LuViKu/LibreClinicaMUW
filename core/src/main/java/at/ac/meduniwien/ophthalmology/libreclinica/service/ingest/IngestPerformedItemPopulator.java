@@ -19,6 +19,8 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDataWriter;
+
 /**
  * DR-025 P1-5 — ticks a visit's "modality performed" box when an image from
  * that modality is bound to the visit.
@@ -57,7 +59,7 @@ public class IngestPerformedItemPopulator {
     private static final Logger LOG = LoggerFactory.getLogger(IngestPerformedItemPopulator.class);
 
     /** Tag written into {@code item_data.source_kind}. */
-    public static final String SOURCE_KIND = "ingest";
+    public static final String SOURCE_KIND = SourcedItemDataWriter.Source.INGEST.kind();
 
     private final DataSource dataSource;
 
@@ -73,6 +75,16 @@ public class IngestPerformedItemPopulator {
         ALREADY_SET,
         /** An operator's own value is present and was left alone. */
         OPERATOR_VALUE_KEPT,
+        /**
+         * Another automatic source owns this item's value and was left alone.
+         *
+         * <p>P3.0 — before the shared writer this case overwrote. No pair of
+         * sources currently targets the same item (checklist boxes and fluid
+         * metrics are different items), so nothing observable changes; one
+         * machine silently overruling another is simply not a behaviour worth
+         * preserving until it does happen.
+         */
+        OTHER_SOURCE_KEPT,
         /** No map row for this device, or the item is not in this CRF version. */
         NOT_APPLICABLE,
         /** The write failed; the bind itself is unaffected. */
@@ -118,20 +130,29 @@ public class IngestPerformedItemPopulator {
                 return Outcome.NOT_APPLICABLE;
             }
 
-            Existing existing = findExisting(c, eventCrfId, itemId);
-            if (existing != null && existing.sourceKind == null) {
-                LOG.info("performed-tick skipped for image {}: event_crf {} item {} carries an operator value",
-                        imageIngestId, eventCrfId, map.itemOid);
-                return Outcome.OPERATOR_VALUE_KEPT;
-            }
-            if (existing != null && map.performedValue.equals(existing.value)) {
-                return Outcome.ALREADY_SET;
-            }
+            // P3.0 — the upsert and the "never overwrite a person" rule are
+            // shared with the retinal populator; only the audit rule below is
+            // ours.
+            SourcedItemDataWriter.Result result = SourcedItemDataWriter.upsert(
+                    c, eventCrfId, itemId, map.performedValue,
+                    new SourcedItemDataWriter.Ref(SourcedItemDataWriter.Source.INGEST, imageIngestId),
+                    actorUserId);
 
-            if (existing == null) {
-                insert(c, eventCrfId, itemId, map.performedValue, imageIngestId, actorUserId);
-            } else {
-                update(c, existing.itemDataId, map.performedValue, imageIngestId, actorUserId);
+            switch (result.outcome()) {
+                case OPERATOR_VALUE_KEPT -> {
+                    LOG.info("performed-tick skipped for image {}: event_crf {} item {} carries an operator value",
+                            imageIngestId, eventCrfId, map.itemOid);
+                    return Outcome.OPERATOR_VALUE_KEPT;
+                }
+                case OTHER_SOURCE_KEPT -> {
+                    LOG.info("performed-tick skipped for image {}: event_crf {} item {} was written by "
+                            + "another source", imageIngestId, eventCrfId, map.itemOid);
+                    return Outcome.OTHER_SOURCE_KEPT;
+                }
+                case UNCHANGED -> {
+                    return Outcome.ALREADY_SET;
+                }
+                case WRITTEN -> { /* fall through to the audit row */ }
             }
             writeAudit(c, eventCrfId, imageIngestId, map.itemOid, map.performedValue, actorUserId);
             LOG.info("performed-tick: image {} marked {} performed on event_crf {}",
@@ -193,52 +214,9 @@ public class IngestPerformedItemPopulator {
         }
     }
 
-    private record Existing(int itemDataId, String value, String sourceKind) {}
 
-    private static Existing findExisting(Connection c, int eventCrfId, int itemId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT item_data_id, value, source_kind FROM item_data "
-                        + " WHERE event_crf_id = ? AND item_id = ? "
-                        + "   AND (deleted IS NULL OR deleted = false) "
-                        + " ORDER BY item_data_id LIMIT 1")) {
-            ps.setInt(1, eventCrfId);
-            ps.setInt(2, itemId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                return new Existing(rs.getInt(1), rs.getString(2), rs.getString(3));
-            }
-        }
-    }
 
-    private static void insert(Connection c, int eventCrfId, int itemId, String value,
-                               long imageIngestId, int actorUserId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO item_data (item_id, event_crf_id, status_id, value, date_created, "
-                        + "owner_id, ordinal, deleted, source_kind, source_image_ingest_id) "
-                        + "VALUES (?, ?, 1, ?, NOW(), ?, 1, false, ?, ?)")) {
-            ps.setInt(1, itemId);
-            ps.setInt(2, eventCrfId);
-            ps.setString(3, value);
-            ps.setInt(4, actorUserId);
-            ps.setString(5, SOURCE_KIND);
-            ps.setLong(6, imageIngestId);
-            ps.executeUpdate();
-        }
-    }
 
-    private static void update(Connection c, int itemDataId, String value,
-                               long imageIngestId, int actorUserId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "UPDATE item_data SET value = ?, date_updated = NOW(), update_id = ?, "
-                        + "source_kind = ?, source_image_ingest_id = ? WHERE item_data_id = ?")) {
-            ps.setString(1, value);
-            ps.setInt(2, actorUserId);
-            ps.setString(3, SOURCE_KIND);
-            ps.setLong(4, imageIngestId);
-            ps.setInt(5, itemDataId);
-            ps.executeUpdate();
-        }
-    }
 
     /** Audit type 129 — seeded by lc-muw-2026-09-18-ingest-performed-item-map.xml. */
     private static final int AUDIT_TYPE_IMAGE_PERFORMED_AUTOTICK = 129;

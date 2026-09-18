@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDataWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
 
 /**
@@ -57,7 +58,7 @@ public class RetinalResultItemDataPopulator {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultItemDataPopulator.class);
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final String SOURCE_KIND = "retinal_inference";
+    private static final String SOURCE_KIND = SourcedItemDataWriter.Source.RETINAL_INFERENCE.kind();
 
     /**
      * Mapping from fluid runner's output_payload JSON key to the OD-eye
@@ -248,16 +249,6 @@ public class RetinalResultItemDataPopulator {
         }
     }
 
-    /** The value an item_data row currently carries, for the audit's old_value. */
-    private static String readItemValue(Connection c, int itemDataId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT value FROM item_data WHERE item_data_id = ?")) {
-            ps.setInt(1, itemDataId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getString(1) : null;
-            }
-        }
-    }
 
     /**
      * Write the {@code RETINAL_CRT_AUTOPOPULATE} audit_log_event row.
@@ -358,55 +349,26 @@ public class RetinalResultItemDataPopulator {
                 throw new SQLException(
                         "Item OID '" + itemOid + "' not found — has the NAMD_VISIT AI section been seeded?");
             }
-            Integer existingId = findExistingItemDataId(c, eventCrfId, itemId);
             String valueStr = formatValue(value);
-            if (existingId == null) {
-                try (PreparedStatement ps = c.prepareStatement(
-                        "INSERT INTO item_data "
-                                + "  (item_id, event_crf_id, status_id, value, "
-                                + "   date_created, owner_id, ordinal, deleted, "
-                                + "   source_kind, source_retinal_job_id) "
-                                + "VALUES (?, ?, 1, ?, NOW(), ?, 1, false, ?, ?)")) {
-                    ps.setInt(1, itemId);
-                    ps.setInt(2, eventCrfId);
-                    ps.setString(3, valueStr);
-                    ps.setInt(4, operatorUserId);
-                    ps.setString(5, SOURCE_KIND);
-                    ps.setLong(6, sourceJobId);
-                    ps.executeUpdate();
-                }
-                writeAutoPopulateAuditRow(c, eventCrfId, itemOid, null, valueStr,
-                        sourceJobId, operatorUserId);
-            } else {
-                // Only auto-overwrite when the existing row came from
-                // THIS source (re-run with new metrics) or from an
-                // earlier auto-populate. Operator-entered rows are
-                // never overwritten by the auto-populator.
-                String previousValue = readItemValue(c, existingId);
-                Long existingSourceJob = readSourceJobId(c, existingId);
-                if (existingSourceJob == null) {
-                    LOG.info("Skip auto-overwrite: ecrf={} item={} carries operator value",
-                            eventCrfId, itemOid);
-                    return;
-                }
-                try (PreparedStatement ps = c.prepareStatement(
-                        "UPDATE item_data "
-                                + "   SET value = ?, "
-                                + "       date_updated = NOW(), "
-                                + "       update_id = ?, "
-                                + "       source_kind = ?, "
-                                + "       source_retinal_job_id = ? "
-                                + " WHERE item_data_id = ?")) {
-                    ps.setString(1, valueStr);
-                    ps.setInt(2, operatorUserId);
-                    ps.setString(3, SOURCE_KIND);
-                    ps.setLong(4, sourceJobId);
-                    ps.setInt(5, existingId);
-                    ps.executeUpdate();
-                }
-                writeAutoPopulateAuditRow(c, eventCrfId, itemOid, previousValue, valueStr,
-                        sourceJobId, operatorUserId);
+
+            // P3.0 — the upsert and the "never overwrite a person" rule are
+            // shared with the ingest populator. The audit rule is not: this
+            // path records every populate pass, including one that recomputed
+            // the same number, because a re-run is itself a fact about the
+            // data. The ingest tick records only real changes.
+            SourcedItemDataWriter.Result result = SourcedItemDataWriter.upsert(
+                    c, eventCrfId, itemId, valueStr,
+                    new SourcedItemDataWriter.Ref(
+                            SourcedItemDataWriter.Source.RETINAL_INFERENCE, sourceJobId),
+                    operatorUserId);
+
+            if (!result.ours()) {
+                LOG.info("Skip auto-overwrite: ecrf={} item={} carries a value this pipeline did not write",
+                        eventCrfId, itemOid);
+                return;
             }
+            writeAutoPopulateAuditRow(c, eventCrfId, itemOid, result.previousValue(), valueStr,
+                    sourceJobId, operatorUserId);
         }
     }
 
@@ -420,30 +382,7 @@ public class RetinalResultItemDataPopulator {
         }
     }
 
-    private static Integer findExistingItemDataId(Connection c, int eventCrfId, int itemId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT item_data_id FROM item_data "
-                        + "WHERE event_crf_id = ? AND item_id = ? AND COALESCE(deleted, false) = false "
-                        + "ORDER BY ordinal ASC LIMIT 1")) {
-            ps.setInt(1, eventCrfId);
-            ps.setInt(2, itemId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : null;
-            }
-        }
-    }
 
-    private static Long readSourceJobId(Connection c, int itemDataId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT source_retinal_job_id FROM item_data WHERE item_data_id = ?")) {
-            ps.setInt(1, itemDataId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                long v = rs.getLong(1);
-                return rs.wasNull() ? null : v;
-            }
-        }
-    }
 
     private static String formatValue(double v) {
         // Item data values are stored as varchar; use a stable
