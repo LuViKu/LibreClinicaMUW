@@ -71,8 +71,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * {@code writeAuditEvent} helper (IMAGE_BIND / IMAGE_DISMISS).
  *
  * <p>Authenticated (behind {@code .anyRequest().hasRole("USER")}), role-gated
- * via {@link ImageBindAuthorization}, and every bind target is checked against
+ * via {@link IngestBindAuthorization}, and every bind target is checked against
  * the caller's site visibility.
+ *
+ * <p><strong>P3.2 — superseded by {@link IngestInboxApiController}.</strong>
+ * This is kept for one release as a compatibility surface: the paths and the
+ * response shapes are unchanged, but bind and dismiss now run through the same
+ * {@link IngestBindService} as the new inbox, so the two cannot behave
+ * differently while both exist. The list here still returns images only,
+ * because that is what a caller of {@code /image-ingest} asked for.
+ *
+ * <p>Nothing new should be added here. The SPA moved to {@code /api/v1/ingest}
+ * in the same change; this exists for anything holding a bookmark or an
+ * integration nobody has told us about yet, and goes away next release.
  */
 @RestController
 @RequestMapping("/api/v1/image-ingest")
@@ -141,7 +152,12 @@ public class ImageIngestApiController {
         List<InboxRow> rows = new ArrayList<>();
         String sql = "SELECT ingest_item_id, source_kind, patient_id, laterality, acquisition_date, "
                 + "modality, original_filename, received_at, preview_png_path "
-                + "FROM ingest_item WHERE status = 'UNBOUND' ORDER BY received_at DESC LIMIT " + INBOX_LIMIT;
+                + "FROM ingest_item WHERE status = 'UNBOUND' "
+                // P3.2 — the table now also holds OCT volumes. A caller of the
+                // image inbox asked for images, and handing them a 200 MB scan
+                // row with no preview would be a surprising answer.
+                + "  AND kind IN ('image', 'dicom') "
+                + "ORDER BY received_at DESC LIMIT " + INBOX_LIMIT;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -297,45 +313,19 @@ public class ImageIngestApiController {
                 "the chosen subject belongs to a study you cannot access");
         if (visGuard != null) return visGuard;
 
-        UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean study = (StudyBean) session.getAttribute("study");
-        try (Connection c = dataSource.getConnection()) {
-            int n;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE ingest_item SET status='BOUND', match_policy='manual', "
-                            + "bound_study_subject_id=?, bound_study_event_id=?, bound_event_crf_id=?, "
-                            + "bound_by_user_id=?, bound_at=? WHERE ingest_item_id=? AND status='UNBOUND'")) {
-                ps.setInt(1, req.studySubjectId());
-                if (req.studyEventId() == null) ps.setNull(2, Types.INTEGER); else ps.setInt(2, req.studyEventId());
-                if (req.eventCrfId() == null) ps.setNull(3, Types.INTEGER); else ps.setInt(3, req.eventCrfId());
-                ps.setInt(4, user.getId());
-                ps.setTimestamp(5, Timestamp.from(Instant.now()));
-                ps.setLong(6, id);
-                n = ps.executeUpdate();
-            }
-            if (n == 0) {
-                return ResponseEntity.status(409).body(Map.of("message", "image " + id + " is not UNBOUND (already reconciled)"));
-            }
-            EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.IMAGE_BIND,
-                    user, study, null, "fundus image bound", "ingest_item", (int) id, "status", "UNBOUND", "BOUND");
-            // The image on the visit is the evidence that this camera was used
-            // on it, so tick the visit's checklist box for this device. The
-            // operator who bound it is the author of that value.
-            if (req.studyEventId() != null && req.eventCrfId() != null) {
-                Device dev = readDevice(c, id);
-                if (dev != null) {
-                    ImageIngestBinding.tickPerformed(dataSource, id,
-                            new ImageIngestBinding.EventTarget(
-                                    req.studySubjectId(), req.studyEventId(), req.eventCrfId()),
-                            dev.sourceKind(), dev.deviceKey(), user.getId());
-                }
-            }
-            LOG.info("ingest_item {} bound to study_subject {}", id, req.studySubjectId());
-            return ResponseEntity.ok(Map.of("imageIngestId", id, "status", "BOUND"));
-        } catch (SQLException e) {
-            LOG.error("image bind failed for {}: {}", id, e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("message", "bind failed"));
-        }
+        IngestBindService.Result r = new IngestBindService(dataSource).bind(
+                id, req.studySubjectId(), req.studyEventId(), req.eventCrfId(),
+                IngestBindService.POLICY_MANUAL,
+                new IngestBindService.Actor(
+                        (UserAccountBean) session.getAttribute("userBean"),
+                        (StudyBean) session.getAttribute("study")));
+        return switch (r) {
+            case OK -> ResponseEntity.ok(Map.of("imageIngestId", id, "status", "BOUND"));
+            case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+            case WRONG_STATE -> ResponseEntity.status(409).body(Map.of(
+                    "message", "image " + id + " is not UNBOUND (already reconciled)"));
+            case FAILED -> ResponseEntity.internalServerError().body(Map.of("message", "bind failed"));
+        };
     }
 
     // ----- POST /{id}/dismiss -----
@@ -348,65 +338,27 @@ public class ImageIngestApiController {
         ResponseEntity<?> roleGuard = guardReconcileRole(session);
         if (roleGuard != null) return roleGuard;
 
-        String reason = (req != null && req.reason() != null && !req.reason().isBlank())
-                ? req.reason().trim() : "dismissed";
-        if (reason.length() > 500) reason = reason.substring(0, 500);
-
-        UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean study = (StudyBean) session.getAttribute("study");
-        try (Connection c = dataSource.getConnection()) {
-            int n;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE ingest_item SET status='DISMISSED', status_message=?, "
-                            + "bound_by_user_id=?, bound_at=? WHERE ingest_item_id=? AND status='UNBOUND'")) {
-                ps.setString(1, reason);
-                ps.setInt(2, user.getId());
-                ps.setTimestamp(3, Timestamp.from(Instant.now()));
-                ps.setLong(4, id);
-                n = ps.executeUpdate();
-            }
-            if (n == 0) {
-                return ResponseEntity.status(409).body(Map.of("message", "image " + id + " is not UNBOUND"));
-            }
-            EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.IMAGE_DISMISS,
-                    user, study, null, "fundus image dismissed", "ingest_item", (int) id, "status", "UNBOUND", "DISMISSED");
-            return ResponseEntity.ok(Map.of("imageIngestId", id, "status", "DISMISSED"));
-        } catch (SQLException e) {
-            LOG.error("image dismiss failed for {}: {}", id, e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("message", "dismiss failed"));
-        }
+        IngestBindService.Result r = new IngestBindService(dataSource).dismiss(
+                id, req == null ? null : req.reason(),
+                new IngestBindService.Actor(
+                        (UserAccountBean) session.getAttribute("userBean"),
+                        (StudyBean) session.getAttribute("study")));
+        return switch (r) {
+            case OK -> ResponseEntity.ok(Map.of("imageIngestId", id, "status", "DISMISSED"));
+            case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+            case WRONG_STATE -> ResponseEntity.status(409).body(Map.of(
+                    "message", "image " + id + " is not UNBOUND"));
+            case FAILED -> ResponseEntity.internalServerError().body(Map.of("message", "dismiss failed"));
+        };
     }
 
     // ----- guards / helpers -----
-
-    /** Which ingress an image came through, and which camera sent it. */
-    private record Device(String sourceKind, String deviceKey) {}
-
-    /**
-     * Reads the device off the image row. Falls back to the DICOM calling AE
-     * title for rows written before {@code device} existed, so images already
-     * sitting in the inbox still tick the right box when they are reconciled.
-     */
-    private static Device readDevice(Connection c, long imageIngestId) {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT source_kind, COALESCE(device, source_ae_title) AS device_key "
-                        + "FROM ingest_item WHERE ingest_item_id = ?")) {
-            ps.setLong(1, imageIngestId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                return new Device(rs.getString("source_kind"), rs.getString("device_key"));
-            }
-        } catch (SQLException e) {
-            LOG.warn("could not read the device of image {}: {}", imageIngestId, e.getMessage());
-            return null;
-        }
-    }
 
 
     private ResponseEntity<?> guardReconcileRole(HttpSession session) {
         StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (role != null && role.getRole() != null) ? role.getRole().getId() : 0;
-        if (!ImageBindAuthorization.roleMayReconcile(roleId)) {
+        if (!IngestBindAuthorization.roleMayReconcile(roleId)) {
             return ResponseEntity.status(403).body(Map.of("message", "Your role may not reconcile fundus images"));
         }
         return null;

@@ -12,6 +12,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import javax.sql.DataSource;
@@ -164,6 +166,158 @@ public class IngestPerformedItemPopulator {
             LOG.error("performed-tick failed for image {} on event_crf {}: {}",
                     imageIngestId, eventCrfId, e.getMessage());
             return Outcome.FAILED;
+        }
+    }
+
+    /** What undoing a tick did. */
+    public enum ClearOutcome {
+        /** The value was removed; the box reads as unanswered again. */
+        CLEARED,
+        /**
+         * Another bound file from the same device still evidences the visit, so
+         * the tick stands and now points at that one instead.
+         */
+        REPOINTED,
+        /** This file never ticked anything. */
+        NOTHING_TO_CLEAR,
+        /** The undo failed; the unbind itself is unaffected. */
+        FAILED
+    }
+
+    /**
+     * P3.2 — undo the tick a bind caused, when that bind is undone.
+     *
+     * <p>An unbind that left the checklist box ticked would be worse than no
+     * unbind at all: the form would keep asserting a modality was performed on
+     * a visit that no longer has any evidence of it, and the person who
+     * corrected the mis-bind would have no reason to suspect it.
+     *
+     * <p>Two cases, and the difference matters clinically. If another file from
+     * the same device is still bound to that visit, the box is still true — the
+     * modality was performed, this was simply not the image proving it — so the
+     * value stays and its provenance moves to the remaining file. Only when
+     * nothing is left is the value removed.
+     *
+     * <p>Removal means deleting the row this populator created, not blanking
+     * it. A blanked row carries no {@code source_kind}, which reads as "a person
+     * typed this", and a later re-bind would then refuse to touch it — the box
+     * would be permanently stuck empty. Deleting restores exactly the state
+     * before the bind.
+     *
+     * <p>Only rows this populator wrote are touched: a value a person typed is
+     * never removed, whatever it says.
+     */
+    public ClearOutcome clearPerformed(long ingestItemId, int actorUserId) {
+        try (Connection c = dataSource.getConnection()) {
+            List<Ticked> ticked = findTicked(c, ingestItemId);
+            if (ticked.isEmpty()) return ClearOutcome.NOTHING_TO_CLEAR;
+
+            boolean repointedAny = false;
+            for (Ticked t : ticked) {
+                Long replacement = anotherBoundFileFor(c, ingestItemId, t.eventCrfId());
+                if (replacement != null) {
+                    repoint(c, t.itemDataId(), replacement);
+                    writeUntickAudit(c, t, actorUserId, "repointed to file " + replacement);
+                    repointedAny = true;
+                } else {
+                    delete(c, t.itemDataId());
+                    writeUntickAudit(c, t, actorUserId, null);
+                }
+            }
+            LOG.info("performed-untick: file {} released {} CRF value(s)", ingestItemId, ticked.size());
+            return repointedAny ? ClearOutcome.REPOINTED : ClearOutcome.CLEARED;
+        } catch (SQLException e) {
+            // Never propagate: the unbind is the clinically meaningful outcome
+            // and a stale tick is visible on the form.
+            LOG.error("performed-untick failed for file {}: {}", ingestItemId, e.getMessage());
+            return ClearOutcome.FAILED;
+        }
+    }
+
+    /** A CRF value this file is responsible for. */
+    private record Ticked(int itemDataId, int eventCrfId, int itemId, String itemOid, String value) {}
+
+    private static List<Ticked> findTicked(Connection c, long ingestItemId) throws SQLException {
+        List<Ticked> out = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT id.item_data_id, id.event_crf_id, id.item_id, i.oc_oid, id.value "
+                        + "  FROM item_data id "
+                        + "  JOIN item i ON i.item_id = id.item_id "
+                        + " WHERE id.source_image_ingest_id = ? "
+                        + "   AND lower(id.source_kind) = ?")) {
+            ps.setLong(1, ingestItemId);
+            ps.setString(2, SOURCE_KIND);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new Ticked(rs.getInt(1), rs.getInt(2), rs.getInt(3),
+                            rs.getString(4), rs.getString(5)));
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Another file still bound to this visit that would tick the same box —
+     * same ingress and same device, since that pair is what the map is keyed
+     * on.
+     */
+    private static Long anotherBoundFileFor(Connection c, long ingestItemId, int eventCrfId)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT other.ingest_item_id "
+                        + "  FROM ingest_item other "
+                        + "  JOIN ingest_item self ON self.ingest_item_id = ? "
+                        + " WHERE other.ingest_item_id <> self.ingest_item_id "
+                        + "   AND other.status = 'BOUND' "
+                        + "   AND other.bound_event_crf_id = ? "
+                        + "   AND lower(other.source_kind) = lower(self.source_kind) "
+                        + "   AND lower(COALESCE(other.device, other.source_ae_title, '')) "
+                        + "     = lower(COALESCE(self.device, self.source_ae_title, '')) "
+                        + " ORDER BY other.ingest_item_id LIMIT 1")) {
+            ps.setLong(1, ingestItemId);
+            ps.setInt(2, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Long.valueOf(rs.getLong(1)) : null;
+            }
+        }
+    }
+
+    private static void repoint(Connection c, int itemDataId, long toIngestItemId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE item_data SET source_image_ingest_id = ?, date_updated = NOW() "
+                        + " WHERE item_data_id = ?")) {
+            ps.setLong(1, toIngestItemId);
+            ps.setInt(2, itemDataId);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void delete(Connection c, int itemDataId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "DELETE FROM item_data WHERE item_data_id = ?")) {
+            ps.setInt(1, itemDataId);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Audit type 130 — seeded by lc-muw-2026-10-05-audit-types-ingest.xml. */
+    private static final int AUDIT_TYPE_INGEST_UNBIND = 130;
+
+    private static void writeUntickAudit(Connection c, Ticked t, int actorUserId, String note)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, user_id, "
+                        + "audit_table, entity_id, entity_name, old_value, new_value, event_crf_id) "
+                        + "VALUES (?, now(), ?, 'item_data', ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, AUDIT_TYPE_INGEST_UNBIND);
+            ps.setInt(2, actorUserId);
+            ps.setInt(3, t.itemDataId());
+            ps.setString(4, t.itemOid());
+            ps.setString(5, t.value());
+            ps.setString(6, note);   // null = the value is gone
+            ps.setInt(7, t.eventCrfId());
+            ps.executeUpdate();
         }
     }
 

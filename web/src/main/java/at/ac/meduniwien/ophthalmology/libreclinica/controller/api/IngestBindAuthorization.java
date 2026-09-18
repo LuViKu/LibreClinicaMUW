@@ -11,11 +11,17 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 
 /**
- * DR-025 — authorization gate for the fundus-image reconciliation inbox
- * ({@code ImageIngestApiController}: bind / dismiss an UNBOUND ingest_item row).
+ * DR-025 / P3.2 — authorization gate for the ingest reconciliation inbox
+ * ({@code IngestInboxApiController}: bind / unbind / dismiss an ingest_item row).
  *
- * <p>Reconciliation is a data-management task — linking an inbound image to the
- * correct subject/visit. Permitted roles mirror {@link CrfReopenAuthorization}:
+ * <p>Reconciliation is a data-management task — saying which patient's visit an
+ * inbound file belongs to.
+ *
+ * <p>P3.2 — this now gates OCT volumes as well as fundus photographs. The
+ * alternative was the retinal queue's rule, which was sysadmin-only; that is
+ * the wrong direction, because the inbox already enforces a role AND per-target
+ * site visibility, and requiring a sysadmin to file a study nurse's scan is how
+ * a queue silts up. Permitted roles mirror {@link CrfReopenAuthorization}:
  * <ul>
  *   <li>{@link Role#STUDYDIRECTOR} (Data Manager) — primary owner.</li>
  *   <li>{@link Role#INVESTIGATOR} — reconciles their own subjects' images.</li>
@@ -26,12 +32,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  * Site/study visibility on the chosen bind target is enforced separately at the
  * controller layer.
  */
-final class ImageBindAuthorization {
+public final class IngestBindAuthorization {
 
-    private ImageBindAuthorization() {}
+    private IngestBindAuthorization() {}
 
     /** @param roleId legacy {@link Role} id from the session {@code userRole}; 0 = none. */
-    static boolean roleMayReconcile(int roleId) {
+    public static boolean roleMayReconcile(int roleId) {
         return roleId == Role.STUDYDIRECTOR.getId()
                 || roleId == Role.INVESTIGATOR.getId()
                 || roleId == Role.COORDINATOR.getId()

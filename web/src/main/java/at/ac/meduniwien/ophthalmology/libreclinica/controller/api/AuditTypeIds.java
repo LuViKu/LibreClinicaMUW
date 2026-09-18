@@ -382,4 +382,21 @@ public final class AuditTypeIds {
      * entityId = ingest_item_id, old_value = {@code "UNBOUND"}.
      */
     public static final int IMAGE_DISMISS                    = 128;
+
+    /**
+     * P3.2 — a BOUND {@code ingest_item} was returned to the inbox, undoing
+     * what the bind caused.
+     *
+     * <p>Written twice per unbind, deliberately, because two different things
+     * happened: once against {@code ingest_item} for the file moving back, and
+     * once per {@code item_data} row whose automatic value the bind had caused
+     * — the CRF value disappearing is its own event on its own form, and an
+     * auditor reading that form must see it there rather than having to know
+     * an unrelated file was unbound.
+     *
+     * <p>Writers: {@code IngestBindService.unbind} and
+     * {@code IngestPerformedItemPopulator.clearPerformed}. Seeded by
+     * {@code lc-muw-2026-10-05-audit-types-ingest.xml}. 129 is the auto-tick.
+     */
+    public static final int INGEST_UNBIND                    = 130;
 }
