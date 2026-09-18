@@ -99,5 +99,6 @@
   <include  file="migration/lc-muw-2026-09-18-ingest-performed-item-map.xml"/>
   <include  file="migration/lc-muw-2026-10-05-ingest-item.xml"/>
   <include  file="migration/lc-muw-2026-10-05-audit-types-ingest.xml"/>
+  <include  file="migration/lc-muw-2026-10-19-retinal-job-ingest-item.xml"/>
 </databaseChangeLog>
 
