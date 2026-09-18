@@ -385,6 +385,44 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
         }
     }
 
+    /* ---------------- /resolve : study scope ---------------- */
+
+    /**
+     * P3.0 — the resolve endpoint honours the portal's study scope.
+     *
+     * <p>It did not before: the sibling search endpoint was scoped, so a portal
+     * configured for one study would refuse to *search* for another study's
+     * subject and then happily *resolve* the same label, naming that subject's
+     * study and site back to a caller who never logged in. Both now answer the
+     * same way, and an out-of-scope subject is indistinguishable from one that
+     * does not exist.
+     */
+    @Test
+    void resolve_honoursThePortalStudyScope() throws Exception {
+        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
+        f.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) f.get(null);
+
+        // Unrestricted: the seeded subject resolves.
+        mockMvc().perform(post("/api/v1/public/image-upload/resolve")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"patientId\":\"M-001\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.candidates.length()").value(1));
+
+        live.setProperty("core.ingest.portal.studyOids", "S_SOME_OTHER_STUDY");
+        try {
+            mockMvc().perform(post("/api/v1/public/image-upload/resolve")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"patientId\":\"M-001\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.state").value("nopatient"))
+                    .andExpect(jsonPath("$.candidates.length()").value(0));
+        } finally {
+            live.remove("core.ingest.portal.studyOids");
+        }
+    }
+
     /* ---------------- /visits : the today's-visits picker ---------------- */
 
     private static void setTodaysVisits(String value) throws Exception {

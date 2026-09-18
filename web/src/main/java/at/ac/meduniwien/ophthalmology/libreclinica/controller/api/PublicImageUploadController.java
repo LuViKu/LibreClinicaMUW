@@ -32,6 +32,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
@@ -186,26 +187,22 @@ public class PublicImageUploadController {
         if (req == null || isBlank(req.patientId())) {
             return ResponseEntity.badRequest().body(Map.of("message", "patientId is required"));
         }
-        List<StudySubjectMatch> matches = studySubjectFinder.findByLabelAcrossStudies(req.patientId().trim());
-        LocalDate date = parseIsoDateOrNull(req.studyDate());
+        // P3.0 — one shared implementation, and the portal's study scope
+        // applied. This used to resolve across every study while the sibling
+        // search endpoint was scoped, so a portal configured for one study
+        // would refuse to *search* for another study's subject but would
+        // happily *resolve* one and name their study and site back to an
+        // unauthenticated caller.
+        IngestResolutionService.Resolution r = new IngestResolutionService(studySubjectFinder)
+                .resolve(req.patientId(), parseIsoDateOrNull(req.studyDate()),
+                        StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
 
-        List<ResolveCandidate> candidates = new ArrayList<>();
-        for (StudySubjectMatch m : matches) {
-            EventCandidate ev = date != null
-                    ? studySubjectFinder.findEventOnDate(m.studySubjectId(), date).orElse(null)
-                    : null;
-            candidates.add(new ResolveCandidate(m.studyId(), m.studyName(), m.studyOid(),
-                    m.studySubjectId(), m.subjectLabel(), m.siteName(), ev));
+        List<ResolveCandidate> candidates = new ArrayList<>(r.candidates().size());
+        for (IngestResolutionService.ResolveCandidate c : r.candidates()) {
+            candidates.add(new ResolveCandidate(c.studyId(), c.studyName(), c.studyOid(),
+                    c.studySubjectId(), c.subjectLabel(), c.siteName(), c.matchingEvent()));
         }
-        String state;
-        if (matches.isEmpty()) {
-            state = "nopatient";
-        } else if (matches.size() > 1) {
-            state = "ambiguous";
-        } else {
-            state = candidates.get(0).matchingEvent() != null ? "suggested" : "novisit";
-        }
-        return ResponseEntity.ok(new ResolveResponse(req.patientId(), candidates, state));
+        return ResponseEntity.ok(new ResolveResponse(req.patientId(), candidates, r.state()));
     }
 
     // ----- /commit : the multipart image upload -----

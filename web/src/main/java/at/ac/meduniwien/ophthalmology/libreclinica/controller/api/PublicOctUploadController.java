@@ -35,6 +35,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
@@ -177,43 +178,35 @@ public class PublicOctUploadController {
         return ResponseEntity.ok(Map.of("scans", out));
     }
 
+    /**
+     * P3.0 — one shared implementation, and the portal's study scope applied.
+     *
+     * <p>This used to resolve across every study while the sibling search
+     * endpoint was scoped, so a portal configured for one study would refuse to
+     * *search* for another study's subject but would happily *resolve* one and
+     * name their study and site back to an unauthenticated caller.
+     */
     private ResolveResponseScan resolveOne(ResolveRequestScan scan) {
         if (scan == null) {
-            return new ResolveResponseScan(null, List.of(), "nopatient");
+            return new ResolveResponseScan(null, List.of(), IngestResolutionService.STATE_NO_PATIENT);
         }
         String patientId = scan.patientId() == null ? "" : scan.patientId().trim();
-        LocalDate scanDate = parseLocalDate(scan.scanDate());
+        IngestResolutionService.Resolution r = resolution().resolve(
+                patientId, parseLocalDate(scan.scanDate()),
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
 
-        if (patientId.isBlank()) {
-            return new ResolveResponseScan(scan.patientId(), List.of(), "nopatient");
-        }
-        List<StudySubjectMatch> matches = studySubjectFinder.findByLabelAcrossStudies(patientId);
-        if (matches.isEmpty()) {
-            return new ResolveResponseScan(patientId, List.of(), "nopatient");
-        }
-
-        List<ResolveCandidate> candidates = new ArrayList<>(matches.size());
-        int candidatesWithEvent = 0;
-        for (StudySubjectMatch m : matches) {
-            Optional<EventCandidate> ev = (scanDate == null)
-                    ? Optional.empty()
-                    : studySubjectFinder.findEventOnDate(m.studySubjectId(), scanDate);
-            if (ev.isPresent()) candidatesWithEvent++;
+        List<ResolveCandidate> candidates = new ArrayList<>(r.candidates().size());
+        for (IngestResolutionService.ResolveCandidate c : r.candidates()) {
             candidates.add(new ResolveCandidate(
-                    m.studyId(), m.studyName(), m.studyOid(),
-                    m.studySubjectId(), m.subjectLabel(),
-                    m.siteName(), ev.orElse(null)));
+                    c.studyId(), c.studyName(), c.studyOid(),
+                    c.studySubjectId(), c.subjectLabel(), c.siteName(), c.matchingEvent()));
         }
+        return new ResolveResponseScan(
+                patientId.isBlank() ? scan.patientId() : patientId, candidates, r.state());
+    }
 
-        String state;
-        if (matches.size() > 1) {
-            state = "ambiguous";
-        } else if (candidatesWithEvent == 1) {
-            state = "suggested";
-        } else {
-            state = "novisit";
-        }
-        return new ResolveResponseScan(patientId, candidates, state);
+    private IngestResolutionService resolution() {
+        return new IngestResolutionService(studySubjectFinder);
     }
 
     /* ====================================================================== */
@@ -291,12 +284,16 @@ public class PublicOctUploadController {
                         "message", "No study_event with id " + studyEventId));
             }
         } else {
-            // park flow — best-effort: if the label resolves to exactly
-            // one study_subject we attach it for the audit trail
-            List<StudySubjectMatch> matches = studySubjectFinder.findByLabelAcrossStudies(pid);
-            if (matches.size() == 1) {
-                auditStudySubjectId = matches.get(0).studySubjectId();
-            }
+            // park flow — best-effort: if the label resolves to exactly one
+            // subject *within the portal's scope* we attach it for the audit
+            // trail. Scoped for the same reason resolve is: an unauthenticated
+            // caller must not reach another study's subjects.
+            auditStudySubjectId = resolution()
+                    .resolve(pid, (java.time.LocalDate) null,
+                            StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY))
+                    .single()
+                    .map(IngestResolutionService.ResolveCandidate::studySubjectId)
+                    .orElse(null);
         }
 
         // ---- stream the upload to disk + compute SHA-256 in one pass -----

@@ -37,6 +37,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
@@ -154,39 +155,35 @@ public class ImageIngestApiController {
         return ResponseEntity.ok(Map.of("images", rows));
     }
 
-    /** Best-effort one-click suggestion: PatientID → exactly one visible subject (+ same-date event). */
+    /**
+     * The one-click suggestion an operator sees beside an unbound image.
+     *
+     * <p>P3.0 — reads through the shared resolution service, so the inbox, the
+     * OCT portal and the image portal now answer the same question the same
+     * way. They previously differed on whether a single subject with no visit
+     * that day counts as a suggestion; it does not, and all three agree now.
+     *
+     * <p>Still returns the subject for the {@code novisit} state, because
+     * knowing who it is saves the operator the search even when the visit
+     * remains theirs to pick. Nothing is returned for an ambiguous label: two
+     * subjects share it, and guessing is how an image reaches the wrong chart.
+     */
     private Suggestion buildSuggestion(String patientId, String studyDate, Set<Integer> visible) {
-        if (patientId == null || patientId.isBlank()) return null;
-        List<StudySubjectMatch> matches;
+        IngestResolutionService.Resolution r;
         try {
-            matches = studySubjectFinder.findByLabelAcrossStudies(patientId.trim());
-        } catch (Exception e) {
+            r = new IngestResolutionService(studySubjectFinder)
+                    .resolve(patientId, studyDate, visible);
+        } catch (RuntimeException lookupFailed) {
+            LOG.warn("inbox suggestion lookup failed: {}", lookupFailed.getMessage());
             return null;
         }
-        List<StudySubjectMatch> vis = new ArrayList<>();
-        for (StudySubjectMatch m : matches) {
-            if (visible.contains(m.studyId())) vis.add(m);
-        }
-        if (vis.size() != 1) return null; // 0 or ambiguous → operator resolves manually
-        StudySubjectMatch m = vis.get(0);
-        Integer studyEventId = null;
-        Integer eventCrfId = null;
-        String state = "novisit";
-        if (studyDate != null && !studyDate.isBlank()) {
-            try {
-                Optional<EventCandidate> ev = studySubjectFinder.findEventOnDate(
-                        m.studySubjectId(), LocalDate.parse(studyDate));
-                if (ev.isPresent()) {
-                    studyEventId = ev.get().studyEventId();
-                    eventCrfId = ev.get().eventCrfId();
-                    state = "suggested";
-                }
-            } catch (Exception ignored) {
-                // no same-date event — the operator still gets the subject suggestion
-            }
-        }
-        return new Suggestion(state, m.studySubjectId(), m.subjectLabel(), m.studyId(), m.studyName(),
-                studyEventId, eventCrfId);
+        var candidate = r.single().orElse(null);
+        if (candidate == null) return null;
+        EventCandidate ev = candidate.matchingEvent();
+        return new Suggestion(r.state(), candidate.studySubjectId(), candidate.subjectLabel(),
+                candidate.studyId(), candidate.studyName(),
+                ev == null ? null : ev.studyEventId(),
+                ev == null ? null : ev.eventCrfId());
     }
 
     // ----- GET /{id}/preview -----
