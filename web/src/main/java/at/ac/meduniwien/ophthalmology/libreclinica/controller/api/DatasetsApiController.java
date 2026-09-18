@@ -387,6 +387,17 @@ public class DatasetsApiController {
         adhoc.setOwnerId(ctx.user.getId());
         adhoc.setStatus(Status.AVAILABLE);
         adhoc.setNumRuns(0);
+        // 2026-09-18 — actually select the study's visits and items.
+        //
+        // This used to leave both lists empty and rely on generateQuery's
+        // "no restrictions" shape. The extract does not read it that way: an
+        // empty selection resolves to no CRF versions, so the metadata pass
+        // produced no form definitions and the export crashed on the way out.
+        // "Quick ODM" means everything in the study, so name everything.
+        adhoc.setEventIds(new ArrayList<>(
+                eventDefinitionIdsForStudy(ctx.study.getId(), ctx.study.getParentStudyId())));
+        adhoc.setItemIds(new ArrayList<>(
+                itemIdsForStudy(ctx.study.getId(), ctx.study.getParentStudyId())));
         adhoc.setSQLStatement(adhoc.generateQuery());
         adhoc.setDatasetItemStatus(DatasetItemStatus.COMPLETED_AND_NONCOMPLETED);
         // ODM serialisation needs the metadata-version oids; the legacy
@@ -627,6 +638,59 @@ public class DatasetsApiController {
         // java.util.Date and java.sql.Date uniformly.
         return java.time.Instant.ofEpochMilli(d.getTime())
                 .atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+    }
+
+    /**
+     * Every visit definition of the study, including those defined on its
+     * parent. A site's own definitions and its parent's are both in scope for
+     * an export of "everything".
+     */
+    private List<Integer> eventDefinitionIdsForStudy(int studyId, int parentStudyId) {
+        return idsFrom(
+                "SELECT study_event_definition_id FROM study_event_definition "
+                        + " WHERE status_id NOT IN (5, 7) "
+                        + "   AND (study_id = ? OR (? > 0 AND study_id = ?)) "
+                        + " ORDER BY study_event_definition_id",
+                studyId, parentStudyId);
+    }
+
+    /**
+     * Every item reachable from those definitions, through the CRFs assigned to
+     * them. Items of a CRF nobody assigned to a visit cannot hold data for this
+     * study, so they are not part of "everything".
+     */
+    private List<Integer> itemIdsForStudy(int studyId, int parentStudyId) {
+        return idsFrom(
+                "SELECT DISTINCT ifm.item_id "
+                        + "  FROM study_event_definition sed "
+                        + "  JOIN event_definition_crf edc "
+                        + "    ON edc.study_event_definition_id = sed.study_event_definition_id "
+                        + "   AND edc.status_id NOT IN (5, 7) "
+                        + "  JOIN crf_version cv ON cv.crf_id = edc.crf_id "
+                        + "  JOIN item_form_metadata ifm ON ifm.crf_version_id = cv.crf_version_id "
+                        + " WHERE sed.status_id NOT IN (5, 7) "
+                        + "   AND (sed.study_id = ? OR (? > 0 AND sed.study_id = ?)) "
+                        + " ORDER BY ifm.item_id",
+                studyId, parentStudyId);
+    }
+
+    private List<Integer> idsFrom(String sql, int studyId, int parentStudyId) {
+        List<Integer> out = new ArrayList<>();
+        try (java.sql.Connection c = dataSource.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studyId);
+            ps.setInt(2, parentStudyId);
+            ps.setInt(3, parentStudyId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getInt(1));
+            }
+        } catch (java.sql.SQLException e) {
+            // An empty selection is handled downstream (the export says so
+            // rather than crashing); failing the whole request over this
+            // lookup would be worse than a narrower export.
+            LOG.warn("Quick-ODM: could not enumerate the study's selection: {}", e.getMessage());
+        }
+        return out;
     }
 
     /** Wraps the legacy GenerateExtractFileService dispatch. */
