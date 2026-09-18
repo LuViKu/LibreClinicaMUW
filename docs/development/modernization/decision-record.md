@@ -603,6 +603,62 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 
 ---
 
+## DR-026 — One ingest queue for every inbound file
+
+**Date:** 2026-11-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-024, DR-025; `ingest_item` (`migration/lc-muw-2026-10-05-ingest-item.xml`, `lc-muw-2026-10-19-retinal-job-ingest-item.xml`); `IngestInboxApiController`, `IngestBindService`, `IngestItemRepository`, `IngestArtifactStore`, `IngestResolutionService`.
+
+**Context.** The platform had grown **two queues for one activity**. A file arrives from a device, somebody says whose visit it belongs to, and it becomes study data — but an OCT volume went to the retinal pipeline's `parked` job list (sysadmin-only, cross-study, its own admin view) and a fundus photo went to the `image_ingest` inbox (DM/Investigator/CRC, its own bind API and SPA view). An operator had to know which queue a file had landed in before they could look for it, and neither view could show them that one patient had both waiting. Three copies of "which subject does this label mean", five of "which directory is this kind of file stored in", and two duplicated `INSERT INTO event_crf` statements had accumulated alongside. A third study would have added a third queue.
+
+**Decision.** One table (**`ingest_item`**, renamed from `image_ingest` and given `kind` ∈ {`e2e`, `dicom`, `image`, `other`}), one inbox (`/api/v1/ingest`), one bind (`IngestBindService`). Existing inference jobs were **backfilled** onto `ingest_item` — one row per distinct scan, not per job, since one `.e2e` is enqueued once per task — with the patient hint recovered from the type-115 audit trail, which was the only place the operator-typed label had ever been kept. `parked` jobs became `cancelled` with a `status_message` naming their replacement: **nothing deleted, reversible by hand**. The public OCT portal now writes an `ingest_item` before anything is enqueued, and a parked upload produces an UNBOUND row and **no job at all** — there is nothing for a GPU to do with a scan whose patient is unknown.
+
+**Consequences.**
+
+- **Unbind exists** (audit 130). Previously a mis-bind was fixed by editing the row, leaving the CRF tick the bind had caused; the form kept asserting a modality was performed with nothing left to show for it. Undoing a bind now undoes what it did — repointing the value to another file from the same device when one remains, and removing it only when nothing does.
+- The dedup key moved from `retinal_inference_job.e2e_sha256` to the scan's own row, and **gained** a condition: cancelled jobs are excluded, so a scan whose run was cancelled can be re-filed and run again. The old index forbade that.
+- **A previous WAR cannot survive the rename.** Rolling back the application means restoring the pre-deploy dump, not redeploying the old image (`deploy-runbook.md` §rollback).
+- Audit rows' `audit_table` locator was repointed from `image_ingest` to `ingest_item`. No `old_value`, `new_value`, `user_id`, timestamp or event type was touched — a pointer to a table that no longer exists preserves no observation.
+- `ImageIngestApiController` and `/image-inbox` remain for one release as a façade and a redirect.
+
+**Reversible** — the migration's `<rollback>` is complete and was verified to restore the schema byte-identically with rows preserved; the parked jobs are cancelled rather than deleted, so restoring them is an `UPDATE`.
+
+**Out of scope.** Cancelling inference jobs on unbind (no bind starts one yet); SSE on the inbox; retiring the `parked` status decoder (kept one release).
+
+---
+
+## DR-027 — A study declares what it does, rather than the code knowing
+
+**Date:** 2026-11-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-026; `imaging_modality` + `imaging_modality_item_binding` (`migration/lc-muw-2026-11-02-imaging-modality.xml`); `study_setting` + `study_item_binding` (`migration/lc-muw-2026-11-16-study-setting.xml`); `PerformedItemAutoTicker`, `StudySettingService`, `StudyBindings`, `AiArmPolicy`, `SharedControllersHaveNoStudyLiteralsTest`.
+
+**Context.** Onboarding a study required editing code every other study shares. Which device ticks which CRF box was two hard-coded rows. Whether a study receives DICOM was an instance-wide property naming study OIDs, changeable only by editing a file on the server and restarting. Which item an inference metric lands in was a literal — `I_NAMD_OD_IRF_MM3` — in a shared populator, as were `F_NAMD_VISIT` and the randomisation group names `AI_SHOWN` / `AI_HIDDEN`. Each of those is a study that cannot exist without a code change.
+
+**Decision.** Three catalogues, all resolving **site → parent → configuration → code default**, so a site inherits its study and an absent row means *as before*:
+
+1. **`imaging_modality`** + **`imaging_modality_item_binding`** — what a study photographs, on which device, and which CRF item each acquisition ticks. Role-based binding rows (`performed` / `not_performed_reason` / `initials`, per eye) rather than columns, so the Visitenplan's three-items-per-modality shape grows without another migration. Deliberately **separate from the existing `modality` table**, which is a global catalogue of *measurements* with a value per eye — same word, different thing.
+2. **`study_setting`** — whether a study receives DICOM, accepts uploads, runs inference, exports bundles, offers the today's-visits list.
+3. **`study_item_binding`** — which item a study means by a role the shared code asks for.
+
+**Consequences.**
+
+- **The auto-ticker starts the form that carries the box** (via `EventCrfEnsurer`, inheriting its refusal to revive a removed form). Previously it wrote nothing when no CRF was open, so the checklist silently disagreed with the files until an operator noticed.
+- A DICOM whose calling AE title matches `auto_match_ae_title` is **classified on arrival**.
+- **Arm names are translated at the boundary.** `armForSubject` / `armForEvent` map whatever a study calls its groups onto one fixed pair of tokens, so the seven masking call sites keep comparing against a constant. An earlier version of this change compared the raw name and would have **silently unblinded** a study that renamed its hidden group — nothing would have reported it, and analysis would have been the first to find out. Handing the raw name outward is the design that fails quietly.
+- Retiring a modality is a **status change**: files filed under it keep naming it, and an audit row explaining a CRF value must stay resolvable after somebody tidies the catalogue.
+- A binding's item OID is **checked to exist** before it is accepted. A binding pointing at nothing does not fail loudly — it stops ticking, and an un-ticked box reads exactly like a modality that was not performed.
+- Audit types 131–134 cover catalogue and setting changes. A study that stops receiving DICOM because somebody flipped a switch looks, from the inbox, exactly like a camera that stopped sending.
+- `SharedControllersHaveNoStudyLiteralsTest` is a **ratchet**: the remaining literals are documented fallbacks, the list may shrink and must never grow.
+
+**Reversible** — every table is additive and every default preserves prior behaviour; an instance that sets nothing behaves exactly as it did.
+
+**Out of scope.** Deleting the fallback literals (waits for every deployment's studies to have rows); migrating the measurement `modality` table's per-eye aliases onto the role-based binding shape (possible later, not needed now).
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
