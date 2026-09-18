@@ -118,3 +118,6 @@ docker/dicom-ingest/
 # Apptainer / Singularity image artifacts — multi-GB, GPU-only, never tracked.
 # Production builds them on the cluster; Mac devs build via docker as a smoke.
 retinal-inference/*.sif
+
+# CI-only DICOM smoke config (token-bearing copy of docker/config)
+docker/config-ci/

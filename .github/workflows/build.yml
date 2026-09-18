@@ -333,20 +333,38 @@ jobs:
       # libreclinica-muw-retinal-inference:latest" because the only
       # image bake had loaded was `libreclinica`. Adding it as a
       # second target keeps the smoke job validating the full stack.
-      - name: Build libreclinica + retinal-inference images (cached)
+      - name: Build libreclinica + sidecar images (cached)
         uses: docker/bake-action@v7
         with:
           files: compose.yaml
           targets: |
             libreclinica
             retinal-inference
+            dicom-scp
           load: true
           set: |
             *.cache-from=type=gha,scope=smoke-${{ github.workflow }}
             *.cache-to=type=gha,scope=smoke-${{ github.workflow }},mode=min
 
+      # DR-025 — the DICOM path needs a shared secret both sides agree on, and
+      # the application reads it from datainfo.properties baked into its image.
+      # Rather than rebuild with a token inside, prepare a config directory the
+      # CI overlay bind-mounts: the token then exists only in this workspace.
+      - name: Prepare the DICOM smoke configuration
+        run: |
+          set -e
+          TOKEN=$(openssl rand -hex 16)
+          echo "DICOM_SCP_INGEST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          rm -rf docker/config-ci
+          cp -R docker/config docker/config-ci
+          sed -i "s/^core.dicom.ingest.token=.*/core.dicom.ingest.token=$TOKEN/" \
+            docker/config-ci/datainfo.properties
+          grep -q "^core.dicom.ingest.token=.\+" docker/config-ci/datainfo.properties
+
       - name: Compose up (uses pre-built image)
-        run: docker compose up --detach --no-build
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml --profile dicom \
+            up --detach --no-build
 
       - name: Wait for application to be reachable
         run: |
@@ -576,6 +594,76 @@ jobs:
           path: web/src/spa/playwright-report
           retention-days: 7
 
+      # DR-025 — the camera path over a real DICOM association.
+      #
+      # The sidecar's unit tests cover its handlers and the application's ITs
+      # cover the worklist and ingest endpoints. Neither exercises the wire,
+      # which is exactly where the Optomed Lumo failed in the field: the
+      # sidecar advertised only uncompressed transfer syntaxes and rejected
+      # every image the camera sent, and nothing in the suite could notice.
+      - name: DICOM smoke (C-ECHO, worklist C-FIND, C-STORE, auto-bind)
+        run: |
+          set -e
+          # The seeded demo visits are historical, and a worklist only offers
+          # what is scheduled now — so give it something to offer.
+          EVENT_ID=$(docker compose exec -T db psql -qAt -U clinica -d libreclinica -c "
+            INSERT INTO study_event (study_event_definition_id, study_subject_id, location,
+                                     sample_ordinal, date_start, owner_id, status_id,
+                                     subject_event_status_id, date_created,
+                                     start_time_flag, end_time_flag)
+            SELECT sed.study_event_definition_id, ss.study_subject_id, '',
+                   COALESCE((SELECT MAX(sample_ordinal) FROM study_event se2
+                              WHERE se2.study_subject_id = ss.study_subject_id
+                                AND se2.study_event_definition_id = sed.study_event_definition_id), 0) + 1,
+                   CURRENT_DATE, 1, 1, 1, NOW(), false, false
+              FROM study_event_definition sed
+              JOIN study_subject ss ON ss.study_id = sed.study_id
+             WHERE sed.status_id NOT IN (5, 7) AND ss.status_id NOT IN (5, 7)
+             ORDER BY sed.study_event_definition_id, ss.study_subject_id
+             LIMIT 1
+            RETURNING study_event_id" | tr -d '\r')
+          if [ -z "$EVENT_ID" ]; then
+            echo "::error::could not schedule a visit for the DICOM smoke"
+            exit 1
+          fi
+          echo "Scheduled study_event $EVENT_ID for today."
+
+          OUT=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T \
+            -e ACCESSION="LC${EVENT_ID}" -e DICOM_HOST=127.0.0.1 \
+            dicom-scp python /smoke.py)
+          echo "$OUT"
+
+          SOP=$(printf '%s' "$OUT" | sed -n 's/^SOP_INSTANCE_UID=//p' | tr -d '\r')
+          if [ -z "$SOP" ]; then
+            echo "::error::the smoke stored no image"
+            docker compose -f compose.yaml -f compose.ci.yaml logs --tail 80 dicom-scp
+            exit 1
+          fi
+
+          # The wire exchanges succeeding is half of it; the image has to reach
+          # the visit the worklist named.
+          ROW=$(docker compose exec -T db psql -qAt -U clinica -d libreclinica -c \
+            "SELECT status || '|' || COALESCE(match_policy,'') || '|' ||
+                    COALESCE(bound_study_event_id::text,'')
+               FROM image_ingest WHERE sop_instance_uid = '$SOP'" | tr -d '\r')
+          echo "image_ingest row: $ROW"
+          if [ "$ROW" != "BOUND|worklist|$EVENT_ID" ]; then
+            echo "::error::expected BOUND|worklist|$EVENT_ID, got '$ROW'"
+            docker compose -f compose.yaml -f compose.ci.yaml logs --tail 80 dicom-scp
+            exit 1
+          fi
+
+          # The synthetic patient name must not have reached the log.
+          if docker compose -f compose.yaml -f compose.ci.yaml logs dicom-scp \
+               | grep -q 'CISMOKE'; then
+            echo "::error::the sidecar logged a patient identifier"
+            exit 1
+          fi
+          echo "DICOM smoke passed: association, worklist, store, auto-bind, clean log."
+
       - name: Compose down
         if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml --profile dicom \
+            down --volumes --remove-orphans
+          rm -rf docker/config-ci
