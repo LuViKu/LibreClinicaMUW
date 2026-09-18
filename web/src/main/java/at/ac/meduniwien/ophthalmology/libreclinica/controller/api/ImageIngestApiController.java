@@ -88,6 +88,19 @@ public class ImageIngestApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+
+    /**
+     * P3.0 — session + study-visibility checks, shared with the retinal
+     * surface. This controller uses the STRICT visibility form: it streams
+     * patient photographs, and b6feaa974 hardened it against reaching one in a
+     * study the session cannot see.
+     */
+    private StudyResourceAccess access;
+
+    private StudyResourceAccess access() {
+        if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
+        return access;
+    }
     private final StudySubjectFinder studySubjectFinder;
 
     @Autowired
@@ -119,12 +132,12 @@ public class ImageIngestApiController {
 
     @GetMapping(value = "/inbox", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> inbox(HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
         ResponseEntity<?> roleGuard = guardReconcileRole(session);
         if (roleGuard != null) return roleGuard;
 
-        Set<Integer> visible = visibleStudyIds(session);
+        Set<Integer> visible = access().visibleStudyIds(session);
         List<InboxRow> rows = new ArrayList<>();
         String sql = "SELECT image_ingest_id, source_kind, patient_id, laterality, study_date, "
                 + "modality, original_filename, received_at, preview_png_path "
@@ -193,7 +206,7 @@ public class ImageIngestApiController {
     @GetMapping("/{id:[0-9]+}/preview")
     public ResponseEntity<?> preview(@PathVariable("id") long id, HttpSession session,
                                      HttpServletResponse response) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
         ResponseEntity<?> roleGuard = guardReconcileRole(session);
         if (roleGuard != null) return roleGuard;
@@ -225,7 +238,7 @@ public class ImageIngestApiController {
         // RetinalResultsApiController.streamArtifact does for OCT artifacts, so
         // ids can't be enumerated across studies.
         if (boundSubjectId != null) {
-            ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId(boundSubjectId), session,
+            ResponseEntity<?> visGuard = access().guardStudyVisibility(subjectStudyId(boundSubjectId), session,
                     "This image belongs to a study you cannot access");
             if (visGuard != null) return visGuard;
         }
@@ -268,7 +281,7 @@ public class ImageIngestApiController {
     @PostMapping(value = "/{id:[0-9]+}/bind", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> bind(@PathVariable("id") long id,
                                   @RequestBody BindRequest req, HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
         ResponseEntity<?> roleGuard = guardReconcileRole(session);
         if (roleGuard != null) return roleGuard;
@@ -280,7 +293,7 @@ public class ImageIngestApiController {
         if (studyId == null) {
             return ResponseEntity.status(404).body(Map.of("message", "no study_subject " + req.studySubjectId()));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibility(studyId, session,
                 "the chosen subject belongs to a study you cannot access");
         if (visGuard != null) return visGuard;
 
@@ -330,7 +343,7 @@ public class ImageIngestApiController {
     @PostMapping(value = "/{id:[0-9]+}/dismiss", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> dismiss(@PathVariable("id") long id,
                                      @RequestBody(required = false) DismissRequest req, HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
         ResponseEntity<?> roleGuard = guardReconcileRole(session);
         if (roleGuard != null) return roleGuard;
@@ -389,17 +402,6 @@ public class ImageIngestApiController {
         }
     }
 
-    private ResponseEntity<?> guardSession(HttpSession session) {
-        UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
-        if (user == null || user.getId() == 0) {
-            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
-        }
-        StudyBean study = (StudyBean) session.getAttribute("study");
-        if (study == null || study.getId() == 0) {
-            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound to the session"));
-        }
-        return null;
-    }
 
     private ResponseEntity<?> guardReconcileRole(HttpSession session) {
         StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
@@ -410,19 +412,7 @@ public class ImageIngestApiController {
         return null;
     }
 
-    private Set<Integer> visibleStudyIds(HttpSession session) {
-        UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        return siteVisibilityFilter.visibleStudyIds(user, study, role);
-    }
 
-    private ResponseEntity<?> guardStudyVisibility(Integer studyId, HttpSession session, String denyMessage) {
-        UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
-        if (user != null && user.isSysAdmin()) return null;
-        if (visibleStudyIds(session).contains(studyId)) return null;
-        return ResponseEntity.status(403).body(Map.of("message", denyMessage));
-    }
 
     private Integer subjectStudyId(int studySubjectId) {
         try (Connection c = dataSource.getConnection();

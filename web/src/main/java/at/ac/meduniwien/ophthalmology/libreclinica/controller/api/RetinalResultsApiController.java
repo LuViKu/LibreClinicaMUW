@@ -134,6 +134,18 @@ public class RetinalResultsApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+
+    /**
+     * P3.0 — session + study-visibility checks, shared with the image inbox.
+     * Built lazily because several constructors exist and the dependencies are
+     * final fields either way.
+     */
+    private StudyResourceAccess access;
+
+    private StudyResourceAccess access() {
+        if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
+        return access;
+    }
     private final RetinalArtifactStorageService artifactStore;
     private final StudySubjectFinder studySubjectFinder;
     private final RemoteRetinalInferenceClient remoteClient;
@@ -294,7 +306,7 @@ public class RetinalResultsApiController {
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getJob(@PathVariable("jobId") long jobId,
                                     HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
         return buildJobDetailResponse(jobId, session);
     }
@@ -345,7 +357,7 @@ public class RetinalResultsApiController {
         String subjectArm = null;
         try (Connection c = dataSource.getConnection()) {
             int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
-            subjectArm = resolveSubjectArm(c, row.eventCrfId, sev);
+            subjectArm = AiArmPolicy.armForEvent(c, row.eventCrfId, sev);
         } catch (SQLException sqlEx) {
             LOG.warn("subjectArm lookup failed for job {} (ecrf={}, sev={}): {}",
                     jobId, row.eventCrfId, row.studyEventId, sqlEx.getMessage());
@@ -357,7 +369,7 @@ public class RetinalResultsApiController {
         // the unannotated OCT/fundus; only the quantification + AI artifact list
         // are withheld. Authoritative enforcement — the SPA hides these panels
         // too, but that is bypassable.
-        if (maskAiForArm(subjectArm, session)) {
+        if (AiArmPolicy.maskAiFor(subjectArm, session)) {
             outputPayload = Map.of();
             pm = null;
             artifactNames = List.of();
@@ -402,7 +414,7 @@ public class RetinalResultsApiController {
             @PathVariable("subjectLabel") String subjectLabel,
             @PathVariable("seq") int seq,
             HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         Long jobId;
@@ -460,67 +472,13 @@ public class RetinalResultsApiController {
      * <p>The match is case-insensitive on the group name to absorb
      * institutional capitalisation variants.
      */
-    /**
-     * Resolve the AI arm (AI_SHOWN / AI_HIDDEN / null) directly from a
-     * {@code study_subject_id}, for the subject-scoped endpoints (per-subject
-     * job list, retinal-trends, crt-timeline) that have no job/event context.
-     */
-    private static String resolveSubjectArmBySubject(Connection c, int studySubjectId) throws SQLException {
-        if (studySubjectId <= 0) return null;
-        String sql = "SELECT sg.name FROM subject_group_map sgm "
-                + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
-                + " WHERE sgm.study_subject_id = ? AND sgm.status_id = 1 "
-                + "   AND UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') LIMIT 1";
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, studySubjectId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                String name = rs.getString(1);
-                return name == null ? null : name.toUpperCase();
-            }
-        }
-    }
 
-    private static String resolveSubjectArm(Connection c, int eventCrfId, int studyEventId) throws SQLException {
-        // 2026-07-02 — retinal jobs from the public OCT-upload portal +
-        // Wave-2 pipeline attach directly via {@code study_event_id}
-        // and leave {@code event_crf_id} null on the row. The prior
-        // event_crf-only join missed 100% of those jobs and the SPA
-        // always saw {@code subjectArm=null}. Accept either path:
-        // pin the join on {@code study_event.study_event_id = ?} when
-        // caller has it, else fall through to the event_crf lookup.
-        if (studyEventId <= 0 && eventCrfId <= 0) return null;
-        StringBuilder sql = new StringBuilder(
-                "SELECT sg.name "
-              + "  FROM study_event ev "
-              + "  JOIN subject_group_map sgm "
-              + "    ON sgm.study_subject_id = ev.study_subject_id "
-              + "   AND sgm.status_id = 1 "
-              + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
-              + " WHERE UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') "
-              + "   AND ");
-        if (studyEventId > 0) {
-            sql.append("ev.study_event_id = ? ");
-        } else {
-            sql.append("ev.study_event_id IN ("
-                    + "SELECT study_event_id FROM event_crf WHERE event_crf_id = ?) ");
-        }
-        sql.append(" LIMIT 1");
-        try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
-            ps.setInt(1, studyEventId > 0 ? studyEventId : eventCrfId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                String name = rs.getString(1);
-                return name == null ? null : name.toUpperCase();
-            }
-        }
-    }
 
     @GetMapping(path = "/event-crfs/{eventCrfId:[0-9]+}/retinal-jobs",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listByEventCrf(@PathVariable("eventCrfId") int eventCrfId,
                                             HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         // Visibility: derive the job's owning study via the event_crf →
@@ -540,7 +498,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No event_crf with id " + eventCrfId));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(studyId, session,
                 "event_crf " + eventCrfId + " belongs to a different study");
         if (visGuard != null) return visGuard;
 
@@ -573,7 +531,7 @@ public class RetinalResultsApiController {
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listByStudySubject(@PathVariable("studySubjectId") int studySubjectId,
                                                 HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         Integer studyId;
@@ -589,7 +547,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No study_subject with id " + studySubjectId));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(studyId, session,
                 "study_subject " + studySubjectId + " belongs to a different study");
         if (visGuard != null) return visGuard;
 
@@ -644,14 +602,14 @@ public class RetinalResultsApiController {
         // Trial blinding — strip the AI primary metric (fluid volume etc.) from
         // every row for a treating clinician on an AI_HIDDEN subject. The rest
         // of the row (task / eye / status / date / seq) is not AI-derived.
-        if (isTreatingRole(session)) {
+        if (AiArmPolicy.isTreatingRole(session)) {
             String arm = null;
             try (Connection c = dataSource.getConnection()) {
-                arm = resolveSubjectArmBySubject(c, studySubjectId);
+                arm = AiArmPolicy.armForSubject(c, studySubjectId);
             } catch (SQLException e) {
                 LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
             }
-            if (maskAiForArm(arm, session)) {
+            if (AiArmPolicy.maskAiFor(arm, session)) {
                 out = out.stream().map(s -> new RetinalJobSummaryDto(
                         s.jobId(), s.task(), s.laterality(), s.status(), s.modelVersion(),
                         s.completedAt(), s.visitDate(), s.acquisitionDate(), s.studyEventId(),
@@ -686,7 +644,7 @@ public class RetinalResultsApiController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listBcvaTimeline(@PathVariable("studySubjectId") int studySubjectId,
                                               HttpSession session) {
-        ResponseEntity<?> denied = guardSession(session);
+        ResponseEntity<?> denied = access().guardSession(session);
         if (denied != null) return denied;
         Integer subjectStudyId;
         try (Connection c = dataSource.getConnection()) {
@@ -699,7 +657,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "study_subject " + studySubjectId + " not found"));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(subjectStudyId, session,
                 "study_subject " + studySubjectId + " is outside your site visibility");
         if (visGuard != null) return visGuard;
 
@@ -831,7 +789,7 @@ public class RetinalResultsApiController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listNamdClinicalFlagsTimeline(@PathVariable("studySubjectId") int studySubjectId,
                                                            HttpSession session) {
-        ResponseEntity<?> denied = guardSession(session);
+        ResponseEntity<?> denied = access().guardSession(session);
         if (denied != null) return denied;
         Integer subjectStudyId;
         try (Connection c = dataSource.getConnection()) {
@@ -844,7 +802,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "study_subject " + studySubjectId + " not found"));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(subjectStudyId, session,
                 "study_subject " + studySubjectId + " is outside your site visibility");
         if (visGuard != null) return visGuard;
 
@@ -949,7 +907,7 @@ public class RetinalResultsApiController {
             @PathVariable("studyEventId") int studyEventId,
             @RequestBody Map<String, Object> body,
             HttpSession session) {
-        ResponseEntity<?> denied = guardSession(session);
+        ResponseEntity<?> denied = access().guardSession(session);
         if (denied != null) return denied;
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {
@@ -977,7 +935,7 @@ public class RetinalResultsApiController {
                     studyId = rs.getInt(1);
                 }
             }
-            ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+            ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(studyId, session,
                     "study_event " + studyEventId + " is outside your site visibility");
             if (visGuard != null) return visGuard;
 
@@ -1121,7 +1079,7 @@ public class RetinalResultsApiController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listCrtTimeline(@PathVariable("studySubjectId") int studySubjectId,
                                              HttpSession session) {
-        ResponseEntity<?> denied = guardSession(session);
+        ResponseEntity<?> denied = access().guardSession(session);
         if (denied != null) return denied;
         if (crtComputeService == null) {
             // Test-only ctor path with a null CRT service. Be explicit
@@ -1140,20 +1098,20 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "study_subject " + studySubjectId + " not found"));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(subjectStudyId, session,
                 "study_subject " + studySubjectId + " is outside your site visibility");
         if (visGuard != null) return visGuard;
 
         // Trial blinding — CRT/CST is derived from the AI layer segmentation;
         // a treating clinician on an AI_HIDDEN subject gets an empty timeline.
-        if (isTreatingRole(session)) {
+        if (AiArmPolicy.isTreatingRole(session)) {
             String arm = null;
             try (Connection c = dataSource.getConnection()) {
-                arm = resolveSubjectArmBySubject(c, studySubjectId);
+                arm = AiArmPolicy.armForSubject(c, studySubjectId);
             } catch (SQLException e) {
                 LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
             }
-            if (maskAiForArm(arm, session)) {
+            if (AiArmPolicy.maskAiFor(arm, session)) {
                 return ResponseEntity.ok(List.of());
             }
         }
@@ -1254,14 +1212,14 @@ public class RetinalResultsApiController {
      * <p>Site visibility re-uses the same path as the per-subject job
      * list — gate on the subject's owning study via
      * {@link #fetchStudyIdForStudySubject(Connection, int)} +
-     * {@link #guardStudyVisibility(Integer, HttpSession, String)}.
+     * {@link #access().guardStudyVisibilityAllowingDeepLink(Integer, HttpSession, String)}.
      */
     @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/retinal-trends",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> trendsForSubject(@PathVariable("studySubjectId") int studySubjectId,
                                               @RequestParam("task") String task,
                                               HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         if (task == null || !TREND_TASKS.contains(task)) {
@@ -1282,20 +1240,20 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No study_subject with id " + studySubjectId));
         }
-        ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(studyId, session,
                 "study_subject " + studySubjectId + " belongs to a different study");
         if (visGuard != null) return visGuard;
 
         // Trial blinding — biomarker trends are pure AI output; a treating
         // clinician on an AI_HIDDEN subject gets an empty series.
-        if (isTreatingRole(session)) {
+        if (AiArmPolicy.isTreatingRole(session)) {
             String arm = null;
             try (Connection c = dataSource.getConnection()) {
-                arm = resolveSubjectArmBySubject(c, studySubjectId);
+                arm = AiArmPolicy.armForSubject(c, studySubjectId);
             } catch (SQLException e) {
                 LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
             }
-            if (maskAiForArm(arm, session)) {
+            if (AiArmPolicy.maskAiFor(arm, session)) {
                 return ResponseEntity.ok(List.of());
             }
         }
@@ -1356,7 +1314,7 @@ public class RetinalResultsApiController {
                                             @PathVariable("name") String name,
                                             HttpSession session,
                                             HttpServletResponse response) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         if (name == null || name.isBlank() || !SAFE_ARTIFACT_NAME.matcher(name).matches()) {
@@ -1385,7 +1343,7 @@ public class RetinalResultsApiController {
         // fetch the raw scan companions (bscan.dcm / fundus.png / geometry.json)
         // but NOT the AI segmentation artifacts (masks / CSVs under
         // bscan_masks_dir).
-        if (!isCompanion && maskAiForArm(armForJobRow(row), session)) {
+        if (!isCompanion && AiArmPolicy.maskAiFor(armForJobRow(row), session)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "AI output is not available for this subject"));
         }
@@ -1475,7 +1433,7 @@ public class RetinalResultsApiController {
     public ResponseEntity<?> streamSegmentation(@PathVariable("jobId") long jobId,
                                                 HttpSession session,
                                                 HttpServletResponse response) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         JobRow row;
@@ -1495,7 +1453,7 @@ public class RetinalResultsApiController {
 
         // Trial blinding — the segmentation envelope is pure AI output; withhold
         // it from a treating clinician viewing an AI_HIDDEN subject.
-        if (maskAiForArm(armForJobRow(row), session)) {
+        if (AiArmPolicy.maskAiFor(armForJobRow(row), session)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "AI output is not available for this subject"));
         }
@@ -1607,7 +1565,7 @@ public class RetinalResultsApiController {
     public ResponseEntity<?> bindParkedJob(@PathVariable("jobId") long jobId,
                                            @RequestBody BindRequest body,
                                            HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         if (body == null || body.eventCrfId() <= 0) {
@@ -1728,7 +1686,7 @@ public class RetinalResultsApiController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> bulkBindParkedJobs(@RequestBody BulkBindRequest body,
                                                 HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         if (body == null || body.jobIds() == null || body.jobIds().isEmpty()) {
@@ -1871,8 +1829,7 @@ public class RetinalResultsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                currentUser, currentStudy, currentRole);
+        Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return BindContext.forbidden(
                     "event_crf " + eventCrfId + " belongs to a different study",
@@ -2005,7 +1962,7 @@ public class RetinalResultsApiController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> retryJob(@PathVariable("jobId") long jobId,
                                       HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         FailedJob job;
@@ -2061,8 +2018,7 @@ public class RetinalResultsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                currentUser, currentStudy, currentRole);
+        Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Job " + jobId + " belongs to a different study"));
@@ -2170,7 +2126,7 @@ public class RetinalResultsApiController {
     public ResponseEntity<?> rerunAs(@PathVariable("jobId") long sourceJobId,
                                      @RequestBody Map<String, String> body,
                                      HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         String newTask = body == null ? null : body.get("task");
@@ -2281,8 +2237,7 @@ public class RetinalResultsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                currentUser, currentStudy, currentRole);
+        Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Source job " + sourceJobId + " belongs to a different study"));
@@ -2511,7 +2466,7 @@ public class RetinalResultsApiController {
     public ResponseEntity<?> searchSubjects(@RequestParam("q") String q,
                                             @RequestParam(value = "limit", defaultValue = "10") int limit,
                                             HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         if (studySubjectFinder == null) {
@@ -2529,8 +2484,7 @@ public class RetinalResultsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                currentUser, currentStudy, currentRole);
+        Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
 
         List<StudySubjectMatch> matches = studySubjectFinder.findByLabelPrefix(prefix, clamped);
         List<Map<String, Object>> out = new ArrayList<>(matches.size());
@@ -2703,7 +2657,7 @@ public class RetinalResultsApiController {
         // 2026-07-02 — direct study_event_id on retinal_inference_job.
         // Modern jobs (public OCT-upload portal + Wave-2 pipeline)
         // attach directly via study_event_id and leave event_crf_id
-        // null; the {@link #resolveSubjectArm} path needs both to
+        // null; the {@link AiArmPolicy#armForEvent} path needs both to
         // find the subject's arm assignment.
         Integer studyEventId;
     }
@@ -2877,71 +2831,11 @@ public class RetinalResultsApiController {
                 primaryMetric(pv, pu), subjectSeq);
     }
 
-    /** 401 if no authenticated user, 400 if no active study. */
-    private ResponseEntity<?> guardSession(HttpSession session) {
-        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
-        if (currentUser == null || currentUser.getId() == 0) {
-            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
-        }
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        if (currentStudy == null || currentStudy.getId() == 0) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
-            ));
-        }
-        return null;
-    }
 
-    /** 403 when the supplied study_id is outside the user's site visibility. */
-    private ResponseEntity<?> guardStudyVisibility(Integer studyId, HttpSession session, String denyMessage) {
-        if (studyId == null) {
-            return ResponseEntity.status(403).body(Map.of("message", denyMessage));
-        }
-        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                currentUser, currentStudy, currentRole);
-        if (visibleStudyIds.contains(studyId)) {
-            return null;
-        }
-        // A deep-linked job may belong to a non-active study; allow if the user has
-        // any active grant on the owning study. Sysadmins pass through.
-        if (currentUser != null && currentUser.isSysAdmin()) {
-            return null;
-        }
-        if (currentUser != null && userHasActiveGrantOnStudy(currentUser, studyId)) {
-            return null;
-        }
-        return ResponseEntity.status(403).body(Map.of("message", denyMessage));
-    }
 
-    /**
-     * 2026-06-22 round 9 helper — true when {@code user} holds an
-     * AVAILABLE study_user_role on the named study. Used by the
-     * cross-study deep-link relaxation in {@link #guardStudyVisibility}.
-     */
-    private boolean userHasActiveGrantOnStudy(UserAccountBean user, Integer studyId) {
-        if (user == null || studyId == null) return false;
-        try {
-            UserAccountDAO userDao = new UserAccountDAO(dataSource);
-            List<StudyUserRoleBean> grants = userDao.findAllRolesByUserName(user.getName());
-            for (StudyUserRoleBean g : grants) {
-                if (g == null || g.getStudyId() != studyId) continue;
-                if (g.getStatus() != null
-                        && g.getStatus().getId() == Status.AVAILABLE.getId()) {
-                    return true;
-                }
-            }
-        } catch (Exception e) {
-            LOG.warn("userHasActiveGrantOnStudy lookup failed for user={} study={}: {}",
-                    user.getName(), studyId, e.getMessage());
-        }
-        return false;
-    }
 
     private ResponseEntity<?> guardJobVisibility(JobRow row, HttpSession session) {
-        return guardStudyVisibility(row.studyId, session,
+        return access().guardStudyVisibilityAllowingDeepLink(row.studyId, session,
                 "retinal_inference_job " + row.jobId + " belongs to a different study");
     }
 
@@ -3051,7 +2945,7 @@ public class RetinalResultsApiController {
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> compareToPrevious(@PathVariable("jobId") long jobId,
                                                HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         JobRow current;
@@ -3072,7 +2966,7 @@ public class RetinalResultsApiController {
 
         // Trial blinding — the visit-to-visit comparison is AI quantification;
         // withhold it from a treating clinician viewing an AI_HIDDEN subject.
-        if (maskAiForArm(armForJobRow(current), session)) {
+        if (AiArmPolicy.maskAiFor(armForJobRow(current), session)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "AI output is not available for this subject"));
         }
@@ -3300,45 +3194,13 @@ public class RetinalResultsApiController {
     /* Trial blinding — server-side AI masking for the AI_HIDDEN arm          */
     /* ====================================================================== */
 
-    /**
-     * Treating-clinician roles that must NOT see AI output for a subject in the
-     * {@code AI_HIDDEN} arm: Investigator (the treating physician) and Study
-     * Coordinator (CRC), who is clinical-facing and inherits Investigator in the
-     * role hierarchy. Data Manager (Study Director), Monitor, and Administrator
-     * keep full access — they are not making the masked treatment decision.
-     */
-    static boolean isTreatingRole(HttpSession session) {
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (currentRole == null || currentRole.getRole() == null) return false;
-        Role r = currentRole.getRole();
-        return r.equals(Role.INVESTIGATOR) || r.equals(Role.COORDINATOR);
-    }
 
-    /**
-     * The authoritative trial-blinding gate: withhold AI output when the subject
-     * is in the {@code AI_HIDDEN} arm AND the requester is a treating clinician.
-     * The SPA's arm-based hiding is defense-in-depth only — it is bypassable via
-     * a pasted URL / curl, so THIS is the enforcement point. Applied to the job
-     * DTO (AI fields stripped), {@code /segmentation}, AI {@code /artifacts},
-     * {@code /compare-previous}, the per-subject list, retinal-trends, and
-     * crt-timeline. The raw scan companions (bscan.dcm / fundus.png /
-     * geometry.json) are NOT masked — the physician still sees the unannotated
-     * scan, per the clinical requirement.
-     *
-     * <p>Masking triggers only on an explicitly-resolved {@code AI_HIDDEN} arm.
-     * A null arm (non-arm study, or a subject not yet randomised) is not masked;
-     * randomisation happens at enrolment, before any scan exists, so a job-owning
-     * subject in an AI-arm study is already assigned by the time this is reached.
-     */
-    static boolean maskAiForArm(String subjectArm, HttpSession session) {
-        return "AI_HIDDEN".equals(subjectArm) && isTreatingRole(session);
-    }
 
     /** Resolve the AI arm (AI_SHOWN / AI_HIDDEN / null) for a loaded job row. */
     private String armForJobRow(JobRow row) {
         try (Connection c = dataSource.getConnection()) {
             int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
-            return resolveSubjectArm(c, row.eventCrfId, sev);
+            return AiArmPolicy.armForEvent(c, row.eventCrfId, sev);
         } catch (SQLException e) {
             LOG.warn("arm lookup failed for job {}: {}", row.jobId, e.getMessage());
             return null;
@@ -3374,7 +3236,7 @@ public class RetinalResultsApiController {
     public ResponseEntity<?> saveCorrection(@PathVariable("jobId") long jobId,
                                             @RequestBody SaveCorrectionRequest req,
                                             HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
@@ -3494,7 +3356,7 @@ public class RetinalResultsApiController {
     public ResponseEntity<?> deleteCorrection(@PathVariable("jobId") long jobId,
                                               @PathVariable("layerIndex") int layerIndex,
                                               HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -3577,7 +3439,7 @@ public class RetinalResultsApiController {
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listCorrections(@PathVariable("jobId") long jobId,
                                              HttpSession session) {
-        ResponseEntity<?> guard = guardSession(session);
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         JobRow row;
