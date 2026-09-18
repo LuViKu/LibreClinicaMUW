@@ -43,10 +43,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
@@ -958,10 +959,12 @@ public class RetinalResultsApiController {
         try (Connection c = dataSource.getConnection()) {
             c.setAutoCommit(false);
 
-            int studySubjectId;
+            // The visit has to exist and be visible before anything is written.
+            // Its study_subject_id used to be read here for the event_crf insert;
+            // EventCrfEnsurer resolves that itself now.
             int studyId;
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT se.study_subject_id, ss.study_id "
+                    "SELECT ss.study_id "
                             + "  FROM study_event se "
                             + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
                             + " WHERE se.study_event_id = ?")) {
@@ -971,8 +974,7 @@ public class RetinalResultsApiController {
                         return ResponseEntity.status(404).body(Map.of(
                                 "message", "study_event " + studyEventId + " not found"));
                     }
-                    studySubjectId = rs.getInt(1);
-                    studyId = rs.getInt(2);
+                    studyId = rs.getInt(1);
                 }
             }
             ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
@@ -999,39 +1001,19 @@ public class RetinalResultsApiController {
             }
 
             // Find or create the event_crf row for (study_event, crf_version).
-            Integer eventCrfId = null;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT event_crf_id FROM event_crf "
-                            + " WHERE study_event_id = ? AND crf_version_id = ? "
-                            + " LIMIT 1")) {
-                ps.setInt(1, studyEventId);
-                ps.setInt(2, crfVersionId);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) eventCrfId = rs.getInt(1);
-                }
+            // P3.0 — shared with the BCVA portal, which had the same statement.
+            EventCrfEnsurer.Instance instance =
+                    EventCrfEnsurer.ensure(c, studyEventId, crfVersionId, currentUser.getId());
+            if (instance.removed()) {
+                // This used to write into the removed form, which revived it.
+                // The unique constraint rules out a replacement instance, so
+                // there is nowhere legitimate for these flags to go; say so
+                // rather than undoing somebody's removal on their behalf.
+                c.rollback();
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "The visit CRF has been removed; restore it before saving flags"));
             }
-            if (eventCrfId == null) {
-                try (PreparedStatement ps = c.prepareStatement(
-                        "INSERT INTO event_crf ("
-                                + "  study_event_id, crf_version_id, "
-                                + "  status_id, completion_status_id, "
-                                + "  owner_id, date_created, "
-                                + "  study_subject_id, "
-                                + "  interviewer_name, date_interviewed, "
-                                + "  electronic_signature_status, sdv_status, "
-                                + "  old_status_id, sdv_update_id) "
-                                + "VALUES (?, ?, 1, 1, ?, now(), ?, '', NULL, false, false, 1, 0) "
-                                + "RETURNING event_crf_id")) {
-                    ps.setInt(1, studyEventId);
-                    ps.setInt(2, crfVersionId);
-                    ps.setInt(3, currentUser.getId());
-                    ps.setInt(4, studySubjectId);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) throw new SQLException("INSERT event_crf returned no id");
-                        eventCrfId = rs.getInt(1);
-                    }
-                }
-            }
+            int eventCrfId = instance.eventCrfId();
 
             // Resolve item_ids for the four per-eye flag items on this CRF version.
             Map<String, Integer> itemIds = new LinkedHashMap<>();

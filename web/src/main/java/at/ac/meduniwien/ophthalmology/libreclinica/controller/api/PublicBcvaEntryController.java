@@ -39,6 +39,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
+
 /**
  * Public BCVA-entry portal backend.
  *
@@ -360,7 +362,21 @@ public class PublicBcvaEntryController {
                 // 2. Find an existing event_crf for that CRF version on
                 //    this event, or create one. Both paths leave us
                 //    with a stable event_crf_id.
-                int eventCrfId = findOrCreateEventCrf(c, body.studyEventId, target);
+                EventCrfEnsurer.Instance instance =
+                        findOrCreateEventCrf(c, body.studyEventId, target);
+                if (instance.removed()) {
+                    // P3.0 — previously this skipped the removed row and fell
+                    // through to an INSERT the unique constraint rejects, so a
+                    // removed BCVA form turned the portal into a 500. There is
+                    // genuinely nowhere to put the values; a nurse at a bench
+                    // can act on being told that, and cannot act on a stack
+                    // trace.
+                    c.rollback();
+                    return ResponseEntity.status(409).body(Map.of(
+                            "message", "This visit's BCVA form has been removed; "
+                                    + "ask the data manager to restore it"));
+                }
+                int eventCrfId = instance.eventCrfId();
 
                 // 3. Project the SPA payload into the semantic field
                 //    model (decimal/partial/letters/logMAR/refraction
@@ -501,58 +517,21 @@ public class PublicBcvaEntryController {
      * Find the existing event_crf for the target CRF version on the
      * named study_event, or create one with a portal-friendly default
      * status. Returns the event_crf_id.
+     *
+     * <p>P3.0 — the statement itself lives in {@link EventCrfEnsurer}, shared
+     * with the retinal flags endpoint that had written its own copy of it.
+     * The owner is this portal's concern and stays here: an unauthenticated
+     * page has nobody to name, so the row is owned by the account the
+     * institution set aside for that, and the audit row written alongside
+     * carries the name the operator typed.
+     *
+     * <p>The caller must check {@link EventCrfEnsurer.Instance#removed()} — a
+     * removed form is returned rather than replaced, because the schema allows
+     * only one instance per visit and version.
      */
-    private int findOrCreateEventCrf(Connection c, int studyEventId, BcvaCrfTarget target) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT event_crf_id FROM event_crf "
-                        + " WHERE study_event_id = ? AND crf_version_id = ? "
-                        + "   AND COALESCE(status_id, 0) NOT IN (5, 7) "
-                        + " ORDER BY event_crf_id ASC LIMIT 1")) {
-            ps.setInt(1, studyEventId);
-            ps.setInt(2, target.crfVersionId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt(1);
-            }
-        }
-        // Resolve study_subject_id for the new row (event_crf carries
-        // it for denormalised lookups in legacy DAOs).
-        int studySubjectId;
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT study_subject_id FROM study_event WHERE study_event_id = ?")) {
-            ps.setInt(1, studyEventId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) throw new SQLException("study_event " + studyEventId + " not found");
-                studySubjectId = rs.getInt(1);
-            }
-        }
-        // owner_id resolves to the lowest-id active root account (typically
-        // user_id=1, 'root'). event_crf has a FK constraint into
-        // user_account, so a sentinel like 0 fails the insert.
-        // Production deployments should swap this for a dedicated
-        // portal-service account once one exists; the audit row already
-        // carries the operator-supplied "entered by" name so the
-        // human-attribution is preserved either way.
-        int portalOwnerId = resolvePortalOwnerId(c);
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO event_crf ("
-                        + "  study_event_id, crf_version_id, "
-                        + "  status_id, completion_status_id, "
-                        + "  owner_id, date_created, "
-                        + "  study_subject_id, "
-                        + "  interviewer_name, date_interviewed, "
-                        + "  electronic_signature_status, sdv_status, "
-                        + "  old_status_id, sdv_update_id) "
-                        + "VALUES (?, ?, 1, 1, ?, now(), ?, '', NULL, false, false, 1, 0) "
-                        + "RETURNING event_crf_id")) {
-            ps.setInt(1, studyEventId);
-            ps.setInt(2, target.crfVersionId);
-            ps.setInt(3, portalOwnerId);
-            ps.setInt(4, studySubjectId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) throw new SQLException("INSERT event_crf returned no id");
-                return rs.getInt(1);
-            }
-        }
+    private EventCrfEnsurer.Instance findOrCreateEventCrf(
+            Connection c, int studyEventId, BcvaCrfTarget target) throws SQLException {
+        return EventCrfEnsurer.ensure(c, studyEventId, target.crfVersionId, resolvePortalOwnerId(c));
     }
 
     /**
