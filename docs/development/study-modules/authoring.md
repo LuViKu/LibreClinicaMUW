@@ -91,11 +91,13 @@ Six slot ids exist. **Three of them are rendered by a host today** — an entry 
 | `subject-detail.workspace`    | SubjectDetailView        | `SubjectDetail \| null`  | yes | Top-of-view CTA (e.g. "Open workspace") |
 | `event-detail.panels`         | EventDetailView          | `EventDetailDto \| null` | yes | Below-form panels per visit — predicate gates by status / definition |
 | `crf-entry.banner`            | CrfEntryView             | `null`                   | yes | Top-of-form banner — no context |
-| `subject-detail.tabs`         | SubjectDetailView        | `SubjectDetail \| null`  | no  | Declared, not mounted — put the tab in your own template for now |
+| `subject-detail.tabs`         | SubjectDetailView        | `SubjectDetail \| null`  | yes | Panel below the built-in sections. Entries receive the loaded subject as a `subject` prop, and a `predicate` is evaluated against it before mounting. Consumed since P3.0 — it was declared and mounted nowhere before that |
 | `event-detail.actions`        | EventDetailView          | `EventDetailDto \| null` | no  | Declared, not mounted |
-| `nav.modules`                 | TopBar                   | `null`                   | no  | The TopBar consumer was removed on 2026-06-21; modules are reached through the subject-detail CTA. The id is reserved for a future surface |
+| `home.cards`                  | HomeView                 | `null`                   | yes | Card in the landing page's study-scoped lane — the module's way in when the operator does not already have a subject open. Replaced `nav.modules` in P3.0, whose TopBar consumer was removed on 2026-06-21, leaving a slot that rendered nowhere |
 
 The framework only surfaces entries from an **active** module — when the active study is not enrolled in your module, your entries do not render anywhere. No per-view gating needed.
+
+Since P3.0 **every** enrolled module is active, not just the first one the backend happens to list. A slot's entries are concatenated across active modules in enrollment order, and entry keys are namespaced `<moduleId>:<key>` on the way out — so two modules may both use `key: 'open-workspace'` without one disappearing. Keys are unique within your module; you do not need to guess what other modules called theirs.
 
 Predicates are typed against `SlotContextMap[slotId]`:
 

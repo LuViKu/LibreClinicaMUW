@@ -40,11 +40,11 @@ const manifest: StudyModuleManifest = {
         component: () => import('./components/NamdEventDetailCta.vue'),
       },
     ],
-    'nav.modules': [
+    'home.cards': [
       {
-        key: 'topbar-workspace',
+        key: 'workspace-card',
         labelKey: 'studyModules.namd.label',
-        component: () => import('./components/NamdNavEntry.vue'),
+        component: () => import('./components/NamdHomeCard.vue'),
       },
     ],
   },

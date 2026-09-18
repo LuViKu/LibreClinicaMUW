@@ -47,9 +47,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { t } = useI18n()
 
-/* 2026-06-21 — nav.modules consumer removed from TopBar; modules are
-   now reached via the subject-detail.workspace CTA only. The slot id
-   stays in the contract for future surfaces. */
+/* 2026-06-21 — the module nav consumer was removed from TopBar. P3.0
+   retired the orphaned slot with it: modules now reach the operator
+   through the subject-detail.workspace CTA and a landing-page card
+   (home.cards). */
 
 /**
  * Coalesced role set — prefer the explicit multi-role list; fall
@@ -234,9 +235,8 @@ function onReportBugClick() {
         </template>
       </nav>
 
-      <!-- Modules are reached via the subject-detail "Open workspace" CTA,
-           NOT the top-nav. The nav.modules slot id stays in the contract for
-           future use; the host no longer mounts entries here. -->
+      <!-- Modules are reached via the subject-detail "Open workspace" CTA
+           and the landing-page card (home.cards), NOT the top-nav. -->
 
       <!-- Phase E hardening B — sysadmin-only entry-point to the
            system-wide audit trail. Gated on Administrator role
