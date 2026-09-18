@@ -87,7 +87,13 @@ public class ImageIngestRetentionService {
         this.dataSource = dataSource;
         this.retentionDays = retentionDays > 0 ? retentionDays : DEFAULT_RETENTION_DAYS;
         this.storeRoot = storeRoot;
+        // The explicit root is accepted alongside the configured ones, so a
+        // caller handed a root (a test, an override) still resolves against it.
+        this.artifactStore = new IngestArtifactStore(
+                storeRoot == null ? List.of() : List.of(storeRoot));
     }
+
+    private final IngestArtifactStore artifactStore;
 
     static int readRetentionDays() {
         try {
@@ -196,40 +202,32 @@ public class ImageIngestRetentionService {
 
     private enum DeleteOutcome { DELETED, ALREADY_GONE, OUTSIDE_STORE }
 
-    /** Deletes a stored file only when it really lies under the ingest store. */
+    /**
+     * Deletes a stored file only when the shared artifact store agrees it lies
+     * under an ingest root.
+     *
+     * <p>P3.0 — this used to carry its own copy of the confinement logic. One
+     * implementation matters more here than anywhere else: this is the only
+     * code in the platform that deletes a file named by a database row.
+     */
     private DeleteOutcome deleteConfined(String rawPath) {
-        Path candidate;
-        try {
-            candidate = Path.of(rawPath).toAbsolutePath().normalize();
-        } catch (Exception bad) {
-            return DeleteOutcome.OUTSIDE_STORE;
-        }
-        Path root;
-        try {
-            root = storeRoot.toAbsolutePath().normalize();
-        } catch (Exception bad) {
-            return DeleteOutcome.OUTSIDE_STORE;
-        }
-        // Compare real paths where both exist, so a symlinked store still
-        // matches and a symlink pointing out of it does not.
-        try {
-            Path realRoot = root.toRealPath();
-            if (candidate.toFile().exists()) {
-                Path realCandidate = candidate.toRealPath();
-                if (!realCandidate.startsWith(realRoot)) return DeleteOutcome.OUTSIDE_STORE;
-            } else if (!candidate.startsWith(realRoot) && !candidate.startsWith(root)) {
+        java.nio.file.Path resolved = artifactStore.resolveConfined(rawPath).orElse(null);
+        if (resolved == null) {
+            // Either it escapes every root, or it is already gone. Tell those
+            // apart, because one is a misconfiguration worth keeping the row for
+            // and the other is nothing to do.
+            try {
+                Path candidate = Path.of(rawPath).toAbsolutePath().normalize();
+                if (!candidate.toFile().exists()) return DeleteOutcome.ALREADY_GONE;
+            } catch (Exception notAPath) {
                 return DeleteOutcome.OUTSIDE_STORE;
             }
-        } catch (IOException noRoot) {
-            // Store root missing (nothing was ever ingested here): fall back to
-            // a lexical check rather than treating every path as deletable.
-            if (!candidate.startsWith(root)) return DeleteOutcome.OUTSIDE_STORE;
+            return DeleteOutcome.OUTSIDE_STORE;
         }
-
-        File f = candidate.toFile();
+        File f = resolved.toFile();
         if (!f.exists()) return DeleteOutcome.ALREADY_GONE;
         if (f.delete()) return DeleteOutcome.DELETED;
-        LOG.warn("ImageIngestRetentionService: could not delete a stored image under {}", root);
+        LOG.warn("ImageIngestRetentionService: could not delete a stored image");
         return DeleteOutcome.ALREADY_GONE;
     }
 

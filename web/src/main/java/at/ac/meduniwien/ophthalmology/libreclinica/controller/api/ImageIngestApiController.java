@@ -37,6 +37,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
@@ -83,6 +84,7 @@ public class ImageIngestApiController {
 
     public static final String DEFAULT_STORE_PATH = "/var/lib/libreclinica/dicom-ingest";
     private static final int INBOX_LIMIT = 200;
+    private static final IngestArtifactStore ARTIFACT_STORE = new IngestArtifactStore();
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
@@ -230,10 +232,13 @@ public class ImageIngestApiController {
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for image " + id));
         }
-        // Path is app-written, but normalise + confine to the ingest store as defence.
-        Path target = Paths.get(previewPath).toAbsolutePath().normalize();
-        Path storeDir = Paths.get(storeDir()).toAbsolutePath().normalize();
-        if (!target.startsWith(storeDir) || !Files.isRegularFile(target)) {
+        // P3.0 — confinement now runs through the shared artifact store, which
+        // resolves symlinks before comparing. The previous check compared path
+        // prefixes literally, so a link inside the store pointing anywhere on
+        // the host satisfied it. The path itself comes from a row an
+        // unauthenticated ingress can write.
+        Path target = ARTIFACT_STORE.resolveConfined(previewPath).orElse(null);
+        if (target == null) {
             return ResponseEntity.status(404).body(Map.of("message", "preview file missing for image " + id));
         }
 
@@ -447,13 +452,4 @@ public class ImageIngestApiController {
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 
-    private static String storeDir() {
-        try {
-            String raw = CoreResources.getField("core.dicom.ingest.storePath");
-            if (raw != null && !raw.isBlank()) return raw.trim();
-        } catch (Exception ignored) {
-            // CoreResources unavailable — use the default.
-        }
-        return DEFAULT_STORE_PATH;
-    }
 }
