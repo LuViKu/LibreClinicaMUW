@@ -483,6 +483,9 @@ images are study data and are never swept; unbound ones are still
 awaiting a decision and are never swept either — a growing unbound
 backlog is a workflow problem, not something retention will clear.
 
+Full rules, including what is deliberately never swept and where the
+files live: [data-retention.md](data-retention.md).
+
 To check the sweep is running:
 
 ```bash
