@@ -3268,6 +3268,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/oct-upload/items/{ingestItemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["undoItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/eventCrfs/{id}/groups/{groupOid}/rows/{ordinal}": {
         parameters: {
             query?: never;
@@ -10794,6 +10810,28 @@ export interface operations {
             header?: never;
             path: {
                 jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    undoItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ingestItemId: number;
             };
             cookie?: never;
         };

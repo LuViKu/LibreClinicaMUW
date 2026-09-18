@@ -265,7 +265,7 @@ for (const [role, cfg] of Object.entries(ROLES)) {
     // Parked-scans admin queue (Administrator) — read-only retinal job queue.
     if (role === 'Administrator') {
       try {
-        await page.goto(`${BASE}/retinal/parked`, { waitUntil: 'domcontentloaded' })
+        await page.goto(`${BASE}/ingest-inbox`, { waitUntil: 'domcontentloaded' })
         await settle(page)
         await shot(page, cfg.dir, '22-parked-scans')
       } catch (e) {

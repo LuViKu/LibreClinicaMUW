@@ -2949,6 +2949,13 @@
       "dismiss": "Verwerfen",
       "dismissConfirm": "Diese Datei wirklich verwerfen?"
     },
+
+    "subjectUnboundItems": {
+      "title": "Nicht zugeordnete Dateien",
+      "loading": "Wird geladen …",
+      "subtitle": "{count} Datei(en) warten im Eingang auf Zuordnung.",
+      "openInbox": "Im Eingang zuordnen →"
+    },
   "dueVisits": {
     "title": "Fällige Visiten",
     "cardDesc": "Anstehende und überfällige Visiten der sichtbaren Studien.",

@@ -2949,6 +2949,13 @@
       "dismiss": "Dismiss",
       "dismissConfirm": "Dismiss this file?"
     },
+
+    "subjectUnboundItems": {
+      "title": "Unfiled arrivals",
+      "loading": "Loading …",
+      "subtitle": "{count} file(s) waiting in the inbox to be filed.",
+      "openInbox": "File them in the inbox →"
+    },
   "dueVisits": {
     "title": "Due visits",
     "cardDesc": "Upcoming and overdue visits across the studies you can see.",

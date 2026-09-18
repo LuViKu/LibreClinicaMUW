@@ -27,7 +27,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -35,11 +34,12 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -344,20 +344,24 @@ public class PublicOctUploadController {
         }
         String absolutePath = savedPath.toString();
 
-        // Dedup pre-check after the stream finishes (we needed the bytes
-        // to hash). The unique index on retinal_inference_job.e2e_sha256
-        // is the race-safe gate; this pre-check just lets us short-
-        // circuit before the INSERT + skip the orphan-file cleanup
-        // path. Soft 409 with a pointer to the existing job.
-        Long existingDuplicateJobId = findJobBySha256(e2eSha256, scanIndex);
-        if (existingDuplicateJobId != null) {
+        // Dedup pre-check after the stream finishes (we needed the bytes to
+        // hash). P3.3 — the identity of a scan is now the ingest_item, whose
+        // partial unique index on (sha256, scan_index) is the race-safe gate;
+        // this pre-check just short-circuits before the INSERT and skips the
+        // orphan-file cleanup path. Soft 409 with a pointer to what is already
+        // there — the job id too, when one exists, because the portal's own
+        // "already uploaded" message links to it.
+        Duplicate existingDuplicate = findDuplicate(e2eSha256, scanIndex);
+        if (existingDuplicate != null) {
             try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
-            LOG.info("Public OCT upload — duplicate (sha256={}, scanIndex={}) matches existing job {}",
-                    e2eSha256, scanIndex, existingDuplicateJobId);
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Diese .e2e-Datei wurde bereits hochgeladen.",
-                    "existingJobId", existingDuplicateJobId,
-                    "duplicate", true));
+            LOG.info("Public OCT upload — duplicate (sha256={}, scanIndex={}) matches ingest_item {}",
+                    e2eSha256, scanIndex, existingDuplicate.ingestItemId());
+            Map<String, Object> dup = new LinkedHashMap<>();
+            dup.put("message", "Diese .e2e-Datei wurde bereits hochgeladen.");
+            dup.put("existingJobId", existingDuplicate.jobId());
+            dup.put("existingIngestItemId", existingDuplicate.ingestItemId());
+            dup.put("duplicate", true);
+            return ResponseEntity.status(409).body(dup);
         }
 
         // 2026-06-19 — initial-status discriminator mirrors the legacy
@@ -406,17 +410,33 @@ public class PublicOctUploadController {
             tasks = List.of(DEFAULT_TASK);
         }
 
+        // P3.3 — the scan becomes a row in the one queue before anything is
+        // enqueued for it. That row is what the inbox lists, what dedup keys
+        // on, and what a later bind acts upon; the jobs hang off it.
+        //
+        // A parked upload stops here: an UNBOUND ingest_item and no job at all.
+        // "Parked" used to be a job status, which meant the retinal pipeline
+        // carried a private queue of scans nobody had filed — a second place to
+        // look, answering the same question the inbox now answers. There is
+        // nothing for a GPU to do with a scan whose patient is unknown, so the
+        // job is not created rather than created and left idle.
+        long ingestItemId;
         List<Long> jobIds = new ArrayList<>();
         List<Map<String, Object>> jobInfos = new ArrayList<>();
         try (Connection c = dataSource.getConnection()) {
-            for (String task : tasks) {
-                long jId = insertJob(c, eventCrfId, studyEventId, task, absolutePath, lat, status, scanIndex, e2eSha256);
-                jobIds.add(jId);
-                Map<String, Object> info = new LinkedHashMap<>();
-                info.put("jobId", jId);
-                info.put("task", task);
-                info.put("status", status);
-                jobInfos.add(info);
+            ingestItemId = insertIngestItem(c, absolutePath, originalFilename, e2eSha256, fileSize(savedPath),
+                    lat, scanIndex, pid, auditStudySubjectId, scanDate, eventCrfId, studyEventId, park);
+            if (!park) {
+                for (String task : tasks) {
+                    long jId = insertJob(c, eventCrfId, studyEventId, task, absolutePath, lat, status,
+                            scanIndex, e2eSha256, ingestItemId);
+                    jobIds.add(jId);
+                    Map<String, Object> info = new LinkedHashMap<>();
+                    info.put("jobId", jId);
+                    info.put("task", task);
+                    info.put("status", status);
+                    jobInfos.add(info);
+                }
             }
         } catch (SQLException sqlEx) {
             // 2026-06-19 — race-safe dedup catch. If a concurrent upload
@@ -444,13 +464,24 @@ public class PublicOctUploadController {
                     "message", "Failed to enqueue job: " + sqlEx.getMessage()));
         }
 
-        // Primary jobId for back-compat with API consumers that expect
-        // the legacy single-job shape; `jobs` carries the full set.
-        long jobId = jobIds.get(0);
+        // Primary jobId for back-compat with API consumers that expect the
+        // legacy single-job shape; `jobs` carries the full set. P3.3 — a
+        // parked upload has no job, so this is null and callers read
+        // ingestItemId instead.
+        Long jobId = jobIds.isEmpty() ? null : jobIds.get(0);
 
         // ---- audit row per enqueued job ------------------------------
-        for (long jid : jobIds) {
-            writePublicOctUploadAuditRow(jid, auditStudySubjectId, pid, lat, status);
+        // A parked upload is audited against its ingest_item: the file arrived
+        // and the operator said they would file it later, which is the event
+        // worth recording. Negated so the entity id cannot collide with a job
+        // id in the same audit_table.
+        if (jobIds.isEmpty()) {
+            writePublicOctUploadAuditRow("ingest_item", ingestItemId,
+                    auditStudySubjectId, pid, lat, "UNBOUND");
+        } else {
+            for (long jid : jobIds) {
+                writePublicOctUploadAuditRow(jid, auditStudySubjectId, pid, lat, status);
+            }
         }
 
         // ---- disambiguation marker (Wave 1B) ------------------------------
@@ -466,8 +497,10 @@ public class PublicOctUploadController {
         // The subject is identified by the ids below, not by the label the
         // operator typed: this line lands in a log that is rotated, shipped and
         // read by people with no clinical role.
-        LOG.info("Public OCT upload — job {} {} (lat={}, scanIndex={}, eventCrfId={}, studyEventId={}, disambiguated={})",
-                jobId, status, lat, scanIndex, eventCrfId, studyEventId, disambiguated);
+        LOG.info("Public OCT upload — ingest_item {} job {} {} (lat={}, scanIndex={}, "
+                + "eventCrfId={}, studyEventId={}, disambiguated={})",
+                ingestItemId, jobId, jobIds.isEmpty() ? "UNBOUND" : status,
+                lat, scanIndex, eventCrfId, studyEventId, disambiguated);
 
         // 2026-06-19 — fire the preprocess + remote-inference dispatch
         // asynchronously so the commit response returns immediately and
@@ -485,18 +518,24 @@ public class PublicOctUploadController {
         final int finalScanIndex = scanIndex;
         final Integer finalEventCrfId = eventCrfId;
         final boolean finalDispatchToRemote = dispatchToRemote;
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                runPostCommitPipelineMulti(finalJobInfos, finalSavedPath, originalFilename,
-                        finalLat, finalScanIndex, finalEventCrfId, finalDispatchToRemote);
-            } catch (Exception ex) {
-                LOG.warn("Post-commit async pipeline threw: {}", ex.getMessage());
-            }
-        });
+        // P3.3 — a parked upload has no job to drive, and preprocessing a scan
+        // nobody has claimed would spend GPU time on a file that may turn out
+        // to belong to no study at all. The work starts when it is filed.
+        if (!jobIds.isEmpty()) {
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    runPostCommitPipelineMulti(finalJobInfos, finalSavedPath, originalFilename,
+                            finalLat, finalScanIndex, finalEventCrfId, finalDispatchToRemote);
+                } catch (Exception ex) {
+                    LOG.warn("Post-commit async pipeline threw: {}", ex.getMessage());
+                }
+            });
+        }
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jobId", jobId);
-        body.put("status", status);
+        body.put("ingestItemId", ingestItemId);
+        body.put("status", jobIds.isEmpty() ? "UNBOUND" : status);
         body.put("jobs", jobInfos);
         return ResponseEntity.status(201).body(body);
     }
@@ -908,9 +947,11 @@ public class PublicOctUploadController {
         // window has elapsed before we touch the row.
         String e2ePath;
         Instant enqueuedAt;
+        Long ingestItemId = null;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT enqueued_at, e2e_path FROM retinal_inference_job WHERE job_id = ?")) {
+                     "SELECT enqueued_at, e2e_path, ingest_item_id "
+                             + "  FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, jobId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
@@ -920,6 +961,8 @@ public class PublicOctUploadController {
                 Timestamp ts = rs.getTimestamp("enqueued_at");
                 enqueuedAt = ts == null ? Instant.EPOCH : ts.toInstant();
                 e2ePath = rs.getString("e2e_path");
+                long ii = rs.getLong("ingest_item_id");
+                ingestItemId = rs.wasNull() ? null : ii;
             }
         } catch (SQLException sqlEx) {
             LOG.error("undo lookup failed for jobId {}: {}", jobId, sqlEx.getMessage());
@@ -951,6 +994,11 @@ public class PublicOctUploadController {
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to delete job: " + sqlEx.getMessage()));
         }
+        // P3.3 — the scan's row goes with its last job. Leaving it would put
+        // an entry in the inbox pointing at a file this undo is about to
+        // delete, which is the one thing an inbox must never contain.
+        if (ingestItemId != null) deleteIngestItemIfUnreferenced(ingestItemId);
+
         if (e2ePath != null && !e2ePath.isBlank()) {
             try {
                 Files.deleteIfExists(Paths.get(e2ePath));
@@ -960,6 +1008,91 @@ public class PublicOctUploadController {
             }
         }
         return ResponseEntity.noContent().build();
+    }
+
+    /* ====================================================================== */
+    /* DELETE /items/{ingestItemId} — undo a parked upload within 60 s        */
+    /* ====================================================================== */
+
+    /**
+     * P3.3 — undo for an upload the operator chose to file later.
+     *
+     * <p>Such an upload creates no job, so there is no job id to undo against.
+     * Same window and same posture as the job form: within 60 seconds the
+     * operator can take back what they just did; after that the file is in the
+     * inbox and belongs to whoever reconciles it.
+     *
+     * <p>Refuses once anybody has acted on it. A row that has been filed or
+     * dismissed is somebody's decision, and an unauthenticated form must not
+     * be able to delete it.
+     */
+    @DeleteMapping(path = "/items/{ingestItemId:[0-9]+}",
+                   produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> undoItem(@PathVariable("ingestItemId") long ingestItemId) {
+        Instant receivedAt;
+        String storedPath;
+        String status;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT received_at, stored_path, status FROM ingest_item WHERE ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of(
+                            "message", "No ingest_item with id " + ingestItemId));
+                }
+                Timestamp ts = rs.getTimestamp("received_at");
+                receivedAt = ts == null ? Instant.EPOCH : ts.toInstant();
+                storedPath = rs.getString("stored_path");
+                status = rs.getString("status");
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("undo lookup failed for ingest_item {}: {}", ingestItemId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to load the upload"));
+        }
+        if (!"UNBOUND".equals(status)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "This upload has already been reconciled"));
+        }
+        if (Duration.between(receivedAt, Instant.now()).compareTo(UNDO_WINDOW) > 0) {
+            return ResponseEntity.status(410).body(Map.of(
+                    "message", "Undo window of " + UNDO_WINDOW.toSeconds() + "s elapsed"));
+        }
+        if (!deleteIngestItemIfUnreferenced(ingestItemId)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "This upload already has work attached to it"));
+        }
+        if (storedPath != null && !storedPath.isBlank()) {
+            try {
+                Files.deleteIfExists(Paths.get(storedPath));
+            } catch (IOException ioEx) {
+                LOG.warn("ingest_item {} deleted but unlinking failed: {}",
+                        ingestItemId, ioEx.getMessage());
+            }
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Delete the scan's row when nothing points at it any more.
+     *
+     * @return false when a job still references it, in which case the row
+     *         stays — the foreign key would refuse anyway, and a row with work
+     *         attached is not this endpoint's to remove
+     */
+    private boolean deleteIngestItemIfUnreferenced(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM ingest_item WHERE ingest_item_id = ? "
+                             + "  AND NOT EXISTS (SELECT 1 FROM retinal_inference_job j "
+                             + "                   WHERE j.ingest_item_id = ingest_item.ingest_item_id)")) {
+            ps.setLong(1, ingestItemId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOG.warn("could not remove ingest_item {}: {}", ingestItemId, e.getMessage());
+            return false;
+        }
     }
 
     /* ====================================================================== */
@@ -1016,12 +1149,111 @@ public class PublicOctUploadController {
         }
     }
 
+    /**
+     * P3.3 — the scan's row in the one queue, written before any job.
+     *
+     * <p>A parked upload produces this and nothing else: an UNBOUND row in the
+     * inbox, which is where every other unfiled arrival already waits. A bound
+     * one lands BOUND with {@code match_policy='visit-picked'} — the operator
+     * picked the visit on the form — and no {@code bound_by_user_id}, because
+     * the form has no logged-in user; the audit row carries the trail.
+     */
+    private long insertIngestItem(Connection c, String e2ePath, String originalFilename,
+                                  String sha256, long byteSize, String laterality, int scanIndex,
+                                  String patientId, Integer candidateStudySubjectId,
+                                  LocalDate acquisitionDate, Integer eventCrfId,
+                                  Integer studyEventId, boolean park) throws SQLException {
+        var item = IngestItemRepository
+                .newItem(IngestArtifactStore.Kind.E2E, "portal-oct", e2ePath)
+                .originalFilename(originalFilename)
+                .contentType("application/octet-stream")
+                .digest(sha256, byteSize)
+                .scanIndex(scanIndex)
+                .laterality(laterality)
+                .acquisitionDate(acquisitionDate)
+                .patientId(patientId)
+                .candidateStudySubjectId(candidateStudySubjectId);
+        if (!park) {
+            ImageIngestBinding.EventTarget target = resolveBindTarget(c, eventCrfId, studyEventId);
+            if (target != null) {
+                item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(),
+                        IngestBindService.POLICY_VISIT_PICKED);
+            }
+        }
+        return item.insert(c);
+    }
+
+    /**
+     * The subject and visit behind whichever binding mode the form used.
+     *
+     * <p>Returns null when neither resolves — the jobs still carry the ids the
+     * operator supplied, so nothing is lost; the inbox row simply stays
+     * unbound rather than claiming a binding the platform could not confirm.
+     */
+    private static ImageIngestBinding.EventTarget resolveBindTarget(
+            Connection c, Integer eventCrfId, Integer studyEventId) throws SQLException {
+        if (studyEventId != null) {
+            return ImageIngestBinding.resolveEventTarget(c, studyEventId);
+        }
+        if (eventCrfId == null) return null;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT study_subject_id, study_event_id FROM event_crf WHERE event_crf_id = ?")) {
+            ps.setInt(1, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return new ImageIngestBinding.EventTarget(
+                        rs.getInt(1), rs.getInt(2), eventCrfId);
+            }
+        }
+    }
+
+    /** Bytes on disk, or 0 when the file cannot be measured. */
+    private static long fileSize(Path p) {
+        try {
+            return Files.size(p);
+        } catch (IOException cannotMeasure) {
+            return 0L;
+        }
+    }
+
+    /** What is already in the queue for a scan, and the job on it if any. */
+    private record Duplicate(long ingestItemId, Long jobId) {}
+
+    /**
+     * P3.3 — the scan's identity is its ingest_item, so that is what dedup
+     * looks at. The job id comes back too, because the portal's "already
+     * uploaded" message has always linked to it.
+     */
+    private Duplicate findDuplicate(String sha256, int scanIndex) {
+        if (sha256 == null || sha256.isBlank()) return null;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ii.ingest_item_id, "
+                             + "  (SELECT MIN(j.job_id) FROM retinal_inference_job j "
+                             + "    WHERE j.ingest_item_id = ii.ingest_item_id) AS job_id "
+                             + "  FROM ingest_item ii "
+                             + " WHERE ii.sha256 = ? AND COALESCE(ii.scan_index, -1) = ? "
+                             + " LIMIT 1")) {
+            ps.setString(1, sha256);
+            ps.setInt(2, scanIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                long jid = rs.getLong(2);
+                return new Duplicate(rs.getLong(1), rs.wasNull() ? null : jid);
+            }
+        } catch (SQLException e) {
+            LOG.warn("duplicate lookup failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private long insertJob(Connection c, Integer eventCrfId, Integer studyEventId, String task,
                            String e2ePath, String lat, String status, int scanIndex,
-                           String e2eSha256) throws SQLException {
+                           String e2eSha256, long ingestItemId) throws SQLException {
         String sql = "INSERT INTO retinal_inference_job ("
-                + "event_crf_id, study_event_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
-                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "event_crf_id, study_event_id, task, e2e_path, eye_laterality, status, scan_index, "
+                + "enqueued_at, e2e_sha256, ingest_item_id"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (eventCrfId == null) {
                 ps.setNull(1, java.sql.Types.INTEGER);
@@ -1044,6 +1276,7 @@ public class PublicOctUploadController {
             } else {
                 ps.setString(9, e2eSha256);
             }
+            ps.setLong(10, ingestItemId);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getLong(1);
@@ -1113,8 +1346,20 @@ public class PublicOctUploadController {
     private void writePublicOctUploadAuditRow(long jobId, Integer studySubjectId,
                                               String patientId, String laterality,
                                               String status) {
-        // entity_id is the new retinal_inference_job PK; entity_name
-        // carries the column we're recording (status), matching
+        writePublicOctUploadAuditRow("retinal_inference_job", jobId, studySubjectId,
+                patientId, laterality, status);
+    }
+
+    /**
+     * @param auditTable which table {@code entityId} identifies. P3.3 — a
+     *                   parked upload creates no job, so the row it is about
+     *                   is the ingest_item; saying which table avoids an
+     *                   entity id that silently means something else.
+     */
+    private void writePublicOctUploadAuditRow(String auditTable, long entityId,
+                                              Integer studySubjectId, String patientId,
+                                              String laterality, String status) {
+        // entity_name carries the column we're recording (status), matching
         // RetinalInferenceApiController's convention.
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
@@ -1122,8 +1367,8 @@ public class PublicOctUploadController {
                              + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
                              + "VALUES (?, now(), NULL, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, AuditTypeIds.OCT_UPLOAD_PUBLIC);
-            ps.setString(2, "retinal_inference_job");
-            ps.setInt(3, (int) jobId);
+            ps.setString(2, auditTable);
+            ps.setInt(3, (int) entityId);
             ps.setString(4, "status");
             // Pack patientId + laterality + (optional) studySubjectId
             // hint into old_value so the audit view can render a
@@ -1134,7 +1379,8 @@ public class PublicOctUploadController {
             ps.setString(6, status);
             ps.executeUpdate();
         } catch (SQLException e) {
-            LOG.warn("OCT_UPLOAD_PUBLIC audit-write failed for job {}: {}", jobId, e.getMessage());
+            LOG.warn("OCT_UPLOAD_PUBLIC audit-write failed for {} {}: {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 

@@ -18,7 +18,7 @@ import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import SubjectGroupEditDialog from '@/components/SubjectGroupEditDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
-import ParkedScansList from '@/components/retinal/ParkedScansList.vue'
+import SubjectUnboundItemsList from '@/components/ingest/SubjectUnboundItemsList.vue'
 import { listSubjectJobs } from '@/api/retinal'
 
 import { useSubjectsStore } from '@/stores/subjects'
@@ -1500,7 +1500,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           :subject-label="subject.id"
         >
           <template #parked>
-            <ParkedScansList :study-subject-id="retinalNumericId" />
+            <SubjectUnboundItemsList :study-subject-id="retinalNumericId" />
           </template>
         </SubjectRetinalTab>
 

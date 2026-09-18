@@ -82,7 +82,13 @@ export interface ResolveResponse {
 
 /** Per-commit response. Maps to the controller's `Map<String,Object>` body. */
 export interface CommitResponse {
-  jobId: number
+  /**
+   * P3.3 — absent for a parked upload, which enqueues nothing. The scan's row
+   * is `ingestItemId`, and that is what undo acts on in that case.
+   */
+  jobId: number | null
+  /** The scan's row in the ingest inbox. Always present. */
+  ingestItemId: number
   status: string
 }
 
@@ -375,7 +381,7 @@ export async function commitScan(
       try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null }
       catch { body = null }
       if (status >= 200 && status < 300) {
-        resolve((body ?? { jobId: 0, status: 'UNKNOWN' }) as CommitResponse)
+        resolve((body ?? { jobId: null, ingestItemId: 0, status: 'UNKNOWN' }) as CommitResponse)
       } else {
         reject(new OctPortalError(
           status,
@@ -412,6 +418,31 @@ export async function undoCommit(jobId: number): Promise<void> {
     throw new OctPortalError(
       res.status,
       messageFrom(body, `DELETE /${jobId} → ${res.status}`),
+      body,
+    )
+  }
+}
+
+/**
+ * P3.3 — undo an upload the operator chose to file later.
+ *
+ * <p>Such an upload creates no inference job, so there is no job id to undo
+ * against; the scan's row in the inbox is what exists. Same 60 s window, and
+ * refused once anybody has filed or dismissed it — that is somebody's
+ * decision, and an unauthenticated form must not be able to delete it.
+ */
+export async function undoParkedCommit(ingestItemId: number): Promise<void> {
+  const res = await fetch(`${BASE}/items/${ingestItemId}`, {
+    method: 'DELETE',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  if (res.status === 204) return
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new OctPortalError(
+      res.status,
+      messageFrom(body, `DELETE /items/${ingestItemId} → ${res.status}`),
       body,
     )
   }
