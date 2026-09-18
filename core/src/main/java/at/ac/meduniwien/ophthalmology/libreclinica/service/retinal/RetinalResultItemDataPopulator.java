@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDataWriter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudyBindings;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
 
 /**
@@ -61,22 +62,64 @@ public class RetinalResultItemDataPopulator {
     private static final String SOURCE_KIND = SourcedItemDataWriter.Source.RETINAL_INFERENCE.kind();
 
     /**
-     * Mapping from fluid runner's output_payload JSON key to the OD-eye
-     * NAMD item OID. The OS variant is derived by replacing {@code _OD_}
-     * with {@code _OS_} since the items are laterality-coded.
+     * Mapping from the fluid runner's output_payload key to the binding role
+     * the study answers, and to the OID the code used before those existed.
+     *
+     * <p>P3.5 — the literals are the fallback, not the answer. A study names
+     * its own items through {@code study_item_binding}; one that has named
+     * nothing keeps exactly these, so this changed no behaviour when it
+     * landed. The OS variant of a fallback is derived by swapping {@code _OD_}
+     * for {@code _OS_}, which is only safe because these particular OIDs are
+     * laterality-coded — a study's own binding names both eyes explicitly.
      */
-    private static final Map<String, String> OD_METRIC_TO_ITEM_OID;
+    private record MetricTarget(String bindingKeyOd, String bindingKeyOs, String fallbackOdOid) {}
+
+    private static final Map<String, MetricTarget> OD_METRIC_TO_ITEM_OID;
 
     static {
-        Map<String, String> m = new LinkedHashMap<>();
-        m.put("irf_mm3", "I_NAMD_OD_IRF_MM3");
-        m.put("srf_mm3", "I_NAMD_OD_SRF_MM3");
-        m.put("ped_mm3", "I_NAMD_OD_PED_MM3");
-        m.put("total_fluid_volume_mm3", "I_NAMD_OD_TOTAL_FLUID_MM3");
+        Map<String, MetricTarget> m = new LinkedHashMap<>();
+        m.put("irf_mm3", new MetricTarget(StudyBindings.RETINAL_FLUID_IRF_OD,
+                StudyBindings.RETINAL_FLUID_IRF_OS, "I_NAMD_OD_IRF_MM3"));
+        m.put("srf_mm3", new MetricTarget(StudyBindings.RETINAL_FLUID_SRF_OD,
+                StudyBindings.RETINAL_FLUID_SRF_OS, "I_NAMD_OD_SRF_MM3"));
+        m.put("ped_mm3", new MetricTarget(StudyBindings.RETINAL_FLUID_PED_OD,
+                StudyBindings.RETINAL_FLUID_PED_OS, "I_NAMD_OD_PED_MM3"));
+        m.put("total_fluid_volume_mm3", new MetricTarget(StudyBindings.RETINAL_FLUID_TOTAL_OD,
+                StudyBindings.RETINAL_FLUID_TOTAL_OS, "I_NAMD_OD_TOTAL_FLUID_MM3"));
         OD_METRIC_TO_ITEM_OID = Map.copyOf(m);
     }
 
     private final DataSource dataSource;
+
+    /** P3.5 — which item this study means by a role the shared code asks for. */
+    private StudyBindings studyBindings;
+
+    private StudyBindings studyBindings() {
+        if (studyBindings == null) studyBindings = new StudyBindings(dataSource);
+        return studyBindings;
+    }
+
+    /**
+     * The study a CRF instance belongs to, for resolving its bindings.
+     *
+     * @return 0 when it cannot be resolved, which makes every binding fall
+     *         back to the literal — the behaviour before P3.5
+     */
+    private int studyIdForEventCrf(int eventCrfId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ss.study_id FROM event_crf ec "
+                             + "  JOIN study_subject ss ON ss.study_subject_id = ec.study_subject_id "
+                             + " WHERE ec.event_crf_id = ?")) {
+            ps.setInt(1, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            LOG.warn("could not resolve the study of event_crf {}: {}", eventCrfId, e.getMessage());
+            return 0;
+        }
+    }
 
     /**
      * 2026-06-24 — CRT compute service. Optional so the existing
@@ -124,10 +167,17 @@ public class RetinalResultItemDataPopulator {
                         + job.laterality + "' — skipped.");
                 continue;
             }
-            for (Map.Entry<String, String> e : OD_METRIC_TO_ITEM_OID.entrySet()) {
+            for (Map.Entry<String, MetricTarget> e : OD_METRIC_TO_ITEM_OID.entrySet()) {
                 String metricKey = e.getKey();
-                String odOid = e.getValue();
-                String targetOid = odOid.replace("_OD_", "_" + lateralityToken + "_");
+                MetricTarget target = e.getValue();
+                boolean od = "OD".equals(lateralityToken);
+                String fallback = od
+                        ? target.fallbackOdOid()
+                        : target.fallbackOdOid().replace("_OD_", "_OS_");
+                String targetOid = studyBindings().oidFor(
+                        studyIdForEventCrf(eventCrfId),
+                        od ? target.bindingKeyOd() : target.bindingKeyOs(),
+                        fallback);
                 Double value = readNumeric(job.payload, metricKey);
                 if (value == null) {
                     // Metric not present in this job's payload — skip silently

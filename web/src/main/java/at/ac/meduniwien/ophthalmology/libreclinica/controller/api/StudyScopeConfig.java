@@ -50,6 +50,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * <p>Sites are included with their parent: naming a parent study OID covers
  * every site beneath it, since a visit belongs to the site but the study is
  * what the operator enrolled.
+ *
+ * <p><strong>P3.5 — a study's own switch wins.</strong> Whether a study
+ * receives DICOM or accepts uploads is now {@code study_setting}, which an
+ * administrator changes without editing a file on the server. The
+ * configuration keys remain as the answer for studies that have set nothing,
+ * so a deployment that configured them keeps exactly the scope it chose, and
+ * an instance that never touched them keeps the "every study" default. They
+ * go away once every deployment has moved.
  */
 final class StudyScopeConfig {
 
@@ -69,6 +77,9 @@ final class StudyScopeConfig {
      *         nothing rather than silently widening).
      */
     static Set<Integer> studyIdsFor(DataSource dataSource, String configKey) {
+        Set<Integer> byStudySetting = studyIdsFromSetting(dataSource, settingKeyFor(configKey));
+        if (byStudySetting != null) return byStudySetting;
+
         String raw = cfg(configKey);
         if (raw == null || raw.isBlank()) {
             return null;
@@ -102,6 +113,59 @@ final class StudyScopeConfig {
         }
         if (ids.isEmpty()) {
             LOG.warn("{} names no study that exists — restricting to no studies", configKey);
+        }
+        return ids;
+    }
+
+    /** The per-study switch each legacy scope key corresponds to. */
+    private static String settingKeyFor(String configKey) {
+        if (WORKLIST_KEY.equals(configKey)) return "ingest.dicom.enabled";
+        if (PORTAL_KEY.equals(configKey)) return "ingest.image.enabled";
+        return null;
+    }
+
+    /**
+     * The studies that have turned this surface on, or null when none has said
+     * anything and the configuration key should answer instead.
+     *
+     * <p>Sites are covered by their parent's answer unless they override it,
+     * which is the same inheritance every other setting uses.
+     *
+     * <p>A study that explicitly turns a surface OFF is excluded even when its
+     * parent is on — the {@code NOT EXISTS} clause is what makes an override
+     * an override rather than an addition.
+     */
+    private static Set<Integer> studyIdsFromSetting(DataSource dataSource, String settingKey) {
+        if (settingKey == null) return null;
+        Set<Integer> ids = new LinkedHashSet<>();
+        boolean anySet = false;
+        String sql = "SELECT s.study_id, "
+                + "       COALESCE(own.value, parent.value) AS effective "
+                + "  FROM study s "
+                + "  LEFT JOIN study_setting own "
+                + "    ON own.study_id = s.study_id AND own.setting_key = ? "
+                + "  LEFT JOIN study_setting parent "
+                + "    ON parent.study_id = s.parent_study_id AND parent.setting_key = ? "
+                + " WHERE own.value IS NOT NULL OR parent.value IS NOT NULL";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, settingKey);
+            ps.setString(2, settingKey);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    anySet = true;
+                    if (Boolean.parseBoolean(rs.getString(2))) ids.add(rs.getInt(1));
+                }
+            }
+        } catch (SQLException e) {
+            // Restricting to nothing is the safe failure: the alternative
+            // hands a device every study's schedule.
+            LOG.error("could not resolve {} — restricting to no studies: {}", settingKey, e.getMessage());
+            return Set.of();
+        }
+        if (!anySet) return null;
+        if (ids.isEmpty()) {
+            LOG.warn("{} is set but no study has it enabled — restricting to no studies", settingKey);
         }
         return ids;
     }

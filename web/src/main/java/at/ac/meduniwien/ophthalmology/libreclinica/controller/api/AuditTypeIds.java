@@ -413,4 +413,15 @@ public final class AuditTypeIds {
     public static final int IMAGING_MODALITY_CREATED         = 131;
     public static final int IMAGING_MODALITY_UPDATED         = 132;
     public static final int IMAGING_MODALITY_BINDING_CHANGED = 133;
+
+    /**
+     * P3.5 — a per-study setting or CRF item binding changed.
+     *
+     * <p>Writer: {@code StudySettingsApiController}. Seeded by
+     * {@code lc-muw-2026-11-16-study-setting.xml}. A study that stops
+     * receiving DICOM because somebody flipped a switch looks, from the inbox,
+     * exactly like a camera that stopped sending — and the difference is this
+     * row.
+     */
+    public static final int STUDY_SETTING_CHANGED            = 134;
 }
