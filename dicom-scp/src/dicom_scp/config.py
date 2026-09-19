@@ -2,6 +2,8 @@
 retinal-inference sidecar's pydantic-settings pattern)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,9 +33,29 @@ class Settings(BaseSettings):
     worklist_url: str = ""
     worklist_timeout_s: int = 15
 
+    # --- Describe endpoint (DR-029) — DICOM files that arrive as uploads ---
+    # The app stores an uploaded .dcm on the shared volume and asks here for
+    # its tags + a preview, and for the file to be pseudonymised in place.
+    # Internal only (never published by compose); shares ingest_token. 0 = off.
+    describe_host: str = "0.0.0.0"
+    describe_port: int = 8081
+    # Comma-separated roots a described path may lie under. Blank = the
+    # C-STORE store above plus the app's unified ingest store.
+    describe_roots: str = ""
+    # Private (vendor) tags carry calibration a study may need, so they stay
+    # unless a deployment says otherwise.
+    deidentify_drop_private: bool = False
+
     @property
     def allowed_calling_aes(self) -> set[str]:
         return {t.strip() for t in self.allowed_calling_ae_titles.split(",") if t.strip()}
+
+    @property
+    def describe_root_paths(self) -> list[Path]:
+        raw = [r.strip() for r in self.describe_roots.split(",") if r.strip()]
+        if not raw:
+            raw = [self.store_path, "/var/lib/libreclinica/ingest"]
+        return [Path(r) for r in raw]
 
 
 settings = Settings()

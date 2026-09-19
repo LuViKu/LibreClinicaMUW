@@ -36,8 +36,8 @@ const CASES: { role: Role | null; path: string; label: string }[] = [
   // DR-025 / P2-6 — the pages added for the pilots. The two upload portals
   // take no login at all: they are opened on a phone at a camera, by whoever
   // is running the clinic that day, so their accessibility is not optional.
-  { role: null, path: '/image-upload', label: 'Image upload portal (no login)' },
-  { role: null, path: '/oct-upload', label: 'OCT upload portal (no login)' },
+  { role: null, path: '/upload', label: 'Upload portal (no login)' },
+  { role: 'dataManager', path: '/ingest-inbox/upload', label: 'Staff upload' },
   { role: 'dataManager', path: '/ingest-inbox', label: 'Ingest reconciliation inbox' },
   { role: 'investigator', path: '/due-visits', label: 'Due visits' },
   { role: 'dataManager', path: '/datasets', label: 'Datasets' },

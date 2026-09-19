@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-029 — the Zeiss devices export DICOM, and the catalogue should say so.
+
+      lc-muw-2026-11-02-seed-imaging-modalities.xml seeded the Clarus fundus
+      camera and the PlexElite OCTA as image-file exports, which is what the
+      Visitenplan said they would deliver. Both also export .dcm, and the
+      combined uploader now accepts it; an acquisition of that kind could not
+      be bound to either modality without this. Additive: the seeded changeset
+      is not edited, and a study that already listed dicom is left alone.
+    -->
+    <changeSet id="2026-12-02-imaging-modality-dicom-kinds" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM imaging_modality
+                     WHERE code IN ('FUNDUS_CLARUS', 'OCTA_PLEXELITE')
+                       AND COALESCE(kinds_accepted, '') NOT LIKE '%dicom%'
+                ) THEN 1 ELSE 0 END
+            </sqlCheck>
+        </preConditions>
+        <comment>Clarus and PlexElite accept DICOM exports as well as image files.</comment>
+
+        <sql>
+            UPDATE imaging_modality
+               SET kinds_accepted = CASE WHEN COALESCE(kinds_accepted, '') = ''
+                                         THEN 'dicom'
+                                         ELSE 'dicom,' || kinds_accepted END
+             WHERE code IN ('FUNDUS_CLARUS', 'OCTA_PLEXELITE')
+               AND COALESCE(kinds_accepted, '') NOT LIKE '%dicom%';
+        </sql>
+
+        <rollback>
+            <sql>
+                UPDATE imaging_modality
+                   SET kinds_accepted = CASE WHEN kinds_accepted = 'dicom' THEN ''
+                                             ELSE REPLACE(kinds_accepted, 'dicom,', '') END
+                 WHERE code IN ('FUNDUS_CLARUS', 'OCTA_PLEXELITE')
+                   AND kinds_accepted LIKE 'dicom%';
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

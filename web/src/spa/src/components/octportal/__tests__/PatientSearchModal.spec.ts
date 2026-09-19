@@ -23,13 +23,14 @@ vi.mock('@/api/retinal', () => ({
 
 // The portal variant calls the anonymous endpoint instead — see the
 // `publicContext` prop. Stubbed at the same boundary.
-vi.mock('@/api/octPortal', () => ({
+// DR-029 — the public lookup lives on the combined upload page's client now.
+vi.mock('@/api/uploadWorkbench', () => ({
   searchPatientsPublic: vi.fn(),
 }))
 
 import PatientSearchModal from '../PatientSearchModal.vue'
 import { searchStudySubjects, type StudySubjectSearchHit } from '@/api/retinal'
-import { searchPatientsPublic } from '@/api/octPortal'
+import { searchPatientsPublic } from '@/api/uploadWorkbench'
 
 const i18n = createI18n({
   legacy: false,

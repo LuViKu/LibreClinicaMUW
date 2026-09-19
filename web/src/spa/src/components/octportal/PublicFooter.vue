@@ -13,6 +13,9 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+/** DR-029 — the combined upload page lists more than one format. */
+const props = defineProps<{ formats?: string }>()
+
 declare const __APP_VERSION__: string
 declare const __BUILD_HASH__: string
 declare const __BUILD_DATE__: string
@@ -38,7 +41,8 @@ const buildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '0000
             <polyline points="14 2 14 8 20 8" />
           </svg>
         </span>
-        {{ t('octPortal.footer.formatNote') }} · <span class="font-mono">.e2e</span>
+        <template v-if="props.formats">{{ props.formats }}</template>
+        <template v-else>{{ t('octPortal.footer.formatNote') }} · <span class="font-mono">.e2e</span></template>
       </span>
     </div>
     <div class="flex items-center gap-2">

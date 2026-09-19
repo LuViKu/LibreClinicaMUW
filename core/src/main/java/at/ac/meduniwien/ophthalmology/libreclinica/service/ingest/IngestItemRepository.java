@@ -158,6 +158,15 @@ public final class IngestItemRepository {
         public Builder laterality(String v) { return set("laterality", v, Types.VARCHAR); }
 
         /**
+         * DR-029 — when the file's patient identity was replaced by the
+         * sidecar before the row was written; null for a file that never
+         * carried one (a worklist-driven C-STORE) or is not DICOM.
+         */
+        public Builder deidentifiedAt(Instant v) {
+            return set("deidentified_at", v == null ? null : Timestamp.from(v), Types.TIMESTAMP);
+        }
+
+        /**
          * Who the platform thinks this belongs to, before anyone confirms it.
          *
          * <p>Distinct from the binding: a suggestion the resolver made is not a

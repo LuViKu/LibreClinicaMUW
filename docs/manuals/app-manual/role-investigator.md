@@ -26,6 +26,9 @@ A breadcrumb trail at the top of each page shows where you are, e.g. *Study › 
 2. **Ihre Aufgaben** shows your queues with their counts — *Heutige offene CRFs*
    (today's open visits), *Signatur ausstehend* (subjects ready to sign),
    *Rückfragen*, *Eingang* (files waiting to be filed) and *Fällige Visiten*.
+   From the Eingang, **Hochladen** brings files in yourself — OCT exports,
+   Clarus/PlexElite DICOM files and fundus photos — filed against a visit you
+   pick once for the batch.
    Each card opens that list with the filter already applied, so the number on
    the card is the number of rows you land on. A dash means the count has not
    arrived yet; a zero means there is nothing waiting.

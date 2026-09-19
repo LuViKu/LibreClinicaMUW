@@ -72,6 +72,12 @@ services:
       # values, etc.) without rebuilding the image. Source is seeded
       # from docker/config/ on first run of setup-ubuntu-host.sh.
       - /opt/libreclinica/config:/usr/local/tomcat/libreclinica.config:ro
+      # DR-029: the unified ingest store (core.ingest.storePath). Compose merges
+      # `volumes` by container path, so this overrides the base file's
+      # ./docker/ingest bind with the same absolute host directory the
+      # dicom-scp service mounts — the sidecar pseudonymises an uploaded .dcm
+      # through this very bind, so the two must be one directory on the host.
+      - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
 
   db:
     restart: unless-stopped
@@ -170,8 +176,16 @@ services:
       # pynetdicom's dataset dumps, which would otherwise put PatientName
       # and PatientID into the container log.
       DICOM_SCP_LOG_LEVEL: ${DICOM_SCP_LOG_LEVEL:-INFO}
+      # DR-029: describes and pseudonymises DICOM files that arrive through
+      # the upload page. Internal to the compose network (no `ports:`); the
+      # app reaches it at core.dicom.describe.url. 0 turns it off, which
+      # turns DICOM uploads into a 503 — never into files stored as-is.
+      DICOM_SCP_DESCRIBE_PORT: ${DICOM_SCP_DESCRIBE_PORT:-8081}
     volumes:
       # Stable host path under the backup root, like the other stores. The
       # app reads the same directory to serve image previews, so the two
       # binds must stay identical.
       - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest
+      # DR-029: the unified ingest store (core.ingest.storePath) the app writes
+      # uploads to. Same bind in both containers — see the runbook, §7.
+      - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest

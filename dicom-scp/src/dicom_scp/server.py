@@ -8,7 +8,7 @@ from pynetdicom import (AE, ALL_TRANSFER_SYNTAXES, AllStoragePresentationContext
                         VerificationPresentationContexts, evt)
 from pynetdicom.sop_class import ModalityWorklistInformationFind
 
-from . import config, store, tags, worklist
+from . import config, describe, store, tags, worklist
 from .ingest_client import post_ingest
 
 LOG = logging.getLogger("dicom_scp.server")
@@ -116,6 +116,9 @@ def serve() -> None:
     LOG.info("Modality Worklist: %s",
              f"serving from {settings.worklist_url}" if settings.worklist_url
              else "DISABLED (DICOM_SCP_WORKLIST_URL unset)")
+    # DR-029 — uploaded DICOM files are described (and pseudonymised) over
+    # HTTP on a daemon thread; the SCP below owns the main thread.
+    describe.start_in_background(settings)
     ae.start_server((settings.host, settings.port), block=True,
                     evt_handlers=[(evt.EVT_C_STORE, _handle_store),
                                   (evt.EVT_C_FIND, _handle_find)])
