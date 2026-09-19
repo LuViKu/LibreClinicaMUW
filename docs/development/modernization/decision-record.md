@@ -683,7 +683,11 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 
 **Reversible** — the bundle is a new format behind a per-study setting; the annotations are additive attributes in a private namespace. The FILE-path substitution is not reversible in spirit: emitting server paths again would reintroduce the disclosure.
 
-**Out of scope.** The dataset-level bundle (P3.8) and its asynchronous export-job path.
+**Follow-ups landed (2026-09-19).**
+
+- **The dataset bundle (P3.8)** goes through the export-job queue: one zip, one manifest, a folder per subject (`subjects/<label>/`), registered under a new `export_format` row 6 (`application/zip`) so nothing that trusts the mime type hands a browser an archive labelled as text. Blinding is decided **per subject** — two subjects of one dataset can be in different arms — and the manifest says `mixed` when they differ rather than pretending one answer for the archive. The gate is applied at enqueue *and* in the worker: a study that switches the export off must not have its imaging leave the platform because a job was already waiting. The SPA queues it and polls; nothing is built on the request thread.
+- **Blinding now fails closed on screen as well.** The viewer's arm lookup used to return "not the hidden arm" on a database error, showing AI output to a clinician the trial had randomised not to see it; the export path had already decided the opposite. An unblinding event is one whether or not a file moved, so the two halves of the platform now agree. Only treating roles are affected.
+- **The four nAMD flag bindings hold OIDs**, like every other `study_item_binding` row. They had been seeded with item *names* because the query that read them matched on `item.name`; the code matches on `oc_oid` now, and an additive changeset (`lc-muw-2026-12-01-namd-flag-bindings-oid.xml`) corrects the seeded rows without touching the deployed seed.
 
 ---
 

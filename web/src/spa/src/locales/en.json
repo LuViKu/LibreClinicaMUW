@@ -2821,7 +2821,16 @@
       "tsv": "TSV (tab-separated)",
       "excel": "Excel (.xls)",
       "sas": "SAS",
-      "spss": "SPSS"
+      "spss": "SPSS",
+      "bundle": "Full bundle (ZIP, with images) — in the background"
+    },
+    "job": {
+      "label": "Bundle",
+      "queued": "Queued …",
+      "running": "Building …",
+      "done": "Done.",
+      "failed": "Failed",
+      "download": "Download"
     },
     "modal": {
       "title": "Export dataset",

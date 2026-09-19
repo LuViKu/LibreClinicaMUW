@@ -137,7 +137,17 @@ public final class BundleExportWriter {
      * @param label the subject label, which also names its folder in the zip
      */
     public record DatasetSubject(int studySubjectId, String label,
-                                 byte[] casebookXml, byte[] casebookCsv) {}
+                                 byte[] casebookXml, byte[] casebookCsv, Policy policy) {}
+
+    /**
+     * Where a subject's folder sits inside a dataset bundle. One rule, shared
+     * with whoever renders the casebook first: the {@code muw:ManifestPath}
+     * annotations have to name the same entries the zip will contain, and the
+     * casebook is rendered before the zip exists.
+     */
+    public static String subjectPrefix(String label) {
+        return "subjects/" + safeFolder(label) + "/";
+    }
 
     /**
      * P3.8 — a whole dataset as one archive.
@@ -159,7 +169,7 @@ public final class BundleExportWriter {
      */
     public static Result writeDataset(OutputStream out, DataSource dataSource,
                                       List<DatasetSubject> subjects, String studyOid,
-                                      Policy policy, String generatedBy, boolean dryRun)
+                                      String generatedBy, boolean dryRun)
             throws IOException {
 
         List<Omission> omitted = new ArrayList<>();
@@ -169,14 +179,20 @@ public final class BundleExportWriter {
 
         ZipOutputStream zos = dryRun ? null : new ZipOutputStream(out);
         try {
+            int masked = 0;
             for (DatasetSubject ds : subjects) {
-                String prefix = "subjects/" + safeFolder(ds.label()) + "/";
+                String prefix = subjectPrefix(ds.label());
+                // Blinding is per subject, not per bundle: two subjects of the
+                // same dataset can be in different arms, and the requester is
+                // blinded to one and not the other.
                 Subject s = addSubject(zos, dataSource, ds.studySubjectId(), ds.label(),
-                        prefix, ds.casebookXml(), ds.casebookCsv(), policy);
+                        prefix, ds.casebookXml(), ds.casebookCsv(), ds.policy());
+                if (ds.policy().maskAi()) masked++;
 
                 Map<String, Object> section = new LinkedHashMap<>();
                 section.put("label", ds.label());
                 section.put("path", prefix);
+                section.put("masking", ds.policy().maskAi() ? "ai-withheld" : "none");
                 section.put("acquisitions", s.acquisitions());
                 section.put("crfFiles", s.crfFiles());
                 section.put("inference", s.inference());
@@ -195,7 +211,10 @@ public final class BundleExportWriter {
             manifest.put("generatedBy", generatedBy);
             manifest.put("study", studyOid);
             manifest.put("scope", "dataset");
-            manifest.put("masking", policy.maskAi() ? "ai-withheld" : "none");
+            // "mixed" tells a reader to look at each subject's own line rather
+            // than assume one answer for the whole archive.
+            manifest.put("masking", masked == 0 ? "none"
+                    : masked == subjects.size() ? "ai-withheld" : "mixed");
             manifest.put("subjects", subjectSections);
             manifest.put("omitted", omitted.stream()
                     .map(o -> Map.of("ref", o.ref(), "reason", o.reason()))
@@ -392,11 +411,16 @@ public final class BundleExportWriter {
      * worse than none, because it reads as evidence that is merely misplaced.
      */
     public static Map<Long, String> acquisitionPaths(DataSource ds, int studySubjectId) {
+        return acquisitionPaths(ds, studySubjectId, "");
+    }
+
+    /** @param prefix the subject's folder inside a dataset bundle, "" for a single-subject one */
+    public static Map<Long, String> acquisitionPaths(DataSource ds, int studySubjectId, String prefix) {
         IngestArtifactStore store = new IngestArtifactStore();
         Map<Long, String> out = new LinkedHashMap<>();
         for (IngestedFile f : ingestedFiles(ds, studySubjectId)) {
             if (store.resolveConfined(f.storedPath()).isPresent()) {
-                out.put(f.id(), acquisitionEntryName(f));
+                out.put(f.id(), prefix + acquisitionEntryName(f));
             }
         }
         return out;

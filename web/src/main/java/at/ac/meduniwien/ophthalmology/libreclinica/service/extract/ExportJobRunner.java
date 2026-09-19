@@ -202,6 +202,7 @@ public class ExportJobRunner implements Job {
             case "pdf": return ExportFormatBean.PDFFILE.getExportFormatId();
             case "odm":
             case "xml": return ExportFormatBean.XMLFILE.getExportFormatId();
+            case "bundle": return ExportFormatBean.ZIPFILE.getExportFormatId();
             default: return ExportFormatBean.TXTFILE.getExportFormatId();
         }
     }

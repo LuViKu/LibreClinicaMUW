@@ -419,15 +419,17 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
                 List.of(new BundleExportWriter.DatasetSubject(
                                 STUDY_SUBJECT_ID, "M-001",
                                 "<ODM/>".getBytes(StandardCharsets.UTF_8),
-                                "label,value\n".getBytes(StandardCharsets.UTF_8)),
+                                "label,value\n".getBytes(StandardCharsets.UTF_8),
+                                new BundleExportWriter.Policy(false)),
                         // A second subject with nothing filed against it: it
                         // still gets its casebook, because "this subject had
                         // no scan" is an answer the recipient needs.
                         new BundleExportWriter.DatasetSubject(
                                 2, "M-002",
                                 "<ODM/>".getBytes(StandardCharsets.UTF_8),
-                                "label,value\n".getBytes(StandardCharsets.UTF_8))),
-                "S_DEFAULTS1", new BundleExportWriter.Policy(false), "root", false);
+                                "label,value\n".getBytes(StandardCharsets.UTF_8),
+                                new BundleExportWriter.Policy(false))),
+                "S_DEFAULTS1", "root", false);
 
         Map<String, byte[]> entries = unzip(sink.toByteArray());
         assertTrue(entries.containsKey("subjects/M-001/casebook.xml"));
@@ -467,12 +469,14 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
                 List.of(new BundleExportWriter.DatasetSubject(
                                 STUDY_SUBJECT_ID, "M-001",
                                 "<ODM/>".getBytes(StandardCharsets.UTF_8),
-                                "x".getBytes(StandardCharsets.UTF_8)),
+                                "x".getBytes(StandardCharsets.UTF_8),
+                                new BundleExportWriter.Policy(false)),
                         new BundleExportWriter.DatasetSubject(
                                 2, "M-002",
                                 "<ODM/>".getBytes(StandardCharsets.UTF_8),
-                                "x".getBytes(StandardCharsets.UTF_8))),
-                "S_DEFAULTS1", new BundleExportWriter.Policy(false), "root", false);
+                                "x".getBytes(StandardCharsets.UTF_8),
+                                new BundleExportWriter.Policy(false))),
+                "S_DEFAULTS1", "root", false);
 
         Map<String, byte[]> entries = unzip(sink.toByteArray());
         assertTrue(entries.containsKey("subjects/M-002/casebook.xml"),
@@ -493,8 +497,9 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
                 List.of(new BundleExportWriter.DatasetSubject(
                         STUDY_SUBJECT_ID, "../../etc/passwd",
                         "<ODM/>".getBytes(StandardCharsets.UTF_8),
-                        "x".getBytes(StandardCharsets.UTF_8))),
-                "S_DEFAULTS1", new BundleExportWriter.Policy(false), "root", false);
+                        "x".getBytes(StandardCharsets.UTF_8),
+                        new BundleExportWriter.Policy(false))),
+                "S_DEFAULTS1", "root", false);
 
         Map<String, byte[]> entries = unzip(sink.toByteArray());
         // What matters is that the label contributes no path structure: one

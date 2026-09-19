@@ -2821,7 +2821,16 @@
       "tsv": "TSV (tabgetrennt)",
       "excel": "Excel (.xls)",
       "sas": "SAS",
-      "spss": "SPSS"
+      "spss": "SPSS",
+      "bundle": "Komplettpaket (ZIP, mit Bildern) — im Hintergrund"
+    },
+    "job": {
+      "label": "Komplettpaket",
+      "queued": "In Warteschlange …",
+      "running": "Wird erstellt …",
+      "done": "Fertig.",
+      "failed": "Fehlgeschlagen",
+      "download": "Herunterladen"
     },
     "modal": {
       "title": "Datensatz exportieren",
