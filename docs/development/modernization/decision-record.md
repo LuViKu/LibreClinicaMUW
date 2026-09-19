@@ -659,6 +659,34 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 
 ---
 
+## DR-028 — An export carries the evidence, and says what a person did not write
+
+**Date:** 2026-09-19
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-025, DR-027; `BundleExportWriter`, `FileItemValue`, `SubjectExportApiController`, `ItemDataBean`/`ItemDataDAO`, `SubjectExportBundleDatabaseIT`, `SubjectExportProvenanceDatabaseIT`.
+
+**Context.** "Export the subject" produced text only. For a study whose endpoint is an image, that is not an export: the OCT volumes, the fundus photographs, the segmentation masks and the files attached to CRF items never left the server. Worse, a FILE item exported as a **server path** — worthless to the recipient, who cannot reach that filesystem, and a disclosure of the directory layout of a machine holding patient data to anyone who receives a casebook. Meanwhile the numbers the platform wrote into CRFs — an auto-ticked checklist box, an inference metric — were indistinguishable in the output from a figure a clinician typed.
+
+**Decision.** The subject bundle (`format=bundle`, off unless `export.bundle.enabled`) is a zip of `casebook.xml`, `casebook.csv`, the acquisitions, the CRF file attachments, the inference artifacts, and `manifest.json` **last**. `ItemData` elements carry `muw:SourceKind`, `muw:IngestItemId` / `muw:RetinalJobId`, and — inside a bundle — `muw:ManifestPath`. FILE items export as their filename in every format, via one implementation (`FileItemValue`).
+
+**Consequences.**
+
+- **The manifest is last, deliberately.** A bundle without one is an incomplete bundle, so a truncated download is detectable rather than silently short.
+- **An omission is named, never silent.** A file outside the store, a missing file, an AI artifact withheld from a blinded recipient: each appears in `omitted[]` with a reason. A recipient must be able to tell "this subject had no scan" from "the scan is gone" — and a blinded export that looks complete is worse than one that says so.
+- **Blinding follows the data out of the platform**, and splits on what the artifact *is*: the model's reading is withheld, the rendering of the eye is kept. A physician is blinded to the algorithm, not to their patient. An unanswerable arm lookup withholds.
+- **Every path is confined before it is read** — the acquisition store, the retinal artifact store, the CRF file store, each separately. Those paths come from rows an unauthenticated ingress can write; reading one unchecked turns an export into an arbitrary file read.
+- **`muw:ManifestPath` appears only where the bundle really carries the file.** A casebook pointing at an entry that is not in the zip reads as evidence that has merely been misplaced, which is worse than a casebook that says nothing.
+- **`ItemDataBean` now carries provenance.** The columns had existed since nAMD Slice 3 and DR-025 P1-5, but `ItemDataDAO` declared them without mapping them — so every consumer holding a bean saw an operator entry. Absence is normalised back to null, because `EntityDAO` turns SQL NULL into `0L` and "job 0 wrote this" is a false claim, not a missing one.
+- **The path leak had three routes**, not one: the per-subject export, `ExtractBean` (tab/CSV/SPSS/SAS), and `OdmExtractDAO` (dataset ODM). Fixing the first two would have left the third. The rule keys on the declared data type, never on the value looking path-like — free text with a slash in it is clinical data.
+- **The endpoint writes the zip to the response directly.** `ResponseEntity<?>`'s wildcard erases the body type, so Spring never selects `StreamingResponseBodyReturnValueHandler` and falls through to the message converters, which cannot write a lambda — a 500 for every caller. Narrowing the return type is not available: the same method answers with JSON errors and with `byte[]`. Nothing is buffered in heap either way.
+
+**Reversible** — the bundle is a new format behind a per-study setting; the annotations are additive attributes in a private namespace. The FILE-path substitution is not reversible in spirit: emitting server paths again would reintroduce the disclosure.
+
+**Out of scope.** The dataset-level bundle (P3.8) and its asynchronous export-job path.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

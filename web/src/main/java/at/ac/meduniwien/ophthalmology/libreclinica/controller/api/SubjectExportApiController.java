@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -78,8 +79,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.OutputStream;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleExportWriter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.FileItemValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
@@ -177,7 +178,8 @@ public class SubjectExportApiController {
     public ResponseEntity<?> export(@PathVariable("studyOid") String studyOid,
                                     @PathVariable("label") String label,
                                     @RequestBody(required = false) ExportRequest body,
-                                    HttpSession session) {
+                                    HttpSession session,
+                                    HttpServletResponse response) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
@@ -260,7 +262,7 @@ public class SubjectExportApiController {
         // heap to hand it to the same response.
         if (fmt.equals("bundle")) {
             return exportBundle(ss, subj, pathStudy, snapshot, currentUser,
-                    Boolean.TRUE.equals(body.dryRun()), session);
+                    Boolean.TRUE.equals(body.dryRun()), session, response);
         }
 
         byte[] payload;
@@ -314,6 +316,51 @@ public class SubjectExportApiController {
                 .body(payload);
     }
 
+    /** The namespace for annotations CDISC ODM has no element for. */
+    static final String MUW_ODM_NS = "http://www.meduniwien.ac.at/ns/odm_ext/v1";
+
+    /**
+     * Where a value came from, when it was not a person.
+     *
+     * <p>P3.7 — a CRF value written by the platform looks identical to one a
+     * clinician typed once it is in an ODM file, and a reader auditing the
+     * export has no way to tell them apart or to find the evidence. These
+     * attributes carry {@code source_kind} and the id of whatever produced it,
+     * and for a file-backed source the path it occupies in the bundle, so a
+     * value and its evidence travel together.
+     *
+     * <p>Empty for a value a person typed, which is the common case and needs
+     * no annotation.
+     *
+     * <p>{@code muw:ManifestPath} appears only in a bundle, and only for a file
+     * this bundle actually carries — {@code acquisitionPaths} is empty for the
+     * plain ODM export, where there is no manifest for a path to point into.
+     * An inference-derived value carries its job id instead; the manifest's
+     * {@code inference[]} entries name the same id, which is the join, and the
+     * job's artifacts are a directory rather than one file.
+     */
+    private static String provenanceAttrs(ItemSnapshot is, Map<Long, String> acquisitionPaths) {
+        String sourceKind = is.data().getSourceKind();
+        if (sourceKind == null || sourceKind.isBlank()) return "";
+        StringBuilder sb = new StringBuilder(64);
+        sb.append(" muw:SourceKind=\"").append(escAttr(sourceKind)).append("\"");
+        Long ingestItemId = is.data().getSourceIngestItemId();
+        if (ingestItemId != null) {
+            sb.append(" muw:IngestItemId=\"").append(ingestItemId).append("\"");
+            String path = acquisitionPaths.get(ingestItemId);
+            if (path != null) {
+                // So a reader can go from a CRF value straight to the file that
+                // justifies it, without parsing the manifest.
+                sb.append(" muw:ManifestPath=\"").append(escAttr(path)).append("\"");
+            }
+        }
+        Long retinalJobId = is.data().getSourceRetinalJobId();
+        if (retinalJobId != null) {
+            sb.append(" muw:RetinalJobId=\"").append(retinalJobId).append("\"");
+        }
+        return sb.toString();
+    }
+
     /**
      * The value to export for an item, with a FILE item's server path reduced
      * to its filename.
@@ -324,17 +371,15 @@ public class SubjectExportApiController {
      * patient data to anyone who receives a casebook. The file itself now
      * travels in the bundle; the text formats name it.
      *
-     * <p>Heritage type 11 is FILE. Detected by the item's data type rather
-     * than by the value looking path-like, because a free-text answer may
-     * legitimately contain a slash.
+     * <p>The rule itself lives in {@link FileItemValue} because the same leak
+     * had a second route — the dataset extract — and fixing one without the
+     * other would have left the disclosure in place for anyone who exports a
+     * dataset rather than a subject.
      */
     private static String exportValue(ItemSnapshot is) {
         String raw = is.data().getValue() == null ? "" : is.data().getValue();
-        if (raw.isEmpty() || is.item() == null || is.item().getItemDataTypeId() != 11) {
-            return raw;
-        }
-        int slash = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'));
-        return slash >= 0 && slash < raw.length() - 1 ? raw.substring(slash + 1) : raw;
+        int typeId = (is.item() == null) ? 0 : is.item().getItemDataTypeId();
+        return FileItemValue.forExport(raw, typeId);
     }
 
     /* =============================================================== */
@@ -352,7 +397,7 @@ public class SubjectExportApiController {
     private ResponseEntity<?> exportBundle(StudySubjectBean ss, SubjectBean subj,
                                            StudyBean pathStudy, CasebookSnapshot snapshot,
                                            UserAccountBean currentUser, boolean dryRun,
-                                           HttpSession session) {
+                                           HttpSession session, HttpServletResponse response) {
         StudySettingService settings = new StudySettingService(dataSource);
         if (!settings.isEnabled(pathStudy.getId(), StudySettingService.EXPORT_BUNDLE_ENABLED)) {
             return ResponseEntity.status(403).body(Map.of(
@@ -374,7 +419,10 @@ public class SubjectExportApiController {
         byte[] odm;
         byte[] csv;
         try {
-            odm = renderOdm(snapshot);
+            // Resolved first: the casebook names the bundle entry each
+            // auto-ticked value came from, so the names have to exist before
+            // the XML is built.
+            odm = renderOdm(snapshot, BundleExportWriter.acquisitionPaths(dataSource, ss.getId()));
             csv = renderCsv(snapshot);
         } catch (Exception e) {
             LOG.error("bundle: casebook render failed for subject {}", ss.getOid(), e);
@@ -401,26 +449,38 @@ public class SubjectExportApiController {
 
         String filename = sanitizeFilename(ss.getLabel()) + "_bundle_"
                 + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".zip";
-        final boolean finalMask = maskAi;
-        StreamingResponseBody body = out -> {
-            try {
-                BundleExportWriter.Result r = BundleExportWriter.write(
-                        out, dataSource, ss.getId(), ss.getLabel(), pathStudy.getOid(),
-                        odm, csv, new BundleExportWriter.Policy(finalMask),
-                        currentUser.getName(), false);
-                LOG.info("Subject bundle: subject {} study {} files={} bytes={} masked={} by user={}",
-                        ss.getOid(), pathStudy.getOid(), r.filesWritten(), r.bytesWritten(),
-                        finalMask, currentUser.getName());
-            } catch (IOException e) {
-                // The response has already begun; the manifest's absence is
-                // what tells the recipient the bundle is incomplete.
-                LOG.error("bundle stream failed mid-write for subject {}", ss.getOid(), e);
-            }
-        };
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/zip"))
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
-                .body(body);
+
+        // Written straight to the response rather than handed back as a
+        // StreamingResponseBody: this endpoint's declared return type is
+        // ResponseEntity<?>, whose wildcard erases the body type, so Spring
+        // never selects StreamingResponseBodyReturnValueHandler and falls
+        // through to the message converters — which have nothing that can
+        // write a lambda, producing a 500 for every caller. Narrowing the
+        // return type is not open to us: the same method answers with JSON
+        // error bodies and with byte[] for the three text formats.
+        //
+        // The property that matters is preserved either way: the zip is never
+        // buffered in heap, so a subject's OCT volumes do not have to fit in
+        // memory to be exported.
+        response.setStatus(200);
+        response.setContentType("application/zip");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        try (OutputStream out = response.getOutputStream()) {
+            BundleExportWriter.Result r = BundleExportWriter.write(
+                    out, dataSource, ss.getId(), ss.getLabel(), pathStudy.getOid(),
+                    odm, csv, policy, currentUser.getName(), false);
+            LOG.info("Subject bundle: subject {} study {} files={} bytes={} masked={} by user={}",
+                    ss.getOid(), pathStudy.getOid(), r.filesWritten(), r.bytesWritten(),
+                    maskAi, currentUser.getName());
+        } catch (IOException e) {
+            // The response has already begun, so there is no status left to
+            // change: the manifest's absence is what tells the recipient the
+            // bundle is incomplete.
+            LOG.error("bundle stream failed mid-write for subject {}", ss.getOid(), e);
+        }
+        // null means "already written" — HttpEntityMethodProcessor marks the
+        // request handled before it looks at the value.
+        return null;
     }
 
     /* =============================================================== */
@@ -557,12 +617,24 @@ public class SubjectExportApiController {
      * group fidelity should use the legacy dataset-driven export.
      */
     private byte[] renderOdm(CasebookSnapshot snap) {
+        return renderOdm(snap, Map.of());
+    }
+
+    /**
+     * @param acquisitionPaths where each ingested file will sit in the bundle,
+     *     for the {@code muw:ManifestPath} annotation. Empty outside a bundle.
+     */
+    private byte[] renderOdm(CasebookSnapshot snap, Map<Long, String> acquisitionPaths) {
         StringBuilder sb = new StringBuilder(8192);
         String createdAt = java.time.OffsetDateTime.now(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"")
           .append(" xmlns:OpenClinica=\"http://www.openclinica.org/ns/odm_ext_v130/v3.1\"")
+          // P3.7 — an ItemData nobody typed carries where it came from. Without
+          // this a reader of the casebook cannot tell an auto-populated value
+          // from a clinician's, nor find the file that produced it.
+          .append(" xmlns:muw=\"").append(MUW_ODM_NS).append("\"")
           .append(" ODMVersion=\"1.3\"")
           .append(" FileType=\"Snapshot\"")
           .append(" FileOID=\"").append(escAttr(snap.studySubject().getOid())).append("_subject_export_")
@@ -602,7 +674,9 @@ public class SubjectExportApiController {
                             : is.item().getOid();
                     String value = exportValue(is);
                     sb.append("            <ItemData ItemOID=\"").append(escAttr(itemOid))
-                      .append("\" Value=\"").append(escAttr(value)).append("\"/>\n");
+                      .append("\" Value=\"").append(escAttr(value)).append("\"")
+                      .append(provenanceAttrs(is, acquisitionPaths))
+                      .append("/>\n");
                 }
 
                 sb.append("          </ItemGroupData>\n");

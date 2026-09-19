@@ -56,7 +56,14 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
     @TempDir
     static Path STORE_ROOT;
 
+    /** The retinal pipeline writes elsewhere; the bundle confines each separately. */
+    @TempDir
+    static Path ARTIFACT_ROOT;
+
     private static final int STUDY_SUBJECT_ID = 1;
+    /** event_crf 1 belongs to M-001 — how a job is tied back to the subject. */
+    private static final int EVENT_CRF_ID = 1;
+    private static final long JOB_ID = 990001L;
     private static final String MARKER = "bundle-it-";
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -71,6 +78,7 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
         SAVED = new java.util.Properties();
         SAVED.putAll(live);
         live.setProperty("core.ingest.storePath", STORE_ROOT.toString());
+        live.setProperty("core.retinalInference.artifactStorePath", ARTIFACT_ROOT.toString());
     }
 
     @AfterEach
@@ -79,6 +87,15 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
              PreparedStatement ps = c.prepareStatement(
                      "DELETE FROM ingest_item WHERE original_filename LIKE ?")) {
             ps.setString(1, MARKER + "%");
+            ps.executeUpdate();
+        }
+        exec("DELETE FROM retinal_inference_result WHERE job_id = " + JOB_ID);
+        exec("DELETE FROM retinal_inference_job WHERE job_id = " + JOB_ID);
+    }
+
+    private void exec(String sql) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
             ps.executeUpdate();
         }
     }
@@ -116,6 +133,41 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
                 return rs.getLong(1);
             }
         }
+    }
+
+    /**
+     * A finished inference job with an artifact directory holding one companion
+     * and one mask. Listed rather than assumed by the writer, so the fixture
+     * puts real files on disk.
+     *
+     * @return the directory the masks live in
+     */
+    private Path seedFinishedJob() throws Exception {
+        Path dir = ARTIFACT_ROOT.resolve("job-" + JOB_ID);
+        Files.createDirectories(dir);
+        // A rendering of the eye — kept even under blinding.
+        Files.write(dir.resolve("fundus.png"), "fundus".getBytes(StandardCharsets.UTF_8));
+        // The model's reading of it — withheld under blinding.
+        Files.write(dir.resolve("irf_mask.png"), "mask".getBytes(StandardCharsets.UTF_8));
+
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_job (job_id, event_crf_id, task, e2e_path, "
+                             + "eye_laterality, status, enqueued_at, completed_at, model_version) "
+                             + "VALUES (?, ?, 'fluid', '/dev/null', 'OD', 'done', now(), now(), 'v1')")) {
+            ps.setLong(1, JOB_ID);
+            ps.setInt(2, EVENT_CRF_ID);
+            ps.executeUpdate();
+        }
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_result (job_id, task, output_payload, "
+                             + "bscan_masks_dir) VALUES (?, 'fluid', '{}'::jsonb, ?)")) {
+            ps.setLong(1, JOB_ID);
+            ps.setString(2, dir.toString());
+            ps.executeUpdate();
+        }
+        return dir;
     }
 
     private BundleExportWriter.Result writeBundle(boolean maskAi, ByteArrayOutputStream sink)
@@ -198,6 +250,52 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(found, "every file written has to appear in the manifest");
     }
 
+    /**
+     * The scan without what the platform made of it is half an export. For a
+     * study whose endpoint is a segmented volume, the masks <em>are</em> the
+     * result — a recipient who gets only the raw .e2e cannot check the number
+     * in the CRF against anything.
+     */
+    @Test
+    void theInferenceOutputTravelsWithTheScan() throws Exception {
+        seedFinishedJob();
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        writeBundle(false, sink);
+
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        assertTrue(entries.containsKey("inference/" + JOB_ID + "/irf_mask.png"),
+                "the mask the model produced has to be in the bundle");
+        assertTrue(entries.containsKey("inference/" + JOB_ID + "/fundus.png"),
+                "so does the companion rendered from the volume");
+        assertEquals("mask",
+                new String(entries.get("inference/" + JOB_ID + "/irf_mask.png"), StandardCharsets.UTF_8));
+
+        JsonNode inference = JSON.readTree(entries.get("manifest.json")).get("inference");
+        assertTrue(inference.isArray() && inference.size() >= 2,
+                "and each artifact has to be named in the manifest");
+    }
+
+    /**
+     * Blinding is about the algorithm, not the patient. A masked export drops
+     * the model's reading and keeps the rendering of the eye — the same split
+     * the on-screen artifact stream already makes.
+     */
+    @Test
+    void aBlindedExportWithholdsTheMasksAndKeepsTheCompanions() throws Exception {
+        seedFinishedJob();
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        BundleExportWriter.Result r = writeBundle(true, sink);
+
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        assertFalse(entries.containsKey("inference/" + JOB_ID + "/irf_mask.png"),
+                "the model's answer must not reach a blinded recipient");
+        assertTrue(entries.containsKey("inference/" + JOB_ID + "/fundus.png"),
+                "the eye itself is not AI output");
+        assertTrue(r.omitted().stream().anyMatch(
+                        o -> o.ref().equals("retinal_job/" + JOB_ID + "/irf_mask.png")),
+                "and what was withheld has to be named, or it cannot be asked for");
+    }
+
     /* ---------------- what it refuses ---------------- */
 
     /**
@@ -232,16 +330,52 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void aBlindedExportSaysWhatItWithheld() throws Exception {
         seedBoundFile("image", "x".getBytes(StandardCharsets.UTF_8));
+        seedFinishedJob();
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
         BundleExportWriter.Result r = writeBundle(true, sink);
 
         JsonNode m = JSON.readTree(unzip(sink.toByteArray()).get("manifest.json"));
         assertEquals("ai-withheld", m.get("masking").asText());
-        assertTrue(r.omitted().stream().anyMatch(o -> o.ref().startsWith("ai/")));
+        assertFalse(r.omitted().isEmpty(), "a blinded export that looks complete is worse than one that says so");
+        assertTrue(m.get("omitted").toString().contains("retinal_job/" + JOB_ID),
+                "the manifest, not only the return value, has to carry the omissions");
         // The raw scan is not AI output: the physician still gets the image.
         assertTrue(unzip(sink.toByteArray()).keySet().stream()
                         .anyMatch(k -> k.startsWith("acquisitions/")),
                 "blinding hides the AI's reading, not the patient's eye");
+    }
+
+    /**
+     * The artifact path is a database column, and the pipeline that writes it
+     * runs on another host. A row pointing outside the artifact store is not
+     * followed, for the same reason the acquisition store is confined.
+     */
+    @Test
+    void anArtifactDirectoryOutsideTheStoreIsNotRead() throws Exception {
+        Path outside = Files.createTempDirectory("not-the-artifact-store");
+        Files.write(outside.resolve("secret_mask.png"), "nope".getBytes(StandardCharsets.UTF_8));
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_job (job_id, event_crf_id, task, e2e_path, "
+                             + "eye_laterality, status, enqueued_at, model_version) "
+                             + "VALUES (?, ?, 'fluid', '/dev/null', 'OD', 'done', now(), 'v1')")) {
+            ps.setLong(1, JOB_ID);
+            ps.setInt(2, EVENT_CRF_ID);
+            ps.executeUpdate();
+        }
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_result (job_id, task, output_payload, "
+                             + "bscan_masks_dir) VALUES (?, 'fluid', '{}'::jsonb, ?)")) {
+            ps.setLong(1, JOB_ID);
+            ps.setString(2, outside.toString());
+            ps.executeUpdate();
+        }
+
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        writeBundle(false, sink);
+        assertTrue(unzip(sink.toByteArray()).keySet().stream().noneMatch(k -> k.contains("secret_mask")),
+                "nothing outside the artifact store may reach the zip");
     }
 
     /* ---------------- dry run ---------------- */

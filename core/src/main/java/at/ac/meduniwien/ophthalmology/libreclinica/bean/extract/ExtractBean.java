@@ -55,6 +55,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.FileItemValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -2645,7 +2646,11 @@ public class ExtractBean {
                     logger.info("Failed date format for: item-data-id="+pitemDataId+" with data-type-id="+pitemDatatypeId+" and item-data-value="+pitemValue);
                 }
             } else {
-                itemValue = pitemValue;
+                // P3.7 — a FILE item stores a server path, and every dataset
+                // extract emitted it verbatim: useless to the recipient, and a
+                // disclosure of the layout of a machine holding patient data.
+                // Same rule as the per-subject export, one implementation.
+                itemValue = FileItemValue.forExport(pitemValue, pitemDatatypeId == null ? 0 : pitemDatatypeId);
             }
 
             itemUnits = pitemUnits;

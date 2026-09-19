@@ -111,6 +111,7 @@ public final class BundleExportWriter {
         List<Omission> omitted = new ArrayList<>();
         List<Map<String, Object>> acquisitions = new ArrayList<>();
         List<Map<String, Object>> crfFiles = new ArrayList<>();
+        List<Map<String, Object>> inference = new ArrayList<>();
         int written = 0;
         long bytes = 0;
 
@@ -136,7 +137,7 @@ public final class BundleExportWriter {
                     acquisitions.add(entry);
                     continue;
                 }
-                String path = "acquisitions/" + f.id() + extensionOf(f.storedPath(), f.kind());
+                String path = acquisitionEntryName(f);
                 entry.put("path", path);
                 if (zos != null) {
                     long size = copyInto(zos, path, resolved);
@@ -172,17 +173,47 @@ public final class BundleExportWriter {
                 crfFiles.add(entry);
             }
 
-            if (policy.maskAi()) {
-                // Named rather than silently absent. A recipient who does not
-                // know something was withheld cannot ask for it, and a blinded
-                // export that looks complete is worse than one that says so.
-                omitted.add(new Omission("ai/*",
-                        "AI-derived output withheld: this subject is in the blinded arm "
-                                + "and the requester is a treating clinician"));
+            // The pipeline's own output: the segmentation masks and the
+            // companions it rendered from the volume. Without these the bundle
+            // has the scan but not what the platform made of it — which for an
+            // AI study is most of the point of exporting at all.
+            for (RetinalArtifact a : retinalArtifacts(dataSource, studySubjectId)) {
+                if (policy.maskAi() && a.isAiOutput()) {
+                    // Named rather than silently absent: a recipient who does
+                    // not know something was withheld cannot ask for it, and a
+                    // blinded export that looks complete is worse than one
+                    // that says so.
+                    omitted.add(new Omission("retinal_job/" + a.jobId() + "/" + a.name(),
+                            "AI-derived output withheld: this subject is in the blinded arm "
+                                    + "and the requester is a treating clinician"));
+                    continue;
+                }
+                Path resolved = confinedArtifact(a.path());
+                if (resolved == null) {
+                    omitted.add(new Omission("retinal_job/" + a.jobId() + "/" + a.name(),
+                            "file missing or outside the artifact store"));
+                    continue;
+                }
+                String path = "inference/" + a.jobId() + "/" + a.name();
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("jobId", a.jobId());
+                entry.put("task", a.task());
+                entry.put("artifact", a.name());
+                entry.put("aiDerived", a.isAiOutput());
+                entry.put("path", path);
+                if (zos != null) {
+                    long size = copyInto(zos, path, resolved);
+                    written++;
+                    bytes += size;
+                    entry.put("byteSize", size);
+                } else {
+                    entry.put("byteSize", sizeOrNull(resolved));
+                }
+                inference.add(entry);
             }
 
             Map<String, Object> manifest = manifest(subjectLabel, studyOid, generatedBy,
-                    policy, acquisitions, crfFiles, omitted, written, bytes);
+                    policy, acquisitions, crfFiles, inference, omitted, written, bytes);
 
             if (zos != null) {
                 // Last, deliberately: a bundle without a manifest is an
@@ -205,6 +236,31 @@ public final class BundleExportWriter {
                                 String storedPath, String laterality, String acquisitionDate,
                                 String modalityCode, Integer scanIndex, String sha256,
                                 Integer boundEventCrfId, Integer boundStudyEventId) {}
+
+    /** Where a subject's acquisition sits inside the zip. One rule, one place. */
+    private static String acquisitionEntryName(IngestedFile f) {
+        return "acquisitions/" + f.id() + extensionOf(f.storedPath(), f.kind());
+    }
+
+    /**
+     * The same names, for a caller that has to reference them before the zip
+     * exists — the casebook is rendered first and annotates each auto-ticked
+     * value with the file that produced it.
+     *
+     * <p>Only files that actually resolve are listed, so the casebook never
+     * points at an entry the bundle does not contain: a dangling reference is
+     * worse than none, because it reads as evidence that is merely misplaced.
+     */
+    public static Map<Long, String> acquisitionPaths(DataSource ds, int studySubjectId) {
+        IngestArtifactStore store = new IngestArtifactStore();
+        Map<Long, String> out = new LinkedHashMap<>();
+        for (IngestedFile f : ingestedFiles(ds, studySubjectId)) {
+            if (store.resolveConfined(f.storedPath()).isPresent()) {
+                out.put(f.id(), acquisitionEntryName(f));
+            }
+        }
+        return out;
+    }
 
     /** Every file filed against this subject, newest last so order is stable. */
     private static List<IngestedFile> ingestedFiles(DataSource ds, int studySubjectId) {
@@ -274,6 +330,133 @@ public final class BundleExportWriter {
         return out;
     }
 
+    /**
+     * One file the retinal pipeline produced for a job.
+     *
+     * @param aiOutput whether this is the model's reading of the eye rather
+     *                 than a rendering of the eye itself. The distinction is
+     *                 the blinding rule: a masked export withholds the AI's
+     *                 answer and keeps the unannotated scan, because a
+     *                 physician is blinded to the algorithm, not to their
+     *                 patient.
+     */
+    private record RetinalArtifact(long jobId, String task, String name, String path,
+                                   boolean aiOutput) {
+        boolean isAiOutput() {
+            return aiOutput;
+        }
+    }
+
+    /** Companions the sidecar renders from the volume; not model output. */
+    private static final List<String> COMPANIONS =
+            List.of("bscan.dcm", "fundus.png", "geometry.json");
+
+    /**
+     * Everything the pipeline wrote for this subject's scans.
+     *
+     * <p>Two sources, because they are stored differently: the per-result mask
+     * directory and en-face mask are columns, while the companions are files
+     * the sidecar drops beside the job's artifacts under a conventional name.
+     */
+    private static List<RetinalArtifact> retinalArtifacts(DataSource ds, int studySubjectId) {
+        List<RetinalArtifact> out = new ArrayList<>();
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT j.job_id, r.task, r.en_face_mask_path, r.bscan_masks_dir "
+                             + "  FROM retinal_inference_job j "
+                             + "  JOIN retinal_inference_result r ON r.job_id = j.job_id "
+                             + "  LEFT JOIN ingest_item ii ON ii.ingest_item_id = j.ingest_item_id "
+                             + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                             + "  LEFT JOIN study_event se ON se.study_event_id = j.study_event_id "
+                             + " WHERE COALESCE(ii.bound_study_subject_id, ec.study_subject_id, "
+                             + "                se.study_subject_id) = ? "
+                             + "   AND j.status = 'done' "
+                             + " ORDER BY j.job_id")) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long jobId = rs.getLong(1);
+                    String task = rs.getString(2);
+                    String enFace = rs.getString(3);
+                    String masksDir = rs.getString(4);
+                    if (enFace != null && !enFace.isBlank()) {
+                        out.add(new RetinalArtifact(jobId, task, "en-face-mask" + extOf(enFace),
+                                enFace, true));
+                    }
+                    if (masksDir != null && !masksDir.isBlank()) {
+                        collectDirectory(out, jobId, task, masksDir);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("bundle: could not list the subject's inference artifacts: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * The files in a job's artifact directory.
+     *
+     * <p>Listed rather than assumed: the sidecar's output has changed shape
+     * more than once, and a hard-coded filename list would quietly export
+     * nothing after the next change. The companions are recognised by name so
+     * they can be kept in a blinded export; everything else in that directory
+     * is the model's output.
+     */
+    private static void collectDirectory(List<RetinalArtifact> out, long jobId, String task,
+                                         String dir) {
+        Path root = confinedArtifact(dir);
+        if (root == null || !Files.isDirectory(root)) return;
+        try (var stream = Files.list(root)) {
+            stream.filter(Files::isRegularFile)
+                  .sorted()
+                  .forEach(f -> {
+                      String name = f.getFileName().toString();
+                      out.add(new RetinalArtifact(jobId, task, name, f.toString(),
+                              !COMPANIONS.contains(name.toLowerCase(Locale.ROOT))));
+                  });
+        } catch (IOException e) {
+            LOG.warn("bundle: could not list the artifact directory for job {}: {}",
+                    jobId, e.getMessage());
+        }
+    }
+
+    /**
+     * An artifact path, resolved under the retinal artifact store and nowhere
+     * else. Same reasoning as every other path here: it comes from a database
+     * row, so it is checked rather than trusted.
+     */
+    private static Path confinedArtifact(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            Path root = retinalArtifactRoot();
+            if (root == null) return null;
+            Path candidate = Path.of(value).toAbsolutePath().normalize();
+            if (!Files.exists(candidate)) return null;
+            return candidate.toRealPath().startsWith(root.toRealPath()) ? candidate : null;
+        } catch (Exception notResolvable) {
+            return null;
+        }
+    }
+
+    private static Path retinalArtifactRoot() {
+        try {
+            String raw = at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources
+                    .getField("core.retinalInference.artifactStorePath");
+            String root = (raw == null || raw.isBlank())
+                    ? "/var/lib/libreclinica/retinal-artifacts"
+                    : raw.trim();
+            return Path.of(root).toAbsolutePath().normalize();
+        } catch (Exception noContext) {
+            return Path.of("/var/lib/libreclinica/retinal-artifacts");
+        }
+    }
+
+    private static String extOf(String path) {
+        int dot = path.lastIndexOf('.');
+        return dot > 0 ? path.substring(dot) : "";
+    }
+
     /* ------------------------------------------------------------------ */
     /* manifest                                                            */
     /* ------------------------------------------------------------------ */
@@ -282,6 +465,7 @@ public final class BundleExportWriter {
                                                 String generatedBy, Policy policy,
                                                 List<Map<String, Object>> acquisitions,
                                                 List<Map<String, Object>> crfFiles,
+                                                List<Map<String, Object>> inference,
                                                 List<Omission> omitted,
                                                 int filesWritten, long bytes) {
         Map<String, Object> m = new LinkedHashMap<>();
@@ -293,6 +477,7 @@ public final class BundleExportWriter {
         m.put("masking", policy.maskAi() ? "ai-withheld" : "none");
         m.put("acquisitions", acquisitions);
         m.put("crfFiles", crfFiles);
+        m.put("inference", inference);
         m.put("omitted", omitted.stream()
                 .map(o -> Map.of("ref", o.ref(), "reason", o.reason()))
                 .toList());

@@ -87,6 +87,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.ClinicalDataUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetaDataCollector;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetadataUnit;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.FileItemValue;
 
 /**
  * Fetch odm data from database and load odm related classes.
@@ -2222,6 +2223,13 @@ public class OdmExtractDAO extends DatasetDAO {
                                     logger.debug("Item -" + itOID + " value " + itValue + " might not be ODM date format yyyy-MM-dd.");
                                 }
                             }
+                            // P3.7 — a FILE item's value is a server path. The
+                            // recipient of an ODM extract cannot use it and
+                            // should not be told the filesystem layout of a
+                            // machine holding patient data. Third route to the
+                            // same leak, same rule.
+                            itValue = FileItemValue.forExport(
+                                    itValue, datatypeid == null ? 0 : datatypeid);
                             it.setValue(itValue);
                         }
                         if (muOid != null && muOid.length() > 0) {
