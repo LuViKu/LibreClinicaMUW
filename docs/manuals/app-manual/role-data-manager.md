@@ -43,16 +43,19 @@ Administrator's and wider than a Monitor's. Common entry points:
 **Steps**
 
 1. After login (and picking a study) you land on the home dashboard.
-2. Review the summary of notes and discrepancies assigned to you.
-3. Use the side navigation or the dashboard links to start a task — most build
-   work begins at **Build Study**.
+2. **Ihre Aufgaben** shows your queues with their counts — open queries, files
+   waiting in the **Eingang**, and **Fällige Visiten**.
+3. Below, **In &lt;study&gt;** lists the workspaces — most build work begins at
+   **Studienaufbau** (Build Study). The top bar's primary navigation reaches
+   Studienaufbau, the Eingang, Datenexport and Rückfragen from any screen.
 
 ![Data Manager home dashboard](screenshots/data-manager/00-home.png)
 
 **Notes**
 
-- The top bar shows the active study/site, your name with a colour-coded **role
-  chip**, the language indicator, and **Log out**.
+- The top bar shows the primary navigation, the active study, and your name
+  with a colour-coded **role chip** that opens the profile menu (manual, **Log
+  out**).
 - The interface is German-first for clinical staff (e.g. *Modalitäten*,
   *Übernehmen*); some administrative screens remain English.
 

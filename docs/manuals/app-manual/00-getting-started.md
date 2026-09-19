@@ -44,18 +44,23 @@ switch later from the top bar.
 
 Every page shares the same frame:
 
-- **Top bar** — the active study/site, a search box for subject IDs, your name
-  with a **role chip** (colour-coded per role), the language indicator, and
-  **Log out**.
-- **Side navigation** — the workflows available to your role. The set of links is
-  role-gated, so a Monitor and a Data Manager see different menus (each chapter
-  lists its own).
+- **Top bar** — the brand (click it to return to **Start**), the **primary
+  navigation** — your role's main destinations, e.g. *Studienteilnehmer*,
+  *Rückfragen*, *Fällige Visiten* — the active study, and your name with a
+  **role chip** (colour-coded per role) that opens your profile menu with the
+  manual and **Log out**. On narrow screens the navigation moves into that
+  menu.
+- **Side rail** — on the working screens, the links local to that workflow
+  (for example Build Study's steps).
 - **Breadcrumbs** — show where you are within a multi-step flow (e.g. Subject →
   Event → CRF).
 
-The **home dashboard** summarizes what needs your attention — for example notes
-and discrepancies assigned to you — and provides quick links into your most
-common tasks.
+The **home dashboard** (*Start*) opens with **your work**: counted queues such as
+today's open visits, subjects ready to sign, open queries, files in the inbox
+and CRFs awaiting verification — each a link into that list with the filter
+already applied, so the number on the card is the number of rows you land on.
+Below that, the destinations in the active study, and for administrators the
+platform-wide ones.
 
 ## 5. Language
 

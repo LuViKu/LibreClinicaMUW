@@ -14,12 +14,14 @@ This chapter is the operational reference for the Administrator's day-to-day sur
 
 ## Navigation
 
-The Administrator's home page (**Start**) presents the available workspaces as two lanes of cards:
-
-- **Platform-wide (cross-study)** — *Nutzer verwalten* (Manage Users), *Neue Studie* (Create Study), *Modalitäten* (Modalities), *Patientenübersicht* (Patients Overview), and a study switcher when more than one study is bound.
-- **Active study** — *Studienteilnehmer* (Subject Matrix), *Studienaufbau* (Build Study), *CRF-Daten importieren* (Import CRF Data), *Audit Trail*, *Datenexport* (Data Export), *Standorte* (Sites), *Regeln* (Rules), and the study-identity / parameters editors.
-
-System-administration screens not tied to a single study — *Systemstatus*, *Passwort-Richtlinie*, *Anwendungskonfiguration*, *Geplante Jobs*, and the *System-Audit-Protokoll* — are reached by their direct addresses (listed per workflow below). Inside a study workspace a left **side-rail** links the closely related build screens (*Studienaufbau*, *Nutzer verwalten*, *CRF-Daten importieren*).
+The Administrator's home page (**Start**) opens with **Ihre Aufgaben** — open
+queries, with their count — then two groups of destinations: **In &lt;study&gt;**
+(Audit Trail, Datenexport, Studienidentität, Standorte) and **Plattform**
+(Nutzerverwaltung with the count of open invitations, Neue Studie anlegen,
+Modalitäten, Patientenübersicht, and *Aktive Studie wechseln* when you hold
+more than one study). The top bar's primary navigation reaches Nutzerverwaltung,
+Standorte, Datenexport and the Audit Trail from any screen; the
+**System-Audit** link beside it is Administrator-only.
 
 ![Administrator home (Start)](screenshots/administrator/00-home.png)
 

@@ -45,6 +45,9 @@ const manifest: StudyModuleManifest = {
         key: 'workspace-card',
         labelKey: 'studyModules.namd.label',
         component: () => import('./components/NamdHomeCard.vue'),
+        // The same roles the workspace route admits. A Monitor used to get
+        // this card and bounce off the route guard.
+        allowedRoles: ['Investigator', 'CRC', 'Data Manager', 'Administrator'],
       },
     ],
   },
