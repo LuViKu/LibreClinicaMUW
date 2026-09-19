@@ -108,6 +108,159 @@ public final class BundleExportWriter {
                                Policy policy, String generatedBy, boolean dryRun)
             throws IOException {
 
+        ZipOutputStream zos = dryRun ? null : new ZipOutputStream(out);
+        try {
+            Subject s = addSubject(zos, dataSource, studySubjectId, subjectLabel, "",
+                    casebookXml, casebookCsv, policy);
+
+            Map<String, Object> manifest = manifest(subjectLabel, studyOid, generatedBy,
+                    policy, s.acquisitions(), s.crfFiles(), s.inference(), s.omitted(),
+                    s.filesWritten(), s.bytesWritten());
+
+            if (zos != null) {
+                // Last, deliberately: a bundle without a manifest is an
+                // incomplete bundle, so a truncated download is detectable.
+                writeBytes(zos, "manifest.json",
+                        JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
+                zos.finish();
+            }
+            return new Result(s.filesWritten(), s.bytesWritten(), s.omitted(), manifest);
+        } finally {
+            if (zos != null) zos.flush();
+        }
+    }
+
+    /**
+     * One subject of a dataset bundle: who, and the casebook already rendered
+     * for them.
+     *
+     * @param label the subject label, which also names its folder in the zip
+     */
+    public record DatasetSubject(int studySubjectId, String label,
+                                 byte[] casebookXml, byte[] casebookCsv) {}
+
+    /**
+     * P3.8 — a whole dataset as one archive.
+     *
+     * <p>One zip, one manifest, a folder per subject. The alternative — a zip
+     * of per-subject zips — would have been less work here and more work for
+     * every recipient, who would have to unpack twice before finding anything
+     * and would have no single place to read what the export contains or what
+     * it withheld.
+     *
+     * <p>Subjects are written in the order given and each is independent: one
+     * subject whose files have gone missing is reported in {@code omitted} and
+     * does not stop the rest. A dataset export that aborts partway because of
+     * one bad row would be worse than one that says which row was bad.
+     *
+     * @param dryRun describe the bundle without writing it — for a dataset
+     *               this matters more than for one subject, because the answer
+     *               can run to tens of gigabytes
+     */
+    public static Result writeDataset(OutputStream out, DataSource dataSource,
+                                      List<DatasetSubject> subjects, String studyOid,
+                                      Policy policy, String generatedBy, boolean dryRun)
+            throws IOException {
+
+        List<Omission> omitted = new ArrayList<>();
+        List<Map<String, Object>> subjectSections = new ArrayList<>();
+        int written = 0;
+        long bytes = 0;
+
+        ZipOutputStream zos = dryRun ? null : new ZipOutputStream(out);
+        try {
+            for (DatasetSubject ds : subjects) {
+                String prefix = "subjects/" + safeFolder(ds.label()) + "/";
+                Subject s = addSubject(zos, dataSource, ds.studySubjectId(), ds.label(),
+                        prefix, ds.casebookXml(), ds.casebookCsv(), policy);
+
+                Map<String, Object> section = new LinkedHashMap<>();
+                section.put("label", ds.label());
+                section.put("path", prefix);
+                section.put("acquisitions", s.acquisitions());
+                section.put("crfFiles", s.crfFiles());
+                section.put("inference", s.inference());
+                section.put("fileCount", s.filesWritten());
+                section.put("byteSize", s.bytesWritten());
+                subjectSections.add(section);
+
+                omitted.addAll(s.omitted());
+                written += s.filesWritten();
+                bytes += s.bytesWritten();
+            }
+
+            Map<String, Object> manifest = new LinkedHashMap<>();
+            manifest.put("schemaVersion", 1);
+            manifest.put("generatedAt", Instant.now().toString());
+            manifest.put("generatedBy", generatedBy);
+            manifest.put("study", studyOid);
+            manifest.put("scope", "dataset");
+            manifest.put("masking", policy.maskAi() ? "ai-withheld" : "none");
+            manifest.put("subjects", subjectSections);
+            manifest.put("omitted", omitted.stream()
+                    .map(o -> Map.of("ref", o.ref(), "reason", o.reason()))
+                    .toList());
+            manifest.put("fileCount", written);
+            manifest.put("byteSize", bytes);
+
+            if (zos != null) {
+                writeBytes(zos, "manifest.json",
+                        JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
+                zos.finish();
+            }
+            return new Result(written, bytes, omitted, manifest);
+        } finally {
+            if (zos != null) zos.flush();
+        }
+    }
+
+    /**
+     * A subject label as a folder name.
+     *
+     * <p>Labels are operator-typed and end up as zip entry names, so anything
+     * that could climb out of the archive on extraction is replaced rather
+     * than escaped — a path separator in a label must not become one in the
+     * archive.
+     */
+    private static String safeFolder(String label) {
+        if (label == null || label.isBlank()) return "unknown";
+        String cleaned = label.trim().replaceAll("[^A-Za-z0-9._-]", "_");
+        // Leading dots go too. Replacing the separators already makes the name
+        // inert — "../.." becomes ".._..", one folder, nowhere to climb — but
+        // extraction tools treat a leading dot inconsistently and a hidden
+        // folder is a poor place to put somebody's export.
+        cleaned = cleaned.replaceAll("^\\.+", "");
+        return cleaned.isBlank() ? "unknown" : cleaned;
+    }
+
+    /**
+     * What one subject contributed: its manifest sections and its totals.
+     */
+    record Subject(List<Map<String, Object>> acquisitions,
+                   List<Map<String, Object>> crfFiles,
+                   List<Map<String, Object>> inference,
+                   List<Omission> omitted,
+                   int filesWritten, long bytesWritten) {}
+
+    /**
+     * Write one subject's casebook and files into a zip the caller owns.
+     *
+     * <p>Split out so a dataset of subjects lands in <em>one</em> archive with
+     * <em>one</em> manifest, rather than a zip of zips. The manifest schema
+     * was written around a {@code subjects[]} array from the start; this is
+     * what fills it for more than one.
+     *
+     * @param zos    the open archive, or null for a dry run
+     * @param prefix "" for a single-subject bundle, {@code subjects/<label>/}
+     *               within a dataset — every path in the returned manifest
+     *               sections already carries it, so a reader never has to
+     *               reconstruct where a file sits
+     */
+    static Subject addSubject(ZipOutputStream zos, DataSource dataSource,
+                              int studySubjectId, String subjectLabel, String prefix,
+                              byte[] casebookXml, byte[] casebookCsv, Policy policy)
+            throws IOException {
+
         List<Omission> omitted = new ArrayList<>();
         List<Map<String, Object>> acquisitions = new ArrayList<>();
         List<Map<String, Object>> crfFiles = new ArrayList<>();
@@ -115,11 +268,10 @@ public final class BundleExportWriter {
         int written = 0;
         long bytes = 0;
 
-        ZipOutputStream zos = dryRun ? null : new ZipOutputStream(out);
-        try {
+        {
             if (zos != null) {
-                writeBytes(zos, "casebook.xml", casebookXml);
-                writeBytes(zos, "casebook.csv", casebookCsv);
+                writeBytes(zos, prefix + "casebook.xml", casebookXml);
+                writeBytes(zos, prefix + "casebook.csv", casebookCsv);
                 written += 2;
                 bytes += casebookXml.length + casebookCsv.length;
             }
@@ -137,7 +289,7 @@ public final class BundleExportWriter {
                     acquisitions.add(entry);
                     continue;
                 }
-                String path = acquisitionEntryName(f);
+                String path = prefix + acquisitionEntryName(f);
                 entry.put("path", path);
                 if (zos != null) {
                     long size = copyInto(zos, path, resolved);
@@ -160,7 +312,7 @@ public final class BundleExportWriter {
                     crfFiles.add(entry);
                     continue;
                 }
-                String path = "crf-files/" + f.itemDataId() + "_" + safeName(resolved);
+                String path = prefix + "crf-files/" + f.itemDataId() + "_" + safeName(resolved);
                 entry.put("path", path);
                 if (zos != null) {
                     long size = copyInto(zos, path, resolved);
@@ -194,7 +346,7 @@ public final class BundleExportWriter {
                             "file missing or outside the artifact store"));
                     continue;
                 }
-                String path = "inference/" + a.jobId() + "/" + a.name();
+                String path = prefix + "inference/" + a.jobId() + "/" + a.name();
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("jobId", a.jobId());
                 entry.put("task", a.task());
@@ -212,19 +364,7 @@ public final class BundleExportWriter {
                 inference.add(entry);
             }
 
-            Map<String, Object> manifest = manifest(subjectLabel, studyOid, generatedBy,
-                    policy, acquisitions, crfFiles, inference, omitted, written, bytes);
-
-            if (zos != null) {
-                // Last, deliberately: a bundle without a manifest is an
-                // incomplete bundle, which makes truncation detectable.
-                writeBytes(zos, "manifest.json",
-                        JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
-                zos.finish();
-            }
-            return new Result(written, bytes, omitted, manifest);
-        } finally {
-            if (zos != null) zos.flush();
+            return new Subject(acquisitions, crfFiles, inference, omitted, written, bytes);
         }
     }
 

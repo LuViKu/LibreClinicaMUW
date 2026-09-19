@@ -21,6 +21,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -397,6 +398,120 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(0, r.filesWritten());
         JsonNode acq = JSON.valueToTree(r.manifest().get("acquisitions"));
         assertTrue(acq.size() >= 1, "but still says what would be in it");
+    }
+
+    /* ---------------- a whole dataset ---------------- */
+
+    /**
+     * P3.8 — many subjects, one archive, one manifest.
+     *
+     * <p>A zip of per-subject zips would have been less work to write and more
+     * work for every recipient: unpack twice before finding anything, and no
+     * single place to read what the export contains or what it withheld.
+     */
+    @Test
+    void aDatasetBundleGivesEachSubjectAFolderUnderOneManifest() throws Exception {
+        long id = seedBoundFile("image", "fundus-bytes".getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        BundleExportWriter.Result r = BundleExportWriter.writeDataset(
+                sink, DATA_SOURCE,
+                List.of(new BundleExportWriter.DatasetSubject(
+                                STUDY_SUBJECT_ID, "M-001",
+                                "<ODM/>".getBytes(StandardCharsets.UTF_8),
+                                "label,value\n".getBytes(StandardCharsets.UTF_8)),
+                        // A second subject with nothing filed against it: it
+                        // still gets its casebook, because "this subject had
+                        // no scan" is an answer the recipient needs.
+                        new BundleExportWriter.DatasetSubject(
+                                2, "M-002",
+                                "<ODM/>".getBytes(StandardCharsets.UTF_8),
+                                "label,value\n".getBytes(StandardCharsets.UTF_8))),
+                "S_DEFAULTS1", new BundleExportWriter.Policy(false), "root", false);
+
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        assertTrue(entries.containsKey("subjects/M-001/casebook.xml"));
+        assertTrue(entries.containsKey("subjects/M-002/casebook.xml"));
+        assertTrue(entries.containsKey("subjects/M-001/acquisitions/" + id + ".jpg"),
+                "a subject's files sit under that subject's folder");
+        assertTrue(entries.containsKey("manifest.json"));
+        assertFalse(entries.containsKey("casebook.xml"),
+                "there is no dataset-level casebook — each subject has its own");
+
+        JsonNode m = JSON.readTree(entries.get("manifest.json"));
+        assertEquals("dataset", m.get("scope").asText());
+        JsonNode subjects = m.get("subjects");
+        assertEquals(2, subjects.size());
+        assertEquals("M-001", subjects.get(0).get("label").asText());
+        assertEquals("subjects/M-001/", subjects.get(0).get("path").asText());
+        assertEquals("M-002", subjects.get(1).get("label").asText());
+        // The manifest's own path for the acquisition has to be the path in
+        // the zip, prefix included — a recipient reads one and opens the other.
+        assertEquals("subjects/M-001/acquisitions/" + id + ".jpg",
+                subjects.get(0).get("acquisitions").get(0).get("path").asText());
+        assertEquals(r.filesWritten(), m.get("fileCount").asInt());
+    }
+
+    /**
+     * One subject's missing file must not cost the rest of the dataset. An
+     * export that aborts partway because of one bad row is worse than one that
+     * names the row.
+     */
+    @Test
+    void aDatasetBundleReportsOneSubjectsLossAndKeepsGoing() throws Exception {
+        long stray = seedStrayPath("image");
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        BundleExportWriter.Result r = BundleExportWriter.writeDataset(
+                sink, DATA_SOURCE,
+                List.of(new BundleExportWriter.DatasetSubject(
+                                STUDY_SUBJECT_ID, "M-001",
+                                "<ODM/>".getBytes(StandardCharsets.UTF_8),
+                                "x".getBytes(StandardCharsets.UTF_8)),
+                        new BundleExportWriter.DatasetSubject(
+                                2, "M-002",
+                                "<ODM/>".getBytes(StandardCharsets.UTF_8),
+                                "x".getBytes(StandardCharsets.UTF_8))),
+                "S_DEFAULTS1", new BundleExportWriter.Policy(false), "root", false);
+
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        assertTrue(entries.containsKey("subjects/M-002/casebook.xml"),
+                "the subject after the bad row still got its casebook");
+        assertTrue(r.omitted().stream().anyMatch(o -> o.ref().equals("ingest_item/" + stray)),
+                "and the loss is named");
+    }
+
+    /**
+     * A label is operator-typed and becomes a folder name. A separator in one
+     * must not become a separator in the archive.
+     */
+    @Test
+    void aLabelCannotClimbOutOfTheArchive() throws Exception {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        BundleExportWriter.writeDataset(
+                sink, DATA_SOURCE,
+                List.of(new BundleExportWriter.DatasetSubject(
+                        STUDY_SUBJECT_ID, "../../etc/passwd",
+                        "<ODM/>".getBytes(StandardCharsets.UTF_8),
+                        "x".getBytes(StandardCharsets.UTF_8))),
+                "S_DEFAULTS1", new BundleExportWriter.Policy(false), "root", false);
+
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        // What matters is that the label contributes no path structure: one
+        // folder under subjects/, no segment that means "go up", nothing
+        // hidden. The characters themselves are harmless once they cannot
+        // separate.
+        for (String k : entries.keySet()) {
+            if (!k.startsWith("subjects/")) continue;
+            String folder = k.substring("subjects/".length(), k.indexOf('/', "subjects/".length()));
+            assertFalse(folder.isEmpty(), k);
+            assertFalse(folder.equals("..") || folder.equals("."), k);
+            assertFalse(folder.startsWith("."), "no hidden folder: " + k);
+        }
+        assertEquals(3, entries.size(),
+                "casebook.xml, casebook.csv and the manifest — and nothing at the root");
+        assertTrue(entries.keySet().stream().anyMatch(k -> k.startsWith("subjects/")),
+                "the subject is still exported, under a name that is safe");
     }
 
     @Test
