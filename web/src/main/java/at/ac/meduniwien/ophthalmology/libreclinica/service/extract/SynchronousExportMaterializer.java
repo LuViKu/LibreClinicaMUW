@@ -160,10 +160,9 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
                 fileId = firstValueOrZero(answer);
             }
             case SAS -> {
-                long elapsed = System.currentTimeMillis() - sysTimeBegin;
-                String name = sanitizedName + "_sas.sas";
-                fileId = extractService.createFile(name, runDir, "", dataset,
-                        elapsed, ExportFormatBean.TXTFILE, true, submittedBy);
+                // Was: a zero-byte file recorded as a successful export. See
+                // GenerateExtractFileService.createSasFile.
+                fileId = extractService.createSasFile(dataset, eb, study, sysTimeBegin, runDir, submittedBy);
             }
             case SPSS -> {
                 SPSSReportBean answer = new SPSSReportBean();

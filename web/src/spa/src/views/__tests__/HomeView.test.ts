@@ -77,6 +77,7 @@ function makeRouter() {
       { path: '/modalities', name: 'modalities', component: { template: '<div />' } },
       { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
       { path: '/image-inbox', name: 'image-ingest-inbox', component: { template: '<div />' } },
+      { path: '/due-visits', name: 'due-visits', component: { template: '<div />' } },
     ],
   })
 }

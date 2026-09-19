@@ -1,11 +1,12 @@
 # Builds the production images and pushes them to the GitHub Container
-# Registry (ghcr.io). Two images are produced in parallel:
+# Registry (ghcr.io). Three images are produced in parallel:
 #
 #   ghcr.io/luviku/libreclinicamuw                     — the Tomcat WAR
 #   ghcr.io/luviku/libreclinicamuw/retinal-inference   — the FastAPI sidecar
+#   ghcr.io/luviku/libreclinicamuw/dicom-scp           — the DICOM sidecar
 #
-# Both share the same tag matrix so an operator picks one release tag
-# (e.g. `v1.4.0-muw`) and both images move together. They can also be
+# All share the same tag matrix so an operator picks one release tag
+# (e.g. `v1.4.0-muw`) and every image moves together. They can also be
 # re-built independently via manual `workflow_dispatch` if a single
 # component needs a refresh.
 #
@@ -16,7 +17,7 @@
 #   3. Maintainer creates a GitHub Release from `main` (the release
 #      page handles tag creation; the tag points at the main tip
 #      commit at the time of publish)
-#   4. This workflow fires automatically, builds BOTH images from that
+#   4. This workflow fires automatically, builds ALL images from that
 #      tag, and pushes them tagged with the release's version (plus
 #      semver families, `latest`, and `sha-<short>`)
 #   5. After both image builds succeed, a long-lived
@@ -58,7 +59,7 @@ on:
         required: false
         type: string
       images:
-        description: 'Which images to build (manual dispatch only). Release-publish events always build both.'
+        description: 'Which images to build (manual dispatch only). Release-publish events always build all of them.'
         required: false
         type: choice
         default: both
@@ -66,6 +67,7 @@ on:
           - both
           - app
           - retinal-inference
+          - dicom-scp
 
 # Don't cancel an in-flight release build — half-pushed images are
 # worse than queued ones. Group by ref so dispatches against different
@@ -79,7 +81,7 @@ env:
 
 jobs:
   # ------------------------------------------------------------------
-  # Build + push both images in parallel via a matrix. Each matrix leg
+  # Build + push every image in parallel via a matrix. Each matrix leg
   # owns its own GHA cache scope so a slow app build never evicts the
   # sidecar's cache (and vice-versa). fail-fast=true (default) means a
   # failing app build cancels the in-flight sidecar build — release
@@ -132,6 +134,18 @@ jobs:
             cache_scope: release-image-retinal-inference
             title: LibreClinica MUW — Retinal inference sidecar
             description: FastAPI + Pydantic sidecar for retinal OCT/SLO inference. v1 ships the deterministic PlaceholderAdapter (task=ga) — task-agnostic contract for future MIRAGE-based decoders.
+          # DR-025 — the fundus camera talks DICOM to this sidecar, not to
+          # the app. Production pulls it by tag like the other two; without
+          # a published image an operator would have to build on the VM.
+          - name: dicom-scp
+            image: luviku/libreclinicamuw/dicom-scp
+            # Repo root, matching compose.yaml's build context.
+            context: .
+            dockerfile: dicom-scp/Dockerfile
+            build_args: ''
+            cache_scope: release-image-dicom-scp
+            title: LibreClinica MUW — DICOM C-STORE / worklist sidecar
+            description: pynetdicom SCP for the DR-025 fundus ingest path. Answers Verification and Modality Worklist C-FIND from the EDC's scheduled visits, and forwards stored images to the internal ingest endpoint.
     steps:
       # Skip a matrix leg if the operator picked "app" or
       # "retinal-inference" on a manual dispatch and this leg isn't it.
@@ -164,7 +178,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Generates the tag matrix + OCI annotation labels. Same tag
-      # rules for both images so the operator can pin both with a
+      # rules for every image so the operator can pin them all with a
       # single release tag in /etc/libreclinica/env. Tag rules:
       #   - `latest`                → release-publish, OR manual dispatch
       #                               against main

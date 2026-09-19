@@ -157,6 +157,18 @@ function messageFrom(body: unknown, fallback: string): string {
  * fetch. Saves one round trip + works without an authenticated
  * session (the auth'd detail endpoint requires login).
  */
+/**
+ * One hit from the public label-prefix lookup. Deliberately narrower than the
+ * staff `StudySubjectSearchHit` — the portal is unauthenticated, so it gets the
+ * subject label plus enough study/site context to disambiguate, and nothing else.
+ */
+export interface PublicSubjectHit {
+  studySubjectId: number
+  label: string
+  studyName: string
+  siteName: string | null
+}
+
 export interface PublicStudyEvent {
   id: string
   eventDefinitionOid: string
@@ -403,4 +415,32 @@ export async function undoCommit(jobId: number): Promise<void> {
       body,
     )
   }
+}
+
+/**
+ * 2026-09-18 — label-prefix subject lookup via the anonymous portal path.
+ *
+ * The patient-search dialog used to call the staff endpoint
+ * {@code GET /api/v1/study-subjects/search}, which is session-gated and so
+ * always 401'd for a portal operator, leaving the dialog empty. This is the
+ * public counterpart: minimum 3-character prefix, at most 10 rows, and a
+ * label-only projection (no gender/DOB/OID).
+ */
+export async function searchPatientsPublic(
+  q: string,
+  limit = 10,
+): Promise<PublicSubjectHit[]> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  const res = await fetch(`${BASE}/patients/search?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new OctPortalError(res.status, messageFrom(body, `GET /patients/search → ${res.status}`), body)
+  }
+  return ((body as { subjects?: PublicSubjectHit[] } | null)?.subjects ?? [])
 }

@@ -1976,7 +1976,23 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
                 + "       WHERE  " + "           event_crf.study_event_id IN  " + "           ( "
                 + "               SELECT study_event_id FROM study_event  " + "               WHERE "
                 + "                   study_event.study_event_definition_id IN " + sedin + "                  AND  "
-                + "                   (   study_event.sample_ordinal IS NOT NULL AND " + "                       study_event.location IS NOT NULL AND "
+                + "                   (   study_event.sample_ordinal IS NOT NULL AND "
+                // 2026-09-18 — `study_event.location IS NOT NULL` removed here.
+                //
+                // The sibling getSQLDatasetBASE_EVENTSIDE dropped this predicate
+                // when location became nullable ("JN: starting 3.1
+                // study_event.location can be null", see the commented-out line
+                // in that method) — but this query kept it, and the two have
+                // been out of sync ever since.
+                //
+                // ExtractBean.addStudyEventData walks the item-data,
+                // event-side and item-group collections in lockstep by index.
+                // Any visit without a location was therefore present on the
+                // event side and absent on the item-group side, the lists ended
+                // up different lengths, and the extract died with
+                // IndexOutOfBoundsException instead of producing a file.
+                // Location is optional in the UI, so in practice this hit
+                // almost every dataset: 29 of 38 seeded visits have none.
                 + "                       study_event.date_start IS NOT NULL  " + "                   ) " + "                  AND "
                 + "                   study_event.study_subject_id IN " + "                  ( "
                 + "                   SELECT DISTINCT study_subject.study_subject_id " + "                    FROM   study_subject   "
@@ -2249,11 +2265,37 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
         String sql = eb.getDataset().getSQLStatement();
         String[] os = sql.split("'");
         if ("postgres".equalsIgnoreCase(dbName)) {
-            dateConstraint = 
-            		String.format(" (date(study_subject.enrollment_date) >= date('%s')) and (date(study_subject.enrollment_date) <= date('%s'))", 
+            dateConstraint =
+            		String.format(" (date(study_subject.enrollment_date) >= date('%s')) and (date(study_subject.enrollment_date) <= date('%s'))",
             				os[1], os[3]);
         }
-        
+
+        // 2026-09-18 — apply the dataset's saved item filters.
+        //
+        // Every subject sub-select in the extract splices this fragment in, and
+        // study_subject is in scope at each, so restricting the subject set here
+        // applies the filters to all formats at once. The ids are resolved
+        // server-side by DatasetFilterSubjectResolver and are plain integers, so
+        // there is nothing to inject; the date literals above are untouched
+        // because callers (and this method) parse the dataset SQL positionally
+        // on the quote character.
+        //
+        // Without this the wizard's filter step was decorative: an operator
+        // could author predicates, see "12 of 40 subjects match", save, export —
+        // and get all 40.
+        List<Integer> filterSubjectIds = eb.getDataset().getFilterSubjectIds();
+        if (filterSubjectIds != null) {
+            StringBuilder ids = new StringBuilder();
+            for (Integer id : filterSubjectIds) {
+                if (ids.length() > 0) ids.append(',');
+                ids.append(id.intValue());
+            }
+            // An empty match set must export nothing, not everything.
+            dateConstraint = dateConstraint
+                    + " AND study_subject.study_subject_id IN ("
+                    + (ids.length() == 0 ? "-1" : ids) + ") ";
+        }
+
         return dateConstraint;
     }
 

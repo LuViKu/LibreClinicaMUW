@@ -19,6 +19,10 @@
 #     timer's expectations).
 #   - retinal-inference: storage volumes redirected to
 #     /var/lib/libreclinica/*, restart policy added.
+#   - dicom-scp: pinned to a published image, ingest store moved to
+#     /var/lib/libreclinica/dicom-ingest, DICOM port bound to the
+#     camera-facing address only. Behind the `dicom` profile, so it
+#     starts only where COMPOSE_PROFILES includes it.
 #   - smtp/mailcrab: not started in production (the systemd ExecStart in
 #     libreclinica.service names the services explicitly and omits smtp).
 
@@ -139,3 +143,35 @@ services:
     # for Postgres + the Tomcat app; the placeholder sidecar is near-idle.
     # Bump this if the sidecar is moved to a larger VM or a real model lands.
     cpus: "${LIBRECLINICA_RETINAL_CPUS:-1.5}"
+
+  # DR-025 — DICOM receiver for the Optomed Lumo fundus camera. Behind the
+  # `dicom` compose profile: set COMPOSE_PROFILES=dicom in
+  # /etc/libreclinica/env on the host that serves a camera, and leave it
+  # unset everywhere else.
+  dicom-scp:
+    image: ghcr.io/luviku/libreclinicamuw/dicom-scp:${LIBRECLINICA_DICOM_IMAGE_TAG:-${LIBRECLINICA_IMAGE_TAG:-latest}}
+    pull_policy: always
+    restart: unless-stopped
+    # NOTE: no `ports:` here, deliberately — Compose concatenates port lists
+    # across files, so a second entry would double-bind 11112 and publish
+    # nothing. The bind address is owned by the base compose.yaml via
+    # ${LIBRECLINICA_DICOM_BIND_ADDR}; production sets that to the
+    # camera-facing address in /etc/libreclinica/env. A C-FIND against this
+    # port returns subject labels, sex and dates of birth, so the campus
+    # firewall rule admitting the camera VLAN alone is not optional.
+    environment:
+      DICOM_SCP_AE_TITLE: ${DICOM_SCP_AE_TITLE:-LIBRECLINICA}
+      # The camera's own AE title. Leaving this blank accepts an association
+      # from anything that can reach the port — set it.
+      DICOM_SCP_ALLOWED_CALLING_AE_TITLES: ${DICOM_SCP_ALLOWED_CALLING_AE_TITLES:-}
+      # Must equal core.dicom.ingest.token in datainfo.properties.
+      DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
+      # INFO keeps the per-association summary lines and suppresses
+      # pynetdicom's dataset dumps, which would otherwise put PatientName
+      # and PatientID into the container log.
+      DICOM_SCP_LOG_LEVEL: ${DICOM_SCP_LOG_LEVEL:-INFO}
+    volumes:
+      # Stable host path under the backup root, like the other stores. The
+      # app reads the same directory to serve image previews, so the two
+      # binds must stay identical.
+      - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest

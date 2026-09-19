@@ -12,7 +12,7 @@
  * waiting for the Compare or Viewer bundles to load. Stays Chart.js-free
  * deliberately (see {@link NamdFluidTrendChart}'s rationale comment).
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Card from '../components/primitives/Card.vue'
 import DeltaChip from '../components/primitives/DeltaChip.vue'
@@ -20,6 +20,7 @@ import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdBcvaTrendChart from '../components/NamdBcvaTrendChart.vue'
 import NamdDecisionPanel from '../components/NamdDecisionPanel.vue'
+import NamdScheduleNextVisitPrompt from '../components/NamdScheduleNextVisitPrompt.vue'
 import NamdRecommendationCard from '../components/NamdRecommendationCard.vue'
 import NamdClinicalFlagsCard from '../components/NamdClinicalFlagsCard.vue'
 import { useNamdAiRecommendation } from '../composables/useNamdAiRecommendation'
@@ -32,6 +33,19 @@ interface Props {
   selectedEye: 'OD' | 'OS'
 }
 const props = defineProps<Props>()
+
+/**
+ * The decision just recorded, which drives the scheduling prompt. Cleared when
+ * the clinician confirms or skips, so the prompt appears once per decision.
+ */
+const savedDecision = ref<{ decisionDate: string; intervalWeeks: number | null } | null>(null)
+
+function onDecisionSaved(decision: { decisionDate: string; intervalWeeks: number | null }): void {
+  savedDecision.value = {
+    decisionDate: decision.decisionDate,
+    intervalWeeks: decision.intervalWeeks,
+  }
+}
 const emit = defineEmits<{
   (e: 'refresh'): void
 }>()
@@ -187,6 +201,17 @@ const crtDelta = computed<number | null>(() => {
         :event-crf-id="props.data.current?.eventCrfId ?? null"
         :subject-arm="props.data.subjectArm"
         :ai-rec="aiVisible ? recommendation : null"
+        @saved="onDecisionSaved"
+      />
+      <!-- P2-5: the decision names an interval; this puts the visit it implies
+           on the calendar. See NamdScheduleNextVisitPrompt. -->
+      <NamdScheduleNextVisitPrompt
+        v-if="savedDecision"
+        :subject-label="props.data.patient.id"
+        :study-event-id="props.data.current?.studyEventId ?? null"
+        :decision-date="savedDecision.decisionDate"
+        :interval-weeks="savedDecision.intervalWeeks"
+        @done="savedDecision = null"
       />
     </div>
   </div>

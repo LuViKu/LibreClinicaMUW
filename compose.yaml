@@ -238,7 +238,16 @@ services:
     profiles: ["dicom"]
     ports:
       # DICOM C-STORE listener — the modality connects here.
-      - "11112:11112"
+      #
+      # Dev binds every interface so a camera on the same LAN can reach a
+      # laptop. Production narrows this to the camera-facing address by
+      # setting LIBRECLINICA_DICOM_BIND_ADDR in /etc/libreclinica/env — a
+      # C-FIND against this port returns subject labels, sex and dates of
+      # birth, so it must not be reachable from the general network. This is
+      # the SINGLE source of truth for the bind: Compose *concatenates* port
+      # lists across files, so a second entry in an overlay would
+      # double-bind 11112 rather than replace it.
+      - "${LIBRECLINICA_DICOM_BIND_ADDR:-0.0.0.0}:11112:11112"
     environment:
       DICOM_SCP_AE_TITLE: ${DICOM_SCP_AE_TITLE:-LIBRECLINICA}
       DICOM_SCP_PORT: "11112"

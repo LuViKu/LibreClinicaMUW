@@ -39,6 +39,15 @@ function messageFrom(body: unknown, fallback: string): string {
 
 export type ResolveState = 'suggested' | 'novisit' | 'nopatient' | 'ambiguous'
 
+/** The visit the backend found for that label on that date, when there is one. */
+export interface EventCandidate {
+  studyEventId: number
+  eventCrfId: number | null
+  definitionLabel: string
+  dateStart: string
+  matchPolicy: string
+}
+
 export interface ResolveCandidate {
   studyId: number
   studyName: string
@@ -46,7 +55,7 @@ export interface ResolveCandidate {
   studySubjectId: number
   subjectLabel: string
   siteName: string | null
-  matchingEvent: unknown | null
+  matchingEvent: EventCandidate | null
 }
 
 export interface ResolveResponse {
@@ -79,15 +88,21 @@ export interface CommitMeta {
   patientId?: string
   laterality?: string
   studyDate?: string
+  /** When set, the image is filed straight against that visit instead of the inbox. */
+  studyEventId?: number
 }
 
-/** Upload one JPEG/PNG → image_ingest(source_kind='upload', UNBOUND). */
+/**
+ * Upload one JPEG/PNG. Without a studyEventId the image lands UNBOUND for the
+ * reconciliation inbox; with one it is filed against that visit directly.
+ */
 export async function commitImage(file: File, meta: CommitMeta): Promise<CommitResult> {
   const fd = new FormData()
   fd.append('file', file)
   if (meta.patientId) fd.append('patientId', meta.patientId)
   if (meta.laterality) fd.append('laterality', meta.laterality)
   if (meta.studyDate) fd.append('studyDate', meta.studyDate)
+  if (meta.studyEventId != null) fd.append('studyEventId', String(meta.studyEventId))
   const res = await fetch(`${BASE}/commit`, {
     method: 'POST',
     credentials: 'omit',
@@ -98,4 +113,68 @@ export async function commitImage(file: File, meta: CommitMeta): Promise<CommitR
     throw new ImagePortalError(res.status, messageFrom(body, `commit → ${res.status}`), body)
   }
   return body as CommitResult
+}
+
+/**
+ * One hit from the public label-prefix lookup — label plus enough study/site
+ * context to disambiguate, and nothing else (the page is unauthenticated).
+ */
+export interface PublicSubjectHit {
+  studySubjectId: number
+  label: string
+  studyName: string
+  siteName: string | null
+}
+
+/**
+ * 2026-09-18 — label-prefix subject lookup via the anonymous portal path, the
+ * sibling of the OCT portal's. Minimum 3-character prefix, at most 10 rows.
+ */
+export async function searchPatientsPublic(q: string, limit = 10): Promise<PublicSubjectHit[]> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  const res = await fetch(`${BASE}/patients/search?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new ImagePortalError(res.status, messageFrom(body, `patients/search → ${res.status}`), body)
+  }
+  return ((body as { subjects?: PublicSubjectHit[] } | null)?.subjects ?? [])
+}
+
+/**
+ * One visit on the picker. Label, visit and study only — the page is
+ * unauthenticated, so nothing more identifying travels to it.
+ */
+export interface PortalVisit {
+  studyEventId: number
+  subjectLabel: string
+  eventLabel: string
+  studyName: string
+  time: string | null
+}
+
+/**
+ * The visits scheduled for one day, mirroring what the camera's own worklist
+ * screen shows. The backend serves this only when
+ * `core.ingest.portal.todaysVisits` is on and answers 404 otherwise, so an
+ * empty list here means "not available", never "no patients today".
+ */
+export async function listTodaysVisits(date?: string): Promise<PortalVisit[] | null> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+  const res = await fetch(`${BASE}/visits${qs}`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  if (res.status === 404) return null
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new ImagePortalError(res.status, messageFrom(body, `visits → ${res.status}`), body)
+  }
+  return (body as { visits?: PortalVisit[] } | null)?.visits ?? []
 }

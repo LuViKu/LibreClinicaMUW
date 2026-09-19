@@ -147,6 +147,14 @@
       "overview2": {
         "crtDeltaAria": "[NEEDS_REVIEW] Change in central retinal thickness vs previous visit"
       },
+      "schedule": {
+        "title": "Schedule the next visit",
+        "body": "The decision sets an interval of {weeks} weeks, which falls on {date}.",
+        "confirm": "Create visit",
+        "saving": "Creating …",
+        "skip": "Later",
+        "alreadyPlanned": "A visit is already scheduled for {date}."
+      },
       "recommendation": {
         "headline": {
           "SHORTEN": "[NEEDS_REVIEW] Shorten interval",
@@ -155,24 +163,41 @@
         },
         "intervalProposed": "[NEEDS_REVIEW] Proposed: {weeks} weeks",
         "firedTriggers": "[NEEDS_REVIEW] Fired triggers",
+        "thresholdSet": "Threshold set {version}.",
         "disclaimer": "[NEEDS_REVIEW] This recommendation follows the study protocol. The treating physician makes the clinical decision.",
+        "rationale": {
+          "STABLE": "Findings are stable.",
+          "DE_NOVO_IRF": "New intraretinal fluid — shorten the interval.",
+          "IRF_INCREASE": "Intraretinal fluid rose by {value} nL (threshold {threshold} nL) — shorten the interval.",
+          "IRF_DECREASE_INSUFFICIENT": "Intraretinal fluid fell by less than half since the previous visit — shorten the interval.",
+          "DE_NOVO_CENTRAL_SRF": "New central subretinal fluid (1 mm) — shorten the interval.",
+          "CENTRAL_SRF_INCREASE": "Central subretinal fluid rose by {value} nL (threshold {threshold} nL) — shorten the interval.",
+          "SRF_RING_1_3_INCREASE": "Subretinal fluid in the 1–3 mm ring rose by {value} nL — shorten the interval.",
+          "NEW_HEMORRHAGE": "New retinal haemorrhage — shorten the interval.",
+          "BCVA_LOSS_5_LETTERS": "Loss of 5 or more letters, attributed to nAMD — shorten the interval.",
+          "RESIDUAL_IRF_HALVED": "Intraretinal fluid down by at least half but still present — keep the interval.",
+          "RESIDUAL_IRF_STABLE": "Residual intraretinal fluid is stable — keep the interval.",
+          "CENTRAL_SRF_IMPROVING": "Central subretinal fluid stable or falling but still present — keep the interval.",
+          "ACTIVITY_IMPROVING": "Overall activity is falling — keep the interval.",
+          "DRY_STABLE": "Dry and stable — extend the interval."
+        },
         "triggers": {
-          "DE_NOVO_IRF": "[NEEDS_REVIEW] New-onset intraretinal fluid",
-          "IRF_INCREASE": "[NEEDS_REVIEW] IRF +{value} nL above threshold ({threshold} nL)",
-          "IRF_DECREASE_INSUFFICIENT": "[NEEDS_REVIEW] IRF decreased <50% vs previous visit",
-          "DE_NOVO_CENTRAL_SRF": "[NEEDS_REVIEW] New-onset central SRF (1 mm)",
-          "CENTRAL_SRF_INCREASE": "[NEEDS_REVIEW] Central SRF +{value} nL above threshold ({threshold} nL)",
-          "SRF_RING_1_3_INCREASE": "[NEEDS_REVIEW] SRF in 1–3 mm ring +{value} nL",
-          "NEW_HEMORRHAGE": "[NEEDS_REVIEW] New retinal hemorrhage recorded",
-          "BCVA_LOSS_5_LETTERS": "[NEEDS_REVIEW] BCVA loss ≥5 letters, nAMD-attributed",
-          "RESIDUAL_IRF_HALVED": "[NEEDS_REVIEW] Residual IRF reduced ≥50% — still present",
-          "RESIDUAL_IRF_STABLE": "[NEEDS_REVIEW] Residual IRF stable — hold interval",
-          "CENTRAL_SRF_IMPROVING": "[NEEDS_REVIEW] Central SRF stable or improving",
-          "ACTIVITY_IMPROVING": "[NEEDS_REVIEW] Overall activity decreasing",
-          "IRF_ABSENT": "[NEEDS_REVIEW] No IRF present",
-          "CENTRAL_SRF_ABSENT": "[NEEDS_REVIEW] No central SRF present",
-          "NO_HEMORRHAGE_OR_BCVA_LOSS": "[NEEDS_REVIEW] No hemorrhage, no BCVA loss",
-          "SRF_ISOLATED_1_3_STABLE": "[NEEDS_REVIEW] SRF — absent, or isolated stable in 1–3 mm ring"
+          "DE_NOVO_IRF": "New intraretinal fluid",
+          "IRF_INCREASE": "Intraretinal fluid +{value} nL, above the {threshold} nL threshold",
+          "IRF_DECREASE_INSUFFICIENT": "Intraretinal fluid fell by less than half",
+          "DE_NOVO_CENTRAL_SRF": "New central subretinal fluid (1 mm)",
+          "CENTRAL_SRF_INCREASE": "Central subretinal fluid +{value} nL, above the {threshold} nL threshold",
+          "SRF_RING_1_3_INCREASE": "Subretinal fluid +{value} nL in the 1–3 mm ring",
+          "NEW_HEMORRHAGE": "New retinal haemorrhage",
+          "BCVA_LOSS_5_LETTERS": "Lost 5 or more letters, attributed to nAMD",
+          "RESIDUAL_IRF_HALVED": "Intraretinal fluid halved but still present",
+          "RESIDUAL_IRF_STABLE": "Residual intraretinal fluid is stable",
+          "CENTRAL_SRF_IMPROVING": "Central subretinal fluid stable or falling",
+          "ACTIVITY_IMPROVING": "Overall activity is falling",
+          "IRF_ABSENT": "No intraretinal fluid",
+          "CENTRAL_SRF_ABSENT": "No central subretinal fluid",
+          "NO_HEMORRHAGE_OR_BCVA_LOSS": "No haemorrhage and no attributed vision loss",
+          "SRF_ISOLATED_1_3_STABLE": "Isolated 1–3 mm ring fluid is stable"
         }
       },
       "report": {

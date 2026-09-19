@@ -98,17 +98,11 @@ export interface StudyModuleManifest {
   }
   /** Lazy i18n loader — merged into vue-i18n on activation. */
   loadI18n?: () => Promise<{ de: Record<string, unknown>; en: Record<string, unknown> }>
-  /** Optional client-side visit scheduler hook (T&E etc). */
-  visitScheduler?: (ctx: VisitSchedulerContext) => VisitSchedulerHint | null
 }
 
-export interface VisitSchedulerContext {
-  currentVisitOid: string
-  lastFluidResult?: { irf: number; srf: number; ped: number }
-  defaultIntervalDays: number
-}
-
-export interface VisitSchedulerHint {
-  intervalDays: number
-  rationale: string
-}
+// 2026-09-18 — the visitScheduler hook was removed. It was declared here and
+// never called by anything: no module implemented it and no host invoked it, so
+// an author reading the contract was offered a scheduling extension point that
+// did not exist. Treat-and-extend scheduling is done by the nAMD module's own
+// components against the events API. Re-introduce a hook when a second module
+// needs the same thing, with a caller.

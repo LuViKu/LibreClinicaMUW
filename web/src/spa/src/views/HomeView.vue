@@ -221,6 +221,14 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     scope: 'study-scoped',
   },
   {
+    id: 'due-visits',
+    to: { name: 'due-visits' },
+    titleKey: 'dueVisits.title',
+    descKey: 'dueVisits.cardDesc',
+    allowedRoles: ['Data Manager', 'Investigator', 'Monitor'],
+    scope: 'study-scoped',
+  },
+  {
     id: 'import-crf-data',
     to: { name: 'import-crf-data' },
     titleKey: 'importCrf.title',

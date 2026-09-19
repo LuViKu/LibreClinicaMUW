@@ -303,6 +303,18 @@ public class ImageIngestApiController {
             }
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.IMAGE_BIND,
                     user, study, null, "fundus image bound", "image_ingest", (int) id, "status", "UNBOUND", "BOUND");
+            // The image on the visit is the evidence that this camera was used
+            // on it, so tick the visit's checklist box for this device. The
+            // operator who bound it is the author of that value.
+            if (req.studyEventId() != null && req.eventCrfId() != null) {
+                Device dev = readDevice(c, id);
+                if (dev != null) {
+                    ImageIngestBinding.tickPerformed(dataSource, id,
+                            new ImageIngestBinding.EventTarget(
+                                    req.studySubjectId(), req.studyEventId(), req.eventCrfId()),
+                            dev.sourceKind(), dev.deviceKey(), user.getId());
+                }
+            }
             LOG.info("image_ingest {} bound to study_subject {}", id, req.studySubjectId());
             return ResponseEntity.ok(Map.of("imageIngestId", id, "status", "BOUND"));
         } catch (SQLException e) {
@@ -351,6 +363,29 @@ public class ImageIngestApiController {
     }
 
     // ----- guards / helpers -----
+
+    /** Which ingress an image came through, and which camera sent it. */
+    private record Device(String sourceKind, String deviceKey) {}
+
+    /**
+     * Reads the device off the image row. Falls back to the DICOM calling AE
+     * title for rows written before {@code device} existed, so images already
+     * sitting in the inbox still tick the right box when they are reconciled.
+     */
+    private static Device readDevice(Connection c, long imageIngestId) {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT source_kind, COALESCE(device, source_ae_title) AS device_key "
+                        + "FROM image_ingest WHERE image_ingest_id = ?")) {
+            ps.setLong(1, imageIngestId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return new Device(rs.getString("source_kind"), rs.getString("device_key"));
+            }
+        } catch (SQLException e) {
+            LOG.warn("could not read the device of image {}: {}", imageIngestId, e.getMessage());
+            return null;
+        }
+    }
 
     private ResponseEntity<?> guardSession(HttpSession session) {
         UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");

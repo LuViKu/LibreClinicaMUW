@@ -248,6 +248,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
             type="button"
             class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="datasets.isQuickOdm || !studyOid"
+            data-testid="dataset-quick-odm"
             @click="runQuickOdm"
           >
             {{ datasets.isQuickOdm ? t('dataExport.quickOdmRunning') : t('dataExport.quickOdmButton') }}

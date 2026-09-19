@@ -55,7 +55,13 @@ const studySubjectLabel = computed(() => {
   return typeof v === 'string' && v.length > 0 ? v : null
 })
 
-const isMock = computed(() => route.query.mock === '1')
+/**
+ * `?mock=1` renders fabricated visits so the workspace can be developed without
+ * a real subject. It is inert in a production build, deliberately: a URL
+ * parameter that fills a clinical screen with invented fluid volumes is one
+ * pasted link away from a clinician reading numbers that describe nobody.
+ */
+const isMock = computed(() => import.meta.env.DEV && route.query.mock === '1')
 
 const { data, loading, error, availableEyes, selectedEye, setEye, refresh } = useNamdVisitData({
   studySubjectOid,

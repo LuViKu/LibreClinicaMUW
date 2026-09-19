@@ -91,7 +91,16 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
         logger.info("logged following owner id: " + fb.getOwnerId() + " vs. " + fb.getOwner().getId());
         int id = getNextPK();
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(Integer.valueOf(1), fb.getId());
+        // 2026-09-18 — bind the reserved PK, not the bean's current id.
+        //
+        // The create SQL starts "INSERT INTO FILTER (FILTER_ID, NAME, …)", so
+        // parameter 1 is the primary key. This bound fb.getId(), which is 0 for
+        // a new bean, while the reserved `id` was only applied to the bean
+        // afterwards — so the row landed under the wrong key and every
+        // dataset_filter_map link then failed its foreign key. Nothing called
+        // this path until dataset filters started being persisted, which is why
+        // it went unnoticed.
+        variables.put(Integer.valueOf(1), Integer.valueOf(id));
         variables.put(Integer.valueOf(2), fb.getName());
         // name desc sql, status id owner id
         variables.put(Integer.valueOf(3), fb.getDescription());

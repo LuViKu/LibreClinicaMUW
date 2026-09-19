@@ -341,7 +341,7 @@ public class PublicOctUploadController {
                 e2eSha256 = null;
             }
         } catch (IOException ioEx) {
-            LOG.error("Failed to persist E2E upload for portal patientId={}: {}", pid, ioEx.getMessage());
+            LOG.error("Failed to persist E2E upload from the portal: {}", ioEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to persist E2E: " + ioEx.getMessage()));
         }
@@ -355,8 +355,8 @@ public class PublicOctUploadController {
         Long existingDuplicateJobId = findJobBySha256(e2eSha256, scanIndex);
         if (existingDuplicateJobId != null) {
             try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
-            LOG.info("Public OCT upload — duplicate (sha256={}, scanIndex={}) matches existing job {} (patientId={})",
-                    e2eSha256, scanIndex, existingDuplicateJobId, pid);
+            LOG.info("Public OCT upload — duplicate (sha256={}, scanIndex={}) matches existing job {}",
+                    e2eSha256, scanIndex, existingDuplicateJobId);
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Diese .e2e-Datei wurde bereits hochgeladen.",
                     "existingJobId", existingDuplicateJobId,
@@ -431,15 +431,15 @@ public class PublicOctUploadController {
                 deleteJobsByIds(jobIds);
                 Long racedJobId = findJobBySha256(e2eSha256, scanIndex);
                 try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
-                LOG.info("Public OCT upload — (sha256, scanIndex, task) race detected for patientId={}, existing job={}",
-                        pid, racedJobId);
+                LOG.info("Public OCT upload — (sha256, scanIndex, task) race detected, existing job={}",
+                        racedJobId);
                 return ResponseEntity.status(409).body(Map.of(
                         "message", "Diese .e2e-Datei wurde bereits hochgeladen.",
                         "existingJobId", racedJobId == null ? -1L : racedJobId,
                         "duplicate", true));
             }
-            LOG.error("Failed to enqueue retinal_inference_job from portal (patientId={}): {}",
-                    pid, sqlEx.getMessage());
+            LOG.error("Failed to enqueue retinal_inference_job from the portal: {}",
+                    sqlEx.getMessage());
             // Best-effort cleanup: roll back partial inserts + drop the orphan file.
             deleteJobsByIds(jobIds);
             try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
@@ -466,8 +466,11 @@ public class PublicOctUploadController {
             writeAmbiguousDisambiguationAuditRow(auditStudySubjectId, candidateCount);
         }
 
-        LOG.info("Public OCT upload — job {} {} (patientId={}, lat={}, scanIndex={}, eventCrfId={}, studyEventId={}, disambiguated={})",
-                jobId, status, pid, lat, scanIndex, eventCrfId, studyEventId, disambiguated);
+        // The subject is identified by the ids below, not by the label the
+        // operator typed: this line lands in a log that is rotated, shipped and
+        // read by people with no clinical role.
+        LOG.info("Public OCT upload — job {} {} (lat={}, scanIndex={}, eventCrfId={}, studyEventId={}, disambiguated={})",
+                jobId, status, lat, scanIndex, eventCrfId, studyEventId, disambiguated);
 
         // 2026-06-19 — fire the preprocess + remote-inference dispatch
         // asynchronously so the commit response returns immediately and
@@ -805,6 +808,19 @@ public class PublicOctUploadController {
      *       CRF exists yet.</li>
      * </ul>
      */
+    /**
+     * Label-prefix subject lookup for the portal's patient-search dialog.
+     * See {@link PublicSubjectSearch} for the deliberate narrowing (minimum
+     * prefix, row cap, label-only projection) relative to the staff endpoint.
+     */
+    @GetMapping(path = "/patients/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> searchPatientsPublic(
+            @RequestParam("q") String q,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return PublicSubjectSearch.search(studySubjectFinder, q, limit,
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
+    }
+
     @GetMapping(path = "/patients/{studySubjectId:[0-9]+}/events",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listPatientEventsPublic(
@@ -876,18 +892,12 @@ public class PublicOctUploadController {
      * completed / signed / locked / stopped / skipped / removed).
      */
     private static String statusForSubjectEventStatusId(int id) {
-        return switch (id) {
-            case 1 -> "scheduled";
-            case 2 -> "data-entry-started";
-            case 4 -> "completed";
-            case 5 -> "stopped";
-            case 6 -> "skipped";
-            case 7 -> "locked";
-            case 8 -> "signed";
-            case 9 -> "scheduled"; // not_scheduled — treat as scheduled for portal
-            case 10 -> "removed";
-            default -> "scheduled";
-        };
+        // 2026-09-18: delegated to the canonical mapper. The copy that used to
+        // live here disagreed with SubjectEventStatus on ids 2 and 3 — it
+        // reported "data-entry-started" for a not-scheduled visit and, having
+        // no case for 3, reported a genuinely started visit as "scheduled" —
+        // and invented ids 9/10 that the enum does not define.
+        return EventsApiController.statusForSubjectEventStatusId(id);
     }
 
     /* ====================================================================== */

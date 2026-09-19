@@ -1,0 +1,37 @@
+# CI overlay — DR-025 DICOM smoke leg.
+#
+# Apply on top of the base compose.yaml in the smoke job:
+#   docker compose -f compose.yaml -f compose.ci.yaml --profile dicom up -d
+#
+# The DICOM path needs a shared secret that both sides agree on, and the
+# application reads it from datainfo.properties baked into its image. Rather
+# than rebuild the image with a token in it, this overlay bind-mounts a config
+# directory the workflow prepares — so the token exists only in the runner's
+# workspace and never in a published layer.
+#
+# Not for production: deploy/compose.production.yaml is the production overlay,
+# and it takes its token from the host environment file instead.
+
+name: libreclinica-muw
+
+services:
+  libreclinica:
+    volumes:
+      # Prepared by the workflow: a copy of docker/config with the smoke
+      # token substituted into core.dicom.ingest.token.
+      - ./docker/config-ci:/usr/local/tomcat/libreclinica.config:ro
+
+  dicom-scp:
+    environment:
+      # Must equal core.dicom.ingest.token in the mounted config above.
+      DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
+      # The smoke client presents this AE title; an empty allow-list would
+      # accept anything and prove nothing about the allow-list itself.
+      DICOM_SCP_ALLOWED_CALLING_AE_TITLES: OPTOMEDLUMO
+      # INFO keeps the per-association summary lines and suppresses the
+      # library's dataset dumps, which would put the synthetic patient name
+      # into the job log.
+      DICOM_SCP_LOG_LEVEL: INFO
+    volumes:
+      # The smoke client runs inside this container, so it needs to be there.
+      - ./scripts/ci/dicom-smoke.py:/smoke.py:ro

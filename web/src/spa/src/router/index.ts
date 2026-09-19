@@ -385,6 +385,19 @@ const router = createRouter({
       component: () => import('@/views/ImageInboxView.vue'),
       meta: { title: 'Bild-Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
     },
+    /* P2-6 — open visits in a date window, reaching into the past so a
+       visit that was due and never happened is visible. Role-gated here
+       (advisory); the backend scopes the list to the studies the session
+       can see. */
+    {
+      path: '/due-visits',
+      name: 'due-visits',
+      component: () => import('@/views/DueVisitsView.vue'),
+      meta: {
+        title: 'Fällige Visiten',
+        role: ['Data Manager', 'Investigator', 'Monitor', 'Administrator'] as const,
+      },
+    },
     /* Phase E retinal-inference (Wave C) — public OCT-upload portal.
        Unauthenticated drag-and-drop ingest at /app/oct-upload; the
        backend whitelists /pages/api/v1/public/oct-upload/** under

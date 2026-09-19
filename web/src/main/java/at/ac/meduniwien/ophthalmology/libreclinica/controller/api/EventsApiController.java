@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -712,6 +713,25 @@ public class EventsApiController {
         if (nextOrdinal > 1 && !def.isRepeating()) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "Event definition '" + def.getOid() + "' is not repeating — already scheduled for this subject"));
+        }
+
+        // P2-5 — refuse an exact duplicate.
+        //
+        // Scheduling is now triggered from the treat-and-extend decision panel,
+        // where a double click, a retried request or two clinicians acting on
+        // the same decision would otherwise put the same patient on the
+        // calendar twice for the same day. Duplicate appointments are a real
+        // harm in a study where a visit means an injection.
+        //
+        // Only an identical (subject, definition, date) that is still merely
+        // scheduled is refused. A repeating visit on a different day, and a
+        // re-scheduling after the first one was completed or stopped, both go
+        // through.
+        Integer duplicateId = findScheduledDuplicate(ss.getId(), def.getId(), startDate);
+        if (duplicateId != null) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "That visit is already scheduled for this subject on that date",
+                    "studyEventId", duplicateId));
         }
 
         StudyEventBean ev = new StudyEventBean();
@@ -1791,8 +1811,156 @@ public class EventsApiController {
     }
 
     private static String statusForSubjectEventStatus(SubjectEventStatus s) {
-        if (s == null) return "not-scheduled";
-        return switch (s.getId()) {
+        return s == null ? "not-scheduled" : statusForSubjectEventStatusId(s.getId());
+    }
+
+    /**
+     * An existing, still-pending visit of the same definition on the same day.
+     *
+     * @return its id, or null when there is none
+     */
+    private Integer findScheduledDuplicate(int studySubjectId, int definitionId, Date dateStarted) {
+        String sql = "SELECT study_event_id FROM study_event "
+                + " WHERE study_subject_id = ? AND study_event_definition_id = ? "
+                + "   AND date(date_start) = ? "
+                + "   AND subject_event_status_id = 1 "
+                + " ORDER BY study_event_id LIMIT 1";
+        try (java.sql.Connection c = dataSource.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            ps.setInt(2, definitionId);
+            ps.setDate(3, new java.sql.Date(dateStarted.getTime()));
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Integer.valueOf(rs.getInt(1)) : null;
+            }
+        } catch (java.sql.SQLException e) {
+            // Never block scheduling over the duplicate check: a visit that
+            // does not get scheduled is worse than one scheduled twice.
+            LOG.warn("duplicate-visit check failed for subject {}: {}", studySubjectId, e.getMessage());
+            return null;
+        }
+    }
+
+    /* ================================================================== */
+    /*  GET /api/v1/events/due — what is coming, and what was missed      */
+    /* ================================================================== */
+
+    /** One row of the due-visits list. */
+    public record DueVisitDto(int studyEventId, int studySubjectId, String subjectLabel,
+                              String studyName, String eventLabel, String date, String time,
+                              String status, boolean overdue) {}
+
+    /** Widest window a single request may span. */
+    private static final int DUE_MAX_WINDOW_DAYS = 92;
+    /** Default window when the caller names none. */
+    private static final int DUE_DEFAULT_WINDOW_DAYS = 14;
+    /** Hard row cap. */
+    private static final int DUE_MAX_ROWS = 1000;
+
+    /**
+     * Visits that are open in a date window — what is coming, and what was
+     * already due and never happened.
+     *
+     * <p>Without this there is no list of who is expected: a visit that nobody
+     * schedules a patient for simply does not happen, and in a treat-and-extend
+     * study a missed visit is a missed injection. Overdue rows are the point,
+     * not a side effect, so the window starts in the past by default.
+     *
+     * <p>Scoped to the studies the session can see, so a monitor with
+     * site-only grants does not learn the other sites' schedules. Optionally
+     * narrowed further to one study by OID.
+     */
+    @GetMapping(value = "/due", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> due(@RequestParam(value = "from", required = false) String from,
+                                 @RequestParam(value = "to", required = false) String to,
+                                 @RequestParam(value = "studyOid", required = false) String studyOid,
+                                 HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+
+        java.time.LocalDate d0 = parseIsoDateOrNullForDue(from);
+        java.time.LocalDate d1 = parseIsoDateOrNullForDue(to);
+        if (d0 == null) d0 = java.time.LocalDate.now().minusDays(DUE_DEFAULT_WINDOW_DAYS);
+        if (d1 == null) d1 = java.time.LocalDate.now().plusDays(DUE_DEFAULT_WINDOW_DAYS);
+        if (d1.isBefore(d0)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "'to' is before 'from'"));
+        }
+        if (d1.isAfter(d0.plusDays(DUE_MAX_WINDOW_DAYS))) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "window may not exceed " + DUE_MAX_WINDOW_DAYS + " days"));
+        }
+
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(ub, currentStudy, currentRole);
+        if (studyOid != null && !studyOid.isBlank()) {
+            StudyBean named = new StudyDAO(dataSource).findByOid(studyOid.trim());
+            if (named == null || named.getId() == 0) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No study with oid '" + studyOid + "'"));
+            }
+            // Intersect rather than replace: naming a study you cannot see
+            // must narrow to nothing, not widen.
+            visible = visible.contains(named.getId())
+                    ? Set.of(named.getId())
+                    : Set.of();
+        }
+
+        java.time.LocalDate today = java.time.LocalDate.now();
+        List<DueVisitDto> out = new ArrayList<>();
+        try {
+            for (ScheduledVisitQuery.ScheduledVisit v :
+                    ScheduledVisitQuery.query(dataSource, d0, d1, visible, DUE_MAX_ROWS)) {
+                boolean overdue = v.date() != null
+                        && java.time.LocalDate.parse(v.date()).isBefore(today);
+                out.add(new DueVisitDto(
+                        v.studyEventId(), v.studySubjectId(), v.subjectLabel(),
+                        v.studyName(), v.eventLabel(), v.date(),
+                        v.time() == null ? null : v.time().toString(),
+                        statusForSubjectEventStatusId(v.subjectEventStatusId()),
+                        overdue));
+            }
+        } catch (java.sql.SQLException e) {
+            LOG.error("due-visits query failed: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not load visits"));
+        }
+        return ResponseEntity.ok(Map.of(
+                "from", d0.toString(), "to", d1.toString(), "visits", out));
+    }
+
+    private static java.time.LocalDate parseIsoDateOrNullForDue(String iso) {
+        if (iso == null || iso.isBlank()) return null;
+        try {
+            return java.time.LocalDate.parse(iso.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+
+    /**
+     * Canonical projection of {@code study_event.subject_event_status_id} onto
+     * the wire vocabulary, keyed by the ids in
+     * {@link SubjectEventStatus} (1 scheduled, 2 not_scheduled,
+     * 3 data_entry_started, 4 completed, 5 stopped, 6 skipped, 7 locked,
+     * 8 signed).
+     *
+     * <p>Package-private so the unauthenticated portals project the same way:
+     * {@code PublicOctUploadController} used to carry its own copy that mapped
+     * 2 → "data-entry-started", had no case for 3 (so real data-entry-started
+     * visits fell through to "scheduled") and invented ids 9 and 10.
+     *
+     * <p>"removed" is not a subject-event status — deletion is carried by
+     * {@code study_event.status_id}, handled by the callers that need it.
+     */
+    static String statusForSubjectEventStatusId(int id) {
+        return switch (id) {
             case 1 -> "scheduled";
             case 2 -> "not-scheduled";
             case 3 -> "data-entry-started";

@@ -598,6 +598,15 @@
                              Boot's version pinning. -->
                         <ignoredUsedUndeclaredDependency>org.junit.jupiter:junit-jupiter-api</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.hamcrest:hamcrest</ignoredUsedUndeclaredDependency>
+                        <!-- 2026-09-18: SubjectEventStatusProjectionTest drives
+                             the status-id → wire-string table with
+                             @ParameterizedTest/@CsvSource. junit-jupiter-params
+                             arrives on the same transitive path as
+                             junit-jupiter-api above (the junit-jupiter
+                             aggregate via spring-boot-starter-test), so it is
+                             ignored for the same reason: declaring it would
+                             duplicate Boot's version pinning. -->
+                        <ignoredUsedUndeclaredDependency>org.junit.jupiter:junit-jupiter-params</ignoredUsedUndeclaredDependency>
                         <!-- Phase E.6 multi-role auth test (2026-06-12):
                              StudyAdminAuthorizationTest uses AssertJ's
                              fluent assertThat for the per-binding

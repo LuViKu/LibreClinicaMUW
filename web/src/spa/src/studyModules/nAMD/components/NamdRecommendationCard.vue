@@ -22,6 +22,7 @@
  * monatliche Injektion") instead.
  */
 import { computed } from 'vue'
+import { NAMD_THRESHOLDS_VERSION } from '../composables/useNamdAiRecommendation'
 import { useI18n } from 'vue-i18n'
 import type { NamdAiRecommendation, NamdTriggerHit } from '../types'
 
@@ -81,7 +82,11 @@ function useI18nLabel(h: NamdTriggerHit): string {
         {{ t('studyModules.namd.recommendation.intervalProposed', { weeks: rec.intervalWeeks }) }}
       </span>
     </div>
-    <p class="mt-3 text-[13.5px] text-slate-700 leading-relaxed">{{ rec.rationale }}</p>
+    <p
+      v-if="rec.rationale"
+      class="mt-3 text-[13.5px] text-slate-700 leading-relaxed"
+      data-testid="namd-rationale"
+    >{{ t(rec.rationale.key, rec.rationale.params) }}</p>
 
     <div v-if="triggers.length > 0" class="mt-4 border-t border-slate-100 pt-3">
       <div class="text-[11px] uppercase tracking-[0.1em] text-slate-400 font-semibold mb-2">
@@ -102,6 +107,7 @@ function useI18nLabel(h: NamdTriggerHit): string {
 
     <p class="mt-4 text-[11px] text-slate-400 leading-snug">
       {{ t('studyModules.namd.recommendation.disclaimer') }}
+      <span data-testid="namd-thresholds-version">{{ t('studyModules.namd.recommendation.thresholdSet', { version: NAMD_THRESHOLDS_VERSION }) }}</span>
     </p>
   </div>
 </template>
