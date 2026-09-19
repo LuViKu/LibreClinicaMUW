@@ -442,11 +442,15 @@ const visibleRows = computed(() =>
 
           <div v-if="crf.versions.length > 0" class="mt-3 border-t border-slate-100 pt-2">
             <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">{{ t('crfLibrary.versions') }}</div>
-            <ul class="space-y-1.5">
+            <!-- The row actions carry their own hit area: bare text-xs buttons were
+                 ~16px tall and 12px apart, under WCAG 2.2 target-size (24×24), and
+                 rows 6px apart put a target's centre within 24px of the next row
+                 (target-offset). 32px tall + 10px between rows clears both. -->
+            <ul class="space-y-2.5">
               <li
                 v-for="v in crf.versions"
                 :key="v.oid"
-                class="flex items-center gap-3 text-xs"
+                class="flex items-center gap-2 text-xs"
               >
                 <span class="font-mono text-slate-700">{{ v.name }}</span>
                 <span class="text-slate-400">{{ v.oid }}</span>
@@ -455,33 +459,33 @@ const visibleRows = computed(() =>
                 <span v-if="v.description" class="text-slate-500 truncate">{{ v.description }}</span>
                 <span class="ml-auto" />
                 <button
-                  class="text-muw-blue hover:underline"
+                  class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                   @click="onDownloadXls(crf, v.oid)"
                 >{{ t('crfLibrary.downloadXls') }}</button>
                 <template v-if="canManage">
                   <button
                     v-if="v.status === 'available'"
-                    class="text-muw-blue hover:underline"
+                    class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                     @click="onLockVersion(crf, v.oid, v.name)"
                   >{{ t('crfLibrary.lock') }}</button>
                   <button
                     v-if="v.status === 'locked'"
-                    class="text-muw-blue hover:underline"
+                    class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                     @click="onUnlockVersion(crf, v.oid, v.name)"
                   >{{ t('crfLibrary.unlock') }}</button>
                   <button
                     v-if="v.status === 'removed' || v.status === 'auto-removed'"
-                    class="text-muw-blue hover:underline"
+                    class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                     @click="onRestoreVersion(crf, v.oid, v.name)"
                   >{{ t('crfLibrary.restore') }}</button>
                   <button
                     v-if="v.status !== 'removed'"
-                    class="text-rose-600 hover:underline"
+                    class="text-rose-600 hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                     @click="onDisableVersion(crf, v.oid, v.name)"
                   >{{ t('crfLibrary.disable') }}</button>
                   <button
                     v-if="isSysadmin"
-                    class="text-rose-800 hover:underline"
+                    class="text-rose-800 hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                     @click="onHardRemoveVersion(crf, v.oid, v.name)"
                   >{{ t('crfLibrary.hardRemove') }}</button>
                 </template>

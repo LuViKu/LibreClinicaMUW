@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 
 import type { UserRole } from '@/types/auth'
 
 interface BreadcrumbItem {
   label: string
   to?: string
+}
+
+/** One destination in the primary navigation. */
+export interface NavItem {
+  id: string
+  to: string
+  label: string
 }
 
 interface Props {
@@ -25,6 +33,13 @@ interface Props {
   userRoles?: UserRole[]
   /** Single-role projection — kept for back-compat with legacy callers. */
   userRole?: UserRole | null
+  /**
+   * The role's main destinations, rendered inline on wide screens and
+   * inside the profile popover on narrow ones. Until this existed the home
+   * page was the only way between workflows: every cross-workflow move was
+   * home → card → view → home.
+   */
+  navItems?: NavItem[]
   /** Optional logout handler — surfaced inside the popover. */
   onLogout?: () => void
   /**
@@ -38,6 +53,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   breadcrumb: () => [],
+  navItems: () => [],
   userName: '',
   userRoles: () => [],
   userRole: null,
@@ -46,6 +62,17 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
+const route = useRoute()
+
+/**
+ * Which nav item is the current one. Prefix matching, except for the home
+ * link — "/" is a prefix of everything, and a home link that is always
+ * highlighted tells the operator nothing.
+ */
+function isCurrent(item: NavItem): boolean {
+  if (item.to === '/') return route.path === '/'
+  return route.path === item.to || route.path.startsWith(item.to + '/')
+}
 
 /* 2026-06-21 — the module nav consumer was removed from TopBar. P3.0
    retired the orphaned slot with it: modules now reach the operator
@@ -223,7 +250,26 @@ function onReportBugClick() {
         </span>
       </RouterLink>
 
-      <nav v-if="breadcrumb.length" class="flex items-center gap-1.5 text-xs text-slate-500">
+      <nav
+        v-if="navItems.length"
+        :aria-label="t('topBar.primaryNav')"
+        class="hidden lg:flex items-center gap-0.5 mr-5"
+        data-testid="topbar-primary-nav"
+      >
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.id"
+          :to="item.to"
+          class="px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap"
+          :class="isCurrent(item) ? 'bg-muw-blue-50 text-muw-blue' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'"
+          :aria-current="isCurrent(item) ? 'page' : undefined"
+          :data-testid="`topbar-nav-${item.id}`"
+        >
+          {{ item.label }}
+        </RouterLink>
+      </nav>
+
+      <nav v-if="breadcrumb.length" :aria-label="t('topBar.breadcrumbNav')" class="flex items-center gap-1.5 text-xs text-slate-500">
         <template v-for="(item, idx) in breadcrumb" :key="idx">
           <RouterLink v-if="item.to" :to="item.to" class="hover:text-slate-900 font-medium text-slate-700">
             {{ item.label }}
@@ -314,6 +360,23 @@ function onReportBugClick() {
               <span class="text-slate-700">{{ t(`manageUsers.role.${r}`) }}</span>
             </li>
           </ul>
+
+          <nav
+            v-if="navItems.length"
+            :aria-label="t('topBar.primaryNav')"
+            class="lg:hidden border-t border-slate-200 mt-1 pt-1.5 px-2"
+          >
+            <RouterLink
+              v-for="item in navItems"
+              :key="`popover-${item.id}`"
+              :to="item.to"
+              class="block px-2 py-1.5 rounded-md hover:bg-slate-100 text-slate-700"
+              :class="isCurrent(item) ? 'font-medium text-muw-blue' : ''"
+              @click="closePopover"
+            >
+              {{ item.label }}
+            </RouterLink>
+          </nav>
 
           <div
             v-if="hasReportBug"
