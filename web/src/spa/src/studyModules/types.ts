@@ -17,6 +17,7 @@
  * on {@code MeDto.ActiveStudyDto}.
  */
 import type { RouteRecordRaw } from 'vue-router'
+import type { UserRole } from '@/types/auth'
 import type { Component } from 'vue'
 import type { EventDetailDto } from '@/types/event'
 import type { SubjectDetail } from '@/types/subject'
@@ -88,6 +89,13 @@ export interface InjectionEntry<S extends InjectionSlotId = InjectionSlotId> {
   component: Component
   /** Optional predicate — receives slot context and decides whether to mount. */
   predicate?: (ctx: SlotContextMap[S]) => boolean
+  /**
+   * Roles the entry is for. Absent means every role — the pre-existing
+   * behaviour. A home card that opens a route the role cannot enter is a
+   * dead click that bounces back to the page it came from, so an entry
+   * pointing at a role-gated route should name the same roles here.
+   */
+  allowedRoles?: UserRole[]
 }
 
 export interface StudyModuleManifest {
