@@ -115,23 +115,6 @@ public class RetinalResultsApiController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /**
-     * Companion files the preprocess sidecar writes per e2eUuid.
-     * Order matters — kept stable so the SPA can iterate without
-     * sorting client-side.
-     */
-    private static final List<String> COMPANION_NAMES =
-            List.of("bscan.dcm", "fundus.png", "geometry.json");
-
-    /**
-     * Path-traversal guard for {@code GET …/artifacts/{name}}.
-     * Allows only alphanumerics + a few common punctuation chars seg
-     * runners actually emit ({@code .}, {@code _}, {@code -}, {@code (},
-     * {@code )}, {@code #}, space).
-     */
-    private static final java.util.regex.Pattern SAFE_ARTIFACT_NAME =
-            java.util.regex.Pattern.compile("[A-Za-z0-9_.()# -]+");
-
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
 
@@ -145,6 +128,14 @@ public class RetinalResultsApiController {
     private StudyResourceAccess access() {
         if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
         return access;
+    }
+
+    /** P3.6 — the job row, its visibility and its files, shared with the split-out controllers. */
+    private RetinalJobAccess jobs;
+
+    private RetinalJobAccess jobs() {
+        if (jobs == null) jobs = new RetinalJobAccess(artifactStore, access());
+        return jobs;
     }
     private final RetinalArtifactStorageService artifactStore;
     private final StudySubjectFinder studySubjectFinder;
@@ -162,14 +153,6 @@ public class RetinalResultsApiController {
      * IT-friendly back-compat ctor stays valid.
      */
     private final RetinalInferenceApiController inferenceController;
-
-    /**
-     * 2026-06-24 — CRT (Central Retinal Thickness, central 1 mm)
-     * compute service. Nullable so the IT-friendly back-compat
-     * constructor stays valid; the new endpoint guards on null.
-     */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService crtComputeService;
 
     @Autowired
     public RetinalResultsApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -320,9 +303,9 @@ public class RetinalResultsApiController {
      * The caller must have already passed {@link #guardSession}.
      */
     private ResponseEntity<?> buildJobDetailResponse(long jobId, HttpSession session) {
-        JobRow row;
+        RetinalJobAccess.JobRow row;
         try (Connection c = dataSource.getConnection()) {
-            row = fetchJobDetail(c, jobId);
+            row = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             LOG.error("Failed to fetch retinal job {}: {}", jobId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
@@ -332,14 +315,14 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
-        String e2eUuid = e2eUuidFromPath(row.e2ePath);
-        List<String> artifactNames = listArtifactNames(row.bscanMasksDir);
+        String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
+        List<String> artifactNames = jobs().listArtifactNames(row.bscanMasksDir);
         // 2026-06-19 — thread scan_index so multi-volume uploads
         // discover their companions under scan-N/.
-        List<String> companions = listCompanionNames(e2eUuid, row.scanIndex);
+        List<String> companions = jobs().listCompanionNames(e2eUuid, row.scanIndex);
 
         String fundusUrl   = companions.contains("fundus.png")
                 ? "/pages/api/v1/retinal-jobs/" + jobId + "/artifacts/fundus.png" : null;
@@ -348,7 +331,7 @@ public class RetinalResultsApiController {
         String bscanDcmUrl = companions.contains("bscan.dcm")
                 ? "/pages/api/v1/retinal-jobs/" + jobId + "/artifacts/bscan.dcm" : null;
 
-        Map<String, Object> outputPayload = parsePayload(row.outputPayloadJson);
+        Map<String, Object> outputPayload = RetinalJobAccess.parsePayload(row.outputPayloadJson);
         PrimaryMetric pm = primaryMetric(row.primaryMetricValue, row.primaryMetricUnit);
         Double confidence = row.confidence;
 
@@ -383,8 +366,8 @@ public class RetinalResultsApiController {
                 row.eyeLaterality,
                 row.status,
                 row.modelVersion,
-                toIso(row.enqueuedAt),
-                toIso(row.completedAt),
+                RetinalJobAccess.toIso(row.enqueuedAt),
+                RetinalJobAccess.toIso(row.completedAt),
                 e2eUuid,
                 pm,
                 outputPayload,
@@ -619,577 +602,6 @@ public class RetinalResultsApiController {
         return ResponseEntity.ok(out);
     }
 
-    /* ====================================================================== */
-    /* GET /study-subjects/{studySubjectId}/bcva-timeline                      */
-    /* BCVA values per visit                                                   */
-    /* ====================================================================== */
-
-    /**
-     * Per-subject BCVA timeline. Returns one row per study_event for
-     * which the subject has at least one populated BCVA item. Each
-     * row carries the per-eye trio {@code (decimal, partial, letters)};
-     * which subset is populated depends on which BCVA preset the
-     * study used (decimal preset → decimal + partial; legacy letters
-     * preset → letters).
-     *
-     * <p>Backs the nAMD module's trend chart + Bericht history table:
-     * the SPA converts decimal+partial → letters via the shared
-     * {@code bcvaConversion.ts} utility when the row carries the
-     * decimal-flavoured fields; the letters field is consumed
-     * directly for legacy studies. The raw form (canonical
-     * {@code 1,0p-2} / {@code 0,8+2}) is reconstructed SPA-side
-     * for tooltip / audit display.
-     */
-    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/bcva-timeline",
-            produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> listBcvaTimeline(@PathVariable("studySubjectId") int studySubjectId,
-                                              HttpSession session) {
-        ResponseEntity<?> denied = access().guardSession(session);
-        if (denied != null) return denied;
-        Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
-            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
-        } catch (SQLException sqlEx) {
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
-        }
-        if (subjectStudyId == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "study_subject " + studySubjectId + " not found"));
-        }
-        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(subjectStudyId, session,
-                "study_subject " + studySubjectId + " is outside your site visibility");
-        if (visGuard != null) return visGuard;
-
-        // Pivot in Java — one SELECT, group by study_event_id, fold
-        // each (eye, oid) row into the per-eye trio.
-        // 2026-06-24 — covers both OID families: SPA-side BCVA preset
-        // (OD_BCVA_*, OS_BCVA_*) AND institutional Ophthalmology Visit
-        // CRF (VA_O*_ETDRS / VA_O*_LOGMAR). A row may come from either
-        // (or both, if a multi-section CRF has all of them).
-        String sql = "SELECT se.study_event_id, "
-                + "       date(se.date_start) AS event_date, "
-                + "       i.name AS oid, "
-                + "       idata.value AS value "
-                + "  FROM item_data idata "
-                + "  JOIN event_crf ec ON ec.event_crf_id = idata.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
-                + "  JOIN item i ON i.item_id = idata.item_id "
-                + " WHERE ec.study_subject_id = ? "
-                + "   AND COALESCE(idata.deleted, false) = false "
-                + "   AND idata.value IS NOT NULL AND idata.value <> '' "
-                + "   AND i.name IN ('OD_BCVA_DECIMAL','OS_BCVA_DECIMAL', "
-                + "                   'OD_BCVA_PARTIAL','OS_BCVA_PARTIAL', "
-                + "                   'OD_BCVA_LETTERS','OS_BCVA_LETTERS', "
-                + "                   'VA_OD_ETDRS','VA_OS_ETDRS', "
-                + "                   'VA_OD_LOGMAR','VA_OS_LOGMAR') "
-                + " ORDER BY se.date_start ASC, se.study_event_id ASC";
-        // Per-event accumulator: { studyEventId → { eventDate, od:{}, os:{} } }
-        Map<Integer, Map<String, Object>> byEvent = new LinkedHashMap<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, studySubjectId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    int sev = rs.getInt("study_event_id");
-                    Map<String, Object> row = byEvent.computeIfAbsent(sev, k -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("studyEventId", k);
-                        try {
-                            java.sql.Date ed = rs.getDate("event_date");
-                            m.put("eventDate", ed == null ? null : ed.toString());
-                        } catch (SQLException ignored) {
-                            m.put("eventDate", null);
-                        }
-                        Map<String, Object> od = new LinkedHashMap<>();
-                        od.put("decimal", null); od.put("partial", null); od.put("letters", null);
-                        Map<String, Object> os = new LinkedHashMap<>();
-                        os.put("decimal", null); os.put("partial", null); os.put("letters", null);
-                        m.put("od", od);
-                        m.put("os", os);
-                        return m;
-                    });
-                    String oid = rs.getString("oid");
-                    String value = rs.getString("value");
-                    // 2026-06-24 — both OID conventions encode the eye
-                    // in a prefix: SPA-side uses `OD_*` / `OS_*`,
-                    // institutional uses `VA_OD_*` / `VA_OS_*` (and
-                    // `REFRACT_OD_*` / `REFRACT_OS_*`). Eye detection
-                    // tolerates both.
-                    String eyeKey = (oid.startsWith("OD_") || oid.contains("_OD_") || oid.startsWith("VA_OD") )
-                            ? "od" : "os";
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(eyeKey);
-                    if (oid.endsWith("_DECIMAL")) {
-                        eyeRow.put("decimal", parseDoubleOrNull(value));
-                    } else if (oid.endsWith("_PARTIAL")) {
-                        eyeRow.put("partial", parseIntOrNull(value));
-                    } else if (oid.endsWith("_LETTERS") || oid.endsWith("_ETDRS")) {
-                        eyeRow.put("letters", parseIntOrNull(value));
-                    } else if (oid.endsWith("_LOGMAR")) {
-                        // logMAR → decimal: decimal = 10^(-logMAR).
-                        // Surfaces in the response only when there's no
-                        // direct decimal write (a CRF-Decimal entry
-                        // wins because it lands earlier in the loop).
-                        Double logmar = parseDoubleOrNull(value);
-                        if (logmar != null && eyeRow.get("decimal") == null) {
-                            eyeRow.put("decimal", Math.pow(10.0, -logmar));
-                        }
-                    }
-                }
-            }
-        } catch (SQLException sqlEx) {
-            LOG.error("Failed to list BCVA timeline for study_subject {}: {}",
-                    studySubjectId, sqlEx.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to list BCVA timeline: " + sqlEx.getMessage()));
-        }
-        return ResponseEntity.ok(new ArrayList<>(byEvent.values()));
-    }
-
-    private static Double parseDoubleOrNull(String s) {
-        if (s == null || s.isBlank()) return null;
-        try { return Double.parseDouble(s.trim().replace(',', '.')); }
-        catch (NumberFormatException e) { return null; }
-    }
-
-    private static Integer parseIntOrNull(String s) {
-        if (s == null || s.isBlank()) return null;
-        try { return Integer.parseInt(s.trim()); }
-        catch (NumberFormatException e) {
-            // Some legacy rows might store as a real; try a tolerant
-            // path before giving up.
-            Double d = parseDoubleOrNull(s);
-            return d == null ? null : (int) Math.round(d);
-        }
-    }
-
-    /* ====================================================================== */
-    /* GET /study-subjects/{studySubjectId}/namd-clinical-flags                */
-    /* Per-event per-eye observation booleans for the rule engine.             */
-    /* ====================================================================== */
-
-    /**
-     * Per-subject nAMD clinical-flags timeline. Returns one row per
-     * study_event for which any of the four observation flags is set:
-     * {@code NAMD_OD_NEW_HEMORRHAGE}, {@code NAMD_OS_NEW_HEMORRHAGE},
-     * {@code NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED},
-     * {@code NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED}.
-     *
-     * <p>The SPA rule engine consumes this alongside the BCVA + CRT
-     * timelines to derive the SHORTEN / KEEP / EXTEND recommendation
-     * per visit. Missing rows (no flag set) are omitted from the
-     * response; the SPA treats missing as {@code false}.
-     *
-     * <p>Same auth posture as {@link #listBcvaTimeline}: session +
-     * site-visibility filter on the subject's study. Tolerant — a
-     * subject with zero flag rows returns an empty array.
-     */
-    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/namd-clinical-flags",
-            produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> listNamdClinicalFlagsTimeline(@PathVariable("studySubjectId") int studySubjectId,
-                                                           HttpSession session) {
-        ResponseEntity<?> denied = access().guardSession(session);
-        if (denied != null) return denied;
-        Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
-            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
-        } catch (SQLException sqlEx) {
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
-        }
-        if (subjectStudyId == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "study_subject " + studySubjectId + " not found"));
-        }
-        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(subjectStudyId, session,
-                "study_subject " + studySubjectId + " is outside your site visibility");
-        if (visGuard != null) return visGuard;
-
-        String sql = "SELECT se.study_event_id, "
-                + "       date(se.date_start) AS event_date, "
-                + "       i.name AS oid, "
-                + "       idata.value AS value "
-                + "  FROM item_data idata "
-                + "  JOIN event_crf ec ON ec.event_crf_id = idata.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
-                + "  JOIN item i ON i.item_id = idata.item_id "
-                + " WHERE ec.study_subject_id = ? "
-                + "   AND COALESCE(idata.deleted, false) = false "
-                + "   AND idata.value IS NOT NULL AND idata.value <> '' "
-                + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE', "
-                + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED', "
-                + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED') "
-                + " ORDER BY se.date_start ASC, se.study_event_id ASC";
-
-        Map<Integer, Map<String, Object>> byEvent = new LinkedHashMap<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, studySubjectId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    int sev = rs.getInt("study_event_id");
-                    Map<String, Object> row = byEvent.computeIfAbsent(sev, k -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("studyEventId", k);
-                        try {
-                            java.sql.Date ed = rs.getDate("event_date");
-                            m.put("eventDate", ed == null ? null : ed.toString());
-                        } catch (SQLException ignored) {
-                            m.put("eventDate", null);
-                        }
-                        Map<String, Object> od = new LinkedHashMap<>();
-                        od.put("hemorrhage", false);
-                        od.put("bcvaLossAttributedToNamd", false);
-                        Map<String, Object> os = new LinkedHashMap<>();
-                        os.put("hemorrhage", false);
-                        os.put("bcvaLossAttributedToNamd", false);
-                        m.put("od", od);
-                        m.put("os", os);
-                        return m;
-                    });
-                    String oid = rs.getString("oid");
-                    String value = rs.getString("value");
-                    boolean truthy = "true".equalsIgnoreCase(value) || "1".equals(value)
-                            || "yes".equalsIgnoreCase(value);
-                    String eyeKey = oid.contains("_OD_") ? "od" : "os";
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(eyeKey);
-                    if (oid.endsWith("_NEW_HEMORRHAGE")) {
-                        eyeRow.put("hemorrhage", truthy);
-                    } else if (oid.endsWith("_BCVA_LOSS_NAMD_ATTRIBUTED")) {
-                        eyeRow.put("bcvaLossAttributedToNamd", truthy);
-                    }
-                }
-            }
-        } catch (SQLException sqlEx) {
-            LOG.error("Failed to list nAMD clinical flags for study_subject {}: {}",
-                    studySubjectId, sqlEx.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to list nAMD clinical flags: " + sqlEx.getMessage()));
-        }
-        return ResponseEntity.ok(new ArrayList<>(byEvent.values()));
-    }
-
-    /* ====================================================================== */
-    /* POST /study-events/{studyEventId}/namd-clinical-flags                   */
-    /* Upsert the per-eye clinical-flag observations for a visit.              */
-    /* ====================================================================== */
-
-    /**
-     * 2026-07-06 — Persist the nAMD clinical-flag observations for one
-     * study_event. Fills the write-side gap of {@link #listNamdClinicalFlagsTimeline}:
-     * the GET timeline lets the rec engine consume the flags, but until
-     * this endpoint shipped nothing let the physician set them from the
-     * nAMD workspace UI.
-     *
-     * <p>Behaviour:
-     *
-     * <ol>
-     *   <li>Guards session + study visibility on the subject's study.</li>
-     *   <li>Finds an existing {@code event_crf} row for
-     *     {@code (study_event_id, F_NAMD_VISIT crf_version)}; if none,
-     *     creates one so a fresh visit can carry the flags without the
-     *     physician manually opening the CRF in the legacy UI first.</li>
-     *   <li>Upserts {@code item_data} for each supplied per-eye flag
-     *     (the request body carries {@code od} and/or {@code os}; either
-     *     or both may be omitted).</li>
-     * </ol>
-     *
-     * <p>Response returns the resolved {@code eventCrfId} so the SPA
-     * can update its local {@code NamdVisit.eventCrfId} without another
-     * roundtrip.
-     */
-    @PostMapping(path = "/study-events/{studyEventId:[0-9]+}/namd-clinical-flags",
-            consumes = MediaType.APPLICATION_JSON_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> upsertNamdClinicalFlags(
-            @PathVariable("studyEventId") int studyEventId,
-            @RequestBody Map<String, Object> body,
-            HttpSession session) {
-        ResponseEntity<?> denied = access().guardSession(session);
-        if (denied != null) return denied;
-        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
-        if (currentUser == null || currentUser.getId() == 0) {
-            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
-        }
-
-        try (Connection c = dataSource.getConnection()) {
-            c.setAutoCommit(false);
-
-            // The visit has to exist and be visible before anything is written.
-            // Its study_subject_id used to be read here for the event_crf insert;
-            // EventCrfEnsurer resolves that itself now.
-            int studyId;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT ss.study_id "
-                            + "  FROM study_event se "
-                            + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
-                            + " WHERE se.study_event_id = ?")) {
-                ps.setInt(1, studyEventId);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) {
-                        return ResponseEntity.status(404).body(Map.of(
-                                "message", "study_event " + studyEventId + " not found"));
-                    }
-                    studyId = rs.getInt(1);
-                }
-            }
-            ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(studyId, session,
-                    "study_event " + studyEventId + " is outside your site visibility");
-            if (visGuard != null) return visGuard;
-
-            // Resolve F_NAMD_VISIT crf_version_id. The demo seed ships
-            // exactly one version; production configurations may add
-            // more, in which case the latest wins.
-            int crfVersionId;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT cv.crf_version_id "
-                            + "  FROM crf_version cv "
-                            + "  JOIN crf c ON c.crf_id = cv.crf_id "
-                            + " WHERE c.oc_oid = 'F_NAMD_VISIT' "
-                            + " ORDER BY cv.crf_version_id DESC LIMIT 1")) {
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) {
-                        return ResponseEntity.status(500).body(Map.of(
-                                "message", "F_NAMD_VISIT CRF version not found"));
-                    }
-                    crfVersionId = rs.getInt(1);
-                }
-            }
-
-            // Find or create the event_crf row for (study_event, crf_version).
-            // P3.0 — shared with the BCVA portal, which had the same statement.
-            EventCrfEnsurer.Instance instance =
-                    EventCrfEnsurer.ensure(c, studyEventId, crfVersionId, currentUser.getId());
-            if (instance.removed()) {
-                // This used to write into the removed form, which revived it.
-                // The unique constraint rules out a replacement instance, so
-                // there is nowhere legitimate for these flags to go; say so
-                // rather than undoing somebody's removal on their behalf.
-                c.rollback();
-                return ResponseEntity.status(409).body(Map.of(
-                        "message", "The visit CRF has been removed; restore it before saving flags"));
-            }
-            int eventCrfId = instance.eventCrfId();
-
-            // Resolve item_ids for the four per-eye flag items on this CRF version.
-            Map<String, Integer> itemIds = new LinkedHashMap<>();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT i.name, i.item_id "
-                            + "  FROM item_form_metadata ifm "
-                            + "  JOIN item i ON i.item_id = ifm.item_id "
-                            + " WHERE ifm.crf_version_id = ? "
-                            + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE',"
-                            + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',"
-                            + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED')")) {
-                ps.setInt(1, crfVersionId);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) itemIds.put(rs.getString(1), rs.getInt(2));
-                }
-            }
-
-            // Walk the body's per-eye maps + upsert each provided flag.
-            Map<String, Object> od = castMap(body.get("od"));
-            Map<String, Object> os = castMap(body.get("os"));
-            upsertFlag(c, itemIds, "NAMD_OD_NEW_HEMORRHAGE", od, "hemorrhage",
-                    eventCrfId, currentUser.getId());
-            upsertFlag(c, itemIds, "NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED", od,
-                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
-            upsertFlag(c, itemIds, "NAMD_OS_NEW_HEMORRHAGE", os, "hemorrhage",
-                    eventCrfId, currentUser.getId());
-            upsertFlag(c, itemIds, "NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED", os,
-                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
-
-            c.commit();
-
-            LOG.info("nAMD clinical flags saved: study_event={} event_crf={} by user={}",
-                    studyEventId, eventCrfId, currentUser.getName());
-
-            return ResponseEntity.ok(Map.of(
-                    "studyEventId", studyEventId,
-                    "eventCrfId", eventCrfId
-            ));
-        } catch (SQLException sqlEx) {
-            LOG.error("Failed to upsert nAMD clinical flags for study_event {}: {}",
-                    studyEventId, sqlEx.getMessage(), sqlEx);
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to save nAMD clinical flags: " + sqlEx.getMessage()));
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Object o) {
-        return o instanceof Map ? (Map<String, Object>) o : Map.of();
-    }
-
-    /**
-     * Upsert one item_data row for the given flag. The uniqueness
-     * constraint {@code (item_id, event_crf_id, ordinal)} lets us do
-     * this in one statement via ON CONFLICT; ordinal is fixed at 1
-     * for these non-repeating items.
-     *
-     * <p>Skips silently when the CRF version doesn't carry that item
-     * (defensive — production installs may drift from the demo seed).
-     */
-    private static void upsertFlag(Connection c, Map<String, Integer> itemIds,
-                                   String itemName, Map<String, Object> eyeBody,
-                                   String bodyKey, int eventCrfId, int userId) throws SQLException {
-        Integer itemId = itemIds.get(itemName);
-        if (itemId == null) return;
-        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return;
-        Object raw = eyeBody.get(bodyKey);
-        String value = raw instanceof Boolean ? String.valueOf(raw) : String.valueOf(raw);
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO item_data ("
-                        + "  item_id, event_crf_id, status_id, value, "
-                        + "  date_created, owner_id, ordinal, deleted) "
-                        + "VALUES (?, ?, 1, ?, now(), ?, 1, false) "
-                        + "ON CONFLICT (item_id, event_crf_id, ordinal) DO UPDATE "
-                        + "SET value = EXCLUDED.value, "
-                        + "    date_updated = now(), "
-                        + "    update_id = EXCLUDED.owner_id, "
-                        + "    deleted = false")) {
-            ps.setInt(1, itemId);
-            ps.setInt(2, eventCrfId);
-            ps.setString(3, value);
-            ps.setInt(4, userId);
-            ps.executeUpdate();
-        }
-    }
-
-    /* ====================================================================== */
-    /* GET /study-subjects/{studySubjectId}/crt-timeline                       */
-    /* central 1 mm retinal thickness                                          */
-    /* ====================================================================== */
-
-    /**
-     * Per-subject CRT timeline. Returns one row per study_event for
-     * which the GA + BM jobs are both {@code done} for at least one
-     * eye. Each row carries per-eye {@code crt_um} plus the source
-     * job ids so the SPA can deep-link the operator to either of the
-     * two artifacts.
-     *
-     * <p>Same auth posture as {@link #listBcvaTimeline}: session +
-     * site-visibility filter on the subject's study. Soft-fails — a
-     * missing GA or BM on one eye returns null for that eye rather
-     * than erroring out the whole timeline.
-     */
-    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/crt-timeline",
-            produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> listCrtTimeline(@PathVariable("studySubjectId") int studySubjectId,
-                                             HttpSession session) {
-        ResponseEntity<?> denied = access().guardSession(session);
-        if (denied != null) return denied;
-        if (crtComputeService == null) {
-            // Test-only ctor path with a null CRT service. Be explicit
-            // rather than 500ing on NPE.
-            return ResponseEntity.status(501).body(Map.of(
-                    "message", "CRT compute service is not wired in this context"));
-        }
-        Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
-            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
-        } catch (SQLException sqlEx) {
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
-        }
-        if (subjectStudyId == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "study_subject " + studySubjectId + " not found"));
-        }
-        ResponseEntity<?> visGuard = access().guardStudyVisibilityAllowingDeepLink(subjectStudyId, session,
-                "study_subject " + studySubjectId + " is outside your site visibility");
-        if (visGuard != null) return visGuard;
-
-        // Trial blinding — CRT/CST is derived from the AI layer segmentation;
-        // a treating clinician on an AI_HIDDEN subject gets an empty timeline.
-        if (AiArmPolicy.isTreatingRole(session)) {
-            String arm = null;
-            try (Connection c = dataSource.getConnection()) {
-                arm = AiArmPolicy.armForSubject(c, studySubjectId);
-            } catch (SQLException e) {
-                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
-            }
-            if (AiArmPolicy.maskAiFor(arm, session)) {
-                return ResponseEntity.ok(List.of());
-            }
-        }
-
-        // Pull every study_event the subject has where at least one
-        // CRT-source done job exists. 2026-06-25 — the supported source
-        // tasks are now {layers, ga, bm}: the consolidated `layers` task
-        // returns both ILM + BM in one job (the post-refactor default
-        // for RIS uploads), and the legacy `ga` + `bm` pair stays
-        // recognised so historical jobs still surface a timeline entry.
-        // Per-eye pairing happens in CrtComputeService.
-        String sql = "SELECT DISTINCT se.study_event_id, "
-                + "       date(se.date_start) AS event_date "
-                + "  FROM retinal_inference_job j "
-                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
-                + " WHERE se.study_subject_id = ? "
-                + "   AND j.task IN ('layers','ga','bm') "
-                + "   AND j.status IN ('done','succeeded') "
-                + " ORDER BY event_date ASC, study_event_id ASC";
-
-        List<Map<String, Object>> out = new ArrayList<>();
-        List<int[]> events = new ArrayList<>(); // [eventId, dateMillis-ish ordinal]
-        Map<Integer, String> eventDateByEventId = new LinkedHashMap<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, studySubjectId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    int sev = rs.getInt("study_event_id");
-                    java.sql.Date ed = rs.getDate("event_date");
-                    eventDateByEventId.put(sev, ed == null ? null : ed.toString());
-                    events.add(new int[]{sev});
-                }
-            }
-        } catch (SQLException sqlEx) {
-            LOG.error("Failed to list CRT-eligible events for study_subject {}: {}",
-                    studySubjectId, sqlEx.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to list CRT timeline: " + sqlEx.getMessage()));
-        }
-        // Per-event per-eye computation. Each event is independent; one
-        // failing event doesn't abort the rest.
-        for (Map.Entry<Integer, String> e : eventDateByEventId.entrySet()) {
-            int eventId = e.getKey();
-            Map<at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye,
-                    at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Result>
-                    perEye = crtComputeService.computeForStudyEvent(eventId);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("studyEventId", eventId);
-            row.put("eventDate", e.getValue());
-            row.put("od", crtRowOrNull(perEye, at.ac.meduniwien.ophthalmology.libreclinica
-                    .service.retinal.metrics.CrtComputeService.Eye.OD));
-            row.put("os", crtRowOrNull(perEye, at.ac.meduniwien.ophthalmology.libreclinica
-                    .service.retinal.metrics.CrtComputeService.Eye.OS));
-            // Only surface events that produced AT LEAST one eye —
-            // events where both GA + BM exist but neither paired (e.g.
-            // GA done for OD, BM done for OS only) would otherwise
-            // surface as a useless empty row.
-            if (row.get("od") != null || row.get("os") != null) {
-                out.add(row);
-            }
-        }
-        return ResponseEntity.ok(out);
-    }
-
-    private static Map<String, Object> crtRowOrNull(
-            Map<at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye,
-                    at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Result> perEye,
-            at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye eye) {
-        var r = perEye.get(eye);
-        if (r == null) return null;
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("crtMicrons", Math.round(r.crtMicrons() * 100.0) / 100.0); // 2 decimals
-        out.put("pixelsInDisk", r.pixelsInDisk());
-        out.put("layersJobId", r.layersJobId());
-        return out;
-    }
 
     /**
      * Permitted values of the {@code task} query parameter on the
@@ -1292,9 +704,9 @@ public class RetinalResultsApiController {
                     String laterality = rs.getString("eye_laterality");
                     BigDecimal value = rs.getBigDecimal("primary_metric_value");
                     String unit = rs.getString("primary_metric_unit");
-                    Map<String, Object> payload = parsePayload(rs.getString("output_payload"));
+                    Map<String, Object> payload = RetinalJobAccess.parsePayload(rs.getString("output_payload"));
                     out.add(new RetinalTrendsPointDto(
-                            jobId, toIso(completedAt),
+                            jobId, RetinalJobAccess.toIso(completedAt),
                             visitDate == null ? null : visitDate.toString(),
                             laterality,
                             value, unit, payload));
@@ -1317,14 +729,14 @@ public class RetinalResultsApiController {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
-        if (name == null || name.isBlank() || !SAFE_ARTIFACT_NAME.matcher(name).matches()) {
+        if (name == null || name.isBlank() || !RetinalJobAccess.SAFE_ARTIFACT_NAME.matcher(name).matches()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Artifact name '" + name + "' contains disallowed characters"));
         }
 
-        JobRow row;
+        RetinalJobAccess.JobRow row;
         try (Connection c = dataSource.getConnection()) {
-            row = fetchJobDetail(c, jobId);
+            row = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             LOG.error("Failed to fetch retinal job {}: {}", jobId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
@@ -1334,11 +746,11 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
         Path target;
-        boolean isCompanion = COMPANION_NAMES.contains(name);
+        boolean isCompanion = RetinalJobAccess.COMPANION_NAMES.contains(name);
         // Trial blinding — a treating clinician viewing an AI_HIDDEN subject may
         // fetch the raw scan companions (bscan.dcm / fundus.png / geometry.json)
         // but NOT the AI segmentation artifacts (masks / CSVs under
@@ -1349,7 +761,7 @@ public class RetinalResultsApiController {
         }
         try {
             if (isCompanion) {
-                String e2eUuid = e2eUuidFromPath(row.e2ePath);
+                String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
                 // 2026-06-19 — pass the job's scan_index so the
                 // resolver looks under scan-N/ for multi-volume uploads
                 // (preprocess sidecar layout change observed 2026-06-18).
@@ -1391,7 +803,7 @@ public class RetinalResultsApiController {
         // be picked up by Jackson and serialised as JSON (then fail on the
         // ChannelInputStream property). Direct streaming sidesteps the
         // converter selection entirely.
-        MediaType mediaType = mediaTypeForName(name);
+        MediaType mediaType = RetinalJobAccess.mediaTypeForName(name);
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType(mediaType.toString());
         long size;
@@ -1436,9 +848,9 @@ public class RetinalResultsApiController {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
-        JobRow row;
+        RetinalJobAccess.JobRow row;
         try (Connection c = dataSource.getConnection()) {
-            row = fetchJobDetail(c, jobId);
+            row = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             LOG.error("Failed to fetch retinal job {}: {}", jobId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
@@ -1448,7 +860,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
         // Trial blinding — the segmentation envelope is pure AI output; withhold
@@ -2452,55 +1864,6 @@ public class RetinalResultsApiController {
         return fallback;
     }
 
-    /**
-     * Wave 1B — staff-portal label prefix search. Backs the Wave 2B
-     * "Patient suchen" modal. Always filtered to the session user's
-     * site-visibility scope; never leaks subjects from studies the
-     * user can't see.
-     *
-     * @param q     label prefix (case-insensitive); blank → empty list
-     * @param limit hard ceiling on rows returned; clamped to [1, 50]
-     */
-    @GetMapping(path = "/study-subjects/search",
-                produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> searchSubjects(@RequestParam("q") String q,
-                                            @RequestParam(value = "limit", defaultValue = "10") int limit,
-                                            HttpSession session) {
-        ResponseEntity<?> guard = access().guardSession(session);
-        if (guard != null) return guard;
-
-        if (studySubjectFinder == null) {
-            // Defensive: legacy 3-arg ctor (read-only IT path). The
-            // production wiring always populates the finder.
-            return ResponseEntity.ok(List.of());
-        }
-
-        int clamped = Math.max(1, Math.min(50, limit));
-        String prefix = (q == null) ? "" : q.trim();
-        if (prefix.isBlank()) {
-            return ResponseEntity.ok(List.of());
-        }
-
-        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
-
-        List<StudySubjectMatch> matches = studySubjectFinder.findByLabelPrefix(prefix, clamped);
-        List<Map<String, Object>> out = new ArrayList<>(matches.size());
-        for (StudySubjectMatch m : matches) {
-            if (!visibleStudyIds.contains(m.studyId())) continue;
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("studySubjectId", m.studySubjectId());
-            row.put("label", m.subjectLabel());
-            row.put("studyId", m.studyId());
-            row.put("studyName", m.studyName());
-            row.put("siteName", m.siteName());
-            out.add(row);
-        }
-        return ResponseEntity.ok(out);
-    }
-
     /* ====================================================================== */
     /* GET /retinal-jobs?status=PARKED — cross-study admin browser            */
     /* ====================================================================== */
@@ -2578,7 +1941,7 @@ public class RetinalResultsApiController {
                             rs.getString("task"),
                             meta.get("patientId"),
                             rs.getString("eye_laterality"),
-                            toIso(rs.getTimestamp("enqueued_at")),
+                            RetinalJobAccess.toIso(rs.getTimestamp("enqueued_at")),
                             candidate));
                 }
             }
@@ -2632,36 +1995,6 @@ public class RetinalResultsApiController {
     /* ====================================================================== */
 
     /** Inline state-only row carrier — bridges JDBC ResultSet to DTO assembly. */
-    private static final class JobRow {
-        long jobId;
-        int eventCrfId;
-        String task;
-        String e2ePath;
-        String eyeLaterality;
-        String status;
-        Timestamp enqueuedAt;
-        Timestamp completedAt;
-        String modelVersion;
-        // result-side (nullable for jobs without a result row)
-        String outputPayloadJson;
-        BigDecimal primaryMetricValue;
-        String primaryMetricUnit;
-        String bscanMasksDir;
-        Double confidence;
-        // visibility — derived via the event_crf → study_event → study_subject chain
-        Integer studyId;
-        // 2026-06-19 — scan_index from retinal_inference_job. Needed by
-        // the artifact resolver to pick the right scan-N/ subdirectory
-        // for multi-volume .e2e uploads.
-        int scanIndex;
-        // 2026-07-02 — direct study_event_id on retinal_inference_job.
-        // Modern jobs (public OCT-upload portal + Wave-2 pipeline)
-        // attach directly via study_event_id and leave event_crf_id
-        // null; the {@link AiArmPolicy#armForEvent} path needs both to
-        // find the subject's arm assignment.
-        Integer studyEventId;
-    }
-
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
     private static final class ParkedJob {
         long jobId;
@@ -2678,53 +2011,6 @@ public class RetinalResultsApiController {
                 job.jobId = rs.getLong("job_id");
                 job.status = rs.getString("status");
                 return job;
-            }
-        }
-    }
-
-    private JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
-        // 2026-06-23 — study_event lookup now uses COALESCE on the
-        // two binding paths so planned-visit-bound jobs (no event_crf
-        // yet) still resolve a studyId. Without this the visibility
-        // guard rejects the job with "belongs to a different study"
-        // because studyId comes back null.
-        String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
-                + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
-                + "       j.scan_index, j.study_event_id, "
-                + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
-                + "       r.bscan_masks_dir, r.confidence, ss.study_id "
-                + "  FROM retinal_inference_job j "
-                + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
-                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  LEFT JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
-                + "  LEFT JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
-                + " WHERE j.job_id = ?";
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setLong(1, jobId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                JobRow row = new JobRow();
-                row.jobId        = rs.getLong("job_id");
-                row.eventCrfId   = rs.getInt("event_crf_id");
-                row.task         = rs.getString("task");
-                row.e2ePath      = rs.getString("e2e_path");
-                row.eyeLaterality= rs.getString("eye_laterality");
-                row.status       = rs.getString("status");
-                row.enqueuedAt   = rs.getTimestamp("enqueued_at");
-                row.completedAt  = rs.getTimestamp("completed_at");
-                row.modelVersion = rs.getString("model_version");
-                row.outputPayloadJson = rs.getString("output_payload");
-                row.primaryMetricValue = rs.getBigDecimal("primary_metric_value");
-                row.primaryMetricUnit  = rs.getString("primary_metric_unit");
-                row.bscanMasksDir      = rs.getString("bscan_masks_dir");
-                double cf = rs.getDouble("confidence");
-                row.confidence = rs.wasNull() ? null : cf;
-                int sid = rs.getInt("study_id");
-                row.studyId = rs.wasNull() ? null : sid;
-                row.scanIndex = rs.getInt("scan_index");
-                int sev = rs.getInt("study_event_id");
-                row.studyEventId = rs.wasNull() ? null : sev;
-                return row;
             }
         }
     }
@@ -2827,103 +2113,16 @@ public class RetinalResultsApiController {
         }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), visitDate, acquisitionDate, studyEventId,
+                RetinalJobAccess.toIso(completedAt), visitDate, acquisitionDate, studyEventId,
                 primaryMetric(pv, pu), subjectSeq);
     }
 
 
 
 
-    private ResponseEntity<?> guardJobVisibility(JobRow row, HttpSession session) {
-        return access().guardStudyVisibilityAllowingDeepLink(row.studyId, session,
-                "retinal_inference_job " + row.jobId + " belongs to a different study");
-    }
-
-    /** Trim a single trailing ".e2e" — match what the upload controller saves. */
-    private static String e2eUuidFromPath(String e2ePath) {
-        if (e2ePath == null) return null;
-        String base = Paths.get(e2ePath).getFileName().toString();
-        if (base.toLowerCase().endsWith(".e2e")) {
-            base = base.substring(0, base.length() - 4);
-        }
-        return base;
-    }
-
-    private List<String> listArtifactNames(String dir) {
-        if (dir == null || dir.isBlank()) return List.of();
-        Path p = Paths.get(dir);
-        if (!Files.isDirectory(p)) return List.of();
-        try (var stream = Files.list(p)) {
-            List<String> names = new ArrayList<>();
-            stream.filter(Files::isRegularFile)
-                  .map(f -> f.getFileName().toString())
-                  .sorted()
-                  .forEach(names::add);
-            return names;
-        } catch (IOException ioEx) {
-            LOG.warn("Failed to list artifacts in {}: {}", dir, ioEx.getMessage());
-            return List.of();
-        }
-    }
-
-    private List<String> listCompanionNames(String e2eUuid) {
-        return listCompanionNames(e2eUuid, -1);
-    }
-
-    private List<String> listCompanionNames(String e2eUuid, int scanIndex) {
-        if (e2eUuid == null || e2eUuid.isBlank()) return List.of();
-        List<String> out = new ArrayList<>();
-        for (String name : COMPANION_NAMES) {
-            try {
-                switch (name) {
-                    case "bscan.dcm"     -> artifactStore.resolveBscanDcm(e2eUuid, scanIndex);
-                    case "fundus.png"    -> artifactStore.resolveFundus(e2eUuid, scanIndex);
-                    case "geometry.json" -> artifactStore.resolveGeometry(e2eUuid, scanIndex);
-                    default -> { }
-                }
-                out.add(name);
-            } catch (NoSuchFileException nfe) {
-                // companion absent — skip
-            } catch (IllegalArgumentException iae) {
-                // bad UUID — none of the companions can be resolved.
-                return List.of();
-            } catch (IOException ioEx) {
-                LOG.warn("Failed to resolve companion {} for e2eUuid {}: {}",
-                        name, e2eUuid, ioEx.getMessage());
-            }
-        }
-        return out;
-    }
-
     private static PrimaryMetric primaryMetric(BigDecimal value, String unit) {
         if (value == null && (unit == null || unit.isBlank())) return null;
         return new PrimaryMetric(value, unit);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> parsePayload(String json) {
-        if (json == null || json.isBlank()) return Map.of();
-        try {
-            return JSON.readValue(json, Map.class);
-        } catch (Exception jsonEx) {
-            LOG.warn("Failed to parse output_payload JSON: {}", jsonEx.getMessage());
-            return Map.of();
-        }
-    }
-
-    private static String toIso(Timestamp ts) {
-        return ts == null ? null : ts.toInstant().toString();
-    }
-
-    private static MediaType mediaTypeForName(String name) {
-        String lower = name.toLowerCase();
-        if (lower.endsWith(".csv"))  return MediaType.parseMediaType("text/csv");
-        if (lower.endsWith(".npy"))  return MediaType.APPLICATION_OCTET_STREAM;
-        if (lower.endsWith(".npz"))  return MediaType.APPLICATION_OCTET_STREAM;
-        if (lower.endsWith(".dcm"))  return MediaType.parseMediaType("application/dicom");
-        if (lower.endsWith(".png"))  return MediaType.IMAGE_PNG;
-        if (lower.endsWith(".json")) return MediaType.APPLICATION_JSON;
-        return MediaType.APPLICATION_OCTET_STREAM;
     }
 
     /* ====================================================================== */
@@ -2948,9 +2147,9 @@ public class RetinalResultsApiController {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
-        JobRow current;
+        RetinalJobAccess.JobRow current;
         try (Connection c = dataSource.getConnection()) {
-            current = fetchJobDetail(c, jobId);
+            current = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             LOG.error("compareToPrevious: fetch current failed for job {}: {}",
                     jobId, sqlEx.getMessage());
@@ -2961,7 +2160,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(current, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(current, session);
         if (visGuard != null) return visGuard;
 
         // Trial blinding — the visit-to-visit comparison is AI quantification;
@@ -2971,7 +2170,7 @@ public class RetinalResultsApiController {
                     "message", "AI output is not available for this subject"));
         }
 
-        Map<String, Object> currentMetrics = parsePayload(current.outputPayloadJson);
+        Map<String, Object> currentMetrics = RetinalJobAccess.parsePayload(current.outputPayloadJson);
         PreviousJobView previous;
         try (Connection c = dataSource.getConnection()) {
             previous = fetchPreviousJob(c, jobId);
@@ -2985,7 +2184,7 @@ public class RetinalResultsApiController {
         Map<String, Double> deltas = new LinkedHashMap<>();
         Map<String, Object> previousMetrics = previous == null
                 ? Map.of()
-                : parsePayload(previous.outputPayloadJson);
+                : RetinalJobAccess.parsePayload(previous.outputPayloadJson);
         // 2026-06-26 — the fluid task's output_payload nests the four
         // biomarker totals inside a `biomarkers` object:
         //   { "biomarkers": { "irf_mm3": …, "srf_mm3": …, "ped_mm3": …,
@@ -3028,10 +2227,10 @@ public class RetinalResultsApiController {
 
         return ResponseEntity.ok(new RetinalJobCompareDto(
                 current.jobId,
-                toIso(current.completedAt),
+                RetinalJobAccess.toIso(current.completedAt),
                 currentMetrics,
                 previous == null ? null : previous.jobId,
-                previous == null ? null : toIso(previous.completedAt),
+                previous == null ? null : RetinalJobAccess.toIso(previous.completedAt),
                 previousMetrics,
                 daysBetween,
                 deltas));
@@ -3197,7 +2396,7 @@ public class RetinalResultsApiController {
 
 
     /** Resolve the AI arm (AI_SHOWN / AI_HIDDEN / null) for a loaded job row. */
-    private String armForJobRow(JobRow row) {
+    private String armForJobRow(RetinalJobAccess.JobRow row) {
         try (Connection c = dataSource.getConnection()) {
             int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
             return AiArmPolicy.armForEvent(c, row.eventCrfId, sev);
@@ -3253,9 +2452,9 @@ public class RetinalResultsApiController {
                     "message", "layerIndex, layerLabel and a non-empty perSliceRows are required"));
         }
 
-        JobRow row;
+        RetinalJobAccess.JobRow row;
         try (Connection c = dataSource.getConnection()) {
-            row = fetchJobDetail(c, jobId);
+            row = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             LOG.error("saveCorrection: fetch job {} failed: {}", jobId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
@@ -3265,7 +2464,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
         if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
             return ResponseEntity.status(409).body(Map.of(
@@ -3366,9 +2565,9 @@ public class RetinalResultsApiController {
                     "message", "Layer-segmentation corrections require Investigator or Data-Manager role"));
         }
 
-        JobRow row;
+        RetinalJobAccess.JobRow row;
         try (Connection c = dataSource.getConnection()) {
-            row = fetchJobDetail(c, jobId);
+            row = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
@@ -3377,7 +2576,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
         if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
             return ResponseEntity.status(404).body(Map.of(
@@ -3442,9 +2641,9 @@ public class RetinalResultsApiController {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
-        JobRow row;
+        RetinalJobAccess.JobRow row;
         try (Connection c = dataSource.getConnection()) {
-            row = fetchJobDetail(c, jobId);
+            row = jobs().fetchJobDetail(c, jobId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
@@ -3453,7 +2652,7 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
         List<CorrectionDto> out = new ArrayList<>();
@@ -3474,7 +2673,7 @@ public class RetinalResultsApiController {
                             rs.getInt("layer_index"), rs.getString("layer_label"),
                             rs.getInt("edited_slice_count"), rs.getString("csv_relpath"),
                             rs.getInt("edited_by_user_id"), rs.getString("user_name"),
-                            toIso(rs.getTimestamp("edited_at"))));
+                            RetinalJobAccess.toIso(rs.getTimestamp("edited_at"))));
                 }
             }
         } catch (SQLException sqlEx) {
@@ -3653,7 +2852,7 @@ public class RetinalResultsApiController {
      * resolves — the audit row's entity_id still points at the
      * correction_id, so the timeline lookup degrades gracefully.
      */
-    private StudySubjectBean resolveStudySubjectForJob(JobRow row) {
+    private StudySubjectBean resolveStudySubjectForJob(RetinalJobAccess.JobRow row) {
         try {
             StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
             if (row.eventCrfId > 0) {

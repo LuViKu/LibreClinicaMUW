@@ -727,55 +727,6 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
                         .value(org.hamcrest.Matchers.containsString("PARKED")));
     }
 
-    /* ====================================================================== */
-    /* GET /study-subjects/search                                              */
-    /* ====================================================================== */
-
-    @Test
-    void searchSubjects_returnsHits_forKnownPrefix() throws Exception {
-        buildMockMvc().perform(get("/api/v1/study-subjects/search")
-                .param("q", "M-00")
-                .param("limit", "10")
-                .session(authenticatedSession()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                // 7 seeded subjects M-001 .. M-007 all visible to root.
-                .andExpect(jsonPath("$.length()").value(7))
-                .andExpect(jsonPath("$[0].label").value("M-001"))
-                .andExpect(jsonPath("$[0].studyId").value(1));
-    }
-
-    @Test
-    void searchSubjects_returnsEmpty_forNonexistentPrefix() throws Exception {
-        buildMockMvc().perform(get("/api/v1/study-subjects/search")
-                .param("q", "ZZZ-NO-SUCH")
-                .session(authenticatedSession()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(0));
-    }
-
-    @Test
-    void searchSubjects_clampsLimitOutOfRange() throws Exception {
-        // limit=99 → clamped to 50 internally; with only 7 rows the assert
-        // is just "no error, returns the 7 matches".
-        buildMockMvc().perform(get("/api/v1/study-subjects/search")
-                .param("q", "M-")
-                .param("limit", "99")
-                .session(authenticatedSession()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(7));
-    }
-
-    @Test
-    void searchSubjects_returnsEmpty_forBlankQuery() throws Exception {
-        buildMockMvc().perform(get("/api/v1/study-subjects/search")
-                .param("q", "  ")
-                .session(authenticatedSession()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
-    }
-
     /* ---- bind / search helpers --------------------------------------- */
 
     private static long seedParkedJob() throws Exception {

@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -117,6 +121,31 @@ public final class StudyResourceAccess {
         if (user != null && user.isSysAdmin()) return null;
         if (user != null && hasLiveRoleOn(user, studyId)) return null;
         return ResponseEntity.status(403).body(Map.of("message", denyMessage));
+    }
+
+    /**
+     * Which study a subject belongs to, or null when there is no such subject.
+     *
+     * <p>Every per-subject endpoint needs this immediately before a visibility
+     * guard, and the two answers are deliberately separate: "no such subject"
+     * is a 404 and "not yours to see" is a 403, and collapsing them would
+     * either leak the existence of subjects in other studies or hide a genuine
+     * typo behind a permissions error.
+     */
+    public Integer studyIdForStudySubject(int studySubjectId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_id FROM study_subject WHERE study_subject_id = ?")) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int sid = rs.getInt(1);
+                return rs.wasNull() ? null : sid;
+            }
+        } catch (SQLException e) {
+            LOG.warn("study lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+            return null;
+        }
     }
 
     /** What the session may see, per the site-visibility rules. */

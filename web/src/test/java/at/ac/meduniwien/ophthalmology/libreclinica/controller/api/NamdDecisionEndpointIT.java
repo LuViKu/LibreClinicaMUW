@@ -168,18 +168,10 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .build();
     }
 
-    private MockMvc buildRetinalResultsMockMvc() {
-        RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
-        Mockito.when(remoteClient.isConfigured()).thenReturn(false);
+    /** P3.6 — the clinical-flags timeline moved out of the retinal controller. */
+    private MockMvc buildNamdClinicalMockMvc() {
         return MockMvcBuilders.standaloneSetup(
-                new RetinalResultsApiController(
-                        DATA_SOURCE,
-                        new SiteVisibilityFilter(DATA_SOURCE),
-                        new RetinalArtifactStorageService(),
-                        new StudySubjectFinder(DATA_SOURCE),
-                        remoteClient,
-                        new RetinalJobStatusBroadcaster(),
-                        null))
+                new NamdClinicalApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -320,7 +312,7 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .andDo(print())
                 .andExpect(status().isOk());
 
-        buildRetinalResultsMockMvc().perform(
+        buildNamdClinicalMockMvc().perform(
                 get("/api/v1/study-subjects/" + STUDY_SUBJECT_ID + "/namd-clinical-flags")
                         .session(sysadminSession()))
                 .andDo(print())
