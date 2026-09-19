@@ -2990,6 +2990,31 @@
         "initials": "initials"
       }
     },
+
+    "studySettings": {
+      "title": "Platform settings",
+      "intro": "What this study uses. “Not set” means as before — the platform decides.",
+      "setting": "Setting",
+      "value": "Value",
+      "effective": "Effective",
+      "notSet": "Not set",
+      "on": "On",
+      "off": "Off",
+      "inherited": "inherited",
+      "save": "Save settings",
+      "saved": "Saved ✓",
+      "bindingsCount": "{n} CRF item binding(s) configured.",
+      "keys": {
+        "ingest.dicom.enabled": "DICOM receiving (worklist + C-STORE)",
+        "ingest.image.enabled": "Image upload portal",
+        "ingest.oct.enabled": "OCT upload portal",
+        "inference.enabled": "AI inference",
+        "export.bundle.enabled": "Multimodal export",
+        "portal.todaysVisits": "Today's visits on the upload page",
+        "ai.arm.shownGroup": "Group shown AI",
+        "ai.arm.hiddenGroup": "Group blinded to AI"
+      }
+    },
   "subjectUnboundItems": {
     "title": "Unfiled arrivals",
     "loading": "Loading …",

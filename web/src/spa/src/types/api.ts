@@ -84,7 +84,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/studies/{studyOid}/parameters": {
+    "/api/v1/studies/{studyOid}/settings": {
         parameters: {
             query?: never;
             header?: never;
@@ -92,6 +92,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_1"];
+        put: operations["put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/parameters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_2"];
         put: operations["update_3"];
         post?: never;
         delete?: never;
@@ -3531,6 +3547,14 @@ export interface components {
             parentStudyName?: string;
             datePlannedStart?: string;
         };
+        WriteRequest: {
+            settings?: {
+                [key: string]: string;
+            };
+            itemBindings?: {
+                [key: string]: string;
+            };
+        };
         UpdateStudyParametersRequest: {
             subjectIdGeneration?: string;
             subjectIdPrefixSuffix?: string;
@@ -5388,6 +5412,54 @@ export interface operations {
         };
     };
     get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    get_2: {
         parameters: {
             query?: never;
             header?: never;

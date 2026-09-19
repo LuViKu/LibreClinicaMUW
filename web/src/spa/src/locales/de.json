@@ -2990,6 +2990,31 @@
         "initials": "Kürzel"
       }
     },
+
+    "studySettings": {
+      "title": "Plattform-Einstellungen",
+      "intro": "Was diese Studie nutzt. „Nicht gesetzt“ heißt: wie bisher – die Plattform entscheidet.",
+      "setting": "Einstellung",
+      "value": "Wert",
+      "effective": "Wirksam",
+      "notSet": "Nicht gesetzt",
+      "on": "Ein",
+      "off": "Aus",
+      "inherited": "geerbt",
+      "save": "Einstellungen speichern",
+      "saved": "Gespeichert ✓",
+      "bindingsCount": "{n} CRF-Item-Zuordnung(en) hinterlegt.",
+      "keys": {
+        "ingest.dicom.enabled": "DICOM-Empfang (Worklist + C-STORE)",
+        "ingest.image.enabled": "Bild-Upload (Portal)",
+        "ingest.oct.enabled": "OCT-Upload (Portal)",
+        "inference.enabled": "KI-Auswertung",
+        "export.bundle.enabled": "Multimodaler Export",
+        "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
+        "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
+        "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+      }
+    },
   "subjectUnboundItems": {
     "title": "Nicht zugeordnete Dateien",
     "loading": "Wird geladen …",
