@@ -77,6 +77,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.io.OutputStream;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleExportWriter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
  * Phase E.6 — Data Export Phase 5 — per-subject one-click snapshot.
@@ -160,7 +164,13 @@ public class SubjectExportApiController {
      * Body shape — {@code format: 'odm' | 'csv' | 'pdf'}. Anything
      * else returns 400.
      */
-    public record ExportRequest(String format) {}
+    /**
+     * @param format  'odm' | 'csv' | 'pdf' | 'bundle'
+     * @param dryRun  bundle only: return the manifest as JSON instead of the
+     *                zip, so a requester can see what it would contain — and
+     *                how large — before asking for gigabytes
+     */
+    public record ExportRequest(String format, Boolean dryRun) {}
 
     @PostMapping(value = "/{studyOid}/subjects/{label}/export",
                  consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -182,13 +192,15 @@ public class SubjectExportApiController {
         }
         if (body == null || body.format() == null || body.format().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Missing 'format' — must be one of 'odm', 'csv', 'pdf'."
+                    "message", "Missing 'format' — must be one of 'odm', 'csv', 'pdf', 'bundle'."
             ));
         }
         String fmt = body.format().trim().toLowerCase(Locale.ROOT);
-        if (!fmt.equals("odm") && !fmt.equals("csv") && !fmt.equals("pdf")) {
+        if (!fmt.equals("odm") && !fmt.equals("csv") && !fmt.equals("pdf")
+                && !fmt.equals("bundle")) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Unsupported format '" + body.format() + "' — must be 'odm', 'csv' or 'pdf'."
+                    "message", "Unsupported format '" + body.format()
+                            + "' — must be 'odm', 'csv', 'pdf' or 'bundle'."
             ));
         }
 
@@ -242,6 +254,15 @@ public class SubjectExportApiController {
             ));
         }
 
+        // P3.7 — the bundle carries files, so it streams rather than
+        // rendering into a byte[]: a subject's OCT volumes alone can run to
+        // gigabytes, and buffering them would mean holding the whole export in
+        // heap to hand it to the same response.
+        if (fmt.equals("bundle")) {
+            return exportBundle(ss, subj, pathStudy, snapshot, currentUser,
+                    Boolean.TRUE.equals(body.dryRun()), session);
+        }
+
         byte[] payload;
         String contentType;
         String extension;
@@ -291,6 +312,115 @@ public class SubjectExportApiController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .body(payload);
+    }
+
+    /**
+     * The value to export for an item, with a FILE item's server path reduced
+     * to its filename.
+     *
+     * <p>P3.7 — a FILE item stores a path, and all three exports emitted it
+     * verbatim. That is useless to the recipient, who has no access to the
+     * server's filesystem, and it discloses the layout of a machine holding
+     * patient data to anyone who receives a casebook. The file itself now
+     * travels in the bundle; the text formats name it.
+     *
+     * <p>Heritage type 11 is FILE. Detected by the item's data type rather
+     * than by the value looking path-like, because a free-text answer may
+     * legitimately contain a slash.
+     */
+    private static String exportValue(ItemSnapshot is) {
+        String raw = is.data().getValue() == null ? "" : is.data().getValue();
+        if (raw.isEmpty() || is.item() == null || is.item().getItemDataTypeId() != 11) {
+            return raw;
+        }
+        int slash = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'));
+        return slash >= 0 && slash < raw.length() - 1 ? raw.substring(slash + 1) : raw;
+    }
+
+    /* =============================================================== */
+    /* P3.7 — the multimodal bundle                                     */
+    /* =============================================================== */
+
+    /**
+     * Stream a subject's whole record: the casebook plus every file.
+     *
+     * <p>Off unless the study turns it on ({@code export.bundle.enabled}).
+     * Handing a study's imaging out of the platform is a decision that belongs
+     * to the study, not to whoever happens to be signed in, and defaulting it
+     * on would ship a new data-egress path to every deployment silently.
+     */
+    private ResponseEntity<?> exportBundle(StudySubjectBean ss, SubjectBean subj,
+                                           StudyBean pathStudy, CasebookSnapshot snapshot,
+                                           UserAccountBean currentUser, boolean dryRun,
+                                           HttpSession session) {
+        StudySettingService settings = new StudySettingService(dataSource);
+        if (!settings.isEnabled(pathStudy.getId(), StudySettingService.EXPORT_BUNDLE_ENABLED)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "This study does not have the multimodal export enabled."));
+        }
+
+        // Blinding follows the data out of the platform. A treating clinician
+        // who cannot see AI output on screen must not receive it in a zip.
+        boolean maskAi;
+        try (Connection c = dataSource.getConnection()) {
+            String arm = AiArmPolicy.armForSubject(c, ss.getId());
+            maskAi = AiArmPolicy.maskAiFor(arm, session);
+        } catch (SQLException e) {
+            // Fail closed: an unanswerable blinding question withholds.
+            LOG.warn("bundle: arm lookup failed for subject {} — withholding AI output", ss.getOid());
+            maskAi = true;
+        }
+
+        byte[] odm;
+        byte[] csv;
+        try {
+            odm = renderOdm(snapshot);
+            csv = renderCsv(snapshot);
+        } catch (Exception e) {
+            LOG.error("bundle: casebook render failed for subject {}", ss.getOid(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "message", "Failed to render the casebook — see server log."));
+        }
+
+        BundleExportWriter.Policy policy = new BundleExportWriter.Policy(maskAi);
+
+        if (dryRun) {
+            try {
+                BundleExportWriter.Result r = BundleExportWriter.write(
+                        OutputStream.nullOutputStream(), dataSource, ss.getId(), ss.getLabel(),
+                        pathStudy.getOid(), odm, csv, policy, currentUser.getName(), true);
+                return ResponseEntity.ok(r.manifest());
+            } catch (IOException e) {
+                LOG.error("bundle dry run failed for subject {}", ss.getOid(), e);
+                return ResponseEntity.status(500).body(Map.of(
+                        "message", "Failed to assemble the manifest — see server log."));
+            }
+        }
+
+        emitExportAudit(currentUser.getId(), ss.getId(), ss.getLabel(), "bundle");
+
+        String filename = sanitizeFilename(ss.getLabel()) + "_bundle_"
+                + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".zip";
+        final boolean finalMask = maskAi;
+        StreamingResponseBody body = out -> {
+            try {
+                BundleExportWriter.Result r = BundleExportWriter.write(
+                        out, dataSource, ss.getId(), ss.getLabel(), pathStudy.getOid(),
+                        odm, csv, new BundleExportWriter.Policy(finalMask),
+                        currentUser.getName(), false);
+                LOG.info("Subject bundle: subject {} study {} files={} bytes={} masked={} by user={}",
+                        ss.getOid(), pathStudy.getOid(), r.filesWritten(), r.bytesWritten(),
+                        finalMask, currentUser.getName());
+            } catch (IOException e) {
+                // The response has already begun; the manifest's absence is
+                // what tells the recipient the bundle is incomplete.
+                LOG.error("bundle stream failed mid-write for subject {}", ss.getOid(), e);
+            }
+        };
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(body);
     }
 
     /* =============================================================== */
@@ -470,7 +600,7 @@ public class SubjectExportApiController {
                     String itemOid = (is.item() == null || is.item().getOid() == null)
                             ? ("I_" + is.data().getItemId())
                             : is.item().getOid();
-                    String value = is.data().getValue() == null ? "" : is.data().getValue();
+                    String value = exportValue(is);
                     sb.append("            <ItemData ItemOID=\"").append(escAttr(itemOid))
                       .append("\" Value=\"").append(escAttr(value)).append("\"/>\n");
                 }
@@ -530,8 +660,7 @@ public class SubjectExportApiController {
                 // Materialise item values by OID for this row.
                 Map<String, String> rowVals = new HashMap<>();
                 for (ItemSnapshot is : cs.items()) {
-                    rowVals.put(itemOidFor(is),
-                            is.data().getValue() == null ? "" : is.data().getValue());
+                    rowVals.put(itemOidFor(is), exportValue(is));
                 }
                 String crfStatus = cs.eventCrf().getStatus() == null
                         ? "" : cs.eventCrf().getStatus().getName();
@@ -657,7 +786,7 @@ public class SubjectExportApiController {
                     for (ItemSnapshot is : cs.items()) {
                         String itemLabel = (is.item() == null) ? itemOidFor(is)
                                 : firstNonBlank(is.item().getDescription(), is.item().getName(), itemOidFor(is));
-                        String value = is.data().getValue() == null ? "" : is.data().getValue();
+                        String value = exportValue(is);
                         String units = (is.item() == null || is.item().getUnits() == null) ? "" : is.item().getUnits();
                         addBodyCell(table, itemLabel, normal);
                         addBodyCell(table, value, normal);
