@@ -24,6 +24,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudyBindings;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -86,6 +87,54 @@ public class NamdClinicalApiController {
     /** Test seam for the CRT path. */
     void setCrtComputeService(CrtComputeService crtComputeService) {
         this.crtComputeService = crtComputeService;
+    }
+
+    /**
+     * One per-eye observation: which eye, which question, and which item this
+     * study records the answer in.
+     *
+     * @param eye      {@code od} / {@code os}, the response key
+     * @param field    the response field this fills
+     * @param itemName the item as this study names it, already resolved
+     */
+    private record FlagRole(String eye, String field, String itemName) {}
+
+    /** Roles paired with their binding key and the name used when unbound. */
+    private static final List<String[]> FLAG_ROLES = List.of(
+            new String[] { "od", "hemorrhage",
+                    StudyBindings.FLAG_HEMORRHAGE_OD, "NAMD_OD_NEW_HEMORRHAGE" },
+            new String[] { "os", "hemorrhage",
+                    StudyBindings.FLAG_HEMORRHAGE_OS, "NAMD_OS_NEW_HEMORRHAGE" },
+            new String[] { "od", "bcvaLossAttributedToNamd",
+                    StudyBindings.FLAG_BCVA_LOSS_OD, "NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED" },
+            new String[] { "os", "bcvaLossAttributedToNamd",
+                    StudyBindings.FLAG_BCVA_LOSS_OS, "NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED" });
+
+    /**
+     * P3.5/P3.6 — the four per-eye observation items, as this study names them.
+     *
+     * <p>The rules engine asks "did this eye bleed since the last visit?", and
+     * the answer used to be found by looking for four item names one study
+     * chose. A second study recording the same observation under its own names
+     * had no way to say so. The names stay as fallbacks, so an instance that
+     * has set no bindings behaves exactly as it did.
+     *
+     * <p>Eye, question and item name travel together rather than in three
+     * lists agreeing by position: a mismatch there would file a right eye's
+     * bleed under the left, which no test of one list alone would catch.
+     */
+    private List<FlagRole> flagRoles(int studyId) {
+        StudyBindings bindings = new StudyBindings(dataSource);
+        List<FlagRole> out = new ArrayList<>(FLAG_ROLES.size());
+        for (String[] r : FLAG_ROLES) {
+            out.add(new FlagRole(r[0], r[1], bindings.oidFor(studyId, r[2], r[3])));
+        }
+        return out;
+    }
+
+    /** {@code ?,?,?,?} — the flag names are bound, never interpolated. */
+    private static String placeholders(int n) {
+        return String.join(",", java.util.Collections.nCopies(n, "?"));
     }
 
     /* ====================================================================== */
@@ -239,11 +288,10 @@ public class NamdClinicalApiController {
     /* ====================================================================== */
 
     /**
-     * Per-subject nAMD clinical-flags timeline. Returns one row per
-     * study_event for which any of the four observation flags is set:
-     * {@code NAMD_OD_NEW_HEMORRHAGE}, {@code NAMD_OS_NEW_HEMORRHAGE},
-     * {@code NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED},
-     * {@code NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED}.
+     * Per-subject clinical-flags timeline. Returns one row per study_event
+     * for which any of the four per-eye observation flags is set — new
+     * hemorrhage and nAMD-attributed BCVA loss, each per eye, named by
+     * {@link #flagItemNames} as the study itself names them.
      *
      * <p>The SPA rule engine consumes this alongside the BCVA + CRT
      * timelines to derive the SHORTEN / KEEP / EXTEND recommendation
@@ -286,15 +334,17 @@ public class NamdClinicalApiController {
                 + " WHERE ec.study_subject_id = ? "
                 + "   AND COALESCE(idata.deleted, false) = false "
                 + "   AND idata.value IS NOT NULL AND idata.value <> '' "
-                + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE', "
-                + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED', "
-                + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED') "
+                + "   AND i.name IN (" + placeholders(4) + ") "
                 + " ORDER BY se.date_start ASC, se.study_event_id ASC";
+        List<FlagRole> flagRoles = flagRoles(subjectStudyId);
 
         Map<Integer, Map<String, Object>> byEvent = new LinkedHashMap<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
+            for (int i = 0; i < flagRoles.size(); i++) {
+                ps.setString(2 + i, flagRoles.get(i).itemName());
+            }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     int sev = rs.getInt("study_event_id");
@@ -321,13 +371,19 @@ public class NamdClinicalApiController {
                     String value = rs.getString("value");
                     boolean truthy = "true".equalsIgnoreCase(value) || "1".equals(value)
                             || "yes".equalsIgnoreCase(value);
-                    String eyeKey = oid.contains("_OD_") ? "od" : "os";
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(eyeKey);
-                    if (oid.endsWith("_NEW_HEMORRHAGE")) {
-                        eyeRow.put("hemorrhage", truthy);
-                    } else if (oid.endsWith("_BCVA_LOSS_NAMD_ATTRIBUTED")) {
-                        eyeRow.put("bcvaLossAttributedToNamd", truthy);
+                    // Which eye and which observation is decided by the role
+                    // that named this item, not by the shape of its name. The
+                    // previous version read "_OD_" and "_NEW_HEMORRHAGE" out
+                    // of the name itself, so a study whose CRF calls these
+                    // items anything else would have been queried correctly
+                    // and then filed under the wrong eye — or silently
+                    // dropped. Every matching role is applied, because a study
+                    // may legitimately record both eyes in one item.
+                    for (FlagRole role : flagRoles) {
+                        if (!role.itemName().equals(oid)) continue;
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> eyeRow = (Map<String, Object>) row.get(role.eye());
+                        eyeRow.put(role.field(), truthy);
                     }
                 }
             }
@@ -357,7 +413,7 @@ public class NamdClinicalApiController {
      * <ol>
      *   <li>Guards session + study visibility on the subject's study.</li>
      *   <li>Finds an existing {@code event_crf} row for
-     *     {@code (study_event_id, F_NAMD_VISIT crf_version)}; if none,
+     *     {@code (study_event_id, visit-CRF version)}; if none,
      *     creates one so a fresh visit can carry the flags without the
      *     physician manually opening the CRF in the legacy UI first.</li>
      *   <li>Upserts {@code item_data} for each supplied per-eye flag
@@ -408,20 +464,25 @@ public class NamdClinicalApiController {
                     "study_event " + studyEventId + " is outside your site visibility");
             if (visGuard != null) return visGuard;
 
-            // Resolve F_NAMD_VISIT crf_version_id. The demo seed ships
-            // exactly one version; production configurations may add
-            // more, in which case the latest wins.
+            // The visit CRF this study records flags on. P3.5: asked of the
+            // study rather than assumed, falling back to the OID the nAMD
+            // study uses so an instance with no binding behaves as before.
+            // The demo seed ships exactly one version; where a production
+            // configuration has more, the latest wins.
+            String visitCrfOid = new StudyBindings(dataSource)
+                    .oidFor(studyId, StudyBindings.VISIT_CRF, "F_NAMD_VISIT");
             int crfVersionId;
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT cv.crf_version_id "
                             + "  FROM crf_version cv "
                             + "  JOIN crf c ON c.crf_id = cv.crf_id "
-                            + " WHERE c.oc_oid = 'F_NAMD_VISIT' "
+                            + " WHERE c.oc_oid = ? "
                             + " ORDER BY cv.crf_version_id DESC LIMIT 1")) {
+                ps.setString(1, visitCrfOid);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         return ResponseEntity.status(500).body(Map.of(
-                                "message", "F_NAMD_VISIT CRF version not found"));
+                                "message", "visit CRF " + visitCrfOid + " has no version"));
                     }
                     crfVersionId = rs.getInt(1);
                 }
@@ -442,17 +503,22 @@ public class NamdClinicalApiController {
             }
             int eventCrfId = instance.eventCrfId();
 
-            // Resolve item_ids for the four per-eye flag items on this CRF version.
+            // Resolve item_ids for the four per-eye flag items on this CRF
+            // version. An item the version does not carry is skipped rather
+            // than created: a flag with nowhere to go means the CRF and the
+            // binding disagree, and inventing a row would hide that.
+            List<FlagRole> flagRoles = flagRoles(studyId);
             Map<String, Integer> itemIds = new LinkedHashMap<>();
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT i.name, i.item_id "
                             + "  FROM item_form_metadata ifm "
                             + "  JOIN item i ON i.item_id = ifm.item_id "
                             + " WHERE ifm.crf_version_id = ? "
-                            + "   AND i.name IN ('NAMD_OD_NEW_HEMORRHAGE','NAMD_OS_NEW_HEMORRHAGE',"
-                            + "                   'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',"
-                            + "                   'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED')")) {
+                            + "   AND i.name IN (" + placeholders(flagRoles.size()) + ")")) {
                 ps.setInt(1, crfVersionId);
+                for (int i = 0; i < flagRoles.size(); i++) {
+                ps.setString(2 + i, flagRoles.get(i).itemName());
+            }
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) itemIds.put(rs.getString(1), rs.getInt(2));
                 }
@@ -461,14 +527,11 @@ public class NamdClinicalApiController {
             // Walk the body's per-eye maps + upsert each provided flag.
             Map<String, Object> od = castMap(body.get("od"));
             Map<String, Object> os = castMap(body.get("os"));
-            upsertFlag(c, itemIds, "NAMD_OD_NEW_HEMORRHAGE", od, "hemorrhage",
-                    eventCrfId, currentUser.getId());
-            upsertFlag(c, itemIds, "NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED", od,
-                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
-            upsertFlag(c, itemIds, "NAMD_OS_NEW_HEMORRHAGE", os, "hemorrhage",
-                    eventCrfId, currentUser.getId());
-            upsertFlag(c, itemIds, "NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED", os,
-                    "bcvaLossAttributedToNamd", eventCrfId, currentUser.getId());
+            for (FlagRole role : flagRoles) {
+                Map<String, Object> eyeBody = "od".equals(role.eye()) ? od : os;
+                upsertFlag(c, itemIds, role.itemName(), eyeBody, role.field(),
+                        eventCrfId, currentUser.getId());
+            }
 
             c.commit();
 

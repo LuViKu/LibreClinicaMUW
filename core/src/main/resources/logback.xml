@@ -579,6 +579,22 @@
     <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RetinalResultsApiController" level="DEBUG">
         <appender-ref ref="CONSOLE_RAW"/>
     </logger>
+    <!--
+      P3.6 (2026-09-19): the retinal controller split into four. Logging is
+      configured per class, so without these three the operator debug this
+      deployment asked for would have quietly gone missing for artifact
+      streaming, corrections and the clinical timelines — a split is not
+      supposed to change what an operator can see.
+    -->
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RetinalJobArtifactsApiController" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RetinalJobAccess" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.NamdClinicalApiController" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
     <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.PublicOctUploadController" level="DEBUG">
         <appender-ref ref="CONSOLE_RAW"/>
     </logger>

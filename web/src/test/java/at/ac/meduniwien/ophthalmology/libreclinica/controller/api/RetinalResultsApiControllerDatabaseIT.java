@@ -227,6 +227,19 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
      * to confirm the bulk endpoint surfaces per-row visibility refusals
      * instead of failing the whole batch with 403.
      */
+    /**
+     * P3.6 — the artifact stream moved to its own controller, but its
+     * fixtures did not: the seeded job, its seg directory and its companion
+     * files are the same ones the job endpoints read. Keeping one fixture and
+     * two builders beats a second copy that drifts from this one.
+     */
+    private MockMvc artifactsMockMvc() {
+        return MockMvcBuilders.standaloneSetup(
+                new RetinalJobArtifactsApiController(DATA_SOURCE, visibilityFilter, artifactStore))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+    }
+
     private MockMvc buildMockMvcWithEmptyVisibility() {
         RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remoteClient.isConfigured()).thenReturn(false);
@@ -363,7 +376,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void streamArtifact_servesCsvWithCorrectContentType() throws Exception {
-        buildMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/retina-thickness.csv")
+        artifactsMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/retina-thickness.csv")
                 .session(authenticatedSession()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("text/csv"))
@@ -372,14 +385,14 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void streamArtifact_404OnMissingFile() throws Exception {
-        buildMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/nonexistent.csv")
+        artifactsMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/nonexistent.csv")
                 .session(authenticatedSession()))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void streamArtifact_400OnPathTraversal() throws Exception {
-        buildMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/..%2Fetc%2Fpasswd")
+        artifactsMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/..%2Fetc%2Fpasswd")
                 .session(authenticatedSession()))
                 .andExpect(status().isBadRequest());
     }
@@ -389,7 +402,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         // bscan.dcm is NOT in segDir — it lives under <bscanRoot>/<e2eUuid>/.
         // The controller must dispatch the companion-name to the artifact-store
         // resolver, not look in bscan_masks_dir.
-        buildMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/bscan.dcm")
+        artifactsMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/bscan.dcm")
                 .session(authenticatedSession()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("application/dicom"));
@@ -397,7 +410,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void streamArtifact_servesFundusPngWithCacheControl() throws Exception {
-        buildMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/fundus.png")
+        artifactsMockMvc().perform(get("/api/v1/retinal-jobs/9001/artifacts/fundus.png")
                 .session(authenticatedSession()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("image/png"))

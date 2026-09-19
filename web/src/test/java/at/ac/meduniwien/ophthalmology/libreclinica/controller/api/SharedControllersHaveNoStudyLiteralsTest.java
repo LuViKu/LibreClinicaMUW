@@ -54,9 +54,18 @@ class SharedControllersHaveNoStudyLiteralsTest {
      *
      * <p>{@code S_HAE} / {@code S_NAMD} are study OIDs; the rest are CRF and
      * group names those studies chose.
+     *
+     * <p>{@code AI_SHOWN} / {@code AI_HIDDEN} are matched only as string
+     * literals. Since P3.5 they are not a study's names but the platform's own
+     * canonical tokens — a study that calls its groups something else has them
+     * translated onto these at the boundary — so code comparing against
+     * {@link AiArmPolicy#ARM_HIDDEN} is correct, and prose naming the arm a
+     * reader will see on screen is just documentation. What must not appear is
+     * the bare quoted name in a query or a comparison, which is what would
+     * silently unblind a study that renamed its groups.
      */
     private static final Pattern STUDY_LITERAL = Pattern.compile(
-            "F_NAMD|I_NAMD_|NAMD_O[DS]_|AI_SHOWN|AI_HIDDEN|I_HEALT_|\"S_HAE\"|\"S_NAMD\"");
+            "F_NAMD|I_NAMD_|NAMD_O[DS]_|\"AI_SHOWN\"|\"AI_HIDDEN\"|I_HEALT_|\"S_HAE\"|\"S_NAMD\"");
 
     /**
      * Where a study literal is still allowed, and why.
@@ -77,15 +86,11 @@ class SharedControllersHaveNoStudyLiteralsTest {
                 "P3.5 fallbacks — the OID each metric used before study_item_binding existed.");
         ALLOWED.put("EventCrfsApiController.java",
                 "P3.5 pending: the nAMD decision audit still names F_NAMD_VISIT directly.");
-        ALLOWED.put("RetinalResultsApiController.java",
-                "P3.5/P3.6 pending: the flags endpoint still resolves F_NAMD_VISIT and the "
-                        + "four NAMD_O?_ flag items directly. P3.6 splits this controller.");
-        ALLOWED.put("SubjectsApiController.java",
-                "Comment prose describing the AI cohort; the SQL reads AiArmPolicy.");
+        ALLOWED.put("NamdClinicalApiController.java",
+                "P3.5 fallbacks — the visit CRF and the four per-eye flag items each ask the "
+                        + "study first; these are the names used when it has said nothing.");
         ALLOWED.put("PerformedItemAutoTicker.java",
                 "Javadoc naming I_HEALT_OPTOMED_PERFORMED as the worked example.");
-        ALLOWED.put("AuditTypeIds.java",
-                "Javadoc prose describing what an audit type records.");
     }
 
     /** Where shared code lives. Study modules are the SPA's, not Java's. */

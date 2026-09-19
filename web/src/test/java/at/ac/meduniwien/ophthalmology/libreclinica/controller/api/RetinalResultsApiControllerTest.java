@@ -134,41 +134,4 @@ class RetinalResultsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value(containsString("task must be one of")));
     }
-
-    /* ---------------------------------------------------------------------- */
-    /* GET /api/v1/retinal-jobs/{jobId}/artifacts/{name}                      */
-    /* ---------------------------------------------------------------------- */
-
-    @Test
-    void streamArtifactReturns401WhenAnonymous() throws Exception {
-        mockMvcWith().perform(get("/api/v1/retinal-jobs/1/artifacts/fluidseg.npz")
-                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void streamArtifactReturns400OnPathTraversal() throws Exception {
-        // The traversal name "..%2Fetc%2Fpasswd" decodes to "../etc/passwd".
-        // Spring's path-variable URL decoding hits the SAFE_ARTIFACT_NAME guard.
-        mockMvcWith().perform(get("/api/v1/retinal-jobs/1/artifacts/..%2Fetc%2Fpasswd")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message")
-                        .value(containsString("disallowed characters")));
-    }
-
-    @Test
-    void streamArtifactReturns400OnSlashInName() throws Exception {
-        // A literal forward-slash inside the filename portion can't reach
-        // the controller (Spring resolves it as a separator). But a name
-        // with an encoded slash or a star character lands and trips the
-        // allow-list. Use a bare "*" — single segment, fails the regex.
-        mockMvcWith().perform(get("/api/v1/retinal-jobs/1/artifacts/foo*bar")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message")
-                        .value(containsString("disallowed characters")));
-    }
 }

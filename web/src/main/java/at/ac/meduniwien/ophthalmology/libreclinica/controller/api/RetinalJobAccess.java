@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
@@ -68,10 +69,13 @@ final class RetinalJobAccess {
     static final Pattern SAFE_ARTIFACT_NAME =
             Pattern.compile("[A-Za-z0-9_.()# -]+");
 
+    private final DataSource dataSource;
     private final RetinalArtifactStorageService artifactStore;
     private final StudyResourceAccess access;
 
-    RetinalJobAccess(RetinalArtifactStorageService artifactStore, StudyResourceAccess access) {
+    RetinalJobAccess(DataSource dataSource, RetinalArtifactStorageService artifactStore,
+                     StudyResourceAccess access) {
+        this.dataSource = dataSource;
         this.artifactStore = artifactStore;
         this.access = access;
     }
@@ -173,6 +177,34 @@ final class RetinalJobAccess {
     ResponseEntity<?> guardJobVisibility(JobRow row, HttpSession session) {
         return access.guardStudyVisibilityAllowingDeepLink(row.studyId, session,
                 "retinal_inference_job " + row.jobId + " belongs to a different study");
+    }
+
+    /**
+     * The trial arm this job's subject is in, or null where the study does not
+     * randomise on AI visibility.
+     *
+     * <p>Resolved through whichever binding the job has: a job attached to a
+     * planned visit carries the study_event directly and has no event_crf yet.
+     *
+     * <p><strong>Fails open, and that is inherited rather than chosen.</strong>
+     * A failed lookup returns null, which {@link AiArmPolicy#maskAiFor} reads
+     * as "not the hidden arm", so a database error shows AI output to a
+     * clinician who may be blinded to it. The export path decided the opposite
+     * (DR-028): an unanswerable blinding question withholds, because a file
+     * that has left the platform cannot be taken back. On screen the stakes
+     * are lower and the behaviour is long-standing, so P3.6 moved it
+     * unchanged rather than altering blinding inside a refactor — but the two
+     * halves of the platform disagreeing about what an unknown arm means is
+     * worth settling deliberately.
+     */
+    String armForJobRow(JobRow row) {
+        try (Connection c = dataSource.getConnection()) {
+            int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
+            return AiArmPolicy.armForEvent(c, row.eventCrfId, sev);
+        } catch (SQLException e) {
+            LOG.warn("arm lookup failed for job {}: {}", row.jobId, e.getMessage());
+            return null;
+        }
     }
 
     /* ------------------------------------------------------------------ */
