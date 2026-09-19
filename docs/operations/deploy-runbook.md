@@ -308,6 +308,19 @@ appeared during the smoke, treat as a deploy regression and go to §5.
 
 ## 5. Rollback
 
+> **One release cannot be rolled back by redeploying the old image: the one
+> that renames `image_ingest` to `ingest_item` (Phase 3 / P3.1, changelog
+> `lc-muw-2026-10-05-ingest-item.xml`).** An older WAR queries `image_ingest`,
+> which no longer exists, so its entire ingest surface — the DICOM receiver,
+> both upload portals, the reconciliation inbox — fails on every request while
+> the rest of the application looks healthy. Rolling that release back means
+> **restoring the §1 dump**, not step (b) below. Check `databasechangelog` for
+> `2026-10-05-ingest-item-rename-table` before assuming an image rollback is
+> enough. The changelog does carry a complete `<rollback>` (verified to restore
+> the schema byte-identically with rows preserved), so a database-only rollback
+> is possible via `liquibase rollbackToDate` — but it must be run *before* the
+> old WAR starts writing, and it is the dump that is the tested path.
+
 Roll back when any of the following is true:
 
 - A clinical write path is failing (subject create, CRF save, eye
