@@ -361,7 +361,7 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO study_item_binding (study_id, binding_key, item_oid, "
                              + "updated_by_user_id) VALUES (1, 'namd.flags.hemorrhage.od', ?, 1)")) {
-            ps.setString(1, "NAMD_OS_NEW_HEMORRHAGE");
+            ps.setString(1, "I_NAMD_OS_NEW_HEMORRHAGE");
             ps.executeUpdate();
         }
 

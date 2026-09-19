@@ -95,23 +95,30 @@ public class NamdClinicalApiController {
      *
      * @param eye      {@code od} / {@code os}, the response key
      * @param field    the response field this fills
-     * @param itemName the item as this study names it, already resolved
+     * @param itemOid  the item as this study names it, already resolved
      */
-    private record FlagRole(String eye, String field, String itemName) {}
+    private record FlagRole(String eye, String field, String itemOid) {}
 
     /** Roles paired with their binding key and the name used when unbound. */
     private static final List<String[]> FLAG_ROLES = List.of(
             new String[] { "od", "hemorrhage",
-                    StudyBindings.FLAG_HEMORRHAGE_OD, "NAMD_OD_NEW_HEMORRHAGE" },
+                    StudyBindings.FLAG_HEMORRHAGE_OD, "I_NAMD_OD_NEW_HEMORRHAGE" },
             new String[] { "os", "hemorrhage",
-                    StudyBindings.FLAG_HEMORRHAGE_OS, "NAMD_OS_NEW_HEMORRHAGE" },
+                    StudyBindings.FLAG_HEMORRHAGE_OS, "I_NAMD_OS_NEW_HEMORRHAGE" },
             new String[] { "od", "bcvaLossAttributedToNamd",
-                    StudyBindings.FLAG_BCVA_LOSS_OD, "NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED" },
+                    StudyBindings.FLAG_BCVA_LOSS_OD, "I_NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED" },
             new String[] { "os", "bcvaLossAttributedToNamd",
-                    StudyBindings.FLAG_BCVA_LOSS_OS, "NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED" });
+                    StudyBindings.FLAG_BCVA_LOSS_OS, "I_NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED" });
 
     /**
      * P3.5/P3.6 — the four per-eye observation items, as this study names them.
+     *
+     * <p>Resolved and matched by item OID, like every other binding. The first
+     * version keyed on {@code item.name} because that is what the heritage
+     * query used, which left {@code study_item_binding.item_oid} holding names
+     * for exactly these four roles — a column that says OID and means it
+     * everywhere else. The seeded rows were corrected in
+     * {@code lc-muw-2026-12-01-namd-flag-bindings-oid.xml}.
      *
      * <p>The rules engine asks "did this eye bleed since the last visit?", and
      * the answer used to be found by looking for four item names one study
@@ -325,7 +332,7 @@ public class NamdClinicalApiController {
 
         String sql = "SELECT se.study_event_id, "
                 + "       date(se.date_start) AS event_date, "
-                + "       i.name AS oid, "
+                + "       i.oc_oid AS oid, "
                 + "       idata.value AS value "
                 + "  FROM item_data idata "
                 + "  JOIN event_crf ec ON ec.event_crf_id = idata.event_crf_id "
@@ -334,7 +341,7 @@ public class NamdClinicalApiController {
                 + " WHERE ec.study_subject_id = ? "
                 + "   AND COALESCE(idata.deleted, false) = false "
                 + "   AND idata.value IS NOT NULL AND idata.value <> '' "
-                + "   AND i.name IN (" + placeholders(4) + ") "
+                + "   AND i.oc_oid IN (" + placeholders(4) + ") "
                 + " ORDER BY se.date_start ASC, se.study_event_id ASC";
         List<FlagRole> flagRoles = flagRoles(subjectStudyId);
 
@@ -343,7 +350,7 @@ public class NamdClinicalApiController {
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
             for (int i = 0; i < flagRoles.size(); i++) {
-                ps.setString(2 + i, flagRoles.get(i).itemName());
+                ps.setString(2 + i, flagRoles.get(i).itemOid());
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -380,7 +387,7 @@ public class NamdClinicalApiController {
                     // dropped. Every matching role is applied, because a study
                     // may legitimately record both eyes in one item.
                     for (FlagRole role : flagRoles) {
-                        if (!role.itemName().equals(oid)) continue;
+                        if (!role.itemOid().equals(oid)) continue;
                         @SuppressWarnings("unchecked")
                         Map<String, Object> eyeRow = (Map<String, Object>) row.get(role.eye());
                         eyeRow.put(role.field(), truthy);
@@ -510,14 +517,14 @@ public class NamdClinicalApiController {
             List<FlagRole> flagRoles = flagRoles(studyId);
             Map<String, Integer> itemIds = new LinkedHashMap<>();
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT i.name, i.item_id "
+                    "SELECT i.oc_oid, i.item_id "
                             + "  FROM item_form_metadata ifm "
                             + "  JOIN item i ON i.item_id = ifm.item_id "
                             + " WHERE ifm.crf_version_id = ? "
-                            + "   AND i.name IN (" + placeholders(flagRoles.size()) + ")")) {
+                            + "   AND i.oc_oid IN (" + placeholders(flagRoles.size()) + ")")) {
                 ps.setInt(1, crfVersionId);
                 for (int i = 0; i < flagRoles.size(); i++) {
-                ps.setString(2 + i, flagRoles.get(i).itemName());
+                ps.setString(2 + i, flagRoles.get(i).itemOid());
             }
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) itemIds.put(rs.getString(1), rs.getInt(2));
@@ -529,7 +536,7 @@ public class NamdClinicalApiController {
             Map<String, Object> os = castMap(body.get("os"));
             for (FlagRole role : flagRoles) {
                 Map<String, Object> eyeBody = "od".equals(role.eye()) ? od : os;
-                upsertFlag(c, itemIds, role.itemName(), eyeBody, role.field(),
+                upsertFlag(c, itemIds, role.itemOid(), eyeBody, role.field(),
                         eventCrfId, currentUser.getId());
             }
 
@@ -565,9 +572,9 @@ public class NamdClinicalApiController {
      * (defensive — production installs may drift from the demo seed).
      */
     private static void upsertFlag(Connection c, Map<String, Integer> itemIds,
-                                   String itemName, Map<String, Object> eyeBody,
+                                   String itemOid, Map<String, Object> eyeBody,
                                    String bodyKey, int eventCrfId, int userId) throws SQLException {
-        Integer itemId = itemIds.get(itemName);
+        Integer itemId = itemIds.get(itemOid);
         if (itemId == null) return;
         if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return;
         Object raw = eyeBody.get(bodyKey);
@@ -641,7 +648,10 @@ public class NamdClinicalApiController {
             try (Connection c = dataSource.getConnection()) {
                 arm = AiArmPolicy.armForSubject(c, studySubjectId);
             } catch (SQLException e) {
-                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+                // Fail closed: an unanswerable blinding question withholds (DR-028).
+                LOG.warn("arm lookup failed for study_subject {} — withholding AI output: {}",
+                        studySubjectId, e.getMessage());
+                arm = AiArmPolicy.ARM_HIDDEN;
             }
             if (AiArmPolicy.maskAiFor(arm, session)) {
                 return ResponseEntity.ok(List.of());

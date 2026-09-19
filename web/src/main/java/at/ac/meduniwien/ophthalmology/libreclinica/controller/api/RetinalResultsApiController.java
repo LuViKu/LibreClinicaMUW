@@ -352,8 +352,10 @@ public class RetinalResultsApiController {
             int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
             subjectArm = AiArmPolicy.armForEvent(c, row.eventCrfId, sev);
         } catch (SQLException sqlEx) {
-            LOG.warn("subjectArm lookup failed for job {} (ecrf={}, sev={}): {}",
+            // Fail closed: an unanswerable blinding question withholds (DR-028).
+            LOG.warn("subjectArm lookup failed for job {} (ecrf={}, sev={}) — withholding AI output: {}",
                     jobId, row.eventCrfId, row.studyEventId, sqlEx.getMessage());
+            subjectArm = AiArmPolicy.ARM_HIDDEN;
         }
 
         // Trial blinding — strip AI-derived output for a treating clinician
@@ -600,7 +602,10 @@ public class RetinalResultsApiController {
             try (Connection c = dataSource.getConnection()) {
                 arm = AiArmPolicy.armForSubject(c, studySubjectId);
             } catch (SQLException e) {
-                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+                // Fail closed: an unanswerable blinding question withholds (DR-028).
+                LOG.warn("arm lookup failed for study_subject {} — withholding AI output: {}",
+                        studySubjectId, e.getMessage());
+                arm = AiArmPolicy.ARM_HIDDEN;
             }
             if (AiArmPolicy.maskAiFor(arm, session)) {
                 out = out.stream().map(s -> new RetinalJobSummaryDto(
@@ -673,7 +678,10 @@ public class RetinalResultsApiController {
             try (Connection c = dataSource.getConnection()) {
                 arm = AiArmPolicy.armForSubject(c, studySubjectId);
             } catch (SQLException e) {
-                LOG.warn("arm lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
+                // Fail closed: an unanswerable blinding question withholds (DR-028).
+                LOG.warn("arm lookup failed for study_subject {} — withholding AI output: {}",
+                        studySubjectId, e.getMessage());
+                arm = AiArmPolicy.ARM_HIDDEN;
             }
             if (AiArmPolicy.maskAiFor(arm, session)) {
                 return ResponseEntity.ok(List.of());

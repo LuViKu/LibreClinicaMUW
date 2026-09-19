@@ -186,24 +186,24 @@ final class RetinalJobAccess {
      * <p>Resolved through whichever binding the job has: a job attached to a
      * planned visit carries the study_event directly and has no event_crf yet.
      *
-     * <p><strong>Fails open, and that is inherited rather than chosen.</strong>
-     * A failed lookup returns null, which {@link AiArmPolicy#maskAiFor} reads
-     * as "not the hidden arm", so a database error shows AI output to a
-     * clinician who may be blinded to it. The export path decided the opposite
-     * (DR-028): an unanswerable blinding question withholds, because a file
-     * that has left the platform cannot be taken back. On screen the stakes
-     * are lower and the behaviour is long-standing, so P3.6 moved it
-     * unchanged rather than altering blinding inside a refactor — but the two
-     * halves of the platform disagreeing about what an unknown arm means is
-     * worth settling deliberately.
+     * <p><strong>Fails closed.</strong> A lookup that cannot be answered
+     * returns the hidden-arm token, so {@link AiArmPolicy#maskAiFor} withholds
+     * AI output from a treating clinician until the question can be answered
+     * again. This used to return null — "not the hidden arm" — which meant a
+     * database hiccup showed the model's reading of an eye to a clinician the
+     * trial had randomised not to see it. An unblinding event is one whether
+     * or not a file moved; the export path had already decided this way
+     * (DR-028), and the two halves of the platform now agree. Non-treating
+     * roles are unaffected: the token only masks for a treating role.
      */
     String armForJobRow(JobRow row) {
         try (Connection c = dataSource.getConnection()) {
             int sev = row.studyEventId == null ? 0 : row.studyEventId.intValue();
             return AiArmPolicy.armForEvent(c, row.eventCrfId, sev);
         } catch (SQLException e) {
-            LOG.warn("arm lookup failed for job {}: {}", row.jobId, e.getMessage());
-            return null;
+            LOG.warn("arm lookup failed for job {} — withholding AI output until it succeeds: {}",
+                    row.jobId, e.getMessage());
+            return AiArmPolicy.ARM_HIDDEN;
         }
     }
 
