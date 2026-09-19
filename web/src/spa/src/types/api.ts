@@ -4020,6 +4020,7 @@ export interface components {
         };
         ExportRequest: {
             format?: string;
+            dryRun?: boolean;
         };
         SetStudyStatusRequest: {
             targetStatus?: string;
