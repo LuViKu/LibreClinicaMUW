@@ -502,6 +502,78 @@ else
   log "Runtime config exists at $RUNTIME_CONFIG (left untouched)"
 fi
 
+# Merge NEW keys from the shipped template into an existing config.
+#
+# The seed above runs once; from then on the operator's file is authoritative
+# and we never rewrite a value they may have edited. But that also meant keys
+# ADDED to the template by a later release never reached an existing host — the
+# app then silently fell back to whatever default the calling code hardcodes,
+# which for a feature flag means "off, with nothing in the log to say why".
+#
+# That is exactly how 1.5.0-beta.7-muw shipped the ELGA medication ingest to a
+# production host whose datainfo.properties predated the feature: the operator's
+# `sed -i 's|^core.terminology.medication.enabled=.*|...=true|'` matched nothing,
+# because the key simply was not in the file.
+#
+# It matters more than it looks: CoreResources.getPropValues() does
+# `prop = new Properties()` before loading the external file, so the
+# bind-mounted datainfo.properties REPLACES the WAR's bundled copy outright —
+# there is no overlay. A key missing here is a key the app never sees.
+#
+# So: append template keys the target lacks; never touch one it already has.
+# A key the operator COMMENTED OUT counts as missing and is re-appended:
+# java.util.Properties ignores "#" lines, so the app was already running on
+# the code default anyway. Commenting a key out is therefore not a durable
+# way to disable it — set the value explicitly instead.
+# Idempotent — a second run finds nothing missing and appends nothing.
+merge_properties() {
+  local template=$1 target=$2 label=$3
+  [[ -f "$template" && -f "$target" ]] || return 0
+
+  # awk compares the key as an exact string, so dots in property names
+  # ('mailSmtpStarttls.enable') cannot act as regex wildcards and mask a
+  # genuinely-missing key the way a grep "^${key}=" probe would.
+  local added
+  added=$(awk -F= '
+    FNR == NR {
+      if ($0 ~ /^[A-Za-z][A-Za-z0-9._]*=/) have[$1] = 1
+      next
+    }
+    /^[A-Za-z][A-Za-z0-9._]*=/ { if (!($1 in have)) print }
+  ' "$target" "$template")
+
+  if [[ -z "$added" ]]; then
+    log "$label: no new keys in the template"
+    return 0
+  fi
+
+  local count
+  count=$(printf '%s\n' "$added" | wc -l | tr -d ' ')
+  {
+    printf '\n'
+    printf '#############################################################################\n'
+    printf '# Added by setup-ubuntu-host.sh on %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '# Keys present in the shipped template but missing here, appended at their\n'
+    printf '# template defaults. Existing values above were NOT modified. Review these\n'
+    printf '# before relying on them - a new feature flag ships disabled by default.\n'
+    printf '#############################################################################\n'
+    printf '%s\n' "$added"
+  } >>"$target"
+
+  log "$label: appended $count new key(s) from the template"
+  printf '%s\n' "$added" | while IFS= read -r kv; do warn "  + ${kv%%=*}"; done
+  warn "  Review $target — appended keys carry template defaults, not site values."
+}
+
+# Runs BEFORE the guarded sed blocks below. Those use 's|^key=.*|' and no-op
+# silently when the key is absent, so merging first means a freshly-appended
+# key still gets its production value stamped on this same run.
+merge_properties "${INSTALL_PREFIX}/docker/config/datainfo.properties" \
+                 "${RUNTIME_CONFIG}/datainfo.properties" "datainfo.properties"
+merge_properties "${INSTALL_PREFIX}/docker/config/extract.properties" \
+                 "${RUNTIME_CONFIG}/extract.properties" "extract.properties"
+chown -R libreclinica:libreclinica "$RUNTIME_CONFIG" 2>/dev/null || true
+
 # Keep the app's dbPass in lockstep with the DB container's POSTGRES_PASSWORD.
 # The repo's datainfo.properties ships dbPass=clinica (the dev default), but
 # production runs Postgres with the host-generated secret — without this sync
