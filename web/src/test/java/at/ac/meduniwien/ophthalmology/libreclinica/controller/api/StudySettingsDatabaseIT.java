@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
@@ -124,6 +125,35 @@ class StudySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "and its own answer wins when it has one");
         assertTrue(settings().isEnabled(STUDY_ID, StudySettingService.INGEST_IMAGE_ENABLED),
                 "without changing the study's");
+    }
+
+    /**
+     * What {@code /me} hands the SPA: every known key, already resolved.
+     *
+     * <p>Resolved and not stored, because a client deciding whether to offer a
+     * feature needs to know what will actually happen. Handing it the stored
+     * rows would make every untouched study look as though each feature were
+     * switched off, and the SPA would hide surfaces that work.
+     */
+    @Test
+    void theResolvedMapAnswersEveryKnownKey() throws Exception {
+        seedSite();
+        settings().put(STUDY_ID, StudySettingService.EXPORT_BUNDLE_ENABLED, "true", 1);
+
+        Map<String, String> resolved = settings().resolvedFor(SITE_ID);
+        assertEquals(StudySettingService.KNOWN_KEYS.size(), resolved.size(),
+                "a key with no row still has to appear, carrying its default");
+        assertTrue(resolved.keySet().containsAll(StudySettingService.KNOWN_KEYS));
+        assertEquals("true", resolved.get(StudySettingService.EXPORT_BUNDLE_ENABLED),
+                "the site inherits what its study set");
+        assertEquals("true", resolved.get(StudySettingService.INFERENCE_ENABLED),
+                "and an untouched key carries the platform default, not 'off'");
+
+        // Same answers as asking key by key — the batched read is an
+        // optimisation, not a second set of semantics.
+        for (String key : StudySettingService.KNOWN_KEYS) {
+            assertEquals(settings().resolve(SITE_ID, key), resolved.get(key), key);
+        }
     }
 
     /**

@@ -3809,6 +3809,9 @@ export interface components {
             roles?: string[];
             protocolType?: string;
             enabledModules?: string[];
+            settings?: {
+                [key: string]: string;
+            };
         };
         MeDto: {
             username?: string;

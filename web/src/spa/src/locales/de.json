@@ -2629,7 +2629,8 @@
     "format": {
       "odm": "CDISC ODM (XML)",
       "csv": "Tabelle (CSV)",
-      "pdf": "PDF-Bericht"
+      "pdf": "PDF-Bericht",
+      "bundle": "Komplettpaket (ZIP, mit Bildern)"
     },
     "downloading": "Lädt herunter…",
     "success": "Download gestartet.",

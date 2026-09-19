@@ -13,6 +13,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
@@ -86,6 +87,21 @@ public class StudySettingService {
     public static final String PORTAL_TODAYS_VISITS = "portal.todaysVisits";
 
     /**
+     * The keys this release understands. An unknown key is refused on write,
+     * and this is the list {@code /me} and the admin panel enumerate — one
+     * list, so a key added here reaches both without being added twice.
+     */
+    public static final List<String> KNOWN_KEYS = List.of(
+            INGEST_DICOM_ENABLED,
+            INGEST_OCT_ENABLED,
+            INGEST_IMAGE_ENABLED,
+            INFERENCE_ENABLED,
+            AI_ARM_SHOWN_GROUP,
+            AI_ARM_HIDDEN_GROUP,
+            EXPORT_BUNDLE_ENABLED,
+            PORTAL_TODAYS_VISITS);
+
+    /**
      * The {@code core.*} property each key falls back to, and the code default
      * behind that.
      *
@@ -143,6 +159,35 @@ public class StudySettingService {
         String own = stored(studyId, key);
         if (own != null) return Boolean.parseBoolean(own);
         return legacyScopeAllows(studyId, legacyScopeProperty);
+    }
+
+    /**
+     * What the platform will actually do for this study, key by key.
+     *
+     * <p>Distinct from {@link #allFor}: that returns what a study has
+     * <em>set</em>, which is what an administrator needs to see before
+     * changing something. This returns what is in force after the site →
+     * parent → configuration → code-default fallback, which is what a client
+     * deciding whether to offer a feature needs. Confusing the two would make
+     * an untouched study look as though every feature were off.
+     */
+    public Map<String, String> resolvedFor(int studyId) {
+        // One pass over the study's rows rather than a lookup per key: this is
+        // on the /me path, which every app boot and every study switch calls,
+        // and eight round trips to answer eight booleans is a cost paid on
+        // every page load.
+        Map<String, String> set = allFor(studyId);
+        Map<String, String> out = new LinkedHashMap<>();
+        for (String key : KNOWN_KEYS) {
+            String own = set.get(key);
+            if (own != null) {
+                out.put(key, own);
+                continue;
+            }
+            String configured = cfg(key);
+            out.put(key, configured != null ? configured : codeDefault(key));
+        }
+        return out;
     }
 
     /** Everything set for a study, for the admin panel and {@code /me}. */

@@ -65,16 +65,15 @@ public class StudySettingsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(StudySettingsApiController.class);
 
-    /** The keys this release understands. An unknown key is refused. */
-    private static final Set<String> KNOWN_SETTINGS = Set.of(
-            StudySettingService.INGEST_DICOM_ENABLED,
-            StudySettingService.INGEST_OCT_ENABLED,
-            StudySettingService.INGEST_IMAGE_ENABLED,
-            StudySettingService.INFERENCE_ENABLED,
-            StudySettingService.AI_ARM_SHOWN_GROUP,
-            StudySettingService.AI_ARM_HIDDEN_GROUP,
-            StudySettingService.EXPORT_BUNDLE_ENABLED,
-            StudySettingService.PORTAL_TODAYS_VISITS);
+    /**
+     * The keys this release understands. An unknown key is refused.
+     *
+     * <p>Held in the service, not here: {@code /me} enumerates the same list
+     * to tell the SPA what the active study does, and two lists would drift
+     * the first time a key was added.
+     */
+    private static final Set<String> KNOWN_SETTINGS =
+            Set.copyOf(StudySettingService.KNOWN_KEYS);
 
     private final DataSource dataSource;
 

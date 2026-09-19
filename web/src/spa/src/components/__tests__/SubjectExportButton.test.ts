@@ -5,7 +5,7 @@
  * snapshot:
  *
  * <ul>
- *   <li>Each format option ({@code odm | csv | pdf}) maps to the
+ *   <li>Each format option ({@code odm | csv | pdf | bundle}) maps to the
  *       same POST URL but flips the body's {@code format} key. A
  *       regression here is invisible to the operator until they open
  *       the wrong-extension file.</li>
@@ -19,9 +19,11 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
+import { useAuthStore } from '@/stores/auth'
 import enMessages from '@/locales/en.json'
 
 const i18n = createI18n({
@@ -30,6 +32,17 @@ const i18n = createI18n({
   fallbackLocale: 'en',
   messages: { en: enMessages },
 })
+
+/**
+ * Sign the user in against a study, optionally with settings. The export
+ * button reads these to decide which formats a study actually offers.
+ */
+function signIn(settings?: Record<string, string>) {
+  const auth = useAuthStore()
+  auth.user = {
+    activeStudy: { oid: 'S_DEMO1', settings },
+  } as unknown as typeof auth.user
+}
 
 function mountButton(overrides: Partial<{ studyOid: string | null; subjectLabel: string; compact: boolean }> = {}) {
   return mount(SubjectExportButton, {
@@ -62,6 +75,8 @@ describe('SubjectExportButton', () => {
   let originalCreateElement: typeof document.createElement
 
   beforeEach(() => {
+    setActivePinia(createPinia())
+    signIn()
     anchorClicks = []
     fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -217,5 +232,45 @@ describe('SubjectExportButton', () => {
     expect((btn.element as HTMLButtonElement).disabled).toBe(true)
     await btn.trigger('click')
     expect(wrapper.find('[data-testid="subject-export-menu"]').exists()).toBe(false)
+  })
+
+  /* ---------------- P3.7 — the multimodal bundle ---------------- */
+
+  /**
+   * Handing a subject's imaging out of the platform is the study's decision,
+   * and the backend answers 403 where it was not taken. An always-failing menu
+   * entry is worse than none: the user cannot tell a policy from a fault.
+   */
+  it('does not offer the bundle for a study that has not enabled it', async () => {
+    const wrapper = mountButton()
+    await wrapper.find('[data-testid="subject-export-trigger"]').trigger('click')
+    expect(wrapper.find('[data-testid="subject-export-bundle"]').exists()).toBe(false)
+    // …and the formats that have always worked are still there.
+    expect(wrapper.find('[data-testid="subject-export-odm"]').exists()).toBe(true)
+  })
+
+  it('offers the bundle where the study enables it', async () => {
+    signIn({ 'export.bundle.enabled': 'true' })
+    const wrapper = mountButton()
+    await wrapper.find('[data-testid="subject-export-trigger"]').trigger('click')
+    expect(wrapper.find('[data-testid="subject-export-bundle"]').exists()).toBe(true)
+  })
+
+  it('asks for a bundle and saves it as a zip', async () => {
+    signIn({ 'export.bundle.enabled': 'true' })
+    fetchMock.mockResolvedValueOnce(blobResponse('PK', {
+      contentType: 'application/zip',
+    }))
+
+    const wrapper = mountButton()
+    await wrapper.find('[data-testid="subject-export-trigger"]').trigger('click')
+    await wrapper.find('[data-testid="subject-export-bundle"]').trigger('click')
+    await flushPromises()
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(init.body)).toEqual({ format: 'bundle' })
+    // No Content-Disposition on this response, so the fallback name is used —
+    // and it has to end in .zip, not .bundle.
+    expect(anchorClicks[0].download).toMatch(/^M-001_bundle_\d{8}\.zip$/)
   })
 })
