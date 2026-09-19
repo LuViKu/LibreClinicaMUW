@@ -171,7 +171,8 @@ public class DatasetsApiController {
             ExportFormatBean.CSVFILE.getId(), "CSV",
             ExportFormatBean.EXCELFILE.getId(), "Excel",
             ExportFormatBean.XMLFILE.getId(), "XML",
-            ExportFormatBean.PDFFILE.getId(), "PDF");
+            ExportFormatBean.PDFFILE.getId(), "PDF",
+            ExportFormatBean.ZIPFILE.getId(), "Bundle");
 
     private final DataSource dataSource;
     private final CoreResources coreResources;

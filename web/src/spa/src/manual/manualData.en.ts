@@ -363,12 +363,12 @@ export const manualEn: Manual = {
           ],
         },
         {
-          id: 'ad-parked', num: '18', title: 'Parked Scans (cross-study retinal jobs)', deutsch: 'Geparkte Scans', route: '/retinal/parked',
+          id: 'ad-parked', num: '18', title: 'Ingest inbox (all inbound files)', deutsch: 'Eingang', route: '/ingest-inbox',
           roles: ['administrator'],
           shot: 'administrator/22-parked-scans.png',
           goal: 'Review retinal inference jobs uploaded without a visit and waiting to be assigned to a subject.',
           steps: [
-            'Open **Geparkte Scans** (`/retinal/parked`) — a sysadmin-only, cross-study overview.',
+            'Open the **Eingang** (`/ingest-inbox`) — the cross-study view of every inbound file, OCT scans and fundus images alike.',
             'Each row shows the **Job**, **PatientId**, **Auge** (eye), **Task** and **Hochgeladen** (upload time). Select rows and use the row **Aktion** to bind a parked scan to a subject\u2019s visit, or **Neu laden** to refresh.',
           ],
           notes: ['Administrator-only. Parked jobs have no study-subject linkage yet, which is why they surface here rather than on a per-subject page.'],

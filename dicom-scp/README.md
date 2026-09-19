@@ -5,7 +5,7 @@ receives fundus images the **Optomed** modality pushes over C-STORE for the
 **HealthAEye study**, writes the Part-10 object + a rendered preview into the
 shared ingest store, and hands them to the app's internal ingest endpoint
 (`POST /pages/api/v1/internal/dicom-ingest`, `DicomIngestApiController`), which
-enqueues an `image_ingest` row (`source_kind='dicom'`) for the SPA reconciliation
+enqueues an `ingest_item` row (`source_kind='dicom'`) for the SPA reconciliation
 inbox.
 
 It also serves a **Modality Worklist** (C-FIND): the Optomed Lumo's standard-DICOM
@@ -54,7 +54,7 @@ python -m pynetdicom storescu 127.0.0.1 11112 sample.dcm -aec LIBRECLINICA -aet 
 # or: storescu -aec LIBRECLINICA 127.0.0.1 11112 sample.dcm   (dcmtk)
 ```
 
-A row should appear in `image_ingest` (UNBOUND) and, once the reconciliation
+A row should appear in `ingest_item` (UNBOUND) and, once the reconciliation
 inbox lands, in the SPA. Confirm the real SOP class + tag layout against the
 first genuine Optomed sample before production.
 

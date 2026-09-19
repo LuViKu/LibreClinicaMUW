@@ -354,19 +354,12 @@ const router = createRouter({
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
-    /* 2026-06-19 — Administrator-only cross-study parked-scans admin.
-       Parked rows have no study-subject linkage so the per-subject
-       ParkedScansList can never surface them; this view is the only
-       reachable bind UX. Doc: retinal-jobs-admin-followup.md. */
-    {
-      path: '/retinal/parked',
-      name: 'retinal-parked-admin',
-      component: () => import('@/views/RetinalParkedAdminView.vue'),
-      meta: {
-        title: 'Geparkte Scans',
-        role: 'Administrator' as const,
-      },
-    },
+    /* P3.3 — the cross-study parked-scans admin is gone. It existed because
+       parked retinal jobs had no study-subject linkage and so could not
+       surface on a per-subject page; those scans are ingest_item rows now and
+       appear in the one inbox with everything else. The old path redirects,
+       because it was an administrator's bookmark. */
+    { path: '/retinal/parked', redirect: { name: 'ingest-inbox' } },
     /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
        patient rather than the active-study study-subject label). */
     {
@@ -376,15 +369,19 @@ const router = createRouter({
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     /* DR-025 — authenticated fundus-image reconciliation inbox. Staff bind
-       UNBOUND image_ingest rows (Optomed C-STORE + Remidio upload) to a
+       UNBOUND ingest_item rows (Optomed C-STORE + Remidio upload) to a
        subject/event/CRF. Role-gated here (advisory); the backend enforces
        role + site visibility. */
     {
-      path: '/image-inbox',
-      name: 'image-ingest-inbox',
-      component: () => import('@/views/ImageInboxView.vue'),
-      meta: { title: 'Bild-Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
+      path: '/ingest-inbox',
+      name: 'ingest-inbox',
+      component: () => import('@/views/IngestInboxView.vue'),
+      meta: { title: 'Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
     },
+    /* P3.2 — the image inbox became the one inbox. Kept as a redirect for a
+       release: the old path is in people's bookmarks and in the operator test
+       script, and a 404 would read as "the feature was removed". */
+    { path: '/image-inbox', redirect: { name: 'ingest-inbox' } },
     /* P2-6 — open visits in a date window, reaching into the past so a
        visit that was due and never happened is visible. Role-gated here
        (advisory); the backend scopes the list to the studies the session

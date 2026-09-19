@@ -47,9 +47,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { t } = useI18n()
 
-/* 2026-06-21 — nav.modules consumer removed from TopBar; modules are
-   now reached via the subject-detail.workspace CTA only. The slot id
-   stays in the contract for future surfaces. */
+/* 2026-06-21 — the module nav consumer was removed from TopBar. P3.0
+   retired the orphaned slot with it: modules now reach the operator
+   through the subject-detail.workspace CTA and a landing-page card
+   (home.cards). */
 
 /**
  * Coalesced role set — prefer the explicit multi-role list; fall
@@ -234,9 +235,8 @@ function onReportBugClick() {
         </template>
       </nav>
 
-      <!-- Modules are reached via the subject-detail "Open workspace" CTA,
-           NOT the top-nav. The nav.modules slot id stays in the contract for
-           future use; the host no longer mounts entries here. -->
+      <!-- Modules are reached via the subject-detail "Open workspace" CTA
+           and the landing-page card (home.cards), NOT the top-nav. -->
 
       <!-- Phase E hardening B — sysadmin-only entry-point to the
            system-wide audit trail. Gated on Administrator role
@@ -250,17 +250,6 @@ function onReportBugClick() {
         data-testid="topbar-system-audit-link"
       >
         {{ t('topBar.systemAuditLog') }}
-      </RouterLink>
-      <!-- Administrator-only entry-point to the cross-study parked-scans admin
-           view. Parked retinal jobs have no study-subject linkage, so they
-           can't surface on a per-subject page. -->
-      <RouterLink
-        v-if="primaryRole === 'Administrator'"
-        to="/retinal/parked"
-        class="mr-2 px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100"
-        data-testid="topbar-retinal-parked-link"
-      >
-        {{ t('topBar.retinalParked') }}
       </RouterLink>
 
       <div v-if="userName" class="relative" :class="primaryRole === 'Administrator' ? '' : 'ml-auto'">

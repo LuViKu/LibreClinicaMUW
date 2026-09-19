@@ -86,11 +86,11 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
             // Audit rows first — they reference the ingest rows by id, and a
             // leftover row would make the next test's audit assertion ambiguous.
             try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM audit_log_event WHERE audit_table = 'image_ingest'")) {
+                    "DELETE FROM audit_log_event WHERE audit_table = 'ingest_item'")) {
                 ps.executeUpdate();
             }
             try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM image_ingest WHERE source_kind = 'upload'")) {
+                    "DELETE FROM ingest_item WHERE source_kind = 'upload'")) {
                 ps.executeUpdate();
             }
         }
@@ -227,15 +227,15 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
 
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT source_kind, status, patient_id, laterality, study_date, content_type, "
+                     "SELECT source_kind, status, patient_id, laterality, acquisition_date, content_type, "
                              + "stored_path, preview_png_path, original_filename "
-                             + "FROM image_ingest WHERE source_kind = 'upload'");
+                             + "FROM ingest_item WHERE source_kind = 'upload'");
              ResultSet rs = ps.executeQuery()) {
             assertTrue(rs.next(), "the commit should have written one row");
             assertEquals("UNBOUND", rs.getString("status"));
             assertEquals("M-001", rs.getString("patient_id"));
             assertEquals("OD", rs.getString("laterality"));
-            assertEquals("2021-01-04", rs.getString("study_date"));
+            assertEquals("2021-01-04", rs.getString("acquisition_date"));
             assertEquals("image/png", rs.getString("content_type"));
             assertEquals("fundus.png", rs.getString("original_filename"));
             // The upload is its own preview, and the bytes really landed in the store.
@@ -267,9 +267,9 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
 
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT image_ingest_id, status, match_policy, bound_study_subject_id, "
+                     "SELECT ingest_item_id, status, match_policy, bound_study_subject_id, "
                              + "bound_study_event_id, bound_event_crf_id, bound_by_user_id, bound_at "
-                             + "FROM image_ingest WHERE source_kind = 'upload'");
+                             + "FROM ingest_item WHERE source_kind = 'upload'");
              ResultSet rs = ps.executeQuery()) {
             assertTrue(rs.next());
             assertEquals("BOUND", rs.getString("status"));
@@ -281,10 +281,10 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
             assertTrue(rs.wasNull(), "a form with no login must not claim an operator");
             assertNotNull(rs.getTimestamp("bound_at"));
 
-            long id = rs.getLong("image_ingest_id");
+            long id = rs.getLong("ingest_item_id");
             try (PreparedStatement a = c.prepareStatement(
                     "SELECT user_id, new_value FROM audit_log_event "
-                            + "WHERE audit_table = 'image_ingest' AND entity_id = ? "
+                            + "WHERE audit_table = 'ingest_item' AND entity_id = ? "
                             + "AND audit_log_event_type_id = ?")) {
                 a.setInt(1, (int) id);
                 a.setInt(2, AuditTypeIds.IMAGE_BIND);
@@ -376,12 +376,50 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
                 .andExpect(status().isCreated());
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT laterality FROM image_ingest WHERE source_kind='upload'");
+                     "SELECT laterality FROM ingest_item WHERE source_kind='upload'");
              ResultSet rs = ps.executeQuery()) {
             assertTrue(rs.next());
             String lat = rs.getString("laterality");
             assertTrue(lat == null || lat.equals("OD") || lat.equals("OS") || lat.equals("OU"),
                     "unexpected laterality persisted: " + lat);
+        }
+    }
+
+    /* ---------------- /resolve : study scope ---------------- */
+
+    /**
+     * P3.0 — the resolve endpoint honours the portal's study scope.
+     *
+     * <p>It did not before: the sibling search endpoint was scoped, so a portal
+     * configured for one study would refuse to *search* for another study's
+     * subject and then happily *resolve* the same label, naming that subject's
+     * study and site back to a caller who never logged in. Both now answer the
+     * same way, and an out-of-scope subject is indistinguishable from one that
+     * does not exist.
+     */
+    @Test
+    void resolve_honoursThePortalStudyScope() throws Exception {
+        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
+        f.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) f.get(null);
+
+        // Unrestricted: the seeded subject resolves.
+        mockMvc().perform(post("/api/v1/public/image-upload/resolve")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"patientId\":\"M-001\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.candidates.length()").value(1));
+
+        live.setProperty("core.ingest.portal.studyOids", "S_SOME_OTHER_STUDY");
+        try {
+            mockMvc().perform(post("/api/v1/public/image-upload/resolve")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"patientId\":\"M-001\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.state").value("nopatient"))
+                    .andExpect(jsonPath("$.candidates.length()").value(0));
+        } finally {
+            live.remove("core.ingest.portal.studyOids");
         }
     }
 
@@ -483,7 +521,7 @@ class PublicImageUploadControllerDatabaseIT extends AbstractApiControllerDatabas
     private int uploadRowCount() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT count(*) FROM image_ingest WHERE source_kind = 'upload'");
+                     "SELECT count(*) FROM ingest_item WHERE source_kind = 'upload'");
              ResultSet rs = ps.executeQuery()) {
             rs.next();
             return rs.getInt(1);

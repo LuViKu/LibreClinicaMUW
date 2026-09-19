@@ -18,7 +18,7 @@ import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import SubjectGroupEditDialog from '@/components/SubjectGroupEditDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
-import ParkedScansList from '@/components/retinal/ParkedScansList.vue'
+import SubjectUnboundItemsList from '@/components/ingest/SubjectUnboundItemsList.vue'
 import { listSubjectJobs } from '@/api/retinal'
 
 import { useSubjectsStore } from '@/stores/subjects'
@@ -747,6 +747,25 @@ watch(subjectId, (next, prev) => {
 })
 
 const subject = computed(() => subjects.selected)
+
+/**
+ * P3.0 — panels contributed by the enrolled study modules.
+ *
+ * <p>The slot has been in the contract since the SPI landed and no host
+ * ever consumed it, so a module author wiring it up got nothing and no
+ * explanation. It renders below the built-in sections, where the
+ * retinal tab already sits — which is where P3.5 moves that tab to,
+ * once the retinal module owns it rather than this view.
+ *
+ * <p>Entries may declare a predicate against the loaded subject; it is
+ * evaluated here so a module can decline to mount without the host
+ * knowing why.
+ */
+const moduleTabs = computed(() =>
+  studyModules
+    .injectionsFor('subject-detail.tabs')
+    .filter((entry) => (entry.predicate ? entry.predicate(subject.value ?? null) : true)),
+)
 const isLoading = computed(() => subjects.isLoadingSelected)
 const loadError = computed(() => subjects.selectedError)
 
@@ -1481,9 +1500,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           :subject-label="subject.id"
         >
           <template #parked>
-            <ParkedScansList :study-subject-id="retinalNumericId" />
+            <SubjectUnboundItemsList :study-subject-id="retinalNumericId" />
           </template>
         </SubjectRetinalTab>
+
+        <!-- P3.0 — module-contributed panels (subject-detail.tabs). -->
+        <component
+          :is="entry.component"
+          v-for="entry in moduleTabs"
+          :key="entry.key"
+          :subject="subject"
+        />
 
         <!-- Phase E.6 — per-eye modality baselines. One panel per
              in-scope eye (subject.studyEye includes the eye) and per

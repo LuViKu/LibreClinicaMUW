@@ -46,11 +46,32 @@ A manifest activates when the active study is **enrolled** in it — `activeStud
 
 `study.protocol_type` is **not** consulted. It is free-form text with no admin-visible toggle, which is why enrollment replaced it; the manifest field kept its name.
 
-The `useStudyModuleStore()` Pinia store re-derives `activeModule` on every study switch. Re-activation skips lazy i18n re-loads — bundles persist for the session.
+The `useStudyModuleStore()` Pinia store re-derives on every study switch. Re-activation skips lazy i18n re-loads — bundles persist for the session.
+
+**Every enrolled module is active (P3.0).** A study running both imaging ingest and a decision aid needs both; before P3.0 only the first id the backend happened to list took effect, and the others were silently inert — routes loaded, slots never rendered, nothing said why. `activeModules` holds them all in enrollment order; `activeModule` remains as "the first" for the few callers that genuinely want one.
+
+Entry keys are namespaced `<moduleId>:<key>` on the way out of `injectionsFor`, so two modules may both use `key: 'open-workspace'` without one disappearing. Keys need only be unique **within** your module — you do not have to guess what others called theirs.
 
 ### Uniqueness
 
 `protocolType` must be unique across the registry. The boot-time assertion in `registry.ts` emits a `console.warn` when two modules collide; `findModule()` returns whichever registered first (insertion order, which under `import.meta.glob` is alphabetical by directory name).
+
+## What belongs in a module, and what belongs to the study
+
+A module is **SPA-only**: routes, panels, components, i18n. It is not where a study's *configuration* goes, and the distinction matters because getting it wrong is what made a third study expensive.
+
+Ask the platform what the study means, rather than hard-coding it:
+
+| You need | Ask | Not |
+|---|---|---|
+| Which CRF item a value lands in | `study_item_binding` via `StudyBindings.oidFor(studyId, role, fallback)` | a literal OID in shared code |
+| Which device ticks which checklist box | the `imaging_modality` catalogue and its bindings | a row in a migration |
+| Whether a study receives DICOM / runs inference | `study_setting` via `StudySettingService` | a `core.*` property naming study OIDs |
+| Which groups a trial randomises AI visibility on | `AiArmPolicy` (`ai.arm.*`) | `AI_SHOWN` / `AI_HIDDEN` literals |
+
+`SharedControllersHaveNoStudyLiteralsTest` enforces this on the Java side: a study's CRF or group name appearing in `controller/api` or `service` fails the build unless it is a documented fallback. That list may shrink and must never grow.
+
+An administrator maintains all three catalogues through the UI — the imaging tab in **Modalitäten**, and the settings panel under study parameters — so **onboarding a study needs no code change and no migration**. That is the claim the catalogues exist to make true; a module that hard-codes its study's OIDs quietly breaks it.
 
 ## Routing
 
@@ -91,11 +112,13 @@ Six slot ids exist. **Three of them are rendered by a host today** — an entry 
 | `subject-detail.workspace`    | SubjectDetailView        | `SubjectDetail \| null`  | yes | Top-of-view CTA (e.g. "Open workspace") |
 | `event-detail.panels`         | EventDetailView          | `EventDetailDto \| null` | yes | Below-form panels per visit — predicate gates by status / definition |
 | `crf-entry.banner`            | CrfEntryView             | `null`                   | yes | Top-of-form banner — no context |
-| `subject-detail.tabs`         | SubjectDetailView        | `SubjectDetail \| null`  | no  | Declared, not mounted — put the tab in your own template for now |
+| `subject-detail.tabs`         | SubjectDetailView        | `SubjectDetail \| null`  | yes | Panel below the built-in sections. Entries receive the loaded subject as a `subject` prop, and a `predicate` is evaluated against it before mounting. Consumed since P3.0 — it was declared and mounted nowhere before that |
 | `event-detail.actions`        | EventDetailView          | `EventDetailDto \| null` | no  | Declared, not mounted |
-| `nav.modules`                 | TopBar                   | `null`                   | no  | The TopBar consumer was removed on 2026-06-21; modules are reached through the subject-detail CTA. The id is reserved for a future surface |
+| `home.cards`                  | HomeView                 | `null`                   | yes | Card in the landing page's study-scoped lane — the module's way in when the operator does not already have a subject open. Replaced `nav.modules` in P3.0, whose TopBar consumer was removed on 2026-06-21, leaving a slot that rendered nowhere |
 
 The framework only surfaces entries from an **active** module — when the active study is not enrolled in your module, your entries do not render anywhere. No per-view gating needed.
+
+Since P3.0 **every** enrolled module is active, not just the first one the backend happens to list. A slot's entries are concatenated across active modules in enrollment order, and entry keys are namespaced `<moduleId>:<key>` on the way out — so two modules may both use `key: 'open-workspace'` without one disappearing. Keys are unique within your module; you do not need to guess what other modules called theirs.
 
 Predicates are typed against `SlotContextMap[slotId]`:
 

@@ -8,6 +8,7 @@ import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import StudyModuleEnrollmentPanel from '@/components/study/StudyModuleEnrollmentPanel.vue'
+import StudySettingsPanel from '@/components/study/StudySettingsPanel.vue'
 
 import { useStudyParametersStore } from '@/stores/studyParameters'
 import { useErrorsStore } from '@/stores/errors'
@@ -353,6 +354,12 @@ const enumLabel = (group: string, value: string) =>
            the new StudyModuleEnrollmentApiController so the dispatch
            in useStudyModuleStore activates only when the toggle is on. -->
       <StudyModuleEnrollmentPanel :study-oid="oid" />
+
+      <!-- P3.5 — what this study does: which ingress paths are open, whether
+           inference runs, which groups it randomises AI visibility on. These
+           were instance-wide properties before; an administrator changes them
+           here instead of editing a file on the server. -->
+      <StudySettingsPanel :study-oid="oid" />
 
       <div class="flex items-center gap-2 pt-2">
         <button

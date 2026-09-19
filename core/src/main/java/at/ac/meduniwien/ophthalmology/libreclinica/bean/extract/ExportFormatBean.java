@@ -31,7 +31,15 @@ public class ExportFormatBean extends Term {
     // as "text/plain" in the table export_format
     public static final ExportFormatBean XMLFILE = new ExportFormatBean(4, "text/plain");
     public static final ExportFormatBean PDFFILE = new ExportFormatBean(5, "application/pdf");
-    // may have to add a #6 to export formats, tbh
+    /**
+     * P3.8 — the multimodal bundle: a casebook plus the files behind it.
+     *
+     * <p>Row 6 in {@code export_format}, added by
+     * {@code lc-muw-2026-11-30-export-format-zip.xml}. Recording a zip under
+     * one of the text formats would make every consumer that trusts the mime
+     * type hand a browser an archive labelled as text.
+     */
+    public static final ExportFormatBean ZIPFILE = new ExportFormatBean(6, "application/zip");
     private int exportFormatId;
     private String mimeType;
 

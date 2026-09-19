@@ -50,8 +50,17 @@ export interface SlotContextMap {
   'event-detail.actions': EventDetailDto | null
   /** Top-of-form banner on CrfEntryView. No context (banner mounts unconditionally). */
   'crf-entry.banner': null
-  /** Entry in TopBar's primary nav. No context (entry renders whenever the active study matches). */
-  'nav.modules': null
+  /**
+   * Card in HomeView's study-scoped lane. No context (the card renders
+   * whenever the module is active on the bound study).
+   *
+   * <p>P3.0 — replaces {@code nav.modules}, which was declared here,
+   * consumed by TopBar until 2026-06-21, and then by nothing. A slot in
+   * the contract with no host is worse than no slot: an author wires it
+   * up, nothing appears, and the module looks broken. This one has a
+   * consumer ({@code HomeView.vue}).
+   */
+  'home.cards': null
 }
 
 /**

@@ -603,6 +603,94 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 
 ---
 
+## DR-026 — One ingest queue for every inbound file
+
+**Date:** 2026-11-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-024, DR-025; `ingest_item` (`migration/lc-muw-2026-10-05-ingest-item.xml`, `lc-muw-2026-10-19-retinal-job-ingest-item.xml`); `IngestInboxApiController`, `IngestBindService`, `IngestItemRepository`, `IngestArtifactStore`, `IngestResolutionService`.
+
+**Context.** The platform had grown **two queues for one activity**. A file arrives from a device, somebody says whose visit it belongs to, and it becomes study data — but an OCT volume went to the retinal pipeline's `parked` job list (sysadmin-only, cross-study, its own admin view) and a fundus photo went to the `image_ingest` inbox (DM/Investigator/CRC, its own bind API and SPA view). An operator had to know which queue a file had landed in before they could look for it, and neither view could show them that one patient had both waiting. Three copies of "which subject does this label mean", five of "which directory is this kind of file stored in", and two duplicated `INSERT INTO event_crf` statements had accumulated alongside. A third study would have added a third queue.
+
+**Decision.** One table (**`ingest_item`**, renamed from `image_ingest` and given `kind` ∈ {`e2e`, `dicom`, `image`, `other`}), one inbox (`/api/v1/ingest`), one bind (`IngestBindService`). Existing inference jobs were **backfilled** onto `ingest_item` — one row per distinct scan, not per job, since one `.e2e` is enqueued once per task — with the patient hint recovered from the type-115 audit trail, which was the only place the operator-typed label had ever been kept. `parked` jobs became `cancelled` with a `status_message` naming their replacement: **nothing deleted, reversible by hand**. The public OCT portal now writes an `ingest_item` before anything is enqueued, and a parked upload produces an UNBOUND row and **no job at all** — there is nothing for a GPU to do with a scan whose patient is unknown.
+
+**Consequences.**
+
+- **Unbind exists** (audit 130). Previously a mis-bind was fixed by editing the row, leaving the CRF tick the bind had caused; the form kept asserting a modality was performed with nothing left to show for it. Undoing a bind now undoes what it did — repointing the value to another file from the same device when one remains, and removing it only when nothing does.
+- The dedup key moved from `retinal_inference_job.e2e_sha256` to the scan's own row, and **gained** a condition: cancelled jobs are excluded, so a scan whose run was cancelled can be re-filed and run again. The old index forbade that.
+- **A previous WAR cannot survive the rename.** Rolling back the application means restoring the pre-deploy dump, not redeploying the old image (`deploy-runbook.md` §rollback).
+- Audit rows' `audit_table` locator was repointed from `image_ingest` to `ingest_item`. No `old_value`, `new_value`, `user_id`, timestamp or event type was touched — a pointer to a table that no longer exists preserves no observation.
+- `ImageIngestApiController` and `/image-inbox` remain for one release as a façade and a redirect.
+
+**Reversible** — the migration's `<rollback>` is complete and was verified to restore the schema byte-identically with rows preserved; the parked jobs are cancelled rather than deleted, so restoring them is an `UPDATE`.
+
+**Out of scope.** Cancelling inference jobs on unbind (no bind starts one yet); SSE on the inbox; retiring the `parked` status decoder (kept one release).
+
+---
+
+## DR-027 — A study declares what it does, rather than the code knowing
+
+**Date:** 2026-11-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-026; `imaging_modality` + `imaging_modality_item_binding` (`migration/lc-muw-2026-11-02-imaging-modality.xml`); `study_setting` + `study_item_binding` (`migration/lc-muw-2026-11-16-study-setting.xml`); `PerformedItemAutoTicker`, `StudySettingService`, `StudyBindings`, `AiArmPolicy`, `SharedControllersHaveNoStudyLiteralsTest`.
+
+**Context.** Onboarding a study required editing code every other study shares. Which device ticks which CRF box was two hard-coded rows. Whether a study receives DICOM was an instance-wide property naming study OIDs, changeable only by editing a file on the server and restarting. Which item an inference metric lands in was a literal — `I_NAMD_OD_IRF_MM3` — in a shared populator, as were `F_NAMD_VISIT` and the randomisation group names `AI_SHOWN` / `AI_HIDDEN`. Each of those is a study that cannot exist without a code change.
+
+**Decision.** Three catalogues, all resolving **site → parent → configuration → code default**, so a site inherits its study and an absent row means *as before*:
+
+1. **`imaging_modality`** + **`imaging_modality_item_binding`** — what a study photographs, on which device, and which CRF item each acquisition ticks. Role-based binding rows (`performed` / `not_performed_reason` / `initials`, per eye) rather than columns, so the Visitenplan's three-items-per-modality shape grows without another migration. Deliberately **separate from the existing `modality` table**, which is a global catalogue of *measurements* with a value per eye — same word, different thing.
+2. **`study_setting`** — whether a study receives DICOM, accepts uploads, runs inference, exports bundles, offers the today's-visits list.
+3. **`study_item_binding`** — which item a study means by a role the shared code asks for.
+
+**Consequences.**
+
+- **The auto-ticker starts the form that carries the box** (via `EventCrfEnsurer`, inheriting its refusal to revive a removed form). Previously it wrote nothing when no CRF was open, so the checklist silently disagreed with the files until an operator noticed.
+- A DICOM whose calling AE title matches `auto_match_ae_title` is **classified on arrival**.
+- **Arm names are translated at the boundary.** `armForSubject` / `armForEvent` map whatever a study calls its groups onto one fixed pair of tokens, so the seven masking call sites keep comparing against a constant. An earlier version of this change compared the raw name and would have **silently unblinded** a study that renamed its hidden group — nothing would have reported it, and analysis would have been the first to find out. Handing the raw name outward is the design that fails quietly.
+- Retiring a modality is a **status change**: files filed under it keep naming it, and an audit row explaining a CRF value must stay resolvable after somebody tidies the catalogue.
+- A binding's item OID is **checked to exist** before it is accepted. A binding pointing at nothing does not fail loudly — it stops ticking, and an un-ticked box reads exactly like a modality that was not performed.
+- Audit types 131–134 cover catalogue and setting changes. A study that stops receiving DICOM because somebody flipped a switch looks, from the inbox, exactly like a camera that stopped sending.
+- `SharedControllersHaveNoStudyLiteralsTest` is a **ratchet**: the remaining literals are documented fallbacks, the list may shrink and must never grow.
+
+**Reversible** — every table is additive and every default preserves prior behaviour; an instance that sets nothing behaves exactly as it did.
+
+**Out of scope.** Deleting the fallback literals (waits for every deployment's studies to have rows); migrating the measurement `modality` table's per-eye aliases onto the role-based binding shape (possible later, not needed now).
+
+---
+
+## DR-028 — An export carries the evidence, and says what a person did not write
+
+**Date:** 2026-09-19
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-025, DR-027; `BundleExportWriter`, `FileItemValue`, `SubjectExportApiController`, `ItemDataBean`/`ItemDataDAO`, `SubjectExportBundleDatabaseIT`, `SubjectExportProvenanceDatabaseIT`.
+
+**Context.** "Export the subject" produced text only. For a study whose endpoint is an image, that is not an export: the OCT volumes, the fundus photographs, the segmentation masks and the files attached to CRF items never left the server. Worse, a FILE item exported as a **server path** — worthless to the recipient, who cannot reach that filesystem, and a disclosure of the directory layout of a machine holding patient data to anyone who receives a casebook. Meanwhile the numbers the platform wrote into CRFs — an auto-ticked checklist box, an inference metric — were indistinguishable in the output from a figure a clinician typed.
+
+**Decision.** The subject bundle (`format=bundle`, off unless `export.bundle.enabled`) is a zip of `casebook.xml`, `casebook.csv`, the acquisitions, the CRF file attachments, the inference artifacts, and `manifest.json` **last**. `ItemData` elements carry `muw:SourceKind`, `muw:IngestItemId` / `muw:RetinalJobId`, and — inside a bundle — `muw:ManifestPath`. FILE items export as their filename in every format, via one implementation (`FileItemValue`).
+
+**Consequences.**
+
+- **The manifest is last, deliberately.** A bundle without one is an incomplete bundle, so a truncated download is detectable rather than silently short.
+- **An omission is named, never silent.** A file outside the store, a missing file, an AI artifact withheld from a blinded recipient: each appears in `omitted[]` with a reason. A recipient must be able to tell "this subject had no scan" from "the scan is gone" — and a blinded export that looks complete is worse than one that says so.
+- **Blinding follows the data out of the platform**, and splits on what the artifact *is*: the model's reading is withheld, the rendering of the eye is kept. A physician is blinded to the algorithm, not to their patient. An unanswerable arm lookup withholds.
+- **Every path is confined before it is read** — the acquisition store, the retinal artifact store, the CRF file store, each separately. Those paths come from rows an unauthenticated ingress can write; reading one unchecked turns an export into an arbitrary file read.
+- **`muw:ManifestPath` appears only where the bundle really carries the file.** A casebook pointing at an entry that is not in the zip reads as evidence that has merely been misplaced, which is worse than a casebook that says nothing.
+- **`ItemDataBean` now carries provenance.** The columns had existed since nAMD Slice 3 and DR-025 P1-5, but `ItemDataDAO` declared them without mapping them — so every consumer holding a bean saw an operator entry. Absence is normalised back to null, because `EntityDAO` turns SQL NULL into `0L` and "job 0 wrote this" is a false claim, not a missing one.
+- **The path leak had three routes**, not one: the per-subject export, `ExtractBean` (tab/CSV/SPSS/SAS), and `OdmExtractDAO` (dataset ODM). Fixing the first two would have left the third. The rule keys on the declared data type, never on the value looking path-like — free text with a slash in it is clinical data.
+- **The endpoint writes the zip to the response directly.** `ResponseEntity<?>`'s wildcard erases the body type, so Spring never selects `StreamingResponseBodyReturnValueHandler` and falls through to the message converters, which cannot write a lambda — a 500 for every caller. Narrowing the return type is not available: the same method answers with JSON errors and with `byte[]`. Nothing is buffered in heap either way.
+
+**Reversible** — the bundle is a new format behind a per-study setting; the annotations are additive attributes in a private namespace. The FILE-path substitution is not reversible in spirit: emitting server paths again would reintroduce the disclosure.
+
+**Follow-ups landed (2026-09-19).**
+
+- **The dataset bundle (P3.8)** goes through the export-job queue: one zip, one manifest, a folder per subject (`subjects/<label>/`), registered under a new `export_format` row 6 (`application/zip`) so nothing that trusts the mime type hands a browser an archive labelled as text. Blinding is decided **per subject** — two subjects of one dataset can be in different arms — and the manifest says `mixed` when they differ rather than pretending one answer for the archive. The gate is applied at enqueue *and* in the worker: a study that switches the export off must not have its imaging leave the platform because a job was already waiting. The SPA queues it and polls; nothing is built on the request thread.
+- **Blinding now fails closed on screen as well.** The viewer's arm lookup used to return "not the hidden arm" on a database error, showing AI output to a clinician the trial had randomised not to see it; the export path had already decided the opposite. An unblinding event is one whether or not a file moved, so the two halves of the platform now agree. Only treating roles are affected.
+- **The four nAMD flag bindings hold OIDs**, like every other `study_item_binding` row. They had been seeded with item *names* because the query that read them matched on `item.name`; the code matches on `oc_oid` now, and an additive changeset (`lc-muw-2026-12-01-namd-flag-bindings-oid.xml`) corrects the seeded rows without touching the deployed seed.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

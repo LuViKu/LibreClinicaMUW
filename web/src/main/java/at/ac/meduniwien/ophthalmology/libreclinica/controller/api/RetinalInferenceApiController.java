@@ -200,7 +200,7 @@ public class RetinalInferenceApiController {
      */
     private int systemActor() {
         Integer sys = at.ac.meduniwien.ophthalmology.libreclinica.service.ingest
-                .IngestPerformedItemPopulator.systemUserId(dataSource);
+                .PerformedItemAutoTicker.systemUserId(dataSource);
         return sys == null ? 0 : sys;
     }
 

@@ -2089,6 +2089,12 @@
       "missingOid": "Mindestens eine OD- oder OS-OID erforderlich.",
       "network": "Modalität konnte nicht gespeichert werden — bitte erneut versuchen."
     }
+  ,
+
+    "tab": {
+      "measurements": "Messwerte (global)",
+      "imaging": "Bildgebung (Studie)"
+    }
   },
   "patientDetail": {
     "heading": "Patient",
@@ -2623,7 +2629,8 @@
     "format": {
       "odm": "CDISC ODM (XML)",
       "csv": "Tabelle (CSV)",
-      "pdf": "PDF-Bericht"
+      "pdf": "PDF-Bericht",
+      "bundle": "Komplettpaket (ZIP, mit Bildern)"
     },
     "downloading": "Lädt herunter…",
     "success": "Download gestartet.",
@@ -2814,7 +2821,16 @@
       "tsv": "TSV (tabgetrennt)",
       "excel": "Excel (.xls)",
       "sas": "SAS",
-      "spss": "SPSS"
+      "spss": "SPSS",
+      "bundle": "Komplettpaket (ZIP, mit Bildern) — im Hintergrund"
+    },
+    "job": {
+      "label": "Komplettpaket",
+      "queued": "In Warteschlange …",
+      "running": "Wird erstellt …",
+      "done": "Fertig.",
+      "failed": "Fehlgeschlagen",
+      "download": "Herunterladen"
     },
     "modal": {
       "title": "Datensatz exportieren",
@@ -2909,6 +2925,111 @@
     "bind": "Zuordnen …",
     "dismiss": "Verwerfen",
     "dismissConfirm": "Dieses Bild wirklich verwerfen?"
+  },
+  "ingestInbox": {
+    "title": "Eingang",
+    "cardDesc": "Eingehende Dateien – Fundusbilder und OCT-Scans – Patienten und Visiten zuordnen.",
+    "subtitle": "{count} Dateien",
+    "loading": "Wird geladen …",
+    "empty": "Keine Dateien in dieser Ansicht.",
+    "filters": "Filter",
+    "kindAll": "Alle",
+    "kind": {
+      "e2e": "OCT-Scan",
+      "dicom": "DICOM-Bild",
+      "image": "Fundusbild",
+      "other": "Andere Datei"
+    },
+    "statusLabel": "Status",
+    "status": {
+      "UNBOUND": "Nicht zugeordnet",
+      "BOUND": "Zugeordnet",
+      "DISMISSED": "Verworfen"
+    },
+    "searchLabel": "Suche",
+    "searchPlaceholder": "Patienten-ID oder Dateiname",
+    "apply": "Anwenden",
+    "selectOne": "Datei auswählen",
+    "selected": "{n} ausgewählt",
+    "bindSelected": "Auswahl zuordnen …",
+    "clearSelection": "Auswahl aufheben",
+    "someSkipped": "{n} Datei(en) wurden übersprungen – sie waren bereits bearbeitet.",
+    "patientId": "Patienten-ID",
+    "eye": "Auge",
+    "suggestion": "Vorschlag: {label} ({study})",
+    "bindSuggested": "Vorschlag zuordnen",
+    "bind": "Zuordnen …",
+    "unbind": "Zuordnung aufheben",
+    "unbindConfirm": "Zuordnung wirklich aufheben? Der dadurch gesetzte CRF-Wert wird ebenfalls entfernt, sofern keine weitere Datei desselben Geräts die Visite belegt.",
+    "dismiss": "Verwerfen",
+    "dismissConfirm": "Diese Datei wirklich verwerfen?"
+  },
+
+    "imagingModalities": {
+      "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",
+      "noStudy": "Keine Studie aktiv. Wählen Sie zuerst eine Studie.",
+      "empty": "Für diese Studie sind noch keine Aufnahmen hinterlegt.",
+      "code": "Code",
+      "label": "Bezeichnung",
+      "labelDe": "Bezeichnung (DE)",
+      "labelEn": "Bezeichnung (EN)",
+      "device": "Gerät",
+      "kinds": "Dateitypen",
+      "bindings": "CRF-Felder",
+      "ordinal": "Reihenfolge",
+      "aeTitle": "DICOM AE-Title",
+      "lateralityRequired": "Auge erforderlich",
+      "checklistOnly": "nur Checkliste",
+      "noBindings": "kein Feld hinterlegt",
+      "kindsHint": "Ohne Auswahl: reine Checklisten-Zeile (z. B. Visus) – es kommt nie eine Datei an.",
+      "autoMatchHint": "Bilder dieses AE-Titles werden automatisch dieser Aufnahme zugeordnet.",
+      "addTitle": "Aufnahme hinzufügen",
+      "add": "Hinzufügen",
+      "addBinding": "CRF-Feld …",
+      "roleLabel": "Rolle",
+      "eye": "Auge",
+      "itemOid": "Item-OID",
+      "itemOidPlaceholder": "z. B. I_HEALT_OCT_PERFORMED",
+      "codedYes": "Ja-Wert",
+      "retire": "Stilllegen",
+      "retired": "stillgelegt",
+      "retireConfirm": "Aufnahme „{code}“ wirklich stilllegen? Sie kreuzt danach kein CRF-Feld mehr an.",
+      "role": {
+        "performed": "durchgeführt",
+        "not_performed_reason": "Begründung",
+        "initials": "Kürzel"
+      }
+    },
+
+    "studySettings": {
+      "title": "Plattform-Einstellungen",
+      "intro": "Was diese Studie nutzt. „Nicht gesetzt“ heißt: wie bisher – die Plattform entscheidet.",
+      "setting": "Einstellung",
+      "value": "Wert",
+      "effective": "Wirksam",
+      "notSet": "Nicht gesetzt",
+      "on": "Ein",
+      "off": "Aus",
+      "inherited": "geerbt",
+      "save": "Einstellungen speichern",
+      "saved": "Gespeichert ✓",
+      "bindingsCount": "{n} CRF-Item-Zuordnung(en) hinterlegt.",
+      "keys": {
+        "ingest.dicom.enabled": "DICOM-Empfang (Worklist + C-STORE)",
+        "ingest.image.enabled": "Bild-Upload (Portal)",
+        "ingest.oct.enabled": "OCT-Upload (Portal)",
+        "inference.enabled": "KI-Auswertung",
+        "export.bundle.enabled": "Multimodaler Export",
+        "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
+        "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
+        "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+      }
+    },
+  "subjectUnboundItems": {
+    "title": "Nicht zugeordnete Dateien",
+    "loading": "Wird geladen …",
+    "subtitle": "{count} Datei(en) warten im Eingang auf Zuordnung.",
+    "openInbox": "Im Eingang zuordnen →"
   },
   "dueVisits": {
     "title": "Fällige Visiten",

@@ -271,15 +271,15 @@ export const administratorDe: ManualChapter = {
       ],
     },
     {
-      id: 'ad-parked', num: '18', title: 'Geparkte Scans', deutsch: 'Parked Scans (cross-study retinal jobs)', route: '/retinal/parked',
+      id: 'ad-parked', num: '18', title: 'Eingang', deutsch: 'Ingest inbox (all inbound files)', route: '/ingest-inbox',
       roles: ['administrator'],
       shot: 'administrator/22-parked-scans.png',
       goal: 'Prüfen Sie retinale Inferenz-Jobs, die ohne Visite hochgeladen wurden und auf die Zuordnung zu einer teilnehmenden Person warten.',
       steps: [
-        'Öffnen Sie **Geparkte Scans** (`/retinal/parked`) — eine ausschließlich Systemadministrator/-innen vorbehaltene, studienübergreifende Übersicht.',
+        'Öffnen Sie den **Eingang** (`/ingest-inbox`) — die studienübergreifende Übersicht aller eingegangenen Dateien (OCT-Scans wie Fundusbilder).',
         'Jede Zeile zeigt den **Job**, die **PatientId**, das **Auge** (eye), den **Task** und den Zeitpunkt **Hochgeladen** (upload time). Wählen Sie Zeilen aus und verwenden Sie die Zeilen-**Aktion**, um einen geparkten Scan einer Visite einer teilnehmenden Person zuzuordnen, oder **Neu laden**, um zu aktualisieren.',
       ],
-      notes: ['Ausschließlich Administrator/-innen vorbehalten. Geparkte Jobs haben noch keine Verknüpfung zu einer Studienteilnehmerin/einem Studienteilnehmer, weshalb sie hier statt auf einer probandenbezogenen Seite erscheinen.'],
+      notes: ['Nicht zugeordnete Dateien haben noch keine Verknüpfung zu einer Studienteilnehmerin/einem Studienteilnehmer, weshalb sie hier statt auf einer probandenbezogenen Seite erscheinen. Seit P3.3 liegen OCT-Scans und Bilder im selben Eingang; die frühere Ansicht „Geparkte Scans“ leitet hierher weiter.'],
     },
   ],
 }

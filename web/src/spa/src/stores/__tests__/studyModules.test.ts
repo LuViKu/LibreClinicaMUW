@@ -78,6 +78,39 @@ function namdManifest(opts: { loadI18n?: () => Promise<{ de: Record<string, unkn
   }
 }
 
+/** A second module, so multi-enrollment has something to be multiple of. */
+function imagingManifest(
+  opts: { loadI18n?: () => Promise<{ de: Record<string, unknown>; en: Record<string, unknown> }> } = {},
+): StudyModuleManifest {
+  return {
+    protocolType: 'IMAGING',
+    labelKey: 'studyModules.imaging.label',
+    routes: [],
+    injections: {
+      // Deliberately the SAME entry key as the nAMD manifest's: keys
+      // are unique within a module, not across them, and a collision
+      // must not make one module invisible.
+      'subject-detail.workspace': [
+        {
+          key: 'open-workspace',
+          labelKey: 'studyModules.imaging.open',
+          component: defineComponent({ template: '<div />' }),
+        },
+      ],
+    },
+    loadI18n: opts.loadI18n,
+  }
+}
+
+/** A user whose active study has several modules enrolled. */
+function userWithModules(ids: string[]): AuthenticatedUser {
+  const u = userWithProtocol(ids[0] ?? 'NONE')
+  if (u.activeStudy) {
+    ;(u.activeStudy as unknown as { enabledModules: string[] }).enabledModules = ids
+  }
+  return u
+}
+
 /**
  * 2026-06-23 — activation now keys on activeStudy.enabledModules
  * (the admin-toggled enrollment), not on study.protocol_type. The
@@ -167,6 +200,77 @@ describe('useStudyModuleStore', () => {
     const store = useStudyModuleStore()
     expect(store.injectionsFor('subject-detail.workspace')).toHaveLength(1)
     expect(store.injectionsFor('event-detail.panels')).toEqual([])
+  })
+
+  /* ---------------- P3.0 — several modules on one study ---------------- */
+
+  it('activates every enrolled module, not just the first', () => {
+    const namd = namdManifest()
+    const imaging = imagingManifest()
+    STUDY_MODULES.push(namd, imaging)
+    const auth = useAuthStore()
+    auth.user = userWithModules(['NAMD', 'IMAGING'])
+    auth.state = 'authenticated'
+
+    const store = useStudyModuleStore()
+    expect(store.activeModules).toEqual([namd, imaging])
+  })
+
+  it('concatenates slot entries across active modules in enrollment order', () => {
+    STUDY_MODULES.push(namdManifest(), imagingManifest())
+    const auth = useAuthStore()
+    auth.user = userWithModules(['NAMD', 'IMAGING'])
+    auth.state = 'authenticated'
+
+    const store = useStudyModuleStore()
+    const entries = store.injectionsFor('subject-detail.workspace')
+    expect(entries).toHaveLength(2)
+    // Both modules used key 'open-workspace'. Namespacing keeps them
+    // distinct — a plain de-dup would silently drop the second module.
+    expect(entries.map((e) => e.key)).toEqual([
+      'NAMD:open-workspace',
+      'IMAGING:open-workspace',
+    ])
+  })
+
+  it('loads the i18n bundle of every active module', async () => {
+    const namdLoad = vi.fn().mockResolvedValue({ de: { a: '1' }, en: { a: '1' } })
+    const imagingLoad = vi.fn().mockResolvedValue({ de: { b: '2' }, en: { b: '2' } })
+    STUDY_MODULES.push(namdManifest({ loadI18n: namdLoad }), imagingManifest({ loadI18n: imagingLoad }))
+
+    const auth = useAuthStore()
+    useStudyModuleStore()
+    auth.user = userWithModules(['NAMD', 'IMAGING'])
+    auth.state = 'authenticated'
+    await flushAll()
+
+    // A module whose slots render but whose labels stay raw i18n keys
+    // looks broken in a way that points at the wrong file.
+    expect(namdLoad).toHaveBeenCalledTimes(1)
+    expect(imagingLoad).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a repeated enrollment row', () => {
+    const namd = namdManifest()
+    STUDY_MODULES.push(namd)
+    const auth = useAuthStore()
+    // A site inheriting its parent's enrollment can list the same id twice.
+    auth.user = userWithModules(['NAMD', 'NAMD'])
+    auth.state = 'authenticated'
+
+    const store = useStudyModuleStore()
+    expect(store.activeModules).toEqual([namd])
+    expect(store.injectionsFor('subject-detail.workspace')).toHaveLength(1)
+  })
+
+  it('activeModule stays the first active one, for callers that want just one', () => {
+    const namd = namdManifest()
+    STUDY_MODULES.push(namd, imagingManifest())
+    const auth = useAuthStore()
+    auth.user = userWithModules(['NAMD', 'IMAGING'])
+    auth.state = 'authenticated'
+
+    expect(useStudyModuleStore().activeModule).toBe(namd)
   })
 
   it('merges i18n on first activation and remembers the load', async () => {

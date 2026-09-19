@@ -118,11 +118,11 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     void cleanRows() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection()) {
             try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM audit_log_event WHERE audit_table = 'image_ingest'")) {
+                    "DELETE FROM audit_log_event WHERE audit_table = 'ingest_item'")) {
                 ps.executeUpdate();
             }
             try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM image_ingest WHERE original_filename LIKE 'it-%'")) {
+                    "DELETE FROM ingest_item WHERE original_filename LIKE 'it-%'")) {
                 ps.executeUpdate();
             }
         }
@@ -174,11 +174,11 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         }
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO image_ingest (source_kind, content_type, stored_path, "
+                     "INSERT INTO ingest_item (kind, source_kind, content_type, stored_path, "
                              + "preview_png_path, original_filename, patient_id, laterality, "
-                             + "study_date, received_at, status) "
-                             + "VALUES ('upload', 'image/png', ?, ?, ?, ?, 'OD', ?::date, NOW(), 'UNBOUND') "
-                             + "RETURNING image_ingest_id")) {
+                             + "acquisition_date, received_at, status) "
+                             + "VALUES ('image', 'upload', 'image/png', ?, ?, ?, ?, 'OD', ?::date, NOW(), 'UNBOUND') "
+                             + "RETURNING ingest_item_id")) {
             ps.setString(1, preview.toString());
             ps.setString(2, withPreview ? preview.toString() : null);
             ps.setString(3, name);
@@ -194,7 +194,7 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     private String statusOf(long id) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT status FROM image_ingest WHERE image_ingest_id = ?")) {
+                     "SELECT status FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 assertTrue(rs.next());
@@ -207,7 +207,7 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = ? "
-                             + "AND audit_table = 'image_ingest' AND entity_id = ?")) {
+                             + "AND audit_table = 'ingest_item' AND entity_id = ?")) {
             ps.setInt(1, typeId);
             ps.setInt(2, (int) entityId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -362,8 +362,8 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         long id = seedUnbound("HID-001", "2021-01-04", true);
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "UPDATE image_ingest SET status='BOUND', match_policy='manual', "
-                             + "bound_study_subject_id=?, bound_at=NOW() WHERE image_ingest_id=?")) {
+                     "UPDATE ingest_item SET status='BOUND', match_policy='manual', "
+                             + "bound_study_subject_id=?, bound_at=NOW() WHERE ingest_item_id=?")) {
             ps.setInt(1, HIDDEN_STUDY_SUBJECT_ID);
             ps.setLong(2, id);
             ps.executeUpdate();

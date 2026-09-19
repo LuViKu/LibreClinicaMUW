@@ -215,9 +215,18 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
         cleanupJob(jobId);
     }
 
-    /** park=true with no eventCrfId leaves event_crf_id NULL + status='parked'. */
+    /**
+     * P3.3 — park no longer means a job.
+     *
+     * <p>"Parked" used to be a status on a retinal_inference_job, which gave
+     * the pipeline a private queue of scans nobody had filed: a second place
+     * to look, answering the question the inbox now answers. A parked upload
+     * produces an UNBOUND ingest_item and no job — there is nothing for a GPU
+     * to do with a scan whose patient is unknown, and the work starts when
+     * somebody files it.
+     */
     @Test
-    void commit_park_acceptsNullEventCrfId() throws Exception {
+    void commit_park_landsAnUnboundItemAndNoJob() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "scan.e2e", "application/octet-stream", new byte[256]);
 
@@ -228,23 +237,36 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
                 .param("laterality", "OS")
                 .param("park", "true"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("parked"))
+                .andExpect(jsonPath("$.status").value("UNBOUND"))
+                .andExpect(jsonPath("$.jobId").doesNotExist())
+                .andExpect(jsonPath("$.ingestItemId").isNumber())
                 .andReturn();
 
-        long jobId = extractJobId(res);
-
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT event_crf_id, status FROM retinal_inference_job WHERE job_id = ?")) {
-            ps.setLong(1, jobId);
-            try (ResultSet rs = ps.executeQuery()) {
-                assertTrue(rs.next());
-                rs.getInt("event_crf_id");
-                assertTrue(rs.wasNull(), "event_crf_id should be NULL on a parked row");
-                assertEquals("parked", rs.getString("status"));
+        long itemId = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(res.getResponse().getContentAsString())
+                .get("ingestItemId").asLong();
+        try {
+            try (Connection c = DATA_SOURCE.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT kind, source_kind, status, laterality, sha256, scan_index, "
+                                 + "  (SELECT count(*) FROM retinal_inference_job j "
+                                 + "    WHERE j.ingest_item_id = ii.ingest_item_id) AS jobs "
+                                 + "  FROM ingest_item ii WHERE ingest_item_id = ?")) {
+                ps.setLong(1, itemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next(), "the upload must leave a row in the inbox");
+                    assertEquals("e2e", rs.getString("kind"));
+                    assertEquals("portal-oct", rs.getString("source_kind"));
+                    assertEquals("UNBOUND", rs.getString("status"));
+                    assertEquals("OS", rs.getString("laterality"));
+                    // The digest is what makes a re-upload detectable.
+                    assertNotNull(rs.getString("sha256"));
+                    assertEquals(0, rs.getInt("jobs"), "a parked scan enqueues nothing");
+                }
             }
+        } finally {
+            cleanupIngestItems();
         }
-        cleanupJob(jobId);
     }
 
     /** Bad multipart: missing both eventCrfId and park → 400. */
@@ -441,8 +463,29 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
             ps.setLong(1, jobId);
             ps.executeUpdate();
         }
+        // P3.3 — the scan is a row now, and dedup keys on its digest. Leaving
+        // it behind makes the next test's identical bytes a duplicate.
+        cleanupIngestItems();
         if (path != null) {
             Files.deleteIfExists(Path.of(path));
+        }
+    }
+
+    /** Remove the ingest_item rows these uploads created, jobs included. */
+    private static void cleanupIngestItems() throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM audit_log_event WHERE audit_table = 'ingest_item' "
+                            + "  AND audit_log_event_type_id = ?")) {
+                ps.setInt(1, AuditTypeIds.OCT_UPLOAD_PUBLIC);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM ingest_item WHERE source_kind = 'portal-oct' "
+                            + "  AND NOT EXISTS (SELECT 1 FROM retinal_inference_job j "
+                            + "                   WHERE j.ingest_item_id = ingest_item.ingest_item_id)")) {
+                ps.executeUpdate();
+            }
         }
     }
 }

@@ -645,8 +645,8 @@ jobs:
           ROW=$(docker compose exec -T db psql -qAt -U clinica -d libreclinica -c \
             "SELECT status || '|' || COALESCE(match_policy,'') || '|' ||
                     COALESCE(bound_study_event_id::text,'')
-               FROM image_ingest WHERE sop_instance_uid = '$SOP'" | tr -d '\r')
-          echo "image_ingest row: $ROW"
+               FROM ingest_item WHERE sop_instance_uid = '$SOP'" | tr -d '\r')
+          echo "ingest_item row: $ROW"
           if [ "$ROW" != "BOUND|worklist|$EVENT_ID" ]; then
             echo "::error::expected BOUND|worklist|$EVENT_ID, got '$ROW'"
             docker compose -f compose.yaml -f compose.ci.yaml logs --tail 80 dicom-scp

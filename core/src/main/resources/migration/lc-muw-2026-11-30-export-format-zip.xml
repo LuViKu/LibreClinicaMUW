@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      P3.8 — a dataset can be exported as a bundle, and a bundle is a zip.
+
+      archived_dataset_file.export_format_id is a foreign key into
+      export_format, which has carried the same five rows since OpenClinica:
+      text, comma-text, Excel, ODM and SAS. A zip is none of those, and
+      recording one under "text/plain" would make every consumer that trusts
+      the mime type — the download endpoint included — hand a browser a zip
+      labelled as text.
+
+      The heritage ExportFormatBean anticipated this: "may have to add a #6 to
+      export formats". This is that row.
+    -->
+    <changeSet id="2026-11-30-export-format-zip" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM export_format WHERE export_format_id = 6
+            </sqlCheck>
+        </preConditions>
+        <comment>Export format 6 — application/zip, for the multimodal bundle.</comment>
+
+        <insert tableName="export_format">
+            <column name="export_format_id" valueNumeric="6"/>
+            <column name="name" value="application/zip"/>
+            <column name="description" value="Multimodal bundle (casebook + files) as a zip archive"/>
+            <column name="mime_type" value="application/zip"/>
+        </insert>
+
+        <rollback>
+            <!--
+              Refuses to leave a dangling foreign key: a bundle already
+              exported would have an archived_dataset_file row pointing here,
+              and deleting the format would orphan it. Nothing to roll back
+              then — the row is inert unless something references it.
+            -->
+            <sql>
+                DELETE FROM export_format
+                 WHERE export_format_id = 6
+                   AND NOT EXISTS (
+                       SELECT 1 FROM archived_dataset_file
+                        WHERE export_format_id = 6
+                   );
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

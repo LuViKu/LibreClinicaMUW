@@ -39,6 +39,7 @@ import {
   resolveScans,
   sha256OfFile,
   undoCommit,
+  undoParkedCommit,
   type EventCandidate,
   type ResolveCandidate,
   type ResolveScanRequest,
@@ -91,6 +92,9 @@ export interface ReviewRow {
   selectedEvent?: EventCandidate | null
   /** Set after /commit returns; needed for the 60-s undo window. */
   jobId?: number
+  /** P3.3 — the scan's row in the ingest inbox; the only handle a
+   *  parked upload has, since it enqueues no job. */
+  ingestItemId?: number
   committedAt?: Date
   /**
    * 2026-06-19 — pointer to a prior upload that already carries the
@@ -555,7 +559,8 @@ export const useOctPortalStore = defineStore('octPortal', () => {
       rows.value[idx] = {
         ...rows.value[idx],
         state: 'committed',
-        jobId: res.jobId,
+        jobId: res.jobId ?? undefined,
+        ingestItemId: res.ingestItemId,
         committedAt: new Date(),
       }
       // Clear progress so the next render doesn't carry a stale 100 %.
@@ -578,14 +583,19 @@ export const useOctPortalStore = defineStore('octPortal', () => {
    *  sees the upload stuck (the row still carries a jobId). */
   async function undo(rowId: string): Promise<void> {
     const row = rows.value.find((r) => r.rowId === rowId)
-    if (!row || row.state !== 'committed' || row.jobId == null) return
+    if (!row || row.state !== 'committed') return
+    // P3.3 — a parked upload enqueues no job, so there is no job id to undo
+    // against; its scan row in the inbox is what exists.
     const jobId = row.jobId
+    const ingestItemId = row.ingestItemId
+    if (jobId == null && ingestItemId == null) return
     // Optimistic flip — the UI animates back to the suggested state
     // so the operator isn't left staring at an unchanged row while
     // the round-trip finishes.
     flipRowState(rowId, 'committing')
     try {
-      await undoCommit(jobId)
+      if (jobId != null) await undoCommit(jobId)
+      else await undoParkedCommit(ingestItemId as number)
       const idx = rows.value.findIndex((r) => r.rowId === rowId)
       if (idx === -1) return
       // After a successful undo the row goes back to whatever the
@@ -600,6 +610,7 @@ export const useOctPortalStore = defineStore('octPortal', () => {
         ...rows.value[idx],
         state: back,
         jobId: undefined,
+        ingestItemId: undefined,
         committedAt: undefined,
       }
     } catch (e) {

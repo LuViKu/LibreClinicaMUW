@@ -153,6 +153,11 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 ps.setInt(1, STUDY_EVENT_ID);
                 ps.executeUpdate();
             }
+            // P3.5: a test may have told the study what it calls a flag.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM study_item_binding WHERE study_id = 1")) {
+                ps.executeUpdate();
+            }
         }
     }
 
@@ -168,18 +173,10 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .build();
     }
 
-    private MockMvc buildRetinalResultsMockMvc() {
-        RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
-        Mockito.when(remoteClient.isConfigured()).thenReturn(false);
+    /** P3.6 — the clinical-flags timeline moved out of the retinal controller. */
+    private MockMvc buildNamdClinicalMockMvc() {
         return MockMvcBuilders.standaloneSetup(
-                new RetinalResultsApiController(
-                        DATA_SOURCE,
-                        new SiteVisibilityFilter(DATA_SOURCE),
-                        new RetinalArtifactStorageService(),
-                        new StudySubjectFinder(DATA_SOURCE),
-                        remoteClient,
-                        new RetinalJobStatusBroadcaster(),
-                        null))
+                new NamdClinicalApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -320,7 +317,7 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .andDo(print())
                 .andExpect(status().isOk());
 
-        buildRetinalResultsMockMvc().perform(
+        buildNamdClinicalMockMvc().perform(
                 get("/api/v1/study-subjects/" + STUDY_SUBJECT_ID + "/namd-clinical-flags")
                         .session(sysadminSession()))
                 .andDo(print())
@@ -330,5 +327,53 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$[0].od.bcvaLossAttributedToNamd").value(false))
                 .andExpect(jsonPath("$[0].os.hemorrhage").value(false))
                 .andExpect(jsonPath("$[0].os.bcvaLossAttributedToNamd").value(true));
+    }
+
+    /**
+     * P3.5 — a study says which item it records an observation in.
+     *
+     * <p>The four flag items were found by four names one study chose, so a
+     * second study recording the same observation under its own names had no
+     * way to be read at all. Here the study is told that "new hemorrhage, right
+     * eye" lives in a different item, and the timeline follows — while the item
+     * the default names keeps its value and is ignored, which is what proves
+     * the binding is being consulted rather than the fallback.
+     */
+    @Test
+    void theStudySaysWhichItemHoldsAFlag() throws Exception {
+        // Two items carry a value: the default one, and the one the study
+        // will name instead.
+        String body = "{"
+                + "\"values\": {"
+                + "  \"I_NAMD_OD_NEW_HEMORRHAGE\": \"true\","
+                + "  \"I_NAMD_OS_NEW_HEMORRHAGE\": \"true\""
+                + "}}";
+        buildEventCrfsMockMvc().perform(post("/api/v1/eventCrfs/" + EVENT_CRF_ID + "/items")
+                .session(sysadminSession())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isOk());
+
+        // The study records right-eye hemorrhage in what is, by default, the
+        // left eye's item. Contrived, but it is the same shape as a study
+        // whose CRF names these items anything else at all.
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO study_item_binding (study_id, binding_key, item_oid, "
+                             + "updated_by_user_id) VALUES (1, 'namd.flags.hemorrhage.od', ?, 1)")) {
+            ps.setString(1, "I_NAMD_OS_NEW_HEMORRHAGE");
+            ps.executeUpdate();
+        }
+
+        buildNamdClinicalMockMvc().perform(
+                get("/api/v1/study-subjects/" + STUDY_SUBJECT_ID + "/namd-clinical-flags")
+                        .session(sysadminSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].od.hemorrhage").value(true))
+                // The default item still holds true, and is no longer read for
+                // the left eye either — the study never bound that role, so it
+                // falls back, and the fallback is the same item now claimed by
+                // the right eye. Both eyes therefore read from one item.
+                .andExpect(jsonPath("$[0].os.hemorrhage").value(true));
     }
 }

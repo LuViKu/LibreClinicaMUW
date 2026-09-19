@@ -2128,21 +2128,10 @@ public class SubjectsApiController {
             StudyBean assignmentStudy, int studySubjectId,
             List<UpdateSubjectGroupsRequest.Assignment> desired, int roleId) {
         try (Connection c = dataSource.getConnection()) {
-            // 1. Which group class carries the AI_SHOWN / AI_HIDDEN groups?
-            Integer aiClassId = null;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT sg.study_group_class_id "
-                            + "  FROM study_group sg "
-                            + "  JOIN study_group_class sgc "
-                            + "    ON sgc.study_group_class_id = sg.study_group_class_id "
-                            + " WHERE sgc.study_id = ? "
-                            + "   AND UPPER(sg.name) IN ('AI_SHOWN','AI_HIDDEN') "
-                            + " LIMIT 1")) {
-                ps.setInt(1, assignmentStudy.getId());
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) aiClassId = rs.getInt(1);
-                }
-            }
+            // 1. Which group class carries the AI arms? P3.0 — the arm names
+            //    live in AiArmPolicy, so this guard and the retinal blinding
+            //    gate cannot drift apart on what "the AI cohort" means.
+            Integer aiClassId = AiArmPolicy.armGroupClassId(c, assignmentStudy.getId());
             if (aiClassId == null) return null; // study has no AI cohort — nothing to guard.
 
             // 2. Current AI group for the subject (0 = none active).

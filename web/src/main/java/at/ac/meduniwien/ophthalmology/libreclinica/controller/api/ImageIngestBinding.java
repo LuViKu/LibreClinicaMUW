@@ -21,7 +21,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
 /**
  * Shared "which visit does this image belong to" resolution for the DR-025
@@ -142,7 +142,7 @@ final class ImageIngestBinding {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, AuditTypeIds.IMAGE_BIND);
-            ps.setString(2, "image_ingest");
+            ps.setString(2, "ingest_item");
             ps.setInt(3, (int) imageIngestId);
             ps.setString(4, "status");
             ps.setString(5, "UNBOUND");
@@ -151,14 +151,14 @@ final class ImageIngestBinding {
             ps.setString(6, "BOUND;match_policy=" + matchPolicy + ";study_event_id=" + studyEventId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            LOG.warn("could not audit the system bind of image_ingest {}: {}",
+            LOG.warn("could not audit the system bind of ingest_item {}: {}",
                     imageIngestId, e.getMessage());
         }
     }
 
     /**
      * Tick the visit's "this modality was performed" box for a bind that just
-     * happened. See {@link IngestPerformedItemPopulator} for what it will and
+     * happened. See {@link PerformedItemAutoTicker} for what it will and
      * will not overwrite.
      *
      * <p>Called from all three bind paths so the behaviour cannot diverge
@@ -173,9 +173,14 @@ final class ImageIngestBinding {
      *                    which is then attributed to the locked {@code system}
      *                    account rather than to a person
      */
-    static void tickPerformed(DataSource dataSource, long imageIngestId, EventTarget target,
-                              String sourceKind, String deviceKey, Integer actorUserId) {
-        if (target == null || target.eventCrfId() == null) return;
+    static void tickPerformed(DataSource dataSource, long ingestItemId, EventTarget target,
+                              String sourceKind, String deviceKey, String laterality,
+                              Integer actorUserId) {
+        // P3.4 — a visit is enough. The tick used to require a started CRF,
+        // which meant the checklist silently disagreed with the files whenever
+        // nobody had opened the form yet; the ticker starts the form that
+        // carries the box.
+        if (target == null) return;
         try {
             Integer studyId = studyIdOfSubject(dataSource, target.studySubjectId());
             if (studyId == null) return;
@@ -183,14 +188,15 @@ final class ImageIngestBinding {
                     ? actorUserId
                     : resolveSystemActor(dataSource);
             if (actor <= 0) {
-                LOG.warn("performed-tick skipped for image {}: no system service account to attribute it to",
-                        imageIngestId);
+                LOG.warn("performed-tick skipped for file {}: no system service account to attribute it to",
+                        ingestItemId);
                 return;
             }
-            new IngestPerformedItemPopulator(dataSource).markPerformed(
-                    imageIngestId, target.eventCrfId(), sourceKind, deviceKey, studyId, actor);
+            new PerformedItemAutoTicker(dataSource).markPerformed(
+                    ingestItemId, target.eventCrfId(), target.studyEventId(),
+                    sourceKind, deviceKey, laterality, studyId, actor);
         } catch (RuntimeException e) {
-            LOG.warn("performed-tick failed for image {}: {}", imageIngestId, e.getMessage());
+            LOG.warn("performed-tick failed for file {}: {}", ingestItemId, e.getMessage());
         }
     }
 
@@ -209,7 +215,7 @@ final class ImageIngestBinding {
     }
 
     private static int resolveSystemActor(DataSource dataSource) {
-        Integer id = IngestPerformedItemPopulator.systemUserId(dataSource);
+        Integer id = PerformedItemAutoTicker.systemUserId(dataSource);
         return id == null ? 0 : id;
     }
 }

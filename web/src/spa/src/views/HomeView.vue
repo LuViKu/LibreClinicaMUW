@@ -37,10 +37,20 @@ import { useSdvStore } from '@/stores/sdv'
 import { useNotesStore } from '@/stores/notes'
 import { useUsersStore } from '@/stores/users'
 import { useRulesStore } from '@/stores/rules'
+import { useStudyModuleStore } from '@/stores/studyModules'
 import type { UserRole } from '@/types/auth'
 import type { RouteLocationRaw } from 'vue-router'
 
 const { t } = useI18n()
+
+/**
+ * P3.0 — cards contributed by the study modules enrolled on the bound
+ * study. They render in the study-scoped lane because that is what they
+ * are: a module is enabled per study, and its entry point stops making
+ * sense the moment the operator switches to a study without it.
+ */
+const studyModules = useStudyModuleStore()
+const moduleCards = computed(() => studyModules.injectionsFor('home.cards'))
 const auth = useAuthStore()
 const sdv = useSdvStore()
 const notes = useNotesStore()
@@ -214,9 +224,9 @@ const CATALOG = computed<CatalogEntry[]>(() => [
   },
   {
     id: 'image-inbox',
-    to: { name: 'image-ingest-inbox' },
-    titleKey: 'imageInbox.title',
-    descKey: 'imageInbox.cardDesc',
+    to: { name: 'ingest-inbox' },
+    titleKey: 'ingestInbox.title',
+    descKey: 'ingestInbox.cardDesc',
     allowedRoles: ['Data Manager', 'Investigator'],
     scope: 'study-scoped',
   },
@@ -453,7 +463,7 @@ onMounted(() => {
     </div>
 
     <section
-      v-if="studyScopedCards.length > 0"
+      v-if="studyScopedCards.length > 0 || moduleCards.length > 0"
       :aria-label="t('home.sectionLabel', { study: activeStudyName })"
       class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8"
     >
@@ -467,6 +477,11 @@ onMounted(() => {
         :description="t(card.descKey)"
         :badge="card.badge"
         :badge-aria-label="card.badgeAriaKey ? t(card.badgeAriaKey, { n: card.badge ?? 0 }) : undefined"
+      />
+      <component
+        :is="entry.component"
+        v-for="entry in moduleCards"
+        :key="entry.key"
       />
     </section>
 

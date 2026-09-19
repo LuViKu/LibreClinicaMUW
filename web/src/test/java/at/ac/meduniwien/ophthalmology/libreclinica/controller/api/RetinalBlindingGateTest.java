@@ -28,6 +28,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  * <p>The SPA hides the panels too, but that is bypassable with a pasted URL.
  * This predicate is the enforcement, so its shape is pinned here rather than
  * only exercised incidentally through the endpoints that call it.
+ *
+ * <p>P3.0 — the predicate itself moved to {@link AiArmPolicy}, which the
+ * subject controller's cohort-change guard now shares. These tests stayed
+ * here: what they describe is the retinal surface's blinding behaviour, which
+ * is what breaks if the rule drifts.
  */
 class RetinalBlindingGateTest extends AbstractApiControllerTest {
     // Extends the shared base: the heritage Role beans need the resource
@@ -48,8 +53,8 @@ class RetinalBlindingGateTest extends AbstractApiControllerTest {
 
     @Test
     void investigatorsAndCoordinatorsAreTreatingRoles() {
-        assertTrue(RetinalResultsApiController.isTreatingRole(sessionAs(Role.INVESTIGATOR)));
-        assertTrue(RetinalResultsApiController.isTreatingRole(sessionAs(Role.COORDINATOR)));
+        assertTrue(AiArmPolicy.isTreatingRole(sessionAs(Role.INVESTIGATOR)));
+        assertTrue(AiArmPolicy.isTreatingRole(sessionAs(Role.COORDINATOR)));
     }
 
     /**
@@ -58,34 +63,34 @@ class RetinalBlindingGateTest extends AbstractApiControllerTest {
      */
     @Test
     void dataManagementRolesAreNotTreatingRoles() {
-        assertFalse(RetinalResultsApiController.isTreatingRole(sessionAs(Role.STUDYDIRECTOR)));
-        assertFalse(RetinalResultsApiController.isTreatingRole(sessionAs(Role.MONITOR)));
-        assertFalse(RetinalResultsApiController.isTreatingRole(sessionAs(Role.ADMIN)));
+        assertFalse(AiArmPolicy.isTreatingRole(sessionAs(Role.STUDYDIRECTOR)));
+        assertFalse(AiArmPolicy.isTreatingRole(sessionAs(Role.MONITOR)));
+        assertFalse(AiArmPolicy.isTreatingRole(sessionAs(Role.ADMIN)));
     }
 
     @Test
     void aSessionWithNoRoleIsNotTreating() {
-        assertFalse(RetinalResultsApiController.isTreatingRole(sessionAs(null)));
+        assertFalse(AiArmPolicy.isTreatingRole(sessionAs(null)));
     }
 
     /* ---------------- what gets masked ---------------- */
 
     @Test
     void aTreatingClinicianOnAHiddenArmSubjectSeesNoAiOutput() {
-        assertTrue(RetinalResultsApiController.maskAiForArm("AI_HIDDEN", sessionAs(Role.INVESTIGATOR)));
-        assertTrue(RetinalResultsApiController.maskAiForArm("AI_HIDDEN", sessionAs(Role.COORDINATOR)));
+        assertTrue(AiArmPolicy.maskAiFor("AI_HIDDEN", sessionAs(Role.INVESTIGATOR)));
+        assertTrue(AiArmPolicy.maskAiFor("AI_HIDDEN", sessionAs(Role.COORDINATOR)));
     }
 
     /** A data manager reviewing the same subject is not blinded. */
     @Test
     void nonTreatingRolesAreNotBlinded() {
-        assertFalse(RetinalResultsApiController.maskAiForArm("AI_HIDDEN", sessionAs(Role.STUDYDIRECTOR)));
-        assertFalse(RetinalResultsApiController.maskAiForArm("AI_HIDDEN", sessionAs(Role.MONITOR)));
+        assertFalse(AiArmPolicy.maskAiFor("AI_HIDDEN", sessionAs(Role.STUDYDIRECTOR)));
+        assertFalse(AiArmPolicy.maskAiFor("AI_HIDDEN", sessionAs(Role.MONITOR)));
     }
 
     @Test
     void theShownArmIsNeverMasked() {
-        assertFalse(RetinalResultsApiController.maskAiForArm("AI_SHOWN", sessionAs(Role.INVESTIGATOR)));
+        assertFalse(AiArmPolicy.maskAiFor("AI_SHOWN", sessionAs(Role.INVESTIGATOR)));
     }
 
     /**
@@ -96,13 +101,13 @@ class RetinalBlindingGateTest extends AbstractApiControllerTest {
      */
     @Test
     void aSubjectWithNoArmIsNotMasked() {
-        assertFalse(RetinalResultsApiController.maskAiForArm(null, sessionAs(Role.INVESTIGATOR)));
+        assertFalse(AiArmPolicy.maskAiFor(null, sessionAs(Role.INVESTIGATOR)));
     }
 
     /** The arm name is matched exactly — a near-miss must not silently unblind. */
     @Test
     void onlyTheExactHiddenArmNameMasks() {
-        assertFalse(RetinalResultsApiController.maskAiForArm("ai_hidden", sessionAs(Role.INVESTIGATOR)));
-        assertFalse(RetinalResultsApiController.maskAiForArm("AI_HIDDEN ", sessionAs(Role.INVESTIGATOR)));
+        assertFalse(AiArmPolicy.maskAiFor("ai_hidden", sessionAs(Role.INVESTIGATOR)));
+        assertFalse(AiArmPolicy.maskAiFor("AI_HIDDEN ", sessionAs(Role.INVESTIGATOR)));
     }
 }

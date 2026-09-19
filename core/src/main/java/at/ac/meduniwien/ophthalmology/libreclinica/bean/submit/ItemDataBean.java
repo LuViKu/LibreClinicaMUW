@@ -83,6 +83,29 @@ public class ItemDataBean extends AuditableEntityBean {
 
     private boolean auditLog = false;
 
+    /**
+     * Where this value came from, when it was not typed by a person:
+     * {@code "retinal_inference"} or {@code "ingest"}, else null.
+     *
+     * <p>The columns have existed since nAMD Slice 3 and DR-025 P1-5, but were
+     * declared to the DAO without ever being read back onto the bean — so a
+     * caller holding an {@code ItemDataBean} could not tell an operator's entry
+     * from one the platform wrote. P3.7 needs exactly that distinction to
+     * annotate the export, and the difference matters clinically: a recipient
+     * has to be able to see which numbers a human put there.
+     *
+     * <p>Deliberately not part of {@link #equals}/{@link #hashCode} — two rows
+     * with the same value in the same place are the same datum whoever wrote
+     * it, which is also how {@code item} is already treated.
+     */
+    private String sourceKind;
+
+    /** The inference job that produced this value, when {@code sourceKind} is {@code retinal_inference}. */
+    private Long sourceRetinalJobId;
+
+    /** The ingested acquisition that ticked this value, when {@code sourceKind} is {@code ingest}. */
+    private Long sourceIngestItemId;
+
     public ItemDataBean() {
         eventCRFId = 0;
         itemId = 0;
@@ -190,6 +213,35 @@ public class ItemDataBean extends AuditableEntityBean {
 
 	public void setItem(ItemBean item) {
 		this.item = item;
+	}
+
+	public String getSourceKind() {
+		return sourceKind;
+	}
+
+	public void setSourceKind(String sourceKind) {
+		this.sourceKind = sourceKind;
+	}
+
+	public Long getSourceRetinalJobId() {
+		return sourceRetinalJobId;
+	}
+
+	public void setSourceRetinalJobId(Long sourceRetinalJobId) {
+		this.sourceRetinalJobId = sourceRetinalJobId;
+	}
+
+	public Long getSourceIngestItemId() {
+		return sourceIngestItemId;
+	}
+
+	public void setSourceIngestItemId(Long sourceIngestItemId) {
+		this.sourceIngestItemId = sourceIngestItemId;
+	}
+
+	/** True when a person typed this value rather than the platform writing it. */
+	public boolean isOperatorEntered() {
+		return sourceKind == null || sourceKind.isBlank();
 	}
     
 }

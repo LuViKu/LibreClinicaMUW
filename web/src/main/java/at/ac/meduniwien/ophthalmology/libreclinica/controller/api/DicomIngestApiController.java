@@ -14,21 +14,18 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
-import java.sql.Types;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestPerformedItemPopulator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -46,7 +43,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * <p>The {@code dicom-scp} sidecar (pynetdicom Storage SCP) receives a fundus
  * image the HealthAEye camera pushes, writes the Part-10 object + a rendered
  * preview into the <em>shared</em> ingest store, then POSTs the DICOM metadata
- * plus those (shared-volume) paths here. We INSERT one {@code image_ingest} row
+ * plus those (shared-volume) paths here. We INSERT one {@code ingest_item} row
  * ({@code source_kind='dicom'}) in {@code UNBOUND} state for the SPA
  * reconciliation inbox (Slice 2). The Remidio upload page is the sibling
  * {@code source_kind='upload'} ingress into the same queue. A study that carries
@@ -135,9 +132,10 @@ public class DicomIngestApiController {
                 // used on it. No operator is involved in a worklist bind, so
                 // the tick is attributed to the system service account.
                 ImageIngestBinding.tickPerformed(
-                        dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(), null);
+                        dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(),
+                        req.laterality(), null);
             }
-            LOG.info("DICOM ingest: image_ingest_id={} status={}", ins.id(), ins.status());
+            LOG.info("DICOM ingest: ingest_item_id={} status={}", ins.id(), ins.status());
             return ResponseEntity.status(201).body(Map.of("imageIngestId", ins.id(), "status", ins.status()));
         } catch (SQLException e) {
             // Race on the sop_instance_uid unique index — treat as idempotent.
@@ -167,7 +165,7 @@ public class DicomIngestApiController {
      * a device that presents itself inconsistently is still one device.
      */
     private static String deviceKeyOf(DicomIngestRequest r) {
-        return IngestPerformedItemPopulator.normaliseDeviceKey(r.sourceAeTitle());
+        return PerformedItemAutoTicker.normaliseDeviceKey(r.sourceAeTitle());
     }
 
     /**
@@ -188,74 +186,78 @@ public class DicomIngestApiController {
         // → land it BOUND to that visit. Anything else lands UNBOUND for the inbox.
         ImageIngestBinding.EventTarget target = resolveWorklistTarget(c, r.accessionNumber());
         String status = target != null ? "BOUND" : "UNBOUND";
-        // source_kind + content_type are literals here — this endpoint is the
-        // DICOM ingress. The Remidio upload path INSERTs source_kind='upload'.
-        String sql = "INSERT INTO image_ingest ("
-                + "source_kind, content_type, device, "
-                + "sop_instance_uid, sop_class_uid, study_instance_uid, series_instance_uid, "
-                + "modality, patient_id, patient_name, accession_number, study_date, laterality, "
-                + "source_ae_title, stored_path, preview_png_path, received_at, "
-                + "status, match_policy, bound_study_subject_id, bound_study_event_id, "
-                + "bound_event_crf_id, bound_at"
-                + ") VALUES ('dicom', 'application/dicom', ?, "
-                + "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            // `device` is the one column that always answers "which camera",
-            // whichever ingress an image came through. For DICOM that is the
-            // calling AE title; source_ae_title keeps the raw DICOM value.
-            ps.setString(1, deviceKeyOf(r));
-            ps.setString(2, r.sopInstanceUid());
-            ps.setString(3, r.sopClassUid());
-            ps.setString(4, r.studyInstanceUid());
-            ps.setString(5, r.seriesInstanceUid());
-            ps.setString(6, r.modality());
-            ps.setString(7, r.patientId());
-            ps.setString(8, r.patientName());
-            ps.setString(9, r.accessionNumber());
-            if (studyDate == null) {
-                ps.setNull(10, Types.DATE);
-            } else {
-                ps.setObject(10, studyDate);
+        // P3.1 — the statement lives in IngestItemRepository, shared with the
+        // upload portal. source_kind and content_type are fixed here because
+        // this endpoint IS the DICOM ingress.
+        //
+        // `device` is the one column that always answers "which camera",
+        // whichever ingress an image came through. For DICOM that is the
+        // calling AE title; source_ae_title keeps the raw DICOM value.
+        var item = IngestItemRepository
+                .newItem(IngestArtifactStore.Kind.DICOM, "dicom", r.dicomPath())
+                .contentType("application/dicom")
+                .device(deviceKeyOf(r))
+                .previewPngPath(r.previewPngPath())
+                .sopInstanceUid(r.sopInstanceUid())
+                .sopClassUid(r.sopClassUid())
+                .studyInstanceUid(r.studyInstanceUid())
+                .seriesInstanceUid(r.seriesInstanceUid())
+                .modality(r.modality())
+                .sourceAeTitle(r.sourceAeTitle())
+                // P3.4 — a camera that identifies itself classifies its own
+                // images: no operator has to say which acquisition this is.
+                .imagingModalityId(modalityForAeTitle(c, deviceKeyOf(r), target))
+                .patientId(r.patientId())
+                .patientName(r.patientName())
+                .accessionNumber(r.accessionNumber())
+                .acquisitionDate(studyDate)
+                .laterality(r.laterality());
+        if (target != null) {
+            item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "worklist");
+        }
+        long id = item.insert(c);
+        return new Inserted(id, status,
+                target == null ? null : target.studyEventId(),
+                target, deviceKeyOf(r));
+    }
+
+    /**
+     * The study's modality whose {@code auto_match_ae_title} is this camera.
+     *
+     * <p>Scoped to the study the worklist bound the image to; an unbound image
+     * belongs to no study yet, so nothing is claimed about it. Site studies
+     * inherit their parent's catalogue.
+     *
+     * @return null when the image is unbound, no catalogue row matches, or the
+     *         lookup fails — in every case the ticker falls back to the device
+     */
+    private static Integer modalityForAeTitle(Connection c, String aeTitle,
+                                              ImageIngestBinding.EventTarget target) {
+        if (aeTitle == null || aeTitle.isBlank() || target == null) return null;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT im.imaging_modality_id "
+                        + "  FROM imaging_modality im "
+                        + "  JOIN study_subject ss ON ss.study_subject_id = ? "
+                        + " WHERE im.status_id = 1 "
+                        + "   AND lower(im.auto_match_ae_title) = lower(?) "
+                        + "   AND im.study_id IN (ss.study_id, "
+                        + "         COALESCE((SELECT parent_study_id FROM study "
+                        + "                    WHERE study_id = ss.study_id), -1)) "
+                        + " ORDER BY im.imaging_modality_id LIMIT 1")) {
+            ps.setInt(1, target.studySubjectId());
+            ps.setString(2, aeTitle);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Integer.valueOf(rs.getInt(1)) : null;
             }
-            ps.setString(11, r.laterality());
-            ps.setString(12, r.sourceAeTitle());
-            ps.setString(13, r.dicomPath());
-            ps.setString(14, r.previewPngPath());
-            Timestamp now = Timestamp.from(Instant.now());
-            ps.setTimestamp(15, now);
-            ps.setString(16, status);
-            if (target == null) {
-                ps.setNull(17, Types.VARCHAR);
-                ps.setNull(18, Types.INTEGER);
-                ps.setNull(19, Types.INTEGER);
-                ps.setNull(20, Types.INTEGER);
-                ps.setNull(21, Types.TIMESTAMP);
-            } else {
-                ps.setString(17, "worklist");
-                ps.setInt(18, target.studySubjectId());
-                ps.setInt(19, target.studyEventId());
-                if (target.eventCrfId() == null) {
-                    ps.setNull(20, Types.INTEGER);
-                } else {
-                    ps.setInt(20, target.eventCrfId());
-                }
-                ps.setTimestamp(21, now);
-            }
-            ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    return new Inserted(keys.getLong(1), status,
-                            target == null ? null : target.studyEventId(),
-                            target, deviceKeyOf(r));
-                }
-                throw new SQLException("image_ingest INSERT returned no PK");
-            }
+        } catch (SQLException e) {
+            LOG.warn("modality auto-match lookup failed: {}", e.getMessage());
+            return null;
         }
     }
 
     private Long findBySopInstanceUid(Connection c, String sopInstanceUid) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT image_ingest_id FROM image_ingest WHERE sop_instance_uid = ?")) {
+                "SELECT ingest_item_id FROM ingest_item WHERE sop_instance_uid = ?")) {
             ps.setString(1, sopInstanceUid);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getLong(1) : null;
