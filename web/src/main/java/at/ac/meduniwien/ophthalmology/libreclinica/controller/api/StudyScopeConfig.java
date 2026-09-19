@@ -15,6 +15,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -77,9 +78,12 @@ final class StudyScopeConfig {
      *         nothing rather than silently widening).
      */
     static Set<Integer> studyIdsFor(DataSource dataSource, String configKey) {
-        Set<Integer> byStudySetting = studyIdsFromSetting(dataSource, settingKeyFor(configKey));
-        if (byStudySetting != null) return byStudySetting;
+        return mergeWithSetting(dataSource, settingKeyFor(configKey),
+                legacyStudyIdsFor(dataSource, configKey));
+    }
 
+    /** What the configuration key alone allows; null means every study. */
+    private static Set<Integer> legacyStudyIdsFor(DataSource dataSource, String configKey) {
         String raw = cfg(configKey);
         if (raw == null || raw.isBlank()) {
             return null;
@@ -125,22 +129,26 @@ final class StudyScopeConfig {
     }
 
     /**
-     * The studies that have turned this surface on, or null when none has said
-     * anything and the configuration key should answer instead.
+     * The studies this surface is open for, or null when nothing narrows it.
      *
-     * <p>Sites are covered by their parent's answer unless they override it,
-     * which is the same inheritance every other setting uses.
+     * <p><strong>Per study, not per instance.</strong> A study that has said
+     * nothing keeps whatever the configuration key gave it; only a study with
+     * an explicit setting is decided by it. The first version of this asked
+     * "has any study set this?" and, if so, restricted the surface to exactly
+     * those studies — so one study opting in silently removed every other
+     * study from the worklist and the portals. The smoke suite caught it; the
+     * integration suite could not, because its database has none of the
+     * studies the seeds target, so no setting row exists there at all.
      *
-     * <p>A study that explicitly turns a surface OFF is excluded even when its
-     * parent is on — the {@code NOT EXISTS} clause is what makes an override
-     * an override rather than an addition.
+     * @param legacyAllowed what the configuration key allows, or null when it
+     *                      allows everything
      */
-    private static Set<Integer> studyIdsFromSetting(DataSource dataSource, String settingKey) {
-        if (settingKey == null) return null;
-        Set<Integer> ids = new LinkedHashSet<>();
-        boolean anySet = false;
-        String sql = "SELECT s.study_id, "
-                + "       COALESCE(own.value, parent.value) AS effective "
+    private static Set<Integer> mergeWithSetting(DataSource dataSource, String settingKey,
+                                                 Set<Integer> legacyAllowed) {
+        if (settingKey == null) return legacyAllowed;
+
+        Map<Integer, Boolean> explicit = new java.util.LinkedHashMap<>();
+        String sql = "SELECT s.study_id, COALESCE(own.value, parent.value) AS effective "
                 + "  FROM study s "
                 + "  LEFT JOIN study_setting own "
                 + "    ON own.study_id = s.study_id AND own.setting_key = ? "
@@ -153,21 +161,48 @@ final class StudyScopeConfig {
             ps.setString(2, settingKey);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    anySet = true;
-                    if (Boolean.parseBoolean(rs.getString(2))) ids.add(rs.getInt(1));
+                    explicit.put(rs.getInt(1), Boolean.parseBoolean(rs.getString(2)));
                 }
             }
         } catch (SQLException e) {
             // Restricting to nothing is the safe failure: the alternative
             // hands a device every study's schedule.
-            LOG.error("could not resolve {} — restricting to no studies: {}", settingKey, e.getMessage());
+            LOG.error("could not resolve {} — restricting to no studies: {}",
+                    settingKey, e.getMessage());
             return Set.of();
         }
-        if (!anySet) return null;
-        if (ids.isEmpty()) {
-            LOG.warn("{} is set but no study has it enabled — restricting to no studies", settingKey);
+
+        // Nobody has said anything: the configuration key is the whole answer,
+        // exactly as before this existed.
+        if (explicit.isEmpty()) return legacyAllowed;
+
+        Set<Integer> allowed = new LinkedHashSet<>();
+        for (Map.Entry<Integer, Boolean> e : explicit.entrySet()) {
+            if (Boolean.TRUE.equals(e.getValue())) allowed.add(e.getKey());
         }
-        return ids;
+        if (legacyAllowed == null) {
+            // The key allows every study, so the only exclusions are the
+            // studies that explicitly turned this off. Enumerate to say so.
+            try (Connection c = dataSource.getConnection();
+                 PreparedStatement ps = c.prepareStatement("SELECT study_id FROM study");
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int id = rs.getInt(1);
+                    if (!explicit.containsKey(id)) allowed.add(id);
+                }
+            } catch (SQLException e) {
+                LOG.error("could not enumerate studies for {} — restricting: {}",
+                        settingKey, e.getMessage());
+                return Set.of();
+            }
+        } else {
+            // The key already narrows; a study it allows and which has said
+            // nothing stays allowed.
+            for (Integer id : legacyAllowed) {
+                if (!explicit.containsKey(id)) allowed.add(id);
+            }
+        }
+        return allowed;
     }
 
     /** Renders a resolved scope as a SQL IN-list of integers, or null when unrestricted. */

@@ -10,12 +10,14 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -170,6 +172,49 @@ class StudySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals("I_PARENT_CRT_OD",
                 bindings().oidFor(SITE_ID, StudyBindings.RETINAL_CRT_OD, "fallback"));
         assertTrue(bindings().forStudy(SITE_ID).containsKey(StudyBindings.RETINAL_CRT_OD));
+    }
+
+    /* ---------------- ingress scope ---------------- */
+
+    /**
+     * One study opting in must not remove the others.
+     *
+     * <p>The first version of this asked "has any study set this?" and, if so,
+     * restricted the surface to exactly those studies — so seeding
+     * {@code ingest.image.enabled} for one study silently took every other
+     * study off the portals and the worklist. The smoke suite caught it on a
+     * database that actually has those studies; this suite could not, because
+     * its database has none of the ones the seeds target, so no setting row
+     * existed here at all. Hence an explicit row.
+     */
+    @Test
+    void oneStudyOptingInDoesNotRestrictTheOthers() throws Exception {
+        seedSite();
+        // A different study turns the image portal on. Study 1 says nothing.
+        settings().put(SITE_ID, StudySettingService.INGEST_IMAGE_ENABLED, "true", 1);
+
+        Set<Integer> allowed = StudyScopeConfig.studyIdsFor(DATA_SOURCE, StudyScopeConfig.PORTAL_KEY);
+        assertTrue(allowed == null || allowed.contains(STUDY_ID),
+                "a study that has said nothing keeps whatever the configuration gave it");
+        assertTrue(allowed == null || allowed.contains(SITE_ID),
+                "and the study that opted in is in scope");
+    }
+
+    /** A study that explicitly opts out is removed, even with nothing configured. */
+    @Test
+    void aStudyThatOptsOutIsRemovedFromTheSurface() throws Exception {
+        settings().put(STUDY_ID, StudySettingService.INGEST_IMAGE_ENABLED, "false", 1);
+
+        Set<Integer> allowed = StudyScopeConfig.studyIdsFor(DATA_SOURCE, StudyScopeConfig.PORTAL_KEY);
+        assertNotNull(allowed, "an explicit opt-out has to narrow the surface");
+        assertFalse(allowed.contains(STUDY_ID));
+    }
+
+    /** With nothing set anywhere, the surface is exactly as unrestricted as before. */
+    @Test
+    void nothingSetAnywhereLeavesTheSurfaceUnrestricted() {
+        assertNull(StudyScopeConfig.studyIdsFor(DATA_SOURCE, StudyScopeConfig.PORTAL_KEY),
+                "no row and no configured key means every study, as it always did");
     }
 
     /* ---------------- the blinding that must not break ---------------- */
