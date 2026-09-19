@@ -32,6 +32,7 @@ const studyOid = computed<string | null>(() => auth.user?.activeStudy?.oid ?? nu
 
 <template>
   <LandingCard
+    compact
     v-if="studyOid"
     data-card-id="namd-workspace"
     data-testid="home-namd-workspace-card"

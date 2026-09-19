@@ -42,10 +42,13 @@ const props = withDefaults(defineProps<{
   description: string
   badge?: number | string | null
   badgeAriaLabel?: string
+  /** Tighter card for a list of destinations rather than a hero grid. */
+  compact?: boolean
 }>(), {
   roleLabel: '',
   badge: null,
   badgeAriaLabel: undefined,
+  compact: false,
 })
 
 const VARIANT_TO_ROLE: Record<RoleVariant, UserRole> = {
@@ -80,7 +83,8 @@ function shouldShowBadge(b: number | string | null | undefined): boolean {
   <RouterLink
     :to="props.to"
     :data-testid="primaryVariant ? `landing-card-${primaryVariant}` : 'landing-card'"
-    class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group relative"
+    class="rounded-muw border border-slate-200 bg-white hover:border-muw-blue-200 hover:shadow-muw-card transition group relative"
+    :class="props.compact ? 'p-4' : 'p-5'"
   >
     <div class="flex items-center gap-2 mb-2">
       <RoleDots :roles="dotRoles" />
@@ -93,10 +97,10 @@ function shouldShowBadge(b: number | string | null | undefined): boolean {
         {{ props.badge }}
       </span>
     </div>
-    <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+    <div class="font-semibold text-slate-900 group-hover:underline mb-1" :class="props.compact ? 'text-sm' : ''">
       {{ props.title }}
     </div>
-    <p class="text-slate-500 text-xs leading-relaxed">
+    <p class="text-slate-500 text-xs leading-relaxed" :class="props.compact ? 'line-clamp-2' : ''">
       {{ props.description }}
     </p>
   </RouterLink>

@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useInactivityStore } from '@/stores/inactivity'
 import { useBreadcrumbStore } from '@/stores/breadcrumb'
 import type { UserRole } from '@/types/auth'
+import { primaryNavFor } from '@/lib/primaryNav'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +140,11 @@ const breadcrumb = computed<Crumb[]>(() => {
 
 const displayUserName = computed(() => auth.user?.username ?? '')
 
+/** The role's main destinations for the top bar, labels resolved here so TopBar stays a presenter. */
+const navItems = computed(() =>
+  primaryNavFor(userRoles.value).map((item) => ({ id: item.id, to: item.to, label: t(item.labelKey) })),
+)
+
 /**
  * Full per-study role set the user holds on the bound study. Prefer
  * the multi-role `activeStudy.roles` projection (M2 wire shape);
@@ -193,6 +199,7 @@ function openBugReport() {
     <TopBar
       v-if="showTopBar && auth.isAuthenticated"
       :breadcrumb="breadcrumb"
+      :nav-items="navItems"
       :user-name="displayUserName"
       :user-roles="userRoles"
       :on-logout="logout"

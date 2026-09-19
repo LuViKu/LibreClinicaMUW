@@ -23,8 +23,16 @@ A breadcrumb trail at the top of each page shows where you are, e.g. *Study › 
 **Steps**
 
 1. After signing in you land on the **Start** (Home) screen at `/`.
-2. Use the operator cards to jump straight to filtered work lists — for example *Heute* (today's open visits) and *Signaturfreigabe* (subjects ready to sign) deep-link into the Subject Matrix with that filter pre-applied.
-3. Use the side-rail to reach the Subject Matrix or the Add Subject form at any time.
+2. **Ihre Aufgaben** shows your queues with their counts — *Heutige offene CRFs*
+   (today's open visits), *Signatur ausstehend* (subjects ready to sign),
+   *Rückfragen*, *Eingang* (files waiting to be filed) and *Fällige Visiten*.
+   Each card opens that list with the filter already applied, so the number on
+   the card is the number of rows you land on. A dash means the count has not
+   arrived yet; a zero means there is nothing waiting.
+3. Below, **In &lt;study&gt;** lists the workspaces — the Subject Matrix, Add
+   Subject — and any study module such as the nAMD workspace.
+4. The top bar's primary navigation reaches the Subject Matrix, Rückfragen,
+   Fällige Visiten and the Eingang from any screen.
 
 ![Investigator home](screenshots/investigator/00-home.png)
 
