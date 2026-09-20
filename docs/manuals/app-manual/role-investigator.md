@@ -154,6 +154,28 @@ On pages below the register a trail in the page header names the levels above yo
 - You must re-enter your password for each subject you sign.
 - If data on a signed subject is later changed, the affected visit drops back from *Signiert* to *Completed* and must be signed again.
 
+### 4d. Put a participant on the fundus camera's worklist (HealthAEye)
+
+**Goal:** the handheld DICOM camera (Optomed Lumo) lists the participant, so the images it takes bind themselves to the visit.
+
+The camera has no patient list of its own. It pulls a **worklist** from the application, and that worklist is the visit schedule: a participant is on it exactly when they have a visit **scheduled for today** (status *Geplant* or *Erfassung begonnen*) in a study the camera serves. There is no separate worklist entry to create.
+
+**Steps**
+
+1. Enrol the participant (§3) and schedule the visit — for HealthAEye the **Baseline** — with **today's date** (§4a). *Speichern & erste Visite planen* on the enrolment form takes you straight to the casebook.
+2. Check the **Kamera-Worklist** strip at the top of the events panel:
+   - *Heute auf der Kamera-Worklist* — done. The strip names the visit and the accession number (`LC…`) the camera shows for it.
+   - *Nicht auf der Kamera-Worklist* — the strip says why and offers the fix: **Baseline für heute planen** when no visit exists, or **Auf heute verschieben** when the visit is booked for another day. Both take effect immediately; the events table updates.
+3. On the camera, refresh the worklist, pick the participant's **Subject-ID**, and take the images. They arrive on the visit without passing through the Eingang, and the visit's CRF shows the camera's modality as performed.
+
+**Notes**
+
+- The camera displays the Subject-ID as patient name and ID — never a name. Sex and date of birth are sent only if the study collects them.
+- The strip appears only for studies a camera serves (the administrator enables *DICOM-Empfang* under the study's platform settings); participants of other studies do not carry it.
+- The camera lists **today** only. A visit booked for tomorrow is on tomorrow's list; move it if the participant is here now.
+- An image taken **without** picking the worklist entry is not lost: it lands in the **Eingang**, where it is filed against the visit by hand (see the administrator chapter, §18).
+- **Fällige Visiten**, filtered to today, shows the whole list the camera will pull.
+
 ## 5. Review retinal scan metrics
 
 **Goal:** review the results of the automated OCT inference pipeline (fluid volumes, GA area, retinal thickness) for one scan.

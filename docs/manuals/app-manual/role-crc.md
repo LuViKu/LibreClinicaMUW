@@ -139,6 +139,34 @@ OD/OS items, then save and mark the CRF complete.
 - Every entry is attributed to you in the audit trail — on a shared workstation,
   always log out when you step away.
 
+## 4. Put a subject on the camera worklist (HealthAEye)
+
+**Goal:** the handheld fundus camera lists the subject, so its images bind
+themselves to the visit.
+
+The camera pulls its patient list from the application, and that list is the
+visit schedule filtered to **today**. There is no worklist entry to create.
+
+**Steps**
+
+1. Enrol the subject (§2) and schedule the **Baseline** with today's date —
+   **Save & schedule** on the enrolment form takes you straight there.
+2. On the subject's casebook, read the **Kamera-Worklist** strip above the
+   visits: *Heute auf der Kamera-Worklist* means the camera will list the
+   subject. If it reads *Nicht auf der Kamera-Worklist*, use the button on the
+   strip — **Baseline für heute planen**, or **Auf heute verschieben** when the
+   visit was booked for another day.
+3. On the camera, refresh the worklist and pick the subject's ID before taking
+   the images.
+
+**Notes**
+
+- Images taken without picking the worklist entry land in the **Eingang** and
+  are filed from there — nothing is lost, but it is a manual step.
+- The strip appears only in studies a camera serves.
+- The full workflow, with what the camera displays, is in
+  [role-investigator.md](role-investigator.md), §4d.
+
 ## See also
 
 - [role-investigator.md](role-investigator.md) — the full Investigator surface

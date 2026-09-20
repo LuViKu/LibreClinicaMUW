@@ -2762,6 +2762,19 @@
     "success": "Download started.",
     "failed": "Export failed"
   },
+  "cameraWorklist": {
+    "on": "On the camera worklist today",
+    "off": "Not on the camera worklist",
+    "noVisitToday": "No visit is open for today — the camera lists only visits dated today.",
+    "otherDay": "{event} is scheduled for {date}.",
+    "noDate": "{event} is scheduled without a date.",
+    "moveToToday": "Move to today",
+    "scheduleToday": "Schedule {event} for today",
+    "scheduleTodayPick": "Schedule a visit for today…",
+    "error": {
+      "generic": "The change failed. Please try again."
+    }
+  },
   "scheduleEvent": {
     "title": "Schedule event",
     "subtitle": "Subject {id}",

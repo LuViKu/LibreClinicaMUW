@@ -44,6 +44,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
@@ -281,30 +282,8 @@ public class SubjectsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
 
-        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
-        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
-        // SPA passes `SS_<label>` by convention; when that OID misses (non-standard
-        // OID), fall back to a label lookup in the active study.
-        if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
-            // 2026-07-02 — the SPA's toStudySubjectOid used to preserve
-            // the label's case, but the DAO generator upper-cases at
-            // creation time (`ris-demo-2` → `SS_RISDEMO2`). Retry with
-            // upper-cased OID so any residual mixed-case caller lands
-            // on the row instead of 404ing.
-            StudySubjectBean upper = studySubjectDAO.findByOid(studySubjectOid.toUpperCase());
-            if (upper != null && upper.getId() != 0) {
-                ss = upper;
-            }
-        }
-        if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
-            String label = studySubjectOid.startsWith("SS_")
-                    ? studySubjectOid.substring(3) : studySubjectOid;
-            StudySubjectBean fallback = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
-            if (fallback != null && fallback.getId() != 0) {
-                ss = fallback;
-            }
-        }
-        if (ss == null || ss.getId() == 0) {
+        StudySubjectBean ss = resolveStudySubject(studySubjectOid, currentStudy);
+        if (ss == null) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Subject with OID '" + studySubjectOid + "' not found."
             ));
@@ -342,6 +321,157 @@ public class SubjectsApiController {
                 ss.getOid(), currentStudy.getOid(), currentUser.getName());
 
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * The subject behind a path segment, or null.
+     *
+     * <p>The SPA passes {@code SS_<label>} by convention. When that OID
+     * misses (a non-standard OID), retry upper-cased — the DAO generator
+     * upper-cases at creation time ({@code ris-demo-2} → {@code SS_RISDEMO2}),
+     * and the SPA's {@code toStudySubjectOid} used to preserve the label's
+     * case — and finally fall back to the bare label in the active study.
+     */
+    private StudySubjectBean resolveStudySubject(String studySubjectOid, StudyBean currentStudy) {
+        if (studySubjectOid == null) return null;
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        if (ss == null || ss.getId() == 0) {
+            StudySubjectBean upper = studySubjectDAO.findByOid(studySubjectOid.toUpperCase());
+            if (upper != null && upper.getId() != 0) {
+                ss = upper;
+            }
+        }
+        if (ss == null || ss.getId() == 0) {
+            String label = studySubjectOid.startsWith("SS_")
+                    ? studySubjectOid.substring(3) : studySubjectOid;
+            StudySubjectBean fallback = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
+            if (fallback != null && fallback.getId() != 0) {
+                ss = fallback;
+            }
+        }
+        return (ss == null || ss.getId() == 0) ? null : ss;
+    }
+
+    /* ================================================================== */
+    /*  GET /api/v1/subjects/{oid}/worklist — is this patient on the camera */
+    /* ================================================================== */
+
+    /** One open visit as the camera's worklist carries it. */
+    public record CameraWorklistVisitDto(int studyEventId, String eventLabel, String date,
+                                         String time, String status, String accession) {}
+
+    /**
+     * @param date      the day the server treats as today — the worklist is
+     *                  served by this clock, so the client must not use its own
+     * @param offered   whether a camera's worklist can carry this subject at
+     *                  all: a DICOM receiver is configured and the subject's
+     *                  study is in the worklist's scope. False means "no camera
+     *                  here", not "not scheduled"
+     * @param today     the visits the worklist lists for this subject today
+     * @param otherOpen open visits on other days, or without a date — not on
+     *                  today's list, but movable there
+     */
+    public record CameraWorklistDto(String date, boolean offered,
+                                    List<CameraWorklistVisitDto> today,
+                                    List<CameraWorklistVisitDto> otherOpen) {}
+
+    /** More open visits than this on one subject is a data problem, not a list. */
+    private static final int CAMERA_WORKLIST_MAX_ROWS = 200;
+
+    /**
+     * Whether this subject is on the fundus camera's worklist today, and if
+     * not, why.
+     *
+     * <p>The camera (DR-025) has no patient list of its own: it pulls a
+     * Modality Worklist, and that worklist is the visit schedule filtered to
+     * today. There is no worklist entry to create. So "the patient is not on
+     * the camera" means one of two things — no visit is scheduled for today,
+     * or the visit sits on another date — and the operator should learn which
+     * on the subject page, not at the device with the patient in the chair.
+     *
+     * <p>This answers with the same query ({@link ScheduledVisitQuery}) and the
+     * same study scope ({@link StudyScopeConfig#WORKLIST_KEY}, merged with the
+     * per-study {@code ingest.dicom.enabled} setting) the worklist endpoint
+     * serves, so the page and the camera cannot disagree. {@code offered} is
+     * false when no receiver is configured at all — the strip would otherwise
+     * tell every subject on a DICOM-less instance that they are "not on the
+     * camera".
+     */
+    @GetMapping(value = "/{studySubjectOid}/worklist", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CameraWorklistDto.class)))
+    public ResponseEntity<?> cameraWorklist(@PathVariable("studySubjectOid") String studySubjectOid,
+                                            HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — visit /MainMenu after login."
+            ));
+        }
+
+        StudySubjectBean ss = resolveStudySubject(studySubjectOid, currentStudy);
+        if (ss == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with OID '" + studySubjectOid + "' not found."
+            ));
+        }
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Subject is not in the currently active study."
+            ));
+        }
+
+        LocalDate today = LocalDate.now();
+        if (!dicomReceiverConfigured() || !studyOnWorklist(ss.getStudyId())) {
+            return ResponseEntity.ok(new CameraWorklistDto(today.toString(), false, List.of(), List.of()));
+        }
+
+        List<CameraWorklistVisitDto> onToday = new ArrayList<>();
+        List<CameraWorklistVisitDto> otherOpen = new ArrayList<>();
+        try {
+            for (ScheduledVisitQuery.ScheduledVisit v :
+                    ScheduledVisitQuery.openVisitsOf(dataSource, ss.getId(), CAMERA_WORKLIST_MAX_ROWS)) {
+                CameraWorklistVisitDto dto = new CameraWorklistVisitDto(
+                        v.studyEventId(),
+                        v.eventLabel(),
+                        v.date(),
+                        v.time() == null ? null : v.time().toString(),
+                        EventsApiController.statusForSubjectEventStatusId(v.subjectEventStatusId()),
+                        ImageIngestBinding.accessionFor(v.studyEventId()));
+                if (v.date() != null && today.equals(LocalDate.parse(v.date()))) {
+                    onToday.add(dto);
+                } else {
+                    otherOpen.add(dto);
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("camera-worklist query failed: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not load visits"));
+        }
+        return ResponseEntity.ok(new CameraWorklistDto(today.toString(), true, onToday, otherOpen));
+    }
+
+    /** The worklist endpoint answers 503 without a token; then there is no camera to be on. */
+    private static boolean dicomReceiverConfigured() {
+        try {
+            String token = CoreResources.getField("core.dicom.ingest.token");
+            return token != null && !token.isBlank();
+        } catch (Exception noContext) {
+            return false;
+        }
+    }
+
+    private boolean studyOnWorklist(int studyId) {
+        Set<Integer> allowed = StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY);
+        return allowed == null || allowed.contains(studyId);
     }
 
     /**

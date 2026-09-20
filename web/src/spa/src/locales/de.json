@@ -2762,6 +2762,19 @@
     "success": "Download gestartet.",
     "failed": "Export fehlgeschlagen"
   },
+  "cameraWorklist": {
+    "on": "Heute auf der Kamera-Worklist",
+    "off": "Nicht auf der Kamera-Worklist",
+    "noVisitToday": "Für heute ist keine Visite offen — die Kamera listet nur Visiten mit heutigem Datum.",
+    "otherDay": "{event} ist für {date} geplant.",
+    "noDate": "{event} ist ohne Datum geplant.",
+    "moveToToday": "Auf heute verschieben",
+    "scheduleToday": "{event} für heute planen",
+    "scheduleTodayPick": "Visite für heute planen…",
+    "error": {
+      "generic": "Änderung fehlgeschlagen. Bitte erneut versuchen."
+    }
+  },
   "scheduleEvent": {
     "title": "Visite planen",
     "subtitle": "Teilnehmer/-in {id}",
