@@ -53,7 +53,9 @@ ls -1t /var/backups/libreclinica/backup-*.sql | tail -n +6 | xargs -r rm
 # (a2) The file stores, in the same window as the dump. Images, OCT
 #      volumes and inference artifacts live on disk; the database holds
 #      only their paths. A restore of the dump alone gives a database
-#      full of references to files that are no longer there.
+#      full of references to files that are no longer there. Every store
+#      is a directory under /var/lib/libreclinica, bound at the same path
+#      in every container (deploy/compose.production.yaml).
 tar -C /var/lib/libreclinica \
   -czf /var/backups/libreclinica/files-$(date +%Y%m%d-%H%M).tar.gz \
   dicom-ingest ingest e2e-uploads retinal-artifacts 2>/dev/null

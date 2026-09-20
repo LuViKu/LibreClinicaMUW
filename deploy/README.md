@@ -141,7 +141,7 @@ above for the host-hardening scope split.
    stay on the build host where they belong — a few MB instead of
    ~150 MB on disk). Seeds `/opt/libreclinica/config/` from
    `docker/config/`. Creates
-   `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference}` and
+   `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference,retinal-artifacts,dicom-ingest,ingest}` and
    `/var/backups/libreclinica/`. The sparse-checkout pattern is
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.

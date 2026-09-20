@@ -14,6 +14,14 @@
 #   - libreclinica: runtime config bind-mounted from
 #     /opt/libreclinica/config so the operator can edit datainfo.properties
 #     (mail relay, etc.) without rebuilding the image.
+#   - every file store — e2e-uploads, retinal-artifacts, dicom-ingest and
+#     the unified ingest store — lives under /var/lib/libreclinica/<store> on
+#     the host and is bound at the same path in EVERY container that touches
+#     it (app, retinal-inference, dicom-scp). The base compose.yaml binds the
+#     dev tree's ./docker/<store> instead; Compose merges `volumes` by
+#     container path, so each entry below replaces the base one. Two
+#     services mounting different host directories at the same container
+#     path is how a preview or a sidecar hand-off silently fails.
 #   - db: postgres password sourced from the host env file, data volume
 #     bind-mounted to /var/lib/libreclinica/postgres (matches the backup
 #     timer's expectations).
@@ -72,11 +80,18 @@ services:
       # values, etc.) without rebuilding the image. Source is seeded
       # from docker/config/ on first run of setup-ubuntu-host.sh.
       - /opt/libreclinica/config:/usr/local/tomcat/libreclinica.config:ro
-      # DR-029: the unified ingest store (core.ingest.storePath). Compose merges
-      # `volumes` by container path, so this overrides the base file's
-      # ./docker/ingest bind with the same absolute host directory the
-      # dicom-scp service mounts — the sidecar pseudonymises an uploaded .dcm
-      # through this very bind, so the two must be one directory on the host.
+      # The file stores, all under the backup root (see the header comment).
+      # e2e-uploads: the app writes uploaded OCT volumes; retinal-inference
+      # reads them back read-only through the same host directory.
+      - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads
+      # retinal-artifacts: the sidecar writes bscan.dcm/fundus.png companions
+      # and segmentation outputs; the viewer streams them from here.
+      - /var/lib/libreclinica/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
+      # dicom-ingest: the C-STORE receiver writes; the app serves the previews.
+      - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest
+      # ingest (core.ingest.storePath, DR-029): the upload page writes JPEG/PNG
+      # and DICOM files; dicom-scp pseudonymises an uploaded .dcm in place
+      # through this very bind, so it must be one directory on the host.
       - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
 
   db:
@@ -137,11 +152,9 @@ services:
       - /var/lib/libreclinica/retinal-inference:/var/lib/libreclinica/segmentation-output
       - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
       # Shared artifact store — the SAME host dir the libreclinica service
-      # binds at this target (base compose.yaml maps ./docker/retinal-artifacts
-      # here), so the sidecar writes companions where the app reads them. Kept
-      # on ./docker (not /var/lib) to match the app's existing bind; the dir is
-      # git-ignored runtime data and survives `git reset` on setup re-runs.
-      - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
+      # binds at this target (see its volumes above), so the sidecar writes
+      # companions where the app reads them.
+      - /var/lib/libreclinica/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
     # The base compose.yaml pins cpus: "4.0" for local dev boxes. The
     # production VM is a 2-CPU host, and Docker rejects a cpus limit above
     # the physical core count outright ("range of CPUs is from 0.01 to

@@ -101,6 +101,12 @@ BACKUP_DIR=/var/backups/libreclinica
 PG_DATA_DIR=/var/lib/libreclinica/postgres
 E2E_UPLOADS_DIR=/var/lib/libreclinica/e2e-uploads
 RETINAL_OUTPUT_DIR=/var/lib/libreclinica/retinal-inference
+# The remaining file stores (deploy/compose.production.yaml binds every store
+# under /var/lib/libreclinica at the same path in every container that
+# touches it; the backup timer tars them from here).
+RETINAL_ARTIFACTS_DIR=/var/lib/libreclinica/retinal-artifacts
+DICOM_INGEST_DIR=/var/lib/libreclinica/dicom-ingest
+INGEST_DIR=/var/lib/libreclinica/ingest
 
 # ----------------------------- arg parsing ------------------------------------
 
@@ -326,6 +332,9 @@ install -d -m 0750 -o libreclinica -g libreclinica "$BACKUP_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$PG_DATA_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$E2E_UPLOADS_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_OUTPUT_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_ARTIFACTS_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$DICOM_INGEST_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$INGEST_DIR"
 
 # Clone or update the repo. The production VM needs only:
 #   - compose.yaml (root file; pulled in by sparse-checkout's implicit
