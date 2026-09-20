@@ -71,5 +71,20 @@ export const crcDe: ManualChapter = {
         'Jede Eingabe wird Ihnen im Audit-Trail zugeordnet — melden Sie sich an einer gemeinsam genutzten Arbeitsstation immer ab, wenn Sie sich entfernen.',
       ],
     },
+    {
+      id: 'crc-worklist', num: '4', title: 'Kamera-Worklist', deutsch: 'Put a subject on the camera worklist (HealthAEye)', route: '/subjects/:id#events',
+      roles: ['crc','investigator'],
+      goal: 'Die Handkamera listet den Teilnehmer, damit sich ihre Bilder von selbst der Visite zuordnen.',
+      steps: [
+        'Die Kamera holt ihre Patientenliste aus der Anwendung: Es ist der Visitenplan, gefiltert auf **heute**. Einen eigenen Worklist-Eintrag gibt es nicht.',
+        'Nehmen Sie den Teilnehmer auf (§2) und planen Sie die **Baseline** mit dem heutigen Datum — **Save & schedule** im Aufnahmeformular führt direkt dorthin.',
+        'Lesen Sie im Fallbuch den Streifen **Kamera-Worklist** oberhalb der Visiten: *Heute auf der Kamera-Worklist* heißt, die Kamera listet den Teilnehmer. Steht dort *Nicht auf der Kamera-Worklist*, nutzen Sie die Schaltfläche im Streifen — **Baseline für heute planen** oder **Auf heute verschieben**, wenn die Visite für einen anderen Tag gebucht war.',
+        'Aktualisieren Sie an der Kamera die Worklist und wählen Sie die ID des Teilnehmers, bevor Sie die Bilder aufnehmen.',
+      ],
+      notes: [
+        'Bilder, die ohne Auswahl des Worklist-Eintrags aufgenommen wurden, landen im **Eingang** und werden dort zugeordnet — nichts geht verloren, aber es ist ein manueller Schritt.',
+        'Der Streifen erscheint nur in Studien, die eine Kamera bedient. Den vollständigen Ablauf mit dem, was die Kamera anzeigt, finden Sie im Kapitel Investigator, §4d.',
+      ],
+    },
   ],
 }

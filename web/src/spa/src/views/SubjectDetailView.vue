@@ -10,6 +10,7 @@ import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
+import CameraWorklistStatus from '@/components/CameraWorklistStatus.vue'
 import CancelEventDialog from '@/components/CancelEventDialog.vue'
 import SignEventDialog from '@/components/SignEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
@@ -585,6 +586,20 @@ async function onEventScheduled() {
     await subjects.fetchOne(subject.value.id)
   }
 }
+
+/**
+ * DR-025 — the camera-worklist strip refreshes whenever the visits change
+ * (scheduled, moved, cancelled, completed — anywhere on this page). A
+ * signature of the rows is cheaper to watch than the rows themselves.
+ */
+const eventsSignature = computed(() =>
+  (subject.value?.events ?? [])
+    .map((ev) => `${ev.eventId}:${ev.dateStart ?? ''}:${ev.status}`)
+    .join('|'),
+)
+const subjectRemoved = computed(
+  () => subject.value?.status === 'removed' || subject.value?.status === 'auto-removed',
+)
 
 /* Phase E A3-lock — DM/Admin only; visibility also gated by current
    state (lock only available when not locked, vice versa). */
@@ -1230,6 +1245,20 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </span>
             </div>
           </div>
+          <!-- DR-025 — is this patient on the fundus camera's worklist today?
+               The worklist is the visit schedule filtered to today, so the
+               strip says so and offers the fix (schedule today / move to
+               today) here rather than at the device. Renders nothing for
+               studies no camera serves. -->
+          <CameraWorklistStatus
+            v-if="!subjectRemoved"
+            :subject-id="subject.id"
+            :study-oid="activeStudyOid"
+            :can-schedule="canScheduleEvent"
+            :events-signature="eventsSignature"
+            @changed="onEventScheduled"
+            @open-schedule="scheduleDialogOpen = true"
+          />
           <!-- 2026-06-25 — transient confirmation after a visit edit saves.
                The inline editor collapses on success; this makes the outcome
                explicit. Failures surface inline via editEvent.fieldError. -->

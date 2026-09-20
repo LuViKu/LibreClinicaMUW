@@ -58,6 +58,16 @@ final class ImageIngestBinding {
     }
 
     /**
+     * The accession the worklist stamps on a visit — the inverse of
+     * {@link #studyEventIdFromAccession}, kept beside it so the two shapes
+     * cannot drift. Shown on the subject page so an operator can match what
+     * the camera displays.
+     */
+    static String accessionFor(int studyEventId) {
+        return "LC" + studyEventId;
+    }
+
+    /**
      * Resolve a study_event to its bind target. Removed/locked events and
      * subjects (status 5/7) resolve to null so an image is never filed against
      * a visit that is no longer live.

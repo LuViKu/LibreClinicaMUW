@@ -2244,6 +2244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/{studySubjectOid}/worklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["cameraWorklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects/{studySubjectOid}/preflightForSign": {
         parameters: {
             query?: never;
@@ -4994,6 +5010,21 @@ export interface components {
             studyEye?: string;
             status?: string;
             groupAssignments?: components["schemas"]["GroupAssignmentSnapshot"][];
+        };
+        CameraWorklistDto: {
+            date?: string;
+            offered?: boolean;
+            today?: components["schemas"]["CameraWorklistVisitDto"][];
+            otherOpen?: components["schemas"]["CameraWorklistVisitDto"][];
+        };
+        CameraWorklistVisitDto: {
+            /** Format: int32 */
+            studyEventId?: number;
+            eventLabel?: string;
+            date?: string;
+            time?: string;
+            status?: string;
+            accession?: string;
         };
         CheckRow: {
             id?: string;
@@ -9790,6 +9821,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    cameraWorklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CameraWorklistDto"];
                 };
             };
         };
