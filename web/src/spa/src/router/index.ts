@@ -382,6 +382,14 @@ const router = createRouter({
        release: the old path is in people's bookmarks and in the operator test
        script, and a 404 would read as "the feature was removed". */
     { path: '/image-inbox', redirect: { name: 'ingest-inbox' } },
+    /* DR-029 — the uploader behind a login, reached from the inbox. Same
+       roles as the inbox: whoever may reconcile a file may bring one in. */
+    {
+      path: '/ingest-inbox/upload',
+      name: 'ingest-upload',
+      component: () => import('@/views/IngestUploadView.vue'),
+      meta: { title: 'Hochladen', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
+    },
     /* P2-6 — open visits in a date window, reaching into the past so a
        visit that was due and never happened is visible. Role-gated here
        (advisory); the backend scopes the list to the studies the session
@@ -400,23 +408,21 @@ const router = createRouter({
        backend whitelists /pages/api/v1/public/oct-upload/** under
        permitAll() (DR-022 sibling) and the institutional reverse
        proxy is the only access gate. */
+    /* DR-029 — the combined upload page: OCT (.e2e), DICOM and JPEG/PNG
+       through one door. Unauthenticated like the two pages it replaces; the
+       backend whitelists /pages/api/v1/public/upload/** under permitAll() and
+       the institutional reverse proxy is the only access gate. */
     {
-      path: '/oct-upload',
-      name: 'oct-upload-portal',
-      component: () => import('@/views/OctUploadPortalView.vue'),
-      meta: { public: true, title: 'OCT-Upload-Portal' },
+      path: '/upload',
+      name: 'upload-portal',
+      component: () => import('@/views/UploadPortalView.vue'),
+      meta: { public: true, title: 'Upload-Portal' },
     },
-    /* DR-025 — public Remidio image-upload portal. Same posture as the
-       OCT/BCVA portals: the institutional reverse proxy is the only access
-       gate; the backend whitelists /pages/api/v1/public/image-upload/**
-       under permitAll(). Operators bookmark /app/image-upload and upload
-       the FOP fundus JPEG/PNG. */
-    {
-      path: '/image-upload',
-      name: 'image-upload-portal',
-      component: () => import('@/views/ImageUploadPortalView.vue'),
-      meta: { public: true, title: 'Bild-Upload-Portal' },
-    },
+    /* The OCT page and the image page became the one page above. Their paths
+       are in bookmarks and on the QR codes at the cameras, so they redirect
+       for a release rather than 404. */
+    { path: '/oct-upload', redirect: { name: 'upload-portal' } },
+    { path: '/image-upload', redirect: { name: 'upload-portal' } },
     /**
      * 2026-06-24 user-feedback round — public BCVA-entry portal.
      * Same posture as the OCT-upload portal (DR-022 sibling): the

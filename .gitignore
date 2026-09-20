@@ -110,6 +110,8 @@ docker/e2e-uploads/
 # DR-025 shared DICOM/upload ingest store (compose binds it into the app and
 # the dicom-scp sidecar). Real fundus photographs — never enter git.
 docker/dicom-ingest/
+# DR-029: the unified ingest store (core.ingest.storePath) — uploads, per kind
+docker/ingest/
 
 # Claude Code session state (transcripts, hook outputs, planning artefacts).
 # Per-developer scratch, not repo content.

@@ -16,5 +16,8 @@ ENV PYTHONPATH=/app/src
 
 # DICOM Storage SCP listener (map to the published host port in compose).
 EXPOSE 11112
+# DR-029 describe endpoint for uploaded DICOM files — reached by the app over
+# the compose network only; never publish it.
+EXPOSE 8081
 
 CMD ["python", "-m", "dicom_scp"]

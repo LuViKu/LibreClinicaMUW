@@ -3116,6 +3116,7 @@
     "dismissConfirm": "Really dismiss this image?"
   },
   "ingestInbox": {
+    "uploadAction": "Upload",
     "title": "Ingest inbox",
     "cardDesc": "File incoming images and scans against patients and visits.",
     "subtitle": "{count} files",
@@ -3236,6 +3237,93 @@
     "colStudy": "Study",
     "colStatus": "Status",
     "countAria": "{n} due visits"
+  },
+  "uploadPortal":   {
+    "topbar": {
+      "portalLabel": "Upload portal"
+    },
+    "head": {
+      "eyebrow": "Imaging · Upload",
+      "title": "Upload acquisitions",
+      "lead": "OCT exports (.e2e), DICOM files (Clarus, PlexElite) and fundus photos (JPEG/PNG) through one page. Pick the visit once, drop every file of the visit — each row can still be changed on its own."
+    },
+    "footer": {
+      "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
+    },
+    "dropzone": {
+      "heroTitle": "Drop files here",
+      "heroBrowsePrefix": "or",
+      "heroBrowse": "choose files",
+      "heroNote": "several files at once · headers are read locally in the browser",
+      "slimDropMore": "Drop more files here",
+      "browse": "Browse"
+    },
+    "batch": {
+      "title": "Visit for these files",
+      "hint": "Pick from today's list, search the patient or type the label — every file can be changed on its own afterwards.",
+      "searchPatient": "Search patient",
+      "clear": "Clear",
+      "visitsLabel": "Today's visits",
+      "visitsFilterPlaceholder": "Filter by label or visit",
+      "visitsLoading": "Loading visits …",
+      "visitsNone": "No matching visit on this day",
+      "patientIdLabel": "Patient ID (for files without a label in the header)",
+      "patientIdPlaceholder": "e.g. HAE-001",
+      "dateLabel": "Acquisition date",
+      "patientFound": "Patient found: {label} ({study})",
+      "patientNotFound": "No matching patient ID",
+      "patientAmbiguous": "Several matches — resolve when assigning",
+      "attachToVisit": "Attach to visit “{visit}”"
+    },
+    "kind": {
+      "e2e": "OCT",
+      "dicom": "DICOM",
+      "jpeg": "JPEG",
+      "png": "PNG",
+      "imageShort": "photos"
+    },
+    "columns": {
+      "file": "File",
+      "patientId": "Label",
+      "date": "Acquired",
+      "eye": "Eye",
+      "assignment": "Study · Visit"
+    },
+    "row": {
+      "unsupported": "Unsupported — JPEG, PNG, DICOM (.dcm) or a Spectralis .e2e",
+      "noVolumes": "No OCT volumes found in the header",
+      "headerError": "The file could not be read",
+      "resolveFailed": "Study/visit lookup failed",
+      "uploadFailed": "Upload failed",
+      "undoFailed": "Undo failed",
+      "invalidVisit": "Invalid visit — please pick again",
+      "noSubject": "No study subject selected",
+      "deidentified": "header pseudonymised",
+      "lateralityAria": "Eye for {file}"
+    },
+    "assignment": {
+      "inInbox": "In the inbox",
+      "noEvent": "No visit found — pick one or upload without a visit.",
+      "noLabel": "No label — search the patient, pick a visit or upload without one.",
+      "alreadyUploadedDetail": "An identical file is already in the inbox as"
+    },
+    "actions": {
+      "uploadWithoutVisit": "Upload without visit"
+    },
+    "summary": {
+      "fileSingular": "file",
+      "filePlural": "files",
+      "ready": "ready",
+      "sent": "sent",
+      "duplicate": "already there",
+      "refused": "refused",
+      "confirmAll": "Confirm {n}"
+    },
+    "staff": {
+      "title": "Upload acquisitions",
+      "lead": "Bring OCT exports, DICOM files and fundus photos into the inbox — filed directly with a visit, or without one for later reconciliation.",
+      "backToInbox": "Back to the inbox"
+    }
   },
   "imagePortal": {
     "visitPickerLabel": "Choose a visit",

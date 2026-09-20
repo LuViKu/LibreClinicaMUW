@@ -46,6 +46,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * request in 1 h so a parade of distinct client IPs can't bloat the
  * map without bound.
  *
+ * <p>DR-029 — the combined upload page files several files per visit, and a
+ * Clarus visit alone is half a dozen. The throttle exists to stop label
+ * enumeration through the lookups; a commit needs a real file and is bounded
+ * by disk, not by guessing. So on that prefix the lookups keep the 30/hour
+ * budget and the commits get their own, larger one. The older portals are
+ * left exactly as they were.
+ *
  * <p>Wire via {@code SecurityConfig.addFilterBefore(filter, ChannelProcessingFilter.class)}.
  */
 @Component
@@ -59,11 +66,18 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     /** One token per 2 minutes → 30 tokens / hour. */
     static final long REFILL_INTERVAL_MS = 120_000L;
 
+    /** DR-029 — commits on the combined page: 300 / hour, one token per 12 s. */
+    static final int MAX_COMMITS_PER_HOUR = 300;
+    static final long COMMIT_REFILL_INTERVAL_MS = 12_000L;
+
     /** Buckets older than 1 h with no activity get dropped. */
     static final long IDLE_BUCKET_TTL_MS = 3_600_000L;
 
     /** Path prefix the filter polices (the original OCT portal). */
     static final String GUARDED_PREFIX = "/pages/api/v1/public/oct-upload/";
+
+    /** DR-029 — the combined page, the one prefix where commits have their own budget. */
+    static final String UPLOAD_PREFIX = "/pages/api/v1/public/upload/";
 
     /**
      * Every unauthenticated portal gets the same bucket policy. 2026-09-17 —
@@ -76,6 +90,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
             GUARDED_PREFIX,
             "/pages/api/v1/public/image-upload/",
             "/pages/api/v1/public/bcva-entry/",
+            UPLOAD_PREFIX,
     };
 
     /** The guarded prefix a URI falls under, or null when the filter should not police it. */
@@ -87,6 +102,13 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         return null;
     }
 
+    /** A file upload on the combined page — budgeted separately from the lookups. */
+    static boolean isUploadCommit(String prefix, String method, String uri) {
+        return UPLOAD_PREFIX.equals(prefix)
+                && "POST".equalsIgnoreCase(method)
+                && uri != null && uri.endsWith("/commit");
+    }
+
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
@@ -95,11 +117,19 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
      * profile here is read-modify-write so AtomicInteger is enough.
      */
     static final class Bucket {
+        final int capacity;
+        final long refillIntervalMs;
         final AtomicInteger tokens;
         final AtomicLong lastRefillMs;
         final AtomicLong lastTouchedMs;
 
         Bucket(int initialTokens, long nowMs) {
+            this(initialTokens, MAX_REQUESTS_PER_HOUR, REFILL_INTERVAL_MS, nowMs);
+        }
+
+        Bucket(int initialTokens, int capacity, long refillIntervalMs, long nowMs) {
+            this.capacity = capacity;
+            this.refillIntervalMs = refillIntervalMs;
             this.tokens = new AtomicInteger(initialTokens);
             this.lastRefillMs = new AtomicLong(nowMs);
             this.lastTouchedMs = new AtomicLong(nowMs);
@@ -139,16 +169,19 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain)
             throws ServletException, IOException {
-        String prefix = guardedPrefixFor(request.getRequestURI());
+        String uri = request.getRequestURI();
+        String prefix = guardedPrefixFor(uri);
         if (prefix == null) {
             chain.doFilter(request, response);
             return;
         }
 
-        String key = clientIp(request) + "|" + prefix;
+        boolean commit = isUploadCommit(prefix, request.getMethod(), uri);
+        String key = clientIp(request) + "|" + prefix + (commit ? "|commit" : "");
         long now = nowMs();
-        Bucket bucket = buckets.computeIfAbsent(
-                key, k -> new Bucket(MAX_REQUESTS_PER_HOUR, now));
+        Bucket bucket = buckets.computeIfAbsent(key, k -> commit
+                ? new Bucket(MAX_COMMITS_PER_HOUR, MAX_COMMITS_PER_HOUR, COMMIT_REFILL_INTERVAL_MS, now)
+                : new Bucket(MAX_REQUESTS_PER_HOUR, now));
         bucket.lastTouchedMs.set(now);
         refill(bucket, now);
 
@@ -165,24 +198,24 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
 
     /**
      * Add tokens to the bucket according to elapsed time since the last
-     * refill stamp. Capped at {@link #MAX_REQUESTS_PER_HOUR} so an idle
-     * client doesn't accumulate infinite credit.
+     * refill stamp. Capped at the bucket's capacity so an idle client
+     * doesn't accumulate infinite credit.
      */
     void refill(Bucket bucket, long nowMs) {
         long last = bucket.lastRefillMs.get();
         long elapsed = nowMs - last;
-        if (elapsed < REFILL_INTERVAL_MS) return;
-        long newTokens = elapsed / REFILL_INTERVAL_MS;
+        if (elapsed < bucket.refillIntervalMs) return;
+        long newTokens = elapsed / bucket.refillIntervalMs;
         if (newTokens <= 0) return;
         // CAS so concurrent requests on the same bucket can't double-refill.
         // The refill stamp advances by `newTokens * interval` so leftover
         // sub-interval time stays banked for the next round.
-        long newStamp = last + newTokens * REFILL_INTERVAL_MS;
+        long newStamp = last + newTokens * bucket.refillIntervalMs;
         if (!bucket.lastRefillMs.compareAndSet(last, newStamp)) return;
         int updated = bucket.tokens.updateAndGet(
-                t -> (int) Math.min(MAX_REQUESTS_PER_HOUR, t + newTokens));
+                t -> (int) Math.min(bucket.capacity, t + newTokens));
         LOG.debug("Bucket refilled: +{} tokens (cap at {}), now at {}",
-                newTokens, MAX_REQUESTS_PER_HOUR, updated);
+                newTokens, bucket.capacity, updated);
     }
 
     /**
@@ -191,7 +224,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
      */
     long retryAfterSec(Bucket bucket, long nowMs) {
         long elapsed = nowMs - bucket.lastRefillMs.get();
-        long remaining = REFILL_INTERVAL_MS - (elapsed % REFILL_INTERVAL_MS);
+        long remaining = bucket.refillIntervalMs - (elapsed % bucket.refillIntervalMs);
         long sec = (remaining + 999L) / 1000L; // ceil
         return Math.max(1L, sec);
     }
@@ -237,5 +270,11 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     int currentTokens(String clientIp, String prefix) {
         Bucket b = buckets.get(clientIp + "|" + prefix);
         return b == null ? MAX_REQUESTS_PER_HOUR : b.tokens.get();
+    }
+
+    /** Test seam — the combined page's commit bucket of a client IP. */
+    int currentCommitTokens(String clientIp) {
+        Bucket b = buckets.get(clientIp + "|" + UPLOAD_PREFIX + "|commit");
+        return b == null ? MAX_COMMITS_PER_HOUR : b.tokens.get();
     }
 }

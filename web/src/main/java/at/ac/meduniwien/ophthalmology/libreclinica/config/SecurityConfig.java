@@ -168,6 +168,10 @@ public class SecurityConfig {
                         // account; reverse-proxy gated like the OCT/BCVA ones).
                         // Lands in ingest_item(source_kind='upload').
                         "/pages/api/v1/public/image-upload/**",
+                        // DR-029 — the combined upload page (OCT, DICOM, JPEG/PNG);
+                        // same posture as the two pages it replaces, which stay
+                        // mounted for one release.
+                        "/pages/api/v1/public/upload/**",
                         // DR-025 — internal DICOM ingest handoff from the
                         // dicom-scp sidecar. Trust-the-reverse-proxy exposure +
                         // a shared-secret X-MUW-Dicom-Token gate in

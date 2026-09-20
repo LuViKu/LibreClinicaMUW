@@ -53,10 +53,12 @@ ls -1t /var/backups/libreclinica/backup-*.sql | tail -n +6 | xargs -r rm
 # (a2) The file stores, in the same window as the dump. Images, OCT
 #      volumes and inference artifacts live on disk; the database holds
 #      only their paths. A restore of the dump alone gives a database
-#      full of references to files that are no longer there.
+#      full of references to files that are no longer there. Every store
+#      is a directory under /var/lib/libreclinica, bound at the same path
+#      in every container (deploy/compose.production.yaml).
 tar -C /var/lib/libreclinica \
   -czf /var/backups/libreclinica/files-$(date +%Y%m%d-%H%M).tar.gz \
-  dicom-ingest e2e-uploads retinal-artifacts 2>/dev/null
+  dicom-ingest ingest e2e-uploads retinal-artifacts 2>/dev/null
 ls -1t /var/backups/libreclinica/files-*.tar.gz | tail -n +6 | xargs -r rm
 
 # (b) Drain new traffic at the reverse proxy. If you do not have a
@@ -446,6 +448,8 @@ never starts it and nothing below applies.
 | 5 | Campus firewall admits the camera VLAN to 11112 and nothing else | A C-FIND returns subject labels, sex and dates of birth. Verify from a general workstation that the port is closed. |
 | 6 | nginx returns 404 for `/LibreClinica/pages/api/v1/internal/` | Shipped in `deploy/nginx/ecrf.conf`. Check after any proxy change. |
 | 7 | `DICOM_SCP_LOG_LEVEL=INFO` | DEBUG makes pynetdicom dump whole datasets, which puts patient name and ID into the container log. |
+| 8 | `core.ingest.storePath` (default `/var/lib/libreclinica/ingest`) mounted at the **same path in the app and the sidecar** — `deploy/compose.production.yaml` binds `/var/lib/libreclinica/ingest` into both | DR-029: the upload page writes JPEG/PNG and DICOM files here; the sidecar describes and pseudonymises an uploaded `.dcm` in place through the same bind. A path that exists in one container and not the other turns every DICOM upload into a 503. Included in the backup tar (a2). |
+| 9 | `core.dicom.describe.url` points at the sidecar (`http://dicom-scp:8081/describe`) and `DICOM_SCP_DESCRIBE_PORT` is **not** in any `ports:` list | The endpoint rewrites files on the shared volume and is gated by the same token as the ingest hand-off; it must never be reachable from outside the compose network. Leaving the URL blank refuses DICOM uploads rather than storing a clinic camera's export with the hospital's patient in it. |
 
 ### Dry run
 
@@ -483,7 +487,7 @@ docker compose exec db psql -U clinica libreclinica -c \
   "SELECT status, count(*) FROM image_ingest GROUP BY 1 ORDER BY 1;"
 
 # Disk. A fundus study is a few MB; a camera flushing a backlog is not.
-du -sh /var/lib/libreclinica/dicom-ingest
+du -sh /var/lib/libreclinica/dicom-ingest /var/lib/libreclinica/ingest
 ```
 
 ### Retention

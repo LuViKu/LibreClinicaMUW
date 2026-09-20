@@ -22,6 +22,20 @@ test.describe('@smoke Image reconciliation inbox', () => {
   })
 })
 
+test.describe('@smoke Staff upload (DR-029)', () => {
+  test('the inbox links to it and it opens in staff mode', async ({ page }) => {
+    await loginAndGoto(page, 'dataManager', '/ingest-inbox')
+    await page.getByTestId('inbox-upload-link').click()
+    await expect(page).toHaveURL(/\/ingest-inbox\/upload$/)
+    const workbench = page.getByTestId('upload-workbench')
+    await expect(workbench).toBeVisible({ timeout: 15_000 })
+    await expect(workbench).toHaveAttribute('data-mode', 'staff')
+    // Behind a login the day's visits come from the due-visits endpoint, no
+    // institutional switch involved — the list is there, possibly empty.
+    await expect(page.getByTestId('todays-visits')).toBeVisible({ timeout: 15_000 })
+  })
+})
+
 test.describe('@smoke Due visits', () => {
   test('an investigator can open it and it queries a window', async ({ page }) => {
     await loginAndGoto(page, 'investigator', '/due-visits')

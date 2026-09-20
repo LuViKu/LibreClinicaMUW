@@ -390,3 +390,26 @@ item.
   **Investigator**; the backend is the authoritative gate.
 - Every resolution is captured in the audit trail with its reason — DDE is a
   data-quality control, so treat the reason field as part of the record.
+
+## 14. Uploading acquisitions (Eingang → Hochladen)
+
+The **Eingang** lists files that arrived from a camera or the upload page and
+still need a visit. Since the combined uploader (DR-029) you can also bring
+files in from here: **Hochladen** opens the same workbench the unauthenticated
+page at `/app/upload` uses, in staff mode — the upload is on your record, and the
+visits offered are those of the studies you can see.
+
+1. Under **Visite für diese Dateien** pick the visit once: from the day's list,
+   via **Patient suchen**, or by typing the label and accepting the visit
+   offered.
+2. Drop the files — a Spectralis `.e2e`, Clarus/PlexElite `.dcm` exports, Remidio
+   JPEG/PNG, all at once. Each row names what the file is; a photo asks for the
+   eye, an OCT scan and a DICOM file say it themselves.
+3. **Bestätigen** rows one by one or **N bestätigen** for the batch. A row without
+   a visit can go to the Eingang with **Ohne Visite hochladen**; a sent row can be
+   taken back with **Rückgängig** for a minute.
+
+A DICOM export is pseudonymised before it is kept: the visit's subject label
+replaces the patient name and ID from the hospital system, the date of birth and
+staff names are cleared. If the DICOM service is not running the page refuses
+`.dcm` files rather than keeping them unchanged.

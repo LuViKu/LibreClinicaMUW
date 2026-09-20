@@ -15,9 +15,9 @@
  */
 import { test, expect } from '@playwright/test'
 
+// DR-029 — one page for every file; the two older paths redirect to it.
 const PORTALS = [
-  { path: '/image-upload', label: 'Remidio image upload' },
-  { path: '/oct-upload', label: 'OCT upload' },
+  { path: '/upload', label: 'Combined upload' },
 ]
 
 for (const { path, label } of PORTALS) {
@@ -53,11 +53,21 @@ for (const { path, label } of PORTALS) {
   })
 }
 
-test.describe('@smoke image upload portal — identification', () => {
+test.describe('@smoke upload page — the older addresses still arrive', () => {
+  for (const old of ['/oct-upload', '/image-upload']) {
+    test(`${old} redirects to /upload`, async ({ page }) => {
+      await page.goto(old, { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/upload$/)
+      await expect(page.getByTestId('upload-workbench')).toBeVisible({ timeout: 15_000 })
+    })
+  }
+})
+
+test.describe('@smoke upload page — identification', () => {
   test('a known subject label resolves', async ({ page }) => {
-    await page.goto('/image-upload', { waitUntil: 'domcontentloaded' })
-    await page.locator('#ip-patient').fill('M-001')
-    await page.locator('#ip-patient').blur()
+    await page.goto('/upload', { waitUntil: 'domcontentloaded' })
+    await page.locator('#up-patient').fill('M-001')
+    await page.locator('#up-patient').blur()
     await expect(page.getByTestId('resolve-found')).toBeVisible({ timeout: 15_000 })
   })
 
@@ -66,9 +76,9 @@ test.describe('@smoke image upload portal — identification', () => {
    * study you may see", and must not echo anything about the register.
    */
   test('an unknown label reveals nothing', async ({ page }) => {
-    await page.goto('/image-upload', { waitUntil: 'domcontentloaded' })
-    await page.locator('#ip-patient').fill('ZZZ-999')
-    await page.locator('#ip-patient').blur()
+    await page.goto('/upload', { waitUntil: 'domcontentloaded' })
+    await page.locator('#up-patient').fill('ZZZ-999')
+    await page.locator('#up-patient').blur()
     await page.waitForTimeout(1500)
 
     await expect(page.getByTestId('resolve-found')).toHaveCount(0)
@@ -77,10 +87,39 @@ test.describe('@smoke image upload portal — identification', () => {
   })
 
   test('the visit picker stays hidden until the institution enables it', async ({ page }) => {
-    await page.goto('/image-upload', { waitUntil: 'domcontentloaded' })
+    await page.goto('/upload', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('load')
     // core.ingest.portal.todaysVisits ships off: a list of today's patients on
     // a page that needs no login waits for data-protection sign-off.
     await expect(page.getByTestId('todays-visits')).toHaveCount(0)
+  })
+
+  /**
+   * A file the page cannot name is shown refused, not silently dropped —
+   * and it never leaves the browser.
+   */
+  test('an unsupported file is refused on the page', async ({ page }) => {
+    await page.goto('/upload', { waitUntil: 'domcontentloaded' })
+    await page.getByTestId('upload-dropzone-input').setInputFiles({
+      name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello, not an image'),
+    })
+    await expect(page.getByTestId('row-error')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-row-kind="unknown"]')).toHaveCount(1)
+  })
+
+  /** A photo lands in the inbox without a visit, and can be taken back. */
+  test('a photo without a visit is uploaded to the inbox and can be undone', async ({ page }) => {
+    await page.goto('/upload', { waitUntil: 'domcontentloaded' })
+    // 1x1 PNG
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+    await page.getByTestId('upload-dropzone-input').setInputFiles({ name: 'fundus.png', mimeType: 'image/png', buffer: png })
+    const row = page.locator('[data-row-kind="image"]').first()
+    await expect(row).toBeVisible({ timeout: 15_000 })
+    await expect(row).toHaveAttribute('data-row-state', /nopatient|duplicate/)
+    if ((await row.getAttribute('data-row-state')) === 'duplicate') return // an earlier run left it there
+    await row.locator('[data-testid^="action-park-"]').click()
+    await expect(row).toHaveAttribute('data-row-state', 'committed', { timeout: 30_000 })
+    await row.locator('[data-testid^="action-undo-"]').click()
+    await expect(row).toHaveAttribute('data-row-state', 'nopatient', { timeout: 30_000 })
   })
 })

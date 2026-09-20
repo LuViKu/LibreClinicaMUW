@@ -240,3 +240,24 @@ core.dicom.ingest.token=                     # shared secret, sidecar → app ha
 
 MPPS · image Query/Retrieve (study-root C-FIND/C-MOVE) · DICOM-TLS · OCT/SEG (DR-022
 follow-up) · PACS forwarding · multi-institution AE management.
+
+## Uploaded DICOM files — the describe endpoint (DR-029, 2026-09-20)
+
+The receiver above answers C-STORE. A Clarus or PlexElite export arrives as a *file* on the combined upload page instead, and the app has no DICOM parser — so the sidecar gained a second, internal entry:
+
+```
+POST http://dicom-scp:8081/describe        X-MUW-Dicom-Token: <core.dicom.ingest.token>
+{ "path": "/var/lib/libreclinica/ingest/dicom/<uuid>.dcm", "pseudonym": "HAE-001" | null }
+→ 200 { sopInstanceUid, sopClassUid, studyInstanceUid, seriesInstanceUid, modality,
+        studyDate, acquisitionDate, laterality (OD/OS/OU), manufacturer,
+        manufacturerModelName, transferSyntaxUid, rows, columns,
+        previewPngPath, identityRemoved: true, changedTags: n }
+```
+
+Order of operations in the app (`IngestUploadService`): store the file under `core.ingest.storePath` → dedup by SHA-256 → resolve the visit the operator picked (the label written into the file is the visit's subject and nothing else) → per-study gate → **describe** (the sidecar pseudonymises in place, renders `<file>.png`, answers the tags) → dedup by SOP Instance UID → row with `deidentified_at`. Any refusal after the store deletes the file and the preview.
+
+What the sidecar rewrites is `dicom_scp/deidentify.py` — a list, deliberately, so what leaves and what stays is legible there: identity replaced, demographics/contacts/staff/institution/hospital numbers blanked, identity-only sequences removed, UIDs and dates and device and private tags kept, pixels not decoded, `PatientIdentityRemoved` and `DeidentificationMethod` stamped. `DICOM_SCP_DEIDENTIFY_DROP_PRIVATE=true` removes vendor private tags for a deployment that would rather lose calibration than keep them.
+
+Failure modes, by design: sidecar unconfigured or unreachable → 503 to the page and no file kept; a file the sidecar cannot read → 400, no file kept; a path outside the ingest roots → 403 from the sidecar (never acted on); token missing → 401. Paths never reach the routine log on either side: they carry an operator-supplied filename fragment.
+
+Config: `DICOM_SCP_DESCRIBE_PORT` (0 = off; never in `ports:`), `DICOM_SCP_DESCRIBE_ROOTS` (CSV; blank = the C-STORE store + `/var/lib/libreclinica/ingest`), `core.dicom.describe.url` on the app. Both containers must mount `core.ingest.storePath` at the same path.

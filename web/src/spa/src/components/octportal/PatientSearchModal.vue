@@ -22,7 +22,8 @@ import { useI18n } from 'vue-i18n'
 import Modal from '@/components/Modal.vue'
 import { ApiError, ApiNetworkError } from '@/api/client'
 import { searchStudySubjects, type StudySubjectSearchHit } from '@/api/retinal'
-import { searchPatientsPublic } from '@/api/octPortal'
+// DR-029 — the public lookups live on the combined upload page's prefix now.
+import { searchPatientsPublic } from '@/api/uploadWorkbench'
 
 interface Props {
   open: boolean

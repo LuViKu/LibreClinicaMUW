@@ -3116,6 +3116,7 @@
     "dismissConfirm": "Dieses Bild wirklich verwerfen?"
   },
   "ingestInbox": {
+    "uploadAction": "Hochladen",
     "title": "Eingang",
     "cardDesc": "Eingegangene Bilder und Scans Patienten und Visiten zuordnen.",
     "subtitle": "{count} Dateien",
@@ -3236,6 +3237,93 @@
     "colStudy": "Studie",
     "colStatus": "Status",
     "countAria": "{n} fällige Visiten"
+  },
+  "uploadPortal":   {
+    "topbar": {
+      "portalLabel": "Upload-Portal"
+    },
+    "head": {
+      "eyebrow": "Bildgebung · Upload",
+      "title": "Aufnahmen hochladen",
+      "lead": "OCT-Exporte (.e2e), DICOM-Dateien (Clarus, PlexElite) und Fundusfotos (JPEG/PNG) über eine Seite. Visite einmal wählen, alle Dateien der Visite ablegen — jede Zeile lässt sich danach noch einzeln ändern."
+    },
+    "footer": {
+      "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
+    },
+    "dropzone": {
+      "heroTitle": "Dateien hierher ziehen",
+      "heroBrowsePrefix": "oder",
+      "heroBrowse": "Dateien wählen",
+      "heroNote": "mehrere Dateien gleichzeitig · Header werden lokal im Browser gelesen",
+      "slimDropMore": "Weitere Dateien hierher ziehen",
+      "browse": "Durchsuchen"
+    },
+    "batch": {
+      "title": "Visite für diese Dateien",
+      "hint": "Aus der heutigen Liste wählen, Patient suchen oder Kennung eintippen — jede Datei kann danach einzeln geändert werden.",
+      "searchPatient": "Patient suchen",
+      "clear": "Auswahl aufheben",
+      "visitsLabel": "Heutige Visiten",
+      "visitsFilterPlaceholder": "Nach Kennung oder Visite filtern",
+      "visitsLoading": "Visiten werden geladen …",
+      "visitsNone": "Keine passende Visite für diesen Tag",
+      "patientIdLabel": "Patienten-ID (für Dateien ohne Kennung im Header)",
+      "patientIdPlaceholder": "z. B. HAE-001",
+      "dateLabel": "Aufnahmedatum",
+      "patientFound": "Patient gefunden: {label} ({study})",
+      "patientNotFound": "Keine passende Patienten-ID gefunden",
+      "patientAmbiguous": "Mehrere Treffer — bei der Zuordnung auflösen",
+      "attachToVisit": "An Visite „{visit}“ anhängen"
+    },
+    "kind": {
+      "e2e": "OCT",
+      "dicom": "DICOM",
+      "jpeg": "JPEG",
+      "png": "PNG",
+      "imageShort": "Fotos"
+    },
+    "columns": {
+      "file": "Datei",
+      "patientId": "Kennung",
+      "date": "Aufnahme",
+      "eye": "Auge",
+      "assignment": "Studie · Visite"
+    },
+    "row": {
+      "unsupported": "Nicht unterstützt — JPEG, PNG, DICOM (.dcm) oder Spectralis .e2e",
+      "noVolumes": "Keine OCT-Volumen im Header gefunden",
+      "headerError": "Datei konnte nicht gelesen werden",
+      "resolveFailed": "Studie/Visite-Lookup fehlgeschlagen",
+      "uploadFailed": "Upload fehlgeschlagen",
+      "undoFailed": "Rückgängig fehlgeschlagen",
+      "invalidVisit": "Ungültige Visite — bitte erneut auswählen",
+      "noSubject": "Kein Studienteilnehmer ausgewählt",
+      "deidentified": "Header pseudonymisiert",
+      "lateralityAria": "Auge für {file}"
+    },
+    "assignment": {
+      "inInbox": "Im Eingang",
+      "noEvent": "Keine Visite gefunden — bitte wählen oder ohne Visite hochladen.",
+      "noLabel": "Keine Kennung — Patient suchen, Visite wählen oder ohne Visite hochladen.",
+      "alreadyUploadedDetail": "Identische Datei existiert bereits als Eingang"
+    },
+    "actions": {
+      "uploadWithoutVisit": "Ohne Visite hochladen"
+    },
+    "summary": {
+      "fileSingular": "Datei",
+      "filePlural": "Dateien",
+      "ready": "bereit",
+      "sent": "übermittelt",
+      "duplicate": "bereits vorhanden",
+      "refused": "abgelehnt",
+      "confirmAll": "{n} bestätigen"
+    },
+    "staff": {
+      "title": "Aufnahmen hochladen",
+      "lead": "OCT-Exporte, DICOM-Dateien und Fundusfotos in den Eingang bringen — mit Visite direkt zugeordnet, ohne Visite zur späteren Zuordnung.",
+      "backToInbox": "Zurück zum Eingang"
+    }
   },
   "imagePortal": {
     "visitPickerLabel": "Visite wählen",

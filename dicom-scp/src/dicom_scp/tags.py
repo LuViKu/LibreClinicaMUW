@@ -29,6 +29,23 @@ def laterality(ds: Dataset) -> str | None:
     return _LATERALITY.get(lat.upper()) if lat else None
 
 
+def _da_iso(raw: str | None) -> str | None:
+    if raw and len(raw) == 8 and raw.isdigit():
+        return f"{raw[0:4]}-{raw[4:6]}-{raw[6:8]}"
+    return None
+
+
+def acquisition_date_iso(ds: Dataset) -> str | None:
+    """When the picture was taken: AcquisitionDate, else ContentDate, else
+    StudyDate — a file export keeps all three, a worklist-driven capture
+    sometimes only the last."""
+    for kw in ("AcquisitionDate", "ContentDate", "StudyDate"):
+        iso = _da_iso(_s(ds, kw))
+        if iso:
+            return iso
+    return None
+
+
 def extract(ds: Dataset, source_ae: str) -> dict:
     """Build the sidecar → app ingest payload (identity/exam tags only; the
     caller adds dicomPath + previewPngPath after persisting)."""
@@ -44,4 +61,30 @@ def extract(ds: Dataset, source_ae: str) -> dict:
         "studyDate": study_date_iso(ds),
         "laterality": laterality(ds),
         "sourceAeTitle": source_ae or None,
+    }
+
+
+def describe(ds: Dataset) -> dict:
+    """What the describe endpoint (DR-029) answers for an uploaded file.
+
+    Exam and device tags only. The patient tags are deliberately absent: the
+    file has just been pseudonymised, and the app must never see what it
+    carried before — the upload page's typed label is the identity it records.
+    """
+    file_meta = getattr(ds, "file_meta", None)
+    transfer_syntax = str(getattr(file_meta, "TransferSyntaxUID", "") or "") if file_meta else ""
+    return {
+        "sopInstanceUid": _s(ds, "SOPInstanceUID"),
+        "sopClassUid": _s(ds, "SOPClassUID"),
+        "studyInstanceUid": _s(ds, "StudyInstanceUID"),
+        "seriesInstanceUid": _s(ds, "SeriesInstanceUID"),
+        "modality": _s(ds, "Modality"),
+        "studyDate": study_date_iso(ds),
+        "acquisitionDate": acquisition_date_iso(ds),
+        "laterality": laterality(ds),
+        "manufacturer": _s(ds, "Manufacturer"),
+        "manufacturerModelName": _s(ds, "ManufacturerModelName"),
+        "transferSyntaxUid": transfer_syntax or None,
+        "rows": getattr(ds, "Rows", None),
+        "columns": getattr(ds, "Columns", None),
     }

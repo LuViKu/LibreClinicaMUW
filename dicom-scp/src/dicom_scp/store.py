@@ -35,11 +35,11 @@ def persist(ds: Dataset, file_meta: FileMetaDataset, store_path: str,
     # file meta) using ds.file_meta's transfer syntax.
     ds.save_as(str(dcm_path), enforce_file_format=True)
 
-    png_path = _render_preview(ds, base / f"{sop}.png")
+    png_path = render_preview(ds, base / f"{sop}.png")
     return str(dcm_path), (str(png_path) if png_path else None)
 
 
-def _render_preview(ds: Dataset, out: Path) -> Path | None:
+def render_preview(ds: Dataset, out: Path) -> Path | None:
     """Render an 8-bit RGB/greyscale thumbnail. Best-effort — a compressed
     transfer syntax without a decoder (no pylibjpeg) just yields no preview; the
     DICOM is still stored and enqueued."""

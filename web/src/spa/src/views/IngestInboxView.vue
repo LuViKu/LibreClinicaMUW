@@ -198,11 +198,25 @@ async function onUnbind(row: IngestItem): Promise<void> {
 
 <template>
   <div class="p-6 max-w-6xl mx-auto">
-    <header class="mb-5">
-      <h1 class="text-xl font-semibold text-slate-800">{{ t('ingestInbox.title') }}</h1>
-      <p class="text-[13px] text-slate-500 mt-1">
-        {{ t('ingestInbox.subtitle', { count: rows.length }) }}
-      </p>
+    <header class="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-semibold text-slate-800">{{ t('ingestInbox.title') }}</h1>
+        <p class="text-[13px] text-slate-500 mt-1">
+          {{ t('ingestInbox.subtitle', { count: rows.length }) }}
+        </p>
+      </div>
+      <!-- DR-029 — files can be brought in here as well as reconciled. -->
+      <RouterLink
+        :to="{ name: 'ingest-upload' }"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 shadow-[0_1px_2px_rgba(17,29,78,0.18)]"
+        data-testid="inbox-upload-link"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 13v8M8 17l4-4 4 4" />
+          <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
+        </svg>
+        {{ t('ingestInbox.uploadAction') }}
+      </RouterLink>
     </header>
 
     <!-- Filters. The kind chips carry their counts so an operator can see at a
