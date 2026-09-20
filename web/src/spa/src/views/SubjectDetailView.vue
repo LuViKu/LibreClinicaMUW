@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import TextInput from '@/components/TextInput.vue'
@@ -31,7 +30,7 @@ import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const { t } = useI18n()
@@ -770,15 +769,8 @@ const isLoading = computed(() => subjects.isLoadingSelected)
 const loadError = computed(() => subjects.selectedError)
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
-// "<study> > Studienteilnehmer > <subject.id>". The matrix link
-// lets the operator step back; the subject id is the active leaf.
-useViewBreadcrumb(computed(() => {
-  const label = subject.value?.id ?? subjectId.value
-  return [
-    { label: t('nav.subjectMatrix'), to: '/subjects' },
-    { label, to: null },
-  ]
-}))
+// The register is the subject's only ancestor; the subject id is the H1.
+const trail = computed(() => [{ label: t('nav.subjectMatrix'), to: '/subjects' }])
 
 /* ------------------------------------------------------------- */
 /* Wave 2A — Retinal trends section mounting.                    */
@@ -894,33 +886,9 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        {{ t('nav.home') }}
-      </RouterLink>
-      <RouterLink to="/subjects" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-      <RouterLink to="/subjects/new" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <circle cx="12" cy="8" r="5" />
-          <path d="M20 21a8 8 0 1 0-16 0" />
-          <path d="M19 16v6M22 19h-6" />
-        </svg>
-        {{ t('nav.addSubject') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-4xl px-8 py-6">
+    <div class="max-w-4xl px-8 py-6 mx-auto">
       <p v-if="isLoading && !subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <template v-else-if="!subject">
@@ -931,9 +899,9 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       </template>
 
       <template v-else>
-        <!-- Header -->
+        <!-- Header: the trail says where the subject sits; the study is in the top bar. -->
         <div class="mb-5">
-          <div class="text-xs text-slate-500 mb-1">{{ subject.studyName }} · {{ t('subjectDetail.subTrail') }}</div>
+          <PageHeader :trail="trail" />
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap">
             {{ subject.id }}
             <span v-if="subject.secondaryId" class="text-slate-400 font-normal text-sm">· {{ subject.secondaryId }}</span>
@@ -1533,10 +1501,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
         </div>
 
         <!-- Action row -->
-        <div class="flex items-center justify-between flex-wrap gap-3">
-          <RouterLink to="/subjects" class="text-xs text-slate-500 hover:text-slate-700">
-            ← {{ t('subjectDetail.backToMatrix') }}
-          </RouterLink>
+        <div class="flex items-center justify-end flex-wrap gap-3">
           <div class="flex items-center gap-2">
             <!-- Phase E.6 P5 — per-subject data snapshot (ODM/CSV/PDF). -->
             <SubjectExportButton

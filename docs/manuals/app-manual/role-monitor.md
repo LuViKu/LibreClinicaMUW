@@ -17,8 +17,8 @@ Two powers are the Monitor's alone in the day-to-day flow:
 
 ## Navigation
 
-The Monitor's side navigation is built around oversight, not data entry. From
-the home dashboard and the side rail you can reach:
+The Monitor's navigation is built around oversight, not data entry. From the
+home dashboard and the top bar you can reach:
 
 - **Quelldatenvergleich** (Source Data Verification) — `/sdv` — the Monitor's
   primary surface.

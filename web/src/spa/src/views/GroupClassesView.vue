@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import SideRail from '@/components/SideRail.vue'
+import BuildStudyRail from '@/components/BuildStudyRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
@@ -135,11 +135,7 @@ const visibleRows = computed(() => gc.rows)
 
 <template>
   <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-    </SideRail>
+    <BuildStudyRail />
 
     <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">

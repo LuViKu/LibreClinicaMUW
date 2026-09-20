@@ -17,7 +17,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { listDueVisits, type DueVisit } from '@/api/events'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const { t } = useI18n()
 
@@ -33,7 +32,6 @@ const rows = ref<DueVisit[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-useViewBreadcrumb(computed(() => [{ label: t('dueVisits.title'), to: null }]))
 
 /** Overdue first, then by date. What was missed matters more than what is coming. */
 const sorted = computed(() =>

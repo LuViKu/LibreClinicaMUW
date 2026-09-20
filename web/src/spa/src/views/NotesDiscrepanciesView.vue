@@ -2,7 +2,6 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import SideRail from '@/components/SideRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
@@ -161,31 +160,9 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/sdv" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-          <polyline points="22 4 12 14.01 9 11.01" />
-        </svg>
-        {{ t('nav.sdv') }}
-      </RouterLink>
-      <RouterLink to="/notes" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M4 15a4 4 0 0 0 4 4h12V5a2 2 0 0 0-2-2H8a4 4 0 0 0-4 4z" />
-        </svg>
-        {{ t('nav.notes') }}
-        <StatusPill compact variant="warning" class="ml-auto">{{ notes.openCount }}</StatusPill>
-      </RouterLink>
-      <RouterLink to="/audit-log" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        </svg>
-        {{ t('nav.auditLog') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 px-8 py-6">
+    <div class="max-w-7xl px-8 py-6 mx-auto">
       <div class="mb-5">
         <div class="text-xs text-slate-500 mb-1">{{ t('notes.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('notes.title') }}</h1>

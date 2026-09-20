@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import SideRail from '@/components/SideRail.vue'
+import BuildStudyRail from '@/components/BuildStudyRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
@@ -276,11 +276,7 @@ const visibleRows = computed(() =>
 
 <template>
   <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-    </SideRail>
+    <BuildStudyRail />
 
     <div class="flex-1 max-w-5xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">

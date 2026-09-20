@@ -1,10 +1,7 @@
 {
   "app": {
     "name": "LibreClinica MUW",
-    "tagline": "Clinical study data platform of the Ophthalmology Department",
-    "crumb": {
-      "studyFallback": "Study"
-    }
+    "tagline": "Clinical study data platform of the Ophthalmology Department"
   },
   "nav": {
     "home": "Home",
@@ -35,7 +32,9 @@
       "rolesLabel": "Roles",
       "rolesAriaLabel": "Assigned roles",
       "manual": "Manual",
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "version": "Version {version}",
+      "build": "Build {date} · {hash}"
     },
     "error": {
       "title": "An error occurred",
@@ -51,7 +50,8 @@
     "systemAuditLog": "System audit",
     "retinalParked": "Parked scans",
     "primaryNav": "Primary navigation",
-    "breadcrumbNav": "Breadcrumb"
+    "study": "Active study",
+    "switchStudy": "Switch study"
   },
   "network": {
     "offline": {
@@ -892,6 +892,10 @@
         "summary": "{count} users",
         "description": "Per-site Investigators, Monitors, Data Managers, CRCs."
       }
+    },
+    "rail": {
+      "heading": "Build Study",
+      "study": "Study"
     }
   },
   "groupClasses": {
@@ -3238,7 +3242,7 @@
     "colStatus": "Status",
     "countAria": "{n} due visits"
   },
-  "uploadPortal":   {
+  "uploadPortal": {
     "topbar": {
       "portalLabel": "Upload portal"
     },
@@ -3777,5 +3781,8 @@
       "network": "Could not send the report. Please try again.",
       "recipientNotConfigured": "Bug-report recipient is not configured. Please contact your sysadmin."
     }
+  },
+  "pageHeader": {
+    "trail": "Breadcrumb"
   }
 }

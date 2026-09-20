@@ -36,7 +36,7 @@ import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import type { CrfEntryStatus, CrfItem, CrfItemGroup } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
@@ -51,21 +51,18 @@ const notifications = useNotificationsStore()
 const advanced = useCrfEntryAdvancedStore()
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
-// "<study> > Studienteilnehmer > <subject> > <event> > <crf>".
-useViewBreadcrumb(computed(() => {
+// The ancestors of this form for the page header: register, subject, visit.
+// The form itself is the H1.
+const trail = computed(() => {
   const entry = store.entry
-  if (!entry) return null
-  const crfLabel = store.schema?.name ?? entry.eventLabel
-  const eventLink = entry.studyEventId != null
-    ? `/events/${entry.studyEventId}`
-    : null
-  return [
+  if (!entry) return []
+  const out = [
     { label: t('nav.subjectMatrix'), to: '/subjects' },
     { label: entry.subjectId, to: `/subjects/${encodeURIComponent(entry.subjectId)}` },
-    { label: entry.eventLabel, to: eventLink },
-    { label: crfLabel, to: null },
   ]
-}))
+  if (entry.studyEventId != null) out.push({ label: entry.eventLabel, to: `/events/${entry.studyEventId}` })
+  return out
+})
 const auth = useAuthStore()
 // Pluggable study-module SPI — top-of-form banner slot. Modules use
 // this for AI-auto-populate hints, regimen-specific reminders, etc.
@@ -603,18 +600,7 @@ function onPrefillApply(values: Record<string, string>) {
 <template>
   <div class="flex">
     <SideRail>
-      <RouterLink
-        to="/subjects"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-
-      <div class="mt-4 px-2.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+      <div class="px-2.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
         {{ t('crfEntry.railHeading') }}
       </div>
       <nav class="mt-1 space-y-0.5" v-if="store.schema">
@@ -637,9 +623,7 @@ function onPrefillApply(values: Record<string, string>) {
 
     <div class="flex-1 max-w-3xl xl:max-w-5xl 2xl:max-w-7xl px-8 py-8">
       <div class="mb-6">
-        <div class="text-xs text-slate-500 mb-1" v-if="store.entry">
-          {{ store.entry.subjectId }} · {{ store.entry.eventLabel }}
-        </div>
+        <PageHeader :trail="trail" />
         <div class="flex items-center gap-3 flex-wrap">
           <h1 class="text-xl font-semibold tracking-tight" v-if="store.schema">
             {{ store.schema.name }} <span class="text-slate-400 font-normal text-sm ml-1">{{ store.schema.version }}</span>

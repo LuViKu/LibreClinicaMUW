@@ -113,7 +113,7 @@ async function mountAt(oid: string) {
   const wrapper = mount(StudyParametersEditView, {
     global: {
       plugins: [router, i18n],
-      stubs: { SideRail: true },
+      stubs: { BuildStudyRail: true },
     },
   })
   await flushPromises()

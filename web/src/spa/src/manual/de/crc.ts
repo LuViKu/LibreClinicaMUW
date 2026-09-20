@@ -21,7 +21,7 @@ export const crcDe: ManualChapter = {
       shotPreCaption: 'Der CRC-Startbildschirm — die heutigen Aufgaben und Schnellzugriffe auf Ihre häufigen Arbeitsabläufe.',
       goal: 'Einen Teilnehmer auffinden und sehen, welche seiner Visiten offen, abgeschlossen oder signiert sind.',
       steps: [
-        'Öffnen Sie **Studienteilnehmer** über die Seitennavigation (`/subjects`).',
+        'Öffnen Sie **Studienteilnehmer** über die obere Leiste (`/subjects`).',
         'Nutzen Sie das **Suchfeld**, um nach Teilnehmer-ID zu filtern, oder verwenden Sie die Filter-Chips — **Alle**, **Heute**, **Bereit zum Signieren**, **Offene Visiten**, **Alle abgeschlossen** und **Signiert**.',
         'Lesen Sie die Zeile: Die Spalte **Auge** zeigt das Studienauge (OD / OS / OU), und jede Visitenspalte zeigt ein Status-Pill, mit einer roten Zahl, wenn diese Visite offene Rückfragen hat.',
         'Klicken Sie auf die Teilnehmer-ID oder rechts auf **Öffnen**, um den Teilnehmer zu öffnen.',
@@ -39,7 +39,7 @@ export const crcDe: ManualChapter = {
       shot2Caption: 'Das Aufnahmeformular mit Beispieldaten ausgefüllt, vor dem Speichern.',
       goal: 'Einen neuen Teilnehmer zur aktiven Studie hinzufügen.',
       steps: [
-        'Klicken Sie in der Seitennavigation auf **Add Subject** (Teilnehmer aufnehmen) oder auf der Matrix auf **+** (`/subjects/new`).',
+        'Klicken Sie auf der Startseite auf **Teilnehmer aufnehmen** oder in der Matrix auf **+ Teilnehmer aufnehmen** (`/subjects/new`).',
         'Geben Sie die **Subject ID** (Teilnehmer-ID) ein. Wenn die Studie einen Protokoll-Kurzcode besitzt, ist das Feld vorausgefüllt (z. B. `GA-`). Die Anwendung prüft während der Eingabe die Verfügbarkeit und markiert eine bereits vergebene ID.',
         'Fügen Sie optional eine **Secondary ID** (Sekundär-ID) hinzu. Geben Sie hier **keine** direkten Patientenidentifikatoren ein — das Formular warnt vor personenbezogenen Daten.',
         'Legen Sie das **Aufnahmedatum** fest (darf nicht in der Zukunft liegen) und wählen Sie das **Geschlecht**.',

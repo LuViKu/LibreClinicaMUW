@@ -75,8 +75,8 @@ Administrator's and wider than a Monitor's. Common entry points:
    to find subjects carrying open discrepancies.
 4. For studies with many visits, use the chevron buttons or **Jump to latest**
    to scroll the visit columns; the Subject column stays frozen on the left.
-5. Open **Studien-Statistik** (study metrics) from the side rail for aggregate
-   counts.
+5. Open **Studien-Statistik** (study metrics) with the button beside **Export**
+   for aggregate counts.
 
 ![Subject Matrix](screenshots/data-manager/01-subject-matrix.png)
 

@@ -14,7 +14,6 @@ import enMessages from '@/locales/en.json'
 
 const { listMock } = vi.hoisted(() => ({ listMock: vi.fn() }))
 vi.mock('@/api/events', () => ({ listDueVisits: (...a: unknown[]) => listMock(...a) }))
-vi.mock('@/composables/useViewBreadcrumb', () => ({ useViewBreadcrumb: () => {} }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en: enMessages } })
 

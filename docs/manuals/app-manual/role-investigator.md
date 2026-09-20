@@ -14,7 +14,7 @@ The left side-rail on every screen carries the core links:
 - **Studienteilnehmer** (Subject Matrix) — `/subjects`
 - **Teilnehmer aufnehmen** (Add Subject) — `/subjects/new`
 
-A breadcrumb trail at the top of each page shows where you are, e.g. *Study › Studienteilnehmer › `<Subject-ID>` › `<Visit>`*. Click any crumb to step back. The active study and your role are shown in the page header; if you work in more than one study, switch the active study before you start entering data.
+On pages below the register a trail in the page header names the levels above you, e.g. *Studienteilnehmer › `<Subject-ID>` › `<Visit>`* above a CRF; click any link to step back. The active study is the chip in the top bar; if you work in more than one study, click it to switch before you start entering data.
 
 ## 1. Home
 

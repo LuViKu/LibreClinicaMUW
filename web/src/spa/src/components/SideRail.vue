@@ -7,74 +7,33 @@ import { useI18n } from 'vue-i18n'
  * Slot-based: the parent supplies a tree of `<RouterLink>`s or buttons.
  * Width + background + base padding are fixed here so every workflow uses
  * the same rail dimensions. Active-state visuals are owned by the link
- * itself (use `:class` + `router-link-active`).
+ * itself (use `:class` + `aria-current`).
  *
- * Phase E.6 (2026-06-09) — sticky behaviour + bottom version/build line.
- *   - The rail now positions itself `sticky top-14` (top-bar h-14 = 56px)
- *     so navigation stays visible while the main scrolls.
- *   - Vite injects __APP_VERSION__ / __BUILD_HASH__ / __BUILD_DATE__ via
- *     defines (see vite.config.ts); we render them in a low-visual-weight
- *     footer pinned to the bottom of the rail.
- *   - An optional `metrics` slot anchors a divider + custom action
- *     (e.g. "Studien-Statistik Details") right above the version line.
+ * A rail is mounted only where it has a section to navigate — the
+ * Studienaufbau pages ({@link BuildStudyRail}) and the CRF entry's section
+ * table of contents. It used to sit on twenty-four views, most of them
+ * holding one or two links the top bar already carried, and it doubled as
+ * the home of the version/build line; that line lives in the profile menu
+ * now, so a page without a rail no longer lacks it.
+ *
+ * Sticky under the top bar (h-14 = 56px) so the navigation stays visible
+ * while the main column scrolls.
  */
 const { t } = useI18n()
-const appVersion = __APP_VERSION__
-const buildHash = __BUILD_HASH__
-// The define ships ISO yyyy-MM-dd; render it as DD-MM-YYYY (e.g. 25-06-2026).
-const rawBuildDate = __BUILD_DATE__
-const buildDate = /^\d{4}-\d{2}-\d{2}$/.test(rawBuildDate)
-  ? rawBuildDate.split('-').reverse().join('-')
-  : rawBuildDate
 </script>
 
 <template>
-  <!-- Complementary region (implicit for <aside>). It previously carried
-       role="navigation", which is not an allowed role on <aside> (axe
-       aria-allowed-role) AND created a second navigation landmark alongside
-       the inner <nav> (axe landmark-unique). The <nav> below is the single
-       navigation landmark; the <aside> stays complementary. -->
+  <!-- Complementary region (implicit for <aside>). The inner <nav> is the
+       single navigation landmark; the <aside> stays complementary (axe
+       aria-allowed-role / landmark-unique). -->
   <aside
-    class="w-56 shrink-0 border-r border-slate-200 bg-slate-50 text-sm sticky top-14 self-start flex flex-col"
+    class="w-56 shrink-0 border-r border-slate-200 bg-slate-50 text-sm sticky top-14 self-start"
     style="min-height: calc(100vh - 3.5rem);"
   >
-    <div class="flex-1 px-3 py-4 overflow-y-auto">
+    <div class="px-3 py-4 overflow-y-auto">
       <nav class="space-y-0.5" :aria-label="t('a11y.sectionNavigation')">
         <slot />
       </nav>
-
-      <template v-if="$slots.footer">
-        <hr class="my-4 border-slate-200" />
-        <div class="px-1">
-          <slot name="footer" />
-        </div>
-      </template>
-
-      <template v-if="$slots.metrics">
-        <hr class="my-4 border-slate-200" />
-        <div class="px-1">
-          <slot name="metrics" />
-        </div>
-      </template>
-    </div>
-
-    <!-- Phase E.6 — version + build pinned to the bottom of the rail.
-         JetBrains-Mono fallback chain keeps the build hash monospace
-         even when the bundled font hasn't been pre-loaded yet. -->
-    <div
-      class="border-t border-slate-200 bg-slate-50/80 px-4 py-3"
-      data-testid="siderail-version"
-    >
-      <div class="text-[11px] text-slate-600 font-medium">
-        LibreClinica<span class="text-muw-coral-700 ml-1">MUW</span>
-        <span class="ml-1 text-slate-500 font-normal">v{{ appVersion }}</span>
-      </div>
-      <div
-        class="mt-1 text-[10px] text-slate-400"
-        style="font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;"
-      >
-        Build {{ buildDate }} · {{ buildHash }}
-      </div>
     </div>
   </aside>
 </template>

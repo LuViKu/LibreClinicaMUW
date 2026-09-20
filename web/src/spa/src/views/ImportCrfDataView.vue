@@ -3,18 +3,15 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 
-import SideRail from '@/components/SideRail.vue'
 import Wizard from '@/components/Wizard.vue'
 import type { WizardStep } from '@/components/Wizard.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DiffCard from '@/components/DiffCard.vue'
 import DenseTable from '@/components/DenseTable.vue'
 
-import { useAuthStore } from '@/stores/auth'
 import { useImportCrfStore } from '@/stores/importCrf'
 import type { ImportCrfPreviewRow, ImportOverwriteMode } from '@/types/importCrf'
 
-const auth = useAuthStore()
 
 const { t } = useI18n()
 
@@ -98,35 +95,9 @@ function variantFor(s: ImportCrfPreviewRow['status']): 'success' | 'warning' | '
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M3 7h18M3 12h18M3 17h12" />
-        </svg>
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-      <!-- 2026-06-23 user-feedback round — gate on Administrator;
-           /manage-users is Administrator-only per router meta. -->
-      <RouterLink
-        v-if="auth.user?.role === 'Administrator'"
-        to="/manage-users"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-        {{ t('nav.manageUsers') }}
-      </RouterLink>
-      <RouterLink to="/import-crf-data" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8 12 3 7 8M12 3v15" />
-        </svg>
-        {{ t('nav.importCrfData') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-5xl px-8 py-6">
+    <div class="max-w-5xl px-8 py-6 mx-auto">
       <div class="mb-5">
         <div class="text-xs text-slate-500 mb-1">{{ t('importCrf.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('importCrf.title') }}</h1>
