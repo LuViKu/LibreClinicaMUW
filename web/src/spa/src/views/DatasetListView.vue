@@ -17,7 +17,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
 import { useConfirm } from '@/composables/useConfirm'
@@ -246,37 +245,9 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M3 7h18M3 12h18M3 17h12" />
-        </svg>
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-      <!-- 2026-06-23 user-feedback round — gate on Administrator;
-           /manage-users is Administrator-only per router meta, so
-           rendering this for other roles meant a one-click bounce
-           to /home. -->
-      <RouterLink
-        v-if="auth.user?.role === 'Administrator'"
-        to="/manage-users"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-        {{ t('nav.manageUsers') }}
-      </RouterLink>
-      <RouterLink to="/export" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M12 3v12M6 9l6 6 6-6M5 21h14" />
-        </svg>
-        {{ t('nav.dataExport') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-5xl px-8 py-8">
+    <div class="max-w-7xl px-8 py-8 mx-auto">
       <div class="mb-6 flex items-start justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('dataExport.subTrail') }}</div>

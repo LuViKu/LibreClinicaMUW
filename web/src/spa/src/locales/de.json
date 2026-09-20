@@ -1,10 +1,7 @@
 {
   "app": {
     "name": "LibreClinica MUW",
-    "tagline": "Klinische Studiendaten-Plattform der Augenklinik",
-    "crumb": {
-      "studyFallback": "Studie"
-    }
+    "tagline": "Klinische Studiendaten-Plattform der Augenklinik"
   },
   "nav": {
     "home": "Start",
@@ -35,7 +32,9 @@
       "rolesLabel": "Rollen",
       "rolesAriaLabel": "Zugewiesene Rollen",
       "manual": "Handbuch",
-      "signOut": "Abmelden"
+      "signOut": "Abmelden",
+      "version": "Version {version}",
+      "build": "Build {date} · {hash}"
     },
     "error": {
       "title": "Ein Fehler ist aufgetreten",
@@ -51,7 +50,8 @@
     "systemAuditLog": "System-Audit",
     "retinalParked": "Geparkte Scans",
     "primaryNav": "Hauptnavigation",
-    "breadcrumbNav": "Pfad"
+    "study": "Aktive Studie",
+    "switchStudy": "Studie wechseln"
   },
   "network": {
     "offline": {
@@ -892,6 +892,10 @@
         "summary": "{count} Personen",
         "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs."
       }
+    },
+    "rail": {
+      "heading": "Studienaufbau",
+      "study": "Studie"
     }
   },
   "groupClasses": {
@@ -3238,7 +3242,7 @@
     "colStatus": "Status",
     "countAria": "{n} fällige Visiten"
   },
-  "uploadPortal":   {
+  "uploadPortal": {
     "topbar": {
       "portalLabel": "Upload-Portal"
     },
@@ -3777,5 +3781,8 @@
       "network": "Fehler beim Versand. Bitte versuchen Sie es erneut.",
       "recipientNotConfigured": "Bug-Report-Empfänger ist nicht konfiguriert. Bitte den Sysadmin kontaktieren."
     }
+  },
+  "pageHeader": {
+    "trail": "Pfad"
   }
 }

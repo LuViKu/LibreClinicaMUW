@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
+import BuildStudyRail from '@/components/BuildStudyRail.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
@@ -179,10 +179,10 @@ const enumLabel = (group: string, value: string) =>
 </script>
 
 <template>
-  <div class="grid grid-cols-[260px_1fr] min-h-screen bg-white">
-    <SideRail />
+  <div class="flex">
+    <BuildStudyRail />
 
-    <div class="px-6 py-5">
+    <div class="flex-1 max-w-4xl px-8 py-6">
       <div class="flex items-baseline justify-between mb-5">
         <h1 class="text-base font-medium text-slate-800">
           {{ t('studyParameters.title') }}

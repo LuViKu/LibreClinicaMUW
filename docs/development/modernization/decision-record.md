@@ -712,6 +712,22 @@ The second problem is the one that decided the shape. A camera that sits in the 
 
 **Reversible** — routes redirect, the old controllers and views are untouched, the changesets are additive, and the sidecar endpoint is off at `DICOM_SCP_DESCRIBE_PORT=0`. The pseudonymisation is not reversible for a file that went through it, which is the intent.
 
+## DR-030 — One landmark per concern: top bar, page trail, section rail
+
+**Status:** Accepted (2026-09-20). Lands with the navigation-chrome PR.
+
+**Context.** The Phase E shell grew three ways of saying where the operator is, and they had drifted into each other. The top bar carried the brand, the role's primary navigation (added with the home dashboard) *and* a breadcrumb whose root was the study name — in one type size, on one line — so on the subject page the word *Studienteilnehmer* appeared as a highlighted pill and again as a crumb 200 px later, the study name read as a sixth destination, and on CRF entry the six-level trail wrapped into two-line crumbs at 1440 px while folding away neatly below 1024 px (the header was cleaner on a small screen than on a laptop). The trail fell back to `route.meta.title` on 34 of 41 routes, which is English on a German-first UI. Each page printed its own eyebrow line as well, and the event page a second, clickable in-page trail plus a "back" link: five ways back to the subject on one screen. The side rail, meanwhile, was mounted on 24 views; 14 of them held only links the top bar already carried, one was empty, and two had a job (the CRF entry's section table of contents with fill badges; the subject matrix's statistics button). It cost 224 px on every page it sat on — the Datasets table was clipped beside a rail holding three links — and it came and went between adjacent pages of one workflow, shifting the content column as the operator clicked through.
+
+**Decision.** Three rules, one landmark each.
+
+1. **The top bar is brand, primary navigation and user — nothing else.** The highlighted pill is the section indicator. The active study is a chip beside the user menu that leads to the study picker; the version/build line moved from the rail's footer into the profile menu, so a page without a rail is not a page without a version. The breadcrumb, its store and its composable are gone.
+2. **A trail only where a hierarchy exists below the section, rendered in the page header** (`PageHeader`). It lists the *ancestors* as links — `Studienteilnehmer › M-007 › V1 Inclusion` above a CRF — and never the page itself: the H1 is the page. Labels come from the views (German), never from route metadata. Flat pages get no trail; the pill and the heading say where they are. The in-page duplicates (event mini-trail, "Zurück zum Probanden", the subject page's "Zurück zur Probandenmatrix") are removed.
+3. **A side rail only where it has a section to navigate.** Two remain: the CRF entry's table of contents, and a real **Studienaufbau rail** (`BuildStudyRail`) listing every build page — tracker, study, parameters, CRFs, visits, groups, rules, sites, modalities, users — filtered by role, current page highlighted. The other 21 views are single-column, centred at the width the page needs (Datasets widened to what its table needs). The subject matrix's statistics button and study facts moved into its header.
+
+**Consequences.** One `<nav>` in the top bar, at most one trail and one section rail per page (each a labelled landmark, which is what the a11y gate checks); page geometry no longer jumps between adjacent pages; the header stops competing with itself for width at laptop sizes; ~24 views lost a block each. The Studienaufbau rail is the pattern for any future section with several pages; a page that wants a rail has to be able to say what section it navigates.
+
+**Reversible** — the components are additive and the views are the only consumers; restoring a rail on a view is one block. The breadcrumb store is deleted rather than kept dormant, because a second way to publish a trail is how the drift started.
+
 ---
 
 ## Future decisions (open)

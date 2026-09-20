@@ -46,14 +46,20 @@ Every page shares the same frame:
 
 - **Top bar** — the brand (click it to return to **Start**), the **primary
   navigation** — your role's main destinations, e.g. *Studienteilnehmer*,
-  *Rückfragen*, *Fällige Visiten* — the active study, and your name with a
-  **role chip** (colour-coded per role) that opens your profile menu with the
-  manual and **Log out**. On narrow screens the navigation moves into that
-  menu.
-- **Side rail** — on the working screens, the links local to that workflow
-  (for example Build Study's steps).
-- **Breadcrumbs** — show where you are within a multi-step flow (e.g. Subject →
-  Event → CRF).
+  *Rückfragen*, *Fällige Visiten*, with the current one highlighted — and on
+  the right the **active study** as a chip (click it to switch study) and your
+  name with a **role chip** that opens your profile menu with the manual, the
+  version line and **Log out**. On narrow screens the navigation moves into
+  that menu.
+- **Side rail** — only where a section has several pages: in **Studienaufbau**
+  it lists every build step (CRFs, visits, groups, rules, sites, modalities,
+  users) with the current one highlighted; on CRF entry it lists the form's
+  sections with their fill state. Every other page is single-column.
+- **Trail** (breadcrumbs) — in the page header, only on pages below a section,
+  naming the levels above as links (e.g. *Studienteilnehmer › M-007 › V1
+  Inclusion* above a CRF). The page itself is the heading, never a crumb; flat
+  pages such as *Rückfragen* have no trail — the highlighted destination and
+  the heading say where you are.
 
 The **home dashboard** (*Start*) opens with **your work**: counted queues such as
 today's open visits, subjects ready to sign, open queries, files in the inbox

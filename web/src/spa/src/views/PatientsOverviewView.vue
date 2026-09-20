@@ -13,9 +13,7 @@
  */
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import SkeletonRow from '@/components/SkeletonRow.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -107,34 +105,9 @@ function rowAriaLabel(p: PatientListItem): string {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink
-        to="/"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        {{ t('nav.home') }}
-      </RouterLink>
-      <RouterLink
-        to="/patients"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium"
-        aria-current="page"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-        {{ t('nav.patientsOverview') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 px-8 py-6 max-w-[1200px]">
+    <div class="px-8 py-6 max-w-[1200px] mx-auto">
       <div class="flex items-end justify-between mb-5">
         <div>
           <div class="text-xs text-slate-500 mb-1">

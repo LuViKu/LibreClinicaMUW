@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
-// Same Vite-injected build constants the SideRail footer uses.
+// Same Vite-injected build constants the profile menu shows.
 // vite.config.ts derives these env-first (APP_VERSION / BUILD_HASH /
 // BUILD_DATE) so the release-image workflow can stamp the real
 // release tag, with package.json + `git rev-parse` fallbacks for

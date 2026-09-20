@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import SideRail from '@/components/SideRail.vue'
+import BuildStudyRail from '@/components/BuildStudyRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
@@ -147,29 +147,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
 
 <template>
   <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M3 7h18M3 12h18M3 17h12" />
-        </svg>
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-      <RouterLink to="/manage-users" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-        {{ t('nav.manageUsers') }}
-        <StatusPill v-if="users.pendingInviteCount > 0" compact variant="warning" class="ml-auto">
-          {{ users.pendingInviteCount }}
-        </StatusPill>
-      </RouterLink>
-      <RouterLink to="/import-crf-data" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8 12 3 7 8M12 3v15" />
-        </svg>
-        {{ t('nav.importCrfData') }}
-      </RouterLink>
-    </SideRail>
+    <BuildStudyRail />
 
     <div class="flex-1 px-8 py-6">
       <div class="flex items-end justify-between mb-4">

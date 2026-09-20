@@ -20,7 +20,7 @@ export const investigatorDe: ManualChapter = {
       steps: [
         'Nach der Anmeldung gelangen Sie auf den **Start** (Home)-Bildschirm unter `/`.',
         'Nutzen Sie die Operator-Karten, um direkt zu gefilterten Arbeitslisten zu springen — zum Beispiel verlinken *Heute* (heutige offene Visiten) und *Signaturfreigabe* (signaturbereite Teilnehmer) direkt in das Studienteilnehmer-Raster (Subject Matrix) mit dem bereits angewendeten Filter.',
-        'Über die Seitenleiste erreichen Sie jederzeit das Studienteilnehmer-Raster oder das Formular **Teilnehmer aufnehmen** (Add Subject).',
+        'Über die obere Leiste erreichen Sie jederzeit das Studienteilnehmer-Raster; **Teilnehmer aufnehmen** (Add Subject) steht dort als Schaltfläche.',
       ],
     },
     {
@@ -48,7 +48,7 @@ export const investigatorDe: ManualChapter = {
       shot2Caption: 'Das Aufnahmeformular mit Beispieldaten ausgefüllt, vor dem Speichern.',
       goal: 'Nehmen Sie einen neuen Studienteilnehmer auf.',
       steps: [
-        'Öffnen Sie **Teilnehmer aufnehmen** (`/subjects/new`) über die Seitenleiste oder die Schaltfläche im Studienteilnehmer-Raster.',
+        'Öffnen Sie **Teilnehmer aufnehmen** (`/subjects/new`) über die Schaltfläche im Studienteilnehmer-Raster oder die Karte auf der Startseite.',
         'Füllen Sie **Identifikation** aus: **Studien-Teilnehmer-ID** (erforderlich; kann mit dem Protokoll-Kurzcode vorbelegt sein, z. B. `GA-…`) und die optionale **Sekundär-ID**. *Geben Sie niemals identifizierende Daten — keinen Namen, keine Krankenhaus-ID, keine Sozialversicherungsnummer — in die Sekundär-ID ein.*',
         'Füllen Sie **Aufnahme** aus: **Aufnahmedatum** (standardmäßig heute, darf nicht in der Zukunft liegen) und **Geschlecht** (wählen Sie eine der vier Schaltflächen).',
         'Unter **Ophthalmology** können Sie optional das **Studienauge** (*nicht gesetzt* / OD / OS / OU) und ein **Screening-Datum** festlegen. Das Studienauge bestimmt die Augen-Spalte im Raster und wie die Augenuntersuchungs-CRFs dargestellt werden.',

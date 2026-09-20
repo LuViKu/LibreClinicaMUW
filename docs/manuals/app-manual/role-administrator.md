@@ -264,14 +264,15 @@ Standorte, Datenexport and the Audit Trail from any screen; the
 
 **Notes:** Subject detail is open to Investigator and Administrator. Study creation, identity edit and parameters edit are **Administrator-only** and re-checked on the backend (403 on denial). Saving the study identity refreshes the breadcrumb if the edited study is the active one. Subject identity edits, eye transitions, event cancellations and signatures are all recorded in the audit trail.
 
-## 18. Parked Scans (cross-study retinal jobs)
+## 18. Eingang (all inbound files)
 
-**Goal:** Review retinal inference jobs that were uploaded without a visit and are waiting to be assigned to a subject.
+**Goal:** Review files that arrived from a camera, the upload page or a C-STORE and still need a visit, and file or dismiss them.
 
 **Steps:**
-1. Open **Geparkte Scans** (Parked Scans, `/retinal/parked`) — a sysadmin-only, cross-study overview.
-2. Each row shows the **Job**, **PatientId**, **Auge** (eye), **Task** and **Hochgeladen** (upload time). Select rows and use the row **Aktion** to assign (bind) a parked scan to a subject's visit, or **Neu laden** (Reload) to refresh.
+1. Open **Eingang** (`/ingest-inbox`) — the cross-study queue of every inbound file: OCT scans, DICOM images, fundus photos.
+2. Filter by kind with the chips (**OCT-Scan**, **DICOM-Bild**, **Fundusbild**, **Andere Datei**), by status, or by a label/filename fragment. Each card shows the preview, the patient-ID hint, the eye, the acquisition date and where the file came from.
+3. **Zuordnen …** files one card (or a selection) against a subject's visit; **Verwerfen** marks a file as not study data with a reason. **Hochladen** opens the staff uploader for bringing files in yourself.
 
-![Parked scans — the cross-study queue of unassigned retinal inference jobs](screenshots/administrator/22-parked-scans.png)
+![Ingest inbox — every inbound file waiting for a visit](screenshots/administrator/22-ingest-inbox.png)
 
-**Notes:** Administrator-only. Parked jobs have no study-subject linkage yet, which is why they surface here rather than on a per-subject page.
+**Notes:** Data Manager, Investigator and Administrator may reconcile. Binding a file ticks the visit's "performed" checklist item; unbinding takes the tick back. Dismissed files are deleted by the retention sweep after 30 days.

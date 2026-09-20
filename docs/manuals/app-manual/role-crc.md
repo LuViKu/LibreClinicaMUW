@@ -27,8 +27,8 @@ Your side navigation centres on subject work:
 - **Add Subject** (`/subjects/new`) — enrol a new subject into the active study.
 
 From the matrix you drill into a subject, then into a visit (event), then into an
-individual CRF. The **breadcrumbs** at the top of each page show that trail
-(Studienteilnehmer → subject → event → CRF) so you can step back up at any point.
+individual CRF. The **trail** in the page header names the levels above you
+(Studienteilnehmer › subject › visit) as links, so you can step back up at any point.
 
 Everything you do is scoped to the **study (and site)** you picked at login. If you
 work in more than one study, switch from the top bar.
