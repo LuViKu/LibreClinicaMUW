@@ -43,16 +43,19 @@ Administrator's and wider than a Monitor's. Common entry points:
 **Steps**
 
 1. After login (and picking a study) you land on the home dashboard.
-2. Review the summary of notes and discrepancies assigned to you.
-3. Use the side navigation or the dashboard links to start a task — most build
-   work begins at **Build Study**.
+2. **Ihre Aufgaben** shows your queues with their counts — open queries, files
+   waiting in the **Eingang**, and **Fällige Visiten**.
+3. Below, **In &lt;study&gt;** lists the workspaces — most build work begins at
+   **Studienaufbau** (Build Study). The top bar's primary navigation reaches
+   Studienaufbau, the Eingang, Datenexport and Rückfragen from any screen.
 
 ![Data Manager home dashboard](screenshots/data-manager/00-home.png)
 
 **Notes**
 
-- The top bar shows the active study/site, your name with a colour-coded **role
-  chip**, the language indicator, and **Log out**.
+- The top bar shows the primary navigation, the active study, and your name
+  with a colour-coded **role chip** that opens the profile menu (manual, **Log
+  out**).
 - The interface is German-first for clinical staff (e.g. *Modalitäten*,
   *Übernehmen*); some administrative screens remain English.
 
@@ -72,8 +75,8 @@ Administrator's and wider than a Monitor's. Common entry points:
    to find subjects carrying open discrepancies.
 4. For studies with many visits, use the chevron buttons or **Jump to latest**
    to scroll the visit columns; the Subject column stays frozen on the left.
-5. Open **Studien-Statistik** (study metrics) from the side rail for aggregate
-   counts.
+5. Open **Studien-Statistik** (study metrics) with the button beside **Export**
+   for aggregate counts.
 
 ![Subject Matrix](screenshots/data-manager/01-subject-matrix.png)
 
@@ -387,3 +390,26 @@ item.
   **Investigator**; the backend is the authoritative gate.
 - Every resolution is captured in the audit trail with its reason — DDE is a
   data-quality control, so treat the reason field as part of the record.
+
+## 14. Uploading acquisitions (Eingang → Hochladen)
+
+The **Eingang** lists files that arrived from a camera or the upload page and
+still need a visit. Since the combined uploader (DR-029) you can also bring
+files in from here: **Hochladen** opens the same workbench the unauthenticated
+page at `/app/upload` uses, in staff mode — the upload is on your record, and the
+visits offered are those of the studies you can see.
+
+1. Under **Visite für diese Dateien** pick the visit once: from the day's list,
+   via **Patient suchen**, or by typing the label and accepting the visit
+   offered.
+2. Drop the files — a Spectralis `.e2e`, Clarus/PlexElite `.dcm` exports, Remidio
+   JPEG/PNG, all at once. Each row names what the file is; a photo asks for the
+   eye, an OCT scan and a DICOM file say it themselves.
+3. **Bestätigen** rows one by one or **N bestätigen** for the batch. A row without
+   a visit can go to the Eingang with **Ohne Visite hochladen**; a sent row can be
+   taken back with **Rückgängig** for a minute.
+
+A DICOM export is pseudonymised before it is kept: the visit's subject label
+replaces the patient name and ID from the hospital system, the date of birth and
+staff names are cleared. If the DICOM service is not running the page refuses
+`.dcm` files rather than keeping them unchanged.

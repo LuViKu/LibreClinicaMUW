@@ -1,10 +1,7 @@
 {
   "app": {
     "name": "LibreClinica MUW",
-    "tagline": "Klinische Studiendaten-Plattform der Augenklinik",
-    "crumb": {
-      "studyFallback": "Studie"
-    }
+    "tagline": "Klinische Studiendaten-Plattform der Augenklinik"
   },
   "nav": {
     "home": "Start",
@@ -20,7 +17,10 @@
     "dataExport": "Datenexport",
     "changePassword": "Passwort ändern",
     "patientsOverview": "Patientenübersicht",
-    "modalities": "Modalitäten"
+    "modalities": "Modalitäten",
+    "dueVisits": "Fällige Visiten",
+    "ingestInbox": "Eingang",
+    "sites": "Standorte"
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
@@ -32,7 +32,9 @@
       "rolesLabel": "Rollen",
       "rolesAriaLabel": "Zugewiesene Rollen",
       "manual": "Handbuch",
-      "signOut": "Abmelden"
+      "signOut": "Abmelden",
+      "version": "Version {version}",
+      "build": "Build {date} · {hash}"
     },
     "error": {
       "title": "Ein Fehler ist aufgetreten",
@@ -46,7 +48,10 @@
       "queuedListTitle": "Weitere Fehler"
     },
     "systemAuditLog": "System-Audit",
-    "retinalParked": "Geparkte Scans"
+    "retinalParked": "Geparkte Scans",
+    "primaryNav": "Hauptnavigation",
+    "study": "Aktive Studie",
+    "switchStudy": "Studie wechseln"
   },
   "network": {
     "offline": {
@@ -74,65 +79,77 @@
     "cards": {
       "patientsOverview": {
         "title": "Patientenübersicht",
-        "description": "Studienübergreifende Sicht auf alle erreichbaren Patient/innen."
+        "description": "Alle Patientinnen und Patienten, die Sie studienübergreifend sehen dürfen."
       },
       "modalities": {
         "title": "Modalitäten",
-        "description": "Untersuchungsmodalitäten und ihre Item-OIDs verwalten."
+        "description": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen."
       }
     },
     "investigator": {
       "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
-      "subjectMatrixDesc": "Standortbezogene Teilnehmerübersicht mit Visiten-Status. Suchen, filtern, neue Visite planen, Teilnehmer signieren.",
-      "addSubjectDesc": "Studienteilnehmer/-in aufnehmen. PHI-bewusste Validierung, Geschlechtsauswahl, drei Speichermodi.",
+      "subjectMatrixDesc": "Teilnehmer finden, Visiten öffnen, Daten eingeben.",
+      "addSubjectDesc": "Eine neue Teilnehmerin oder einen neuen Teilnehmer in die Studie aufnehmen.",
       "signQueueTitle": "Signatur ausstehend",
-      "signQueueDesc": "Teilnehmer mit abgeschlossenen Visiten zur E-Signatur. 21 CFR Part 11 §11.50 Attestierung.",
+      "signQueueDesc": "Abgeschlossene Visiten prüfen und elektronisch signieren.",
       "todaysCrfsTitle": "Heutige offene CRFs",
-      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant.",
+      "todaysCrfsDesc": "Visiten, die heute anstehen oder gerade in der Eingabe sind.",
       "openQueriesTitle": "Meine Rückfragen",
-      "openQueriesDesc": "Mir zugewiesene Rückfragen. Antwort aus der CRF-Eingabe heraus."
+      "openQueriesDesc": "Mir zugewiesene Rückfragen. Antwort aus der CRF-Eingabe heraus.",
+      "todaysCrfsCountAria": "{n} Visiten heute offen",
+      "signQueueCountAria": "{n} Teilnehmer zur Signatur"
     },
     "monitor": {
       "sectionLabel": "Arbeitsabläufe Monitor/-in",
-      "subjectMatrixDesc": "Teilnehmende und CRFs lesend einsehen. CRF öffnen, Daten prüfen und Rückfragen anlegen.",
-      "sdvDesc": "Abgeschlossene CRFs aller Teilnehmer mit Quelldatenanforderung. Stapel-Verifikation, inline-Rückfragen.",
+      "subjectMatrixDesc": "Teilnehmende und CRFs lesen, Rückfragen anlegen.",
+      "sdvDesc": "Abgeschlossene CRFs mit den Quelldaten abgleichen.",
       "sdvBadgeAria": "{n} CRFs warten auf Quelldatenvergleich",
-      "openQueriesDesc": "Studienweite Rückfragen + Anmerkungen. Filter nach Status / Art / Zuweisung.",
+      "openQueriesDesc": "Offene Rückfragen beantworten oder neue stellen.",
       "openQueriesBadgeAria": "{n} offene Rückfragen",
-      "auditLogDesc": "Lückenlose Zeitleiste mit Diff-Karten bei Änderungsgründen. Filter nach Akteur / Ereignisart / Teilnehmer."
+      "auditLogDesc": "Nachvollziehen, wer wann was geändert hat."
     },
     "dataManager": {
       "sectionLabel": "Arbeitsabläufe Datenmanager/-in",
-      "buildStudyDesc": "Sieben-Schritt-Setup mit Fortschrittsbalken und Status je Aufgabe.",
-      "manageUsersDesc": "Nutzerrollen + Standort + Anmeldemethode. Offene Einladungen.",
+      "buildStudyDesc": "Visiten, CRFs und Regeln der Studie einrichten.",
+      "manageUsersDesc": "Konten anlegen, Rollen zuweisen, Einladungen nachhalten.",
       "pendingInvitesBadgeAria": "{n} offene Einladungen",
-      "openQueriesDesc": "Offene Rückfragen an allen Standorten.",
-      "auditLogDesc": "Audit-Trail mit Diff-Karten.",
-      "importCrfDesc": "Mehrstufiger Assistent: Hochladen → Zuordnen → Vorschau & lösen → Übernehmen.",
-      "rulesDesc": "Validierungs- und Workflow-Regeln zu Event-CRFs.",
+      "openQueriesDesc": "Offene Rückfragen an allen Standorten beantworten.",
+      "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
+      "importCrfDesc": "CRF-Daten aus einer Datei in die Studie übernehmen.",
+      "rulesDesc": "Prüf- und Ablaufregeln für die CRFs pflegen.",
       "dataExportTitle": "Datenexport",
-      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — ODM, CSV, TSV, Excel, SAS oder SPSS exportieren und generierte Dateien herunterladen."
+      "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen."
     },
     "administrator": {
       "globalSectionLabel": "Plattformweite Aktionen",
       "studyScopedLabel": "In {study}",
       "sectionLabel": "Arbeitsabläufe Administrator/-in",
-      "manageUsersDesc": "Nutzerkonten, Rollenzuweisungen je Studie, offene Einladungen, Passwort-Rücksetzung.",
+      "manageUsersDesc": "Konten anlegen, Rollen je Studie zuweisen, Einladungen nachhalten, Passwörter zurücksetzen.",
       "pendingInvitesBadgeAria": "{n} offene Einladungen",
       "editStudyTitle": "Studienidentität bearbeiten",
-      "editStudyDesc": "Studienname, Sponsor, Protokollnummer, Zusammenfassung, Daten.",
+      "editStudyDesc": "Name, Sponsor, Protokoll und Laufzeit der Studie bearbeiten.",
       "createStudyTitle": "Neue Studie anlegen",
-      "createStudyDesc": "Top-Level-Studie erstellen. Sie werden automatisch als Studien-Koordinator/-in zugewiesen.",
+      "createStudyDesc": "Eine neue Studie anlegen; Sie werden ihr als Studienleitung zugewiesen.",
       "sitesTitle": "Standorte verwalten",
-      "sitesDesc": "Standortidentität + Aktivierung + Nutzerrollen je Standort.",
-      "auditLogDesc": "Plattform-Audit-Trail mit Diff-Karten bei jeder Änderung.",
+      "sitesDesc": "Standorte anlegen, aktivieren und Rollen je Standort vergeben.",
+      "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
       "dataExportTitle": "Datenexport",
-      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — Exporte starten und generierte Dateien herunterladen.",
-      "modalitiesDesc": "Untersuchungsmodalitäten + zugehörige eye-spezifische Item-OIDs verwalten."
+      "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen.",
+      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
-    "switchStudyDesc": "Andere Studie auswählen, der Sie zugeordnet sind. Nur Ihre zugeordneten Studien werden angezeigt."
+    "switchStudyDesc": "In eine andere Ihrer Studien wechseln.",
+    "greeting": "Willkommen, {name}",
+    "greetingPlain": "Willkommen",
+    "sections": {
+      "queues": "Ihre Aufgaben",
+      "study": "In {study}",
+      "platform": "Plattform"
+    },
+    "queue": {
+      "loading": "Anzahl wird geladen"
+    }
   },
   "common": {
     "actions": "Aktionen",
@@ -840,13 +857,45 @@
       "success": "Schritt als abgeschlossen markiert."
     },
     "task": {
-      "create-study": { "title": "Studie anlegen", "summary": "{count} aktiv", "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer." },
-      "crf":          { "title": "CRFs gestalten", "summary": "{count} CRFs", "description": "Formularbibliothek: Item-Raster, Antwortsätze, Wiederholungsgruppen." },
-      "events":       { "title": "Visiten definieren", "summary": "{count} Visiten", "description": "Visitenplan mit CRF-Zuordnung + SDV-Anforderung pro Visite." },
-      "groups":       { "title": "Teilnehmergruppen", "summary": "{count} Gruppen", "description": "Randomisierungsarme + Stratifizierungsregeln." },
-      "rules":        { "title": "Validierungsregeln", "summary": "{count} Regeln", "description": "Feld- und formularübergreifende Prädikate mit Aktionstypen." },
-      "sites":        { "title": "Standorte", "summary": "{count} Standorte", "description": "Pro Standort PI, Anschrift, Rekrutierungs-Obergrenze." },
-      "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
+      "create-study": {
+        "title": "Studie anlegen",
+        "summary": "{count} aktiv",
+        "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer."
+      },
+      "crf": {
+        "title": "CRFs gestalten",
+        "summary": "{count} CRFs",
+        "description": "Formularbibliothek: Item-Raster, Antwortsätze, Wiederholungsgruppen."
+      },
+      "events": {
+        "title": "Visiten definieren",
+        "summary": "{count} Visiten",
+        "description": "Visitenplan mit CRF-Zuordnung + SDV-Anforderung pro Visite."
+      },
+      "groups": {
+        "title": "Teilnehmergruppen",
+        "summary": "{count} Gruppen",
+        "description": "Randomisierungsarme + Stratifizierungsregeln."
+      },
+      "rules": {
+        "title": "Validierungsregeln",
+        "summary": "{count} Regeln",
+        "description": "Feld- und formularübergreifende Prädikate mit Aktionstypen."
+      },
+      "sites": {
+        "title": "Standorte",
+        "summary": "{count} Standorte",
+        "description": "Pro Standort PI, Anschrift, Rekrutierungs-Obergrenze."
+      },
+      "users": {
+        "title": "Nutzer/-innen",
+        "summary": "{count} Personen",
+        "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs."
+      }
+    },
+    "rail": {
+      "heading": "Studienaufbau",
+      "study": "Studie"
     }
   },
   "groupClasses": {
@@ -1399,17 +1448,50 @@
         "primitives": "Primitive Items",
         "presets": "Presets",
         "prim": {
-          "ST": { "label": "Text", "description": "Einzeiliger oder mehrzeiliger Text." },
-          "INT": { "label": "Ganzzahl", "description": "Integer-Wert ohne Nachkommastellen." },
-          "REAL": { "label": "Reelle Zahl", "description": "Numerischer Wert mit Nachkommastellen." },
-          "DATE": { "label": "Datum", "description": "Vollständiges Datum (TT.MM.JJJJ)." },
-          "BL": { "label": "Boolean", "description": "Ja / Nein als einzelne Checkbox." },
-          "TRISTATE_REASON": { "label": "Ja / Nein / Unbekannt + Grund", "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld." },
-          "PDATE": { "label": "Teildatum", "description": "Jahr oder Monat und Jahr." },
-          "CHOICE_SINGLE": { "label": "Auswahlliste", "description": "Einfachauswahl aus eigenen Optionen." },
-          "CHOICE_MULTI": { "label": "Mehrfachauswahl", "description": "Mehrere Optionen gleichzeitig auswählbar." },
-          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." },
-          "TABLE": { "label": "Wiederholbare Tabelle", "description": "Spalten selbst definieren; Anwender fügt Zeilen hinzu (z. B. Medikamente, Diagnosen)." }
+          "ST": {
+            "label": "Text",
+            "description": "Einzeiliger oder mehrzeiliger Text."
+          },
+          "INT": {
+            "label": "Ganzzahl",
+            "description": "Integer-Wert ohne Nachkommastellen."
+          },
+          "REAL": {
+            "label": "Reelle Zahl",
+            "description": "Numerischer Wert mit Nachkommastellen."
+          },
+          "DATE": {
+            "label": "Datum",
+            "description": "Vollständiges Datum (TT.MM.JJJJ)."
+          },
+          "BL": {
+            "label": "Boolean",
+            "description": "Ja / Nein als einzelne Checkbox."
+          },
+          "TRISTATE_REASON": {
+            "label": "Ja / Nein / Unbekannt + Grund",
+            "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld."
+          },
+          "PDATE": {
+            "label": "Teildatum",
+            "description": "Jahr oder Monat und Jahr."
+          },
+          "CHOICE_SINGLE": {
+            "label": "Auswahlliste",
+            "description": "Einfachauswahl aus eigenen Optionen."
+          },
+          "CHOICE_MULTI": {
+            "label": "Mehrfachauswahl",
+            "description": "Mehrere Optionen gleichzeitig auswählbar."
+          },
+          "FILE": {
+            "label": "Dateianhang",
+            "description": "Datei-Upload."
+          },
+          "TABLE": {
+            "label": "Wiederholbare Tabelle",
+            "description": "Spalten selbst definieren; Anwender fügt Zeilen hinzu (z. B. Medikamente, Diagnosen)."
+          }
         }
       },
       "table": {
@@ -1659,27 +1741,37 @@
       "spectralisOct": {
         "label": "Spectralis SD-OCT",
         "description": "Heidelberg Spectralis SD-OCT — Akquisition akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
-        "acquired": { "label": "OCT akquiriert?" }
+        "acquired": {
+          "label": "OCT akquiriert?"
+        }
       },
       "spectralisFaf": {
         "label": "Spectralis FAF",
         "description": "Heidelberg Spectralis Fundus-Autofluoreszenz akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
-        "acquired": { "label": "FAF akquiriert?" }
+        "acquired": {
+          "label": "FAF akquiriert?"
+        }
       },
       "plexEliteOcta": {
         "label": "ZEISS PLEX Elite OCT-A",
         "description": "PLEX Elite 9000 OCT-Angiographie akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
-        "acquired": { "label": "OCT-A akquiriert?" }
+        "acquired": {
+          "label": "OCT-A akquiriert?"
+        }
       },
       "zeissClarus": {
         "label": "ZEISS Clarus 700",
         "description": "Ultra-Weitwinkel-Fundusaufnahme akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
-        "acquired": { "label": "Fundusbild akquiriert?" }
+        "acquired": {
+          "label": "Fundusbild akquiriert?"
+        }
       },
       "topconMaestro2Oct": {
         "label": "Topcon Maestro2 OCT",
         "description": "Topcon Maestro 2 SD-OCT akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
-        "acquired": { "label": "OCT akquiriert?" }
+        "acquired": {
+          "label": "OCT akquiriert?"
+        }
       },
       "plBcva": {
         "label": "PL-BCVA (Pinhole)",
@@ -1688,7 +1780,9 @@
           "label": "PL-BCVA (Buchstaben)",
           "validation": "0–100 Buchstaben (ganzzahlig)."
         },
-        "notes": { "label": "Bemerkung" }
+        "notes": {
+          "label": "Bemerkung"
+        }
       },
       "llBcva": {
         "label": "LL-BCVA (Low Luminance)",
@@ -1697,7 +1791,9 @@
           "label": "LL-BCVA (Buchstaben)",
           "validation": "0–100 Buchstaben (ganzzahlig)."
         },
-        "notes": { "label": "Bemerkung" }
+        "notes": {
+          "label": "Bemerkung"
+        }
       }
     }
   },
@@ -1730,26 +1826,58 @@
       "realRange": "Zahl zwischen {min} und {max} erwartet."
     },
     "entry": {
-      "BCVA_LETTERS": { "label": "BCVA Buchstaben" },
-      "BCVA_SNELLEN": { "label": "BCVA Snellen" },
-      "IOP": { "label": "Augeninnendruck" },
-      "SPECTRALIS_DONE": { "label": "Spectralis-OCT durchgeführt" },
-      "PLEX_ELITE_DONE": { "label": "Plex-Elite-OCT durchgeführt" },
-      "REFRACTION_SPHERE": { "label": "Refraktion — Sphäre" },
-      "REFRACTION_TORUS": { "label": "Refraktion — Torus" },
-      "REFRACTION_ANGLE": { "label": "Refraktion — Winkel" },
-      "REFRACTION_VISUS": { "label": "Refraktion — Visus" },
+      "BCVA_LETTERS": {
+        "label": "BCVA Buchstaben"
+      },
+      "BCVA_SNELLEN": {
+        "label": "BCVA Snellen"
+      },
+      "IOP": {
+        "label": "Augeninnendruck"
+      },
+      "SPECTRALIS_DONE": {
+        "label": "Spectralis-OCT durchgeführt"
+      },
+      "PLEX_ELITE_DONE": {
+        "label": "Plex-Elite-OCT durchgeführt"
+      },
+      "REFRACTION_SPHERE": {
+        "label": "Refraktion — Sphäre"
+      },
+      "REFRACTION_TORUS": {
+        "label": "Refraktion — Torus"
+      },
+      "REFRACTION_ANGLE": {
+        "label": "Refraktion — Winkel"
+      },
+      "REFRACTION_VISUS": {
+        "label": "Refraktion — Visus"
+      },
       "REFRACTION_COMPOUND": {
         "label": "Refraktion (Sphäre / Torus / Winkel / Visus)",
         "subFields": "vier Unterfelder pro Auge — werden gemeinsam eingefügt"
       },
-      "CCT": { "label": "Zentrale Hornhautdicke" },
-      "CRT": { "label": "Zentrale Subfeld-Dicke (CST)" },
-      "FUNDUS_PHOTO_DONE": { "label": "Fundusfotografie durchgeführt" },
-      "VISUAL_FIELD_DONE": { "label": "Gesichtsfeld durchgeführt" },
-      "OCT_A_DONE": { "label": "OCT-Angiographie durchgeführt" },
-      "ACD": { "label": "Vorderkammertiefe" },
-      "AXIAL_LENGTH": { "label": "Achsenlänge" },
+      "CCT": {
+        "label": "Zentrale Hornhautdicke"
+      },
+      "CRT": {
+        "label": "Zentrale Subfeld-Dicke (CST)"
+      },
+      "FUNDUS_PHOTO_DONE": {
+        "label": "Fundusfotografie durchgeführt"
+      },
+      "VISUAL_FIELD_DONE": {
+        "label": "Gesichtsfeld durchgeführt"
+      },
+      "OCT_A_DONE": {
+        "label": "OCT-Angiographie durchgeführt"
+      },
+      "ACD": {
+        "label": "Vorderkammertiefe"
+      },
+      "AXIAL_LENGTH": {
+        "label": "Achsenlänge"
+      },
       "reasonIfNotDone": "Grund (falls nicht durchgeführt)"
     }
   },
@@ -2088,6 +2216,10 @@
       "unknownOid": "Item-OID „{oid}\" wurde in keiner aktiven CRF-Version gefunden.",
       "missingOid": "Mindestens eine OD- oder OS-OID erforderlich.",
       "network": "Modalität konnte nicht gespeichert werden — bitte erneut versuchen."
+    },
+    "tab": {
+      "measurements": "Messwerte (global)",
+      "imaging": "Bildgebung (Studie)"
     }
   },
   "patientDetail": {
@@ -2623,11 +2755,25 @@
     "format": {
       "odm": "CDISC ODM (XML)",
       "csv": "Tabelle (CSV)",
-      "pdf": "PDF-Bericht"
+      "pdf": "PDF-Bericht",
+      "bundle": "Komplettpaket (ZIP, mit Bildern)"
     },
     "downloading": "Lädt herunter…",
     "success": "Download gestartet.",
     "failed": "Export fehlgeschlagen"
+  },
+  "cameraWorklist": {
+    "on": "Heute auf der Kamera-Worklist",
+    "off": "Nicht auf der Kamera-Worklist",
+    "noVisitToday": "Für heute ist keine Visite offen — die Kamera listet nur Visiten mit heutigem Datum.",
+    "otherDay": "{event} ist für {date} geplant.",
+    "noDate": "{event} ist ohne Datum geplant.",
+    "moveToToday": "Auf heute verschieben",
+    "scheduleToday": "{event} für heute planen",
+    "scheduleTodayPick": "Visite für heute planen…",
+    "error": {
+      "generic": "Änderung fehlgeschlagen. Bitte erneut versuchen."
+    }
   },
   "scheduleEvent": {
     "title": "Visite planen",
@@ -2749,32 +2895,99 @@
       "itemRequired": "Mindestens ein Item auswählen."
     },
     "flagSection": {
-      "subject": { "title": "Studienteilnehmer-Metadaten" },
-      "event": { "title": "Visiten-Metadaten" },
-      "crf": { "title": "CRF-Status" },
-      "interviewer": { "title": "Interviewer-Felder" },
-      "notes": { "title": "Discrepancy Notes" }
+      "subject": {
+        "title": "Studienteilnehmer-Metadaten"
+      },
+      "event": {
+        "title": "Visiten-Metadaten"
+      },
+      "crf": {
+        "title": "CRF-Status"
+      },
+      "interviewer": {
+        "title": "Interviewer-Felder"
+      },
+      "notes": {
+        "title": "Discrepancy Notes"
+      }
     },
     "flag": {
-      "dob": { "label": "Geburtsdatum", "hint": "Vollständiges DOB. PHI — für de-identifizierte Auszüge deaktivieren." },
-      "gender": { "label": "Geschlecht", "hint": "Bildet das Geschlechts-Code-Feld ab." },
-      "subjectStatus": { "label": "Status (Studienteilnehmer)", "hint": "Verfügbar, entfernt, gelöscht, signiert, …" },
-      "uniqueIdentifier": { "label": "Eindeutige Studienteilnehmer-ID", "hint": "Site- oder studienweit eindeutige ID." },
-      "secondaryId": { "label": "Sekundär-ID", "hint": "Sponsor- oder Register-ID." },
-      "ageAtEvent": { "label": "Alter zum Visiten-Zeitpunkt", "hint": "Aus DOB und Visiten-Startdatum berechnet." },
-      "groupInformation": { "label": "Gruppe", "hint": "Arm / Familie / Gruppenklassen-Zuordnung." },
-      "eventLocation": { "label": "Visiten-Ort", "hint": "Freitext-Ort auf der Visite." },
-      "eventStartDate": { "label": "Visiten-Startdatum", "hint": "Geplant oder tatsächlich, abhängig vom Status." },
-      "eventEndDate": { "label": "Visiten-Enddatum", "hint": "Für Visiten mit Dauer." },
-      "eventStartTime": { "label": "Visiten-Startzeit", "hint": "Wenn auf der Visiten-Definition konfiguriert." },
-      "eventEndTime": { "label": "Visiten-Endzeit", "hint": "Wenn auf der Visiten-Definition konfiguriert." },
-      "eventStatus": { "label": "Visiten-Status", "hint": "Geplant, in Bearbeitung, abgeschlossen, gestoppt, übersprungen, signiert, gesperrt." },
-      "crfStatus": { "label": "CRF-Status", "hint": "Initial / abgeschlossen / signiert / gesperrt / ungültig." },
-      "crfVersion": { "label": "CRF-Version", "hint": "Versionsname und OID pro CRF-Zeile." },
-      "interviewerName": { "label": "Interviewer-Name", "hint": "Freitext „wer hat das CRF erfasst“." },
-      "interviewerDate": { "label": "Interviewer-Datum", "hint": "Datum, auf das sich der Interviewer-Eintrag bezieht." },
-      "completionDate": { "label": "Abschlussdatum CRF", "hint": "ISO-8601 Zeitpunkt." },
-      "discNotes": { "label": "Discrepancy Notes", "hint": "Hängt eine Spalte mit verknüpften Queries / Annotationen an. Phase 4 verdrahtet die tatsächliche Emission." }
+      "dob": {
+        "label": "Geburtsdatum",
+        "hint": "Vollständiges DOB. PHI — für de-identifizierte Auszüge deaktivieren."
+      },
+      "gender": {
+        "label": "Geschlecht",
+        "hint": "Bildet das Geschlechts-Code-Feld ab."
+      },
+      "subjectStatus": {
+        "label": "Status (Studienteilnehmer)",
+        "hint": "Verfügbar, entfernt, gelöscht, signiert, …"
+      },
+      "uniqueIdentifier": {
+        "label": "Eindeutige Studienteilnehmer-ID",
+        "hint": "Site- oder studienweit eindeutige ID."
+      },
+      "secondaryId": {
+        "label": "Sekundär-ID",
+        "hint": "Sponsor- oder Register-ID."
+      },
+      "ageAtEvent": {
+        "label": "Alter zum Visiten-Zeitpunkt",
+        "hint": "Aus DOB und Visiten-Startdatum berechnet."
+      },
+      "groupInformation": {
+        "label": "Gruppe",
+        "hint": "Arm / Familie / Gruppenklassen-Zuordnung."
+      },
+      "eventLocation": {
+        "label": "Visiten-Ort",
+        "hint": "Freitext-Ort auf der Visite."
+      },
+      "eventStartDate": {
+        "label": "Visiten-Startdatum",
+        "hint": "Geplant oder tatsächlich, abhängig vom Status."
+      },
+      "eventEndDate": {
+        "label": "Visiten-Enddatum",
+        "hint": "Für Visiten mit Dauer."
+      },
+      "eventStartTime": {
+        "label": "Visiten-Startzeit",
+        "hint": "Wenn auf der Visiten-Definition konfiguriert."
+      },
+      "eventEndTime": {
+        "label": "Visiten-Endzeit",
+        "hint": "Wenn auf der Visiten-Definition konfiguriert."
+      },
+      "eventStatus": {
+        "label": "Visiten-Status",
+        "hint": "Geplant, in Bearbeitung, abgeschlossen, gestoppt, übersprungen, signiert, gesperrt."
+      },
+      "crfStatus": {
+        "label": "CRF-Status",
+        "hint": "Initial / abgeschlossen / signiert / gesperrt / ungültig."
+      },
+      "crfVersion": {
+        "label": "CRF-Version",
+        "hint": "Versionsname und OID pro CRF-Zeile."
+      },
+      "interviewerName": {
+        "label": "Interviewer-Name",
+        "hint": "Freitext „wer hat das CRF erfasst“."
+      },
+      "interviewerDate": {
+        "label": "Interviewer-Datum",
+        "hint": "Datum, auf das sich der Interviewer-Eintrag bezieht."
+      },
+      "completionDate": {
+        "label": "Abschlussdatum CRF",
+        "hint": "ISO-8601 Zeitpunkt."
+      },
+      "discNotes": {
+        "label": "Discrepancy Notes",
+        "hint": "Hängt eine Spalte mit verknüpften Queries / Annotationen an. Phase 4 verdrahtet die tatsächliche Emission."
+      }
     }
   },
   "dataExport": {
@@ -2814,7 +3027,16 @@
       "tsv": "TSV (tabgetrennt)",
       "excel": "Excel (.xls)",
       "sas": "SAS",
-      "spss": "SPSS"
+      "spss": "SPSS",
+      "bundle": "Komplettpaket (ZIP, mit Bildern) — im Hintergrund"
+    },
+    "job": {
+      "label": "Komplettpaket",
+      "queued": "In Warteschlange …",
+      "running": "Wird erstellt …",
+      "done": "Fertig.",
+      "failed": "Fehlgeschlagen",
+      "download": "Herunterladen"
     },
     "modal": {
       "title": "Datensatz exportieren",
@@ -2894,6 +3116,259 @@
     "noBcvaProvided": "Bitte mindestens einen Visus-Wert eingeben (OD oder OS).",
     "submit": "Speichern",
     "submitting": "Speichere …"
+  },
+  "imageInbox": {
+    "title": "Bild-Eingang",
+    "cardDesc": "Eingehende Fundusbilder Patienten und Visiten zuordnen.",
+    "subtitle": "{count} nicht zugeordnete Bilder",
+    "loading": "Wird geladen …",
+    "empty": "Keine nicht zugeordneten Bilder.",
+    "noPreview": "Keine Vorschau",
+    "patientId": "Patienten-ID",
+    "eye": "Auge",
+    "suggestion": "Vorschlag: {label} ({study})",
+    "bindSuggested": "Vorschlag zuordnen",
+    "bind": "Zuordnen …",
+    "dismiss": "Verwerfen",
+    "dismissConfirm": "Dieses Bild wirklich verwerfen?"
+  },
+  "ingestInbox": {
+    "uploadAction": "Hochladen",
+    "title": "Eingang",
+    "cardDesc": "Eingegangene Bilder und Scans Patienten und Visiten zuordnen.",
+    "subtitle": "{count} Dateien",
+    "loading": "Wird geladen …",
+    "empty": "Keine Dateien in dieser Ansicht.",
+    "filters": "Filter",
+    "kindAll": "Alle",
+    "kind": {
+      "e2e": "OCT-Scan",
+      "dicom": "DICOM-Bild",
+      "image": "Fundusbild",
+      "other": "Andere Datei"
+    },
+    "statusLabel": "Status",
+    "status": {
+      "UNBOUND": "Nicht zugeordnet",
+      "BOUND": "Zugeordnet",
+      "DISMISSED": "Verworfen"
+    },
+    "searchLabel": "Suche",
+    "searchPlaceholder": "Patienten-ID oder Dateiname",
+    "apply": "Anwenden",
+    "selectOne": "Datei auswählen",
+    "selected": "{n} ausgewählt",
+    "bindSelected": "Auswahl zuordnen …",
+    "clearSelection": "Auswahl aufheben",
+    "someSkipped": "{n} Datei(en) wurden übersprungen – sie waren bereits bearbeitet.",
+    "patientId": "Patienten-ID",
+    "eye": "Auge",
+    "suggestion": "Vorschlag: {label} ({study})",
+    "bindSuggested": "Vorschlag zuordnen",
+    "bind": "Zuordnen …",
+    "unbind": "Zuordnung aufheben",
+    "unbindConfirm": "Zuordnung wirklich aufheben? Der dadurch gesetzte CRF-Wert wird ebenfalls entfernt, sofern keine weitere Datei desselben Geräts die Visite belegt.",
+    "dismiss": "Verwerfen",
+    "dismissConfirm": "Diese Datei wirklich verwerfen?",
+    "countAria": "{n} Dateien im Eingang"
+  },
+  "imagingModalities": {
+    "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",
+    "noStudy": "Keine Studie aktiv. Wählen Sie zuerst eine Studie.",
+    "empty": "Für diese Studie sind noch keine Aufnahmen hinterlegt.",
+    "code": "Code",
+    "label": "Bezeichnung",
+    "labelDe": "Bezeichnung (DE)",
+    "labelEn": "Bezeichnung (EN)",
+    "device": "Gerät",
+    "kinds": "Dateitypen",
+    "bindings": "CRF-Felder",
+    "ordinal": "Reihenfolge",
+    "aeTitle": "DICOM AE-Title",
+    "lateralityRequired": "Auge erforderlich",
+    "checklistOnly": "nur Checkliste",
+    "noBindings": "kein Feld hinterlegt",
+    "kindsHint": "Ohne Auswahl: reine Checklisten-Zeile (z. B. Visus) – es kommt nie eine Datei an.",
+    "autoMatchHint": "Bilder dieses AE-Titles werden automatisch dieser Aufnahme zugeordnet.",
+    "addTitle": "Aufnahme hinzufügen",
+    "add": "Hinzufügen",
+    "addBinding": "CRF-Feld …",
+    "roleLabel": "Rolle",
+    "eye": "Auge",
+    "itemOid": "Item-OID",
+    "itemOidPlaceholder": "z. B. I_HEALT_OCT_PERFORMED",
+    "codedYes": "Ja-Wert",
+    "retire": "Stilllegen",
+    "retired": "stillgelegt",
+    "retireConfirm": "Aufnahme „{code}“ wirklich stilllegen? Sie kreuzt danach kein CRF-Feld mehr an.",
+    "role": {
+      "performed": "durchgeführt",
+      "not_performed_reason": "Begründung",
+      "initials": "Kürzel"
+    }
+  },
+  "studySettings": {
+    "title": "Plattform-Einstellungen",
+    "intro": "Was diese Studie nutzt. „Nicht gesetzt“ heißt: wie bisher – die Plattform entscheidet.",
+    "setting": "Einstellung",
+    "value": "Wert",
+    "effective": "Wirksam",
+    "notSet": "Nicht gesetzt",
+    "on": "Ein",
+    "off": "Aus",
+    "inherited": "geerbt",
+    "save": "Einstellungen speichern",
+    "saved": "Gespeichert ✓",
+    "bindingsCount": "{n} CRF-Item-Zuordnung(en) hinterlegt.",
+    "keys": {
+      "ingest.dicom.enabled": "DICOM-Empfang (Worklist + C-STORE)",
+      "ingest.image.enabled": "Bild-Upload (Portal)",
+      "ingest.oct.enabled": "OCT-Upload (Portal)",
+      "inference.enabled": "KI-Auswertung",
+      "export.bundle.enabled": "Multimodaler Export",
+      "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
+      "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
+      "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+    }
+  },
+  "subjectUnboundItems": {
+    "title": "Nicht zugeordnete Dateien",
+    "loading": "Wird geladen …",
+    "subtitle": "{count} Datei(en) warten im Eingang auf Zuordnung.",
+    "openInbox": "Im Eingang zuordnen →"
+  },
+  "dueVisits": {
+    "title": "Fällige Visiten",
+    "cardDesc": "Anstehende und überfällige Visiten im Blick behalten.",
+    "intro": "Offene Visiten im gewählten Zeitraum. Überfällige stehen oben.",
+    "from": "Von",
+    "to": "Bis",
+    "reload": "Aktualisieren",
+    "loading": "Wird geladen …",
+    "empty": "Keine offenen Visiten in diesem Zeitraum.",
+    "overdue": "überfällig",
+    "overdueCount": "{count} überfällig",
+    "colDate": "Datum",
+    "colSubject": "Teilnehmer/-in",
+    "colVisit": "Visite",
+    "colStudy": "Studie",
+    "colStatus": "Status",
+    "countAria": "{n} fällige Visiten"
+  },
+  "uploadPortal": {
+    "topbar": {
+      "portalLabel": "Upload-Portal"
+    },
+    "head": {
+      "eyebrow": "Bildgebung · Upload",
+      "title": "Aufnahmen hochladen",
+      "lead": "OCT-Exporte (.e2e), DICOM-Dateien (Clarus, PlexElite) und Fundusfotos (JPEG/PNG) über eine Seite. Visite einmal wählen, alle Dateien der Visite ablegen — jede Zeile lässt sich danach noch einzeln ändern."
+    },
+    "footer": {
+      "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
+    },
+    "dropzone": {
+      "heroTitle": "Dateien hierher ziehen",
+      "heroBrowsePrefix": "oder",
+      "heroBrowse": "Dateien wählen",
+      "heroNote": "mehrere Dateien gleichzeitig · Header werden lokal im Browser gelesen",
+      "slimDropMore": "Weitere Dateien hierher ziehen",
+      "browse": "Durchsuchen"
+    },
+    "batch": {
+      "title": "Visite für diese Dateien",
+      "hint": "Aus der heutigen Liste wählen, Patient suchen oder Kennung eintippen — jede Datei kann danach einzeln geändert werden.",
+      "searchPatient": "Patient suchen",
+      "clear": "Auswahl aufheben",
+      "visitsLabel": "Heutige Visiten",
+      "visitsFilterPlaceholder": "Nach Kennung oder Visite filtern",
+      "visitsLoading": "Visiten werden geladen …",
+      "visitsNone": "Keine passende Visite für diesen Tag",
+      "patientIdLabel": "Patienten-ID (für Dateien ohne Kennung im Header)",
+      "patientIdPlaceholder": "z. B. HAE-001",
+      "dateLabel": "Aufnahmedatum",
+      "patientFound": "Patient gefunden: {label} ({study})",
+      "patientNotFound": "Keine passende Patienten-ID gefunden",
+      "patientAmbiguous": "Mehrere Treffer — bei der Zuordnung auflösen",
+      "attachToVisit": "An Visite „{visit}“ anhängen"
+    },
+    "kind": {
+      "e2e": "OCT",
+      "dicom": "DICOM",
+      "jpeg": "JPEG",
+      "png": "PNG",
+      "imageShort": "Fotos"
+    },
+    "columns": {
+      "file": "Datei",
+      "patientId": "Kennung",
+      "date": "Aufnahme",
+      "eye": "Auge",
+      "assignment": "Studie · Visite"
+    },
+    "row": {
+      "unsupported": "Nicht unterstützt — JPEG, PNG, DICOM (.dcm) oder Spectralis .e2e",
+      "noVolumes": "Keine OCT-Volumen im Header gefunden",
+      "headerError": "Datei konnte nicht gelesen werden",
+      "resolveFailed": "Studie/Visite-Lookup fehlgeschlagen",
+      "uploadFailed": "Upload fehlgeschlagen",
+      "undoFailed": "Rückgängig fehlgeschlagen",
+      "invalidVisit": "Ungültige Visite — bitte erneut auswählen",
+      "noSubject": "Kein Studienteilnehmer ausgewählt",
+      "deidentified": "Header pseudonymisiert",
+      "lateralityAria": "Auge für {file}"
+    },
+    "assignment": {
+      "inInbox": "Im Eingang",
+      "noEvent": "Keine Visite gefunden — bitte wählen oder ohne Visite hochladen.",
+      "noLabel": "Keine Kennung — Patient suchen, Visite wählen oder ohne Visite hochladen.",
+      "alreadyUploadedDetail": "Identische Datei existiert bereits als Eingang"
+    },
+    "actions": {
+      "uploadWithoutVisit": "Ohne Visite hochladen"
+    },
+    "summary": {
+      "fileSingular": "Datei",
+      "filePlural": "Dateien",
+      "ready": "bereit",
+      "sent": "übermittelt",
+      "duplicate": "bereits vorhanden",
+      "refused": "abgelehnt",
+      "confirmAll": "{n} bestätigen"
+    },
+    "staff": {
+      "title": "Aufnahmen hochladen",
+      "lead": "OCT-Exporte, DICOM-Dateien und Fundusfotos in den Eingang bringen — mit Visite direkt zugeordnet, ohne Visite zur späteren Zuordnung.",
+      "backToInbox": "Zurück zum Eingang"
+    }
+  },
+  "imagePortal": {
+    "visitPickerLabel": "Visite wählen",
+    "visitFilterPlaceholder": "Nach Kennung oder Visite filtern",
+    "visitLoading": "Visiten werden geladen …",
+    "visitNone": "Keine passende Visite für heute",
+    "visitClear": "Auswahl aufheben",
+    "attachToVisit": "An Visite „{visit}“ anhängen",
+    "brandSuffix": "MUW",
+    "portalLabel": "Bild-Upload",
+    "noLoginRequired": "Kein Login erforderlich",
+    "heroTitle": "Fundusbild hochladen",
+    "heroSubtitle": "Bild hierher ziehen oder ",
+    "heroBrowse": "Datei wählen",
+    "formatNote": "JPEG oder PNG · max. 64 MB",
+    "patientIdLabel": "Patienten-ID (optional)",
+    "patientIdPlaceholder": "z. B. HAE-001",
+    "lateralityLabel": "Auge (optional)",
+    "dateLabel": "Aufnahmedatum (optional)",
+    "uploadButton": "Hochladen",
+    "uploading": "Wird hochgeladen …",
+    "successTitle": "Bild hochgeladen",
+    "successBody": "Das Bild wurde übermittelt und steht zur Zuordnung bereit.",
+    "uploadAnother": "Weiteres Bild hochladen",
+    "errorTitle": "Upload fehlgeschlagen",
+    "patientFound": "Patient gefunden: {label} ({study})",
+    "patientNotFound": "Keine passende Patienten-ID gefunden",
+    "patientAmbiguous": "Mehrere Treffer — bei der Zuordnung auflösen"
   },
   "octPortal": {
     "topbar": {
@@ -3043,7 +3518,7 @@
       }
     },
     "live": {
-      "indicator": "Live-Aktualisierung"
+      "indicator": "Live"
     },
     "status": {
       "queued": "In Warteschlange",
@@ -3267,9 +3742,6 @@
       "sectionTitle": "Retinal-Verlauf",
       "sectionSubtitle": "Längsschnitt-Auswertungen der OCT-Inferenz für diese/n Teilnehmer/in."
     },
-    "live": {
-      "indicator": "Live"
-    },
     "parked": {
       "title": "Parkende Scans",
       "subtitle": "Hochgeladene Scans ohne zugewiesene Visite — bitte einer Visite zuordnen.",
@@ -3322,5 +3794,8 @@
       "network": "Fehler beim Versand. Bitte versuchen Sie es erneut.",
       "recipientNotConfigured": "Bug-Report-Empfänger ist nicht konfiguriert. Bitte den Sysadmin kontaktieren."
     }
+  },
+  "pageHeader": {
+    "trail": "Pfad"
   }
 }

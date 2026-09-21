@@ -30,7 +30,7 @@ import NamdViewerTab from './NamdViewerTab.vue'
 import NamdCompareTab from './NamdCompareTab.vue'
 import NamdReportTab from './NamdReportTab.vue'
 import { useNamdVisitData } from '../composables/useNamdVisitData'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -55,7 +55,13 @@ const studySubjectLabel = computed(() => {
   return typeof v === 'string' && v.length > 0 ? v : null
 })
 
-const isMock = computed(() => route.query.mock === '1')
+/**
+ * `?mock=1` renders fabricated visits so the workspace can be developed without
+ * a real subject. It is inert in a production build, deliberately: a URL
+ * parameter that fills a clinical screen with invented fluid volumes is one
+ * pasted link away from a clinician reading numbers that describe nobody.
+ */
+const isMock = computed(() => import.meta.env.DEV && route.query.mock === '1')
 
 const { data, loading, error, availableEyes, selectedEye, setEye, refresh } = useNamdVisitData({
   studySubjectOid,
@@ -63,23 +69,23 @@ const { data, loading, error, availableEyes, selectedEye, setEye, refresh } = us
   mock: isMock,
 })
 
-// 2026-06-23 user-feedback round — nested breadcrumb trail:
-// "<study> > Studienteilnehmer > <subject> > nAMD".
-useViewBreadcrumb(computed(() => {
+// Register and subject are the workspace's ancestors; the banner below is
+// the workspace itself.
+const trail = computed(() => {
   const subjLabel = studySubjectLabel.value ?? data.value?.patient.id ?? studySubjectOid.value
-  if (!subjLabel) return null
+  if (!subjLabel) return []
   return [
     { label: t('nav.subjectMatrix'), to: '/subjects' },
     { label: subjLabel, to: `/subjects/${encodeURIComponent(subjLabel)}` },
-    { label: t('studyModules.namd.workspaceBreadcrumb'), to: null },
   ]
-}))
+})
 </script>
 
 <template>
   <div data-testid="namd-workspace-view" class="min-h-screen bg-slate-50">
-    <!-- The shared TopBar handles study breadcrumb + workspace nav entry.
-         The workspace view starts at the patient banner. -->
+    <div v-if="trail.length" class="max-w-[1240px] mx-auto px-6 pt-4 print:hidden">
+      <PageHeader :trail="trail" />
+    </div>
     <NamdPatientBanner
       v-if="data"
       :patient="data.patient"

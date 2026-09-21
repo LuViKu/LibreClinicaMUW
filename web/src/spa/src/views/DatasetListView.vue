@@ -13,11 +13,10 @@
  * surfaces datasets the operator created via that wizard. An empty
  * table links out to the legacy /Extract Data path with a note.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
 import { useConfirm } from '@/composables/useConfirm'
@@ -140,11 +139,72 @@ function openExportModal(datasetId: number, datasetName: string) {
   }
 }
 
-const EXPORT_FORMATS: ExportFormat[] = ['odm', 'csv', 'tsv', 'excel', 'sas', 'spss']
+/**
+ * P3.8 — the multimodal bundle is offered only where the study turns it on.
+ * The backend answers 403 otherwise, and a radio button that always fails is
+ * worse than none: the operator cannot tell a policy from a fault.
+ */
+const bundleEnabled = computed(
+  () => auth.user?.activeStudy?.settings?.['export.bundle.enabled'] === 'true',
+)
+const EXPORT_FORMATS = computed<ExportFormat[]>(() =>
+  bundleEnabled.value
+    ? ['odm', 'csv', 'tsv', 'excel', 'sas', 'spss', 'bundle']
+    : ['odm', 'csv', 'tsv', 'excel', 'sas', 'spss'],
+)
+
+/* ---------------- P3.8 — background bundle jobs ---------------- */
+
+const POLL_MS = 3000
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopPolling() {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+/**
+ * Poll while any bundle job is in flight, and stop the moment none is. A
+ * bundle can take minutes; the operator keeps the page and sees the row's
+ * status strip move from queued to running to a download link.
+ */
+function ensurePolling() {
+  if (pollTimer !== null) return
+  pollTimer = setInterval(async () => {
+    if (!studyOid.value) return
+    await datasets.refreshActiveJobs(studyOid.value)
+    if (!datasets.hasActiveJobs) stopPolling()
+  }, POLL_MS)
+}
+
+onBeforeUnmount(stopPolling)
+
+function jobFor(datasetId: number) {
+  return datasets.jobsByDataset.get(datasetId) ?? null
+}
+
+function jobIsActive(datasetId: number): boolean {
+  const j = jobFor(datasetId)
+  return !!j && (j.status === 'queued' || j.status === 'running')
+}
 
 async function submitExport() {
   if (!exportModal.value || !studyOid.value) return
   exportModal.value.error = null
+  if (exportModal.value.format === 'bundle') {
+    // Nothing to download yet: the answer is a job. The row shows its
+    // progress and, when done, the link.
+    const job = await datasets.enqueueBundle(exportModal.value.datasetId)
+    if (job) {
+      exportModal.value = null
+      ensurePolling()
+    } else if (datasets.error) {
+      exportModal.value.error = datasets.error
+    }
+    return
+  }
   const result = await datasets.triggerExport(
     studyOid.value,
     exportModal.value.datasetId,
@@ -185,37 +245,9 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M3 7h18M3 12h18M3 17h12" />
-        </svg>
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-      <!-- 2026-06-23 user-feedback round — gate on Administrator;
-           /manage-users is Administrator-only per router meta, so
-           rendering this for other roles meant a one-click bounce
-           to /home. -->
-      <RouterLink
-        v-if="auth.user?.role === 'Administrator'"
-        to="/manage-users"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-        {{ t('nav.manageUsers') }}
-      </RouterLink>
-      <RouterLink to="/export" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M12 3v12M6 9l6 6 6-6M5 21h14" />
-        </svg>
-        {{ t('nav.dataExport') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-5xl px-8 py-8">
+    <div class="max-w-7xl px-8 py-8 mx-auto">
       <div class="mb-6 flex items-start justify-between gap-4">
         <div>
           <div class="text-xs text-slate-500 mb-1">{{ t('dataExport.subTrail') }}</div>
@@ -248,6 +280,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
             type="button"
             class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="datasets.isQuickOdm || !studyOid"
+            data-testid="dataset-quick-odm"
             @click="runQuickOdm"
           >
             {{ datasets.isQuickOdm ? t('dataExport.quickOdmRunning') : t('dataExport.quickOdmButton') }}
@@ -346,11 +379,49 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                     <button
                       type="button"
                       class="px-2.5 py-1 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      :disabled="datasets.isExporting.has(row.id)"
+                      :disabled="datasets.isExporting.has(row.id) || jobIsActive(row.id)"
+                      data-testid="dataset-export-now"
                       @click="openExportModal(row.id, row.name)"
                     >
                       {{ datasets.isExporting.has(row.id) ? t('dataExport.exporting') : t('dataExport.exportNow') }}
                     </button>
+                  </div>
+                </td>
+              </tr>
+              <!-- P3.8 — the bundle job for this dataset, while it runs and once it is done. -->
+              <tr v-if="jobFor(row.id)" :data-testid="`bundle-job-${row.id}`">
+                <td colspan="6" class="px-4 py-2 bg-muw-blue-50/40 text-xs">
+                  <div class="flex items-center gap-3">
+                    <span class="font-medium text-slate-700">{{ t('dataExport.job.label') }}</span>
+                    <template v-if="jobFor(row.id)!.status === 'done'">
+                      <span class="text-muw-teal-700">{{ t('dataExport.job.done') }}</span>
+                      <a
+                        v-if="jobFor(row.id)!.downloadUrl"
+                        :href="jobFor(row.id)!.downloadUrl!"
+                        class="text-muw-blue hover:underline font-medium"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="bundle-job-download"
+                      >{{ t('dataExport.job.download') }}</a>
+                    </template>
+                    <span v-else-if="jobFor(row.id)!.status === 'failed'" class="text-rose-700" role="alert">
+                      {{ t('dataExport.job.failed') }}<template v-if="jobFor(row.id)!.errorMessage">: {{ jobFor(row.id)!.errorMessage }}</template>
+                    </span>
+                    <template v-else>
+                      <span class="text-slate-600">
+                        {{ jobFor(row.id)!.status === 'running' ? t('dataExport.job.running') : t('dataExport.job.queued') }}
+                      </span>
+                      <span
+                        class="inline-block w-32 h-1.5 rounded bg-slate-200 overflow-hidden"
+                        role="progressbar"
+                        :aria-valuenow="jobFor(row.id)!.progressPct"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        :aria-label="t('dataExport.job.label')"
+                      >
+                        <span class="block h-full bg-muw-blue" :style="{ width: `${jobFor(row.id)!.progressPct}%` }"></span>
+                      </span>
+                    </template>
                   </div>
                 </td>
               </tr>

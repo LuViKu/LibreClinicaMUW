@@ -354,19 +354,12 @@ const router = createRouter({
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
-    /* 2026-06-19 — Administrator-only cross-study parked-scans admin.
-       Parked rows have no study-subject linkage so the per-subject
-       ParkedScansList can never surface them; this view is the only
-       reachable bind UX. Doc: retinal-jobs-admin-followup.md. */
-    {
-      path: '/retinal/parked',
-      name: 'retinal-parked-admin',
-      component: () => import('@/views/RetinalParkedAdminView.vue'),
-      meta: {
-        title: 'Geparkte Scans',
-        role: 'Administrator' as const,
-      },
-    },
+    /* P3.3 — the cross-study parked-scans admin is gone. It existed because
+       parked retinal jobs had no study-subject linkage and so could not
+       surface on a per-subject page; those scans are ingest_item rows now and
+       appear in the one inbox with everything else. The old path redirects,
+       because it was an administrator's bookmark. */
+    { path: '/retinal/parked', redirect: { name: 'ingest-inbox' } },
     /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
        patient rather than the active-study study-subject label). */
     {
@@ -375,17 +368,61 @@ const router = createRouter({
       component: () => import('@/views/PatientsOverviewView.vue'),
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
+    /* DR-025 — authenticated fundus-image reconciliation inbox. Staff bind
+       UNBOUND ingest_item rows (Optomed C-STORE + Remidio upload) to a
+       subject/event/CRF. Role-gated here (advisory); the backend enforces
+       role + site visibility. */
+    {
+      path: '/ingest-inbox',
+      name: 'ingest-inbox',
+      component: () => import('@/views/IngestInboxView.vue'),
+      meta: { title: 'Eingang', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
+    },
+    /* P3.2 — the image inbox became the one inbox. Kept as a redirect for a
+       release: the old path is in people's bookmarks and in the operator test
+       script, and a 404 would read as "the feature was removed". */
+    { path: '/image-inbox', redirect: { name: 'ingest-inbox' } },
+    /* DR-029 — the uploader behind a login, reached from the inbox. Same
+       roles as the inbox: whoever may reconcile a file may bring one in. */
+    {
+      path: '/ingest-inbox/upload',
+      name: 'ingest-upload',
+      component: () => import('@/views/IngestUploadView.vue'),
+      meta: { title: 'Hochladen', role: ['Data Manager', 'Investigator', 'Administrator'] as const },
+    },
+    /* P2-6 — open visits in a date window, reaching into the past so a
+       visit that was due and never happened is visible. Role-gated here
+       (advisory); the backend scopes the list to the studies the session
+       can see. */
+    {
+      path: '/due-visits',
+      name: 'due-visits',
+      component: () => import('@/views/DueVisitsView.vue'),
+      meta: {
+        title: 'Fällige Visiten',
+        role: ['Data Manager', 'Investigator', 'Monitor', 'Administrator'] as const,
+      },
+    },
     /* Phase E retinal-inference (Wave C) — public OCT-upload portal.
        Unauthenticated drag-and-drop ingest at /app/oct-upload; the
        backend whitelists /pages/api/v1/public/oct-upload/** under
        permitAll() (DR-022 sibling) and the institutional reverse
        proxy is the only access gate. */
+    /* DR-029 — the combined upload page: OCT (.e2e), DICOM and JPEG/PNG
+       through one door. Unauthenticated like the two pages it replaces; the
+       backend whitelists /pages/api/v1/public/upload/** under permitAll() and
+       the institutional reverse proxy is the only access gate. */
     {
-      path: '/oct-upload',
-      name: 'oct-upload-portal',
-      component: () => import('@/views/OctUploadPortalView.vue'),
-      meta: { public: true, title: 'OCT-Upload-Portal' },
+      path: '/upload',
+      name: 'upload-portal',
+      component: () => import('@/views/UploadPortalView.vue'),
+      meta: { public: true, title: 'Upload-Portal' },
     },
+    /* The OCT page and the image page became the one page above. Their paths
+       are in bookmarks and on the QR codes at the cameras, so they redirect
+       for a release rather than 404. */
+    { path: '/oct-upload', redirect: { name: 'upload-portal' } },
+    { path: '/image-upload', redirect: { name: 'upload-portal' } },
     /**
      * 2026-06-24 user-feedback round — public BCVA-entry portal.
      * Same posture as the OCT-upload portal (DR-022 sibling): the

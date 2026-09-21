@@ -12,9 +12,14 @@
  * Newsreader serif loads even when the rest of the app is paused;
  * `serif` font is reserved for branding moments per style.css.
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+/** DR-029 — the combined upload page shares this chrome and names itself. */
+const props = defineProps<{ label?: string }>()
+const portalLabel = computed(() => props.label ?? t('octPortal.topbar.portalLabel'))
 </script>
 
 <template>
@@ -43,7 +48,7 @@ const { t } = useI18n()
       >{{ t('octPortal.topbar.brandSuffix') }}</em></span>
       <span
         class="ml-2 pl-3 border-l border-slate-200 text-[13px] font-medium text-slate-500"
-      >{{ t('octPortal.topbar.portalLabel') }}</span>
+      >{{ portalLabel }}</span>
     </div>
     <div class="ml-auto flex items-center gap-4">
       <span

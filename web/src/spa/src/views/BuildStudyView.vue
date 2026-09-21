@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import SideRail from '@/components/SideRail.vue'
+import BuildStudyRail from '@/components/BuildStudyRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 
 import { useStudyStore } from '@/stores/study'
@@ -167,30 +167,7 @@ function iconFor(id: StudyBuildTaskId): string {
 
 <template>
   <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M3 7h18M3 12h18M3 17h12" />
-        </svg>
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-      <!-- 2026-06-23 user-feedback round — gate "Nutzer anlegen" on
-           the Administrator role. The /manage-users route is
-           Administrator-only (see router.meta.role); rendering the
-           sidebar entry for other roles meant a Study Manager could
-           click it just to bounce to /home. Backend authoritatively
-           re-checks; this is purely a discoverability fix. -->
-      <RouterLink
-        v-if="canManageStudy"
-        to="/manage-users"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-        {{ t('nav.manageUsers') }}
-      </RouterLink>
-    </SideRail>
+    <BuildStudyRail />
 
     <div class="flex-1 max-w-4xl px-8 py-8">
       <p v-if="study.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>

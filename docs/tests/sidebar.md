@@ -11,3 +11,4 @@
 * [T014](tests/t014.md "T014 - data entry")
 * [T031](tests/t031.md "T031 - study audit log")
 * [T038](tests/t032.md "T038 - system management")
+* [T046](tests/t046.md "T046 - fundus image ingest (inbox + upload page)")

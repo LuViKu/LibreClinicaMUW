@@ -136,6 +136,14 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         // nAMD Slice 3 (#229, 2026-06-20) — item_data source tracking.
         this.setTypeExpected(13, TypeNames.STRING); // source_kind
         this.setTypeExpected(14, TypeNames.LONG);   // source_retinal_job_id (BIGINT)
+        // DR-025 P1-5 (2026-09-18) — which ingested image ticked this value.
+        //
+        // These positions mirror the physical column order of item_data, and
+        // the queries here are SELECT *. A column added to the table without a
+        // line added here makes every read of item_data fail with "column
+        // index N is not within the allowed range" — which surfaces far away
+        // from the migration, in the audit log and the CRF screens.
+        this.setTypeExpected(15, TypeNames.LONG);   // source_ingest_item_id (BIGINT)
     }
 
     @Override
@@ -451,7 +459,29 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         eb.setOrdinal(((Integer) hm.get("ordinal")).intValue());
         eb.setDeleted(((Boolean) hm.get("deleted")).booleanValue());
         eb.setOldStatus(Status.get(hm.get("old_status_id") == null ? 1 : ((Integer) hm.get("old_status_id")).intValue()));
+        // Provenance. The columns have been declared in setTypesExpected since
+        // nAMD Slice 3 / DR-025 P1-5 but were never read back, so every caller
+        // holding a bean saw an operator entry and a platform-written value as
+        // identical. Read by name, not by position — unlike the declarations
+        // above, this is safe against a column being inserted in the middle.
+        //
+        // EntityDAO turns SQL NULL into 0L / "" (getLong + wasNull), so absence
+        // arrives here as a zero, not a null: normalise it back, or an export
+        // would claim job 0 wrote the value.
+        String sourceKind = (String) hm.get("source_kind");
+        eb.setSourceKind((sourceKind == null || sourceKind.isBlank()) ? null : sourceKind);
+        eb.setSourceRetinalJobId(nullableId(hm.get("source_retinal_job_id")));
+        eb.setSourceIngestItemId(nullableId(hm.get("source_ingest_item_id")));
         return eb;
+    }
+
+    /** A zero or absent id means "no source", not "source 0". */
+    private static Long nullableId(Object raw) {
+        if (!(raw instanceof Number n)) {
+            return null;
+        }
+        long v = n.longValue();
+        return v == 0L ? null : Long.valueOf(v);
     }
 
     public List<ItemDataBean> findByStudyEventAndOids(Integer studyEventId, String itemOid, String itemGroupOid) {

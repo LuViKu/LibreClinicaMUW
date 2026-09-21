@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      P3.5 follow-up — the four nAMD flag bindings hold item OIDs, like every
+      other binding.
+
+      lc-muw-2026-11-16-study-setting.xml seeded namd.flags.* with item
+      *names* (NAMD_OD_NEW_HEMORRHAGE …) because the code that read them
+      matched on item.name. The column is called item_oid and means it for the
+      retinal and visit-CRF roles, so a reader would have taken these four for
+      OIDs and been wrong. The code now matches on oc_oid; these rows follow.
+      Additive: the seeded changeset is not edited, and a study that bound its
+      own OID by hand is left alone.
+    -->
+    <changeSet id="2026-12-01-namd-flag-bindings-oid" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM study_item_binding
+                     WHERE binding_key LIKE 'namd.flags.%'
+                       AND item_oid IN ('NAMD_OD_NEW_HEMORRHAGE', 'NAMD_OS_NEW_HEMORRHAGE',
+                                        'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',
+                                        'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED')
+                ) THEN 1 ELSE 0 END
+            </sqlCheck>
+        </preConditions>
+        <comment>nAMD flag bindings: item names become the items' OIDs.</comment>
+
+        <sql>
+            UPDATE study_item_binding
+               SET item_oid = 'I_' || item_oid
+             WHERE binding_key LIKE 'namd.flags.%'
+               AND item_oid IN ('NAMD_OD_NEW_HEMORRHAGE', 'NAMD_OS_NEW_HEMORRHAGE',
+                                'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',
+                                'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED');
+        </sql>
+
+        <rollback>
+            <sql>
+                UPDATE study_item_binding
+                   SET item_oid = SUBSTRING(item_oid FROM 3)
+                 WHERE binding_key LIKE 'namd.flags.%'
+                   AND item_oid IN ('I_NAMD_OD_NEW_HEMORRHAGE', 'I_NAMD_OS_NEW_HEMORRHAGE',
+                                    'I_NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED',
+                                    'I_NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED');
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

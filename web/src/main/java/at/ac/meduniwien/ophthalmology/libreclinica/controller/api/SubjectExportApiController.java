@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -77,6 +78,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.io.OutputStream;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleExportWriter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.CasebookSnapshot;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.CrfSnapshot;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.EventSnapshot;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.ItemSnapshot;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.FileItemValue;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
  * Phase E.6 — Data Export Phase 5 — per-subject one-click snapshot.
@@ -160,14 +170,21 @@ public class SubjectExportApiController {
      * Body shape — {@code format: 'odm' | 'csv' | 'pdf'}. Anything
      * else returns 400.
      */
-    public record ExportRequest(String format) {}
+    /**
+     * @param format  'odm' | 'csv' | 'pdf' | 'bundle'
+     * @param dryRun  bundle only: return the manifest as JSON instead of the
+     *                zip, so a requester can see what it would contain — and
+     *                how large — before asking for gigabytes
+     */
+    public record ExportRequest(String format, Boolean dryRun) {}
 
     @PostMapping(value = "/{studyOid}/subjects/{label}/export",
                  consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> export(@PathVariable("studyOid") String studyOid,
                                     @PathVariable("label") String label,
                                     @RequestBody(required = false) ExportRequest body,
-                                    HttpSession session) {
+                                    HttpSession session,
+                                    HttpServletResponse response) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
@@ -182,13 +199,15 @@ public class SubjectExportApiController {
         }
         if (body == null || body.format() == null || body.format().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Missing 'format' — must be one of 'odm', 'csv', 'pdf'."
+                    "message", "Missing 'format' — must be one of 'odm', 'csv', 'pdf', 'bundle'."
             ));
         }
         String fmt = body.format().trim().toLowerCase(Locale.ROOT);
-        if (!fmt.equals("odm") && !fmt.equals("csv") && !fmt.equals("pdf")) {
+        if (!fmt.equals("odm") && !fmt.equals("csv") && !fmt.equals("pdf")
+                && !fmt.equals("bundle")) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Unsupported format '" + body.format() + "' — must be 'odm', 'csv' or 'pdf'."
+                    "message", "Unsupported format '" + body.format()
+                            + "' — must be 'odm', 'csv', 'pdf' or 'bundle'."
             ));
         }
 
@@ -234,12 +253,21 @@ public class SubjectExportApiController {
         //      independent of DAO call sequencing.
         CasebookSnapshot snapshot;
         try {
-            snapshot = collectCasebook(ss, subj, pathStudy);
+            snapshot = CasebookRenderer.collect(dataSource, ss, subj, pathStudy);
         } catch (Exception e) {
             LOG.error("Casebook walk failed for subject {} (study {})", ss.getOid(), pathStudy.getOid(), e);
             return ResponseEntity.status(500).body(Map.of(
                     "message", "Failed to assemble casebook — see server log."
             ));
+        }
+
+        // P3.7 — the bundle carries files, so it streams rather than
+        // rendering into a byte[]: a subject's OCT volumes alone can run to
+        // gigabytes, and buffering them would mean holding the whole export in
+        // heap to hand it to the same response.
+        if (fmt.equals("bundle")) {
+            return exportBundle(ss, subj, pathStudy, snapshot, currentUser,
+                    Boolean.TRUE.equals(body.dryRun()), session, response);
         }
 
         byte[] payload;
@@ -248,12 +276,12 @@ public class SubjectExportApiController {
         try {
             switch (fmt) {
                 case "odm":
-                    payload = renderOdm(snapshot);
+                    payload = CasebookRenderer.renderOdm(snapshot);
                     contentType = "application/xml";
                     extension = "xml";
                     break;
                 case "csv":
-                    payload = renderCsv(snapshot);
+                    payload = CasebookRenderer.renderCsv(snapshot);
                     contentType = "text/csv";
                     extension = "csv";
                     break;
@@ -293,264 +321,108 @@ public class SubjectExportApiController {
                 .body(payload);
     }
 
-    /* =============================================================== */
-    /* Casebook walk                                                   */
-    /* =============================================================== */
-
-    /**
-     * In-memory snapshot of a single subject's whole data — built once
-     * by {@link #collectCasebook} and consumed by every renderer.
-     *
-     * <p>{@code events} is in protocol order (definition ordinal);
-     * each event's {@code crfs} is in event_crf id order; each CRF's
-     * {@code items} is in the order returned by
-     * {@link ItemDataDAO#findAllByEventCRFId} — which mirrors the
-     * order the data was entered.
-     */
-    record CasebookSnapshot(
-            StudySubjectBean studySubject,
-            SubjectBean subject,
-            StudyBean study,
-            List<EventSnapshot> events) {}
-
-    record EventSnapshot(
-            StudyEventBean event,
-            StudyEventDefinitionBean definition,
-            List<CrfSnapshot> crfs) {}
-
-    record CrfSnapshot(
-            EventCRFBean eventCrf,
-            CRFVersionBean crfVersion,
-            String crfName,
-            List<ItemSnapshot> items) {}
-
-    record ItemSnapshot(
-            ItemDataBean data,
-            ItemBean item) {}
-
-    private CasebookSnapshot collectCasebook(StudySubjectBean ss, SubjectBean subj, StudyBean study) {
-        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
-        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
-        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDAO = new ItemDataDAO(dataSource);
-        ItemDAO itemDAO = new ItemDAO(dataSource);
-        CRFVersionDAO crfVersionDAO = new CRFVersionDAO(dataSource);
-        CRFDAO crfDAO = new CRFDAO(dataSource);
-
-        // Caches to avoid hammering single-PK DAOs for the (likely small)
-        // set of items + CRF versions in one subject's casebook.
-        Map<Integer, ItemBean> itemCache = new HashMap<>();
-        Map<Integer, StudyEventDefinitionBean> defCache = new HashMap<>();
-        Map<Integer, CRFVersionBean> versionCache = new HashMap<>();
-        Map<Integer, String> crfNameCache = new HashMap<>();
-
-        List<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
-        if (events == null) events = Collections.emptyList();
-
-        List<EventSnapshot> eventSnaps = new ArrayList<>(events.size());
-        for (StudyEventBean ev : events) {
-            StudyEventDefinitionBean def = defCache.computeIfAbsent(
-                    ev.getStudyEventDefinitionId(), studyEventDefinitionDAO::findByPK);
-
-            List<EventCRFBean> ecs = eventCRFDAO.findAllByStudyEvent(ev);
-            if (ecs == null) ecs = Collections.emptyList();
-
-            List<CrfSnapshot> crfSnaps = new ArrayList<>(ecs.size());
-            for (EventCRFBean ec : ecs) {
-                CRFVersionBean ver = versionCache.computeIfAbsent(
-                        ec.getCRFVersionId(), crfVersionDAO::findByPK);
-                String crfName = (ver == null) ? "(unknown CRF)"
-                        : crfNameCache.computeIfAbsent(ver.getCrfId(), crfId -> {
-                            try {
-                                CRFBean crf = crfDAO.findByPK(crfId);
-                                return (crf == null || crf.getName() == null) ? "(unknown CRF)" : crf.getName();
-                            } catch (Exception e) {
-                                return "(unknown CRF)";
-                            }
-                        });
-
-                List<ItemDataBean> dataRows = itemDataDAO.findAllByEventCRFId(ec.getId());
-                if (dataRows == null) dataRows = Collections.emptyList();
-
-                List<ItemSnapshot> itemSnaps = new ArrayList<>(dataRows.size());
-                for (ItemDataBean d : dataRows) {
-                    ItemBean ib = itemCache.computeIfAbsent(d.getItemId(), itemDAO::findByPK);
-                    itemSnaps.add(new ItemSnapshot(d, ib));
-                }
-                crfSnaps.add(new CrfSnapshot(ec, ver, crfName, itemSnaps));
-            }
-
-            eventSnaps.add(new EventSnapshot(ev, def, crfSnaps));
-        }
-
-        // Sort events by protocol order (definition ordinal); null
-        // definitions (data corruption) sort last.
-        eventSnaps.sort(Comparator.comparingInt(es -> es.definition() == null
-                ? Integer.MAX_VALUE
-                : es.definition().getOrdinal()));
-
-        return new CasebookSnapshot(ss, subj, study, eventSnaps);
-    }
+    /** The namespace for annotations CDISC ODM has no element for — kept here for the tests that name it. */
+    static final String MUW_ODM_NS = CasebookRenderer.MUW_ODM_NS;
 
     /* =============================================================== */
-    /* ODM 1.3 renderer (hand-built XML)                               */
+    /* P3.7 — the multimodal bundle                                     */
     /* =============================================================== */
 
     /**
-     * Build a minimal ODM 1.3 XML document with one {@code SubjectData}
-     * block. We hand-build the XML rather than plug into the legacy
-     * {@code OdmDataCollector} / {@code ClinicalDataUnit} pipeline because
-     * that pipeline is dataset-driven (requires a persisted
-     * {@code DatasetBean}) and entangled with the legacy
-     * {@code ExportDataset} servlet's session state.
+     * Stream a subject's whole record: the casebook plus every file.
      *
-     * <p>Shape (per CDISC ODM 1.3):
-     * <pre>
-     *   &lt;ODM ...&gt;
-     *     &lt;ClinicalData StudyOID=... MetaDataVersionOID="v1.0.0"&gt;
-     *       &lt;SubjectData SubjectKey=...&gt;
-     *         &lt;StudyEventData StudyEventOID=... StudyEventRepeatKey="1"&gt;
-     *           &lt;FormData FormOID=... FormRepeatKey="1"&gt;
-     *             &lt;ItemGroupData ItemGroupOID=... ItemGroupRepeatKey="1"&gt;
-     *               &lt;ItemData ItemOID=... Value=... /&gt;
-     *             &lt;/ItemGroupData&gt;
-     *           &lt;/FormData&gt;
-     *         &lt;/StudyEventData&gt;
-     *       &lt;/SubjectData&gt;
-     *     &lt;/ClinicalData&gt;
-     *   &lt;/ODM&gt;
-     * </pre>
-     *
-     * <p>ItemGroup is collapsed to a single per-CRF group ({@code IG_}
-     * + CRF version OID) because the SPA-side seed data doesn't track
-     * grouping per item. Downstream consumers that require strict
-     * group fidelity should use the legacy dataset-driven export.
+     * <p>Off unless the study turns it on ({@code export.bundle.enabled}).
+     * Handing a study's imaging out of the platform is a decision that belongs
+     * to the study, not to whoever happens to be signed in, and defaulting it
+     * on would ship a new data-egress path to every deployment silently.
      */
-    private byte[] renderOdm(CasebookSnapshot snap) {
-        StringBuilder sb = new StringBuilder(8192);
-        String createdAt = java.time.OffsetDateTime.now(ZoneId.systemDefault())
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"")
-          .append(" xmlns:OpenClinica=\"http://www.openclinica.org/ns/odm_ext_v130/v3.1\"")
-          .append(" ODMVersion=\"1.3\"")
-          .append(" FileType=\"Snapshot\"")
-          .append(" FileOID=\"").append(escAttr(snap.studySubject().getOid())).append("_subject_export_")
-          .append(System.currentTimeMillis()).append("\"")
-          .append(" CreationDateTime=\"").append(escAttr(createdAt)).append("\">\n");
-
-        sb.append("  <ClinicalData StudyOID=\"").append(escAttr(snap.study().getOid()))
-          .append("\" MetaDataVersionOID=\"v1.0.0\">\n");
-
-        sb.append("    <SubjectData SubjectKey=\"").append(escAttr(snap.studySubject().getOid())).append("\"")
-          .append(" OpenClinica:StudySubjectID=\"").append(escAttr(snap.studySubject().getLabel())).append("\">\n");
-
-        int seqEvent = 0;
-        for (EventSnapshot es : snap.events()) {
-            seqEvent++;
-            String evtOid = (es.definition() == null) ? "SE_UNKNOWN" : es.definition().getOid();
-            sb.append("      <StudyEventData StudyEventOID=\"").append(escAttr(evtOid)).append("\"")
-              .append(" StudyEventRepeatKey=\"").append(seqEvent).append("\">\n");
-
-            int seqForm = 0;
-            for (CrfSnapshot cs : es.crfs()) {
-                seqForm++;
-                String formOid = (cs.crfVersion() == null) ? "F_UNKNOWN" : cs.crfVersion().getOid();
-                sb.append("        <FormData FormOID=\"").append(escAttr(formOid)).append("\"")
-                  .append(" FormRepeatKey=\"").append(seqForm).append("\">\n");
-
-                String groupOid = "IG_" + (cs.crfVersion() == null
-                        ? ("" + cs.eventCrf().getId())
-                        : cs.crfVersion().getOid());
-                sb.append("          <ItemGroupData ItemGroupOID=\"").append(escAttr(groupOid)).append("\"")
-                  .append(" ItemGroupRepeatKey=\"1\"")
-                  .append(" TransactionType=\"Insert\">\n");
-
-                for (ItemSnapshot is : cs.items()) {
-                    String itemOid = (is.item() == null || is.item().getOid() == null)
-                            ? ("I_" + is.data().getItemId())
-                            : is.item().getOid();
-                    String value = is.data().getValue() == null ? "" : is.data().getValue();
-                    sb.append("            <ItemData ItemOID=\"").append(escAttr(itemOid))
-                      .append("\" Value=\"").append(escAttr(value)).append("\"/>\n");
-                }
-
-                sb.append("          </ItemGroupData>\n");
-                sb.append("        </FormData>\n");
-            }
-
-            sb.append("      </StudyEventData>\n");
+    private ResponseEntity<?> exportBundle(StudySubjectBean ss, SubjectBean subj,
+                                           StudyBean pathStudy, CasebookSnapshot snapshot,
+                                           UserAccountBean currentUser, boolean dryRun,
+                                           HttpSession session, HttpServletResponse response) {
+        StudySettingService settings = new StudySettingService(dataSource);
+        if (!settings.isEnabled(pathStudy.getId(), StudySettingService.EXPORT_BUNDLE_ENABLED)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "This study does not have the multimodal export enabled."));
         }
 
-        sb.append("    </SubjectData>\n");
-        sb.append("  </ClinicalData>\n");
-        sb.append("</ODM>\n");
-        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-    }
+        // Blinding follows the data out of the platform. A treating clinician
+        // who cannot see AI output on screen must not receive it in a zip.
+        boolean maskAi;
+        try (Connection c = dataSource.getConnection()) {
+            String arm = AiArmPolicy.armForSubject(c, ss.getId());
+            maskAi = AiArmPolicy.maskAiFor(arm, session);
+        } catch (SQLException e) {
+            // Fail closed: an unanswerable blinding question withholds.
+            LOG.warn("bundle: arm lookup failed for subject {} — withholding AI output", ss.getOid());
+            maskAi = true;
+        }
 
-    /* =============================================================== */
-    /* CSV renderer                                                     */
-    /* =============================================================== */
+        byte[] odm;
+        byte[] csv;
+        try {
+            // Resolved first: the casebook names the bundle entry each
+            // auto-ticked value came from, so the names have to exist before
+            // the XML is built.
+            odm = CasebookRenderer.renderOdm(snapshot, BundleExportWriter.acquisitionPaths(dataSource, ss.getId()));
+            csv = CasebookRenderer.renderCsv(snapshot);
+        } catch (Exception e) {
+            LOG.error("bundle: casebook render failed for subject {}", ss.getOid(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "message", "Failed to render the casebook — see server log."));
+        }
 
-    /**
-     * One row per event-CRF; columns = union of item OIDs encountered
-     * in this subject's data (sorted alphabetically for predictable
-     * diffs). Fixed leading columns: {@code subjectLabel},
-     * {@code eventOid}, {@code eventOrdinal}, {@code crfName},
-     * {@code crfStatus}, {@code dateCompleted}.
-     *
-     * <p>Hand-rolled because OpenCSV is not a direct dependency of
-     * the web module and the data shape is straightforward — adding
-     * a transitive just for a six-line writer would be overkill.
-     */
-    private byte[] renderCsv(CasebookSnapshot snap) {
-        // Collect all item OIDs in this subject's data first so columns
-        // line up across rows. Sort alphabetically for deterministic output.
-        java.util.TreeSet<String> allItemOids = new java.util.TreeSet<>();
-        for (EventSnapshot es : snap.events()) {
-            for (CrfSnapshot cs : es.crfs()) {
-                for (ItemSnapshot is : cs.items()) {
-                    allItemOids.add(itemOidFor(is));
-                }
+        BundleExportWriter.Policy policy = new BundleExportWriter.Policy(maskAi);
+
+        if (dryRun) {
+            try {
+                BundleExportWriter.Result r = BundleExportWriter.write(
+                        OutputStream.nullOutputStream(), dataSource, ss.getId(), ss.getLabel(),
+                        pathStudy.getOid(), odm, csv, policy, currentUser.getName(), true);
+                return ResponseEntity.ok(r.manifest());
+            } catch (IOException e) {
+                LOG.error("bundle dry run failed for subject {}", ss.getOid(), e);
+                return ResponseEntity.status(500).body(Map.of(
+                        "message", "Failed to assemble the manifest — see server log."));
             }
         }
 
-        StringBuilder sb = new StringBuilder(4096);
-        // Fixed cols + dynamic item cols.
-        sb.append("subjectLabel,eventOid,eventOrdinal,crfName,crfStatus,dateCompleted");
-        for (String oid : allItemOids) {
-            sb.append(',').append(csvCell(oid));
-        }
-        sb.append("\r\n");
+        emitExportAudit(currentUser.getId(), ss.getId(), ss.getLabel(), "bundle");
 
-        for (EventSnapshot es : snap.events()) {
-            String evOid = (es.definition() == null) ? "SE_UNKNOWN" : es.definition().getOid();
-            int evOrd = (es.definition() == null) ? 0 : es.definition().getOrdinal();
-            for (CrfSnapshot cs : es.crfs()) {
-                // Materialise item values by OID for this row.
-                Map<String, String> rowVals = new HashMap<>();
-                for (ItemSnapshot is : cs.items()) {
-                    rowVals.put(itemOidFor(is),
-                            is.data().getValue() == null ? "" : is.data().getValue());
-                }
-                String crfStatus = cs.eventCrf().getStatus() == null
-                        ? "" : cs.eventCrf().getStatus().getName();
-                String dateCompleted = cs.eventCrf().getDateCompleted() == null
-                        ? "" : isoDate(cs.eventCrf().getDateCompleted());
+        String filename = sanitizeFilename(ss.getLabel()) + "_bundle_"
+                + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".zip";
 
-                sb.append(csvCell(snap.studySubject().getLabel())).append(',');
-                sb.append(csvCell(evOid)).append(',');
-                sb.append(evOrd).append(',');
-                sb.append(csvCell(cs.crfName())).append(',');
-                sb.append(csvCell(crfStatus)).append(',');
-                sb.append(csvCell(dateCompleted));
-                for (String oid : allItemOids) {
-                    sb.append(',').append(csvCell(rowVals.getOrDefault(oid, "")));
-                }
-                sb.append("\r\n");
-            }
+        // Written straight to the response rather than handed back as a
+        // StreamingResponseBody: this endpoint's declared return type is
+        // ResponseEntity<?>, whose wildcard erases the body type, so Spring
+        // never selects StreamingResponseBodyReturnValueHandler and falls
+        // through to the message converters — which have nothing that can
+        // write a lambda, producing a 500 for every caller. Narrowing the
+        // return type is not open to us: the same method answers with JSON
+        // error bodies and with byte[] for the three text formats.
+        //
+        // The property that matters is preserved either way: the zip is never
+        // buffered in heap, so a subject's OCT volumes do not have to fit in
+        // memory to be exported.
+        response.setStatus(200);
+        response.setContentType("application/zip");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        try (OutputStream out = response.getOutputStream()) {
+            BundleExportWriter.Result r = BundleExportWriter.write(
+                    out, dataSource, ss.getId(), ss.getLabel(), pathStudy.getOid(),
+                    odm, csv, policy, currentUser.getName(), false);
+            LOG.info("Subject bundle: subject {} study {} files={} bytes={} masked={} by user={}",
+                    ss.getOid(), pathStudy.getOid(), r.filesWritten(), r.bytesWritten(),
+                    maskAi, currentUser.getName());
+        } catch (IOException e) {
+            // The response has already begun, so there is no status left to
+            // change: the manifest's absence is what tells the recipient the
+            // bundle is incomplete.
+            LOG.error("bundle stream failed mid-write for subject {}", ss.getOid(), e);
         }
-        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        // null means "already written" — HttpEntityMethodProcessor marks the
+        // request handled before it looks at the value.
+        return null;
     }
 
     /* =============================================================== */
@@ -602,11 +474,11 @@ public class SubjectExportApiController {
                 snap.studySubject().getSecondaryLabel() == null
                         || snap.studySubject().getSecondaryLabel().isBlank()
                         ? "—" : snap.studySubject().getSecondaryLabel());
-        addIdRow(identity, normal, "Gender", genderLabel(snap.subject()));
-        addIdRow(identity, normal, "Year of birth", yobLabel(snap.subject()));
+        addIdRow(identity, normal, "Gender", CasebookRenderer.genderLabel(snap.subject()));
+        addIdRow(identity, normal, "Year of birth", CasebookRenderer.yobLabel(snap.subject()));
         addIdRow(identity, normal, "Enrolled on",
                 snap.studySubject().getEnrollmentDate() == null
-                        ? "—" : isoDate(snap.studySubject().getEnrollmentDate()));
+                        ? "—" : CasebookRenderer.isoDate(snap.studySubject().getEnrollmentDate()));
         addIdRow(identity, normal, "Study OID", snap.study().getOid());
         addIdRow(identity, normal, "Generated", LocalDate.now().toString());
         doc.add(identity);
@@ -627,10 +499,10 @@ public class SubjectExportApiController {
             String status = es.event().getSubjectEventStatus() == null
                     ? "(no status)" : es.event().getSubjectEventStatus().getName();
             String dates = "";
-            if (es.event().getDateStarted() != null) dates += "Started " + isoDate(es.event().getDateStarted());
+            if (es.event().getDateStarted() != null) dates += "Started " + CasebookRenderer.isoDate(es.event().getDateStarted());
             if (es.event().getDateEnded() != null) {
                 if (!dates.isEmpty()) dates += ", ";
-                dates += "Ended " + isoDate(es.event().getDateEnded());
+                dates += "Ended " + CasebookRenderer.isoDate(es.event().getDateEnded());
             }
             String meta = "Status: " + status + (dates.isEmpty() ? "" : " · " + dates);
             doc.add(new Paragraph(meta, small));
@@ -655,9 +527,9 @@ public class SubjectExportApiController {
                     addHeaderCell(table, "Value", h3);
                     addHeaderCell(table, "Units", h3);
                     for (ItemSnapshot is : cs.items()) {
-                        String itemLabel = (is.item() == null) ? itemOidFor(is)
-                                : firstNonBlank(is.item().getDescription(), is.item().getName(), itemOidFor(is));
-                        String value = is.data().getValue() == null ? "" : is.data().getValue();
+                        String itemLabel = (is.item() == null) ? CasebookRenderer.itemOidFor(is)
+                                : CasebookRenderer.firstNonBlank(is.item().getDescription(), is.item().getName(), CasebookRenderer.itemOidFor(is));
+                        String value = CasebookRenderer.exportValue(is);
                         String units = (is.item() == null || is.item().getUnits() == null) ? "" : is.item().getUnits();
                         addBodyCell(table, itemLabel, normal);
                         addBodyCell(table, value, normal);
@@ -673,11 +545,11 @@ public class SubjectExportApiController {
                         && cs.eventCrf().getDateValidateCompleted() != null) {
                     String sigLine = "Signed by user_id="
                             + cs.eventCrf().getValidatorId()
-                            + " on " + isoDate(cs.eventCrf().getDateValidateCompleted());
+                            + " on " + CasebookRenderer.isoDate(cs.eventCrf().getDateValidateCompleted());
                     doc.add(new Paragraph(sigLine, italic));
                 } else if (cs.eventCrf().getDateCompleted() != null) {
                     doc.add(new Paragraph("Data entry completed on "
-                            + isoDate(cs.eventCrf().getDateCompleted()), italic));
+                            + CasebookRenderer.isoDate(cs.eventCrf().getDateCompleted()), italic));
                 }
             }
         }
@@ -748,95 +620,12 @@ public class SubjectExportApiController {
     /* Helpers                                                          */
     /* =============================================================== */
 
-    private static String itemOidFor(ItemSnapshot is) {
-        if (is.item() != null && is.item().getOid() != null && !is.item().getOid().isBlank()) {
-            return is.item().getOid();
-        }
-        return "I_" + is.data().getItemId();
-    }
 
-    private static String genderLabel(SubjectBean subj) {
-        if (subj == null) return "—";
-        return switch (Character.toLowerCase(subj.getGender())) {
-            case 'f' -> "F";
-            case 'm' -> "M";
-            case 'o' -> "O";
-            case 'u' -> "U";
-            default -> "—";
-        };
-    }
 
-    private static String yobLabel(SubjectBean subj) {
-        if (subj == null || subj.getDateOfBirth() == null) return "—";
-        // sql.Date#toInstant throws; route through epoch ms.
-        return String.valueOf(java.time.Instant.ofEpochMilli(subj.getDateOfBirth().getTime())
-                .atZone(ZoneId.systemDefault()).getYear());
-    }
 
-    private static String isoDate(Date d) {
-        if (d == null) return "";
-        return LocalDate.ofInstant(
-                java.time.Instant.ofEpochMilli(d.getTime()), ZoneId.systemDefault()).toString();
-    }
 
-    private static String firstNonBlank(String... candidates) {
-        if (candidates == null) return "";
-        for (String s : candidates) {
-            if (s != null && !s.isBlank()) return s;
-        }
-        return "";
-    }
 
-    /**
-     * Escape characters for XML attribute / text content. Covers the
-     * five mandatory entity replacements per the XML 1.0 spec; works
-     * for both elements and attributes (the broader rule).
-     */
-    private static String escAttr(String s) {
-        if (s == null) return "";
-        StringBuilder sb = new StringBuilder(s.length() + 16);
-        for (int i = 0; i < s.length(); i++) {
-            char ch = s.charAt(i);
-            switch (ch) {
-                case '<': sb.append("&lt;"); break;
-                case '>': sb.append("&gt;"); break;
-                case '&': sb.append("&amp;"); break;
-                case '"': sb.append("&quot;"); break;
-                case '\'': sb.append("&apos;"); break;
-                default:
-                    // Filter ASCII control chars that aren't permitted in XML 1.0.
-                    if (ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r') {
-                        sb.append('?');
-                    } else {
-                        sb.append(ch);
-                    }
-            }
-        }
-        return sb.toString();
-    }
 
-    /**
-     * CSV cell quoting per RFC 4180: wrap in double quotes if the
-     * cell contains a comma, double-quote, CR or LF; escape internal
-     * double quotes by doubling.
-     */
-    private static String csvCell(String s) {
-        if (s == null) return "";
-        boolean needsQuoting = s.indexOf(',') >= 0
-                || s.indexOf('"') >= 0
-                || s.indexOf('\n') >= 0
-                || s.indexOf('\r') >= 0;
-        if (!needsQuoting) return s;
-        StringBuilder sb = new StringBuilder(s.length() + 8);
-        sb.append('"');
-        for (int i = 0; i < s.length(); i++) {
-            char ch = s.charAt(i);
-            if (ch == '"') sb.append("\"\"");
-            else sb.append(ch);
-        }
-        sb.append('"');
-        return sb.toString();
-    }
 
     /**
      * Strip characters disallowed in filenames across the common OSes

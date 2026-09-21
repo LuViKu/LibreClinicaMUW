@@ -29,6 +29,8 @@ vi.mock('@/api/client', () => ({
 
 import HomeView from '@/views/HomeView.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSdvStore } from '@/stores/sdv'
+import { useSubjectsStore } from '@/stores/subjects'
 
 // Use the real en.json so aria-labels are the actual rendered strings.
 // The test is about which sections RENDER for which role, not about
@@ -45,6 +47,13 @@ const i18n = createI18n({
 // Minimal router stub — HomeView's <LandingCard> uses RouterLink, which
 // needs a router context to resolve <to>. We don't navigate anywhere;
 // memory history is fine.
+//
+// NOTE: this list must carry every route name the HomeView CATALOG points
+// at. A card whose target is missing here makes vue-router throw
+// "No match for {name: …}" during render, which surfaces as several
+// unrelated-looking catalogue assertions failing at once (that is how the
+// ingest inbox card was caught on 2026-09-17). Add the route here in
+// the same commit that adds the card.
 function makeRouter() {
   return createRouter({
     history: createMemoryHistory(),
@@ -69,6 +78,8 @@ function makeRouter() {
       { path: '/export', name: 'data-export', component: { template: '<div />' } },
       { path: '/modalities', name: 'modalities', component: { template: '<div />' } },
       { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
+      { path: '/ingest-inbox', name: 'ingest-inbox', component: { template: '<div />' } },
+      { path: '/due-visits', name: 'due-visits', component: { template: '<div />' } },
     ],
   })
 }
@@ -88,7 +99,7 @@ function mountWith(roles: Role[] | null) {
     const sorted = [...roles].sort((a, b) => priority[b] - priority[a])
     auth.user = {
       username: 'demo',
-      displayName: 'Demo',
+      displayName: 'Demo Operator',
       email: null,
       role: sorted[0],
       siteLabel: null,
@@ -262,5 +273,77 @@ describe('HomeView role-aware catalogue', () => {
     ] as never
     await w.vm.$nextTick()
     expect(cardIds(w)).toContain('switch-study')
+  })
+})
+
+
+/**
+ * 2026-09-19 — the home page became a dashboard: counted work queues first,
+ * destinations below, cards only where the role can actually go.
+ */
+describe('HomeView dashboard', () => {
+  it('greets the operator and names the study, instead of the brand', async () => {
+    const w = mountWith(['Investigator'])
+    await w.vm.$nextTick()
+    expect(w.get('[data-testid="home-greeting"]').text()).toContain('Demo Operator')
+    expect(w.get('[data-testid="home-context"]').text()).toContain('Default Study')
+  })
+
+  it('puts the work queues first and the destinations after', async () => {
+    const w = mountWith(['Investigator'])
+    await w.vm.$nextTick()
+    const queueIds = w.get('[data-testid="home-queues"]').findAll('[data-card-id]')
+      .map((el) => el.attributes('data-card-id'))
+    expect(queueIds).toEqual(['todays-crfs', 'sign-queue', 'notes', 'image-inbox', 'due-visits'])
+    const workspaceIds = w.get('[data-testid="home-study-workspaces"]').findAll('[data-card-id]')
+      .map((el) => el.attributes('data-card-id'))
+    expect(workspaceIds).toContain('subject-matrix')
+    expect(workspaceIds).not.toContain('notes')
+  })
+
+  it('shows a queue count once its source has answered — zero included', async () => {
+    const w = mountWith(['Monitor'])
+    await flushPromises()
+    const sdv = useSdvStore()
+    sdv.rows = [
+      { status: 'pending' }, { status: 'pending' }, { status: 'verified' },
+    ] as never
+    await w.vm.$nextTick()
+    const card = w.get('[data-card-id="sdv"]')
+    expect(card.get('[data-testid="queue-count"]').text()).toBe('2')
+    // and "ready to sign" for a physician with nothing waiting says 0, not nothing
+    const inv = mountWith(['Investigator'])
+    await flushPromises()
+    useSubjectsStore().rows = [] as never
+    await inv.vm.$nextTick()
+    expect(inv.get('[data-card-id="sign-queue"]').get('[data-testid="queue-count"]').text()).toBe('0')
+  })
+
+  it('does not hand a CRC the patient overview — the route does not admit the role', async () => {
+    const w = mountWith(['CRC'])
+    await w.vm.$nextTick()
+    expect(cardIds(w)).not.toContain('patients-overview')
+    const inv = mountWith(['Investigator'])
+    await inv.vm.$nextTick()
+    expect(cardIds(inv)).toContain('patients-overview')
+  })
+
+  it('gives a Monitor no physician queues', async () => {
+    const w = mountWith(['Monitor'])
+    await w.vm.$nextTick()
+    const ids = cardIds(w)
+    expect(ids).not.toContain('todays-crfs')
+    expect(ids).not.toContain('sign-queue')
+    expect(ids).toContain('sdv')
+    expect(ids).toContain('due-visits')
+  })
+
+  it('shows the platform section only when there is something in it', async () => {
+    const crc = mountWith(['CRC'])
+    await crc.vm.$nextTick()
+    expect(crc.find('[data-testid="home-platform-workspaces"]').exists()).toBe(false)
+    const admin = mountWith(['Administrator'])
+    await admin.vm.$nextTick()
+    expect(admin.find('[data-testid="home-platform-workspaces"]').exists()).toBe(true)
   })
 })

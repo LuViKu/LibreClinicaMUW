@@ -364,4 +364,64 @@ public final class AuditTypeIds {
      * file's audit hygiene.
      */
     public static final int SUBJECT_RANDOMIZATION_OVERRIDDEN = 126;
+
+    /**
+     * DR-025 — a staff member bound an UNBOUND {@code ingest_item} row (a
+     * fundus image received via C-STORE or the Remidio upload page) to a
+     * subject/event/CRF through the reconciliation inbox. Writer is
+     * {@code ImageIngestApiController.bind}; auditTable = {@code ingest_item},
+     * entityId = ingest_item_id, old_value = {@code "UNBOUND"}. Analog of
+     * {@link #RETINAL_PARK_BIND}.
+     */
+    public static final int IMAGE_BIND                       = 127;
+
+    /**
+     * DR-025 — a staff member dismissed an UNBOUND {@code ingest_item} row in
+     * the reconciliation inbox (a duplicate / unusable capture). Writer is
+     * {@code ImageIngestApiController.dismiss}; auditTable = {@code ingest_item},
+     * entityId = ingest_item_id, old_value = {@code "UNBOUND"}.
+     */
+    public static final int IMAGE_DISMISS                    = 128;
+
+    /**
+     * P3.2 — a BOUND {@code ingest_item} was returned to the inbox, undoing
+     * what the bind caused.
+     *
+     * <p>Written twice per unbind, deliberately, because two different things
+     * happened: once against {@code ingest_item} for the file moving back, and
+     * once per {@code item_data} row whose automatic value the bind had caused
+     * — the CRF value disappearing is its own event on its own form, and an
+     * auditor reading that form must see it there rather than having to know
+     * an unrelated file was unbound.
+     *
+     * <p>Writers: {@code IngestBindService.unbind} and
+     * {@code PerformedItemAutoTicker.clearPerformed}. Seeded by
+     * {@code lc-muw-2026-10-05-audit-types-ingest.xml}. 129 is the auto-tick.
+     */
+    public static final int INGEST_UNBIND                    = 130;
+
+    // ------------------------------------------------------------------
+    // P3.4 — the per-study imaging catalogue (ImagingModalitiesApiController)
+    //
+    // Configuration rather than clinical data, but it decides what the
+    // platform writes into a CRF without anybody typing it: a binding edited
+    // to point at a different item silently changes which box a camera ticks
+    // from that moment on. Seeded by
+    // lc-muw-2026-11-02-audit-types-imaging-modality.xml.
+    // ------------------------------------------------------------------
+
+    public static final int IMAGING_MODALITY_CREATED         = 131;
+    public static final int IMAGING_MODALITY_UPDATED         = 132;
+    public static final int IMAGING_MODALITY_BINDING_CHANGED = 133;
+
+    /**
+     * P3.5 — a per-study setting or CRF item binding changed.
+     *
+     * <p>Writer: {@code StudySettingsApiController}. Seeded by
+     * {@code lc-muw-2026-11-16-study-setting.xml}. A study that stops
+     * receiving DICOM because somebody flipped a switch looks, from the inbox,
+     * exactly like a camera that stopped sending — and the difference is this
+     * row.
+     */
+    public static final int STUDY_SETTING_CHANGED            = 134;
 }

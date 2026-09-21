@@ -66,7 +66,7 @@ const ROW: DatasetDto = {
   fileCount: 2,
 }
 
-async function mountView({ rows }: { rows: DatasetDto[] }) {
+async function mountView({ rows, settings }: { rows: DatasetDto[]; settings?: Record<string, string> }) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore()
@@ -81,7 +81,7 @@ async function mountView({ rows }: { rows: DatasetDto[] }) {
     profileComplete: true,
     locale: null,
     timezone: null,
-    activeStudy: { id: 1, oid: 'S_DEFAULT', name: 'Default Study', isSite: false },
+    activeStudy: { id: 1, oid: 'S_DEFAULT', name: 'Default Study', isSite: false, settings },
   }
   // Seed the datasets store directly so onMounted's load() resolves
   // to the empty default, then we replace rows in-place.
@@ -155,5 +155,81 @@ describe('DatasetListView', () => {
 
     expect(spy).toHaveBeenCalledWith('S_DEFAULT')
     void apiPost
+  })
+})
+
+
+/**
+ * P3.8 — the multimodal bundle runs in the background.
+ *
+ * <p>Two things worth pinning: the option exists only where the study turned
+ * it on (a radio button that always answers 403 is worse than none), and
+ * choosing it does not download anything — it queues a job whose progress
+ * the row shows until a link appears. The operator keeps the page; the file
+ * arrives when the job says so.
+ */
+describe('DatasetListView — bundle export (P3.8)', () => {
+  const JOB = {
+    id: 7, datasetId: 11, format: 'bundle', status: 'queued', progressPct: 0,
+    submittedAt: '2026-09-19T10:00:00Z', startedAt: null, finishedAt: null,
+    archivedDatasetFileId: null, errorMessage: null, downloadUrl: null,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('does not offer the bundle for a study that has not enabled it', async () => {
+    const wrapper = await mountView({ rows: [ROW] })
+    await wrapper.get('[data-testid="dataset-export-now"]').trigger('click')
+    expect(wrapper.find('input[type="radio"][value="bundle"]').exists()).toBe(false)
+  })
+
+  it('offers the bundle where the study enables it and queues a job on submit', async () => {
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JOB)
+    const wrapper = await mountView({ rows: [ROW], settings: { 'export.bundle.enabled': 'true' } })
+    await wrapper.get('[data-testid="dataset-export-now"]').trigger('click')
+    await wrapper.get('input[type="radio"][value="bundle"]').setValue()
+    const buttons = wrapper.findAll('[role="dialog"] button')
+    await buttons[buttons.length - 1].trigger('click')
+    await flushPromises()
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/datasets/11/exports', { format: 'bundle' })
+    // Nothing was downloaded; the row now reports the job.
+    const strip = wrapper.get('[data-testid="bundle-job-11"]')
+    expect(strip.text()).toContain(enMessages.dataExport.job.queued)
+    expect(wrapper.find('[data-testid="bundle-job-download"]').exists()).toBe(false)
+    // and the export action waits until the job is done
+    expect((wrapper.get('[data-testid="dataset-export-now"]').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('polls the job and shows the download link once it is done', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JOB)
+      const wrapper = await mountView({ rows: [ROW], settings: { 'export.bundle.enabled': 'true' } })
+      await wrapper.get('[data-testid="dataset-export-now"]').trigger('click')
+      await wrapper.get('input[type="radio"][value="bundle"]').setValue()
+      const buttons = wrapper.findAll('[role="dialog"] button')
+      await buttons[buttons.length - 1].trigger('click')
+      await flushPromises()
+
+      ;(apiGet as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+        if (url === '/pages/api/v1/exports/7') {
+          return { ...JOB, status: 'done', progressPct: 100, archivedDatasetFileId: 99,
+            finishedAt: '2026-09-19T10:05:00Z',
+            downloadUrl: '/LibreClinica/pages/api/v1/exports/7/download' }
+        }
+        return []
+      })
+      await vi.advanceTimersByTimeAsync(3000)
+      await flushPromises()
+
+      const link = wrapper.get('[data-testid="bundle-job-download"]')
+      expect(link.attributes('href')).toBe('/LibreClinica/pages/api/v1/exports/7/download')
+      expect((wrapper.get('[data-testid="dataset-export-now"]').element as HTMLButtonElement).disabled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

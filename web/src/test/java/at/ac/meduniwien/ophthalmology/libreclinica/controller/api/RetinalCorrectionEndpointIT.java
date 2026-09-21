@@ -160,16 +160,10 @@ class RetinalCorrectionEndpointIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    /** P3.6 — the correction endpoints moved to the artifacts controller. */
     private MockMvc buildMockMvc() {
-        RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
-        Mockito.when(remoteClient.isConfigured()).thenReturn(false);
         return MockMvcBuilders.standaloneSetup(
-                new RetinalResultsApiController(
-                        DATA_SOURCE, visibilityFilter, artifactStore,
-                        new StudySubjectFinder(DATA_SOURCE),
-                        remoteClient,
-                        new RetinalJobStatusBroadcaster(),
-                        null))
+                new RetinalJobArtifactsApiController(DATA_SOURCE, visibilityFilter, artifactStore))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

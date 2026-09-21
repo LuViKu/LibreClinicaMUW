@@ -45,9 +45,9 @@ export const gettingStartedDe: ManualChapter = {
       shot: 'administrator/00-home.png',
       goal: 'Lernen Sie den auf jeder Seite gemeinsamen Rahmen kennen.',
       bullets: [
-        '**Obere Leiste** (top bar) — die aktive Studie/der aktive Standort, ein Suchfeld für Teilnehmer-IDs, Ihr Name mit einem **Rollen-Chip** (rollenspezifisch farbcodiert), die Sprachanzeige und **Abmelden**.',
-        '**Seitennavigation** (side navigation) — die für Ihre Rolle verfügbaren Arbeitsabläufe. Die Auswahl der Verknüpfungen ist rollenabhängig, sodass ein Monitor und eine Studienleitung unterschiedliche Menüs sehen.',
-        '**Brotkrümel** (breadcrumbs) — zeigen, wo Sie sich innerhalb eines mehrstufigen Ablaufs befinden (z. B. Teilnehmer → Visite → CRF).',
+        '**Obere Leiste** (top bar) — die Marke (Klick führt zu **Start**), die **Hauptnavigation** mit den Hauptzielen Ihrer Rolle (z. B. *Studienteilnehmer*, *Rückfragen*, *Fällige Visiten*; das aktuelle Ziel ist hervorgehoben), rechts die **aktive Studie** als Chip (Klick öffnet die Studienauswahl) und Ihr Name mit einem **Rollen-Chip**, der das Profilmenü mit Handbuch, Version und **Abmelden** öffnet. Auf schmalen Bildschirmen wandert die Navigation in dieses Menü.',
+        '**Seitenleiste** (side rail) — nur dort, wo ein Bereich mehrere Seiten hat: im **Studienaufbau** listet sie alle Aufbau-Schritte (CRFs, Visiten, Gruppen, Regeln, Standorte, Modalitäten, Nutzer), bei der CRF-Eingabe die Abschnitte des Formulars mit ihrem Ausfüllstand. Alle anderen Seiten sind einspaltig.',
+        '**Pfad** (breadcrumbs) — steht im Seitenkopf, nur auf Seiten unterhalb eines Bereichs, und nennt die übergeordneten Stufen als Links (z. B. *Studienteilnehmer › M-007 › V1 Inclusion* über einem CRF). Die Seite selbst ist die Überschrift; flache Seiten wie *Rückfragen* haben keinen Pfad — hervorgehobenes Navigationsziel und Überschrift sagen, wo Sie sind.',
       ],
       notes: [
         'Das **Start-Dashboard** (home dashboard) fasst zusammen, was Ihre Aufmerksamkeit erfordert — beispielsweise Ihnen zugewiesene Notizen und Diskrepanzen — und bietet Schnellzugriffe auf Ihre häufigsten Aufgaben.',

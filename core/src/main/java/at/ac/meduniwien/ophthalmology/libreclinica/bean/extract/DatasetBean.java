@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 
 /**
@@ -52,6 +53,22 @@ public class DatasetBean extends AuditableEntityBean {
      */
     private ArrayList<Integer> eventIds = new ArrayList<>();
     private ArrayList<Integer> itemIds = new ArrayList<>();
+
+    /**
+     * 2026-09-18 — study_subject ids the dataset's saved item filters match,
+     * resolved at extract time by {@code DatasetFilterSubjectResolver}.
+     *
+     * <p>Transient: not a dataset column. The filters themselves live in
+     * {@code filter} / {@code dataset_filter_map}; this is the resolved set the
+     * extract restricts to. {@code null} means "no filters" (export everything);
+     * an empty list means "filters matched nobody" and must export nothing.
+     *
+     * <p>Deliberately NOT folded into {@link #generateQuery()}: that string is
+     * parsed positionally on the quote character by
+     * {@code EntityDAO.genDatabaseDateConstraint}, so adding clauses to it
+     * breaks extraction.
+     */
+    private transient List<Integer> filterSubjectIds = null;
     private ArrayList<Integer> subjectGroupIds = new ArrayList<>();
     private HashMap<String, ItemBean> itemMap = new HashMap<>();
 
@@ -282,6 +299,16 @@ public class DatasetBean extends AuditableEntityBean {
     /**
      * @return Returns the itemIds.
      */
+    /** @see #filterSubjectIds */
+    public List<Integer> getFilterSubjectIds() {
+        return filterSubjectIds;
+    }
+
+    /** @see #filterSubjectIds */
+    public void setFilterSubjectIds(List<Integer> filterSubjectIds) {
+        this.filterSubjectIds = filterSubjectIds;
+    }
+
     public ArrayList<Integer> getItemIds() {
         return itemIds;
     }

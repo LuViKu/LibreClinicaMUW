@@ -36,9 +36,9 @@ import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import type { CrfEntryStatus, CrfItem } from '@/types/crf'
+import type { CrfEntryStatus, CrfItem, CrfItemGroup } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
 
@@ -51,21 +51,18 @@ const notifications = useNotificationsStore()
 const advanced = useCrfEntryAdvancedStore()
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
-// "<study> > Studienteilnehmer > <subject> > <event> > <crf>".
-useViewBreadcrumb(computed(() => {
+// The ancestors of this form for the page header: register, subject, visit.
+// The form itself is the H1.
+const trail = computed(() => {
   const entry = store.entry
-  if (!entry) return null
-  const crfLabel = store.schema?.name ?? entry.eventLabel
-  const eventLink = entry.studyEventId != null
-    ? `/events/${entry.studyEventId}`
-    : null
-  return [
+  if (!entry) return []
+  const out = [
     { label: t('nav.subjectMatrix'), to: '/subjects' },
     { label: entry.subjectId, to: `/subjects/${encodeURIComponent(entry.subjectId)}` },
-    { label: entry.eventLabel, to: eventLink },
-    { label: crfLabel, to: null },
   ]
-}))
+  if (entry.studyEventId != null) out.push({ label: entry.eventLabel, to: `/events/${entry.studyEventId}` })
+  return out
+})
 const auth = useAuthStore()
 // Pluggable study-module SPI — top-of-form banner slot. Modules use
 // this for AI-auto-populate hints, regimen-specific reminders, etc.
@@ -329,6 +326,38 @@ const itemsByOid = computed<Record<string, CrfItem>>(() => {
   return out
 })
 
+/**
+ * Repeating groups, bucketed by the section that owns them.
+ *
+ * <p>A {@link CrfItemGroup} carries no section reference of its own, so the
+ * owning section is derived from membership: the section whose items include
+ * the group's {@code itemOids}. Before this, every group was rendered in one
+ * block AFTER the section loop, which pushed all of a CRF's tables to the
+ * bottom of the form — a "Medical History" section showed only its Yes/No
+ * gate question while the table it introduces sat pages away. The authoring
+ * preview renders them inline, so the two views disagreed.
+ */
+const groupsBySectionOid = computed<Record<string, CrfItemGroup[]>>(() => {
+  const out: Record<string, CrfItemGroup[]> = {}
+  for (const section of store.schema?.sections ?? []) {
+    const oids = new Set(section.items.map((i) => i.oid))
+    out[section.oid] = store.groups.filter((g) => g.itemOids.some((o) => oids.has(o)))
+  }
+  return out
+})
+
+/**
+ * Groups whose items matched no section — rendered after the loop so a
+ * schema oddity degrades to the old behaviour rather than silently dropping
+ * a table (and the data entry it holds) from the form.
+ */
+const orphanGroups = computed<CrfItemGroup[]>(() => {
+  const claimed = new Set(
+    Object.values(groupsBySectionOid.value).flatMap((gs) => gs.map((g) => g.oid)),
+  )
+  return store.groups.filter((g) => !claimed.has(g.oid))
+})
+
 async function onUploadFile(itemOid: string, file: File): Promise<void> {
   await store.uploadFile(itemOid, file)
 }
@@ -571,18 +600,7 @@ function onPrefillApply(values: Record<string, string>) {
 <template>
   <div class="flex">
     <SideRail>
-      <RouterLink
-        to="/subjects"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-
-      <div class="mt-4 px-2.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+      <div class="px-2.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
         {{ t('crfEntry.railHeading') }}
       </div>
       <nav class="mt-1 space-y-0.5" v-if="store.schema">
@@ -603,11 +621,9 @@ function onPrefillApply(values: Record<string, string>) {
       </nav>
     </SideRail>
 
-    <div class="flex-1 max-w-3xl px-8 py-8">
+    <div class="flex-1 max-w-3xl xl:max-w-5xl 2xl:max-w-7xl px-8 py-8">
       <div class="mb-6">
-        <div class="text-xs text-slate-500 mb-1" v-if="store.entry">
-          {{ store.entry.subjectId }} · {{ store.entry.eventLabel }}
-        </div>
+        <PageHeader :trail="trail" />
         <div class="flex items-center gap-3 flex-wrap">
           <h1 class="text-xl font-semibold tracking-tight" v-if="store.schema">
             {{ store.schema.name }} <span class="text-slate-400 font-normal text-sm ml-1">{{ store.schema.version }}</span>
@@ -953,14 +969,35 @@ function onPrefillApply(values: Record<string, string>) {
             </template>
           </div>
           </div>
+
+          <!-- Repeating item groups belonging to THIS section, rendered
+               inline under its items so a table sits with the gate
+               question that introduces it (and matches the authoring
+               preview). Per-cell writes flow through store.setValueInRow
+               so the dirty map keeps the right shape. -->
+          <RepeatingGroupSection
+            v-for="group in groupsBySectionOid[section.oid] ?? []"
+            :key="group.oid"
+            :group="group"
+            :items-by-oid="itemsByOid"
+            :disabled="isReadOnly"
+            :busy="store.isSaving"
+            :add-row-label="t('crfEntry.group.addRow')"
+            :delete-row-label="t('crfEntry.group.deleteRow')"
+            :delete-row-confirm="t('crfEntry.group.deleteRowConfirm')"
+            :repeat-max-reached-label="t('crfEntry.group.repeatMaxReached')"
+            :empty-label="t('crfEntry.group.empty')"
+            @add-row="() => store.addGroupRow(group.oid)"
+            @delete-row="(ord) => store.deleteGroupRow(group.oid, ord)"
+            @set-value="(payload) => store.setValueInRow(group.oid, payload.rowOrdinal, payload.itemOid, payload.value)"
+          />
         </section>
 
-        <!-- Phase E.6: repeating item groups. Each group is rendered as
-             a standalone section with its own row table; per-cell
-             writes flow through store.setValueInRow so the dirty map
-             gets the right shape. -->
+        <!-- Groups whose items matched no section. Should not occur, but
+             rendering them here keeps a schema oddity from silently
+             dropping a table (and its data) out of the form. -->
         <RepeatingGroupSection
-          v-for="group in store.groups"
+          v-for="group in orphanGroups"
           :key="group.oid"
           :group="group"
           :items-by-oid="itemsByOid"

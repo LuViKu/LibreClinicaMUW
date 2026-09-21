@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-025 P1-5 (2026-09-18) — tick the visit's "modality performed" box
+        when an image is bound to that visit.
+
+        The HealthAEye visit plan is a per-modality checklist: for each device,
+        "ja | nein + Begründung" plus the investigator's initials. An image
+        arriving from that device and being bound to the visit IS the evidence
+        that it was performed, so making the operator also tick a box is
+        duplicate data entry that will disagree with reality the first time
+        someone forgets.
+
+        This adds the mapping that says which item a given device's image
+        ticks, and the back-reference from the written value to the image that
+        caused it.
+
+        What stays manual: "nein + Begründung" and the investigator initials.
+        Absence of an image is not evidence of a reason.
+
+        Phase 3 grows this into a per-study imaging-modality catalogue by
+        adding modality_id; the (source_kind, device_key) key shape is chosen
+        so those rows migrate rather than being re-authored.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-09-18-ingest-performed-item-map">
+        <createTable tableName="ingest_performed_item_map">
+            <column autoIncrement="true" name="ingest_performed_item_map_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <!-- NULL = applies to every study. A study row wins over a global
+                 one, so a study whose CRF names its items differently can
+                 override without disturbing the others. -->
+            <column name="study_id" type="INT"/>
+            <!-- Matches image_ingest.source_kind: 'upload' | 'dicom'. -->
+            <column name="source_kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Which device. For DICOM this is image_ingest.source_ae_title
+                 (the camera's AE title); for an upload it is the device field
+                 the portal submits. Compared case-insensitively in Java. -->
+            <column name="device_key" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The CRF item to tick. Deliberately no FK to item: CRF versions
+                 rename and re-create items, and a dangling map row that logs a
+                 warning is better than a migration that cannot be applied.
+                 Resolved within the visit's own CRF version at write time. -->
+            <column name="item_oid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The coded value that means "yes" in this CRF's response set.
+                 Configurable because it is a CRF-authoring decision, not a
+                 platform one — a checkbox may code yes as '1', 'Y' or 'ja'. -->
+            <column name="performed_value" type="VARCHAR(32)" defaultValue="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_created" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_id" type="INT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="ingest_performed_item_map" baseColumnNames="study_id"
+                                 constraintName="fk_ingest_performed_map_study"
+                                 referencedTableName="study" referencedColumnNames="study_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+
+        <rollback>
+            <dropTable tableName="ingest_performed_item_map"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Two unique indexes rather than one constraint: Postgres treats NULLs as
+        distinct, so a plain UNIQUE(study_id, source_kind, device_key) would
+        happily accept two global rows for the same device.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-18-ingest-performed-item-map-unique" dbms="postgresql">
+        <sql>
+            CREATE UNIQUE INDEX u_ingest_performed_map_study
+                ON ingest_performed_item_map (study_id, source_kind, device_key)
+             WHERE study_id IS NOT NULL;
+            CREATE UNIQUE INDEX u_ingest_performed_map_global
+                ON ingest_performed_item_map (source_kind, device_key)
+             WHERE study_id IS NULL;
+        </sql>
+        <rollback>
+            <sql>
+                DROP INDEX IF EXISTS u_ingest_performed_map_study;
+                DROP INDEX IF EXISTS u_ingest_performed_map_global;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Which device an image came from.
+
+        DICOM images already carry source_ae_title, which is the camera's own
+        identifier. An uploaded image had nothing: the portal knew which page it
+        was, but that never reached the row, so the platform could not tell a
+        Remidio JPEG from any other upload — and therefore could not know which
+        checklist box it evidences. Nullable; existing rows stay as they are.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-18-image-ingest-device">
+        <addColumn tableName="image_ingest">
+            <column name="device" type="VARCHAR(64)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="image_ingest" columnName="device"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The back-reference, mirroring item_data.source_retinal_job_id. Lets the
+        SPA show "ticked by the image the Optomed sent at 09:14" instead of an
+        unexplained value, and lets an unbind reverse exactly what it caused.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-18-item-data-source-image-ingest">
+        <addColumn tableName="item_data">
+            <column name="source_image_ingest_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <addForeignKeyConstraint
+                constraintName="fk_item_data_source_image_ingest"
+                baseTableName="item_data"
+                baseColumnNames="source_image_ingest_id"
+                referencedTableName="image_ingest"
+                referencedColumnNames="image_ingest_id"
+                onDelete="SET NULL"
+                onUpdate="RESTRICT"/>
+
+        <createIndex tableName="item_data" indexName="i_item_data_source_image_ingest">
+            <column name="source_image_ingest_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="item_data" indexName="i_item_data_source_image_ingest"/>
+            <dropForeignKeyConstraint baseTableName="item_data"
+                    constraintName="fk_item_data_source_image_ingest"/>
+            <dropColumn tableName="item_data" columnName="source_image_ingest_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-09-18-audit-type-image-performed" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 129;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed audit type 129 — image_performed_autotick. Every automatic
+            tick is recorded, because a value in a CRF that nobody typed must
+            be explainable from the audit trail alone.
+        </comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="129"/>
+            <column name="name" value="image_performed_autotick"/>
+            <column name="display_name" value="Modality marked performed from a bound image"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 129</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        A locked account for writes nobody performed.
+
+        A worklist-bound image arrives while no one is logged in, so the value
+        it ticks has no human author. Attributing it to root would put a
+        person's name on a machine's write, which is precisely what an audit
+        trail must not do. This account exists so those rows say "system".
+
+        It cannot log in: no usable password hash, enabled = false and
+        account_non_locked = false. Not context="demo" — production needs it.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-18-seed-system-account">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'system';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO user_account
+              (user_id, user_name, passwd, first_name, last_name, email, active_study,
+               institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp,
+               user_type_id, enabled, account_non_locked, lock_counter, run_webservices,
+               authtype, enable_api_key)
+            SELECT COALESCE(MAX(user_id), 0) + 1, 'system',
+              '{noop}!locked-no-login!',
+              'System', 'Service Account', 'system@localhost.invalid', 1,
+              'LibreClinica MUW', 1, 1, NOW(), NOW(),
+              2, false, false, 0, false, 'STANDARD', false
+            FROM user_account;
+        </sql>
+        <rollback>
+            <delete tableName="user_account">
+                <where>user_name = 'system'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The account above takes its id from MAX(user_id)+1, which can collide
+        with the sequence the application uses for user-created accounts.
+        Realign, as lc-muw-2026-08-11-resync-seeded-sequences.xml does.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-18-resync-user-account-seq" dbms="postgresql">
+        <sql>
+            SELECT setval('user_account_user_id_seq',
+                          GREATEST((SELECT COALESCE(MAX(user_id), 1) FROM user_account), 1));
+        </sql>
+        <rollback/>
+    </changeSet>
+
+    <!--
+        HealthAEye's two handheld cameras. Global rows (study_id NULL) because
+        the device is the same wherever it is used; a study that names its
+        items differently adds its own row and wins.
+
+        These OIDs must match the study's CRF. When they do not, the write is
+        skipped with a warning naming the OID rather than failing the bind —
+        an image that reached the right visit is the outcome that matters, and
+        the checklist box can still be ticked by hand.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-18-seed-healthaeye-performed-map" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM ingest_performed_item_map
+                WHERE study_id IS NULL AND source_kind IN ('upload', 'dicom');
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="ingest_performed_item_map">
+            <column name="study_id"/>
+            <column name="source_kind" value="upload"/>
+            <column name="device_key" value="remidio"/>
+            <column name="item_oid" value="I_HEALT_REMIDIO_PERFORMED"/>
+            <column name="performed_value" value="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="ingest_performed_item_map">
+            <column name="study_id"/>
+            <column name="source_kind" value="dicom"/>
+            <column name="device_key" value="OPTOMEDLUMO"/>
+            <column name="item_oid" value="I_HEALT_OPTOMED_PERFORMED"/>
+            <column name="performed_value" value="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="ingest_performed_item_map">
+                <where>study_id IS NULL AND device_key IN ('remidio', 'OPTOMEDLUMO')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

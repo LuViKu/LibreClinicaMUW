@@ -8,6 +8,28 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.extract;
 
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ArchivedDatasetFileBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AiArmPolicy;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleExportWriter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -160,10 +182,9 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
                 fileId = firstValueOrZero(answer);
             }
             case SAS -> {
-                long elapsed = System.currentTimeMillis() - sysTimeBegin;
-                String name = sanitizedName + "_sas.sas";
-                fileId = extractService.createFile(name, runDir, "", dataset,
-                        elapsed, ExportFormatBean.TXTFILE, true, submittedBy);
+                // Was: a zero-byte file recorded as a successful export. See
+                // GenerateExtractFileService.createSasFile.
+                fileId = extractService.createSasFile(dataset, eb, study, sysTimeBegin, runDir, submittedBy);
             }
             case SPSS -> {
                 SPSSReportBean answer = new SPSSReportBean();
@@ -175,6 +196,13 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
                 HashMap<String, Integer> answerMap = extractService.createSPSSFile(
                         dataset, eb2, study, parentStudy, sysTimeBegin, runDir, answer, "", submittedBy);
                 fileId = firstValueOrZero(answerMap);
+            }
+            case BUNDLE -> {
+                // P3.8 — every subject's casebook plus every file behind it.
+                // Never on the request thread: this is why the job queue
+                // exists, and why the SPA polls rather than waits.
+                fileId = writeDatasetBundle(dataset, study, submittedBy, runDir,
+                        sanitizedName, sysTimeBegin);
             }
             default -> throw new IllegalStateException("Unhandled format: " + format);
         }
@@ -212,6 +240,159 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
     }
 
     /* --------------------------------------------------------------- */
+    /* P3.8 — the dataset bundle                                        */
+    /* --------------------------------------------------------------- */
+
+    /**
+     * One zip for the whole dataset: a folder per subject holding that
+     * subject's casebook and files, one manifest at the root.
+     *
+     * <p>Gated on {@code export.bundle.enabled} here as well as at enqueue
+     * time. The queue row outlives the request that created it; a study that
+     * switched the export off between the two must not have its imaging leave
+     * the platform because a job was already waiting.
+     *
+     * <p>Blinding is decided per subject. The requester's role on the study
+     * says whether they are a treating clinician; each subject's arm says
+     * whether that matters for them. An unanswerable question — a role lookup
+     * that fails, an arm that cannot be read — withholds, because a file that
+     * has left the platform cannot be taken back (DR-028).
+     */
+    private int writeDatasetBundle(DatasetBean dataset, StudyBean study, UserAccountBean submittedBy,
+                                   String runDir, String sanitizedName, long sysTimeBegin)
+            throws IOException {
+        StudySettingService settings = new StudySettingService(dataSource);
+        if (!settings.isEnabled(study.getId(), StudySettingService.EXPORT_BUNDLE_ENABLED)) {
+            throw new IllegalStateException(
+                    "The multimodal bundle is not enabled for study " + study.getOid());
+        }
+
+        List<Integer> subjectIds = new DatasetFilterSubjectResolver(dataSource)
+                .resolve(dataset.getId(), study.getId());
+        if (subjectIds == null) {
+            // No saved filters means "do not restrict" — the same reading the
+            // text extracts give it.
+            subjectIds = allSubjectIds(study.getId());
+        }
+
+        boolean treating = submitterIsTreatingClinician(submittedBy, study);
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+        List<BundleExportWriter.DatasetSubject> subjects = new ArrayList<>(subjectIds.size());
+        for (Integer id : subjectIds) {
+            StudySubjectBean ss = (StudySubjectBean) studySubjectDAO.findByPK(id);
+            if (ss == null || ss.getId() == 0) continue;
+            SubjectBean subj = (SubjectBean) subjectDAO.findByPK(ss.getSubjectId());
+
+            boolean maskAi = treating && AiArmPolicy.ARM_HIDDEN.equals(armOf(ss.getId()));
+            BundleExportWriter.Policy policy = new BundleExportWriter.Policy(maskAi);
+
+            // Rendered before the zip exists, so the casebook can name the
+            // entries the zip will contain — under this subject's own folder.
+            String prefix = BundleExportWriter.subjectPrefix(ss.getLabel());
+            CasebookRenderer.CasebookSnapshot snap =
+                    CasebookRenderer.collect(dataSource, ss, subj, study);
+            byte[] odm = CasebookRenderer.renderOdm(snap,
+                    BundleExportWriter.acquisitionPaths(dataSource, ss.getId(), prefix));
+            byte[] csv = CasebookRenderer.renderCsv(snap);
+            subjects.add(new BundleExportWriter.DatasetSubject(
+                    ss.getId(), ss.getLabel(), odm, csv, policy));
+        }
+
+        File dir = new File(runDir);
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IOException("could not create run directory " + runDir);
+        }
+        File zip = new File(dir, sanitizedName + "_bundle.zip");
+        BundleExportWriter.Result written;
+        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(zip))) {
+            written = BundleExportWriter.writeDataset(out, dataSource, subjects, study.getOid(),
+                    submittedBy.getName(), false);
+        }
+        LOG.info("Dataset bundle: dataset_id={} subjects={} files={} bytes={} omitted={} by user={}",
+                dataset.getId(), subjects.size(), written.filesWritten(), written.bytesWritten(),
+                written.omitted().size(), submittedBy.getName());
+
+        // Registered the way the text formats are, so the SPA's file table,
+        // the download endpoint and the retention sweep all see one more
+        // archived file — under the zip format, not a text one.
+        ArchivedDatasetFileBean fb = new ArchivedDatasetFileBean();
+        fb.setName(zip.getName());
+        fb.setFileReference(zip.getAbsolutePath());
+        fb.setFileSize((int) Math.min(zip.length(), Integer.MAX_VALUE));
+        fb.setRunTime((System.currentTimeMillis() - sysTimeBegin) / 1000.0);
+        fb.setDatasetId(dataset.getId());
+        fb.setExportFormatBean(ExportFormatBean.ZIPFILE);
+        fb.setExportFormatId(ExportFormatBean.ZIPFILE.getId());
+        fb.setOwner(submittedBy);
+        fb.setOwnerId(submittedBy.getId());
+        fb.setDateCreated(new Date());
+        ArchivedDatasetFileBean created =
+                (ArchivedDatasetFileBean) new ArchivedDatasetFileDAO(dataSource).create(fb);
+        return created == null ? 0 : created.getId();
+    }
+
+    /** Every live subject of the study and its sites, in label order. */
+    private List<Integer> allSubjectIds(int studyId) throws IOException {
+        List<Integer> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ss.study_subject_id FROM study_subject ss "
+                             + "  JOIN study s ON s.study_id = ss.study_id "
+                             + " WHERE (s.study_id = ? OR s.parent_study_id = ?) "
+                             + "   AND ss.status_id NOT IN (5, 7) "
+                             + " ORDER BY ss.label, ss.study_subject_id")) {
+            ps.setInt(1, studyId);
+            ps.setInt(2, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getInt(1));
+            }
+        } catch (SQLException e) {
+            throw new IOException("could not list the study's subjects: " + e.getMessage(), e);
+        }
+        return out;
+    }
+
+    /**
+     * Whether the requester holds a treating role on the study or its parent.
+     * Fails closed: if the grants cannot be read, the requester is treated as
+     * a clinician, which withholds rather than reveals.
+     */
+    private boolean submitterIsTreatingClinician(UserAccountBean user, StudyBean study) {
+        try {
+            List<StudyUserRoleBean> grants =
+                    new UserAccountDAO(dataSource).findAllRolesByUserName(user.getName());
+            for (StudyUserRoleBean g : grants) {
+                if (g == null || g.getRole() == null) continue;
+                boolean onStudy = g.getStudyId() == study.getId()
+                        || (study.getParentStudyId() > 0 && g.getStudyId() == study.getParentStudyId());
+                if (!onStudy) continue;
+                if (g.getStatus() != null && g.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                if (g.getRole().equals(Role.INVESTIGATOR) || g.getRole().equals(Role.COORDINATOR)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            LOG.warn("role lookup failed for user={} study={} — treating as a clinician: {}",
+                    user.getName(), study.getOid(), e.getMessage());
+            return true;
+        }
+    }
+
+    /** The subject's arm, read as hidden when it cannot be read at all. */
+    private String armOf(int studySubjectId) {
+        try (Connection c = dataSource.getConnection()) {
+            return AiArmPolicy.armForSubject(c, studySubjectId);
+        } catch (SQLException e) {
+            LOG.warn("arm lookup failed for study_subject {} — withholding AI output: {}",
+                    studySubjectId, e.getMessage());
+            return AiArmPolicy.ARM_HIDDEN;
+        }
+    }
+
+    /* --------------------------------------------------------------- */
     /* Helpers                                                         */
     /* --------------------------------------------------------------- */
 
@@ -232,7 +413,7 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
     }
 
     /** Format string projection. Mirrors DatasetsApiController.ExportFormatKey. */
-    private enum Fmt { ODM, CSV, TSV, EXCEL, SAS, SPSS }
+    private enum Fmt { ODM, CSV, TSV, EXCEL, SAS, SPSS, BUNDLE }
 
     private static Fmt normaliseFormat(String raw) {
         if (raw == null) return Fmt.ODM;
@@ -243,6 +424,7 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
             case "excel", "xls", "xlsx" -> Fmt.EXCEL;
             case "sas" -> Fmt.SAS;
             case "spss" -> Fmt.SPSS;
+            case "bundle" -> Fmt.BUNDLE;
             default -> Fmt.ODM;
         };
     }

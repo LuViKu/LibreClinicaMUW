@@ -14,7 +14,7 @@ The left side-rail on every screen carries the core links:
 - **Studienteilnehmer** (Subject Matrix) — `/subjects`
 - **Teilnehmer aufnehmen** (Add Subject) — `/subjects/new`
 
-A breadcrumb trail at the top of each page shows where you are, e.g. *Study › Studienteilnehmer › `<Subject-ID>` › `<Visit>`*. Click any crumb to step back. The active study and your role are shown in the page header; if you work in more than one study, switch the active study before you start entering data.
+On pages below the register a trail in the page header names the levels above you, e.g. *Studienteilnehmer › `<Subject-ID>` › `<Visit>`* above a CRF; click any link to step back. The active study is the chip in the top bar; if you work in more than one study, click it to switch before you start entering data.
 
 ## 1. Home
 
@@ -23,8 +23,19 @@ A breadcrumb trail at the top of each page shows where you are, e.g. *Study › 
 **Steps**
 
 1. After signing in you land on the **Start** (Home) screen at `/`.
-2. Use the operator cards to jump straight to filtered work lists — for example *Heute* (today's open visits) and *Signaturfreigabe* (subjects ready to sign) deep-link into the Subject Matrix with that filter pre-applied.
-3. Use the side-rail to reach the Subject Matrix or the Add Subject form at any time.
+2. **Ihre Aufgaben** shows your queues with their counts — *Heutige offene CRFs*
+   (today's open visits), *Signatur ausstehend* (subjects ready to sign),
+   *Rückfragen*, *Eingang* (files waiting to be filed) and *Fällige Visiten*.
+   From the Eingang, **Hochladen** brings files in yourself — OCT exports,
+   Clarus/PlexElite DICOM files and fundus photos — filed against a visit you
+   pick once for the batch.
+   Each card opens that list with the filter already applied, so the number on
+   the card is the number of rows you land on. A dash means the count has not
+   arrived yet; a zero means there is nothing waiting.
+3. Below, **In &lt;study&gt;** lists the workspaces — the Subject Matrix, Add
+   Subject — and any study module such as the nAMD workspace.
+4. The top bar's primary navigation reaches the Subject Matrix, Rückfragen,
+   Fällige Visiten and the Eingang from any screen.
 
 ![Investigator home](screenshots/investigator/00-home.png)
 
@@ -142,6 +153,28 @@ A breadcrumb trail at the top of each page shows where you are, e.g. *Study › 
 - Your electronic signature is the legally binding equivalent of your handwritten signature: it confirms that the case report forms are a full, accurate and complete record of the observations recorded.
 - You must re-enter your password for each subject you sign.
 - If data on a signed subject is later changed, the affected visit drops back from *Signiert* to *Completed* and must be signed again.
+
+### 4d. Put a participant on the fundus camera's worklist (HealthAEye)
+
+**Goal:** the handheld DICOM camera (Optomed Lumo) lists the participant, so the images it takes bind themselves to the visit.
+
+The camera has no patient list of its own. It pulls a **worklist** from the application, and that worklist is the visit schedule: a participant is on it exactly when they have a visit **scheduled for today** (status *Geplant* or *Erfassung begonnen*) in a study the camera serves. There is no separate worklist entry to create.
+
+**Steps**
+
+1. Enrol the participant (§3) and schedule the visit — for HealthAEye the **Baseline** — with **today's date** (§4a). *Speichern & erste Visite planen* on the enrolment form takes you straight to the casebook.
+2. Check the **Kamera-Worklist** strip at the top of the events panel:
+   - *Heute auf der Kamera-Worklist* — done. The strip names the visit and the accession number (`LC…`) the camera shows for it.
+   - *Nicht auf der Kamera-Worklist* — the strip says why and offers the fix: **Baseline für heute planen** when no visit exists, or **Auf heute verschieben** when the visit is booked for another day. Both take effect immediately; the events table updates.
+3. On the camera, refresh the worklist, pick the participant's **Subject-ID**, and take the images. They arrive on the visit without passing through the Eingang, and the visit's CRF shows the camera's modality as performed.
+
+**Notes**
+
+- The camera displays the Subject-ID as patient name and ID — never a name. Sex and date of birth are sent only if the study collects them.
+- The strip appears only for studies a camera serves (the administrator enables *DICOM-Empfang* under the study's platform settings); participants of other studies do not carry it.
+- The camera lists **today** only. A visit booked for tomorrow is on tomorrow's list; move it if the participant is here now.
+- An image taken **without** picking the worklist entry is not lost: it lands in the **Eingang**, where it is filed against the visit by hand (see the administrator chapter, §18).
+- **Fällige Visiten**, filtered to today, shows the whole list the camera will pull.
 
 ## 5. Review retinal scan metrics
 

@@ -1,10 +1,7 @@
 {
   "app": {
     "name": "LibreClinica MUW",
-    "tagline": "Clinical study data platform of the Ophthalmology Department",
-    "crumb": {
-      "studyFallback": "Study"
-    }
+    "tagline": "Clinical study data platform of the Ophthalmology Department"
   },
   "nav": {
     "home": "Home",
@@ -20,7 +17,10 @@
     "dataExport": "Data Export",
     "changePassword": "Change password",
     "patientsOverview": "Patient Overview",
-    "modalities": "Modalities"
+    "modalities": "Modalities",
+    "dueVisits": "Due visits",
+    "ingestInbox": "Inbox",
+    "sites": "Sites"
   },
   "a11y": {
     "skipToMain": "Skip to main content",
@@ -32,7 +32,9 @@
       "rolesLabel": "Roles",
       "rolesAriaLabel": "Assigned roles",
       "manual": "Manual",
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "version": "Version {version}",
+      "build": "Build {date} · {hash}"
     },
     "error": {
       "title": "An error occurred",
@@ -46,7 +48,10 @@
       "queuedListTitle": "More errors"
     },
     "systemAuditLog": "System audit",
-    "retinalParked": "Parked scans"
+    "retinalParked": "Parked scans",
+    "primaryNav": "Primary navigation",
+    "study": "Active study",
+    "switchStudy": "Switch study"
   },
   "network": {
     "offline": {
@@ -74,65 +79,77 @@
     "cards": {
       "patientsOverview": {
         "title": "Patient Overview",
-        "description": "Cross-study view of every patient you can access."
+        "description": "Every patient you may see, across your studies."
       },
       "modalities": {
         "title": "Modalities",
-        "description": "Manage exam modalities and their item OIDs."
+        "description": "Maintain the imaging modalities and their CRF fields."
       }
     },
     "investigator": {
       "sectionLabel": "Investigator workflows",
-      "subjectMatrixDesc": "Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.",
-      "addSubjectDesc": "Enrol a study subject. PHI-aware validation, gender selector, three save modes.",
+      "subjectMatrixDesc": "Find subjects, open visits, enter data.",
+      "addSubjectDesc": "Enrol a new subject in the study.",
       "signQueueTitle": "Sign-pending subjects",
-      "signQueueDesc": "Subjects with completed events ready for e-signature. 21 CFR Part 11 §11.50 attestation.",
+      "signQueueDesc": "Review completed visits and sign them electronically.",
       "todaysCrfsTitle": "Today's pending CRFs",
-      "todaysCrfsDesc": "Subjects with events in data-entry-started state or scheduled for today.",
+      "todaysCrfsDesc": "Visits scheduled for today or currently being entered.",
       "openQueriesTitle": "My queries",
-      "openQueriesDesc": "Discrepancies assigned to me. Respond from the CRF entry view."
+      "openQueriesDesc": "Discrepancies assigned to me. Respond from the CRF entry view.",
+      "todaysCrfsCountAria": "{n} visits open today",
+      "signQueueCountAria": "{n} subjects ready to sign"
     },
     "monitor": {
       "sectionLabel": "Monitor workflows",
-      "subjectMatrixDesc": "Browse subjects and their CRFs read-only. Open a CRF to review data and raise queries.",
-      "sdvDesc": "Completed CRFs across all subjects with SDV requirement. Bulk-verify, inline Add Query.",
+      "subjectMatrixDesc": "Read subjects and CRFs, raise queries.",
+      "sdvDesc": "Verify completed CRFs against the source documents.",
       "sdvBadgeAria": "{n} CRFs pending source-data verification",
-      "openQueriesDesc": "Cross-subject query + annotation list with status / type / assigned-to-me filters.",
+      "openQueriesDesc": "Answer open queries or raise new ones.",
       "openQueriesBadgeAria": "{n} open queries",
-      "auditLogDesc": "Gapless timeline with diff cards on reason-for-change. Filter by actor / event type / subject."
+      "auditLogDesc": "See who changed what, and when."
     },
     "dataManager": {
       "sectionLabel": "Data Manager workflows",
-      "buildStudyDesc": "Seven-task setup tracker with progress bar and per-task status.",
-      "manageUsersDesc": "Per-user role + site + auth method. Pending invites badge.",
+      "buildStudyDesc": "Set up the study’s visits, CRFs and rules.",
+      "manageUsersDesc": "Create accounts, assign roles, follow up on invitations.",
       "pendingInvitesBadgeAria": "{n} pending user invites",
-      "openQueriesDesc": "Open queries across all sites.",
-      "auditLogDesc": "Audit trail with diff cards.",
-      "importCrfDesc": "Multi-step wizard: Upload → Map → Preview & resolve → Commit.",
-      "rulesDesc": "Validation + workflow rules attached to event-CRFs.",
+      "openQueriesDesc": "Answer open queries across all sites.",
+      "auditLogDesc": "See who changed what, and when.",
+      "importCrfDesc": "Bring CRF data from a file into the study.",
+      "rulesDesc": "Maintain the validation and workflow rules for the CRFs.",
       "dataExportTitle": "Data Export",
-      "dataExportDesc": "Saved datasets for the active study — trigger ODM, CSV, TSV, Excel, SAS, or SPSS exports and download generated files."
+      "dataExportDesc": "Export datasets and download the generated files."
     },
     "administrator": {
       "globalSectionLabel": "Platform-wide actions",
       "studyScopedLabel": "On {study}",
       "sectionLabel": "Administrator workflows",
-      "manageUsersDesc": "User accounts, role bindings per study, pending invites, password resets.",
+      "manageUsersDesc": "Create accounts, assign roles per study, follow up on invitations, reset passwords.",
       "pendingInvitesBadgeAria": "{n} pending user invites",
       "editStudyTitle": "Edit study identity",
-      "editStudyDesc": "Study name, sponsor, protocol number, summary, dates.",
+      "editStudyDesc": "Edit the study’s name, sponsor, protocol and dates.",
       "createStudyTitle": "Create new study",
-      "createStudyDesc": "Provision a top-level study. You are auto-bound as study coordinator.",
+      "createStudyDesc": "Create a new study; you will be assigned as its study director.",
       "sitesTitle": "Manage sites",
-      "sitesDesc": "Site identity + activation + per-site user roles.",
-      "auditLogDesc": "Platform audit trail with diff cards on every change.",
+      "sitesDesc": "Create and activate sites, assign roles per site.",
+      "auditLogDesc": "See who changed what, and when.",
       "dataExportTitle": "Data Export",
-      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files.",
-      "modalitiesDesc": "Manage measurement modalities + their per-eye item OIDs."
+      "dataExportDesc": "Export datasets and download the generated files.",
+      "modalitiesDesc": "Maintain the imaging modalities and their CRF fields."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
-    "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown."
+    "switchStudyDesc": "Switch to another of your studies.",
+    "greeting": "Welcome, {name}",
+    "greetingPlain": "Welcome",
+    "sections": {
+      "queues": "Your work",
+      "study": "In {study}",
+      "platform": "Platform"
+    },
+    "queue": {
+      "loading": "Count is loading"
+    }
   },
   "common": {
     "actions": "Actions",
@@ -840,13 +857,45 @@
       "success": "Step marked complete."
     },
     "task": {
-      "create-study": { "title": "Create study", "summary": "{count} active", "description": "Study metadata, version, OID, sponsor + protocol number." },
-      "crf":          { "title": "Design CRFs", "summary": "{count} CRFs", "description": "Form library: item grids, response sets, repeating groups." },
-      "events":       { "title": "Define events", "summary": "{count} events", "description": "Visit schedule with per-event CRF assignment + SDV requirement." },
-      "groups":       { "title": "Subject groups", "summary": "{count} groups", "description": "Randomisation arms + stratification rules." },
-      "rules":        { "title": "Validation rules", "summary": "{count} rules", "description": "Field-level and cross-form predicates with action types." },
-      "sites":        { "title": "Sites", "summary": "{count} sites", "description": "Per-site PI, address, recruitment cap." },
-      "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
+      "create-study": {
+        "title": "Create study",
+        "summary": "{count} active",
+        "description": "Study metadata, version, OID, sponsor + protocol number."
+      },
+      "crf": {
+        "title": "Design CRFs",
+        "summary": "{count} CRFs",
+        "description": "Form library: item grids, response sets, repeating groups."
+      },
+      "events": {
+        "title": "Define events",
+        "summary": "{count} events",
+        "description": "Visit schedule with per-event CRF assignment + SDV requirement."
+      },
+      "groups": {
+        "title": "Subject groups",
+        "summary": "{count} groups",
+        "description": "Randomisation arms + stratification rules."
+      },
+      "rules": {
+        "title": "Validation rules",
+        "summary": "{count} rules",
+        "description": "Field-level and cross-form predicates with action types."
+      },
+      "sites": {
+        "title": "Sites",
+        "summary": "{count} sites",
+        "description": "Per-site PI, address, recruitment cap."
+      },
+      "users": {
+        "title": "Users",
+        "summary": "{count} users",
+        "description": "Per-site Investigators, Monitors, Data Managers, CRCs."
+      }
+    },
+    "rail": {
+      "heading": "Build Study",
+      "study": "Study"
     }
   },
   "groupClasses": {
@@ -1399,17 +1448,50 @@
         "primitives": "Primitive items",
         "presets": "Presets",
         "prim": {
-          "ST": { "label": "Text", "description": "Single- or multi-line text." },
-          "INT": { "label": "Integer", "description": "Whole-number value." },
-          "REAL": { "label": "Real number", "description": "Numeric value with decimals." },
-          "DATE": { "label": "Date", "description": "Full date (DD.MM.YYYY)." },
-          "BL": { "label": "Boolean", "description": "Yes / No as a single checkbox." },
-          "TRISTATE_REASON": { "label": "Yes / No / Unknown + reason", "description": "Three-state selector with conditional reason field." },
-          "PDATE": { "label": "Partial date", "description": "Year, or month and year." },
-          "CHOICE_SINGLE": { "label": "Dropdown list", "description": "Single choice from your own options." },
-          "CHOICE_MULTI": { "label": "Multi-select", "description": "Several options selectable at once." },
-          "FILE": { "label": "File attachment", "description": "File upload." },
-          "TABLE": { "label": "Repeating table", "description": "Define your own columns; the user adds rows (e.g. medications, diagnoses)." }
+          "ST": {
+            "label": "Text",
+            "description": "Single- or multi-line text."
+          },
+          "INT": {
+            "label": "Integer",
+            "description": "Whole-number value."
+          },
+          "REAL": {
+            "label": "Real number",
+            "description": "Numeric value with decimals."
+          },
+          "DATE": {
+            "label": "Date",
+            "description": "Full date (DD.MM.YYYY)."
+          },
+          "BL": {
+            "label": "Boolean",
+            "description": "Yes / No as a single checkbox."
+          },
+          "TRISTATE_REASON": {
+            "label": "Yes / No / Unknown + reason",
+            "description": "Three-state selector with conditional reason field."
+          },
+          "PDATE": {
+            "label": "Partial date",
+            "description": "Year, or month and year."
+          },
+          "CHOICE_SINGLE": {
+            "label": "Dropdown list",
+            "description": "Single choice from your own options."
+          },
+          "CHOICE_MULTI": {
+            "label": "Multi-select",
+            "description": "Several options selectable at once."
+          },
+          "FILE": {
+            "label": "File attachment",
+            "description": "File upload."
+          },
+          "TABLE": {
+            "label": "Repeating table",
+            "description": "Define your own columns; the user adds rows (e.g. medications, diagnoses)."
+          }
         }
       },
       "table": {
@@ -1659,27 +1741,37 @@
       "spectralisOct": {
         "label": "Spectralis SD-OCT",
         "description": "Heidelberg Spectralis SD-OCT acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "OCT acquired?" }
+        "acquired": {
+          "label": "OCT acquired?"
+        }
       },
       "spectralisFaf": {
         "label": "Spectralis FAF",
         "description": "Heidelberg Spectralis fundus autofluorescence acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "FAF acquired?" }
+        "acquired": {
+          "label": "FAF acquired?"
+        }
       },
       "plexEliteOcta": {
         "label": "ZEISS PLEX Elite OCT-A",
         "description": "PLEX Elite 9000 OCT angiography acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "OCT-A acquired?" }
+        "acquired": {
+          "label": "OCT-A acquired?"
+        }
       },
       "zeissClarus": {
         "label": "ZEISS Clarus 700",
         "description": "Ultra-widefield fundus photography acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "Fundus image acquired?" }
+        "acquired": {
+          "label": "Fundus image acquired?"
+        }
       },
       "topconMaestro2Oct": {
         "label": "Topcon Maestro2 OCT",
         "description": "Topcon Maestro 2 SD-OCT acquired? (Yes/No/Unknown) per eye.",
-        "acquired": { "label": "OCT acquired?" }
+        "acquired": {
+          "label": "OCT acquired?"
+        }
       },
       "plBcva": {
         "label": "PL-BCVA (Pinhole)",
@@ -1688,7 +1780,9 @@
           "label": "PL-BCVA (letters)",
           "validation": "0–100 letters (integer)."
         },
-        "notes": { "label": "Notes" }
+        "notes": {
+          "label": "Notes"
+        }
       },
       "llBcva": {
         "label": "LL-BCVA (Low Luminance)",
@@ -1697,7 +1791,9 @@
           "label": "LL-BCVA (letters)",
           "validation": "0–100 letters (integer)."
         },
-        "notes": { "label": "Notes" }
+        "notes": {
+          "label": "Notes"
+        }
       }
     }
   },
@@ -1730,26 +1826,58 @@
       "realRange": "Expected a number between {min} and {max}."
     },
     "entry": {
-      "BCVA_LETTERS": { "label": "BCVA letters" },
-      "BCVA_SNELLEN": { "label": "BCVA Snellen" },
-      "IOP": { "label": "Intraocular pressure" },
-      "SPECTRALIS_DONE": { "label": "Spectralis OCT done" },
-      "PLEX_ELITE_DONE": { "label": "Plex Elite OCT done" },
-      "REFRACTION_SPHERE": { "label": "Refraction — Sphere" },
-      "REFRACTION_TORUS": { "label": "Refraction — Torus" },
-      "REFRACTION_ANGLE": { "label": "Refraction — Angle" },
-      "REFRACTION_VISUS": { "label": "Refraction — Visus" },
+      "BCVA_LETTERS": {
+        "label": "BCVA letters"
+      },
+      "BCVA_SNELLEN": {
+        "label": "BCVA Snellen"
+      },
+      "IOP": {
+        "label": "Intraocular pressure"
+      },
+      "SPECTRALIS_DONE": {
+        "label": "Spectralis OCT done"
+      },
+      "PLEX_ELITE_DONE": {
+        "label": "Plex Elite OCT done"
+      },
+      "REFRACTION_SPHERE": {
+        "label": "Refraction — Sphere"
+      },
+      "REFRACTION_TORUS": {
+        "label": "Refraction — Torus"
+      },
+      "REFRACTION_ANGLE": {
+        "label": "Refraction — Angle"
+      },
+      "REFRACTION_VISUS": {
+        "label": "Refraction — Visus"
+      },
       "REFRACTION_COMPOUND": {
         "label": "Refraction (Sphere / Torus / Angle / Visus)",
         "subFields": "four sub-fields per eye — inserted together"
       },
-      "CCT": { "label": "Central corneal thickness" },
-      "CRT": { "label": "Central subfield thickness (CST)" },
-      "FUNDUS_PHOTO_DONE": { "label": "Fundus photograph done" },
-      "VISUAL_FIELD_DONE": { "label": "Visual field done" },
-      "OCT_A_DONE": { "label": "OCT angiography done" },
-      "ACD": { "label": "Anterior chamber depth" },
-      "AXIAL_LENGTH": { "label": "Axial length" },
+      "CCT": {
+        "label": "Central corneal thickness"
+      },
+      "CRT": {
+        "label": "Central subfield thickness (CST)"
+      },
+      "FUNDUS_PHOTO_DONE": {
+        "label": "Fundus photograph done"
+      },
+      "VISUAL_FIELD_DONE": {
+        "label": "Visual field done"
+      },
+      "OCT_A_DONE": {
+        "label": "OCT angiography done"
+      },
+      "ACD": {
+        "label": "Anterior chamber depth"
+      },
+      "AXIAL_LENGTH": {
+        "label": "Axial length"
+      },
       "reasonIfNotDone": "Reason (if not done)"
     }
   },
@@ -2088,6 +2216,10 @@
       "unknownOid": "Item OID '{oid}' not found in any active CRF version.",
       "missingOid": "Provide at least one of OD OID / OS OID.",
       "network": "Could not save the modality — please try again."
+    },
+    "tab": {
+      "measurements": "Measurements (platform)",
+      "imaging": "Imaging (study)"
     }
   },
   "patientDetail": {
@@ -2623,11 +2755,25 @@
     "format": {
       "odm": "CDISC ODM (XML)",
       "csv": "Spreadsheet (CSV)",
-      "pdf": "PDF report"
+      "pdf": "PDF report",
+      "bundle": "Full bundle (ZIP, with images)"
     },
     "downloading": "Downloading…",
     "success": "Download started.",
     "failed": "Export failed"
+  },
+  "cameraWorklist": {
+    "on": "On the camera worklist today",
+    "off": "Not on the camera worklist",
+    "noVisitToday": "No visit is open for today — the camera lists only visits dated today.",
+    "otherDay": "{event} is scheduled for {date}.",
+    "noDate": "{event} is scheduled without a date.",
+    "moveToToday": "Move to today",
+    "scheduleToday": "Schedule {event} for today",
+    "scheduleTodayPick": "Schedule a visit for today…",
+    "error": {
+      "generic": "The change failed. Please try again."
+    }
   },
   "scheduleEvent": {
     "title": "Schedule event",
@@ -2749,32 +2895,99 @@
       "itemRequired": "Select at least one item."
     },
     "flagSection": {
-      "subject": { "title": "Subject metadata" },
-      "event": { "title": "Event metadata" },
-      "crf": { "title": "CRF status" },
-      "interviewer": { "title": "Interviewer fields" },
-      "notes": { "title": "Discrepancy notes" }
+      "subject": {
+        "title": "Subject metadata"
+      },
+      "event": {
+        "title": "Event metadata"
+      },
+      "crf": {
+        "title": "CRF status"
+      },
+      "interviewer": {
+        "title": "Interviewer fields"
+      },
+      "notes": {
+        "title": "Discrepancy notes"
+      }
     },
     "flag": {
-      "dob": { "label": "Date of birth", "hint": "Full DOB column. Includes PHI — disable for de-identified extracts." },
-      "gender": { "label": "Gender", "hint": "Maps to the subject's gender code." },
-      "subjectStatus": { "label": "Subject status", "hint": "Available, removed, deleted, signed, …" },
-      "uniqueIdentifier": { "label": "Subject unique ID", "hint": "Site- or study-scoped subject identifier." },
-      "secondaryId": { "label": "Secondary ID", "hint": "Sponsor or registry secondary identifier." },
-      "ageAtEvent": { "label": "Age at event", "hint": "Computed from DOB and the event start date." },
-      "groupInformation": { "label": "Subject group", "hint": "Arm / family / group-class membership." },
-      "eventLocation": { "label": "Event location", "hint": "Free-text location captured on the event." },
-      "eventStartDate": { "label": "Event start date", "hint": "Scheduled or actual start, depending on event status." },
-      "eventEndDate": { "label": "Event end date", "hint": "Captured for events with a duration." },
-      "eventStartTime": { "label": "Event start time", "hint": "Captured when configured on the event definition." },
-      "eventEndTime": { "label": "Event end time", "hint": "Captured when configured on the event definition." },
-      "eventStatus": { "label": "Event status", "hint": "Scheduled, data-entry-started, completed, stopped, skipped, signed, locked." },
-      "crfStatus": { "label": "CRF status", "hint": "Initial / completed / signed / locked / invalid." },
-      "crfVersion": { "label": "CRF version", "hint": "Version name and OID for each CRF row." },
-      "interviewerName": { "label": "Interviewer name", "hint": "Free-text 'who entered the CRF' label." },
-      "interviewerDate": { "label": "Interviewer date", "hint": "Date the interviewer column refers to." },
-      "completionDate": { "label": "CRF completion date", "hint": "ISO-8601 completion timestamp." },
-      "discNotes": { "label": "Discrepancy notes", "hint": "Appends an extra column with linked query / annotation notes. Phase 4 wires the actual emission." }
+      "dob": {
+        "label": "Date of birth",
+        "hint": "Full DOB column. Includes PHI — disable for de-identified extracts."
+      },
+      "gender": {
+        "label": "Gender",
+        "hint": "Maps to the subject's gender code."
+      },
+      "subjectStatus": {
+        "label": "Subject status",
+        "hint": "Available, removed, deleted, signed, …"
+      },
+      "uniqueIdentifier": {
+        "label": "Subject unique ID",
+        "hint": "Site- or study-scoped subject identifier."
+      },
+      "secondaryId": {
+        "label": "Secondary ID",
+        "hint": "Sponsor or registry secondary identifier."
+      },
+      "ageAtEvent": {
+        "label": "Age at event",
+        "hint": "Computed from DOB and the event start date."
+      },
+      "groupInformation": {
+        "label": "Subject group",
+        "hint": "Arm / family / group-class membership."
+      },
+      "eventLocation": {
+        "label": "Event location",
+        "hint": "Free-text location captured on the event."
+      },
+      "eventStartDate": {
+        "label": "Event start date",
+        "hint": "Scheduled or actual start, depending on event status."
+      },
+      "eventEndDate": {
+        "label": "Event end date",
+        "hint": "Captured for events with a duration."
+      },
+      "eventStartTime": {
+        "label": "Event start time",
+        "hint": "Captured when configured on the event definition."
+      },
+      "eventEndTime": {
+        "label": "Event end time",
+        "hint": "Captured when configured on the event definition."
+      },
+      "eventStatus": {
+        "label": "Event status",
+        "hint": "Scheduled, data-entry-started, completed, stopped, skipped, signed, locked."
+      },
+      "crfStatus": {
+        "label": "CRF status",
+        "hint": "Initial / completed / signed / locked / invalid."
+      },
+      "crfVersion": {
+        "label": "CRF version",
+        "hint": "Version name and OID for each CRF row."
+      },
+      "interviewerName": {
+        "label": "Interviewer name",
+        "hint": "Free-text 'who entered the CRF' label."
+      },
+      "interviewerDate": {
+        "label": "Interviewer date",
+        "hint": "Date the interviewer column refers to."
+      },
+      "completionDate": {
+        "label": "CRF completion date",
+        "hint": "ISO-8601 completion timestamp."
+      },
+      "discNotes": {
+        "label": "Discrepancy notes",
+        "hint": "Appends an extra column with linked query / annotation notes. Phase 4 wires the actual emission."
+      }
     }
   },
   "dataExport": {
@@ -2814,7 +3027,16 @@
       "tsv": "TSV (tab-separated)",
       "excel": "Excel (.xls)",
       "sas": "SAS",
-      "spss": "SPSS"
+      "spss": "SPSS",
+      "bundle": "Full bundle (ZIP, with images) — in the background"
+    },
+    "job": {
+      "label": "Bundle",
+      "queued": "Queued …",
+      "running": "Building …",
+      "done": "Done.",
+      "failed": "Failed",
+      "download": "Download"
     },
     "modal": {
       "title": "Export dataset",
@@ -2894,6 +3116,259 @@
     "noBcvaProvided": "Enter at least one BCVA value (OD or OS).",
     "submit": "Save",
     "submitting": "Saving …"
+  },
+  "imageInbox": {
+    "title": "Image inbox",
+    "cardDesc": "Assign incoming fundus images to patients and visits.",
+    "subtitle": "{count} unbound images",
+    "loading": "Loading …",
+    "empty": "No unbound images.",
+    "noPreview": "No preview",
+    "patientId": "Patient ID",
+    "eye": "Eye",
+    "suggestion": "Suggestion: {label} ({study})",
+    "bindSuggested": "Bind suggestion",
+    "bind": "Bind …",
+    "dismiss": "Dismiss",
+    "dismissConfirm": "Really dismiss this image?"
+  },
+  "ingestInbox": {
+    "uploadAction": "Upload",
+    "title": "Ingest inbox",
+    "cardDesc": "File incoming images and scans against patients and visits.",
+    "subtitle": "{count} files",
+    "loading": "Loading …",
+    "empty": "No files in this view.",
+    "filters": "Filters",
+    "kindAll": "All",
+    "kind": {
+      "e2e": "OCT scan",
+      "dicom": "DICOM image",
+      "image": "Fundus image",
+      "other": "Other file"
+    },
+    "statusLabel": "Status",
+    "status": {
+      "UNBOUND": "Unreconciled",
+      "BOUND": "Filed",
+      "DISMISSED": "Dismissed"
+    },
+    "searchLabel": "Search",
+    "searchPlaceholder": "Patient ID or filename",
+    "apply": "Apply",
+    "selectOne": "Select file",
+    "selected": "{n} selected",
+    "bindSelected": "File selection …",
+    "clearSelection": "Clear selection",
+    "someSkipped": "{n} file(s) were skipped — they had already been dealt with.",
+    "patientId": "Patient ID",
+    "eye": "Eye",
+    "suggestion": "Suggested: {label} ({study})",
+    "bindSuggested": "Accept suggestion",
+    "bind": "File …",
+    "unbind": "Undo filing",
+    "unbindConfirm": "Undo this filing? The CRF value it set is removed too, unless another file from the same device still evidences the visit.",
+    "dismiss": "Dismiss",
+    "dismissConfirm": "Dismiss this file?",
+    "countAria": "{n} files in the inbox"
+  },
+  "imagingModalities": {
+    "intro": "Which acquisitions this study performs, on which device — and which CRF box a filed file ticks.",
+    "noStudy": "No active study. Pick a study first.",
+    "empty": "No acquisitions configured for this study yet.",
+    "code": "Code",
+    "label": "Label",
+    "labelDe": "Label (DE)",
+    "labelEn": "Label (EN)",
+    "device": "Device",
+    "kinds": "File kinds",
+    "bindings": "CRF items",
+    "ordinal": "Order",
+    "aeTitle": "DICOM AE title",
+    "lateralityRequired": "Eye required",
+    "checklistOnly": "checklist only",
+    "noBindings": "no item bound",
+    "kindsHint": "Leave empty for a checklist-only row (e.g. BCVA) — no file ever arrives for it.",
+    "autoMatchHint": "Images from this AE title are classified as this acquisition automatically.",
+    "addTitle": "Add an acquisition",
+    "add": "Add",
+    "addBinding": "CRF item …",
+    "roleLabel": "Role",
+    "eye": "Eye",
+    "itemOid": "Item OID",
+    "itemOidPlaceholder": "e.g. I_HEALT_OCT_PERFORMED",
+    "codedYes": "Coded yes",
+    "retire": "Retire",
+    "retired": "retired",
+    "retireConfirm": "Retire acquisition “{code}”? It will stop ticking its CRF box.",
+    "role": {
+      "performed": "performed",
+      "not_performed_reason": "reason",
+      "initials": "initials"
+    }
+  },
+  "studySettings": {
+    "title": "Platform settings",
+    "intro": "What this study uses. “Not set” means as before — the platform decides.",
+    "setting": "Setting",
+    "value": "Value",
+    "effective": "Effective",
+    "notSet": "Not set",
+    "on": "On",
+    "off": "Off",
+    "inherited": "inherited",
+    "save": "Save settings",
+    "saved": "Saved ✓",
+    "bindingsCount": "{n} CRF item binding(s) configured.",
+    "keys": {
+      "ingest.dicom.enabled": "DICOM receiving (worklist + C-STORE)",
+      "ingest.image.enabled": "Image upload portal",
+      "ingest.oct.enabled": "OCT upload portal",
+      "inference.enabled": "AI inference",
+      "export.bundle.enabled": "Multimodal export",
+      "portal.todaysVisits": "Today's visits on the upload page",
+      "ai.arm.shownGroup": "Group shown AI",
+      "ai.arm.hiddenGroup": "Group blinded to AI"
+    }
+  },
+  "subjectUnboundItems": {
+    "title": "Unfiled arrivals",
+    "loading": "Loading …",
+    "subtitle": "{count} file(s) waiting in the inbox to be filed.",
+    "openInbox": "File them in the inbox →"
+  },
+  "dueVisits": {
+    "title": "Due visits",
+    "cardDesc": "Keep an eye on upcoming and overdue visits.",
+    "intro": "Open visits in the chosen window. Overdue ones come first.",
+    "from": "From",
+    "to": "To",
+    "reload": "Refresh",
+    "loading": "Loading …",
+    "empty": "No open visits in this window.",
+    "overdue": "overdue",
+    "overdueCount": "{count} overdue",
+    "colDate": "Date",
+    "colSubject": "Subject",
+    "colVisit": "Visit",
+    "colStudy": "Study",
+    "colStatus": "Status",
+    "countAria": "{n} due visits"
+  },
+  "uploadPortal": {
+    "topbar": {
+      "portalLabel": "Upload portal"
+    },
+    "head": {
+      "eyebrow": "Imaging · Upload",
+      "title": "Upload acquisitions",
+      "lead": "OCT exports (.e2e), DICOM files (Clarus, PlexElite) and fundus photos (JPEG/PNG) through one page. Pick the visit once, drop every file of the visit — each row can still be changed on its own."
+    },
+    "footer": {
+      "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
+    },
+    "dropzone": {
+      "heroTitle": "Drop files here",
+      "heroBrowsePrefix": "or",
+      "heroBrowse": "choose files",
+      "heroNote": "several files at once · headers are read locally in the browser",
+      "slimDropMore": "Drop more files here",
+      "browse": "Browse"
+    },
+    "batch": {
+      "title": "Visit for these files",
+      "hint": "Pick from today's list, search the patient or type the label — every file can be changed on its own afterwards.",
+      "searchPatient": "Search patient",
+      "clear": "Clear",
+      "visitsLabel": "Today's visits",
+      "visitsFilterPlaceholder": "Filter by label or visit",
+      "visitsLoading": "Loading visits …",
+      "visitsNone": "No matching visit on this day",
+      "patientIdLabel": "Patient ID (for files without a label in the header)",
+      "patientIdPlaceholder": "e.g. HAE-001",
+      "dateLabel": "Acquisition date",
+      "patientFound": "Patient found: {label} ({study})",
+      "patientNotFound": "No matching patient ID",
+      "patientAmbiguous": "Several matches — resolve when assigning",
+      "attachToVisit": "Attach to visit “{visit}”"
+    },
+    "kind": {
+      "e2e": "OCT",
+      "dicom": "DICOM",
+      "jpeg": "JPEG",
+      "png": "PNG",
+      "imageShort": "photos"
+    },
+    "columns": {
+      "file": "File",
+      "patientId": "Label",
+      "date": "Acquired",
+      "eye": "Eye",
+      "assignment": "Study · Visit"
+    },
+    "row": {
+      "unsupported": "Unsupported — JPEG, PNG, DICOM (.dcm) or a Spectralis .e2e",
+      "noVolumes": "No OCT volumes found in the header",
+      "headerError": "The file could not be read",
+      "resolveFailed": "Study/visit lookup failed",
+      "uploadFailed": "Upload failed",
+      "undoFailed": "Undo failed",
+      "invalidVisit": "Invalid visit — please pick again",
+      "noSubject": "No study subject selected",
+      "deidentified": "header pseudonymised",
+      "lateralityAria": "Eye for {file}"
+    },
+    "assignment": {
+      "inInbox": "In the inbox",
+      "noEvent": "No visit found — pick one or upload without a visit.",
+      "noLabel": "No label — search the patient, pick a visit or upload without one.",
+      "alreadyUploadedDetail": "An identical file is already in the inbox as"
+    },
+    "actions": {
+      "uploadWithoutVisit": "Upload without visit"
+    },
+    "summary": {
+      "fileSingular": "file",
+      "filePlural": "files",
+      "ready": "ready",
+      "sent": "sent",
+      "duplicate": "already there",
+      "refused": "refused",
+      "confirmAll": "Confirm {n}"
+    },
+    "staff": {
+      "title": "Upload acquisitions",
+      "lead": "Bring OCT exports, DICOM files and fundus photos into the inbox — filed directly with a visit, or without one for later reconciliation.",
+      "backToInbox": "Back to the inbox"
+    }
+  },
+  "imagePortal": {
+    "visitPickerLabel": "Choose a visit",
+    "visitFilterPlaceholder": "Filter by label or visit",
+    "visitLoading": "Loading visits …",
+    "visitNone": "No matching visit today",
+    "visitClear": "Clear selection",
+    "attachToVisit": "Attach to visit “{visit}”",
+    "brandSuffix": "MUW",
+    "portalLabel": "Image Upload",
+    "noLoginRequired": "No login required",
+    "heroTitle": "Upload a fundus image",
+    "heroSubtitle": "Drag the image here or ",
+    "heroBrowse": "choose a file",
+    "formatNote": "JPEG or PNG · max 64 MB",
+    "patientIdLabel": "Patient ID (optional)",
+    "patientIdPlaceholder": "e.g. HAE-001",
+    "lateralityLabel": "Eye (optional)",
+    "dateLabel": "Capture date (optional)",
+    "uploadButton": "Upload",
+    "uploading": "Uploading …",
+    "successTitle": "Image uploaded",
+    "successBody": "The image has been submitted and is ready for reconciliation.",
+    "uploadAnother": "Upload another image",
+    "errorTitle": "Upload failed",
+    "patientFound": "Patient found: {label} ({study})",
+    "patientNotFound": "No matching patient ID found",
+    "patientAmbiguous": "Multiple matches — resolve during reconciliation"
   },
   "octPortal": {
     "topbar": {
@@ -3319,5 +3794,8 @@
       "network": "Could not send the report. Please try again.",
       "recipientNotConfigured": "Bug-report recipient is not configured. Please contact your sysadmin."
     }
+  },
+  "pageHeader": {
+    "trail": "Breadcrumb"
   }
 }

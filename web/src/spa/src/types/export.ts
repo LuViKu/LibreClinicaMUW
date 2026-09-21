@@ -70,7 +70,28 @@ export interface ArchivedFileDto {
  * Export formats the SPA's format picker offers. Maps 1:1 to the
  * backend's {@code DatasetsApiController.ExportFormatKey} enum.
  */
-export type ExportFormat = 'odm' | 'csv' | 'tsv' | 'excel' | 'sas' | 'spss'
+export type ExportFormat = 'odm' | 'csv' | 'tsv' | 'excel' | 'sas' | 'spss' | 'bundle'
+
+/**
+ * P3.8 — one queued export, as {@code POST /datasets/{id}/exports} answers
+ * and {@code GET /exports/{jobId}} reports. A bundle can run to gigabytes,
+ * so it is never produced on the request thread; the SPA polls this until
+ * {@code status} is {@code done} or {@code failed}.
+ */
+export interface ExportJobDto {
+  id: number
+  datasetId: number
+  format: string
+  status: 'queued' | 'running' | 'done' | 'failed' | string
+  progressPct: number
+  submittedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  archivedDatasetFileId: number | null
+  errorMessage: string | null
+  /** Set once the job is done. */
+  downloadUrl: string | null
+}
 
 /** Wire shape of {@code POST /datasets/{id}/export}. */
 export interface ExportTriggerRequest {

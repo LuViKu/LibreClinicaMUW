@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import ConfirmationWithPreflight from '@/components/ConfirmationWithPreflight.vue'
@@ -141,18 +140,9 @@ async function onSign(payload: ESignaturePayload) {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/subjects" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-4xl px-8 py-6">
+    <div class="max-w-4xl px-8 py-6 mx-auto">
       <p v-if="subjects.isLoadingSelected || subjects.isLoadingPreflight" class="text-slate-500 italic">
         {{ t('common.loading') }}
       </p>

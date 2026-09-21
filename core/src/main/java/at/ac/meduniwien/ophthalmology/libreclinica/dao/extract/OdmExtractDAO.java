@@ -87,6 +87,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.ClinicalDataUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetaDataCollector;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.MetadataUnit;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.FileItemValue;
 
 /**
  * Fetch odm data from database and load odm related classes.
@@ -971,8 +972,20 @@ public class OdmExtractDAO extends DatasetDAO {
                 }
             }
         }
-        cvIds = cvIds.substring(0, cvIds.length() - 1);
+        // 2026-09-18 — guard the trailing-comma strip. When the dataset's
+        // selection resolves to no CRF versions, cvIds is empty and
+        // substring(0, -1) threw StringIndexOutOfBoundsException, which
+        // surfaced to the operator as a 500 on the export button. An empty
+        // selection is a legitimate state (a dataset whose items were all
+        // removed, or the one-click export before it names any), and the
+        // honest answer is metadata with no forms rather than a stack trace.
+        cvIds = cvIds.isEmpty() ? "" : cvIds.substring(0, cvIds.length() - 1);
         metadata.setCvIds(cvIds);
+        if (cvIds.isEmpty()) {
+            logger.warn("ODM metadata: the dataset selects no CRF versions — "
+                    + "the export will contain no form definitions");
+            return;
+        }
 
         HashMap<Integer, Integer> maxLengths = new HashMap<Integer, Integer>();
         this.setItemDataMaxLengthTypesExpected();
@@ -1906,35 +1919,76 @@ public class OdmExtractDAO extends DatasetDAO {
         metadata.setSectionIds(sectionIds);
     }
 
+    /**
+     * 2026-09-18 — the SQL-ish {@code (w,d)} spelling.
+     *
+     * <p>The documented OpenClinica width/decimal format is {@code w(d)}, and
+     * the two parsers below implement exactly that. Several Liquibase-seeded
+     * CRFs (the demo Demographics form, Ophthalmology Visit and the nAMD
+     * Treat-and-Extend Visit) instead store {@code (4,1)} — the shape of a SQL
+     * {@code NUMERIC(4,1)} declaration. That fell into the "(d)" branch, so the
+     * parser tried {@code Integer.parseInt("4,1")} and threw, aborting the
+     * whole ODM export: metadata is collected per CRF version, so a single bad
+     * value made every ODM export of that study impossible, whichever items the
+     * operator selected. Recognising the spelling fixes existing rows without
+     * editing deployed changesets, and covers any future seed that uses it.
+     */
+    private static final java.util.regex.Pattern SQL_STYLE_WIDTH_DECIMAL =
+            java.util.regex.Pattern.compile("^\\(?\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)?$");
+
     public int parseWidth(String widthDecimal) {
+        if (widthDecimal == null) return 0;
+        String raw = widthDecimal.trim();
+        java.util.regex.Matcher sqlStyle = SQL_STYLE_WIDTH_DECIMAL.matcher(raw);
+        if (sqlStyle.matches()) {
+            return parseIntOrZero(sqlStyle.group(1), raw);
+        }
         String w = "";
-        widthDecimal = widthDecimal.trim();
-        if (widthDecimal.startsWith("(")) {
-        } else if (widthDecimal.contains("(")) {
-            w = widthDecimal.split("\\(")[0];
+        if (raw.startsWith("(")) {
+        } else if (raw.contains("(")) {
+            w = raw.split("\\(")[0];
         } else {
-            w = widthDecimal;
+            w = raw;
         }
         if (w.length() > 0) {
-            return "w".equalsIgnoreCase(w) ? 0 : Integer.parseInt(w);
+            return "w".equalsIgnoreCase(w) ? 0 : parseIntOrZero(w, raw);
         }
         return 0;
     }
 
     public int parseDecimal(String widthDecimal) {
+        if (widthDecimal == null) return 0;
+        String raw = widthDecimal.trim();
+        java.util.regex.Matcher sqlStyle = SQL_STYLE_WIDTH_DECIMAL.matcher(raw);
+        if (sqlStyle.matches()) {
+            return parseIntOrZero(sqlStyle.group(2), raw);
+        }
         String d = "";
-        widthDecimal = widthDecimal.trim();
-        if (widthDecimal.startsWith("(")) {
-            d = widthDecimal.substring(1, widthDecimal.length() - 1);
-        } else if (widthDecimal.contains("(")) {
-            d = widthDecimal.split("\\(")[1].trim();
+        if (raw.startsWith("(")) {
+            d = raw.substring(1, raw.length() - 1);
+        } else if (raw.contains("(")) {
+            d = raw.split("\\(")[1].trim();
             d = d.substring(0, d.length() - 1);
 
         }
         if (d.length() > 0) {
-            return "d".equalsIgnoreCase(d) ? 0 : Integer.parseInt(d);
+            return "d".equalsIgnoreCase(d) ? 0 : parseIntOrZero(d, raw);
         }
         return 0;
+    }
+
+    /**
+     * Width/decimal is presentation metadata: a malformed value should cost the
+     * ODM its {@code SignificantDigits} hint, not cost the study its export.
+     */
+    private int parseIntOrZero(String value, String original) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            logger.warn("Unparseable item_form_metadata.width_decimal '{}' — exporting it as 0",
+                    original);
+            return 0;
+        }
     }
 
     public void getAdminData(StudyBean study, DatasetBean dataset, OdmAdminDataBean data, String odmVersion) {
@@ -2169,6 +2223,13 @@ public class OdmExtractDAO extends DatasetDAO {
                                     logger.debug("Item -" + itOID + " value " + itValue + " might not be ODM date format yyyy-MM-dd.");
                                 }
                             }
+                            // P3.7 — a FILE item's value is a server path. The
+                            // recipient of an ODM extract cannot use it and
+                            // should not be told the filesystem layout of a
+                            // machine holding patient data. Third route to the
+                            // same leak, same rule.
+                            itValue = FileItemValue.forExport(
+                                    itValue, datatypeid == null ? 0 : datatypeid);
                             it.setValue(itValue);
                         }
                         if (muOid != null && muOid.length() > 0) {
@@ -2331,6 +2392,24 @@ public class OdmExtractDAO extends DatasetDAO {
         }
     }
 
+    /**
+     * The display name of a status id, or the value itself when it is not one.
+     *
+     * <p>Audit values are free text in the schema. Several event types happen
+     * to store a status id there, and the ODM exporter renders those as names —
+     * but a value that is not a status id is still a legitimate audit value and
+     * must travel through unchanged rather than aborting the export.
+     */
+    static String statusNameOrRaw(String value) {
+        if (value == null) return null;
+        if ("0".equals(value)) return Status.INVALID.getName();
+        try {
+            return Status.getFromMap(Integer.parseInt(value.trim())).getName();
+        } catch (NumberFormatException notAStatusId) {
+            return value;
+        }
+    }
+
     protected void setOCFormDataAuditLogs(StudyBean study, OdmClinicalDataBean data, String studySubjectOids, String ecIds,
             HashMap<Integer, String> formOidPoses) {
         this.setOCFormDataAuditsTypesExpected();
@@ -2361,16 +2440,15 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 8 || typeId == 10 || typeId == 11 || typeId == 14 || typeId == 15 || typeId == 16) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setNewValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(Status.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(Status.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // 2026-09-18 — these six types were assumed to carry a
+                    // numeric status id, and Integer.parseInt was called on
+                    // the value with no guard. Newer code writes rows of type
+                    // 8 ("Event CRF marked complete") whose new_value is an
+                    // ISO timestamp, so a single completed CRF made the whole
+                    // study impossible to export as ODM. An exporter must not
+                    // die on the content of an audit row it is only copying.
+                    auditLog.setNewValue(statusNameOrRaw(newValue));
+                    auditLog.setOldValue(statusNameOrRaw(oldValue));
                 } //Fix for 0011675: SDV'ed subject is dipslayed as not SDV'ed in the 1.3 Full ODM Extract commenting out the following lines as these are treated like booleans while they are strings
                 else {
                     auditLog.setNewValue(newValue);

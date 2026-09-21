@@ -3,7 +3,6 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SkeletonRow from '@/components/SkeletonRow.vue'
@@ -14,7 +13,6 @@ import { useAuthStore } from '@/stores/auth'
 import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
 import { formatDate } from '@/lib/dateFormat'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
@@ -25,8 +23,6 @@ const route = useRoute()
 // 2026-06-23 user-feedback round — nested breadcrumb trail.
 // "<study> > Studienteilnehmer". The Subject Matrix is the leaf
 // of its own flow so the inner-trail is a single non-link crumb;
-// App.vue prepends the active study.
-useViewBreadcrumb(computed(() => [{ label: t('nav.subjectMatrix'), to: null }]))
 
 /**
  * Phase E.6 — Pick-a-subject banner that previously launched on the
@@ -129,7 +125,7 @@ const eventColumns = computed(() => {
   return raw.map((c) => ({ ...c, title: c.label }))
 })
 
-/* Studien-Statistik modal — opens on the SideRail link. */
+/* Studien-Statistik modal — opens from the header button. */
 const metricsModalOpen = ref(false)
 
 const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'neutral' => {
@@ -290,64 +286,9 @@ watch(eventColumns, async (next, prev) => {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink
-        to="/"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        {{ t('nav.home') }}
-      </RouterLink>
+  <div>
 
-      <RouterLink
-        to="/subjects"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium"
-        aria-current="page"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-
-      <template #footer>
-        <dl class="space-y-1.5 text-[11px]">
-          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.pi') }}</dt><dd class="text-slate-700 text-right truncate">{{ studyPi }}</dd></div>
-          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.start') }}</dt><dd class="text-slate-700 text-right truncate">{{ studyStart }}</dd></div>
-          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.subjects') }}</dt><dd class="text-slate-700 text-right">{{ subjects.totalCount }} {{ t('subjectMatrix.studyCard.enrolled') }}</dd></div>
-          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.status') }}</dt><dd><StatusPill :variant="studyStatusActive ? 'success' : 'neutral'">{{ studyStatusActive ? t('subjectMatrix.studyCard.active') : studyStatusLabel }}</StatusPill></dd></div>
-        </dl>
-      </template>
-
-      <template #metrics>
-        <button
-          type="button"
-          class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white text-xs"
-          data-testid="open-study-metrics"
-          @click="metricsModalOpen = true"
-        >
-          <span class="inline-flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-              <path d="M3 3v18h18" />
-              <rect x="7" y="11" width="3" height="6" rx="1" />
-              <rect x="12" y="7" width="3" height="10" rx="1" />
-              <rect x="17" y="13" width="3" height="4" rx="1" />
-            </svg>
-            {{ t('subjectMatrix.metricsLink') }}
-          </span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </button>
-      </template>
-    </SideRail>
-
-    <div class="flex-1 px-8 py-6 min-w-0">
+    <div class="max-w-7xl px-8 py-6 min-w-0 mx-auto">
       <!-- Phase E.6 — schedule-visit hint from HomeView's
            "Schedule visit" card. The actual dialog lives on
            SubjectDetailView; this banner tells the operator to drill
@@ -365,14 +306,34 @@ watch(eventColumns, async (next, prev) => {
         <p class="leading-relaxed">{{ t('subjectMatrix.scheduleHint') }}</p>
       </div>
 
-      <div class="flex items-end justify-between mb-5">
-        <div>
+      <div class="flex items-end justify-between gap-4 flex-wrap mb-5">
+        <div class="min-w-0">
           <div class="text-xs text-slate-500 mb-1">
             <template v-if="studyContextLabel">{{ studyContextLabel }} · </template>{{ subjects.totalCount }} {{ t('subjectMatrix.subjectsCountTrail') }}
           </div>
           <h1 class="text-xl font-semibold tracking-tight">{{ t('subjectMatrix.title') }}</h1>
+          <!-- The study facts the side rail used to carry, as one line. -->
+          <dl class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500" data-testid="study-facts">
+            <div class="inline-flex items-center gap-1"><dt>{{ t('subjectMatrix.studyCard.pi') }}</dt><dd class="text-slate-700">{{ studyPi }}</dd></div>
+            <div class="inline-flex items-center gap-1"><dt>{{ t('subjectMatrix.studyCard.start') }}</dt><dd class="text-slate-700">{{ studyStart }}</dd></div>
+            <div class="inline-flex items-center gap-1"><dt class="sr-only">{{ t('subjectMatrix.studyCard.status') }}</dt><dd><StatusPill compact :variant="studyStatusActive ? 'success' : 'neutral'">{{ studyStatusActive ? t('subjectMatrix.studyCard.active') : studyStatusLabel }}</StatusPill></dd></div>
+          </dl>
         </div>
         <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5"
+            data-testid="open-study-metrics"
+            @click="metricsModalOpen = true"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <path d="M3 3v18h18" />
+              <rect x="7" y="11" width="3" height="6" rx="1" />
+              <rect x="12" y="7" width="3" height="10" rx="1" />
+              <rect x="17" y="13" width="3" height="4" rx="1" />
+            </svg>
+            {{ t('subjectMatrix.metricsLink') }}
+          </button>
           <button
             data-testid="subject-matrix-export"
             :disabled="subjects.filtered.length === 0"

@@ -43,22 +43,47 @@
  * card.
  */
 
+// Rule specification, thresholds in both units, and the sign-off record:
+// docs/development/study-modules/namd-treat-and-extend-rules.md
 import { computed, type ComputedRef } from 'vue'
 import type { NamdAiRecommendation, NamdTriggerHit, NamdVisit } from '../types'
 
 // ─── Tunable thresholds ────────────────────────────────────────────
+//
+// 2026-09-18 — every threshold below was multiplied by ten when the mm³ → nL
+// conversion in useNamdVisitData was corrected (it multiplied by 100 instead
+// of 1000). The two changes cancel: the volumes these fire at are exactly the
+// volumes they fired at before, so no recommendation changes. What changed is
+// that the numbers are now stated in real nanolitres.
+//
+// These are therefore the values the rules have always used, not a clinical
+// decision. The literal figures in the rule specification are ten times
+// smaller. Lowering them to the specification is a clinical call for the study
+// lead; when that happens, bump NAMD_THRESHOLDS_VERSION and record the
+// decision in the rules document, because every stored recommendation has to
+// stay interpretable against the thresholds that produced it.
+//
+// See docs/development/study-modules/namd-treat-and-extend-rules.md.
+
+/**
+ * Identifies the threshold set a recommendation was produced under. Shown on
+ * the recommendation card and written into the decision audit, so a decision
+ * made last year can still be read against the rules of last year.
+ */
+export const NAMD_THRESHOLDS_VERSION = 'v1-2026-09'
+
 /** SHORTEN: total IRF increase (nL) above this is "above threshold". */
-export const IRF_INCREASE_NL = 20
+export const IRF_INCREASE_NL = 200
 /** SHORTEN: central-1mm SRF increase (nL) above this is "above strict threshold". */
-export const CENTRAL_SRF_STRICT_INCREASE_NL = 10
+export const CENTRAL_SRF_STRICT_INCREASE_NL = 100
 /** SHORTEN: SRF in the 1–3 mm ring rises by ≥ this many nL vs prev OR cumulatively vs reference/nadir. */
-export const SRF_RING_1_3_INCREASE_NL = 10
+export const SRF_RING_1_3_INCREASE_NL = 100
 /** SHORTEN: IRF dropped vs prev but by < this fraction (i.e. < 50 %). */
 export const IRF_DECREASE_SUFFICIENT_PCT = 0.5
 /** SHORTEN: ≥ this BCVA-letters drop vs prev (combined with the attribution flag) triggers BCVA_LOSS. */
 export const BCVA_LOSS_LETTERS = 5
 /** KEEP / EXTEND: max activity (nL) considered "absent" — covers measurement noise around 0. */
-export const ABSENT_NL = 1
+export const ABSENT_NL = 10
 /** Default interval shift when shortening / extending (weeks). */
 export const SHIFT_WEEKS = 2
 /** Loading-phase interval (weeks). */
@@ -86,41 +111,36 @@ function hit(
   return { key, bucket, value, threshold }
 }
 
-/** Build the rationale line from the top-priority fired trigger. */
-function rationaleFor(top: NamdTriggerHit | undefined): string {
-  if (!top) return 'Stabile Befundlage.'
+/**
+ * The rationale line for the top-priority fired trigger, as a translation key
+ * and its parameters.
+ *
+ * Returns the structure rather than a sentence so the card can render it in
+ * the reader's language. Values are rounded here, where the unit is known, so
+ * the translation never has to do arithmetic.
+ */
+function rationaleFor(
+  top: NamdTriggerHit | undefined,
+): { key: string; params: Record<string, string | number> } | null {
+  const base = 'studyModules.namd.recommendation.rationale.'
+  if (!top) return { key: base + 'STABLE', params: {} }
+
+  const params: Record<string, string | number> = {
+    value: top.value != null ? Math.round(top.value) : 0,
+    threshold: top.threshold != null ? Math.round(top.threshold) : 0,
+  }
+
   switch (top.key) {
-    case 'DE_NOVO_IRF':
-      return 'Neu aufgetretene intraretinale Flüssigkeit — Intervall verkürzen.'
-    case 'IRF_INCREASE':
-      return `IRF um ${Math.round(top.value ?? 0)} nL gestiegen (Schwelle ${top.threshold} nL).`
-    case 'IRF_DECREASE_INSUFFICIENT':
-      return 'IRF rückläufig um weniger als 50 % vs. Vorbesuch — Intervall verkürzen.'
-    case 'DE_NOVO_CENTRAL_SRF':
-      return 'Neu aufgetretene zentrale subretinale Flüssigkeit (1 mm).'
-    case 'CENTRAL_SRF_INCREASE':
-      return `Zentrale SRF um ${Math.round(top.value ?? 0)} nL gestiegen (Schwelle ${top.threshold} nL).`
-    case 'SRF_RING_1_3_INCREASE':
-      return `SRF im 1–3 mm Ring um ${Math.round(top.value ?? 0)} nL gestiegen.`
-    case 'NEW_HEMORRHAGE':
-      return 'Neue retinale Blutung — Intervall verkürzen.'
-    case 'BCVA_LOSS_5_LETTERS':
-      return 'Visusverlust ≥ 5 Buchstaben, nAMD-attribuiert.'
-    case 'RESIDUAL_IRF_HALVED':
-      return 'IRF um ≥ 50 % zurückgegangen, jedoch noch vorhanden — Intervall halten.'
-    case 'RESIDUAL_IRF_STABLE':
-      return 'Stabile residuelle IRF — Intervall halten.'
-    case 'CENTRAL_SRF_IMPROVING':
-      return 'Zentrale SRF stabil oder rückläufig, jedoch noch vorhanden.'
-    case 'ACTIVITY_IMPROVING':
-      return 'Aktivität insgesamt rückläufig — Intervall halten.'
+    // The four EXTEND-eligibility triggers share one sentence: none of them is
+    // a finding, they are the absence of findings.
     case 'IRF_ABSENT':
     case 'CENTRAL_SRF_ABSENT':
     case 'NO_HEMORRHAGE_OR_BCVA_LOSS':
     case 'SRF_ISOLATED_1_3_STABLE':
-      return 'Trockener, stabiler Befund — Intervall verlängern.'
+      return { key: base + 'DRY_STABLE', params }
+    default:
+      return { key: base + top.key, params }
   }
-  return ''
 }
 
 // ─── Public API ───────────────────────────────────────────────────

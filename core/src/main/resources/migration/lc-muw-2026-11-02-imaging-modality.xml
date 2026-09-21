@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.4 — what a study photographs, as configuration.
+
+        P1-5 taught the platform to tick a visit's "this modality was
+        performed" box when a file from that device is filed against the
+        visit. It learned it from two hard-coded rows: a Remidio camera ticks
+        I_HEALT_REMIDIO_PERFORMED, an Optomed ticks I_HEALT_OPTOMED_PERFORMED.
+        That is exactly as far as it goes — a third study, or the Spectralis
+        modalities the HealthAEye visit plan already lists (IR, red-free, blue
+        autofluorescence, OCTA), needs a code change and a migration.
+
+        This makes it a per-study catalogue an administrator maintains.
+
+        WHY NOT THE EXISTING `modality` TABLE. That one is a global catalogue
+        of MEASUREMENTS — BCVA in logMAR and ETDRS letters, IOP, refraction —
+        with one item OID per eye, feeding the per-eye baselines panel. An
+        imaging acquisition is a different thing: it belongs to one study, it
+        accepts files of particular kinds, and it ticks a checklist rather than
+        carrying a value. Overloading one table with both would mean every
+        reader of either has to know which sort of row it is looking at.
+
+        THE BINDING TABLE IS ROLE-BASED, not column-based. P1-5's map had one
+        item_oid; the visit plan wants three per modality (performed, the
+        reason when it was not, the investigator's initials) and eventually per
+        eye. Roles and laterality as rows rather than columns is what lets that
+        grow without another migration — and is shaped so the measurement
+        catalogue's per-eye aliases could migrate onto it later.
+
+        NO FOREIGN KEY FROM A BINDING TO `item`. CRF versions rename and
+        re-create items; a dangling binding that logs a warning is a better
+        outcome than a migration that cannot be applied, and the item is
+        resolved inside the visit's own CRF version at write time anyway.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-11-02-imaging-modality">
+        <comment>Per-study catalogue of imaging acquisitions.</comment>
+
+        <createTable tableName="imaging_modality">
+            <column autoIncrement="true" name="imaging_modality_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <!-- The parent study. Sites inherit; the resolver walks
+                 parent_study_id rather than duplicating rows per site. -->
+            <column name="study_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Stable identifier an operator and an API both use. -->
+            <column name="code" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label_de" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label_en" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The instrument, matched against ingest_item.device. -->
+            <column name="device" type="VARCHAR(64)"/>
+            <!--
+                Which ingest kinds may be filed as this modality, comma
+                separated — 'e2e', 'dicom', 'image', 'other'.
+
+                Empty means checklist-only: BCVA is on the visit plan and has
+                a "performed" box, but no file ever arrives for it. Without
+                this the catalogue could not describe half the visit plan.
+            -->
+            <column name="kinds_accepted" type="VARCHAR(64)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Whether filing one demands an eye. A fundus photo is of an
+                 eye; a checklist row may not be. -->
+            <column name="laterality_required" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <!-- A DICOM calling AE title that identifies this modality on
+                 arrival, so a camera's images need no operator to classify. -->
+            <column name="auto_match_ae_title" type="VARCHAR(32)"/>
+            <column name="ordinal" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_id" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_created" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="INT"/>
+            <column name="date_updated" type="TIMESTAMP"/>
+            <column name="updated_by_user_id" type="INT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="imaging_modality" baseColumnNames="study_id"
+                                 constraintName="fk_imaging_modality_study"
+                                 referencedTableName="study" referencedColumnNames="study_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+
+        <addUniqueConstraint tableName="imaging_modality" columnNames="study_id, code"
+                             constraintName="u_imaging_modality_study_code"/>
+
+        <createIndex tableName="imaging_modality" indexName="idx_imaging_modality_study">
+            <column name="study_id"/>
+            <column name="ordinal"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="imaging_modality"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-11-02-imaging-modality-item-binding">
+        <comment>Which CRF item each modality ticks, by role and eye.</comment>
+
+        <createTable tableName="imaging_modality_item_binding">
+            <column autoIncrement="true" name="imaging_modality_item_binding_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="imaging_modality_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- 'performed' | 'not_performed_reason' | 'initials'. Decoded in
+                 Java; a new role must not need a migration. -->
+            <column name="role" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- 'OU' when one item covers both eyes, 'OD'/'OS' when the CRF
+                 has a box per eye. -->
+            <column name="laterality" type="VARCHAR(2)" defaultValue="OU">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_oid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The coded value meaning "yes" in this CRF's response set: a
+                 checkbox may code it '1', 'Y' or 'ja'. A CRF-authoring
+                 decision, not a platform one. -->
+            <column name="performed_value" type="VARCHAR(32)" defaultValue="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_created" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="INT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="imaging_modality_item_binding"
+                                 baseColumnNames="imaging_modality_id"
+                                 constraintName="fk_imaging_binding_modality"
+                                 referencedTableName="imaging_modality"
+                                 referencedColumnNames="imaging_modality_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+
+        <addUniqueConstraint tableName="imaging_modality_item_binding"
+                             columnNames="imaging_modality_id, role, laterality"
+                             constraintName="u_imaging_binding_modality_role_eye"/>
+
+        <rollback>
+            <dropTable tableName="imaging_modality_item_binding"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The column P3.1 added without its target. Now the catalogue exists, it
+        can point at it. SET NULL rather than RESTRICT: removing a modality
+        from a study's catalogue is an administrative decision, and it must not
+        be blocked by files that were once filed under it — those keep their
+        binding and their CRF value, they simply stop naming a modality.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-02-ingest-item-modality-fk">
+        <comment>Point ingest_item.imaging_modality_id at the catalogue.</comment>
+        <addForeignKeyConstraint baseTableName="ingest_item" baseColumnNames="imaging_modality_id"
+                                 constraintName="fk_ingest_item_imaging_modality"
+                                 referencedTableName="imaging_modality"
+                                 referencedColumnNames="imaging_modality_id"
+                                 onDelete="SET NULL" onUpdate="RESTRICT"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="ingest_item"
+                                      constraintName="fk_ingest_item_imaging_modality"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The back-reference stops saying "image".
+
+        item_data.source_image_ingest_id was named when the queue held only
+        photographs. It now points at ingest_item, which holds OCT volumes too,
+        and a column claiming otherwise misleads every reader of a CRF value's
+        provenance. The position in the table is unchanged, which matters:
+        ItemDataDAO enumerates column types POSITIONALLY, so a rename is safe
+        where an insert would not be.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-02-item-data-source-ingest-item">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="item_data" columnName="source_image_ingest_id"/>
+        </preConditions>
+        <comment>source_image_ingest_id becomes source_ingest_item_id.</comment>
+
+        <renameColumn tableName="item_data"
+                      oldColumnName="source_image_ingest_id" newColumnName="source_ingest_item_id"
+                      columnDataType="BIGINT"/>
+
+        <rollback>
+            <renameColumn tableName="item_data"
+                          oldColumnName="source_ingest_item_id" newColumnName="source_image_ingest_id"
+                          columnDataType="BIGINT"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-11-02-item-data-source-ingest-item-names" dbms="postgresql">
+        <comment>Bring the FK and index names along with the column.</comment>
+        <sql splitStatements="true" endDelimiter=";">
+            ALTER TABLE item_data RENAME CONSTRAINT fk_item_data_source_image_ingest
+                TO fk_item_data_source_ingest_item;
+            ALTER INDEX IF EXISTS i_item_data_source_image_ingest
+                RENAME TO i_item_data_source_ingest_item;
+        </sql>
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";">
+                ALTER TABLE item_data RENAME CONSTRAINT fk_item_data_source_ingest_item
+                    TO fk_item_data_source_image_ingest;
+                ALTER INDEX IF EXISTS i_item_data_source_ingest_item
+                    RENAME TO i_item_data_source_image_ingest;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -187,8 +187,18 @@ export interface NamdAiRecommendation {
   rec: 'SHORTEN' | 'KEEP' | 'EXTEND'
   /** Suggested next interval (weeks). */
   intervalWeeks: number
-  /** One-line rationale string, German — derived from the top-priority trigger. */
-  rationale: string
+  /**
+   * One-line rationale, as a translation key plus its parameters.
+   *
+   * Structured rather than a finished sentence because the recommendation is
+   * rendered in whichever language the reader has chosen, and this line is the
+   * one that says why. It used to be hard-coded German, so an English-speaking
+   * reviewer of a German study got a German sentence in an otherwise English
+   * screen — or, worse, skipped it.
+   *
+   * Null when no trigger fired.
+   */
+  rationale: { key: string; params: Record<string, string | number> } | null
   /**
    * 2026-06-30 — every fired trigger, in priority order
    * (SHORTEN first, then KEEP, then EXTEND-eligibility). The UI

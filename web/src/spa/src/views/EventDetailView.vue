@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
@@ -13,7 +12,7 @@ import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 
 /**
  * Phase E.6 — standalone Event Detail view (replaces the legacy
@@ -99,17 +98,16 @@ watch(eventId, (id) => {
 
 const event = computed(() => store.event)
 
-// 2026-06-23 user-feedback round — nested breadcrumb trail:
-// "<study> > Studienteilnehmer > <subject> > <event>".
-useViewBreadcrumb(computed(() => {
+// The ancestors of this visit, for the page header: the register and the
+// subject. The visit itself is the H1, so it is not repeated as a crumb.
+const trail = computed(() => {
   const ev = event.value
-  if (!ev) return null
+  if (!ev) return []
   return [
     { label: t('nav.subjectMatrix'), to: '/subjects' },
     { label: ev.subjectLabel, to: `/subjects/${encodeURIComponent(ev.subjectLabel)}` },
-    { label: ev.eventDefinitionName, to: null },
   ]
-}))
+})
 
 function statusVariant(s: StudyEventStatus): 'success' | 'info' | 'warning' | 'danger' | 'neutral' {
   switch (s) {
@@ -203,17 +201,9 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        {{ t('nav.home') }}
-      </RouterLink>
-      <RouterLink to="/subjects" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-4xl px-8 py-6">
+    <div class="max-w-4xl px-8 py-6 mx-auto">
       <p v-if="store.isLoading && !event" class="text-slate-500 italic">
         {{ t('common.loading') }}
       </p>
@@ -239,18 +229,12 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
       </template>
 
       <template v-else-if="event">
-        <!-- Breadcrumb / header -->
+        <!-- Header: the trail above says whose visit this is; the H1 is the visit. -->
         <div class="mb-5">
-          <div class="text-xs text-slate-500 mb-1">
-            {{ event.studyName }}
-            <span class="text-slate-500"> / </span>
-            <RouterLink :to="`/subjects/${event.subjectLabel}`" class="underline">{{ event.subjectLabel }}</RouterLink>
-            <span class="text-slate-500"> / </span>
-            {{ event.eventDefinitionName }}
-            <span v-if="event.repeating && event.ordinal > 1" class="text-slate-400">· #{{ event.ordinal }}</span>
-          </div>
+          <PageHeader :trail="trail" />
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap">
             {{ event.eventDefinitionName }}
+            <span v-if="event.repeating && event.ordinal > 1" class="text-slate-400 font-normal text-sm">#{{ event.ordinal }}</span>
             <StatusPill :variant="statusVariant(event.status)">{{ t(`subjectMatrix.status.${event.status}`) }}</StatusPill>
           </h1>
           <div class="mt-1 flex items-center justify-between gap-3 flex-wrap">
@@ -422,9 +406,6 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           />
         </template>
 
-        <RouterLink :to="`/subjects/${event.subjectLabel}`" class="text-xs text-muw-blue underline" data-test="event-detail-back">
-          {{ t('eventDetail.back') }}
-        </RouterLink>
       </template>
     </div>
   </div>

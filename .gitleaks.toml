@@ -99,4 +99,30 @@ regexes = [
   # Spring Security / Boot config-property paths used in JSP
   # debug output occasionally match the generic rule.
   '''libreclinica\.sso\.''',
+
+  # --- 2026-09-21: the two findings that failed every scheduled run ---
+  #
+  # gitleaks-action scans the PUSH RANGE on a push event but the FULL
+  # HISTORY on a schedule, so these only ever broke the 04:00 UTC cron —
+  # 29 consecutive red scheduled runs against 11 green push runs. A daily
+  # red that everyone learns to ignore is worse than no scan, because a
+  # real leak looks identical; hence allowlisting rather than muting.
+
+  # DEV-compose value wired in 6bf78e64d ("wire dev compose preprocess
+  # sidecar for cluster smoke", 2026-06-17) and still present at
+  # docker/config/datainfo.properties. Production reads the real token
+  # from /etc/libreclinica/env at runtime and never from the repo, per
+  # the convention at the top of this file. Scoped to this ONE key, so a
+  # genuine credential landing in the same file — `dbPass`, say — is
+  # still caught.
+  '''core\.retinalInference\.preprocessToken\s*=''',
+
+  # `SECRET_ID` in dicom-scp/tests/test_log_hygiene.py is the sentinel a
+  # test plants in a DICOM PatientID to prove it never reaches the log
+  # (`assert SECRET_ID not in caplog.text`). It exists precisely BECAUSE
+  # patient identifiers must not be logged — the same invariant the CI
+  # log-hygiene gate enforces. Matching the assignment keeps the
+  # specific-format rules active, so a real key pasted into that constant
+  # would still fail the scan.
+  '''SECRET_ID\s*=''',
 ]
