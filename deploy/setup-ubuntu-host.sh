@@ -736,7 +736,16 @@ chmod 0600 "$DUMP_FILE"
 chown libreclinica:libreclinica "$DUMP_FILE"
 
 # Rotate.
-find "$BACKUP_DIR" -name 'libreclinica-*.sql.gz' -mtime +"$RETENTION_DAYS" -delete
+#
+# The glob is '*.sql.gz*', not '*.sql.gz', on purpose. A logrotate stanza
+# used to also manage this directory and renamed each dump to
+# `.sql.gz.1`, which the narrower glob stopped matching — so nothing was
+# pruned at all. On the MUW host that left every dump back to 2026-06-13
+# in place, 100 days into a 30-day window. The logrotate stanza is gone
+# (see the Logrotate section below), and the trailing '*' lets this prune
+# clean up the already-renamed backlog on the next run instead of leaving
+# it stranded forever.
+find "$BACKUP_DIR" -name 'libreclinica-*.sql.gz*' -mtime +"$RETENTION_DAYS" -delete
 
 # Surface size to journald so `journalctl -u libreclinica-backup-db.service`
 # tells the operator at a glance whether the dump shrank suspiciously.
@@ -783,15 +792,38 @@ section "Logrotate (backup directory)"
 # Docker container logs are already rotated by the json-file driver
 # (50MB × 5 files = 250MB max per container — set in daemon.json above).
 # We only need logrotate for the human-readable summary log we leave
-# in /var/log/libreclinica/setup.log, plus a safety net on the backup
-# directory in case retention via find ever misfires.
+# in /var/log/libreclinica/setup.log.
+#
+# The backup directory is deliberately NOT managed here any more. It used
+# to be, as "a safety net on the backup directory in case retention via
+# find ever misfires" — and the safety net is precisely what broke the
+# thing it was guarding. logrotate renamed each dump to `.sql.gz.1`, the
+# prune in libreclinica-backup-db matched only `*.sql.gz`, and so nothing
+# was ever deleted: on the MUW host, every dump back to 2026-06-13
+# survived a 30-day retention window.
+#
+# logrotate is the wrong tool for this directory regardless. It rotates
+# append-mode log files that keep one stable name; these are discrete,
+# already-compressed, already-timestamped dumps with their own pruning.
+# Two mechanisms owning the same files is the bug. The `find -mtime`
+# prune in libreclinica-backup-db is now the single owner, and its glob
+# was widened to `*.sql.gz*` so it clears the renamed backlog too.
+#
+# Remove a stanza left by an earlier run of this script, so an existing
+# host stops rotating backups on the next re-run rather than needing a
+# manual cleanup.
+if [[ -f /etc/logrotate.d/libreclinica ]] \
+   && grep -q "${BACKUP_DIR}" /etc/logrotate.d/libreclinica; then
+  log "Removing the legacy logrotate stanza for ${BACKUP_DIR} (it defeated backup retention)"
+fi
 cat >/etc/logrotate.d/libreclinica <<EOF
-${BACKUP_DIR}/*.sql.gz {
+/var/log/libreclinica/setup.log {
     weekly
-    rotate ${LIBRECLINICA_BACKUP_RETENTION_DAYS}
+    rotate 12
     missingok
     notifempty
-    nocreate
+    compress
+    delaycompress
     su libreclinica libreclinica
 }
 EOF
