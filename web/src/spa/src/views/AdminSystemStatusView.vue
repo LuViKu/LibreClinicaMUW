@@ -6,6 +6,13 @@
  * panels: JVM facts, database facts (Liquibase changelog count +
  * reachability probe), application status (OOM marker, uptime).
  *
+ * 2026-09-22 — a fourth panel, the retinal-inference cluster, fed by its
+ * own request to /api/v1/admin/retinal-cluster so a dead GPU node running
+ * out its probe timeout never delays the three panels above. One row per
+ * node (state, registered tasks, host + GPU, latency) and the tail of the
+ * app-VM cron monitor's log. Born of an outage nobody could see from
+ * inside the app for nineteen days.
+ *
  * Sysadmin-only — the backend returns 403 for non-sysadmin sessions
  * and the SPA router meta below requires the Administrator role.
  */
@@ -40,13 +47,37 @@ interface SystemStatus {
   }
 }
 
+type ClusterNodeState = 'healthy' | 'degraded' | 'unhealthy' | 'unreachable'
+
+interface ClusterNode {
+  name: string
+  url: string
+  state: ClusterNodeState
+  supportedTasks: string[]
+  missingTasks: string[]
+  latencyMs: number | null
+  node: string | null
+  gpuDevice: string | null
+  gpuName: string | null
+  error: string | null
+}
+
+interface ClusterStatus {
+  configured: boolean
+  remotePushUrl: string
+  expectedTasks: string[]
+  nodes: ClusterNode[]
+  monitor?: { path: string; readable: boolean; lines: string[] }
+}
+
 const data = ref<SystemStatus | null>(null)
+const cluster = ref<ClusterStatus | null>(null)
+const clusterError = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const lastRefreshed = ref<number | null>(null)
 
-async function load() {
-  loading.value = true
+async function loadSystem() {
   error.value = null
   try {
     data.value = await apiGet<SystemStatus>('/pages/api/v1/admin/system-status')
@@ -55,9 +86,46 @@ async function load() {
     error.value = err instanceof ApiError
       ? `${err.status}: ${err.message}`
       : t('adminSystemStatus.loadFailed')
+  }
+}
+
+async function loadCluster() {
+  clusterError.value = null
+  try {
+    cluster.value = await apiGet<ClusterStatus>('/pages/api/v1/admin/retinal-cluster')
+  } catch (err) {
+    clusterError.value = err instanceof ApiError
+      ? `${err.status}: ${err.message}`
+      : t('adminSystemStatus.clusterLoadFailed')
+  }
+}
+
+// The two requests are independent on purpose: the cluster probe waits on
+// remote hosts and can take its full timeout; the local facts must not.
+async function load() {
+  loading.value = true
+  try {
+    await Promise.all([loadSystem(), loadCluster()])
   } finally {
     loading.value = false
   }
+}
+
+const stateClass: Record<ClusterNodeState, string> = {
+  healthy: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  degraded: 'bg-amber-50 text-amber-800 border-amber-200',
+  unhealthy: 'bg-rose-50 text-rose-800 border-rose-200',
+  unreachable: 'bg-rose-50 text-rose-800 border-rose-200',
+}
+
+function stateLabel(state: ClusterNodeState): string {
+  return t(`adminSystemStatus.clusterState${state.charAt(0).toUpperCase()}${state.slice(1)}`)
+}
+
+function gpuLabel(n: ClusterNode): string {
+  if (!n.gpuName && !n.gpuDevice) return '\u2014'
+  const dev = n.gpuDevice ? `#${n.gpuDevice}` : ''
+  return [n.gpuName, dev].filter(Boolean).join(' ')
 }
 
 function formatUptime(ms: number): string {
@@ -141,5 +209,57 @@ onMounted(load)
         </dl>
       </section>
     </div>
+
+    <section class="mt-4 rounded-md border border-slate-200 bg-white p-4 text-xs" aria-labelledby="cluster-heading">
+      <h2 id="cluster-heading" class="text-sm font-medium mb-2">{{ t('adminSystemStatus.clusterHeading') }}</h2>
+
+      <div v-if="clusterError" class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800" role="alert">{{ clusterError }}</div>
+
+      <template v-else-if="cluster">
+        <p v-if="!cluster.configured" class="text-slate-500">{{ t('adminSystemStatus.clusterNotConfigured') }}</p>
+
+        <template v-else>
+          <p class="text-slate-500 mb-2">{{ t('adminSystemStatus.clusterTargetIs', { url: cluster.remotePushUrl }) }}</p>
+
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="text-left text-slate-500 border-b border-slate-200">
+                <th scope="col" class="py-1 pr-3 font-medium">{{ t('adminSystemStatus.clusterNode') }}</th>
+                <th scope="col" class="py-1 pr-3 font-medium">{{ t('adminSystemStatus.clusterState') }}</th>
+                <th scope="col" class="py-1 pr-3 font-medium">{{ t('adminSystemStatus.clusterTasks') }}</th>
+                <th scope="col" class="py-1 pr-3 font-medium">{{ t('adminSystemStatus.clusterGpu') }}</th>
+                <th scope="col" class="py-1 font-medium text-right">{{ t('adminSystemStatus.clusterLatency') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="n in cluster.nodes" :key="n.url" class="border-b border-slate-100 align-top" :data-node="n.name">
+                <td class="py-1.5 pr-3">
+                  <div class="font-medium">{{ n.name }}</div>
+                  <div class="text-slate-500 truncate max-w-[16rem]">{{ n.node && n.node !== n.name ? `${n.node} \u00b7 ` : '' }}{{ n.url }}</div>
+                </td>
+                <td class="py-1.5 pr-3">
+                  <span class="inline-block rounded border px-1.5 py-0.5" :class="stateClass[n.state]">{{ stateLabel(n.state) }}</span>
+                  <div v-if="n.error" class="text-rose-700 mt-1 break-all">{{ n.error }}</div>
+                </td>
+                <td class="py-1.5 pr-3">
+                  <span>{{ n.supportedTasks.length }} / {{ cluster.expectedTasks.length }}</span>
+                  <div v-if="n.missingTasks.length" class="text-amber-800">{{ t('adminSystemStatus.clusterMissingTasks', { tasks: n.missingTasks.join(', ') }) }}</div>
+                </td>
+                <td class="py-1.5 pr-3">{{ gpuLabel(n) }}</td>
+                <td class="py-1.5 text-right tabular-nums">{{ n.latencyMs != null ? `${n.latencyMs} ms` : '\u2014' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <div v-if="cluster.monitor" class="mt-4">
+          <h3 class="font-medium mb-1">{{ t('adminSystemStatus.clusterMonitorHeading') }}</h3>
+          <p class="text-slate-500 mb-1">{{ t('adminSystemStatus.clusterMonitorHint') }}</p>
+          <p v-if="!cluster.monitor.readable" class="text-amber-800">{{ t('adminSystemStatus.clusterMonitorUnavailable', { path: cluster.monitor.path }) }}</p>
+          <p v-else-if="cluster.monitor.lines.length === 0" class="text-emerald-700">{{ t('adminSystemStatus.clusterMonitorEmpty') }}</p>
+          <pre v-else class="rounded bg-slate-50 border border-slate-200 p-2 overflow-x-auto whitespace-pre-wrap break-all" data-testid="monitor-log">{{ cluster.monitor.lines.join('\n') }}</pre>
+        </div>
+      </template>
+    </section>
   </div>
 </template>
