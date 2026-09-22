@@ -3170,7 +3170,11 @@
     "unbindConfirm": "Undo this filing? The CRF value it set is removed too, unless another file from the same device still evidences the visit.",
     "dismiss": "Dismiss",
     "dismissConfirm": "Dismiss this file?",
-    "countAria": "{n} files in the inbox"
+    "countAria": "{n} files in the inbox",
+    "dateMismatchTitle": "The dates do not match",
+    "dateMismatchConfirm": "This file says it was acquired on {fileDate}, but the visit is dated {visitDate}. File it on this visit anyway? Your decision is recorded in the audit trail. ({n} file(s))",
+    "dateUnverified": "not read from the file",
+    "dateFromFile": "read from the file"
   },
   "imagingModalities": {
     "intro": "Which acquisitions this study performs, on which device — and which CRF box a filed file ticks.",

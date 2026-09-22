@@ -23,6 +23,7 @@ import {
   bulkBindIngestItems,
   dismissIngestItem,
   ingestInboxCounts,
+  isDateMismatch,
   listIngestInbox,
   unbindIngestItem,
   type IngestItem,
@@ -122,26 +123,74 @@ async function runBind(
   studySubjectId: number,
   studyEventId: number | null,
   eventCrfId: number | null,
+  acknowledgeDateMismatch = false,
 ): Promise<void> {
   error.value = null
   try {
     if (ids.length === 1) {
       busyId.value = ids[0] ?? null
-      await bindIngestItem(ids[0] as number, { studySubjectId, studyEventId, eventCrfId })
+      await bindIngestItem(ids[0] as number, {
+        studySubjectId, studyEventId, eventCrfId, acknowledgeDateMismatch,
+      })
       removeRow(ids[0] as number)
       return
     }
-    const res = await bulkBindIngestItems(ids, { studySubjectId, studyEventId, eventCrfId })
+    const res = await bulkBindIngestItems(ids, {
+      studySubjectId, studyEventId, eventCrfId, acknowledgeDateMismatch,
+    })
     res.bound.forEach(removeRow)
-    if (res.skipped.length > 0) {
+    // A batch gets skipped for two different reasons and they need different
+    // words: DATE_MISMATCH is a question to put to the operator, anything else
+    // is a row somebody already dealt with.
+    const dated = res.skipped.filter((sk) => sk.reason === 'DATE_MISMATCH')
+    const other = res.skipped.length - dated.length
+    if (other > 0) {
       // Say so rather than silently binding fewer than the operator selected.
-      error.value = t('ingestInbox.someSkipped', { n: res.skipped.length })
+      error.value = t('ingestInbox.someSkipped', { n: other })
+    }
+    if (dated.length > 0) {
+      const first = dated[0]!
+      await askDateMismatch(
+        dated.map((sk) => sk.id), studySubjectId, studyEventId, eventCrfId,
+        first.fileDate ?? '—', first.visitDate ?? '—',
+      )
     }
   } catch (e) {
+    // 409 date_mismatch is not a failure. The backend refuses once to file a
+    // scan under a day it does not claim to come from, so it cannot happen by
+    // accident; putting the two dates to the operator is the whole point.
+    if (isDateMismatch(e)) {
+      await askDateMismatch(ids, studySubjectId, studyEventId, eventCrfId,
+        e.body.fileDate, e.body.visitDate)
+      return
+    }
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     busyId.value = null
   }
+}
+
+/**
+ * Show both dates and bind anyway if the operator says so.
+ *
+ * Filing a scan on a visit it disagrees with is a judgement they are allowed to
+ * make — a device with a wrong clock, a visit recorded on the wrong day — and
+ * the acknowledgement is recorded in the audit trail alongside the two dates.
+ */
+async function askDateMismatch(
+  ids: number[],
+  studySubjectId: number,
+  studyEventId: number | null,
+  eventCrfId: number | null,
+  fileDate: string,
+  visitDate: string,
+): Promise<void> {
+  const ok = await confirm({
+    title: t('ingestInbox.dateMismatchTitle'),
+    message: t('ingestInbox.dateMismatchConfirm', { fileDate, visitDate, n: ids.length }),
+    danger: true,
+  })
+  if (ok) await runBind(ids, studySubjectId, studyEventId, eventCrfId, true)
 }
 
 function bindSuggested(row: IngestItem): void {
@@ -350,7 +399,22 @@ async function onUnbind(row: IngestItem): Promise<void> {
             <span class="font-medium">{{ t('ingestInbox.patientId') }}:</span> {{ row.patientId || '—' }}
           </div>
           <div class="text-[12px] text-slate-500 mt-0.5">
-            {{ t('ingestInbox.eye') }}: {{ row.laterality || '—' }} · {{ row.acquisitionDate || '—' }}
+            {{ t('ingestInbox.eye') }}: {{ row.laterality || '—' }} ·
+            <span v-if="row.acquisitionDate">
+              {{ row.acquisitionDate }}
+              <!--
+                A date nobody read out of the file is an assertion, and on the
+                upload workbench it is specifically the day the operator
+                searched visits by — so it agrees with whichever visit they
+                picked. Shown as unverified so it is not mistaken for evidence.
+              -->
+              <span
+                v-if="row.acquisitionDateSource !== 'file'"
+                class="italic text-slate-400"
+                :title="t('ingestInbox.dateUnverified')"
+              >({{ t('ingestInbox.dateUnverified') }})</span>
+            </span>
+            <span v-else>—</span>
           </div>
           <div class="text-[11px] text-slate-500 mt-0.5 uppercase tracking-wide">
             {{ t(`ingestInbox.kind.${row.kind}`) }}

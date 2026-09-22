@@ -28,6 +28,11 @@ vi.mock('@/api/ingest', () => ({
   bulkBindIngestItems: (...a: unknown[]) => bulkBindIngestItems(...a),
   dismissIngestItem: (...a: unknown[]) => dismissIngestItem(...a),
   unbindIngestItem: (...a: unknown[]) => unbindIngestItem(...a),
+  // Real behaviour, not a stub: the view branches on this to tell the date
+  // question apart from a genuine failure, and a stub that always said false
+  // would make the mismatch tests pass for the wrong reason.
+  isDateMismatch: (e: unknown) =>
+    (e as { body?: { code?: string } } | null)?.body?.code === 'date_mismatch',
 }))
 
 const confirmMock = vi.fn()
@@ -57,6 +62,7 @@ function row(over: Partial<Record<string, unknown>> = {}) {
     patientId: 'M-001',
     laterality: 'OD',
     acquisitionDate: '2026-09-18',
+    acquisitionDateSource: 'operator',
     modality: null,
     originalFilename: 'a.jpg',
     byteSize: 2048,
@@ -112,6 +118,87 @@ describe('IngestInboxView', () => {
     await flushPromises()
     expect(w.text()).toContain(de.ingestInbox.kind.e2e)
     expect(w.text()).toContain('200 MB')
+  })
+
+  it('a date mismatch asks before filing, and re-sends with the acknowledgement', async () => {
+    // The backend refuses the first attempt so a scan cannot land on the wrong
+    // day by accident; confirming repeats it with the flag set.
+    bindIngestItem
+      .mockRejectedValueOnce({
+        status: 409,
+        body: {
+          code: 'date_mismatch', ingestItemId: 1,
+          fileDate: '2026-09-09', visitDate: '2026-09-18',
+          message: 'nope',
+        },
+      })
+      .mockResolvedValueOnce({ ingestItemId: 1, status: 'BOUND' })
+    confirmMock.mockResolvedValue(true)
+
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid="inbox-grid"] button:nth-of-type(1)').trigger('click')
+    await w.findComponent({ name: 'AssignIngestDialog' }).vm.$emit('bind', {
+      ingestItemId: 1, studySubjectId: 5, studyEventId: 9, eventCrfId: null,
+    })
+    await flushPromises()
+
+    expect(confirmMock).toHaveBeenCalled()
+    // Both dates reach the operator — "the dates disagree" on its own is not
+    // something anybody can act on.
+    const asked = String(confirmMock.mock.calls[0]?.[0]?.message ?? '')
+    expect(asked).toContain('2026-09-09')
+    expect(asked).toContain('2026-09-18')
+
+    expect(bindIngestItem).toHaveBeenCalledTimes(2)
+    expect(bindIngestItem).toHaveBeenLastCalledWith(
+      1, expect.objectContaining({ acknowledgeDateMismatch: true }),
+    )
+  })
+
+  it('declining a date mismatch leaves the file alone', async () => {
+    bindIngestItem.mockRejectedValueOnce({
+      status: 409,
+      body: {
+        code: 'date_mismatch', ingestItemId: 1,
+        fileDate: '2026-09-09', visitDate: '2026-09-18', message: 'nope',
+      },
+    })
+    confirmMock.mockResolvedValue(false)
+
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid="inbox-grid"] button:nth-of-type(1)').trigger('click')
+    await w.findComponent({ name: 'AssignIngestDialog' }).vm.$emit('bind', {
+      ingestItemId: 1, studySubjectId: 5, studyEventId: 9, eventCrfId: null,
+    })
+    await flushPromises()
+
+    // One attempt only, and the row is still in the inbox.
+    expect(bindIngestItem).toHaveBeenCalledTimes(1)
+    expect(w.text()).toContain('M-001')
+  })
+
+  it('marks a date that was not read from the file as unverified', async () => {
+    listIngestInbox.mockResolvedValue({
+      items: [row({ acquisitionDateSource: 'operator' })],
+      limit: 100,
+      status: 'UNBOUND',
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain(de.ingestInbox.dateUnverified)
+  })
+
+  it('leaves a date read out of the file unqualified', async () => {
+    listIngestInbox.mockResolvedValue({
+      items: [row({ acquisitionDateSource: 'file' })],
+      limit: 100,
+      status: 'UNBOUND',
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).not.toContain(de.ingestInbox.dateUnverified)
   })
 
   it('one file goes through the single-item endpoint, not the bulk one', async () => {

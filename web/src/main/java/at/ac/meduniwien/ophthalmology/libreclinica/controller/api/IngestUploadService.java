@@ -218,8 +218,22 @@ final class IngestUploadService {
             String device = deviceFor(up, desc);
             String laterality = desc != null && desc.laterality() != null
                     ? desc.laterality() : normaliseLaterality(up.laterality());
-            LocalDate acquisition = desc != null && desc.acquisitionDate() != null
-                    ? desc.acquisitionDate() : up.acquisitionDate();
+            // 2026-09-22 — a date read out of the file and a date typed by the
+            // operator are not the same claim, and this column used to hold
+            // both under one name. On the staff workbench the typed value is
+            // the day the operator searched visits by, so it agrees with the
+            // chosen visit no matter what the file says; stored bare, it reads
+            // as corroboration. Record which kind it is.
+            //
+            // Only DICOM yields a file date here — `desc` is null for .e2e and
+            // images, so an .e2e starts out operator-dated (or undated) and is
+            // upgraded to source='file' once /preprocess reads the exam chunk
+            // (PublicOctUploadController.persistAcquisitionDate).
+            LocalDate fromFile = desc != null ? desc.acquisitionDate() : null;
+            LocalDate acquisition = fromFile != null ? fromFile : up.acquisitionDate();
+            String acquisitionSource = fromFile != null
+                    ? IngestItemRepository.ACQ_SOURCE_FILE
+                    : (up.acquisitionDate() != null ? IngestItemRepository.ACQ_SOURCE_OPERATOR : null);
             Integer modalityId = target == null ? null : suggestModality(target.studyId(), device, kind);
             String policy = up.channel() == Channel.PORTAL
                     ? IngestBindService.POLICY_PORTAL : IngestBindService.POLICY_VISIT_PICKED;
@@ -236,6 +250,7 @@ final class IngestUploadService {
                         .patientId(blankToNull(up.patientId()))
                         .laterality(laterality)
                         .acquisitionDate(acquisition)
+                        .acquisitionDateSource(acquisitionSource)
                         .imagingModalityId(modalityId);
                 if (desc != null) {
                     item.sopInstanceUid(desc.sopInstanceUid())

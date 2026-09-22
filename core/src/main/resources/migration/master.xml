@@ -108,5 +108,6 @@
   <include  file="migration/lc-muw-2026-12-01-namd-flag-bindings-oid.xml"/>
   <include  file="migration/lc-muw-2026-12-02-ingest-item-deidentified.xml"/>
   <include  file="migration/lc-muw-2026-12-02-imaging-modality-dicom-kinds.xml"/>
+  <include  file="migration/lc-muw-2026-12-03-ingest-acquisition-date-source.xml"/>
 </databaseChangeLog>
 

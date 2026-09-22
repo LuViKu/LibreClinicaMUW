@@ -52,6 +52,28 @@ import java.util.List;
  */
 public final class IngestItemRepository {
 
+    /**
+     * {@code acquisition_date} was read out of the file itself — a DICOM
+     * header, an .e2e exam chunk. The only provenance that counts as evidence
+     * of when the scan was taken, and the only one the bind-time visit-date
+     * check looks at.
+     */
+    public static final String ACQ_SOURCE_FILE = "file";
+
+    /**
+     * {@code acquisition_date} was supplied by whoever uploaded the file.
+     * On the staff workbench that value is the day the operator searched
+     * visits by, so it matches the chosen visit by construction and says
+     * nothing about the file.
+     */
+    public static final String ACQ_SOURCE_OPERATOR = "operator";
+
+    /**
+     * {@code acquisition_date} predates the provenance column and could have
+     * been either. Treated as untrusted, like {@link #ACQ_SOURCE_OPERATOR}.
+     */
+    public static final String ACQ_SOURCE_UNKNOWN = "unknown";
+
     private IngestItemRepository() {}
 
     /**
@@ -155,6 +177,24 @@ public final class IngestItemRepository {
         public Builder patientName(String v) { return set("patient_name", v, Types.VARCHAR); }
         public Builder accessionNumber(String v) { return set("accession_number", v, Types.VARCHAR); }
         public Builder acquisitionDate(LocalDate v) { return set("acquisition_date", v, Types.DATE); }
+
+        /**
+         * Where {@link #acquisitionDate(LocalDate)} came from — one of
+         * {@link #ACQ_SOURCE_FILE} or {@link #ACQ_SOURCE_OPERATOR}, or null
+         * when no date is known.
+         *
+         * <p>The distinction matters because only a date read out of the file
+         * is evidence of when the scan was taken. An operator-supplied date is
+         * an assertion, and on the upload workbench it is specifically the day
+         * the operator searched visits by — so it agrees with the chosen visit
+         * whatever the file actually contains. Checking that against the visit
+         * proves nothing; checking a {@code file} date against it proves
+         * something.
+         */
+        public Builder acquisitionDateSource(String v) {
+            return set("acquisition_date_source", v, Types.VARCHAR);
+        }
+
         public Builder laterality(String v) { return set("laterality", v, Types.VARCHAR); }
 
         /**
