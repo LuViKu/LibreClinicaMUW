@@ -53,8 +53,10 @@ Every page shares the same frame:
   that menu.
 - **Side rail** — only where a section has several pages: in **Studienaufbau**
   it lists every build step (CRFs, visits, groups, rules, sites, modalities,
-  users) with the current one highlighted; on CRF entry it lists the form's
-  sections with their fill state. Every other page is single-column.
+  users) with the current one highlighted; for Administrators, **System** lists
+  the five instance-level pages (status, system audit, password policy,
+  configuration, scheduled jobs); on CRF entry it lists the form's sections
+  with their fill state. Every other page is single-column.
 - **Trail** (breadcrumbs) — in the page header, only on pages below a section,
   naming the levels above as links (e.g. *Studienteilnehmer › M-007 › V1
   Inclusion* above a CRF). The page itself is the heading, never a crumb; flat

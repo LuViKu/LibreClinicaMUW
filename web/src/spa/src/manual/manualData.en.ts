@@ -284,7 +284,7 @@ export const manualEn: Manual = {
           shot: 'administrator/12-system-audit-log.png',
           goal: 'Review the institution-wide audit trail, including operation failures and failed jobs.',
           steps: [
-            'Go to **System-Audit-Protokoll** at `/system/audit-log`.',
+            'Open **System-Audit-Protokoll** from the **System** rail (`/system/audit-log`).',
             'Filter by actor, event variant (signed, reason-for-change, sdv, admin, data, query, subject-group-change) or subject.',
             'Browse the date-grouped timeline; click an entry with a chevron to expand its before/after diff and reason.',
           ],
@@ -298,7 +298,7 @@ export const manualEn: Manual = {
           shot: 'administrator/13-system-status.png',
           goal: 'Check the health of the running application after a restart or incident.',
           steps: [
-            'Go to **Systemstatus** at `/admin/system-status`.',
+            'Open **Systemstatus** via **System** in the top bar (`/admin/system-status`) — the section\'s landing page. The entry sits right of the study chip because these five pages concern the instance, not a study; the **System** rail switches between them.',
             'Read the three panels: **JVM** (Java version, heap, threads, CPUs), **Database** (reachability, product/version, Liquibase changelog count), and **Application** (status OK/OutOfMemory, uptime).',
             'Click **Aktualisieren** (Refresh) to re-poll; the last-refreshed time is shown next to the button.',
           ],
@@ -310,7 +310,7 @@ export const manualEn: Manual = {
           shot: 'administrator/14-password-policy.png',
           goal: 'Set the password rules enforced for local accounts.',
           steps: [
-            'Go to **Passwort-Richtlinie** at `/admin/password-policy`.',
+            'Open **Passwort-Richtlinie** from the **System** rail (`/admin/password-policy`).',
             'Tick the required character classes (lowercase, uppercase, digits, special characters).',
             'Set the length constraints — *Min Length*, *Max Length* (1–256) — and *Expiration Days* (0 = no expiration).',
             'Optionally require a password change on first login, then click **Save** (or **Discard**).',
@@ -325,7 +325,7 @@ export const manualEn: Manual = {
           shot: 'administrator/15-app-config.png',
           goal: 'See what configuration the running application actually reads.',
           steps: [
-            'Go to **Anwendungskonfiguration** at `/admin/config`.',
+            'Open **Anwendungskonfiguration** from the **System** rail (`/admin/config`).',
             'Read the values: default timezone, user language/country, file encoding, OS name/architecture, JVM options, the retinal-inference remote-push URL, and whether SSO is enabled.',
             'Click **Aktualisieren** to re-read after a restart.',
           ],
@@ -339,7 +339,7 @@ export const manualEn: Manual = {
           shot: 'administrator/16-scheduled-jobs.png',
           goal: 'Inspect the background (Quartz) jobs the platform runs.',
           steps: [
-            'Go to **Geplante Jobs** at `/admin/jobs`.',
+            'Open **Geplante Jobs** from the **System** rail (`/admin/jobs`).',
             'Review the scheduler status bar (name, started/standby) and the jobs table: name, group, state, previous and next fire times, description.',
             'Click **Aktualisieren** to re-poll.',
           ],

@@ -47,7 +47,7 @@
       "moreErrors": "{n} weitere Fehler",
       "queuedListTitle": "Weitere Fehler"
     },
-    "systemAuditLog": "System-Audit",
+    "system": "System",
     "retinalParked": "Geparkte Scans",
     "primaryNav": "Hauptnavigation",
     "study": "Aktive Studie",
@@ -3251,6 +3251,12 @@
       "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
       "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
       "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+    }
+  },
+  "system": {
+    "rail": {
+      "heading": "System",
+      "audit": "System-Audit"
     }
   },
   "subjectUnboundItems": {

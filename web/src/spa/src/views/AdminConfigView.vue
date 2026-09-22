@@ -10,6 +10,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SystemRail from '@/components/SystemRail.vue'
 import { apiGet, ApiError } from '@/api/client'
 
 const { t } = useI18n()
@@ -54,7 +55,10 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-6 py-6">
+  <div class="flex">
+    <SystemRail />
+
+  <div class="flex-1 max-w-2xl px-8 py-6">
     <div class="flex items-baseline justify-between mb-4">
       <h1 class="text-base font-semibold tracking-tight">{{ t('adminConfig.title') }}</h1>
       <button type="button" class="px-3 py-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 text-xs muw-focus" :disabled="loading" @click="load">
@@ -81,5 +85,6 @@ onMounted(load)
         <dd class="ml-3 text-right break-all">{{ display(typeof entry.v === 'boolean' ? String(entry.v) : entry.v) }}</dd>
       </div>
     </dl>
+  </div>
   </div>
 </template>
