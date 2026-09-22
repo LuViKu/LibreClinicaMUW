@@ -22,12 +22,23 @@
 #   start-cluster-server.sh              # restart in background (nohup) + verify
 #   start-cluster-server.sh --foreground # exec uvicorn in fg (for systemd)
 #   start-cluster-server.sh --check      # verify env + invariants, don't launch
+#   …               --strict             # refuse to start degraded (see below)
 #
 # Every path can be overridden by exporting the matching env var first.
 # =============================================================================
 set -euo pipefail
 
-MODE="${1:-background}"
+MODE="background"
+STRICT=0
+for arg in "$@"; do
+  case "$arg" in
+    --strict)                       STRICT=1 ;;
+    --check|--foreground|background) MODE="$arg" ;;
+    *) printf '\033[1;31m[ri]\033[0m %s\n' \
+         "unknown argument: $arg (use: background | --foreground | --check [--strict])" >&2
+       exit 1 ;;
+  esac
+done
 
 # systemd --user runs services with a minimal environment in which $USER is
 # usually NOT set. Combined with `set -u` that aborts the script before it does
@@ -101,16 +112,36 @@ export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-0}"
 # conda 3.11 interpreter uvicorn must run under.
 BM_MODULES="${RETINAL_INFERENCE_BM_MODULES:-Python/3.8.2-foss-2019a CUDA/11.1.1-GCCcore-8.2.0 cuDNN/8.2.1.32-CUDA-11.1.1}"
 
+# Sourcing the lmod init file gives you the `module` FUNCTION but not
+# necessarily a populated MODULEPATH — on this cluster the module tree is
+# exported by the /etc/profile.d snippets a LOGIN shell runs. cron and systemd
+# run neither, so `module load` there failed against an empty tree while the
+# same call succeeded in an interactive shell. That asymmetry is what kept the
+# cn5 watchdog from ever restarting the server (2026-09-03 → 2026-09-22).
 derive_bm_ld() {
   (
     set +eu
-    if ! command -v module >/dev/null 2>&1; then
-      for init in /etc/profile.d/lmod.sh /etc/profile.d/modules.sh \
-                  /usr/share/lmod/lmod/init/bash /usr/share/Modules/init/bash; do
-        [ -r "$init" ] && . "$init" && break
+    # Don't `break` on a successful source — a sourced init's exit status is
+    # its last command's, so the old `. "$init" && break` could source an init
+    # that worked and then fall through and source another on top of it.
+    for init in /etc/profile.d/lmod.sh /etc/profile.d/modules.sh \
+                /usr/share/lmod/lmod/init/bash /usr/share/Modules/init/bash; do
+      command -v module >/dev/null 2>&1 && break
+      [ -r "$init" ] && . "$init" >/dev/null 2>&1
+    done
+    command -v module >/dev/null 2>&1 || exit 1
+
+    # Recover MODULEPATH the way a login shell would, but only if it's empty —
+    # never clobber a MODULEPATH the caller deliberately set.
+    if [ -z "${MODULEPATH:-}" ]; then
+      for p in /etc/profile.d/*modulepath*.sh /etc/profile.d/z00_*.sh \
+               /etc/profile.d/*lmod*.sh; do
+        [ -r "$p" ] && . "$p" >/dev/null 2>&1
       done
     fi
-    command -v module >/dev/null 2>&1 || exit 1
+    [ -n "${MODULEPATH:-}" ] || . /etc/profile >/dev/null 2>&1
+    [ -n "${MODULEPATH:-}" ] || exit 1
+
     module purge >/dev/null 2>&1 || true
     # shellcheck disable=SC2086
     module load $BM_MODULES >/dev/null 2>&1 || exit 1
@@ -121,14 +152,41 @@ derive_bm_ld() {
 if [ -z "${RETINAL_INFERENCE_BM_LD_LIBRARY_PATH:-}" ]; then
   RETINAL_INFERENCE_BM_LD_LIBRARY_PATH="$(derive_bm_ld || true)"
 fi
-[ -n "$RETINAL_INFERENCE_BM_LD_LIBRARY_PATH" ] || die \
-  "could not derive BM_LD_LIBRARY_PATH from modules ($BM_MODULES).
-   Without it the 'bm' AND 'layers' tasks are silently unavailable.
-   Fix the module list, or export RETINAL_INFERENCE_BM_LD_LIBRARY_PATH yourself."
-export RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
 
 # ----------------------------- preflight --------------------------------------
-EXPECTED_TASKS="bm fluid ga layers onl pr"
+ALL_TASKS="bm fluid ga layers onl pr"
+EXPECTED_TASKS="$ALL_TASKS"
+
+# A missing BM_LD_LIBRARY_PATH costs us `bm` and `layers`. It must NOT cost us
+# the other four.
+#
+# This used to `die`. That turned a two-task degradation into a total outage:
+# from 2026-09-03 every cron restart aborted here, so fluid/onl/pr/ga — none of
+# which touch the BM env — were down for nineteen days and every OCT job failed
+# with "Remote /run returned null". Fail-closed was the wrong default for a
+# launcher whose job is to get the server up.
+#
+# So: start degraded and say so loudly. The reduced task list is itself the
+# alarm — check-retinal-cluster.sh on the app VM already mails "DEGRADED —
+# supported_tasks missing: bm layers". Use --strict (or --check) where you want
+# the hard failure instead.
+if [ -z "$RETINAL_INFERENCE_BM_LD_LIBRARY_PATH" ]; then
+  if [ "$STRICT" = 1 ] || [ "$MODE" = "--check" ]; then
+    die "could not derive BM_LD_LIBRARY_PATH from modules ($BM_MODULES).
+   Without it the 'bm' AND 'layers' tasks are unavailable.
+   Fix the module list, or export RETINAL_INFERENCE_BM_LD_LIBRARY_PATH yourself."
+  fi
+  warn "DEGRADED: could not derive BM_LD_LIBRARY_PATH from modules ($BM_MODULES)."
+  warn "DEGRADED: starting WITHOUT the 'bm' and 'layers' tasks — the other four"
+  warn "DEGRADED: (fluid onl pr ga) are unaffected. Fix the module list, or export"
+  warn "DEGRADED: RETINAL_INFERENCE_BM_LD_LIBRARY_PATH, then restart."
+  # Unset rather than export empty: the adapter keys capability off the var
+  # being absent, and an empty string is not reliably falsy on the Python side.
+  unset RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
+  EXPECTED_TASKS="fluid ga onl pr"
+else
+  export RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
+fi
 
 preflight() {
   [ -x "$RI_UVICORN" ] || die "uvicorn not found/executable at $RI_UVICORN"
@@ -142,7 +200,11 @@ preflight() {
     die "muw-e2e-converter IS installed in the cluster env — violates DR-024. Uninstall it."
   fi
   log "DR-024 invariant holds (muw-e2e-converter absent)"
-  log "BM_LD_LIBRARY_PATH derived (${#RETINAL_INFERENCE_BM_LD_LIBRARY_PATH} chars)"
+  if [ -n "${RETINAL_INFERENCE_BM_LD_LIBRARY_PATH:-}" ]; then
+    log "BM_LD_LIBRARY_PATH derived (${#RETINAL_INFERENCE_BM_LD_LIBRARY_PATH} chars)"
+  else
+    warn "BM_LD_LIBRARY_PATH unavailable — running degraded (no bm, no layers)"
+  fi
 }
 
 # Assert the server registered every task we expect. A short list means an env
@@ -157,7 +219,11 @@ assert_tasks() {
     warn "health: $health"
     die "supported_tasks is missing:$missing — an env var did not take"
   fi
-  log "all tasks registered: $EXPECTED_TASKS"
+  if [ "$EXPECTED_TASKS" = "$ALL_TASKS" ]; then
+    log "all tasks registered: $EXPECTED_TASKS"
+  else
+    warn "DEGRADED but serving: registered [$EXPECTED_TASKS]; bm + layers absent"
+  fi
   log "health: $health"
 }
 
