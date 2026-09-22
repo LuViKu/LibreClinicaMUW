@@ -4564,6 +4564,7 @@ export interface components {
             eventCrfId?: number;
             modalityCode?: string;
             laterality?: string;
+            acknowledgeDateMismatch?: boolean;
         };
         ImportCrfPreviewDto: {
             /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
