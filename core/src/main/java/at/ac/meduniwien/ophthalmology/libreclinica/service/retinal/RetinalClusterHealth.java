@@ -171,8 +171,17 @@ public final class RetinalClusterHealth {
                 latencyMs, node, gpuDevice, gpuName, null);
     }
 
-    /** The result for a node that gave no usable answer (refused, timed out, DNS…). */
-    public static NodeStatus unreachable(NodeSpec spec, String error, long latencyMs) {
+    /**
+     * The result for a node that gave no usable answer (refused, timed out, DNS…).
+     *
+     * @param latencyMs how long the attempt took, or null when there is no
+     *                  measurement to report — the probe itself failed rather
+     *                  than a request completing unsuccessfully. {@link
+     *                  NodeStatus#latencyMs()} is nullable for that case, so a
+     *                  boxed type here keeps "took 0 ms" and "never measured"
+     *                  distinguishable on the panel.
+     */
+    public static NodeStatus unreachable(NodeSpec spec, String error, Long latencyMs) {
         return new NodeStatus(spec.name(), spec.url(), "unreachable", List.of(), EXPECTED_TASKS,
                 latencyMs, null, null, null, error);
     }
