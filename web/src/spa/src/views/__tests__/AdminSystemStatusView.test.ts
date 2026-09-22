@@ -55,7 +55,10 @@ function routeBy(cluster: unknown, opts: { clusterFails?: boolean } = {}) {
 
 function mountView() {
   const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-  return mount(AdminSystemStatusView, { global: { plugins: [i18n] } })
+  // The view carries the System section rail, which reads the route. This
+  // test has no router and is not about navigation, so the rail is stubbed —
+  // as the build-page tests stub BuildStudyRail. SystemRail has its own test.
+  return mount(AdminSystemStatusView, { global: { plugins: [i18n], stubs: { SystemRail: true } } })
 }
 
 describe('AdminSystemStatusView — retinal cluster panel', () => {
