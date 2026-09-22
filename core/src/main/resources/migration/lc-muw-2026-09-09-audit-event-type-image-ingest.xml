@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-025 — seed the IMAGE_BIND (127) + IMAGE_DISMISS (128)
+        audit_log_event_type rows that ImageIngestApiController emits when a
+        staff member reconciles an image_ingest row (binds it to a
+        subject/event/CRF, or dismisses it). auditTable = image_ingest,
+        entity_id = image_ingest_id, old_value carries the prior status.
+
+        Analog of RETINAL_PARK_BIND (116) — binding a previously-unbound
+        artifact to an event. is_user_visible=true: a bound fundus image is a
+        material clinical-data event.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-09-09-audit-event-type-image-ingest" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id IN (127, 128);
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="127"/>
+            <column name="name" value="image_bind"/>
+            <column name="display_name" value="Fundus image bound to subject/event"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="128"/>
+            <column name="name" value="image_dismiss"/>
+            <column name="display_name" value="Fundus image dismissed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id IN (127, 128)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

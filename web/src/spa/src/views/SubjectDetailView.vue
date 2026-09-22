@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import TextInput from '@/components/TextInput.vue'
@@ -11,6 +10,7 @@ import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
+import CameraWorklistStatus from '@/components/CameraWorklistStatus.vue'
 import CancelEventDialog from '@/components/CancelEventDialog.vue'
 import SignEventDialog from '@/components/SignEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
@@ -18,7 +18,7 @@ import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import SubjectGroupEditDialog from '@/components/SubjectGroupEditDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
-import ParkedScansList from '@/components/retinal/ParkedScansList.vue'
+import SubjectUnboundItemsList from '@/components/ingest/SubjectUnboundItemsList.vue'
 import { listSubjectJobs } from '@/api/retinal'
 
 import { useSubjectsStore } from '@/stores/subjects'
@@ -31,7 +31,7 @@ import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const { t } = useI18n()
@@ -587,6 +587,20 @@ async function onEventScheduled() {
   }
 }
 
+/**
+ * DR-025 — the camera-worklist strip refreshes whenever the visits change
+ * (scheduled, moved, cancelled, completed — anywhere on this page). A
+ * signature of the rows is cheaper to watch than the rows themselves.
+ */
+const eventsSignature = computed(() =>
+  (subject.value?.events ?? [])
+    .map((ev) => `${ev.eventId}:${ev.dateStart ?? ''}:${ev.status}`)
+    .join('|'),
+)
+const subjectRemoved = computed(
+  () => subject.value?.status === 'removed' || subject.value?.status === 'auto-removed',
+)
+
 /* Phase E A3-lock — DM/Admin only; visibility also gated by current
    state (lock only available when not locked, vice versa). */
 const canLock = computed(() => canRemove.value && !subject.value?.locked)
@@ -747,19 +761,31 @@ watch(subjectId, (next, prev) => {
 })
 
 const subject = computed(() => subjects.selected)
+
+/**
+ * P3.0 — panels contributed by the enrolled study modules.
+ *
+ * <p>The slot has been in the contract since the SPI landed and no host
+ * ever consumed it, so a module author wiring it up got nothing and no
+ * explanation. It renders below the built-in sections, where the
+ * retinal tab already sits — which is where P3.5 moves that tab to,
+ * once the retinal module owns it rather than this view.
+ *
+ * <p>Entries may declare a predicate against the loaded subject; it is
+ * evaluated here so a module can decline to mount without the host
+ * knowing why.
+ */
+const moduleTabs = computed(() =>
+  studyModules
+    .injectionsFor('subject-detail.tabs')
+    .filter((entry) => (entry.predicate ? entry.predicate(subject.value ?? null) : true)),
+)
 const isLoading = computed(() => subjects.isLoadingSelected)
 const loadError = computed(() => subjects.selectedError)
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
-// "<study> > Studienteilnehmer > <subject.id>". The matrix link
-// lets the operator step back; the subject id is the active leaf.
-useViewBreadcrumb(computed(() => {
-  const label = subject.value?.id ?? subjectId.value
-  return [
-    { label: t('nav.subjectMatrix'), to: '/subjects' },
-    { label, to: null },
-  ]
-}))
+// The register is the subject's only ancestor; the subject id is the H1.
+const trail = computed(() => [{ label: t('nav.subjectMatrix'), to: '/subjects' }])
 
 /* ------------------------------------------------------------- */
 /* Wave 2A — Retinal trends section mounting.                    */
@@ -875,33 +901,9 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        {{ t('nav.home') }}
-      </RouterLink>
-      <RouterLink to="/subjects" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium" aria-current="page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-      <RouterLink to="/subjects/new" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <circle cx="12" cy="8" r="5" />
-          <path d="M20 21a8 8 0 1 0-16 0" />
-          <path d="M19 16v6M22 19h-6" />
-        </svg>
-        {{ t('nav.addSubject') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 max-w-4xl px-8 py-6">
+    <div class="max-w-4xl px-8 py-6 mx-auto">
       <p v-if="isLoading && !subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <template v-else-if="!subject">
@@ -912,9 +914,9 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       </template>
 
       <template v-else>
-        <!-- Header -->
+        <!-- Header: the trail says where the subject sits; the study is in the top bar. -->
         <div class="mb-5">
-          <div class="text-xs text-slate-500 mb-1">{{ subject.studyName }} · {{ t('subjectDetail.subTrail') }}</div>
+          <PageHeader :trail="trail" />
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap">
             {{ subject.id }}
             <span v-if="subject.secondaryId" class="text-slate-400 font-normal text-sm">· {{ subject.secondaryId }}</span>
@@ -1243,6 +1245,20 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </span>
             </div>
           </div>
+          <!-- DR-025 — is this patient on the fundus camera's worklist today?
+               The worklist is the visit schedule filtered to today, so the
+               strip says so and offers the fix (schedule today / move to
+               today) here rather than at the device. Renders nothing for
+               studies no camera serves. -->
+          <CameraWorklistStatus
+            v-if="!subjectRemoved"
+            :subject-id="subject.id"
+            :study-oid="activeStudyOid"
+            :can-schedule="canScheduleEvent"
+            :events-signature="eventsSignature"
+            @changed="onEventScheduled"
+            @open-schedule="scheduleDialogOpen = true"
+          />
           <!-- 2026-06-25 — transient confirmation after a visit edit saves.
                The inline editor collapses on success; this makes the outcome
                explicit. Failures surface inline via editEvent.fieldError. -->
@@ -1481,9 +1497,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           :subject-label="subject.id"
         >
           <template #parked>
-            <ParkedScansList :study-subject-id="retinalNumericId" />
+            <SubjectUnboundItemsList :study-subject-id="retinalNumericId" />
           </template>
         </SubjectRetinalTab>
+
+        <!-- P3.0 — module-contributed panels (subject-detail.tabs). -->
+        <component
+          :is="entry.component"
+          v-for="entry in moduleTabs"
+          :key="entry.key"
+          :subject="subject"
+        />
 
         <!-- Phase E.6 — per-eye modality baselines. One panel per
              in-scope eye (subject.studyEye includes the eye) and per
@@ -1506,10 +1530,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
         </div>
 
         <!-- Action row -->
-        <div class="flex items-center justify-between flex-wrap gap-3">
-          <RouterLink to="/subjects" class="text-xs text-slate-500 hover:text-slate-700">
-            ← {{ t('subjectDetail.backToMatrix') }}
-          </RouterLink>
+        <div class="flex items-center justify-end flex-wrap gap-3">
           <div class="flex items-center gap-2">
             <!-- Phase E.6 P5 — per-subject data snapshot (ODM/CSV/PDF). -->
             <SubjectExportButton

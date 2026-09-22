@@ -13,6 +13,7 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.job.ArchivedFileRetentionScheduler;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.ImageIngestRetentionScheduler;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobExecutionExceptionListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTriggerListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.OpenClinicaSchedulerFactoryBean;
@@ -98,5 +99,17 @@ public class QuartzConfig {
     @DependsOn("schedulerFactoryBean")
     public ArchivedFileRetentionScheduler archivedFileRetentionScheduler(Scheduler scheduler) {
         return new ArchivedFileRetentionScheduler(scheduler);
+    }
+
+    /**
+     * DR-025 — register the daily sweep of dismissed fundus images. A
+     * dismissed image is a retinal photograph of an identifiable person that
+     * an operator has ruled out as study data, so it should not sit on disk
+     * indefinitely. Same {@code @DependsOn} reason as the sweep above.
+     */
+    @Bean
+    @DependsOn("schedulerFactoryBean")
+    public ImageIngestRetentionScheduler imageIngestRetentionScheduler(Scheduler scheduler) {
+        return new ImageIngestRetentionScheduler(scheduler);
     }
 }

@@ -20,7 +20,7 @@ export const investigatorDe: ManualChapter = {
       steps: [
         'Nach der Anmeldung gelangen Sie auf den **Start** (Home)-Bildschirm unter `/`.',
         'Nutzen Sie die Operator-Karten, um direkt zu gefilterten Arbeitslisten zu springen — zum Beispiel verlinken *Heute* (heutige offene Visiten) und *Signaturfreigabe* (signaturbereite Teilnehmer) direkt in das Studienteilnehmer-Raster (Subject Matrix) mit dem bereits angewendeten Filter.',
-        'Über die Seitenleiste erreichen Sie jederzeit das Studienteilnehmer-Raster oder das Formular **Teilnehmer aufnehmen** (Add Subject).',
+        'Über die obere Leiste erreichen Sie jederzeit das Studienteilnehmer-Raster; **Teilnehmer aufnehmen** (Add Subject) steht dort als Schaltfläche.',
       ],
     },
     {
@@ -48,7 +48,7 @@ export const investigatorDe: ManualChapter = {
       shot2Caption: 'Das Aufnahmeformular mit Beispieldaten ausgefüllt, vor dem Speichern.',
       goal: 'Nehmen Sie einen neuen Studienteilnehmer auf.',
       steps: [
-        'Öffnen Sie **Teilnehmer aufnehmen** (`/subjects/new`) über die Seitenleiste oder die Schaltfläche im Studienteilnehmer-Raster.',
+        'Öffnen Sie **Teilnehmer aufnehmen** (`/subjects/new`) über die Schaltfläche im Studienteilnehmer-Raster oder die Karte auf der Startseite.',
         'Füllen Sie **Identifikation** aus: **Studien-Teilnehmer-ID** (erforderlich; kann mit dem Protokoll-Kurzcode vorbelegt sein, z. B. `GA-…`) und die optionale **Sekundär-ID**. *Geben Sie niemals identifizierende Daten — keinen Namen, keine Krankenhaus-ID, keine Sozialversicherungsnummer — in die Sekundär-ID ein.*',
         'Füllen Sie **Aufnahme** aus: **Aufnahmedatum** (standardmäßig heute, darf nicht in der Zukunft liegen) und **Geschlecht** (wählen Sie eine der vier Schaltflächen).',
         'Unter **Ophthalmology** können Sie optional das **Studienauge** (*nicht gesetzt* / OD / OS / OU) und ein **Screening-Datum** festlegen. Das Studienauge bestimmt die Augen-Spalte im Raster und wie die Augenuntersuchungs-CRFs dargestellt werden.',
@@ -118,6 +118,21 @@ export const investigatorDe: ManualChapter = {
           notes: [
             'Ihre elektronische Signatur ist das rechtsverbindliche Äquivalent Ihrer handschriftlichen Unterschrift: Sie bestätigt, dass die CRFs eine vollständige, korrekte und lückenlose Dokumentation darstellen. Sie müssen für jeden Teilnehmer, den Sie signieren, Ihr Passwort erneut eingeben.',
             'Werden Daten eines signierten Teilnehmers später geändert, fällt die betroffene Visite von *Signiert* auf *Completed* zurück und muss erneut signiert werden.',
+          ],
+        },
+        {
+          title: '4d · Kamera-Worklist', deutsch: 'Put a participant on the fundus camera\'s worklist (HealthAEye)',
+          goal: 'Die Handkamera (Optomed Lumo) listet den Teilnehmer, damit sich ihre Bilder von selbst der Visite zuordnen.',
+          steps: [
+            'Die Kamera hat keine eigene Patientenliste: Sie holt sich eine **Worklist** aus der Anwendung, und diese Worklist ist der Visitenplan — ein Teilnehmer steht genau dann darauf, wenn eine Visite mit **heutigem Datum** (Status *Geplant* oder *Erfassung begonnen*) in einer Studie geplant ist, die die Kamera bedient. Einen eigenen Worklist-Eintrag gibt es nicht.',
+            'Nehmen Sie den Teilnehmer auf (§3) und planen Sie die Visite — bei HealthAEye die **Baseline** — mit dem heutigen Datum (§4a). **Speichern & erste Visite planen** im Aufnahmeformular führt direkt ins Casebook.',
+            'Prüfen Sie den Streifen **Kamera-Worklist** oben im Visiten-Panel: *Heute auf der Kamera-Worklist* — fertig; der Streifen nennt die Visite und die Accession-Nummer (`LC…`), die die Kamera anzeigt. *Nicht auf der Kamera-Worklist* — der Streifen nennt den Grund und bietet die Korrektur an: **Baseline für heute planen**, wenn keine Visite existiert, oder **Auf heute verschieben**, wenn die Visite für einen anderen Tag gebucht ist.',
+            'Aktualisieren Sie an der Kamera die Worklist, wählen Sie die **Subject-ID** des Teilnehmers und nehmen Sie die Bilder auf. Sie landen ohne Umweg über den Eingang auf der Visite, und das CRF der Visite zeigt die Modalität der Kamera als durchgeführt.',
+          ],
+          notes: [
+            'Die Kamera zeigt die Subject-ID als Patientenname und -ID — nie einen Namen. Geschlecht und Geburtsdatum werden nur übermittelt, wenn die Studie sie erhebt.',
+            'Der Streifen erscheint nur in Studien, die eine Kamera bedient (die Administration schaltet *DICOM-Empfang* in den Plattform-Einstellungen der Studie ein). Die Kamera listet nur **heute** — eine für morgen gebuchte Visite steht auf der Liste von morgen.',
+            'Ein Bild, das **ohne** Auswahl des Worklist-Eintrags aufgenommen wurde, geht nicht verloren: Es landet im **Eingang** und wird dort der Visite zugeordnet. **Fällige Visiten**, gefiltert auf heute, zeigt die gesamte Liste, die die Kamera abruft.',
           ],
         },
       ],

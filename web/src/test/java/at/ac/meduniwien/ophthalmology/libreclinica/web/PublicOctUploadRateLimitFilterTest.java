@@ -128,7 +128,80 @@ class PublicOctUploadRateLimitFilterTest {
                 filter.currentTokens("8.8.8.8"));
     }
 
+    @Test
+    void siblingPublicPortalsAreThrottledInSeparateBuckets() throws Exception {
+        // 2026-09-17 — the DR-025 image-upload and BCVA portals share the
+        // policy but not the bucket: exhausting one leaves the others fresh.
+        ClockableFilter filter = new ClockableFilter(0L);
+        String image = "/pages/api/v1/public/image-upload/commit";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invoke(filter, "10.0.0.5", image).getStatus());
+        }
+        assertEquals(429, invoke(filter, "10.0.0.5", image).getStatus());
+        assertEquals(200, invoke(filter, "10.0.0.5", "/pages/api/v1/public/bcva-entry/S_X/visits").getStatus());
+        assertEquals(200, invoke(filter, "10.0.0.5").getStatus()); // OCT portal bucket untouched
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR - 1,
+                filter.currentTokens("10.0.0.5"));
+        assertEquals(0, filter.currentTokens("10.0.0.5", "/pages/api/v1/public/image-upload/"));
+    }
+
+    @Test
+    void uploadPageCommitsDoNotSpendTheLookupBudget() throws Exception {
+        // DR-029 — a Clarus visit is half a dozen files; the lookups are what
+        // an enumeration attack would use, so only they keep the 30/h budget.
+        ClockableFilter filter = new ClockableFilter(0L);
+        String search = "/pages/api/v1/public/upload/patients/search";
+        String commit = "/pages/api/v1/public/upload/commit";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invoke(filter, "10.0.0.9", search).getStatus());
+        }
+        assertEquals(429, invoke(filter, "10.0.0.9", search).getStatus());
+        // The lookups are spent; a commit still goes through, on its own budget.
+        assertEquals(200, invoke(filter, "10.0.0.9", commit).getStatus());
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_COMMITS_PER_HOUR - 1,
+                filter.currentCommitTokens("10.0.0.9"));
+        assertEquals(0, filter.currentTokens("10.0.0.9", PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+    }
+
+    @Test
+    void uploadPageCommitsHaveALargerBudgetOfTheirOwn() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        String commit = "/pages/api/v1/public/upload/commit";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_COMMITS_PER_HOUR; i++) {
+            assertEquals(200, invoke(filter, "10.0.0.10", commit).getStatus(), "commit " + i);
+        }
+        assertEquals(429, invoke(filter, "10.0.0.10", commit).getStatus());
+        // Spent commits leave the lookups untouched...
+        assertEquals(200, invoke(filter, "10.0.0.10", "/pages/api/v1/public/upload/visits").getStatus());
+        // ...and refill at their own, faster rate.
+        filter.nowMs = PublicOctUploadRateLimitFilter.COMMIT_REFILL_INTERVAL_MS + 1L;
+        assertEquals(200, invoke(filter, "10.0.0.10", commit).getStatus());
+        assertEquals(429, invoke(filter, "10.0.0.10", commit).getStatus());
+    }
+
+    @Test
+    void theOlderPortalsKeepCountingCommitsAgainstTheOneBudget() throws Exception {
+        // The split is for the combined page only; the pages it replaces are
+        // left exactly as they were for the release they stay alive.
+        ClockableFilter filter = new ClockableFilter(0L);
+        String image = "/pages/api/v1/public/image-upload/commit";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invoke(filter, "10.0.0.11", image).getStatus());
+        }
+        assertEquals(429, invoke(filter, "10.0.0.11", image).getStatus());
+    }
+
     /* ---- helpers ----------------------------------------------------- */
+
+    private static MockHttpServletResponse invoke(PublicOctUploadRateLimitFilter filter,
+                                                   String remoteAddr, String uri) throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", uri);
+        req.setRequestURI(uri);
+        req.setRemoteAddr(remoteAddr);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(req, resp, new MockFilterChain());
+        return resp;
+    }
 
     private static MockHttpServletRequest guardedRequest() {
         MockHttpServletRequest req = new MockHttpServletRequest("POST",

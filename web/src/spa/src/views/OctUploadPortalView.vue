@@ -247,6 +247,7 @@ function onVisitPickerClose(): void {
     <PatientSearchModal
       :open="searchTargetRowId !== null"
       :initial-query="searchInitialQuery"
+      public-context
       @subject-picked="onSubjectPicked"
       @close="onPatientSearchClose"
     />

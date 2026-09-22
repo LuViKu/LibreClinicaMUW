@@ -58,6 +58,15 @@ services:
       # The viewer's artifact-stream endpoint reads them back. Shared with
       # the retinal-preprocess service at the same in-container path.
       - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
+      # DR-025: shared DICOM ingest store — the dicom-scp sidecar writes the
+      # received Part-10 + preview here; the app records the paths and (in the
+      # reconciliation inbox) reads them back through the same bind.
+      - ./docker/dicom-ingest:/var/lib/libreclinica/dicom-ingest
+      # P3.0 / DR-029: the unified ingest store (core.ingest.storePath) — where
+      # the combined upload page writes JPEG/PNG and DICOM files, under one
+      # subdirectory per kind. The dicom-scp sidecar mounts the same bind so it
+      # can describe and pseudonymise an uploaded .dcm in place.
+      - ./docker/ingest:/var/lib/libreclinica/ingest
     develop:
       watch:
         # restart on config file changes
@@ -221,6 +230,54 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # DR-025 — DICOM C-STORE receiver for the Optomed fundus modality. Opt-in via
+  # the `dicom` profile; publishes the DICOM port so the device can push, and
+  # shares the ingest store with the app. Not started by default.
+  dicom-scp:
+    build:
+      context: .
+      dockerfile: dicom-scp/Dockerfile
+    image: libreclinica-muw-dicom-scp:latest
+    container_name: libreclinica-muw-dicom-scp-1
+    profiles: ["dicom"]
+    ports:
+      # DICOM C-STORE listener — the modality connects here.
+      #
+      # Dev binds every interface so a camera on the same LAN can reach a
+      # laptop. Production narrows this to the camera-facing address by
+      # setting LIBRECLINICA_DICOM_BIND_ADDR in /etc/libreclinica/env — a
+      # C-FIND against this port returns subject labels, sex and dates of
+      # birth, so it must not be reachable from the general network. This is
+      # the SINGLE source of truth for the bind: Compose *concatenates* port
+      # lists across files, so a second entry in an overlay would
+      # double-bind 11112 rather than replace it.
+      - "${LIBRECLINICA_DICOM_BIND_ADDR:-0.0.0.0}:11112:11112"
+    environment:
+      DICOM_SCP_AE_TITLE: ${DICOM_SCP_AE_TITLE:-LIBRECLINICA}
+      DICOM_SCP_PORT: "11112"
+      # Empty = accept any calling AE (TEST ONLY); set to the Optomed's AE title.
+      DICOM_SCP_ALLOWED_CALLING_AE_TITLES: ${DICOM_SCP_ALLOWED_CALLING_AE_TITLES:-}
+      DICOM_SCP_STORE_PATH: /var/lib/libreclinica/dicom-ingest
+      DICOM_SCP_INGEST_URL: ${DICOM_SCP_INGEST_URL:-http://libreclinica:8080/LibreClinica/pages/api/v1/internal/dicom-ingest}
+      # Modality Worklist source (C-FIND) — the Lumo pulls scheduled visits from
+      # here, then C-STOREs the study carrying our accession → auto-bound.
+      DICOM_SCP_WORKLIST_URL: ${DICOM_SCP_WORKLIST_URL:-http://libreclinica:8080/LibreClinica/pages/api/v1/internal/dicom-worklist}
+      # Must match core.dicom.ingest.token on the app; blank leaves the sidecar
+      # unable to start (both must be set together to exercise the DICOM path).
+      DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
+      # DR-029: the describe endpoint for DICOM files that arrive as uploads
+      # (tags + preview + pseudonymisation in place). Reached by the app at
+      # core.dicom.describe.url over the compose network only — deliberately
+      # not in `ports:`. 0 disables it.
+      DICOM_SCP_DESCRIBE_PORT: "8081"
+    volumes:
+      # Shared ingest store — the sidecar writes, the app reads (same bind).
+      - ./docker/dicom-ingest:/var/lib/libreclinica/dicom-ingest
+      # DR-029: the unified ingest store the app writes uploads to — the
+      # sidecar reads (and rewrites) an uploaded .dcm through the same bind.
+      - ./docker/ingest:/var/lib/libreclinica/ingest
+    restart: on-failure
 
   # Fluid model-runner (RetInsight fluidseg, IRF/SRF/PED). Behind the `optima`
   # compose profile because its image needs vendor wheels (runners/fluid/wheels/)

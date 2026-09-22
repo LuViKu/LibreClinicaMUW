@@ -17,6 +17,7 @@
  * on {@code MeDto.ActiveStudyDto}.
  */
 import type { RouteRecordRaw } from 'vue-router'
+import type { UserRole } from '@/types/auth'
 import type { Component } from 'vue'
 import type { EventDetailDto } from '@/types/event'
 import type { SubjectDetail } from '@/types/subject'
@@ -50,8 +51,17 @@ export interface SlotContextMap {
   'event-detail.actions': EventDetailDto | null
   /** Top-of-form banner on CrfEntryView. No context (banner mounts unconditionally). */
   'crf-entry.banner': null
-  /** Entry in TopBar's primary nav. No context (entry renders whenever the active study matches). */
-  'nav.modules': null
+  /**
+   * Card in HomeView's study-scoped lane. No context (the card renders
+   * whenever the module is active on the bound study).
+   *
+   * <p>P3.0 — replaces {@code nav.modules}, which was declared here,
+   * consumed by TopBar until 2026-06-21, and then by nothing. A slot in
+   * the contract with no host is worse than no slot: an author wires it
+   * up, nothing appears, and the module looks broken. This one has a
+   * consumer ({@code HomeView.vue}).
+   */
+  'home.cards': null
 }
 
 /**
@@ -79,6 +89,13 @@ export interface InjectionEntry<S extends InjectionSlotId = InjectionSlotId> {
   component: Component
   /** Optional predicate — receives slot context and decides whether to mount. */
   predicate?: (ctx: SlotContextMap[S]) => boolean
+  /**
+   * Roles the entry is for. Absent means every role — the pre-existing
+   * behaviour. A home card that opens a route the role cannot enter is a
+   * dead click that bounces back to the page it came from, so an entry
+   * pointing at a role-gated route should name the same roles here.
+   */
+  allowedRoles?: UserRole[]
 }
 
 export interface StudyModuleManifest {
@@ -98,17 +115,11 @@ export interface StudyModuleManifest {
   }
   /** Lazy i18n loader — merged into vue-i18n on activation. */
   loadI18n?: () => Promise<{ de: Record<string, unknown>; en: Record<string, unknown> }>
-  /** Optional client-side visit scheduler hook (T&E etc). */
-  visitScheduler?: (ctx: VisitSchedulerContext) => VisitSchedulerHint | null
 }
 
-export interface VisitSchedulerContext {
-  currentVisitOid: string
-  lastFluidResult?: { irf: number; srf: number; ped: number }
-  defaultIntervalDays: number
-}
-
-export interface VisitSchedulerHint {
-  intervalDays: number
-  rationale: string
-}
+// 2026-09-18 — the visitScheduler hook was removed. It was declared here and
+// never called by anything: no module implemented it and no host invoked it, so
+// an author reading the contract was offered a scheduling extension point that
+// did not exist. Treat-and-extend scheduling is done by the nAMD module's own
+// components against the events API. Re-introduce a hook when a second module
+// needs the same thing, with a caller.

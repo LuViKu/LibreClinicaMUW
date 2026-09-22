@@ -2,12 +2,14 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useAuthStore } from '@/stores/auth'
+
 /**
  * Phase E.6 — Data Export Phase 5 — per-subject snapshot download.
  *
  * <p>A small "Download data ▾" dropdown that fires
  * {@code POST /pages/api/v1/studies/{studyOid}/subjects/{label}/export}
- * with the chosen format ({@code odm | csv | pdf}). Backend streams
+ * with the chosen format ({@code odm | csv | pdf | bundle}). Backend streams
  * the body with a Content-Disposition filename which we honour
  * verbatim; if it's missing we synthesise a sensible fallback so the
  * download doesn't end up named after the random blob URL.
@@ -35,11 +37,28 @@ const props = withDefaults(defineProps<Props>(), {
 const { t } = useI18n()
 
 const open = ref(false)
-const loading = ref<'odm' | 'csv' | 'pdf' | null>(null)
 const error = ref<string | null>(null)
 
-type Format = 'odm' | 'csv' | 'pdf'
-const FORMATS: Format[] = ['odm', 'csv', 'pdf']
+type Format = 'odm' | 'csv' | 'pdf' | 'bundle'
+const loading = ref<Format | null>(null)
+
+const auth = useAuthStore()
+
+/**
+ * P3.7 — the multimodal bundle is offered only where the study turns it on.
+ *
+ * Handing a subject's imaging out of the platform is the study's decision, so
+ * the backend refuses it with a 403 unless {@code export.bundle.enabled} is
+ * set. Showing a menu entry that always fails is worse than showing none: the
+ * user cannot tell a policy from a fault.
+ */
+const bundleEnabled = computed(
+  () => auth.user?.activeStudy?.settings?.['export.bundle.enabled'] === 'true',
+)
+
+const FORMATS = computed<Format[]>(() =>
+  bundleEnabled.value ? ['odm', 'csv', 'pdf', 'bundle'] : ['odm', 'csv', 'pdf'],
+)
 
 const disabled = computed(() => !props.studyOid || !props.subjectLabel)
 
@@ -74,8 +93,15 @@ function parseFilename(disposition: string | null): string | null {
   return null
 }
 
+const EXTENSION: Record<Format, string> = {
+  odm: 'xml',
+  csv: 'csv',
+  pdf: 'pdf',
+  bundle: 'zip',
+}
+
 function fallbackFilename(fmt: Format): string {
-  const ext = fmt === 'odm' ? 'xml' : fmt
+  const ext = EXTENSION[fmt]
   const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const safeLabel = props.subjectLabel.replace(/[^A-Za-z0-9_-]/g, '_') || 'subject'
   return `${safeLabel}_${fmt}_${yyyymmdd}.${ext}`
@@ -95,7 +121,7 @@ async function download(fmt: Format) {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        Accept: 'application/octet-stream, application/xml, text/csv, application/pdf',
+        Accept: 'application/octet-stream, application/xml, text/csv, application/pdf, application/zip',
       },
       body: JSON.stringify({ format: fmt }),
     })

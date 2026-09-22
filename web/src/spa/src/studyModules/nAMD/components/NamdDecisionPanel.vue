@@ -37,6 +37,7 @@
  */
 
 import { computed, ref } from 'vue'
+import { NAMD_THRESHOLDS_VERSION } from '../composables/useNamdAiRecommendation'
 import { useI18n } from 'vue-i18n'
 import { I } from '../icons'
 import type { NamdAiRecommendation, NamdSubjectArm } from '../types'
@@ -190,11 +191,22 @@ async function confirm() {
   saving.value = true
   saveError.value = null
   try {
+    // thresholdsVersion travels with the snapshot: a decision read back in a
+    // year has to be interpretable against the rules that produced it, and
+    // the thresholds are expected to change once the clinical lead reviews
+    // them against the specification.
     const snapshot = props.aiRec ? JSON.stringify({
       rec: props.aiRec.rec,
       intervalWeeks: props.aiRec.intervalWeeks,
-      rationale: props.aiRec.rationale,
+      // Both forms deliberately: the key stays interpretable when the wording
+      // is revised, and the resolved sentence means a reader of this audit
+      // years from now does not need the translation bundle to know why.
+      rationaleKey: props.aiRec.rationale?.key ?? null,
+      rationale: props.aiRec.rationale
+        ? t(props.aiRec.rationale.key, props.aiRec.rationale.params)
+        : '',
       triggersFired: props.aiRec.triggersFired,
+      thresholdsVersion: NAMD_THRESHOLDS_VERSION,
     }) : ''
     const values: Record<string, string> = {
       I_NAMD_DECISION_ACTION: action.value as Action,

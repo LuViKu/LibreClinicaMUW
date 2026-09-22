@@ -94,5 +94,19 @@
   <include  file="migration/lc-muw-2026-08-12-grant-admin-default-study.xml"/>
   <include  file="migration/lc-muw-2026-08-12-terminology.xml"/>
   <include  file="migration/lc-muw-2026-08-12-crf-item-terminology.xml"/>
+  <include  file="migration/lc-muw-2026-09-09-image-ingest.xml"/>
+  <include  file="migration/lc-muw-2026-09-09-audit-event-type-image-ingest.xml"/>
+  <include  file="migration/lc-muw-2026-09-18-ingest-performed-item-map.xml"/>
+  <include  file="migration/lc-muw-2026-10-05-ingest-item.xml"/>
+  <include  file="migration/lc-muw-2026-10-05-audit-types-ingest.xml"/>
+  <include  file="migration/lc-muw-2026-10-19-retinal-job-ingest-item.xml"/>
+  <include  file="migration/lc-muw-2026-11-02-imaging-modality.xml"/>
+  <include  file="migration/lc-muw-2026-11-02-audit-types-imaging-modality.xml"/>
+  <include  file="migration/lc-muw-2026-11-02-seed-imaging-modalities.xml"/>
+  <include  file="migration/lc-muw-2026-11-16-study-setting.xml"/>
+  <include  file="migration/lc-muw-2026-11-30-export-format-zip.xml"/>
+  <include  file="migration/lc-muw-2026-12-01-namd-flag-bindings-oid.xml"/>
+  <include  file="migration/lc-muw-2026-12-02-ingest-item-deidentified.xml"/>
+  <include  file="migration/lc-muw-2026-12-02-imaging-modality-dicom-kinds.xml"/>
 </databaseChangeLog>
 

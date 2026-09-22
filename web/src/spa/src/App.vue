@@ -10,14 +10,13 @@ import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInactivityStore } from '@/stores/inactivity'
-import { useBreadcrumbStore } from '@/stores/breadcrumb'
 import type { UserRole } from '@/types/auth'
+import { primaryNavFor } from '@/lib/primaryNav'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const inactivity = useInactivityStore()
-const breadcrumbs = useBreadcrumbStore()
 const { t } = useI18n()
 
 async function logout() {
@@ -86,58 +85,30 @@ onMounted(() => {
 })
 onUnmounted(() => inactivity.stop())
 
-interface Crumb { label: string; to?: string }
-
 /**
- * 2026-06-23 user-feedback round — nested breadcrumb trail.
- *
- * <p>The session-bound study (or study + site) is always the leading
- * crumb. After that:
- *   1. If the active view has published a trail via the breadcrumb
- *      store, append it. Per-view trails carry their own parent
- *      chain ("Subjects > EIAMD150 > V03") so the surfaced trail
- *      mirrors the navigation path that brought the operator here.
- *   2. Otherwise fall back to the legacy single-crumb behaviour
- *      (route.meta.title), which still serves every view that hasn't
- *      registered yet.
+ * Build stamp from the Vite defines, shown in the profile menu. Guarded so a
+ * test runner without the define pass still mounts the shell.
  */
-const breadcrumb = computed<Crumb[]>(() => {
-  const crumbs: Crumb[] = []
-  const active = auth.user?.activeStudy
-  if (active) {
-    if (active.isSite) {
-      // The active study is a site row. The SPA doesn't carry the
-      // parent study's name in /me's wire shape — fall back to the
-      // siteLabel and a generic "Studie" parent. When the
-      // parent-study display name lands in the /me adapter, drop
-      // the placeholder.
-      crumbs.push({ label: t('app.crumb.studyFallback') })
-      crumbs.push({ label: active.name })
-    } else {
-      // Active study links back to /home (the catalogue / dashboard).
-      crumbs.push({ label: active.name, to: '/' })
-    }
-  }
-  // View-published trail wins when present — that's the per-route
-  // nested chain (Subjects > EIAMD150 > V03 …).
-  const viewTrail = breadcrumbs.items
-  if (viewTrail && viewTrail.length > 0) {
-    for (const item of viewTrail) {
-      crumbs.push({ label: item.label, to: item.to ?? undefined })
-    }
-    return crumbs
-  }
-  // Fallback: the route's static title for views that haven't migrated
-  // to the per-view trail yet. Drop the link so the legacy single crumb
-  // still reads as "active leaf".
-  const routeTitle = route.meta?.title as string | undefined
-  if (routeTitle && route.name !== 'home' && route.name !== 'login' && route.name !== 'first-login') {
-    crumbs.push({ label: routeTitle })
-  }
-  return crumbs
-})
+declare const __APP_VERSION__: string
+declare const __BUILD_HASH__: string
+declare const __BUILD_DATE__: string
+const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''
+const buildHash = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : ''
+const rawBuildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : ''
+// The define ships ISO yyyy-MM-dd; render it as DD-MM-YYYY like the rail used to.
+const buildDate = /^\d{4}-\d{2}-\d{2}$/.test(rawBuildDate)
+  ? rawBuildDate.split('-').reverse().join('-')
+  : rawBuildDate
+
+/** The study the session is bound to — the chip beside the user menu. */
+const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
 
 const displayUserName = computed(() => auth.user?.username ?? '')
+
+/** The role's main destinations for the top bar, labels resolved here so TopBar stays a presenter. */
+const navItems = computed(() =>
+  primaryNavFor(userRoles.value).map((item) => ({ id: item.id, to: item.to, label: t(item.labelKey) })),
+)
 
 /**
  * Full per-study role set the user holds on the bound study. Prefer
@@ -164,6 +135,7 @@ const showTopBar = computed(
     route.name !== 'login' &&
     route.name !== 'first-login' &&
     route.name !== 'oct-upload-portal' &&
+    route.name !== 'image-upload-portal' &&
     // Phase E.8 Slice L4 — the printable-CRF view is meant to feed
     // the browser's "Print to PDF" cleanly. The TopBar would show up
     // in the captured PDF and the printable view has its own minimal
@@ -191,7 +163,12 @@ function openBugReport() {
 
     <TopBar
       v-if="showTopBar && auth.isAuthenticated"
-      :breadcrumb="breadcrumb"
+      :nav-items="navItems"
+      :study-name="activeStudyName"
+      study-to="/pick-study"
+      :version="appVersion"
+      :build-hash="buildHash"
+      :build-date="buildDate"
       :user-name="displayUserName"
       :user-roles="userRoles"
       :on-logout="logout"

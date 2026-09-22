@@ -21,6 +21,9 @@
 !/retinal-inference
 !/muw-e2e-converter
 
+# DR-025 — the dicom-scp sidecar Dockerfile also builds from the repo root.
+!/dicom-scp
+
 # ignore build files
 /*/target
 
@@ -30,3 +33,5 @@
 # step inside the Docker build resolve them fresh for the right OS.
 /web/src/spa/node_modules
 /web/src/spa/dist
+# Testcontainers IT logs (git-ignored, grows to GBs) — never part of the build context
+web/testcontainers-it/

@@ -20,7 +20,7 @@ export const monitorDe: ManualChapter = {
       steps: [
         'Nach der Anmeldung (und der Auswahl einer Studie) landen Sie auf dem **Start-Dashboard**.',
         'Lesen Sie die Aufmerksamkeitsübersicht — Ihnen zugewiesene Notizen und Diskrepanzen sowie die Anzahl der CRFs, die noch auf eine Verifizierung warten.',
-        'Nutzen Sie die Seitennavigation oder die Schnellzugriffe des Dashboards, um **Quelldatenvergleich**, **Rückfragen & Diskrepanzen** oder den **Audit Trail** zu öffnen.',
+        'Nutzen Sie die obere Leiste oder die Karten des Dashboards, um **Quelldatenvergleich**, **Rückfragen & Diskrepanzen** oder den **Audit Trail** zu öffnen.',
       ],
       notes: [
         'Sie können jederzeit über **Start** (Home) hierher zurückkehren. Das Dashboard ist schreibgeschützt; es verlinkt in die Arbeitsmasken, statt ein direktes Bearbeiten der Daten zu erlauben.',
@@ -32,7 +32,7 @@ export const monitorDe: ManualChapter = {
       shot: 'monitor/01-subject-matrix.png',
       goal: 'Finden Sie eine/n Teilnehmer/in und öffnen Sie deren Visiten und CRFs zur visuellen Durchsicht.',
       steps: [
-        'Öffnen Sie **Studienteilnehmer** über die Seitennavigation.',
+        'Öffnen Sie **Studienteilnehmer** über die obere Leiste.',
         'Nutzen Sie das Suchfeld (*Teilnehmer per ID suchen…*) oder die Filter-Chips — **Alle**, **Mit offenen Visiten**, **Alle Visiten abgeschlossen**, **Signiert** und die Checkbox **Nur mit offenen Rückfragen**.',
         'Jede Zeile zeigt Teilnehmer-ID, Geschlecht, Studienauge, Gruppe, Aufnahmedatum und eine Status-Pille je Visite. Ein kleines rotes Abzeichen neben einer Visiten-Pille zählt die offenen Rückfragen darauf.',
         'Klicken Sie auf die Teilnehmer-ID oder rechts auf **Öffnen**, um in das Teilnehmerdetail und von dort in einzelne Visiten und CRFs zu wechseln.',

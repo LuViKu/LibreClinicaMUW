@@ -50,6 +50,17 @@ pg_dump -h db.internal -U clinica libreclinica \
   > /var/backups/libreclinica/backup-$(date +%Y%m%d-%H%M).sql
 ls -1t /var/backups/libreclinica/backup-*.sql | tail -n +6 | xargs -r rm
 
+# (a2) The file stores, in the same window as the dump. Images, OCT
+#      volumes and inference artifacts live on disk; the database holds
+#      only their paths. A restore of the dump alone gives a database
+#      full of references to files that are no longer there. Every store
+#      is a directory under /var/lib/libreclinica, bound at the same path
+#      in every container (deploy/compose.production.yaml).
+tar -C /var/lib/libreclinica \
+  -czf /var/backups/libreclinica/files-$(date +%Y%m%d-%H%M).tar.gz \
+  dicom-ingest ingest e2e-uploads retinal-artifacts 2>/dev/null
+ls -1t /var/backups/libreclinica/files-*.tar.gz | tail -n +6 | xargs -r rm
+
 # (b) Drain new traffic at the reverse proxy. If you do not have a
 #     drain mechanism, stop the container — the proxy will return
 #     503 to clients, which is the explicit "down for maintenance"
@@ -299,6 +310,19 @@ appeared during the smoke, treat as a deploy regression and go to §5.
 
 ## 5. Rollback
 
+> **One release cannot be rolled back by redeploying the old image: the one
+> that renames `image_ingest` to `ingest_item` (Phase 3 / P3.1, changelog
+> `lc-muw-2026-10-05-ingest-item.xml`).** An older WAR queries `image_ingest`,
+> which no longer exists, so its entire ingest surface — the DICOM receiver,
+> both upload portals, the reconciliation inbox — fails on every request while
+> the rest of the application looks healthy. Rolling that release back means
+> **restoring the §1 dump**, not step (b) below. Check `databasechangelog` for
+> `2026-10-05-ingest-item-rename-table` before assuming an image rollback is
+> enough. The changelog does carry a complete `<rollback>` (verified to restore
+> the schema byte-identically with rows preserved), so a database-only rollback
+> is possible via `liquibase rollbackToDate` — but it must be run *before* the
+> old WAR starts writing, and it is the dump that is the tested path.
+
 Roll back when any of the following is true:
 
 - A clinical write path is failing (subject create, CRF save, eye
@@ -404,3 +428,86 @@ serialized to the JSON appender via includeMdcKeyName>reqId.
 > - Secondary on-call sysadmin: [name, contact]
 > - Pager rotation schedule: [link to roster]
 > - Escalation to clinical lead: [name, contact]
+
+---
+
+## 7. DICOM fundus receiver (DR-025)
+
+Only on a host that serves a camera. The sidecar is behind the `dicom`
+compose profile, so a host that does not set `COMPOSE_PROFILES=dicom`
+never starts it and nothing below applies.
+
+### What has to be true before a camera is connected
+
+| # | Item | Why |
+|---|---|---|
+| 1 | `core.dicom.ingest.token` set to 32+ hex characters, and `DICOM_SCP_INGEST_TOKEN` in `/etc/libreclinica/env` set to the same value | The sidecar cannot post an image without it, and the worklist answers 503. They are compared byte for byte. |
+| 2 | `DICOM_SCP_ALLOWED_CALLING_AE_TITLES` set to the camera's AE title | Blank accepts an association from anything that can reach the port. |
+| 3 | `core.dicom.worklist.studyOids` set to the study the camera serves | A blank value offers every study's schedule to the device. |
+| 4 | `LIBRECLINICA_DICOM_BIND_ADDR` set to the camera-facing address | The default publishes 11112 on every interface. |
+| 5 | Campus firewall admits the camera VLAN to 11112 and nothing else | A C-FIND returns subject labels, sex and dates of birth. Verify from a general workstation that the port is closed. |
+| 6 | nginx returns 404 for `/LibreClinica/pages/api/v1/internal/` | Shipped in `deploy/nginx/ecrf.conf`. Check after any proxy change. |
+| 7 | `DICOM_SCP_LOG_LEVEL=INFO` | DEBUG makes pynetdicom dump whole datasets, which puts patient name and ID into the container log. |
+| 8 | `core.ingest.storePath` (default `/var/lib/libreclinica/ingest`) mounted at the **same path in the app and the sidecar** — `deploy/compose.production.yaml` binds `/var/lib/libreclinica/ingest` into both | DR-029: the upload page writes JPEG/PNG and DICOM files here; the sidecar describes and pseudonymises an uploaded `.dcm` in place through the same bind. A path that exists in one container and not the other turns every DICOM upload into a 503. Included in the backup tar (a2). |
+| 9 | `core.dicom.describe.url` points at the sidecar (`http://dicom-scp:8081/describe`) and `DICOM_SCP_DESCRIBE_PORT` is **not** in any `ports:` list | The endpoint rewrites files on the shared volume and is gated by the same token as the ingest hand-off; it must never be reachable from outside the compose network. Leaving the URL blank refuses DICOM uploads rather than storing a clinic camera's export with the hospital's patient in it. |
+
+### Dry run
+
+```bash
+COMPOSE_PROFILES=dicom deploy/dicom-dry-run.sh
+```
+
+Performs the three exchanges a camera performs (C-ECHO, worklist
+C-FIND, C-STORE), checks in the database that the image bound to the
+visit, removes what it created, and checks that no patient identifier
+from its test image reached the sidecar log. Schedule a visit for a test
+subject today first, or the worklist and bind checks have nothing to
+check against and say so.
+
+Then connect the real camera on that test subject. On the Optomed Lumo:
+remote AE `LIBRECLINICA`, the VM's camera-facing address, port 11112,
+its own AE title matching item 2 above, worklist pointed at the same
+host and port. **Clear the device's stored-study backlog first** — it
+flushes everything it holds on first contact, and those images will
+arrive as unbound rows in the inbox.
+
+### Day one
+
+```bash
+# The sidecar's per-association summary lines.
+docker compose logs -f dicom-scp
+
+# The app side. Both lines carry counts, never patient data.
+docker compose logs libreclinica | grep -E "DICOM ingest:|DICOM worklist served:"
+
+# Reconciliation backlog. UNBOUND should trend to zero as operators
+# work the inbox; a growing UNBOUND count means the worklist is not
+# being used, so images arrive without an accession.
+docker compose exec db psql -U clinica libreclinica -c \
+  "SELECT status, count(*) FROM image_ingest GROUP BY 1 ORDER BY 1;"
+
+# Disk. A fundus study is a few MB; a camera flushing a backlog is not.
+du -sh /var/lib/libreclinica/dicom-ingest /var/lib/libreclinica/ingest
+```
+
+### Retention
+
+Dismissing an image in the inbox is the operator's decision that it is
+not study data. The nightly sweep (03:30) then deletes the file and the
+row once `core.ingest.retention.dismissedDays` has passed, default 30,
+and writes one audit row per pass recording how many it removed. Bound
+images are study data and are never swept; unbound ones are still
+awaiting a decision and are never swept either — a growing unbound
+backlog is a workflow problem, not something retention will clear.
+
+Full rules, including what is deliberately never swept and where the
+files live: [data-retention.md](data-retention.md).
+
+To check the sweep is running:
+
+```bash
+docker compose exec db psql -U clinica libreclinica -c \
+  "SELECT audit_date, new_value FROM audit_log_event
+    WHERE audit_table = 'image_ingest' AND entity_name = 'Retention sweep'
+    ORDER BY audit_date DESC LIMIT 5;"
+```

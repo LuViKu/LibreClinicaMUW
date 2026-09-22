@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequire
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 import org.springframework.security.core.Authentication;
@@ -200,12 +201,30 @@ public class MeApiController {
             // purpose.
             java.util.List<String> enabledModules;
             try {
+                // Sites inherit their parent's modules — see
+                // StudyModuleEnrollmentApiController. A site session that did
+                // not inherit saw no modules at all.
                 enabledModules = StudyModuleEnrollmentApiController
-                        .loadEnrolledModuleIds(dataSource, currentStudy.getId());
+                        .loadEnrolledModuleIds(dataSource, currentStudy.getId(),
+                                currentStudy.getParentStudyId());
             } catch (Exception e) {
                 LOG.warn("Failed to load module enrollments for study={}: {}",
                         currentStudy.getOid(), e.getMessage());
                 enabledModules = java.util.List.of();
+            }
+            // P3.5/P3.7 — what this study does. Soft-failed to an empty map:
+            // a settings lookup that breaks must not cost the user their
+            // session, and an absent map reads as "nothing extra is on",
+            // which is the same conservative answer as before the keys
+            // existed.
+            java.util.Map<String, String> studySettings;
+            try {
+                studySettings = new StudySettingService(dataSource)
+                        .resolvedFor(currentStudy.getId());
+            } catch (Exception e) {
+                LOG.warn("Failed to resolve settings for study={}: {}",
+                        currentStudy.getOid(), e.getMessage());
+                studySettings = java.util.Map.of();
             }
             activeStudy = new MeDto.ActiveStudyDto(
                     currentStudy.getId(),
@@ -224,7 +243,8 @@ public class MeApiController {
                     // to the top-level single highest-priority projection.
                     spaRoles,
                     protocolTypeKey,
-                    enabledModules
+                    enabledModules,
+                    studySettings
             );
         }
 

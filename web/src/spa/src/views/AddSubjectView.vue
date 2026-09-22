@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
 import DateInput from '@/components/DateInput.vue'
@@ -318,45 +317,9 @@ const genderOptions: { code: Gender; label: () => string }[] = [
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink
-        to="/"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        {{ t('nav.home') }}
-      </RouterLink>
+  <div>
 
-      <RouterLink
-        to="/subjects"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-        {{ t('nav.subjectMatrix') }}
-      </RouterLink>
-
-      <RouterLink
-        to="/subjects/new"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-muw-blue-50 text-muw-blue font-medium"
-        aria-current="page"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <circle cx="12" cy="8" r="5" />
-          <path d="M20 21a8 8 0 1 0-16 0" />
-          <path d="M19 16v6M22 19h-6" />
-        </svg>
-        {{ t('nav.addSubject') }}
-      </RouterLink>
-    </SideRail>
-
-    <div class="flex-1 max-w-3xl px-8 py-8">
+    <div class="max-w-3xl px-8 py-8 mx-auto">
       <div class="mb-6">
         <div class="text-xs text-slate-500 mb-1">{{ form.siteLabel }} · {{ t('addSubject.subTrail') }}</div>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('addSubject.title') }}</h1>

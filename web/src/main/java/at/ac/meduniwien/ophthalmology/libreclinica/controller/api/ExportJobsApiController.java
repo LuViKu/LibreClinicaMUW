@@ -23,6 +23,7 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,7 +117,7 @@ public class ExportJobsApiController {
 
     /** Accepted format strings — kept in lock-step with the SPA dropdown + DatasetsApiController.ExportFormatKey. */
     private static final Set<String> SUPPORTED_FORMATS =
-            Set.of("odm", "csv", "tsv", "tab", "excel", "xls", "xlsx", "sas", "spss");
+            Set.of("odm", "csv", "tsv", "tab", "excel", "xls", "xlsx", "sas", "spss", "bundle");
 
     private static final int DEFAULT_PAGE_SIZE = 25;
     private static final int MAX_PAGE_SIZE = 100;
@@ -169,6 +170,15 @@ public class ExportJobsApiController {
         if (ds == null) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
+        }
+        // P3.8 — the bundle is off unless the study turns it on. Handing a
+        // study's imaging out of the platform is the study's decision, not
+        // whoever happens to be signed in; the same gate the per-subject
+        // bundle applies, so the two routes cannot disagree.
+        if ("bundle".equals(format) && !new StudySettingService(dataSource)
+                .isEnabled(ds.getStudyId(), StudySettingService.EXPORT_BUNDLE_ENABLED)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "This study does not have the multimodal export enabled."));
         }
 
         ExportJobDAO jobDao = new ExportJobDAO(dataSource);

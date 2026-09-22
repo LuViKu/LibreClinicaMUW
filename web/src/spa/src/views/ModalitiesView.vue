@@ -2,11 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import SideRail from '@/components/SideRail.vue'
+import BuildStudyRail from '@/components/BuildStudyRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import ModalityEditDialog from '@/components/ModalityEditDialog.vue'
+import ImagingModalitiesPanel from '@/components/imaging/ImagingModalitiesPanel.vue'
 
 import { useModalitiesStore } from '@/stores/modalities'
+import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
 import { ApiError } from '@/api/client'
 import type {
@@ -34,6 +36,17 @@ import type {
  */
 const { t } = useI18n()
 const store = useModalitiesStore()
+const auth = useAuthStore()
+
+/**
+ * P3.4 — two catalogues, deliberately side by side rather than merged.
+ *
+ * Measurements are platform-wide and carry a value per eye; imaging
+ * acquisitions belong to one study and tick a checklist. Same word, different
+ * thing — the tabs are what stop an administrator conflating them.
+ */
+const tab = ref<'measurements' | 'imaging'>('measurements')
+const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const confirm = useConfirm()
 
 onMounted(() => { void store.load() })
@@ -109,11 +122,7 @@ const rows = computed(() => store.list)
 
 <template>
   <div class="flex">
-    <SideRail>
-      <RouterLink to="/build-study" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        {{ t('nav.buildStudy') }}
-      </RouterLink>
-    </SideRail>
+    <BuildStudyRail />
 
     <div class="flex-1 max-w-6xl px-8 py-6">
       <div class="mb-4 flex items-end justify-between gap-4">
@@ -121,6 +130,7 @@ const rows = computed(() => store.list)
           <h1 class="text-xl font-semibold tracking-tight">{{ t('modalities.title') }}</h1>
         </div>
         <button
+          v-if="tab === 'measurements'"
           class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium"
           @click="openCreate"
           data-testid="modalities-new"
@@ -129,6 +139,34 @@ const rows = computed(() => store.list)
         </button>
       </div>
 
+      <div class="mb-5 flex gap-1 border-b border-slate-200" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'measurements'"
+          class="px-3 py-2 text-[13px] font-medium -mb-px border-b-2"
+          :class="tab === 'measurements'
+            ? 'border-muw-blue text-muw-blue'
+            : 'border-transparent text-slate-600 hover:text-slate-800'"
+          data-testid="tab-measurements"
+          @click="tab = 'measurements'"
+        >{{ t('modalities.tab.measurements') }}</button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'imaging'"
+          class="px-3 py-2 text-[13px] font-medium -mb-px border-b-2"
+          :class="tab === 'imaging'
+            ? 'border-muw-blue text-muw-blue'
+            : 'border-transparent text-slate-600 hover:text-slate-800'"
+          data-testid="tab-imaging"
+          @click="tab = 'imaging'"
+        >{{ t('modalities.tab.imaging') }}</button>
+      </div>
+
+      <ImagingModalitiesPanel v-if="tab === 'imaging'" :study-oid="activeStudyOid" />
+
+      <template v-else>
       <p v-if="store.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
       <p v-else-if="store.error" class="text-rose-700">{{ store.error }}</p>
 
@@ -184,6 +222,8 @@ const rows = computed(() => store.list)
           </td>
         </tr>
       </DenseTable>
+
+      </template>
 
       <ModalityEditDialog
         :open="dialogOpen"

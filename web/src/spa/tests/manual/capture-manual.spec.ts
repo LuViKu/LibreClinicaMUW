@@ -192,6 +192,9 @@ test('capture: common (login & study picker)', async ({ page }) => {
 for (const [role, cfg] of Object.entries(ROLES)) {
   test(`capture: ${role}`, async ({ page }) => {
     test.skip(!process.env.MANUAL_CAPTURE, 'set MANUAL_CAPTURE=1 to run the capture harness')
+    // Eighteen screens with a settle each outgrow the 60 s default; the
+    // Administrator group used to lose its last shot to the timeout.
+    test.setTimeout(300_000)
     const user = process.env[cfg.userEnv]
     const pass = process.env[cfg.passEnv]
     test.skip(!user || !pass, `no creds for ${role} (${cfg.userEnv}/${cfg.passEnv})`)
@@ -262,14 +265,14 @@ for (const [role, cfg] of Object.entries(ROLES)) {
       }
     }
 
-    // Parked-scans admin queue (Administrator) — read-only retinal job queue.
+    // Ingest inbox (Administrator) — every inbound file, cross-study (P3.2).
     if (role === 'Administrator') {
       try {
-        await page.goto(`${BASE}/retinal/parked`, { waitUntil: 'domcontentloaded' })
+        await page.goto(`${BASE}/ingest-inbox`, { waitUntil: 'domcontentloaded' })
         await settle(page)
-        await shot(page, cfg.dir, '22-parked-scans')
+        await shot(page, cfg.dir, '22-ingest-inbox')
       } catch (e) {
-        failures.push(`parked-scans: ${(e as Error).message}`)
+        failures.push(`ingest-inbox: ${(e as Error).message}`)
       }
     }
 

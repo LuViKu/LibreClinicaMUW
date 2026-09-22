@@ -127,6 +127,27 @@ public class RetinalInferenceApiController {
     private final RetinalMetricComputer metricComputer;
     private final RetinalJobStatusBroadcaster broadcaster;
 
+    /**
+     * P2-4 — copies a finished job's metrics into the visit's CRF.
+     *
+     * <p>Optional on purpose. The endpoint that does this on demand has existed
+     * since the nAMD work but had no caller, so an inference result reached the
+     * CRF only if somebody remembered to ask for it — which in a clinic means
+     * the CRF is empty and the numbers live in a viewer nobody exports.
+     *
+     * <p>Setter-injected and nullable so the many tests that construct this
+     * controller directly keep compiling, and so a deployment without the bean
+     * degrades to the previous behaviour rather than failing to start.
+     */
+    private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
+            retinalAutoPopulator;
+
+    @Autowired(required = false)
+    public void setRetinalAutoPopulator(
+            at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator p) {
+        this.retinalAutoPopulator = p;
+    }
+
     @Autowired
     public RetinalInferenceApiController(@Qualifier("dataSource") DataSource dataSource,
                                          SiteVisibilityFilter siteVisibilityFilter,
@@ -142,6 +163,45 @@ public class RetinalInferenceApiController {
         this.artifactStore = artifactStore;
         this.metricComputer = metricComputer;
         this.broadcaster = broadcaster;
+    }
+
+    /**
+     * Copy a finished job's metrics into the visit's CRF.
+     *
+     * <p>Never throws and never blocks the job's completion. Skips silently
+     * when the job is not bound to a CRF — a parked scan has no form to write
+     * into.
+     */
+    void autoPopulateCrf(Integer eventCrfId, int actorUserId) {
+        if (eventCrfId == null || eventCrfId <= 0) return;
+        if (retinalAutoPopulator == null) {
+            LOG.debug("auto-populate skipped for ecrf {}: no populator wired", eventCrfId);
+            return;
+        }
+        if (actorUserId <= 0) {
+            LOG.warn("auto-populate skipped for ecrf {}: no account to attribute the write to",
+                    eventCrfId);
+            return;
+        }
+        try {
+            retinalAutoPopulator.populateForEventCrf(eventCrfId, actorUserId);
+            LOG.info("auto-populate: inference values written into event_crf {}", eventCrfId);
+        } catch (Exception e) {
+            LOG.warn("auto-populate failed for ecrf {}: {}", eventCrfId, e.getMessage());
+        }
+    }
+
+    /**
+     * The locked {@code system} account, for values written when nobody was
+     * logged in. A machine's write must never carry a person's name.
+     *
+     * <p>{@code retinal_inference_job} records no owner, so the actor comes
+     * from the caller rather than from the row.
+     */
+    private int systemActor() {
+        Integer sys = at.ac.meduniwien.ophthalmology.libreclinica.service.ingest
+                .PerformedItemAutoTicker.systemUserId(dataSource);
+        return sys == null ? 0 : sys;
     }
 
     @PostMapping(path = "/{eventCrfId:[0-9]+}/oct-upload",
@@ -264,7 +324,8 @@ public class RetinalInferenceApiController {
         // unchanged (initialStatus == 'queued').
         if (remoteConfigured) {
             ResponseEntity<?> remoteResp = handleRemote(
-                    jobId, taskClean, absolutePath, lat, scanIndex, eventCrfId);
+                    jobId, taskClean, absolutePath, lat, scanIndex, eventCrfId,
+                    currentUser.getId());
             if (remoteResp != null) return remoteResp;
             // fall through to the existing local path on remote failure
         }
@@ -374,12 +435,31 @@ public class RetinalInferenceApiController {
      * the bind endpoint had no path to invoke the remote run. Identified
      * during the 2026-06-18 smoke of the cross-study parked-admin view.
      */
+    /**
+     * Back-compatible entry point for callers that have no user in hand — the
+     * unauthenticated portal. Values written into the CRF are attributed to the
+     * locked {@code system} account rather than to a person.
+     */
     ResponseEntity<?> handleRemote(long jobId,
                                    String taskClean,
                                    String absolutePath,
                                    String lat,
                                    int scanIndex,
                                    Integer eventCrfId) {
+        return handleRemote(jobId, taskClean, absolutePath, lat, scanIndex, eventCrfId, 0);
+    }
+
+    /**
+     * @param actorUserId the user whose upload started this job, or 0 when
+     *                    nobody was logged in (the portal path)
+     */
+    ResponseEntity<?> handleRemote(long jobId,
+                                   String taskClean,
+                                   String absolutePath,
+                                   String lat,
+                                   int scanIndex,
+                                   Integer eventCrfId,
+                                   int actorUserId) {
         try (Connection c = dataSource.getConnection()) {
             updateStatus(c, jobId, "segmenting", false, null);
         } catch (SQLException sqlEx) {
@@ -500,6 +580,14 @@ public class RetinalInferenceApiController {
             } catch (SQLException ignored) { /* best-effort */ }
             return null;
         }
+
+        // P2-4 — the job is done, so put its numbers in the CRF.
+        //
+        // Soft-fail, like the metric compute above: the result row and the
+        // artifacts are persisted and the job is 'done'. A populate failure
+        // must not undo that, and the operator can still trigger the populate
+        // by hand.
+        autoPopulateCrf(eventCrfId, actorUserId > 0 ? actorUserId : systemActor());
 
         // Body + log: prefer the computed metric over the envelope's
         // placeholder values; fall back to the envelope when compute

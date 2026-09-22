@@ -59,6 +59,56 @@ jobs:
           fi
           echo "OK — no active mock-code reintroductions."
 
+      # DR-025 — no patient-identifying strings in logs.
+      #
+      # The DICOM worklist and both upload portals handle subject labels,
+      # patient names and patient IDs that arrive from a camera or an operator.
+      # A log line carrying one puts identifying data into a file that is
+      # rotated, shipped and read by people with no clinical role, and it is
+      # the kind of thing that gets added in a hurry while debugging a device
+      # on a clinic bench. Counts and ids are fine; the values are not.
+      #
+      # Mark a deliberate exception with a trailing `// phi-safe:` comment
+      # explaining why the value is not identifying.
+      - name: No patient identifiers in log statements
+        run: |
+          set +e
+          matches=$(grep -rnE \
+            'LOG\.(trace|debug|info|warn|error)\(.*(patientId|patientName|subjectLabel|PatientName|PatientID)' \
+            web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api \
+            --include='*.java' | grep -v 'phi-safe:')
+          py=$(grep -rnE \
+            '(logger|log|LOG)\.(debug|info|warning|error)\(.*(PatientName|PatientID|patient_name|patient_id)' \
+            dicom-scp/src | grep -v 'phi-safe:')
+          set -e
+          if [ -n "$matches" ] || [ -n "$py" ]; then
+            echo "::error::A log statement carries a patient identifier:"
+            echo "$matches"
+            echo "$py"
+            echo
+            echo "Log a count or an internal id instead. If the value really is not"
+            echo "identifying, append a '// phi-safe:' comment saying why."
+            exit 1
+          fi
+          echo "OK — no patient identifiers in log statements."
+
+      # The nAMD workspace can render fabricated visits for development. A URL
+      # parameter that fills a clinical screen with invented fluid volumes must
+      # not survive into a production bundle, so every read of it stays behind
+      # import.meta.env.DEV, which Vite resolves at build time.
+      - name: Mock-data query parameter stays development-only
+        run: |
+          set +e
+          matches=$(grep -rn 'query\.mock' web/src/spa/src \
+            --include='*.ts' --include='*.vue' | grep -v '__tests__' | grep -v 'import\.meta\.env\.DEV')
+          set -e
+          if [ -n "$matches" ]; then
+            echo "::error::A mock-data query parameter is readable in a production build:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "OK — mock-data query parameter is development-only."
+
       - name: Maven package (with unit tests)
         run: mvn -B -ntp -DskipTests=false package
 
@@ -122,6 +172,59 @@ jobs:
             }' "$csv"
             echo "::endgroup::"
           done
+
+  sidecar-tests:
+    # 2026-09-17 — until now NO Python test ran in CI: the sidecars
+    # (`dicom-scp`, `muw-e2e-converter`, `retinal-inference`) all ship
+    # pytest suites that were only ever run by hand. The DR-025 DICOM
+    # receiver in particular is the seam a medical device talks to, so
+    # its handler tests belong in the gate. Independent of the Maven
+    # jobs — no `needs:` — so it fails fast and in parallel.
+    name: Python sidecar tests (${{ matrix.pkg }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # `extra` names the package's own test extra — installing that rather
+        # than a bare pytest is what pulls each suite's test-only deps (e.g.
+        # retinal-inference's httpx, which starlette.testclient needs).
+        include:
+          - pkg: dicom-scp
+            extra: test
+          - pkg: muw-e2e-converter
+            extra: dev
+          - pkg: retinal-inference
+            extra: dev
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # retinal-inference's preprocess tests import the converter package
+      # (DR-024 keeps them separate so the GPU cluster can skip it), so it
+      # is installed alongside. Editable installs keep `src/` layouts importable.
+      - name: Install ${{ matrix.pkg }}
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.pkg }}" = "retinal-inference" ]; then
+            pip install -e ./muw-e2e-converter
+          fi
+          pip install -e "./${{ matrix.pkg }}[${{ matrix.extra }}]"
+
+      - name: Run ${{ matrix.pkg }} tests
+        run: python -m pytest ${{ matrix.pkg }}/tests -q --junitxml=pytest-${{ matrix.pkg }}.xml
+
+      - name: Upload pytest report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.pkg }}
+          path: pytest-${{ matrix.pkg }}.xml
+          retention-days: 7
 
   integration-tests:
     # Runs the DB-dependent tests excluded from the default surefire run
@@ -230,20 +333,38 @@ jobs:
       # libreclinica-muw-retinal-inference:latest" because the only
       # image bake had loaded was `libreclinica`. Adding it as a
       # second target keeps the smoke job validating the full stack.
-      - name: Build libreclinica + retinal-inference images (cached)
+      - name: Build libreclinica + sidecar images (cached)
         uses: docker/bake-action@v7
         with:
           files: compose.yaml
           targets: |
             libreclinica
             retinal-inference
+            dicom-scp
           load: true
           set: |
             *.cache-from=type=gha,scope=smoke-${{ github.workflow }}
             *.cache-to=type=gha,scope=smoke-${{ github.workflow }},mode=min
 
+      # DR-025 — the DICOM path needs a shared secret both sides agree on, and
+      # the application reads it from datainfo.properties baked into its image.
+      # Rather than rebuild with a token inside, prepare a config directory the
+      # CI overlay bind-mounts: the token then exists only in this workspace.
+      - name: Prepare the DICOM smoke configuration
+        run: |
+          set -e
+          TOKEN=$(openssl rand -hex 16)
+          echo "DICOM_SCP_INGEST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          rm -rf docker/config-ci
+          cp -R docker/config docker/config-ci
+          sed -i "s/^core.dicom.ingest.token=.*/core.dicom.ingest.token=$TOKEN/" \
+            docker/config-ci/datainfo.properties
+          grep -q "^core.dicom.ingest.token=.\+" docker/config-ci/datainfo.properties
+
       - name: Compose up (uses pre-built image)
-        run: docker compose up --detach --no-build
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml --profile dicom \
+            up --detach --no-build
 
       - name: Wait for application to be reachable
         run: |
@@ -473,6 +594,76 @@ jobs:
           path: web/src/spa/playwright-report
           retention-days: 7
 
+      # DR-025 — the camera path over a real DICOM association.
+      #
+      # The sidecar's unit tests cover its handlers and the application's ITs
+      # cover the worklist and ingest endpoints. Neither exercises the wire,
+      # which is exactly where the Optomed Lumo failed in the field: the
+      # sidecar advertised only uncompressed transfer syntaxes and rejected
+      # every image the camera sent, and nothing in the suite could notice.
+      - name: DICOM smoke (C-ECHO, worklist C-FIND, C-STORE, auto-bind)
+        run: |
+          set -e
+          # The seeded demo visits are historical, and a worklist only offers
+          # what is scheduled now — so give it something to offer.
+          EVENT_ID=$(docker compose exec -T db psql -qAt -U clinica -d libreclinica -c "
+            INSERT INTO study_event (study_event_definition_id, study_subject_id, location,
+                                     sample_ordinal, date_start, owner_id, status_id,
+                                     subject_event_status_id, date_created,
+                                     start_time_flag, end_time_flag)
+            SELECT sed.study_event_definition_id, ss.study_subject_id, '',
+                   COALESCE((SELECT MAX(sample_ordinal) FROM study_event se2
+                              WHERE se2.study_subject_id = ss.study_subject_id
+                                AND se2.study_event_definition_id = sed.study_event_definition_id), 0) + 1,
+                   CURRENT_DATE, 1, 1, 1, NOW(), false, false
+              FROM study_event_definition sed
+              JOIN study_subject ss ON ss.study_id = sed.study_id
+             WHERE sed.status_id NOT IN (5, 7) AND ss.status_id NOT IN (5, 7)
+             ORDER BY sed.study_event_definition_id, ss.study_subject_id
+             LIMIT 1
+            RETURNING study_event_id" | tr -d '\r')
+          if [ -z "$EVENT_ID" ]; then
+            echo "::error::could not schedule a visit for the DICOM smoke"
+            exit 1
+          fi
+          echo "Scheduled study_event $EVENT_ID for today."
+
+          OUT=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T \
+            -e ACCESSION="LC${EVENT_ID}" -e DICOM_HOST=127.0.0.1 \
+            dicom-scp python /smoke.py)
+          echo "$OUT"
+
+          SOP=$(printf '%s' "$OUT" | sed -n 's/^SOP_INSTANCE_UID=//p' | tr -d '\r')
+          if [ -z "$SOP" ]; then
+            echo "::error::the smoke stored no image"
+            docker compose -f compose.yaml -f compose.ci.yaml logs --tail 80 dicom-scp
+            exit 1
+          fi
+
+          # The wire exchanges succeeding is half of it; the image has to reach
+          # the visit the worklist named.
+          ROW=$(docker compose exec -T db psql -qAt -U clinica -d libreclinica -c \
+            "SELECT status || '|' || COALESCE(match_policy,'') || '|' ||
+                    COALESCE(bound_study_event_id::text,'')
+               FROM ingest_item WHERE sop_instance_uid = '$SOP'" | tr -d '\r')
+          echo "ingest_item row: $ROW"
+          if [ "$ROW" != "BOUND|worklist|$EVENT_ID" ]; then
+            echo "::error::expected BOUND|worklist|$EVENT_ID, got '$ROW'"
+            docker compose -f compose.yaml -f compose.ci.yaml logs --tail 80 dicom-scp
+            exit 1
+          fi
+
+          # The synthetic patient name must not have reached the log.
+          if docker compose -f compose.yaml -f compose.ci.yaml logs dicom-scp \
+               | grep -q 'CISMOKE'; then
+            echo "::error::the sidecar logged a patient identifier"
+            exit 1
+          fi
+          echo "DICOM smoke passed: association, worklist, store, auto-bind, clean log."
+
       - name: Compose down
         if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml --profile dicom \
+            down --volumes --remove-orphans
+          rm -rf docker/config-ci

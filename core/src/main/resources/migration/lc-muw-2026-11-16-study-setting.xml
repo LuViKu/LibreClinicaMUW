@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.5 — a study says what it does, and which items it means.
+
+        Two tables, for two things the platform currently hard-codes.
+
+        WHAT A STUDY DOES. Whether a study receives DICOM, accepts OCT
+        uploads, runs inference, offers the today's-visits list — today that is
+        answered by instance-wide properties in datainfo.properties, some of
+        them lists of study OIDs (core.dicom.worklist.studyOids,
+        core.ingest.portal.studyOids) that an administrator can only change by
+        editing a file on the server and restarting. On an instance running
+        three studies that is both awkward and a disclosure risk: the default
+        of an unset key is "every study".
+
+        WHICH ITEMS A STUDY MEANS. Shared controllers carry literal OIDs —
+        F_NAMD_VISIT, I_NAMD_OD_IRF_MM3, AI_SHOWN — so a second study wanting
+        the same behaviour with its own CRF cannot have it without editing code
+        that every other study shares. P3.9's guard-rail test bans those
+        literals outright; this is where they go instead.
+
+        Both tables resolve site → parent → configuration → code default, so a
+        site inherits its study and nothing has to be restated per site.
+
+        DEFAULTS PRESERVE TODAY'S BEHAVIOUR. No row means "as before": an
+        absent setting falls through to the core.* property it replaces, and an
+        absent binding falls through to the literal the code used. Nothing
+        changes until somebody sets something.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-11-16-study-setting">
+        <comment>Per-study settings, resolved site → parent → config → default.</comment>
+
+        <createTable tableName="study_setting">
+            <column autoIncrement="true" name="study_setting_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="study_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Dotted, namespaced by area: 'ingest.dicom.enabled',
+                 'inference.enabled', 'ai.arm.hiddenGroup'. Decoded in Java so
+                 a new key needs no migration. -->
+            <column name="setting_key" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Text, whatever the key means. Booleans are 'true'/'false';
+                 typing the column would mean a migration per new kind of
+                 setting, which is the thing this exists to avoid. -->
+            <column name="value" type="VARCHAR(500)"/>
+            <column name="date_updated" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by_user_id" type="INT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="study_setting" baseColumnNames="study_id"
+                                 constraintName="fk_study_setting_study"
+                                 referencedTableName="study" referencedColumnNames="study_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+
+        <addUniqueConstraint tableName="study_setting" columnNames="study_id, setting_key"
+                             constraintName="u_study_setting_study_key"/>
+
+        <rollback>
+            <dropTable tableName="study_setting"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Which CRF item a study means by a role the platform knows about.
+
+        'visit.crf' is the form the nAMD decision panel writes to;
+        'retinal.fluid.irf.od' is where an inference metric lands. A second
+        study doing the same work with its own CRF sets its own rows and the
+        shared code stops naming anybody's items.
+
+        No foreign key to `item`, for the same reason as the imaging bindings:
+        CRF versions rename and re-create items, and a dangling row that logs a
+        warning beats a migration that cannot be applied. Resolved at write
+        time inside the visit's own CRF version.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-16-study-item-binding">
+        <comment>Which item a study means by a role the shared code knows.</comment>
+
+        <createTable tableName="study_item_binding">
+            <column autoIncrement="true" name="study_item_binding_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="study_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The role the shared code asks for: 'visit.crf',
+                 'retinal.fluid.irf.od', 'namd.decision.action'. -->
+            <column name="binding_key" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_oid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_updated" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by_user_id" type="INT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="study_item_binding" baseColumnNames="study_id"
+                                 constraintName="fk_study_item_binding_study"
+                                 referencedTableName="study" referencedColumnNames="study_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+
+        <addUniqueConstraint tableName="study_item_binding" columnNames="study_id, binding_key"
+                             constraintName="u_study_item_binding_study_key"/>
+
+        <rollback>
+            <dropTable tableName="study_item_binding"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        134 — a setting changed.
+
+        These decide whether a study receives images at all, and which CRF item
+        an automatic write lands in. A study that stops receiving DICOM because
+        somebody flipped a switch looks, from the inbox, exactly like a camera
+        that stopped sending.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-16-audit-type-study-setting" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 134;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit type 134 — study_setting_changed.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="134"/>
+            <column name="name" value="study_setting_changed"/>
+            <column name="display_name" value="Study setting changed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 134</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The nAMD study's own item names, lifted out of shared controllers.
+
+        Seeded only where that study exists; a deployment without it is
+        unaffected. The shared code keeps its literal as the fallback for one
+        release, so this changes nothing on its own — it is what lets the
+        literal be deleted next.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-16-seed-study-bindings-namd" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM study WHERE oc_oid = 'S_NAMD';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM study_item_binding b
+                      JOIN study s ON s.study_id = b.study_id WHERE s.oc_oid = 'S_NAMD';
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>nAMD: the items the shared retinal and decision code names.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO study_item_binding (study_id, binding_key, item_oid, updated_by_user_id)
+            SELECT s.study_id, v.binding_key, v.item_oid, 1
+              FROM study s
+              CROSS JOIN (VALUES
+                    ('visit.crf',              'F_NAMD_VISIT'),
+                    ('retinal.fluid.irf.od',   'I_NAMD_OD_IRF_MM3'),
+                    ('retinal.fluid.irf.os',   'I_NAMD_OS_IRF_MM3'),
+                    ('retinal.fluid.srf.od',   'I_NAMD_OD_SRF_MM3'),
+                    ('retinal.fluid.srf.os',   'I_NAMD_OS_SRF_MM3'),
+                    ('retinal.fluid.ped.od',   'I_NAMD_OD_PED_MM3'),
+                    ('retinal.fluid.ped.os',   'I_NAMD_OS_PED_MM3'),
+                    ('retinal.fluid.total.od', 'I_NAMD_OD_TOTAL_FLUID_MM3'),
+                    ('retinal.fluid.total.os', 'I_NAMD_OS_TOTAL_FLUID_MM3'),
+                    ('retinal.crt.od',         'I_OD_CRT_CENTRAL_1MM_UM'),
+                    ('retinal.crt.os',         'I_OS_CRT_CENTRAL_1MM_UM'),
+                    ('namd.flags.hemorrhage.od', 'NAMD_OD_NEW_HEMORRHAGE'),
+                    ('namd.flags.hemorrhage.os', 'NAMD_OS_NEW_HEMORRHAGE'),
+                    ('namd.flags.bcvaLoss.od', 'NAMD_OD_BCVA_LOSS_NAMD_ATTRIBUTED'),
+                    ('namd.flags.bcvaLoss.os', 'NAMD_OS_BCVA_LOSS_NAMD_ATTRIBUTED')
+                 ) AS v(binding_key, item_oid)
+             WHERE s.oc_oid = 'S_NAMD';
+        ]]></sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM study_item_binding
+                 WHERE study_id IN (SELECT study_id FROM study WHERE oc_oid = 'S_NAMD');
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The AI arm group names, which AiArmPolicy holds as constants.
+
+        Seeded per study rather than globally because the arms belong to the
+        trial that randomises on them. Absent rows keep the constants, so
+        blinding behaves identically until a study says otherwise — the one
+        rule where silently changing behaviour would be worst.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-16-seed-study-settings-namd" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM study WHERE oc_oid = 'S_NAMD';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM study_setting st
+                      JOIN study s ON s.study_id = st.study_id WHERE s.oc_oid = 'S_NAMD';
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>nAMD: its arm group names and the surfaces it uses.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO study_setting (study_id, setting_key, value, updated_by_user_id)
+            SELECT s.study_id, v.k, v.val, 1
+              FROM study s
+              CROSS JOIN (VALUES
+                    ('ai.arm.shownGroup',  'AI_SHOWN'),
+                    ('ai.arm.hiddenGroup', 'AI_HIDDEN'),
+                    ('ingest.oct.enabled', 'true'),
+                    ('inference.enabled',  'true')
+                 ) AS v(k, val)
+             WHERE s.oc_oid = 'S_NAMD';
+        ]]></sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM study_setting
+                 WHERE study_id IN (SELECT study_id FROM study WHERE oc_oid = 'S_NAMD');
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        HealthAEye receives images from two cameras and runs no inference.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-16-seed-study-settings-healthaeye" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM study WHERE oc_oid = 'S_HAE';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM study_setting st
+                      JOIN study s ON s.study_id = st.study_id WHERE s.oc_oid = 'S_HAE';
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>HealthAEye: DICOM and image ingest on, inference off.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO study_setting (study_id, setting_key, value, updated_by_user_id)
+            SELECT s.study_id, v.k, v.val, 1
+              FROM study s
+              CROSS JOIN (VALUES
+                    ('ingest.dicom.enabled', 'true'),
+                    ('ingest.image.enabled', 'true'),
+                    ('inference.enabled',    'false')
+                 ) AS v(k, val)
+             WHERE s.oc_oid = 'S_HAE';
+        ]]></sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM study_setting
+                 WHERE study_id IN (SELECT study_id FROM study WHERE oc_oid = 'S_HAE');
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

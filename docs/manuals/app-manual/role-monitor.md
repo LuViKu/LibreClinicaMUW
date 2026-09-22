@@ -17,8 +17,8 @@ Two powers are the Monitor's alone in the day-to-day flow:
 
 ## Navigation
 
-The Monitor's side navigation is built around oversight, not data entry. From
-the home dashboard and the side rail you can reach:
+The Monitor's navigation is built around oversight, not data entry. From the
+home dashboard and the top bar you can reach:
 
 - **Quelldatenvergleich** (Source Data Verification) — `/sdv` — the Monitor's
   primary surface.
@@ -47,17 +47,18 @@ tasks.
 
 1. After signing in (and picking a study, if your account is attached to more
    than one) you land on the **home dashboard**.
-2. Read the attention summary — for example notes and discrepancies assigned to
-   you and the count of CRFs still awaiting verification.
-3. Use the side navigation or the dashboard's quick links to open
-   **Quelldatenvergleich**, **Rückfragen & Diskrepanzen**, or the **Audit
-   Trail**.
+2. **Ihre Aufgaben** shows your queues with their counts — CRFs still awaiting
+   verification (**Quelldatenvergleich**), open queries (**Rückfragen &
+   Diskrepanzen**) and **Fällige Visiten**. Each card opens that list.
+3. Below, **In &lt;study&gt;** lists the Subject Matrix, the Audit Trail and
+   Data Export. The top bar's primary navigation reaches the Subject Matrix,
+   Quelldatenvergleich, Rückfragen and the Audit Trail from any screen.
 
 ![Monitor home dashboard](screenshots/monitor/00-home.png)
 
 **Notes**
 
-- You can return here at any time with **Start** (Home) in the side navigation.
+- You can return here at any time with **Start** in the top bar.
 - The dashboard is read-only; it links into the working screens rather than
   letting you act on data directly.
 
