@@ -1,8 +1,12 @@
 # Retinal-inference on the OPTIMA GPU cluster (DR-022)
 
-Runbook for running the inference server on the OPTIMA Apptainer/SLURM cluster
-(`cn5.cir.meduniwien.ac.at`), reached from the LibreClinica app VM over the
-internal MUW network.
+Runbook for running the inference server on the OPTIMA Apptainer/SLURM cluster,
+reached from the LibreClinica app VM over the internal MUW network.
+
+> **Nodes changed 2026-09-22.** This runbook was written for `cn5`, which is now
+> `State=DOWN` (`Reason=reboot timed out`, SLURM, after wedging at `CPULoad=14024`).
+> Production now runs on **on3** with **cn6** as the nginx failover backup. See
+> §1a for why those two and not the faster hardware.
 
 ## Topology
 
@@ -22,6 +26,45 @@ Confirmed cluster facts (June 2026): same internal network (cn5↔app VM route, 
 **the user has no SLURM association yet** (so `srun` is blocked — direct mode until
 an admin grants an account, likely `optima`); the container runtime is
 **`singularity 3.8.7` at `/usr/bin/singularity`** (no `apptainer`, no module).
+
+## 1a. Which nodes can actually run this (GPU architecture)
+
+**Only Turing-or-older GPUs can run the full task set.** Validated 2026-09-22 by
+running every task against two nodes:
+
+| Node | GPUs | Arch | app-VM reachable | Verdict |
+|---|---|---|---|---|
+| **on3** (`149.148.108.144`) | 6x 2080Ti | Turing | yes | **primary — all tasks** |
+| **cn6** (`149.148.108.170`) | 4x 2080Ti | Turing | yes | **backup** |
+| vn1 (`…108.168`) | 4x 2080Ti | Turing | yes | spare candidate, unvalidated |
+| vn2 (`…108.121`) | 4x 2080Ti | Turing | yes | SLURM `resv` |
+| cn5 (`…108.173`) | 3x TitanXp, 2x 2080Ti, 1x TitanV | Pascal/Turing/Volta | yes | **DOWN** since 2026-09-22 |
+| on2 (`…108.24`) | 3080Ti | Ampere | **no** (:8000 firewalled) | **fails `pr` + `bm`** |
+| on4 / on5 | A6000 / A6000 Ada | Ampere / Ada | yes | would fail identically |
+| on1 (`…109.114`) | 6x K80 | Kepler (sm_37) | yes | too old |
+| on0, cn1, cn2 | none | — | yes | no GPU |
+
+On Ampere, `pr` and `bm` both die with:
+
+```
+RuntimeError: cuda runtime error (48) : no kernel image is available for execution on the device
+```
+
+The `pr` container ships PyTorch 0.4 / CUDA 10 and the `bm` venv ships torch 1.8;
+neither has sm_86 kernels compiled in. **No configuration fixes this** — it needs
+the vendor containers rebuilt. `fluid`, `onl` and `ga` do work on Ampere, so a
+node like on2 answers `/health` with all six tasks and then fails two of them per
+job. That is worse than an outage, because the monitor sees a healthy server.
+
+The counter-intuitive consequence: **on4/on5 are the fastest hardware on the
+cluster and are unusable here.** Pick nodes by architecture, not by speed, and
+re-validate every task before promoting one.
+
+Distinguishing the failures you will see, all of which look alike from the app:
+- `no kernel image is available` — architecture mismatch. Fatal, pick another node.
+- `CUDA out of memory` — another tenant is on that card. Not fatal; the launcher
+  now picks the emptiest GPU at startup (§3b).
+- `Remote /run returned null` — nothing listening, or the node is unreachable.
 
 ## 0. Container runtime
 Confirmed: `singularity 3.8.7-1.el7` on PATH. Set:
@@ -198,6 +241,20 @@ The script:
 - **Derives `BM_LD_LIBRARY_PATH` from the LMOD modules** rather than hardcoding
   the ~2 KB path, and does it in a **subshell** — loading `Python/3.8.2` into the
   launch shell would shadow the conda 3.11 interpreter uvicorn runs under.
+- **Recovers `MODULEPATH` when it is empty.** Sourcing lmod's init file defines
+  the `module` function but not the module tree — on this cluster that comes from
+  `/etc/profile.d/00-modulepath.sh` and `z00_lmod.sh`, which only a LOGIN shell
+  runs. So `module load` succeeded interactively and failed under cron, and
+  `--check` looked healthy the whole time the watchdog could restart nothing.
+- **Degrades instead of aborting** when the BM env is genuinely unavailable: it
+  warns loudly and starts without `bm` + `layers`, leaving the other four tasks
+  serving. The short `supported_tasks` list is the alarm — the app-VM monitor
+  mails `DEGRADED`. Use `--strict` (or `--check`) to demand a hard failure.
+- **Picks the least-used GPU at startup** instead of hardcoding device 0. These
+  are shared nodes and the config lives on a shared NFS home, so no fixed index
+  is right for every node — on 2026-09-22 device 0 on on3 was 6.5/11 GB occupied
+  by another tenant and `bm` died with CUDA OOM while GPUs 2-4 sat idle. Override
+  with `RETINAL_INFERENCE_APPTAINER_GPU_DEVICE` / `..._BM_GPU_DEVICE`.
 - **Asserts every expected task is registered** after startup
   (`bm fluid ga layers onl pr`) and exits non-zero otherwise.
 - Enforces the DR-024 invariant (`muw-e2e-converter` must be absent).
@@ -242,8 +299,21 @@ tmux new -d -s ri 'retinal-inference/scripts/start-cluster-server.sh --foregroun
 > restarted by hand. `systemd --user` is **unavailable** on the node (`Failed
 > to get D-Bus connection`) and lingering isn't granted, so **cron is the only
 > self-healing mechanism available to an unprivileged user.**
+>
+> **The 2026-09 outage: nineteen days, two stacked faults.** The server died on
+> 2026-09-03 and stayed dead until 2026-09-22. Every five minutes the watchdog
+> fired and aborted at `could not derive BM_LD_LIBRARY_PATH` — the cron
+> `MODULEPATH` bug (§3b) — so nothing ever restarted. At some point cn5 itself
+> wedged (`CPULoad=14024`), and an admin reboot on 2026-09-22 timed out, leaving
+> it `State=DOWN`. Fixing the launcher was necessary but not sufficient: on a
+> node at that load nothing was going to start either way. Two lessons are baked
+> in now — a launcher that degrades rather than aborts, and a **second node**
+> (§3d), because self-healing on one box cannot heal the box.
+>
+> **Install the watchdog on every serving node.** cron is per-node; the crontab
+> on cn5 did nothing for on3. Verify with `crontab -l` on each.
 
-**On cn5 — self-heal** with [`scripts/cluster-watchdog.sh`](../scripts/cluster-watchdog.sh):
+**On each serving node (on3, cn6) — self-heal** with [`scripts/cluster-watchdog.sh`](../scripts/cluster-watchdog.sh):
 
 ```sh
 mkdir -p ~/.config/retinal-inference
@@ -274,6 +344,43 @@ nothing while healthy, and re-mails only ~hourly during a sustained outage.
 > so the long-lived footprint on a contended node disappears. Chase the SLURM
 > account.
 
+## 3d. Two nodes: nginx failover on the app VM
+
+One configured node is one outage away from every OCT job failing. The app VM's
+nginx already fronts the eCRF, so the failover lives there — no Java change, no
+WAR rebuild. The block is in [`deploy/nginx/ecrf.conf`](../../deploy/nginx/ecrf.conf):
+
+```nginx
+upstream retinal_cluster {
+    server 149.148.108.144:8000 max_fails=2 fail_timeout=60s;  # on3
+    server 149.148.108.170:8000 backup;                        # cn6
+}
+server { listen 8088; ... location / { proxy_pass http://retinal_cluster; } }
+```
+
+Then `core.retinalInference.remotePushUrl=http://nginx:8088`.
+
+This works because **a failed dispatch already requeues**: `runRemote` returns
+null and the caller reverts the job to `queued` for the DB poll to drain. So the
+first POST at a dead node fails, nginx marks it down, and the requeued job lands
+on the backup. nginx does **not** retry the POST itself (non-idempotent requests
+are not retried unless `non_idempotent` is set — deliberately unset), which is
+what stops the same multi-minute GPU job starting twice.
+
+Two deliberate choices, both load-bearing:
+- **Literal IPs, not hostnames.** nginx resolves upstream names once at startup
+  and refuses to start if that fails. This nginx is the eCRF's front door; a
+  flaky DNS entry for a GPU node must not be able to take the clinical app down.
+- **`proxy_read_timeout 3600s`, `proxy_connect_timeout 5s`.** Fail over fast on a
+  dead node, but wait out a live segmentation — a short read timeout is
+  indistinguishable from an outage and would poison the fail counter mid-job.
+
+Validate the config before reloading, since this file also serves the eCRF:
+
+```sh
+sudo nginx -t && sudo docker compose exec nginx nginx -s reload
+```
+
 ## 4. Flip to SLURM (production, after an account is granted)
 ```sh
 RETINAL_INFERENCE_APPTAINER_USE_SLURM=true \
@@ -287,8 +394,24 @@ pin — SLURM assigns it). `shared_tmpdir` MUST stay on the shared FS so the
 compute node sees the `bscan.dcm`.
 
 ## 5. Wire the app VM
-Set `core.retinalInference.remotePushUrl=http://149.148.108.173:8000/run` and the
-matching token on the Java side. Reachability test from the app VM:
+Set `core.retinalInference.remotePushUrl` to the sidecar's **base URL** and the
+matching token on the Java side. With the failover proxy (§3d) that is
+`http://nginx:8088`; pointed straight at one node it is
+`http://on3.cir.meduniwien.ac.at:8000`.
+
+> **No `/run` suffix.** The client appends it —
+> `RemoteRetinalInferenceClient` does `url.replaceAll("/+$","") + "/run"`. An
+> earlier revision of this runbook told you to include `/run`, which yields
+> `/run/run` and a 404. Corrected 2026-09-22.
+
+> **Rotate the shared secret.** `core.retinalInference.remotePushToken` ships as
+> the literal placeholder `choose-a-long-shared-secret` (see
+> `deploy/setup-ubuntu-host.sh`), and the 2026-09 production deployment was found
+> still using it on both ends — a value published in a public repo. Change it in
+> `datainfo.properties` **and** `~/.config/retinal-inference/env` together; a
+> mismatch rejects every job.
+
+Reachability test from the app VM:
 ```sh
 curl -sS -m5 -o /dev/null -w "%{http_code}\n" http://149.148.108.173:8000/health
 ```

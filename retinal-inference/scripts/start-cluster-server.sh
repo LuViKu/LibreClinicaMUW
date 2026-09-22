@@ -60,6 +60,28 @@ log()  { printf '\033[1;32m[ri]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[ri]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[ri]\033[0m %s\n' "$*" >&2; exit 1; }
 
+# ----------------------------- GPU selection ----------------------------------
+# These are SHARED nodes: other users' jobs sit on whichever cards they like, and
+# the config file that feeds this script lives on the shared NFS home, so it
+# cannot say "device 2" for one node and "device 0" for another.
+#
+# Hardcoding device 0 is what broke `bm` and `layers` on on3 (2026-09-22): GPU 0
+# was 6.5/11 GB occupied by someone else's job and the model died with CUDA OOM
+# while GPUs 2, 3 and 4 sat completely idle. Picking the emptiest card at startup
+# fixes that for every node from one config.
+#
+# This is a startup-time choice, not a per-request one — a card that is free now
+# can be busy in an hour. It removes the systematic failure (always landing on a
+# contended device 0), not the racy one. Per-request scheduling is SLURM's job,
+# and is one more reason to chase the account.
+pick_idle_gpu() {
+  command -v nvidia-smi >/dev/null 2>&1 || { printf '0'; return; }
+  local idx
+  idx="$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits 2>/dev/null \
+         | sort -t, -k2 -n | head -1 | cut -d, -f1 | tr -d '[:space:]')"
+  printf '%s' "${idx:-0}"
+}
+
 # ----------------------------- server config ----------------------------------
 export RETINAL_INFERENCE_INFERENCE_ADAPTER=apptainer
 export RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED=true
@@ -67,7 +89,7 @@ export RETINAL_INFERENCE_WORKER_ENABLED=false
 export RETINAL_INFERENCE_SHARED_TMPDIR="$RI_SCRATCH/tmp"
 export RETINAL_INFERENCE_APPTAINER_BIN=singularity
 export RETINAL_INFERENCE_APPTAINER_USE_SLURM=false
-export RETINAL_INFERENCE_APPTAINER_GPU_DEVICE="${RETINAL_INFERENCE_APPTAINER_GPU_DEVICE:-0}"
+export RETINAL_INFERENCE_APPTAINER_GPU_DEVICE="${RETINAL_INFERENCE_APPTAINER_GPU_DEVICE:-$(pick_idle_gpu)}"
 
 # Shared secret must match core.retinalInference.remotePushToken on the app VM.
 #
@@ -103,7 +125,7 @@ export RETINAL_INFERENCE_GA_IOWA_LD_LIBRARY_PATH="$RI_HOME/ri-env/lib:$RI_SHARED
 # IOWA env + the BM env, so it comes for free once both groups are set.
 export RETINAL_INFERENCE_BM_PYTHON="$RI_SHARED/Processor_Implementations/sese_bm_final/venv/bin/python3"
 export RETINAL_INFERENCE_BM_CODE="$RI_SHARED/Processor_Implementations/sese_bm_final/code"
-export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-0}"
+export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-$RETINAL_INFERENCE_APPTAINER_GPU_DEVICE}"
 
 # ----------------------------- BM_LD_LIBRARY_PATH -----------------------------
 # The BM venv python needs the LMOD module lib dirs (libpython3.8.so et al).
@@ -200,6 +222,7 @@ preflight() {
     die "muw-e2e-converter IS installed in the cluster env — violates DR-024. Uninstall it."
   fi
   log "DR-024 invariant holds (muw-e2e-converter absent)"
+  log "GPU device: $RETINAL_INFERENCE_APPTAINER_GPU_DEVICE (bm: $RETINAL_INFERENCE_BM_GPU_DEVICE)"
   if [ -n "${RETINAL_INFERENCE_BM_LD_LIBRARY_PATH:-}" ]; then
     log "BM_LD_LIBRARY_PATH derived (${#RETINAL_INFERENCE_BM_LD_LIBRARY_PATH} chars)"
   else
