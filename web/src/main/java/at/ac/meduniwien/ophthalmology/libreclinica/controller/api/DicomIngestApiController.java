@@ -210,7 +210,11 @@ public class DicomIngestApiController {
                 .patientId(r.patientId())
                 .patientName(r.patientName())
                 .accessionNumber(r.accessionNumber())
+                // StudyDate off the DICOM header — the file's own account of
+                // when it was taken, not anything an operator typed.
                 .acquisitionDate(studyDate)
+                .acquisitionDateSource(studyDate == null
+                        ? null : IngestItemRepository.ACQ_SOURCE_FILE)
                 .laterality(r.laterality());
         if (target != null) {
             item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "worklist");

@@ -3170,7 +3170,11 @@
     "unbindConfirm": "Zuordnung wirklich aufheben? Der dadurch gesetzte CRF-Wert wird ebenfalls entfernt, sofern keine weitere Datei desselben Geräts die Visite belegt.",
     "dismiss": "Verwerfen",
     "dismissConfirm": "Diese Datei wirklich verwerfen?",
-    "countAria": "{n} Dateien im Eingang"
+    "countAria": "{n} Dateien im Eingang",
+    "dateMismatchTitle": "Die Daten stimmen nicht überein",
+    "dateMismatchConfirm": "Diese Datei gibt als Aufnahmedatum {fileDate} an, die Visite ist auf {visitDate} datiert. Trotzdem dieser Visite zuordnen? Ihre Entscheidung wird im Audit-Trail vermerkt. ({n} Datei(en))",
+    "dateUnverified": "nicht aus der Datei gelesen",
+    "dateFromFile": "aus der Datei gelesen"
   },
   "imagingModalities": {
     "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",

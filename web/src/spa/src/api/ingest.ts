@@ -9,7 +9,7 @@
  * Session-cookie `apiGet`/`apiPost` (context-path aware), unlike the public
  * upload portals which are `credentials: 'omit'`.
  */
-import { apiGet, apiPost } from '@/api/client'
+import { ApiError, apiGet, apiPost } from '@/api/client'
 
 /** What a file IS, as opposed to how it arrived. */
 export type IngestKind = 'e2e' | 'dicom' | 'image' | 'other'
@@ -35,6 +35,14 @@ export interface IngestItem {
   patientId: string | null
   laterality: string | null
   acquisitionDate: string | null
+  /**
+   * Where `acquisitionDate` came from. Only `'file'` is evidence of when the
+   * scan was taken — `'operator'` is the day whoever uploaded it typed into
+   * the workbench, which is also the key the visit list was searched by, so it
+   * agrees with the chosen visit whatever the file contains. `'unknown'` is a
+   * row written before the distinction existed. Null when there is no date.
+   */
+  acquisitionDateSource: 'file' | 'operator' | 'unknown' | null
   modality: string | null
   originalFilename: string | null
   byteSize: number | null
@@ -89,6 +97,34 @@ export interface BindPayload {
   eventCrfId?: number | null
   modalityCode?: string | null
   laterality?: string | null
+  /**
+   * Proceed even though the file's own acquisition date disagrees with the
+   * visit's date. Without it the backend answers 409 `date_mismatch`; the
+   * caller shows the two dates and re-sends with this set if the operator
+   * confirms. Only ever set from an explicit confirmation.
+   */
+  acknowledgeDateMismatch?: boolean
+}
+
+/** The 409 body a bind comes back with when the two dates disagree. */
+export interface DateMismatch {
+  code: 'date_mismatch'
+  ingestItemId: number
+  fileDate: string
+  visitDate: string
+  message: string
+}
+
+/**
+ * True when this rejection is the date question rather than a real failure.
+ *
+ * The backend refuses a mismatched bind once so it cannot happen by accident;
+ * it is not an error state, and the caller is expected to ask and retry.
+ */
+export function isDateMismatch(e: unknown): e is ApiError & { body: DateMismatch } {
+  if (!(e instanceof ApiError)) return false
+  const body = e.body as { code?: string } | null
+  return body?.code === 'date_mismatch'
 }
 
 export function bindIngestItem(
@@ -107,7 +143,10 @@ export function bindIngestItem(
 export function bulkBindIngestItems(
   ids: number[],
   payload: BindPayload,
-): Promise<{ bound: number[]; skipped: Array<{ id: number; reason: string }> }> {
+): Promise<{
+  bound: number[]
+  skipped: Array<{ id: number; reason: string; fileDate?: string; visitDate?: string }>
+}> {
   return apiPost('/pages/api/v1/ingest/bulk-bind', { ids, ...payload })
 }
 

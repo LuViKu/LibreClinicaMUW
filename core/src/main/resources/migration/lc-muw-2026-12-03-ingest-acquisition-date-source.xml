@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      Where ingest_item.acquisition_date came from.
+
+      The column held two different kinds of thing under one name. For a DICOM
+      file it was read out of the header — a property of the scan. For an .e2e
+      or an image it was whatever the upload workbench had in its date box, and
+      that box is the *visit search key*: the operator types a day, the panel
+      lists that day's visits, they pick one, and the day they searched with was
+      written back onto the file as the day it was acquired. The stored date
+      then agreed with the visit by construction, which reads exactly like
+      corroboration and is not.
+
+      Observed: ingest_item 5 (OCTMP224.E2E, bound to HAE-002's 2026-09-09
+      baseline) carried acquisition_date=2026-09-09 while nothing had read a
+      date from the file at all. The file does carry one — 2026-09-09, as it
+      happens — but the match was luck, not verification.
+
+      So the date now travels with its provenance:
+        file      — read out of the file itself (DICOM header, .e2e exam chunk)
+        operator  — asserted by the person uploading; NOT verified
+        unknown   — recorded before this column existed (backfill below)
+      NULL means no date is known, which is an honest answer and the one the
+      reconciliation inbox is expected to show for a file nothing could date.
+
+      Only 'file' is evidence. The bind-time visit-date check keys off it and
+      stays quiet for everything else, because warning about a date the
+      operator just typed would fire on every single upload.
+
+      Additive; the existing column keeps its values and nothing reads the new
+      one as required.
+    -->
+    <changeSet id="2026-12-03-ingest-acquisition-date-source" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="acquisition_date_source"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.acquisition_date_source — whether the date was read from the file or asserted by an operator.</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="acquisition_date_source" type="VARCHAR(16)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="acquisition_date_source"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      Backfill. Every row that predates the column has a date of unknown
+      provenance, and there is no way to recover which kind it was: the DICOM
+      path and the workbench path wrote the same column the same way. Marking
+      them 'unknown' rather than guessing keeps them out of the bind check and
+      out of any UI that claims a date is verified.
+
+      Rows with no date stay NULL on both columns.
+    -->
+    <changeSet id="2026-12-03-ingest-acquisition-date-source-backfill" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="ingest_item" columnName="acquisition_date_source"/>
+        </preConditions>
+        <comment>Existing dates predate the provenance column; mark them unknown rather than guessing.</comment>
+
+        <update tableName="ingest_item">
+            <column name="acquisition_date_source" value="unknown"/>
+            <where>acquisition_date IS NOT NULL AND acquisition_date_source IS NULL</where>
+        </update>
+
+        <rollback>
+            <update tableName="ingest_item">
+                <column name="acquisition_date_source" value="null"/>
+                <where>acquisition_date_source = 'unknown'</where>
+            </update>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

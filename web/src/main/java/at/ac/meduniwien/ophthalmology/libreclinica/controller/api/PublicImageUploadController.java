@@ -303,7 +303,11 @@ public class PublicImageUploadController {
                 .contentType(contentType)
                 .patientId(patientId)
                 .laterality(laterality)
-                .acquisitionDate(studyDate);
+                // A form field, not the image's metadata: a JPEG from a
+                // handheld camera carries no date anyone here reads.
+                .acquisitionDate(studyDate)
+                .acquisitionDateSource(studyDate == null
+                        ? null : IngestItemRepository.ACQ_SOURCE_OPERATOR);
         if (target != null) {
             item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "portal");
         }
