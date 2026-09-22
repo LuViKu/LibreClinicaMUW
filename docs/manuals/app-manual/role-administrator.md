@@ -20,8 +20,14 @@ queries, with their count — then two groups of destinations: **In &lt;study&gt
 (Nutzerverwaltung with the count of open invitations, Neue Studie anlegen,
 Modalitäten, Patientenübersicht, and *Aktive Studie wechseln* when you hold
 more than one study). The top bar's primary navigation reaches Nutzerverwaltung,
-Standorte, Datenexport and the Audit Trail from any screen; the
-**System-Audit** link beside it is Administrator-only.
+Standorte, Datenexport and the Audit Trail from any screen. The **System** entry
+beside the study chip is Administrator-only and opens the instance-level
+section — Systemstatus, System-Audit-Protokoll, Passwort-Richtlinie,
+Anwendungskonfiguration and Geplante Jobs (§12–§16). It sits to the right of
+the study chip on purpose: everything left of the chip is scoped to the active
+study, these five pages are not. On each of them a side rail lists the section
+with the current page highlighted, so you move between them without going
+back to the top.
 
 ![Administrator home (Start)](screenshots/administrator/00-home.png)
 
@@ -188,7 +194,7 @@ Standorte, Datenexport and the Audit Trail from any screen; the
 **Goal:** Review the institution-wide audit trail, including operation failures and failed jobs.
 
 **Steps:**
-1. Go to **System-Audit-Protokoll** (System Audit Log) at `/system/audit-log`.
+1. Open **System-Audit-Protokoll** (System Audit Log) from the **System** rail (`/system/audit-log`).
 2. Filter by actor, event variant (signed, reason-for-change, sdv, admin, data, query, subject-group-change) or subject.
 3. Browse the date-grouped timeline; click an entry with a chevron to expand its before/after diff and reason.
 
@@ -201,7 +207,7 @@ Standorte, Datenexport and the Audit Trail from any screen; the
 **Goal:** Check the health of the running application after a restart or incident.
 
 **Steps:**
-1. Go to **Systemstatus** (System Status) at `/admin/system-status`.
+1. Open **Systemstatus** (System Status) via **System** in the top bar (`/admin/system-status`) — it is the section's landing page.
 2. Read the three panels: **JVM** (Java version, heap used/max, threads, CPUs), **Database** (reachability, product/version, Liquibase changelog count), and **Application** (status OK/OutOfMemory, uptime).
 3. Click **Aktualisieren** (Refresh) to re-poll; the last-refreshed time is shown next to the button.
 
@@ -214,7 +220,7 @@ Standorte, Datenexport and the Audit Trail from any screen; the
 **Goal:** Set the password rules enforced for local accounts.
 
 **Steps:**
-1. Go to **Passwort-Richtlinie** (Password Policy) at `/admin/password-policy`.
+1. Open **Passwort-Richtlinie** (Password Policy) from the **System** rail (`/admin/password-policy`).
 2. Tick the required character classes (lowercase, uppercase, digits, special characters).
 3. Set the length constraints — *Min Length*, *Max Length* (1–256) — and *Expiration Days* (0 = no expiration).
 4. Optionally require a password change on first login, then click **Save** (or **Discard** to revert to the last-saved values).
@@ -228,7 +234,7 @@ Standorte, Datenexport and the Audit Trail from any screen; the
 **Goal:** See what configuration the running application actually reads.
 
 **Steps:**
-1. Go to **Anwendungskonfiguration** (App Configuration) at `/admin/config`.
+1. Open **Anwendungskonfiguration** (App Configuration) from the **System** rail (`/admin/config`).
 2. Read the values: default timezone, user language/country, file encoding, OS name/architecture, JVM options, the retinal-inference remote-push URL, and whether SSO is enabled.
 3. Click **Aktualisieren** (Refresh) to re-read after a restart.
 
@@ -241,7 +247,7 @@ Standorte, Datenexport and the Audit Trail from any screen; the
 **Goal:** Inspect the background (Quartz) jobs the platform runs.
 
 **Steps:**
-1. Go to **Geplante Jobs** (Scheduled Jobs) at `/admin/jobs`.
+1. Open **Geplante Jobs** (Scheduled Jobs) from the **System** rail (`/admin/jobs`).
 2. Review the scheduler status bar (name, started/standby) and the jobs table: name, group, state, previous and next fire times, description.
 3. Click **Aktualisieren** (Refresh) to re-poll.
 

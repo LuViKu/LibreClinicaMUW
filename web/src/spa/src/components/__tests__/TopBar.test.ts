@@ -27,6 +27,8 @@ async function mountAt(path: string, extra: Record<string, unknown> = {}) {
       { path: '/subjects/:id', component: { template: '<div />' } },
       { path: '/notes', component: { template: '<div />' } },
       { path: '/pick-study', component: { template: '<div />' } },
+      { path: '/admin/system-status', component: { template: '<div />' } },
+      { path: '/system/audit-log', component: { template: '<div />' } },
     ],
   })
   await router.push(path)
@@ -75,6 +77,25 @@ describe('TopBar', () => {
     // Without a picker it is plain text, not a dead link.
     const plain = await mountAt('/notes', { studyName: 'HealthAEye' })
     expect(plain.get('[data-testid="topbar-study"]').element.tagName).toBe('SPAN')
+  })
+
+  it('offers the System section to administrators only, beside the study chip', async () => {
+    const admin = await mountAt('/notes', { userRoles: ['Administrator'] })
+    const link = admin.get('[data-testid="topbar-system-link"]')
+    expect(link.attributes('href')).toBe('/admin/system-status')
+    expect(link.text()).toBe(enMessages.topBar.system)
+    expect(link.attributes('aria-current')).toBeUndefined()
+    // Not a primary-nav destination: the one <nav> landmark stays the primary navigation.
+    expect(admin.findAll('nav')).toHaveLength(1)
+    const investigator = await mountAt('/notes')
+    expect(investigator.find('[data-testid="topbar-system-link"]').exists()).toBe(false)
+  })
+
+  it('marks the System entry current across both of its path prefixes', async () => {
+    const onStatus = await mountAt('/admin/system-status', { userRoles: ['Administrator'] })
+    expect(onStatus.get('[data-testid="topbar-system-link"]').attributes('aria-current')).toBe('page')
+    const onAudit = await mountAt('/system/audit-log', { userRoles: ['Administrator'] })
+    expect(onAudit.get('[data-testid="topbar-system-link"]').attributes('aria-current')).toBe('page')
   })
 
   it('keeps the version and build in the profile menu', async () => {

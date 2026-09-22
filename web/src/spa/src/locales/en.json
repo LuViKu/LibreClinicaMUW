@@ -47,7 +47,7 @@
       "moreErrors": "{n} more error(s)",
       "queuedListTitle": "More errors"
     },
-    "systemAuditLog": "System audit",
+    "system": "System",
     "retinalParked": "Parked scans",
     "primaryNav": "Primary navigation",
     "study": "Active study",
@@ -3229,6 +3229,12 @@
       "portal.todaysVisits": "Today's visits on the upload page",
       "ai.arm.shownGroup": "Group shown AI",
       "ai.arm.hiddenGroup": "Group blinded to AI"
+    }
+  },
+  "system": {
+    "rail": {
+      "heading": "System",
+      "audit": "System audit"
     }
   },
   "subjectUnboundItems": {

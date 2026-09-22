@@ -33,6 +33,9 @@ const CASES: { role: Role | null; path: string; label: string }[] = [
   { role: 'admin', path: '/manage-users', label: 'Manage Users' },
   { role: 'admin', path: '/sites', label: 'Sites' },
   { role: 'admin', path: '/studies/new', label: 'Create Study' },
+  // The System section (2026-09-22): a second section rail beside the top
+  // bar's navigation — one labelled landmark each is what the rules check.
+  { role: 'admin', path: '/admin/system-status', label: 'System Status (System rail)' },
   // DR-025 / P2-6 — the pages added for the pilots. The two upload portals
   // take no login at all: they are opened on a phone at a camera, by whoever
   // is running the clinic that day, so their accessibility is not optional.

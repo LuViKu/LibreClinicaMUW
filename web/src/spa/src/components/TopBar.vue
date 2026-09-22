@@ -84,6 +84,15 @@ function isCurrent(item: NavItem): boolean {
   return route.path === item.to || route.path.startsWith(item.to + '/')
 }
 
+/**
+ * The System entry is current on any page of its section. The section spans
+ * two path prefixes — the four /admin/ pages and the audit trail under
+ * /system/ — which is why this is not a NavItem with one `to`.
+ */
+const systemCurrent = computed(
+  () => route.path.startsWith('/admin/') || route.path.startsWith('/system/'),
+)
+
 /* 2026-06-21 — the module nav consumer was removed from TopBar. P3.0
    retired the orphaned slot with it: modules now reach the operator
    through the subject-detail.workspace CTA and a landing-page card
@@ -307,18 +316,23 @@ function onReportBugClick() {
           <span class="truncate">{{ studyName }}</span>
         </span>
 
-        <!-- Phase E hardening B — sysadmin-only entry-point to the
-             system-wide audit trail. Gated on Administrator role
-             (sysadmin / techadmin both project to Administrator in
-             UsersApiController.list); the same role gate the
-             backend endpoint enforces. -->
+        <!-- The System section — Administrator-only, and deliberately on
+             this side of the study chip: everything left of the chip is
+             scoped to the active study, while the five pages behind this
+             entry (status, system-wide audit trail, password policy,
+             configuration, scheduled jobs) are about the instance. It lands
+             on the status page; the section's rail carries the rest. The
+             role gate mirrors the backend's (sysadmin / techadmin both
+             project to Administrator in UsersApiController.list). -->
         <RouterLink
           v-if="primaryRole === 'Administrator'"
-          to="/system/audit-log"
-          class="px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100 whitespace-nowrap"
-          data-testid="topbar-system-audit-link"
+          to="/admin/system-status"
+          class="px-2 py-1 rounded-md text-xs whitespace-nowrap"
+          :class="systemCurrent ? 'bg-muw-blue-50 text-muw-blue' : 'text-slate-700 hover:bg-slate-100'"
+          :aria-current="systemCurrent ? 'page' : undefined"
+          data-testid="topbar-system-link"
         >
-          {{ t('topBar.systemAuditLog') }}
+          {{ t('topBar.system') }}
         </RouterLink>
 
       <div v-if="userName" class="relative">

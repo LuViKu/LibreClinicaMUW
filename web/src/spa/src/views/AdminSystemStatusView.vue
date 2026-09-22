@@ -12,6 +12,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SystemRail from '@/components/SystemRail.vue'
 import { apiGet, ApiError } from '@/api/client'
 
 const { t } = useI18n()
@@ -75,7 +76,10 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-6 py-6">
+  <div class="flex">
+    <SystemRail />
+
+  <div class="flex-1 max-w-4xl px-8 py-6">
     <div class="flex items-baseline justify-between mb-4">
       <h1 class="text-base font-semibold tracking-tight">{{ t('adminSystemStatus.title') }}</h1>
       <div class="flex items-center gap-3 text-xs text-slate-500">
@@ -141,5 +145,6 @@ onMounted(load)
         </dl>
       </section>
     </div>
+  </div>
   </div>
 </template>
