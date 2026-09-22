@@ -8,7 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,6 +26,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.Validation
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DatabaseChangeLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequirementsDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalClusterHealth;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalClusterHealth.NodeSpec;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalClusterHealth.NodeStatus;
 
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
@@ -47,6 +54,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *   <li>{@code /pages/SystemStatus} → {@code GET /api/v1/admin/system-status}</li>
  *   <li>{@code /pages/ConfigurePasswordRequirements} →
  *       {@code GET / PUT /api/v1/admin/password-policy}</li>
+ *   <li>{@code GET /api/v1/admin/retinal-cluster} — per-node health of
+ *       the remote inference cluster + the cron monitor's last alerts
+ *       (2026-09-22; no legacy JSP counterpart)</li>
  *   <li>{@code /pages/Configure} → {@code GET /api/v1/admin/config}
  *       (read-only — at MUW these are deployment-time env vars per the
  *       single-site production scope; see project memory)</li>
@@ -269,6 +279,92 @@ public class AdminApiController {
      * Returns null on permitted, ResponseEntity (401/403) on denied.
      * Inlined as a method so each handler stays a 5-line dispatch.
      */
+    /* ====================================================================== */
+    /* Retinal inference cluster (2026-09-22)                                 */
+    /* ====================================================================== */
+
+    /**
+     * Per-node probe timeout. Short on purpose: a hung node must cost this
+     * page three seconds, not the sixty-minute {@code remotePushTimeoutSecs}
+     * the job path allows.
+     */
+    private static final Duration CLUSTER_PROBE_TIMEOUT = Duration.ofSeconds(3);
+    private static final int MONITOR_TAIL_LINES = 20;
+
+    /**
+     * {@code GET /api/v1/admin/retinal-cluster} — per-node health of the
+     * remote retinal-inference cluster, plus the tail of the app-VM cron
+     * monitor's log.
+     *
+     * <p>Why this exists: during the 2026-09 outage the cluster was dead for
+     * nineteen days and nothing inside the app said so — the only symptom was
+     * jobs failing with "Remote /run returned null". This is the pull-side
+     * view of that: <em>is each node listening, healthy, missing tasks, and
+     * which host and GPU is it on</em>, answered in one screen instead of an
+     * afternoon of SSH.
+     *
+     * <p>Kept separate from {@code /system-status} so the JVM/DB panels
+     * render immediately even while a dead node runs out its probe timeout.
+     *
+     * <p>Probes {@code core.retinalInference.clusterNodes} (the real nodes),
+     * not {@code remotePushUrl}: behind the nginx failover the push URL is
+     * healthy as long as <em>either</em> node is, which would read as green
+     * while the primary is dead. Falls back to the push URL as a single row
+     * when the node list is unset.
+     */
+    @GetMapping(value = "/retinal-cluster", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> retinalCluster(HttpSession session) {
+        ResponseEntity<?> guard = requireSysadmin(session);
+        if (guard != null) return guard;
+
+        String remoteUrl = configField("core.retinalInference.remotePushUrl", "");
+        String nodesRaw = configField("core.retinalInference.clusterNodes", "");
+        List<NodeSpec> specs = RetinalClusterHealth.parseNodes(nodesRaw, remoteUrl);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("configured", !specs.isEmpty());
+        body.put("remotePushUrl", remoteUrl);
+        body.put("expectedTasks", RetinalClusterHealth.EXPECTED_TASKS);
+        body.put("nodes", probeCluster(specs));
+
+        String logPath = configField("core.retinalInference.clusterMonitorLog", "");
+        if (!logPath.isBlank()) {
+            Path log = Path.of(logPath);
+            boolean readable = Files.isReadable(log);
+            Map<String, Object> monitor = new LinkedHashMap<>();
+            monitor.put("path", logPath);
+            monitor.put("readable", readable);
+            monitor.put("lines", readable
+                    ? RetinalClusterHealth.tailLines(log, MONITOR_TAIL_LINES)
+                    : List.of());
+            body.put("monitor", monitor);
+        }
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * The network step, isolated so tests can substitute canned results and
+     * never open a socket. Production probes every node concurrently.
+     */
+    protected List<NodeStatus> probeCluster(List<NodeSpec> specs) {
+        return new RetinalClusterHealth(CLUSTER_PROBE_TIMEOUT).probeAll(specs);
+    }
+
+    /**
+     * {@code datainfo.properties} read. Overridable because
+     * {@link CoreResources} is not initialised in MockMvc runs, where the
+     * static call throws and this would otherwise always return the fallback.
+     */
+    protected String configField(String key, String fallback) {
+        try {
+            String raw = CoreResources.getField(key);
+            if (raw != null) return raw.trim();
+        } catch (Exception ignored) {
+            // CoreResources unavailable outside a booted container.
+        }
+        return fallback;
+    }
+
     private ResponseEntity<?> requireSysadmin(HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null) {

@@ -269,6 +269,24 @@ It alerts when the cluster is unreachable **or degraded** (`supported_tasks`
 missing `bm`/`layers` — the silent-failure mode §3b guards against), prints
 nothing while healthy, and re-mails only ~hourly during a sustained outage.
 
+**Inside the app — the sysadmin System Status page** (2026-09-22) has a
+*Retinal inference cluster* panel: one row per node with state
+(healthy / degraded / unhealthy / unreachable), registered tasks against the
+expected six, host + GPU as the sidecar's `/health` now reports them, and
+latency; plus the tail of the cron monitor's log above. It is the pull-side
+view of the alert above and needs no MTA. Configure the **real nodes**, not
+the push URL — behind the nginx failover (§3d) the push URL is healthy as
+long as either node is, which reads as green while the primary is dead:
+
+```
+core.retinalInference.clusterNodes=on3=http://149.148.108.144:8000,cn6=http://149.148.108.170:8000
+core.retinalInference.clusterMonitorLog=/var/lib/libreclinica/retinal-cluster-monitor.log
+```
+
+Endpoint: `GET /api/v1/admin/retinal-cluster` (sysadmin only). Probes run in
+parallel with a 3 s timeout, so a dead node costs the page three seconds, not
+a minute, and never delays the JVM/DB panels, which are a separate request.
+
 > Both are stopgaps. The structural fix is **SLURM mode** (§4): the resident
 > process becomes a thin dispatcher and each `/run` executes as an `srun` job,
 > so the long-lived footprint on a contended node disappears. Chase the SLURM

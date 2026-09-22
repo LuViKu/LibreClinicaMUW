@@ -74,12 +74,23 @@ class ScreenResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """200 response from GET /health."""
+    """200 response from GET /health.
+
+    ``node`` / ``gpu_device`` / ``gpu_name`` were added 2026-09-22 so a
+    monitor can tell *where* a server runs. Until then /health said nothing
+    about the host, and learning that a node's 3080Ti could not run two of
+    the six tasks took a validation run and a CUDA traceback rather than a
+    glance at a status line. All three are optional: the placeholder adapter
+    and CPU-only dev hosts report ``None``.
+    """
 
     status: str
     adapter: str
     model_version: str
     supported_tasks: list[TaskName]
+    node: str | None = None
+    gpu_device: str | None = None
+    gpu_name: str | None = None
 
 
 class JobStatusResponse(BaseModel):
