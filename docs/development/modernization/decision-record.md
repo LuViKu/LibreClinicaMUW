@@ -580,6 +580,157 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 
 ---
 
+## DR-025 — DICOM C-STORE receiver for handheld fundus cameras
+
+**Date:** 2026-09-09
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-024; `StudySubjectFinder` / `EventCandidate` (`core/.../service/retinal/`); `image_ingest` (`migration/lc-muw-2026-09-09-image-ingest.xml`); `RetinalArtifactStorageService`; `RetinalResultsApiController`; the **HealthAEye study** (#26). Implementation plan: [dicom-fundus-receiver.md](dicom-fundus-receiver.md).
+
+**Context.** The **HealthAEye study** captures fundus images from two handheld devices with different capabilities. The **Remidio FOP** is effectively an iPhone + browser with **no DICOM export** — the operator uploads the captured JPEG through a web page. The **Optomed** is a full **DICOM modality** — it consumes a Modality Worklist and pushes images via **C-STORE**. Both need the image stored and attached to a subject/event/CRF; neither needs GPU inference (2-D fundus photos, distinct from the OCT `bscan.dcm` path, DR-024). The platform already has reusable pieces — `StudySubjectFinder` matches an image to a subject + event, and `retinal_inference_job` is a proven persisted queue. The operator has no LibreClinica account, so both ingress paths are unauthenticated (reverse-proxy gated).
+
+**Decision.** One source-agnostic **`image_ingest`** queue (`source_kind` = `upload` | `dicom`) feeds a single SPA **reconciliation inbox**: bindings are nullable, images arrive `UNBOUND`, and an operator links each to a subject/event/CRF. Two ingress paths write it — (1) **upload**: a public upload page (no account, reverse-proxy gated, mirroring the OCT/BCVA portals) takes the Remidio JPEG; (2) **dicom**: a **`pynetdicom` C-STORE Storage SCP** app-VM sidecar (`dicom-scp`, alongside the `retinal-preprocess` posture — chosen over in-process `dcm4che` to keep the raw DICOM socket out of Tomcat) receives the Optomed's push, writes the Part-10 + a preview, and hands off to a shared-secret app endpoint. **Sequencing:** the generalized `image_ingest` schema first, then the two ingress paths (plain **C-STORE** first), then a **Modality Worklist SCP** so Optomed images auto-identify from the worklist we issue — **un-deferred 2026-09-11**: the Optomed Lumo manual and a live packet capture showed its standard-DICOM integration is *worklist-driven* (it pulls an MWL, then C-STOREs the study; without a worklist it opens the TCP connection and closes it without ever sending an association), so the sidecar serves a worklist from scheduled `study_event` rows (via a token-gated `internal/dicom-worklist` endpoint) and the ingest endpoint auto-binds a returning study by its accession `LC<study_event_id>` (`match_policy='worklist'`). **Live-verified end-to-end with the Lumo on 2026-09-17** (worklist pull → capture → C-STORE of *Ophthalmic Photography 8 Bit Image Storage*, JPEG Baseline → row `BOUND` to the scheduled visit); details in the plan doc. PatientName/ID are kept (images stay on-prem; no redaction, unlike DR-022's outbound path).
+
+**Consequences.**
+
+- A new opt-in sidecar + an upload endpoint + the `image_ingest` table (migration `lc-muw-2026-09-09-image-ingest.xml`); the DICOM sidecar is gated behind `core.dicom.scp.enabled` — unset is a no-op for existing deploys (mirrors DR-022's opt-in discipline).
+- The receiver runs on the app VM (persists PHI, reaches the camera network); the GPU-sidecar "never persists" invariant is untouched, and no fundus image reaches the GPU cluster.
+- Operator workflow gains a "DICOM inbox" reconciliation view with audited bind/dismiss.
+- **2026-09-20 — no worklist entity, confirmed.** The question "how do we create a worklist entry for a new patient" has the answer "you don't": the worklist *is* the visit schedule filtered to today, and a subject is on the camera exactly when a visit dated today is open in a study the camera serves. What was missing was the operator's view of that fact, so the subject page carries a **Kamera-Worklist** strip (`GET /subjects/{oid}/worklist` — same `ScheduledVisitQuery` and same study scope as the worklist endpoint, so page and device cannot disagree) that says whether the camera lists the patient today and offers the fix in place: schedule the study's only visit definition for today, or move an open visit from another day. The strip is absent where no receiver is configured or the study is out of the camera's scope. Manuals (investigator §4d, CRC §4) and `docs/tests/t046.md` (T046-13) describe it.
+
+**Reversible** — `core.dicom.scp.enabled=false` + not deploying the sidecar; the `dicom_ingest` table is additive and unused when off. No change to the retinal or CRF paths.
+
+**Out of scope (for this DR).** MPPS; image Query/Retrieve (study-root C-FIND/C-MOVE); DICOM-TLS (single-site internal for v1); OCT/SEG creation (the DR-022 follow-up); PACS forwarding; multi-institution AE-title management.
+
+---
+
+## DR-026 — One ingest queue for every inbound file
+
+**Date:** 2026-11-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-024, DR-025; `ingest_item` (`migration/lc-muw-2026-10-05-ingest-item.xml`, `lc-muw-2026-10-19-retinal-job-ingest-item.xml`); `IngestInboxApiController`, `IngestBindService`, `IngestItemRepository`, `IngestArtifactStore`, `IngestResolutionService`.
+
+**Context.** The platform had grown **two queues for one activity**. A file arrives from a device, somebody says whose visit it belongs to, and it becomes study data — but an OCT volume went to the retinal pipeline's `parked` job list (sysadmin-only, cross-study, its own admin view) and a fundus photo went to the `image_ingest` inbox (DM/Investigator/CRC, its own bind API and SPA view). An operator had to know which queue a file had landed in before they could look for it, and neither view could show them that one patient had both waiting. Three copies of "which subject does this label mean", five of "which directory is this kind of file stored in", and two duplicated `INSERT INTO event_crf` statements had accumulated alongside. A third study would have added a third queue.
+
+**Decision.** One table (**`ingest_item`**, renamed from `image_ingest` and given `kind` ∈ {`e2e`, `dicom`, `image`, `other`}), one inbox (`/api/v1/ingest`), one bind (`IngestBindService`). Existing inference jobs were **backfilled** onto `ingest_item` — one row per distinct scan, not per job, since one `.e2e` is enqueued once per task — with the patient hint recovered from the type-115 audit trail, which was the only place the operator-typed label had ever been kept. `parked` jobs became `cancelled` with a `status_message` naming their replacement: **nothing deleted, reversible by hand**. The public OCT portal now writes an `ingest_item` before anything is enqueued, and a parked upload produces an UNBOUND row and **no job at all** — there is nothing for a GPU to do with a scan whose patient is unknown.
+
+**Consequences.**
+
+- **Unbind exists** (audit 130). Previously a mis-bind was fixed by editing the row, leaving the CRF tick the bind had caused; the form kept asserting a modality was performed with nothing left to show for it. Undoing a bind now undoes what it did — repointing the value to another file from the same device when one remains, and removing it only when nothing does.
+- The dedup key moved from `retinal_inference_job.e2e_sha256` to the scan's own row, and **gained** a condition: cancelled jobs are excluded, so a scan whose run was cancelled can be re-filed and run again. The old index forbade that.
+- **A previous WAR cannot survive the rename.** Rolling back the application means restoring the pre-deploy dump, not redeploying the old image (`deploy-runbook.md` §rollback).
+- Audit rows' `audit_table` locator was repointed from `image_ingest` to `ingest_item`. No `old_value`, `new_value`, `user_id`, timestamp or event type was touched — a pointer to a table that no longer exists preserves no observation.
+- `ImageIngestApiController` and `/image-inbox` remain for one release as a façade and a redirect.
+
+**Reversible** — the migration's `<rollback>` is complete and was verified to restore the schema byte-identically with rows preserved; the parked jobs are cancelled rather than deleted, so restoring them is an `UPDATE`.
+
+**Out of scope.** Cancelling inference jobs on unbind (no bind starts one yet); SSE on the inbox; retiring the `parked` status decoder (kept one release).
+
+---
+
+## DR-027 — A study declares what it does, rather than the code knowing
+
+**Date:** 2026-11-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-026; `imaging_modality` + `imaging_modality_item_binding` (`migration/lc-muw-2026-11-02-imaging-modality.xml`); `study_setting` + `study_item_binding` (`migration/lc-muw-2026-11-16-study-setting.xml`); `PerformedItemAutoTicker`, `StudySettingService`, `StudyBindings`, `AiArmPolicy`, `SharedControllersHaveNoStudyLiteralsTest`.
+
+**Context.** Onboarding a study required editing code every other study shares. Which device ticks which CRF box was two hard-coded rows. Whether a study receives DICOM was an instance-wide property naming study OIDs, changeable only by editing a file on the server and restarting. Which item an inference metric lands in was a literal — `I_NAMD_OD_IRF_MM3` — in a shared populator, as were `F_NAMD_VISIT` and the randomisation group names `AI_SHOWN` / `AI_HIDDEN`. Each of those is a study that cannot exist without a code change.
+
+**Decision.** Three catalogues, all resolving **site → parent → configuration → code default**, so a site inherits its study and an absent row means *as before*:
+
+1. **`imaging_modality`** + **`imaging_modality_item_binding`** — what a study photographs, on which device, and which CRF item each acquisition ticks. Role-based binding rows (`performed` / `not_performed_reason` / `initials`, per eye) rather than columns, so the Visitenplan's three-items-per-modality shape grows without another migration. Deliberately **separate from the existing `modality` table**, which is a global catalogue of *measurements* with a value per eye — same word, different thing.
+2. **`study_setting`** — whether a study receives DICOM, accepts uploads, runs inference, exports bundles, offers the today's-visits list.
+3. **`study_item_binding`** — which item a study means by a role the shared code asks for.
+
+**Consequences.**
+
+- **The auto-ticker starts the form that carries the box** (via `EventCrfEnsurer`, inheriting its refusal to revive a removed form). Previously it wrote nothing when no CRF was open, so the checklist silently disagreed with the files until an operator noticed.
+- A DICOM whose calling AE title matches `auto_match_ae_title` is **classified on arrival**.
+- **Arm names are translated at the boundary.** `armForSubject` / `armForEvent` map whatever a study calls its groups onto one fixed pair of tokens, so the seven masking call sites keep comparing against a constant. An earlier version of this change compared the raw name and would have **silently unblinded** a study that renamed its hidden group — nothing would have reported it, and analysis would have been the first to find out. Handing the raw name outward is the design that fails quietly.
+- Retiring a modality is a **status change**: files filed under it keep naming it, and an audit row explaining a CRF value must stay resolvable after somebody tidies the catalogue.
+- A binding's item OID is **checked to exist** before it is accepted. A binding pointing at nothing does not fail loudly — it stops ticking, and an un-ticked box reads exactly like a modality that was not performed.
+- Audit types 131–134 cover catalogue and setting changes. A study that stops receiving DICOM because somebody flipped a switch looks, from the inbox, exactly like a camera that stopped sending.
+- `SharedControllersHaveNoStudyLiteralsTest` is a **ratchet**: the remaining literals are documented fallbacks, the list may shrink and must never grow.
+
+**Reversible** — every table is additive and every default preserves prior behaviour; an instance that sets nothing behaves exactly as it did.
+
+**Out of scope.** Deleting the fallback literals (waits for every deployment's studies to have rows); migrating the measurement `modality` table's per-eye aliases onto the role-based binding shape (possible later, not needed now).
+
+---
+
+## DR-028 — An export carries the evidence, and says what a person did not write
+
+**Date:** 2026-09-19
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-022, DR-025, DR-027; `BundleExportWriter`, `FileItemValue`, `SubjectExportApiController`, `ItemDataBean`/`ItemDataDAO`, `SubjectExportBundleDatabaseIT`, `SubjectExportProvenanceDatabaseIT`.
+
+**Context.** "Export the subject" produced text only. For a study whose endpoint is an image, that is not an export: the OCT volumes, the fundus photographs, the segmentation masks and the files attached to CRF items never left the server. Worse, a FILE item exported as a **server path** — worthless to the recipient, who cannot reach that filesystem, and a disclosure of the directory layout of a machine holding patient data to anyone who receives a casebook. Meanwhile the numbers the platform wrote into CRFs — an auto-ticked checklist box, an inference metric — were indistinguishable in the output from a figure a clinician typed.
+
+**Decision.** The subject bundle (`format=bundle`, off unless `export.bundle.enabled`) is a zip of `casebook.xml`, `casebook.csv`, the acquisitions, the CRF file attachments, the inference artifacts, and `manifest.json` **last**. `ItemData` elements carry `muw:SourceKind`, `muw:IngestItemId` / `muw:RetinalJobId`, and — inside a bundle — `muw:ManifestPath`. FILE items export as their filename in every format, via one implementation (`FileItemValue`).
+
+**Consequences.**
+
+- **The manifest is last, deliberately.** A bundle without one is an incomplete bundle, so a truncated download is detectable rather than silently short.
+- **An omission is named, never silent.** A file outside the store, a missing file, an AI artifact withheld from a blinded recipient: each appears in `omitted[]` with a reason. A recipient must be able to tell "this subject had no scan" from "the scan is gone" — and a blinded export that looks complete is worse than one that says so.
+- **Blinding follows the data out of the platform**, and splits on what the artifact *is*: the model's reading is withheld, the rendering of the eye is kept. A physician is blinded to the algorithm, not to their patient. An unanswerable arm lookup withholds.
+- **Every path is confined before it is read** — the acquisition store, the retinal artifact store, the CRF file store, each separately. Those paths come from rows an unauthenticated ingress can write; reading one unchecked turns an export into an arbitrary file read.
+- **`muw:ManifestPath` appears only where the bundle really carries the file.** A casebook pointing at an entry that is not in the zip reads as evidence that has merely been misplaced, which is worse than a casebook that says nothing.
+- **`ItemDataBean` now carries provenance.** The columns had existed since nAMD Slice 3 and DR-025 P1-5, but `ItemDataDAO` declared them without mapping them — so every consumer holding a bean saw an operator entry. Absence is normalised back to null, because `EntityDAO` turns SQL NULL into `0L` and "job 0 wrote this" is a false claim, not a missing one.
+- **The path leak had three routes**, not one: the per-subject export, `ExtractBean` (tab/CSV/SPSS/SAS), and `OdmExtractDAO` (dataset ODM). Fixing the first two would have left the third. The rule keys on the declared data type, never on the value looking path-like — free text with a slash in it is clinical data.
+- **The endpoint writes the zip to the response directly.** `ResponseEntity<?>`'s wildcard erases the body type, so Spring never selects `StreamingResponseBodyReturnValueHandler` and falls through to the message converters, which cannot write a lambda — a 500 for every caller. Narrowing the return type is not available: the same method answers with JSON errors and with `byte[]`. Nothing is buffered in heap either way.
+
+**Reversible** — the bundle is a new format behind a per-study setting; the annotations are additive attributes in a private namespace. The FILE-path substitution is not reversible in spirit: emitting server paths again would reintroduce the disclosure.
+
+**Follow-ups landed (2026-09-19).**
+
+- **The dataset bundle (P3.8)** goes through the export-job queue: one zip, one manifest, a folder per subject (`subjects/<label>/`), registered under a new `export_format` row 6 (`application/zip`) so nothing that trusts the mime type hands a browser an archive labelled as text. Blinding is decided **per subject** — two subjects of one dataset can be in different arms — and the manifest says `mixed` when they differ rather than pretending one answer for the archive. The gate is applied at enqueue *and* in the worker: a study that switches the export off must not have its imaging leave the platform because a job was already waiting. The SPA queues it and polls; nothing is built on the request thread.
+- **Blinding now fails closed on screen as well.** The viewer's arm lookup used to return "not the hidden arm" on a database error, showing AI output to a clinician the trial had randomised not to see it; the export path had already decided the opposite. An unblinding event is one whether or not a file moved, so the two halves of the platform now agree. Only treating roles are affected.
+- **The four nAMD flag bindings hold OIDs**, like every other `study_item_binding` row. They had been seeded with item *names* because the query that read them matched on `item.name`; the code matches on `oc_oid` now, and an additive changeset (`lc-muw-2026-12-01-namd-flag-bindings-oid.xml`) corrects the seeded rows without touching the deployed seed.
+
+## DR-029 — One front door for every file a device exports
+
+**Status:** Accepted (2026-09-20). Lands with the combined uploader (`/app/upload`, `/app/ingest-inbox/upload`).
+
+**Context.** Phase 3 unified everything *behind* the front doors — one `ingest_item` queue, one artifact store, one resolver, one inbox, one bind service — but left the doors themselves as they were: an OCT page that took `.e2e` and nothing else, and an image page that took JPEG/PNG and nothing else. The Zeiss devices on the HealthAEye Visitenplan (Clarus fundus camera, PlexElite OCTA) export **DICOM**, which fitted neither, and an operator standing at a device had to know which page a file belonged to before they could hand it in. Both pages also trusted a claim about the file — the browser's content type on one, the extension on the other — and a Clarus visit is half a dozen files, each of which meant re-picking the visit.
+
+The second problem is the one that decided the shape. A camera that sits in the clinic fills its DICOM header from the hospital system: the real patient name, the hospital ID, the date of birth, the operator. The Optomed path never had this problem because its header carries the label *we* put on the worklist. A Clarus export dropped on an upload page does — and the file it arrives in is the file the export bundle (DR-028) later hands to a researcher.
+
+**Decision.**
+
+1. **One page, any kind, the kind read off the bytes.** `FileKindSniffer` (server) and `lib/fileKind.ts` (page) decide from the leading bytes — PNG and JPEG signatures, `DICM` at 128, the three Spectralis magics — and the claim is ignored. A file the platform cannot name is refused with a message, not stored as "other".
+2. **One visit pick for a batch.** The page files every reviewable row against the visit picked once (today's list, a search, or a typed label the backend resolves); a row can still be pointed elsewhere by hand. The OCT route keeps its own per-scan resolution underneath.
+3. **The OCT route is delegated to, not moved.** `PublicUploadController` hands an `.e2e` to `PublicOctUploadController.commit(...)` unchanged — per-scan rows, retinal jobs, the async pipeline, undo by job — because a move that alters what an endpoint answers is not a move, and the batch-visit behaviour was the new thing, not that route. Images and DICOM go through `IngestUploadService`, shared by the public and the staff controller; the two older pages stay mounted for one release and redirect.
+4. **A DICOM upload is pseudonymised before it is kept, by the sidecar that already has a DICOM parser.** The app stores the file on the volume both containers share and asks `dicom-scp` (`POST /describe`, same shared secret as the ingest hand-off, path confined to the ingest roots) for the exam and device tags and a preview; the sidecar rewrites the file in place first. What goes: `PatientName`/`PatientID` (replaced by the visit's subject label, or blanked when the upload is not yet filed — never a guessed label), birth date and demographics beyond sex, contact details, the physicians and operators, the institution, the hospital's accession and study IDs. What stays: the UIDs (dedup, provenance), the dates (the clinical timeline), the device and its private tags (calibration the research needs; droppable by configuration), the pixels untouched and untranscoded. The file is stamped `PatientIdentityRemoved=YES`; the row gets `deidentified_at`. **If the sidecar is unconfigured or unreachable the upload is refused (503), not stored as-is** — the point of the call is that the file is clean before it is kept. The tags the app receives never include the patient module.
+5. **The same uploader behind a login.** `/ingest-inbox/upload` runs the same workbench in staff mode: the session's cookie, the upload attributed to the person (`bound_by_user_id`, a user-bearing audit row), the visits in reach those of the site visibility rather than a configured portal scope, no public throttle. Role-gated like the inbox: whoever may reconcile a file may bring one in.
+6. **The throttle distinguishes lookups from commits, on the new prefix only.** The 30/hour budget exists to stop label enumeration through the lookups; a commit needs a real file and is bounded by disk. On `/public/upload/` the lookups keep 30/hour and commits get 300/hour; the older prefixes are left exactly as they were for the release they stay alive.
+7. **A study that has turned an ingress off refuses the kind — discreetly on the public page.** The portal scope already folds `ingest.image.enabled` in; the upload's own gate covers DICOM. On the page with no login both answer in the same words as a visit outside the scope, so an anonymous caller learns nothing about which studies exist and what they refuse; behind a login the refusal says why, because the operator can go and change the setting.
+8. **The catalogue says the Zeiss devices export DICOM.** `FUNDUS_CLARUS` and `OCTA_PLEXELITE` gain `dicom` in `kinds_accepted` (additive changeset); a DICOM upload bound at upload time is filed under the study's matching modality when exactly one matches the device and kind — a guess between two would be filed as a fact, so two is none.
+
+**Consequences.** One page to bookmark and one QR code at every device; the Clarus and PlexElite workflows exist without a Java DICOM parser; a hospital patient never reaches a database row or an export bundle; the DICOM route is only as available as the `dicom` compose profile — a deployment that wants Clarus uploads without a C-STORE camera still runs the sidecar. What is *not* decided here: relabelling a file whose binding changes later in the inbox (the file keeps a blank identity; the row and the manifest carry the binding), and retiring the two older controllers, which follow once nothing calls them.
+
+**Reversible** — routes redirect, the old controllers and views are untouched, the changesets are additive, and the sidecar endpoint is off at `DICOM_SCP_DESCRIBE_PORT=0`. The pseudonymisation is not reversible for a file that went through it, which is the intent.
+
+## DR-030 — One landmark per concern: top bar, page trail, section rail
+
+**Status:** Accepted (2026-09-20). Lands with the navigation-chrome PR.
+
+**Context.** The Phase E shell grew three ways of saying where the operator is, and they had drifted into each other. The top bar carried the brand, the role's primary navigation (added with the home dashboard) *and* a breadcrumb whose root was the study name — in one type size, on one line — so on the subject page the word *Studienteilnehmer* appeared as a highlighted pill and again as a crumb 200 px later, the study name read as a sixth destination, and on CRF entry the six-level trail wrapped into two-line crumbs at 1440 px while folding away neatly below 1024 px (the header was cleaner on a small screen than on a laptop). The trail fell back to `route.meta.title` on 34 of 41 routes, which is English on a German-first UI. Each page printed its own eyebrow line as well, and the event page a second, clickable in-page trail plus a "back" link: five ways back to the subject on one screen. The side rail, meanwhile, was mounted on 24 views; 14 of them held only links the top bar already carried, one was empty, and two had a job (the CRF entry's section table of contents with fill badges; the subject matrix's statistics button). It cost 224 px on every page it sat on — the Datasets table was clipped beside a rail holding three links — and it came and went between adjacent pages of one workflow, shifting the content column as the operator clicked through.
+
+**Decision.** Three rules, one landmark each.
+
+1. **The top bar is brand, primary navigation and user — nothing else.** The highlighted pill is the section indicator. The active study is a chip beside the user menu that leads to the study picker; the version/build line moved from the rail's footer into the profile menu, so a page without a rail is not a page without a version. The breadcrumb, its store and its composable are gone.
+2. **A trail only where a hierarchy exists below the section, rendered in the page header** (`PageHeader`). It lists the *ancestors* as links — `Studienteilnehmer › M-007 › V1 Inclusion` above a CRF — and never the page itself: the H1 is the page. Labels come from the views (German), never from route metadata. Flat pages get no trail; the pill and the heading say where they are. The in-page duplicates (event mini-trail, "Zurück zum Probanden", the subject page's "Zurück zur Probandenmatrix") are removed.
+3. **A side rail only where it has a section to navigate.** Two remain: the CRF entry's table of contents, and a real **Studienaufbau rail** (`BuildStudyRail`) listing every build page — tracker, study, parameters, CRFs, visits, groups, rules, sites, modalities, users — filtered by role, current page highlighted. The other 21 views are single-column, centred at the width the page needs (Datasets widened to what its table needs). The subject matrix's statistics button and study facts moved into its header.
+
+**Consequences.** One `<nav>` in the top bar, at most one trail and one section rail per page (each a labelled landmark, which is what the a11y gate checks); page geometry no longer jumps between adjacent pages; the header stops competing with itself for width at laptop sizes; ~24 views lost a block each. The Studienaufbau rail is the pattern for any future section with several pages; a page that wants a rail has to be able to say what section it navigates.
+
+**Reversible** — the components are additive and the views are the only consumers; restoring a rail on a view is one block. The breadcrumb store is deleted rather than kept dormant, because a second way to publish a trail is how the drift started.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

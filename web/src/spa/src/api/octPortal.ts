@@ -82,7 +82,13 @@ export interface ResolveResponse {
 
 /** Per-commit response. Maps to the controller's `Map<String,Object>` body. */
 export interface CommitResponse {
-  jobId: number
+  /**
+   * P3.3 — absent for a parked upload, which enqueues nothing. The scan's row
+   * is `ingestItemId`, and that is what undo acts on in that case.
+   */
+  jobId: number | null
+  /** The scan's row in the ingest inbox. Always present. */
+  ingestItemId: number
   status: string
 }
 
@@ -157,6 +163,18 @@ function messageFrom(body: unknown, fallback: string): string {
  * fetch. Saves one round trip + works without an authenticated
  * session (the auth'd detail endpoint requires login).
  */
+/**
+ * One hit from the public label-prefix lookup. Deliberately narrower than the
+ * staff `StudySubjectSearchHit` — the portal is unauthenticated, so it gets the
+ * subject label plus enough study/site context to disambiguate, and nothing else.
+ */
+export interface PublicSubjectHit {
+  studySubjectId: number
+  label: string
+  studyName: string
+  siteName: string | null
+}
+
 export interface PublicStudyEvent {
   id: string
   eventDefinitionOid: string
@@ -363,7 +381,7 @@ export async function commitScan(
       try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null }
       catch { body = null }
       if (status >= 200 && status < 300) {
-        resolve((body ?? { jobId: 0, status: 'UNKNOWN' }) as CommitResponse)
+        resolve((body ?? { jobId: null, ingestItemId: 0, status: 'UNKNOWN' }) as CommitResponse)
       } else {
         reject(new OctPortalError(
           status,
@@ -403,4 +421,57 @@ export async function undoCommit(jobId: number): Promise<void> {
       body,
     )
   }
+}
+
+/**
+ * P3.3 — undo an upload the operator chose to file later.
+ *
+ * <p>Such an upload creates no inference job, so there is no job id to undo
+ * against; the scan's row in the inbox is what exists. Same 60 s window, and
+ * refused once anybody has filed or dismissed it — that is somebody's
+ * decision, and an unauthenticated form must not be able to delete it.
+ */
+export async function undoParkedCommit(ingestItemId: number): Promise<void> {
+  const res = await fetch(`${BASE}/items/${ingestItemId}`, {
+    method: 'DELETE',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  if (res.status === 204) return
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new OctPortalError(
+      res.status,
+      messageFrom(body, `DELETE /items/${ingestItemId} → ${res.status}`),
+      body,
+    )
+  }
+}
+
+/**
+ * 2026-09-18 — label-prefix subject lookup via the anonymous portal path.
+ *
+ * The patient-search dialog used to call the staff endpoint
+ * {@code GET /api/v1/study-subjects/search}, which is session-gated and so
+ * always 401'd for a portal operator, leaving the dialog empty. This is the
+ * public counterpart: minimum 3-character prefix, at most 10 rows, and a
+ * label-only projection (no gender/DOB/OID).
+ */
+export async function searchPatientsPublic(
+  q: string,
+  limit = 10,
+): Promise<PublicSubjectHit[]> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  const res = await fetch(`${BASE}/patients/search?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new OctPortalError(res.status, messageFrom(body, `GET /patients/search → ${res.status}`), body)
+  }
+  return ((body as { subjects?: PublicSubjectHit[] } | null)?.subjects ?? [])
 }

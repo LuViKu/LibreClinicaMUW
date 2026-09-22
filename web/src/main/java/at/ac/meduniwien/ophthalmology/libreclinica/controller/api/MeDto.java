@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.util.List;
+import java.util.Map;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -139,5 +140,18 @@ public record MeDto(
              * {@code S_DEFAULTS1} study so the user's nAMD smoke flow
              * keeps working through this schema change.
              */
-            List<String> enabledModules) {}
+            List<String> enabledModules,
+            /**
+             * P3.5/P3.7 — what this study does, as the platform will actually
+             * behave, after the site → parent → configuration → code-default
+             * fallback. Keys are {@code StudySettingService.KNOWN_KEYS}.
+             *
+             * <p>The SPA reads this to decide whether to offer a capability at
+             * all: the multimodal bundle is off unless the study turns it on,
+             * and offering a download that answers 403 is worse than not
+             * offering it. Resolved rather than stored values, because an
+             * untouched study behaves like the platform default, not like a
+             * study with everything switched off.
+             */
+            Map<String, String> settings) {}
 }

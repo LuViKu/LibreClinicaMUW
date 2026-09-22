@@ -12,6 +12,7 @@ import {
   EMPTY_DRAFT,
   type EventTreeNode,
   type ExportFormat,
+  type ExportJobDto,
   type ExportTriggerResponse,
   FLAG_DEFAULTS,
   type FilterTestResult,
@@ -63,6 +64,12 @@ export const useDatasetsStore = defineStore('datasets', () => {
   const isLoadingFiles = ref<Set<number>>(new Set())
   const isExporting = ref<Set<number>>(new Set())
   const isQuickOdm = ref(false)
+  /**
+   * P3.8 — the bundle job in flight (or just finished) per dataset. One per
+   * dataset: a second request while one runs would only queue the same work
+   * twice, so the view disables the action instead.
+   */
+  const jobsByDataset = ref<Map<number, ExportJobDto>>(new Map())
   const error = ref<string | null>(null)
   /**
    * Phase E.6 restore-quickwins — when true, `load()` appends
@@ -234,6 +241,79 @@ export const useDatasetsStore = defineStore('datasets', () => {
       const next = new Set(isExporting.value)
       next.delete(datasetId)
       isExporting.value = next
+    }
+  }
+
+  function rememberJob(job: ExportJobDto): void {
+    const next = new Map(jobsByDataset.value)
+    next.set(job.datasetId, job)
+    jobsByDataset.value = next
+  }
+
+  /**
+   * P3.8 — queue a multimodal bundle for a dataset.
+   *
+   * Unlike {@link triggerExport} nothing is downloaded here: the answer is a
+   * job, and the file arrives when the job says so. A bundle is every
+   * subject's casebook plus every file behind it, which for an imaging study
+   * is not something to build while a browser waits.
+   */
+  async function enqueueBundle(datasetId: number): Promise<ExportJobDto | null> {
+    if (!datasetId) return null
+    error.value = null
+    try {
+      const job = await apiPost<ExportJobDto>(
+        `/pages/api/v1/datasets/${datasetId}/exports`,
+        { format: 'bundle' },
+      )
+      rememberJob(job)
+      return job
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Export fehlgeschlagen (HTTP ${e.status}).`
+      } else if (e instanceof ApiNetworkError) {
+        error.value = 'Backend nicht erreichbar — Export fehlgeschlagen.'
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Export.'
+      }
+      return null
+    }
+  }
+
+  /** True while any bundle job is still queued or running. */
+  const hasActiveJobs = computed(() =>
+    [...jobsByDataset.value.values()].some((j) => j.status === 'queued' || j.status === 'running'),
+  )
+
+  /**
+   * Re-read every job that is still in flight. When one finishes, its
+   * dataset's file list is invalidated the same way a synchronous export
+   * invalidates it, so the new zip shows up in the expanded row.
+   */
+  async function refreshActiveJobs(studyOid: string): Promise<void> {
+    const active = [...jobsByDataset.value.values()]
+      .filter((j) => j.status === 'queued' || j.status === 'running')
+    for (const j of active) {
+      try {
+        const fresh = await apiGet<ExportJobDto>(`/pages/api/v1/exports/${j.id}`)
+        rememberJob(fresh)
+        if (fresh.status === 'done') {
+          const row = rows.value.find((r) => r.id === fresh.datasetId)
+          if (row) {
+            row.lastRunAt = fresh.finishedAt ?? new Date().toISOString()
+            row.fileCount = (row.fileCount ?? 0) + 1
+          }
+          if (filesByDataset.value.has(fresh.datasetId)) {
+            const next = new Map(filesByDataset.value)
+            next.delete(fresh.datasetId)
+            filesByDataset.value = next
+            void loadFiles(studyOid, fresh.datasetId)
+          }
+        }
+      } catch {
+        // A missed poll is not a failed job; the next tick reads again.
+      }
     }
   }
 
@@ -608,6 +688,8 @@ export const useDatasetsStore = defineStore('datasets', () => {
     isLoading,
     isLoadingFiles,
     isExporting,
+    jobsByDataset,
+    hasActiveJobs,
     isQuickOdm,
     error,
     showRemoved,
@@ -615,6 +697,8 @@ export const useDatasetsStore = defineStore('datasets', () => {
     loadList,
     loadFiles,
     triggerExport,
+    enqueueBundle,
+    refreshActiveJobs,
     quickOdm,
     /* Phase 2 — event tree + wizard draft */
     eventTree,

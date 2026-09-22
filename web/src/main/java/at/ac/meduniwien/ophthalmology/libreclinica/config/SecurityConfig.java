@@ -164,6 +164,23 @@ public class SecurityConfig {
                         // trust-the-reverse-proxy gate; nurses don't have
                         // accounts. See PublicBcvaEntryController.
                         "/pages/api/v1/public/bcva-entry/**",
+                        // DR-025 — public Remidio image-upload portal (no
+                        // account; reverse-proxy gated like the OCT/BCVA ones).
+                        // Lands in ingest_item(source_kind='upload').
+                        "/pages/api/v1/public/image-upload/**",
+                        // DR-029 — the combined upload page (OCT, DICOM, JPEG/PNG);
+                        // same posture as the two pages it replaces, which stay
+                        // mounted for one release.
+                        "/pages/api/v1/public/upload/**",
+                        // DR-025 — internal DICOM ingest handoff from the
+                        // dicom-scp sidecar. Trust-the-reverse-proxy exposure +
+                        // a shared-secret X-MUW-Dicom-Token gate in
+                        // DicomIngestApiController; never expose publicly.
+                        "/pages/api/v1/internal/dicom-ingest/**",
+                        // DR-025 — Modality Worklist source for the sidecar
+                        // (same shared-secret gate; the Lumo pulls scheduled
+                        // visits via the sidecar's C-FIND).
+                        "/pages/api/v1/internal/dicom-worklist/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",

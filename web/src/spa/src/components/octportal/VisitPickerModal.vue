@@ -19,8 +19,9 @@ import { ApiError, ApiNetworkError, apiGet } from '@/api/client'
 import { formatDate } from '@/lib/dateFormat'
 import type { StudyEvent } from '@/types/event'
 import type { EventDetailDto } from '@/types/event'
+// DR-029 — the public lookups live on the combined upload page's prefix now.
+import { listPatientEventsPublic } from '@/api/uploadWorkbench'
 import {
-  listPatientEventsPublic,
   OctPortalError,
 } from '@/api/octPortal'
 

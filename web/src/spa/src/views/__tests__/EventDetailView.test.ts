@@ -210,10 +210,14 @@ describe('EventDetailView', () => {
     expect(w.find('[data-test="event-detail-forbidden"]').exists()).toBe(true)
   })
 
-  it('back link returns to the subject detail view', async () => {
+  it('the page trail leads back to the register and the subject, and never repeats the visit', async () => {
     const w = await mountAt(42, { rows: TWO_ROWS })
-    const back = w.find('[data-test="event-detail-back"]')
-    expect(back.exists()).toBe(true)
-    expect(back.attributes('href')).toContain('/subjects/M-001')
+    const trail = w.find('[data-testid="page-trail"]')
+    expect(trail.exists()).toBe(true)
+    const hrefs = trail.findAll('a').map((a) => a.attributes('href'))
+    expect(hrefs).toEqual(['/subjects', '/subjects/M-001'])
+    expect(trail.text()).not.toContain(w.get('h1').text().split(' ')[0])
+    // The old in-page "Zurück zum Probanden" link duplicated the trail.
+    expect(w.find('[data-test="event-detail-back"]').exists()).toBe(false)
   })
 })

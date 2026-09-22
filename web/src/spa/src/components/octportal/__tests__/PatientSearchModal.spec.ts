@@ -21,8 +21,16 @@ vi.mock('@/api/retinal', () => ({
   searchStudySubjects: vi.fn(),
 }))
 
+// The portal variant calls the anonymous endpoint instead — see the
+// `publicContext` prop. Stubbed at the same boundary.
+// DR-029 — the public lookup lives on the combined upload page's client now.
+vi.mock('@/api/uploadWorkbench', () => ({
+  searchPatientsPublic: vi.fn(),
+}))
+
 import PatientSearchModal from '../PatientSearchModal.vue'
 import { searchStudySubjects, type StudySubjectSearchHit } from '@/api/retinal'
+import { searchPatientsPublic } from '@/api/uploadWorkbench'
 
 const i18n = createI18n({
   legacy: false,
@@ -41,7 +49,9 @@ const HIT: StudySubjectSearchHit = {
   siteName: 'Wien-AKH',
 }
 
-function mountModal(props: { open: boolean; initialQuery?: string } = { open: true }) {
+function mountModal(
+  props: { open: boolean; initialQuery?: string; publicContext?: boolean } = { open: true },
+) {
   return mount(PatientSearchModal, {
     props,
     global: { plugins: [i18n] },
@@ -53,6 +63,7 @@ describe('PatientSearchModal', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(searchStudySubjects).mockReset()
+    vi.mocked(searchPatientsPublic).mockReset()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -141,5 +152,81 @@ describe('PatientSearchModal', () => {
     const errBanner = document.querySelector<HTMLElement>('[data-testid="patient-search-error"]')
     expect(errBanner).not.toBeNull()
     expect(errBanner!.textContent ?? '').toContain('boom')
+  })
+})
+
+describe('PatientSearchModal — publicContext (unauthenticated portals)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.mocked(searchStudySubjects).mockReset()
+    vi.mocked(searchPatientsPublic).mockReset()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    document.body.innerHTML = ''
+  })
+
+  async function typeAndSettle(query: string): Promise<void> {
+    const input = document.querySelector<HTMLInputElement>('[data-testid="patient-search-input"]')
+    expect(input).not.toBeNull()
+    input!.value = query
+    input!.dispatchEvent(new Event('input'))
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(310)
+    await flushPromises()
+  }
+
+  /**
+   * The regression this prop exists for: on the upload portals the modal used
+   * to call the session-gated staff endpoint, which answers 401 for an
+   * anonymous operator, so the dialog stayed empty with no explanation.
+   */
+  it('queries the public endpoint and never the session-gated one', async () => {
+    vi.mocked(searchPatientsPublic).mockResolvedValue([
+      { studySubjectId: 42, label: 'GA-014', studyName: 'GA-Studie', siteName: 'Wien-AKH' },
+    ])
+    mount(PatientSearchModal, {
+      props: { open: true, publicContext: true },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    await typeAndSettle('GA-0')
+
+    expect(searchPatientsPublic).toHaveBeenCalledTimes(1)
+    expect(searchPatientsPublic).toHaveBeenCalledWith('GA-0', 10)
+    expect(searchStudySubjects).not.toHaveBeenCalled()
+    expect(document.body.textContent ?? '').toContain('GA-014')
+  })
+
+  /** The public endpoint rejects prefixes under three characters, so don't send them. */
+  it('does not call the public endpoint for a two-character prefix', async () => {
+    mount(PatientSearchModal, {
+      props: { open: true, publicContext: true },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    await typeAndSettle('GA')
+
+    expect(searchPatientsPublic).not.toHaveBeenCalled()
+  })
+
+  /** Without the flag the staff endpoint is still the one used. */
+  it('keeps using the staff endpoint when publicContext is not set', async () => {
+    vi.mocked(searchStudySubjects).mockResolvedValue([HIT])
+    mount(PatientSearchModal, {
+      props: { open: true },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    await typeAndSettle('GA')
+
+    expect(searchStudySubjects).toHaveBeenCalledTimes(1)
+    expect(searchPatientsPublic).not.toHaveBeenCalled()
   })
 })

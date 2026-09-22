@@ -14,12 +14,14 @@ This chapter is the operational reference for the Administrator's day-to-day sur
 
 ## Navigation
 
-The Administrator's home page (**Start**) presents the available workspaces as two lanes of cards:
-
-- **Platform-wide (cross-study)** — *Nutzer verwalten* (Manage Users), *Neue Studie* (Create Study), *Modalitäten* (Modalities), *Patientenübersicht* (Patients Overview), and a study switcher when more than one study is bound.
-- **Active study** — *Studienteilnehmer* (Subject Matrix), *Studienaufbau* (Build Study), *CRF-Daten importieren* (Import CRF Data), *Audit Trail*, *Datenexport* (Data Export), *Standorte* (Sites), *Regeln* (Rules), and the study-identity / parameters editors.
-
-System-administration screens not tied to a single study — *Systemstatus*, *Passwort-Richtlinie*, *Anwendungskonfiguration*, *Geplante Jobs*, and the *System-Audit-Protokoll* — are reached by their direct addresses (listed per workflow below). Inside a study workspace a left **side-rail** links the closely related build screens (*Studienaufbau*, *Nutzer verwalten*, *CRF-Daten importieren*).
+The Administrator's home page (**Start**) opens with **Ihre Aufgaben** — open
+queries, with their count — then two groups of destinations: **In &lt;study&gt;**
+(Audit Trail, Datenexport, Studienidentität, Standorte) and **Plattform**
+(Nutzerverwaltung with the count of open invitations, Neue Studie anlegen,
+Modalitäten, Patientenübersicht, and *Aktive Studie wechseln* when you hold
+more than one study). The top bar's primary navigation reaches Nutzerverwaltung,
+Standorte, Datenexport and the Audit Trail from any screen; the
+**System-Audit** link beside it is Administrator-only.
 
 ![Administrator home (Start)](screenshots/administrator/00-home.png)
 
@@ -262,14 +264,15 @@ System-administration screens not tied to a single study — *Systemstatus*, *Pa
 
 **Notes:** Subject detail is open to Investigator and Administrator. Study creation, identity edit and parameters edit are **Administrator-only** and re-checked on the backend (403 on denial). Saving the study identity refreshes the breadcrumb if the edited study is the active one. Subject identity edits, eye transitions, event cancellations and signatures are all recorded in the audit trail.
 
-## 18. Parked Scans (cross-study retinal jobs)
+## 18. Eingang (all inbound files)
 
-**Goal:** Review retinal inference jobs that were uploaded without a visit and are waiting to be assigned to a subject.
+**Goal:** Review files that arrived from a camera, the upload page or a C-STORE and still need a visit, and file or dismiss them.
 
 **Steps:**
-1. Open **Geparkte Scans** (Parked Scans, `/retinal/parked`) — a sysadmin-only, cross-study overview.
-2. Each row shows the **Job**, **PatientId**, **Auge** (eye), **Task** and **Hochgeladen** (upload time). Select rows and use the row **Aktion** to assign (bind) a parked scan to a subject's visit, or **Neu laden** (Reload) to refresh.
+1. Open **Eingang** (`/ingest-inbox`) — the cross-study queue of every inbound file: OCT scans, DICOM images, fundus photos.
+2. Filter by kind with the chips (**OCT-Scan**, **DICOM-Bild**, **Fundusbild**, **Andere Datei**), by status, or by a label/filename fragment. Each card shows the preview, the patient-ID hint, the eye, the acquisition date and where the file came from.
+3. **Zuordnen …** files one card (or a selection) against a subject's visit; **Verwerfen** marks a file as not study data with a reason. **Hochladen** opens the staff uploader for bringing files in yourself.
 
-![Parked scans — the cross-study queue of unassigned retinal inference jobs](screenshots/administrator/22-parked-scans.png)
+![Ingest inbox — every inbound file waiting for a visit](screenshots/administrator/22-ingest-inbox.png)
 
-**Notes:** Administrator-only. Parked jobs have no study-subject linkage yet, which is why they surface here rather than on a per-subject page.
+**Notes:** Data Manager, Investigator and Administrator may reconcile. Binding a file ticks the visit's "performed" checklist item; unbinding takes the tick back. Dismissed files are deleted by the retention sweep after 30 days.

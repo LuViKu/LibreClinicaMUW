@@ -44,13 +44,15 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 /**
  * Admin-driven study-module enrollment.
  *
- * <p>The SPA's pluggable study-module SPI dispatches on
- * {@code study.protocol_type}, but that field is free-form text and
- * carries no admin-visible toggle. The
- * {@code study_module_enrollment(study_id, module_id)} table this
- * controller fronts decouples activation from the discriminator: a
- * module activates only when the study's {@code protocol_type} matches
- * the manifest AND the study is enrolled here.
+ * <p>A study module activates when the study is enrolled here. The
+ * {@code study_module_enrollment(study_id, module_id)} table this controller
+ * fronts is the toggle; {@code study.protocol_type} is free-form text and is
+ * not consulted.
+ *
+ * <p>Enrollment is inherited by sites. A data manager administers the parent
+ * study, so that is where the row is written — but the people entering data
+ * are scoped to a site, with a different study id. Without the inheritance
+ * they would see none of the study's modules.
  *
  * <h2>Endpoints</h2>
  * <ul>
@@ -116,7 +118,10 @@ public class StudyModuleEnrollmentApiController {
         }
 
         try {
-            List<String> ids = loadEnrolledModuleIds(target.getId());
+            // Inherited rows are listed too, so a site's module list matches
+            // what its users actually get.
+            List<String> ids = loadEnrolledModuleIds(
+                    dataSource, target.getId(), target.getParentStudyId());
             return ResponseEntity.ok(new EnrollmentList(studyOid, ids));
         } catch (SQLException e) {
             LOG.error("List module enrollments failed for oid={}: {}", studyOid, e.getMessage());
@@ -157,7 +162,11 @@ public class StudyModuleEnrollmentApiController {
 
         try {
             upsertEnrollment(target.getId(), normalisedId, me.getId());
-            List<String> ids = loadEnrolledModuleIds(target.getId());
+            // The effective list, not just this study's own rows: un-enrolling
+            // a module from a site that inherits it from the parent leaves it
+            // active, and the admin should see that rather than assume it went.
+            List<String> ids = loadEnrolledModuleIds(
+                    dataSource, target.getId(), target.getParentStudyId());
             LOG.info("Module enrolled: study={} module={} by user={}",
                     studyOid, normalisedId, me.getName());
             return ResponseEntity.ok(new EnrollmentList(studyOid, ids));
@@ -201,7 +210,11 @@ public class StudyModuleEnrollmentApiController {
 
         try {
             deleteEnrollment(target.getId(), normalisedId);
-            List<String> ids = loadEnrolledModuleIds(target.getId());
+            // The effective list, not just this study's own rows: un-enrolling
+            // a module from a site that inherits it from the parent leaves it
+            // active, and the admin should see that rather than assume it went.
+            List<String> ids = loadEnrolledModuleIds(
+                    dataSource, target.getId(), target.getParentStudyId());
             LOG.info("Module un-enrolled: study={} module={} by user={}",
                     studyOid, normalisedId, me.getName());
             return ResponseEntity.ok(new EnrollmentList(studyOid, ids));
@@ -225,20 +238,36 @@ public class StudyModuleEnrollmentApiController {
     }
 
     static List<String> loadEnrolledModuleIds(DataSource dataSource, int studyId) throws SQLException {
+        return loadEnrolledModuleIds(dataSource, studyId, 0);
+    }
+
+    /**
+     * Modules enrolled on a study, including those enrolled on its parent.
+     *
+     * <p>Enrollment is recorded on the study a data manager administers, which
+     * is the parent. A user whose session is scoped to a site of that study has
+     * a different study_id, so without the parent fallback they saw none of the
+     * modules — the nAMD workspace simply was not there for anyone working at a
+     * site, which is where the patients are.
+     *
+     * @param parentStudyId the study's parent, or 0 when it is itself a parent
+     */
+    static List<String> loadEnrolledModuleIds(DataSource dataSource, int studyId, int parentStudyId)
+            throws SQLException {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT module_id FROM study_module_enrollment WHERE study_id = ? ORDER BY module_id")) {
+                     "SELECT module_id FROM study_module_enrollment "
+                             + " WHERE study_id = ? OR (? > 0 AND study_id = ?) "
+                             + " ORDER BY module_id")) {
             ps.setInt(1, studyId);
+            ps.setInt(2, parentStudyId);
+            ps.setInt(3, parentStudyId);
             try (ResultSet rs = ps.executeQuery()) {
                 Set<String> ids = new LinkedHashSet<>();
                 while (rs.next()) ids.add(rs.getString(1));
                 return new ArrayList<>(ids);
             }
         }
-    }
-
-    private List<String> loadEnrolledModuleIds(int studyId) throws SQLException {
-        return loadEnrolledModuleIds(dataSource, studyId);
     }
 
     private void upsertEnrollment(int studyId, String moduleId, int userId) throws SQLException {

@@ -54,6 +54,8 @@ public class GenerateExtractFileService {
 
     private static final Logger logger = LoggerFactory.getLogger(GenerateExtractFileService.class);
     private final DataSource ds;
+    private final CoreResources coreResources;
+    private final RuleSetRuleDao ruleSetRuleDao;
     private HttpServletRequest request;
     public static ResourceBundle resword;
 
@@ -63,6 +65,8 @@ public class GenerateExtractFileService {
             RuleSetRuleDao ruleSetRuleDao) {
         this.ds = ds;
         this.request = request;
+        this.coreResources = coreResources;
+        this.ruleSetRuleDao = ruleSetRuleDao;
     }
 
     public GenerateExtractFileService(DataSource ds, CoreResources coreResources,RuleSetRuleDao ruleSetRuleDao) {
@@ -116,9 +120,19 @@ public class GenerateExtractFileService {
     public HashMap<String, Integer> createODMFile(String odmVersion, long sysTimeBegin, String generalFileDir, DatasetBean datasetBean,
             StudyBean currentStudy, String generalFileDirCopy,ExtractBean eb,
             Integer currentStudyId, Integer parentStudyId, String studySubjectNumber, UserAccountBean userBean) {
-        // default zipped - true
+        // 2026-09-18 — zipped=false, deliberately.
+        //
+        // OdmFileCreation does not zip: the call that would is commented out
+        // there ("Zipped in the next stage"), because the Quartz XsltTransformJob
+        // zips the ODM itself after its stylesheet run. It passes zipped through
+        // for that later stage. Callers of THIS bridge (the SPA's dataset export,
+        // the async export materializer, the legacy /ExportDataset servlet) have
+        // no such later stage, so passing true only made the archived_dataset_file
+        // row claim a "<name>.xml.zip" that was never written — the export
+        // appeared to succeed and its download was a dead link. Recording the
+        // file that actually exists makes the download work.
         return createODMFile(odmVersion, sysTimeBegin, generalFileDir, datasetBean,
-                currentStudy, generalFileDirCopy, eb, currentStudyId, parentStudyId, studySubjectNumber, true, true, true, null, userBean);
+                currentStudy, generalFileDirCopy, eb, currentStudyId, parentStudyId, studySubjectNumber, false, true, true, null, userBean);
     }
     /**
      * createODMfile, added by tbh, 01/2009
@@ -129,17 +143,31 @@ public class GenerateExtractFileService {
             StudyBean currentStudy, String generalFileDirCopy,ExtractBean eb,
             Integer currentStudyId, Integer parentStudyId, String studySubjectNumber, boolean zipped, boolean saveToDB, boolean deleteOld, String odmType, UserAccountBean userBean){
 
-        // OdmFileCreation has no DI-aware constructor and the default
-        // ctor leaves dataSource/ruleSetRuleDao/coreResources null.
-        // This service's own constructor accepted coreResources +
-        // ruleSetRuleDao but never stored them, so we only have `ds`
-        // to forward. The CDISC OdmDataCollector chain dereferences ds
-        // immediately (StudyDAO.findByPK → ds.getConnection), so at
-        // minimum forward what we have. Callers that need rules
-        // resolution or CoreResources should call OdmFileCreation
-        // directly with the full set of deps wired.
+        // OdmFileCreation has no DI-aware constructor, so its three
+        // collaborators are set explicitly here.
+        //
+        // 2026-09-18: this used to forward only `ds`. The constructor
+        // accepted coreResources + ruleSetRuleDao and silently dropped
+        // them, leaving both null on every ODM export that does not go
+        // through the Quartz XsltTransformJob (which resolves the
+        // fully-wired `odmFileCreation` bean itself) — i.e. the SPA's
+        // Quick-ODM, POST /datasets/{id}/export?format=odm, the async
+        // export materializer and the legacy /ExportDataset servlet.
+        // MetadataUnit.collectMetaDataVersion dereferences the rules dao,
+        // so that was a latent NPE; all four callers already pass both
+        // dependencies in, they just needed keeping.
+        //
+        // Scope note: wiring these does NOT by itself make ODM export
+        // work for the Liquibase-seeded CRFs. Those carry width_decimal
+        // in "(w,d)" form while OdmExtractDAO.parseDecimal expects
+        // OpenClinica's "w(d)", so metadata collection throws
+        // NumberFormatException before the rules lookup is ever reached
+        // (verified 2026-09-18 by running the export with and without
+        // this change — see DatasetExportCharacterisationDatabaseIT).
         OdmFileCreation ofc = new OdmFileCreation();
         ofc.setDataSource(ds);
+        ofc.setCoreResources(coreResources);
+        ofc.setRuleSetRuleDao(ruleSetRuleDao);
         return ofc.createODMFile(odmVersion, sysTimeBegin, generalFileDir, datasetBean,
                 currentStudy, generalFileDirCopy, eb,
                 currentStudyId, parentStudyId, studySubjectNumber, zipped, saveToDB, deleteOld, odmType, userBean);
@@ -243,6 +271,96 @@ public class GenerateExtractFileService {
         HashMap<String, Integer> answerMap = new HashMap<>();
         answerMap.put(DDLFileName, Integer.valueOf(fId));
         return answerMap;
+    }
+
+    /**
+     * SAS export: the ODM document plus the three packaged stylesheets.
+     *
+     * <p>Until 2026-09 every caller outside the Quartz scheduled-job screens
+     * wrote a zero-byte file here — the SPA's dataset export, the asynchronous
+     * export runner and the legacy Extract Data servlet all had a SAS branch
+     * that produced an {@code archived_dataset_file} row over empty content. An
+     * operator saw a successful export and downloaded nothing.
+     *
+     * <p>What SAS actually needs is three artefacts, and they are generated the
+     * same way the scheduled job generates them (see {@code extract.10} in
+     * extract.properties):
+     *
+     * <ul>
+     *   <li>{@code SAS_DATA.xml} — the data, as an XML document</li>
+     *   <li>{@code SAS_MAP.xml} — an SXLEMAP telling SAS how to read it</li>
+     *   <li>{@code SAS_FORMAT.sas} — the syntax that reads both in and applies
+     *       the code lists as SAS formats</li>
+     * </ul>
+     *
+     * <p>The names are fixed rather than derived from the dataset, because
+     * {@code xml_convert_sas_format.xsl} writes {@code FILENAME} statements
+     * that name the other two files literally. Renaming an entry would produce
+     * a script that cannot find its own data.
+     *
+     * <p>The intermediate ODM is generated with {@code odmType=clinical_data}
+     * (what the stylesheets expect) and is deliberately not recorded in
+     * {@code archived_dataset_file} — it is scaffolding, not a deliverable. It
+     * is removed after the transform unless {@code dataset_file_delete} is
+     * configured off, matching how the other multi-file exports treat their
+     * intermediates.
+     *
+     * @return the archived_dataset_file id of the zip, or 0 if nothing was written
+     */
+    public int createSasFile(DatasetBean datasetBean, ExtractBean eb, StudyBean currentStudy,
+            long sysTimeBegin, String generalFileDir, UserAccountBean userBean) {
+
+        HashMap<String, Integer> odmAnswer = createODMFile(
+                "oc1.3", sysTimeBegin, generalFileDir, datasetBean, currentStudy, "", eb,
+                currentStudy.getId(), currentStudy.getParentStudyId(), "99",
+                false /* zipped */, false /* saveToDB — scaffolding, not a deliverable */,
+                false /* deleteOld */, "clinical_data", userBean);
+
+        String odmName = null;
+        if (odmAnswer != null && !odmAnswer.isEmpty()) {
+            odmName = odmAnswer.keySet().iterator().next();
+        }
+        if (odmName == null || odmName.isBlank()) {
+            logger.error("SAS export: ODM generation produced no file name for dataset {}", datasetBean.getId());
+            return 0;
+        }
+        File odmFile = new File(generalFileDir, odmName.replaceAll(" ", "_"));
+
+        ArrayList<String> contents;
+        try {
+            contents = new ArrayList<>(OdmXsltTransformer.transform(odmFile, SAS_STYLESHEETS));
+        } catch (Exception e) {
+            // Deliberately not swallowed into an empty export: a failed
+            // transform must not look like a successful one. The caller turns
+            // a 0 return into an error for the operator.
+            logger.error("SAS export: stylesheet run failed for dataset " + datasetBean.getId(), e);
+            deleteIntermediate(odmFile);
+            return 0;
+        }
+
+        long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
+        int fId = createFile(datasetBean.getName() + "_sas", new ArrayList<>(SAS_EXPORT_NAMES),
+                generalFileDir, contents, datasetBean, sysTimeEnd, ExportFormatBean.TXTFILE, true, userBean);
+        deleteIntermediate(odmFile);
+        return fId;
+    }
+
+    /** Stylesheets for the SAS export — mirrors {@code extract.10.file}. */
+    private static final List<String> SAS_STYLESHEETS = List.of(
+            "xml_convert_sas_map.xsl", "xml_convert_sas_data.xsl", "xml_convert_sas_format.xsl");
+
+    /** Zip entry names — mirrors {@code extract.10.exportname}; see createSasFile. */
+    private static final List<String> SAS_EXPORT_NAMES = List.of(
+            "SAS_MAP.xml", "SAS_DATA.xml", "SAS_FORMAT.sas");
+
+    private static void deleteIntermediate(File f) {
+        String flag = CoreResources.getField("dataset_file_delete");
+        if (flag != null && "false".equalsIgnoreCase(flag.trim())) {
+            return;
+        }
+        if (f != null && f.isFile() && !f.delete()) {
+            logger.warn("could not delete intermediate extract file {}", f.getName());
+        }
     }
 
     public int createFile(String zipName, ArrayList<String> names, String dir, ArrayList<String> contents, DatasetBean datasetBean, long time,
@@ -566,6 +684,18 @@ public class GenerateExtractFileService {
         eb.setStudy(currentStudy);
         eb.setParentStudy(parentStudy);
         eb.setDateCreated(new java.util.Date());
+
+        // 2026-09-18 — resolve the dataset's saved item filters into the subject
+        // set the extract restricts to. Every producer builds its ExtractBean
+        // here, so doing it once covers ODM, tab, CSV and SPSS alike. Null means
+        // "no filters"; see EntityDAO.genDatabaseDateConstraint for where the
+        // restriction is applied.
+        if (dsetBean != null && dsetBean.getId() > 0 && currentStudy != null) {
+            int scopeStudyId = currentStudy.getParentStudyId() > 0
+                    ? currentStudy.getParentStudyId() : currentStudy.getId();
+            dsetBean.setFilterSubjectIds(
+                    new DatasetFilterSubjectResolver(ds).resolve(dsetBean.getId(), scopeStudyId));
+        }
         return eb;
     }
 

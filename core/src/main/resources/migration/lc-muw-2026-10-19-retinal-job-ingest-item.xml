@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.3 — the retinal queue joins the one inbox.
+
+        P3.1 and P3.2 built a single queue and a single bind. This is the step
+        that moves the OCT side onto it: every inference job gains the
+        ingest_item its .e2e came from, and the "parked" list — the retinal
+        pipeline's private queue of scans nobody had filed yet — stops being a
+        second place to look.
+
+        THE JOBS ARE NOT TOUCHED except to gain a foreign key and, for parked
+        ones, a status. No row is deleted, no result, artifact or correction is
+        moved, and every completed job keeps its own id, which is what
+        item_data.source_retinal_job_id points at. A parked job becomes
+        'cancelled' with a status_message naming the ingest_item that replaced
+        it, so the decision is legible and reversible by hand if this proves
+        wrong.
+
+        One ingest_item per distinct scan, not per job: a single .e2e scan is
+        enqueued once per task (fluid, layers, …), and those are several jobs
+        describing one file. The key is the digest where there is one and the
+        stored path where there is not, plus the scan index.
+
+        Idempotent throughout — every step is scoped to rows that have not been
+        migrated yet, so a re-run does nothing.
+    -->
+
+    <!--
+        The link. Nullable, because a job enqueued before this has no ingest_item
+        until the backfill below gives it one, and because nothing should fail
+        if a future path forgets to set it.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-19-retinal-job-ingest-item-column">
+        <comment>Give every inference job the file it came from.</comment>
+
+        <addColumn tableName="retinal_inference_job">
+            <column name="ingest_item_id" type="BIGINT"/>
+        </addColumn>
+
+        <addForeignKeyConstraint baseTableName="retinal_inference_job" baseColumnNames="ingest_item_id"
+                                 constraintName="fk_retinal_job_ingest_item"
+                                 referencedTableName="ingest_item" referencedColumnNames="ingest_item_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+
+        <createIndex tableName="retinal_inference_job" indexName="idx_retinal_job_ingest_item">
+            <column name="ingest_item_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="retinal_inference_job" indexName="idx_retinal_job_ingest_item"/>
+            <dropForeignKeyConstraint baseTableName="retinal_inference_job"
+                                      constraintName="fk_retinal_job_ingest_item"/>
+            <dropColumn tableName="retinal_inference_job" columnName="ingest_item_id"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The patient hint.
+
+        A scan uploaded through the public OCT portal carries the label the
+        operator typed, and that was only ever recorded in the audit row the
+        upload wrote (type 115, old_value 'patientId=…;laterality=…;
+        studySubjectId=…'). The job row itself never kept it. Without this the
+        backfilled inbox rows would show nothing to identify a file by, and an
+        operator would have to open each one.
+
+        Best-effort by design: not every job has such an audit row (other paths
+        enqueue too), and a missing hint simply means no suggestion.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-19-retinal-job-backfill-ingest-items" dbms="postgresql">
+        <comment>One ingest_item per distinct scan; link every job to its own.</comment>
+        <sql splitStatements="false"><![CDATA[
+            -- 1. Create the missing rows: one per (digest-or-path, scan index),
+            --    seeded from the lowest job id so the choice is deterministic.
+            WITH hints AS (
+                SELECT a.entity_id AS job_id,
+                       substring(a.old_value from 'patientId=([^;]*)')      AS patient_id,
+                       NULLIF(substring(a.old_value from 'studySubjectId=([0-9]+)'), '')::int
+                                                                            AS study_subject_id
+                  FROM audit_log_event a
+                 WHERE a.audit_log_event_type_id = 115
+                   AND a.audit_table = 'retinal_inference_job'
+            ),
+            scans AS (
+                SELECT COALESCE(j.e2e_sha256, 'path:' || j.e2e_path) AS scan_key,
+                       j.scan_index,
+                       MIN(j.job_id) AS seed_job_id
+                  FROM retinal_inference_job j
+                 WHERE j.ingest_item_id IS NULL
+                 GROUP BY 1, 2
+            )
+            INSERT INTO ingest_item (
+                kind, source_kind, stored_path, sha256, scan_index,
+                laterality, acquisition_date, patient_id, candidate_study_subject_id,
+                received_at, status, match_policy,
+                bound_study_subject_id, bound_study_event_id, bound_event_crf_id, bound_at,
+                status_message)
+            SELECT 'e2e',
+                   'portal-oct',
+                   j.e2e_path,
+                   j.e2e_sha256,
+                   j.scan_index,
+                   j.eye_laterality,
+                   j.acquisition_date,
+                   h.patient_id,
+                   -- The suggestion, not a decision: a subject the upload named
+                   -- is a hint until somebody confirms it.
+                   (SELECT ss.study_subject_id FROM study_subject ss
+                     WHERE ss.study_subject_id = h.study_subject_id),
+                   -- When the file actually arrived, not when this ran.
+                   j.enqueued_at,
+                   CASE
+                       WHEN j.study_event_id IS NOT NULL OR j.event_crf_id IS NOT NULL THEN 'BOUND'
+                       WHEN j.status = 'cancelled' THEN 'DISMISSED'
+                       ELSE 'UNBOUND'
+                   END,
+                   CASE
+                       WHEN j.study_event_id IS NOT NULL OR j.event_crf_id IS NOT NULL THEN 'backfill'
+                       ELSE NULL
+                   END,
+                   COALESCE(
+                       (SELECT se.study_subject_id FROM study_event se
+                         WHERE se.study_event_id = j.study_event_id),
+                       (SELECT ec.study_subject_id FROM event_crf ec
+                         WHERE ec.event_crf_id = j.event_crf_id)),
+                   COALESCE(
+                       j.study_event_id,
+                       (SELECT ec.study_event_id FROM event_crf ec
+                         WHERE ec.event_crf_id = j.event_crf_id)),
+                   j.event_crf_id,
+                   CASE
+                       WHEN j.study_event_id IS NOT NULL OR j.event_crf_id IS NOT NULL
+                       THEN COALESCE(j.completed_at, j.enqueued_at)
+                       ELSE NULL
+                   END,
+                   CASE
+                       WHEN j.status = 'parked'
+                       THEN 'migrated from the parked retinal queue'
+                       ELSE NULL
+                   END
+              FROM scans s
+              JOIN retinal_inference_job j ON j.job_id = s.seed_job_id
+              LEFT JOIN hints h ON h.job_id = j.job_id
+             -- Skip anything already in the queue: the digest is the identity,
+             -- and re-creating it would violate the dedup index.
+             WHERE NOT EXISTS (
+                     SELECT 1 FROM ingest_item ii
+                      WHERE ii.sha256 IS NOT NULL
+                        AND ii.sha256 = j.e2e_sha256
+                        AND COALESCE(ii.scan_index, -1) = COALESCE(j.scan_index, -1))
+               AND NOT EXISTS (
+                     SELECT 1 FROM ingest_item ii
+                      WHERE j.e2e_sha256 IS NULL
+                        AND ii.stored_path = j.e2e_path
+                        AND COALESCE(ii.scan_index, -1) = COALESCE(j.scan_index, -1));
+
+            -- 2. Point every job at the row for its scan. Matching on the same
+            --    key the insert grouped by, so the sibling tasks of one scan all
+            --    land on the same item.
+            UPDATE retinal_inference_job j
+               SET ingest_item_id = ii.ingest_item_id
+              FROM ingest_item ii
+             WHERE j.ingest_item_id IS NULL
+               AND ii.kind = 'e2e'
+               AND COALESCE(ii.scan_index, -1) = COALESCE(j.scan_index, -1)
+               AND (
+                     (j.e2e_sha256 IS NOT NULL AND ii.sha256 = j.e2e_sha256)
+                  OR (j.e2e_sha256 IS NULL AND ii.stored_path = j.e2e_path)
+                   );
+        ]]></sql>
+
+        <rollback>
+            <!--
+                Remove only what this created: the link, and the rows that no
+                job outside the e2e backfill refers to. Rows an operator has
+                since acted on keep their state — a rollback of a migration
+                must not undo a person's decision.
+            -->
+            <sql splitStatements="false"><![CDATA[
+                DELETE FROM ingest_item ii
+                 WHERE ii.kind = 'e2e'
+                   AND ii.source_kind = 'portal-oct'
+                   AND EXISTS (SELECT 1 FROM retinal_inference_job j
+                                WHERE j.ingest_item_id = ii.ingest_item_id);
+                UPDATE retinal_inference_job SET ingest_item_id = NULL;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Parked jobs.
+
+        'parked' meant "this scan arrived and nobody has said whose visit it
+        is" — exactly what UNBOUND now means on the ingest_item the step above
+        created. Keeping both would leave two answers to one question.
+
+        The job becomes 'cancelled' rather than being deleted, and says why.
+        Nothing is lost: the file, the digest, the laterality and the patient
+        hint are all on the ingest_item, and filing that item through the inbox
+        enqueues the work again.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-19-retinal-job-park-to-cancelled" dbms="postgresql">
+        <comment>Parked jobs are superseded by their UNBOUND ingest_item.</comment>
+        <sql>
+            UPDATE retinal_inference_job
+               SET status = 'cancelled',
+                   status_message = 'migrated to ingest_item ' || ingest_item_id
+                                    || ' (P3.3 — superseded by the unified inbox)'
+             WHERE status = 'parked'
+               AND ingest_item_id IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE retinal_inference_job
+                   SET status = 'parked', status_message = NULL
+                 WHERE status = 'cancelled'
+                   AND status_message LIKE 'migrated to ingest_item %';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The dedup key moves with the data.
+
+        It was (e2e_sha256, scan_index, task), which says "one job per task per
+        scan". The scan is now a row, so the same rule reads (ingest_item_id,
+        task) — and gains a condition the old one lacked: cancelled jobs are
+        excluded, so a scan whose run was cancelled can be re-filed and run
+        again. Under the old index it could not, which is a real limitation
+        that only shows up when somebody needs it.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-19-retinal-job-unique-swap" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <indexExists indexName="ux_retinal_inference_job_e2e_sha256_scan_task_idx"/>
+        </preConditions>
+        <comment>Dedup on the scan's row rather than its digest; allow a re-run after a cancel.</comment>
+        <sql splitStatements="true" endDelimiter=";">
+            CREATE UNIQUE INDEX ux_retinal_job_ingest_item_task
+                ON retinal_inference_job (ingest_item_id, task)
+             WHERE ingest_item_id IS NOT NULL AND status &lt;&gt; 'cancelled';
+
+            DROP INDEX IF EXISTS ux_retinal_inference_job_e2e_sha256_scan_task_idx;
+        </sql>
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";">
+                CREATE UNIQUE INDEX ux_retinal_inference_job_e2e_sha256_scan_task_idx
+                    ON retinal_inference_job (e2e_sha256, scan_index, task);
+
+                DROP INDEX IF EXISTS ux_retinal_job_ingest_item_task;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

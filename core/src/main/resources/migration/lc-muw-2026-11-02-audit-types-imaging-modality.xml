@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.4 — audit types for the imaging catalogue.
+
+        These are configuration changes, not clinical data, but they decide
+        what the platform writes into a CRF without anybody typing it. A
+        binding edited to point at a different item silently changes which box
+        a camera ticks from that moment on, and the only way to answer "why did
+        this value appear" later is to know when the binding changed.
+
+        130 is the ingest unbind; 129 the auto-tick.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-11-02-audit-types-imaging-modality" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id IN (131, 132, 133);
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit types 131-133 for the imaging-modality catalogue.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="131"/>
+            <column name="name" value="imaging_modality_created"/>
+            <column name="display_name" value="Imaging modality added to a study"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="132"/>
+            <column name="name" value="imaging_modality_updated"/>
+            <column name="display_name" value="Imaging modality changed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="133"/>
+            <column name="name" value="imaging_modality_binding_changed"/>
+            <column name="display_name" value="Imaging modality's CRF item binding changed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id IN (131, 132, 133)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

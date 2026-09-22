@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 3 P3.4 — the HealthAEye catalogue, from Visitenplan V1.0
+        (13.07.2026), in the order the plan lists them.
+
+        Nine acquisitions, of which HealthAEye phase 1 uses four. The other
+        five are seeded anyway: the visit plan names them, an administrator
+        would otherwise have to re-type them, and a modality with no bindings
+        is inert — it appears in the admin list and ticks nothing.
+
+        BINDINGS ONLY WHERE THE ITEM EXISTS. The CRF is authored in the
+        application, not in this repository, and its revision for the IR /
+        red-free / blue-autofluorescence / OCTA rows is a study-team task
+        (checkpoint C2). Seeding a binding to an item that is not there would
+        produce a warning on every bind; seeding none means the modality sits
+        ready and starts ticking the day the item appears. The insert is
+        therefore guarded on the item's existence, not asserted.
+
+        Every changeSet is a no-op where the study is absent, so a deployment
+        that does not run HealthAEye is unaffected.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-11-02-seed-healthaeye-modalities" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM study WHERE oc_oid = 'S_HAE';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM imaging_modality im
+                      JOIN study s ON s.study_id = im.study_id
+                     WHERE s.oc_oid = 'S_HAE';
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>HealthAEye's nine acquisitions, in Visitenplan order.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO imaging_modality
+                (study_id, code, label_de, label_en, device, kinds_accepted,
+                 laterality_required, auto_match_ae_title, ordinal, status_id, created_by_user_id)
+            SELECT s.study_id, v.code, v.label_de, v.label_en, v.device, v.kinds,
+                   v.lat_required, v.ae_title, v.ordinal, 1, 1
+              FROM study s
+              CROSS JOIN (VALUES
+                    -- 1. No file ever arrives for BCVA; it is a checklist row
+                    --    the data-entry path fills. kinds_accepted '' says so.
+                    ('BCVA',           'Visus (BCVA)',                  'BCVA (letters + Snellen)',
+                     NULL,          '',           false, NULL,   1),
+                    ('OCT_SPECTRALIS', 'OCT 20×20°, 97 B-Scans',        'OCT 20x20deg, 97 B-scans',
+                     'spectralis',  'e2e',        true,  NULL,   2),
+                    ('IR_SPECTRALIS',  'IR-Reflektanz 30×30°',          'NIR reflectance 30x30deg',
+                     'spectralis',  'e2e,image',  true,  NULL,   3),
+                    ('RF_SPECTRALIS',  'Rotfrei 30×30°',                'Red-free 30x30deg',
+                     'spectralis',  'e2e,image',  true,  NULL,   4),
+                    ('BAF_SPECTRALIS', 'Blau-Autofluoreszenz 30×30°',   'Blue autofluorescence 30x30deg',
+                     'spectralis',  'e2e,image',  true,  NULL,   5),
+                    -- 6-7. Zeiss devices export files; there is no C-STORE.
+                    ('OCTA_PLEXELITE', 'OCTA 6×6 mm + 3×3 mm',          'OCTA 6x6mm + 3x3mm',
+                     'plexelite',   'image,other',true,  NULL,   6),
+                    ('FUNDUS_CLARUS',  'Fundusfoto zentral (Clarus)',   'Fundus photo, central (Clarus)',
+                     'clarus',      'image',      true,  NULL,   7),
+                    ('FUNDUS_REMIDIO', 'Handheld-Fundus (Remidio)',     'Handheld fundus (Remidio InstaFOP)',
+                     'remidio',     'image',      true,  NULL,   8),
+                    -- 9. The one device that identifies itself: its calling AE
+                    --    title classifies the image without an operator.
+                    ('FUNDUS_OPTOMED', 'Handheld-Fundus (Optomed)',     'Handheld fundus (Optomed Lumo)',
+                     'OPTOMEDLUMO', 'dicom',      true,  'OPTOMEDLUMO', 9)
+                 ) AS v(code, label_de, label_en, device, kinds, lat_required, ae_title, ordinal)
+             WHERE s.oc_oid = 'S_HAE';
+        ]]></sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM imaging_modality
+                 WHERE study_id IN (SELECT study_id FROM study WHERE oc_oid = 'S_HAE');
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The performed bindings, for the modalities whose CRF item exists today.
+
+        BCVA, OCT, Clarus, Remidio and Optomed have their boxes; the Spectralis
+        IR / red-free / BAF rows and the PlexElite OCTA do not yet. Laterality
+        'OU' because the current CRF has one box per modality rather than one
+        per eye — the per-eye revision is the same study-team task, and adding
+        OD/OS rows then needs no migration.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-02-seed-healthaeye-bindings" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM imaging_modality_item_binding b
+                  JOIN imaging_modality im ON im.imaging_modality_id = b.imaging_modality_id
+                  JOIN study s ON s.study_id = im.study_id
+                 WHERE s.oc_oid = 'S_HAE';
+            </sqlCheck>
+        </preConditions>
+        <comment>Performed boxes for the modalities whose CRF item is authored.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO imaging_modality_item_binding
+                (imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id)
+            SELECT im.imaging_modality_id, 'performed', 'OU', v.item_oid, '1', 1
+              FROM imaging_modality im
+              JOIN study s ON s.study_id = im.study_id
+              JOIN (VALUES
+                    ('BCVA',           'I_HEALT_BCVA_PERFORMED'),
+                    ('OCT_SPECTRALIS', 'I_HEALT_OCT_PERFORMED'),
+                    ('FUNDUS_CLARUS',  'I_HEALT_CLARUS_PERFORMED'),
+                    ('FUNDUS_REMIDIO', 'I_HEALT_REMIDIO_PERFORMED'),
+                    ('FUNDUS_OPTOMED', 'I_HEALT_OPTOMED_PERFORMED')
+                   ) AS v(code, item_oid) ON v.code = im.code
+             WHERE s.oc_oid = 'S_HAE'
+               -- Guarded, not asserted: the CRF is authored in the app, and a
+               -- binding to an absent item would warn on every single bind.
+               AND EXISTS (SELECT 1 FROM item i WHERE i.oc_oid = v.item_oid);
+        ]]></sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM imaging_modality_item_binding
+                 WHERE imaging_modality_id IN (
+                       SELECT im.imaging_modality_id FROM imaging_modality im
+                         JOIN study s ON s.study_id = im.study_id
+                        WHERE s.oc_oid = 'S_HAE');
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The reason boxes.
+
+        Deliberately bound but never written by the platform: "nein +
+        Begründung" is a clinical statement about why something did not happen,
+        and the absence of a file is not evidence of a reason. The binding
+        exists so the admin UI can show the complete row and so an export knows
+        which item belongs to which modality.
+
+        The OIDs are truncated at 35 characters because that is the oc_oid
+        column's limit — I_HEALT_OPTOMED_NOT_PERFORMED_REASO and
+        I_HEALT_REMIDIO_NOT_PERFORMED_REASO are what the CRF actually contains.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-02-seed-healthaeye-reason-bindings" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM imaging_modality_item_binding
+                 WHERE role = 'not_performed_reason';
+            </sqlCheck>
+        </preConditions>
+        <comment>Reason items, for completeness of the admin view; never auto-written.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO imaging_modality_item_binding
+                (imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id)
+            SELECT im.imaging_modality_id, 'not_performed_reason', 'OU', v.item_oid, '1', 1
+              FROM imaging_modality im
+              JOIN study s ON s.study_id = im.study_id
+              JOIN (VALUES
+                    ('BCVA',           'I_HEALT_BCVA_NOT_PERFORMED_REASON'),
+                    ('OCT_SPECTRALIS', 'I_HEALT_OCT_NOT_PERFORMED_REASON'),
+                    ('FUNDUS_CLARUS',  'I_HEALT_CLARUS_NOT_PERFORMED_REASON'),
+                    ('FUNDUS_REMIDIO', 'I_HEALT_REMIDIO_NOT_PERFORMED_REASO'),
+                    ('FUNDUS_OPTOMED', 'I_HEALT_OPTOMED_NOT_PERFORMED_REASO')
+                   ) AS v(code, item_oid) ON v.code = im.code
+             WHERE s.oc_oid = 'S_HAE'
+               AND EXISTS (SELECT 1 FROM item i WHERE i.oc_oid = v.item_oid);
+        ]]></sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM imaging_modality_item_binding WHERE role = 'not_performed_reason';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        nAMD photographs one thing: the OCT the inference pipeline reads. No
+        binding — that study's CRF records fluid volumes, not a performed
+        checklist — so the row exists to classify arriving files, which is what
+        the inbox filters and the export manifest name them by.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-02-seed-namd-modalities" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM study WHERE oc_oid = 'S_NAMD';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM imaging_modality im
+                      JOIN study s ON s.study_id = im.study_id
+                     WHERE s.oc_oid = 'S_NAMD';
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>nAMD: the Spectralis OCT, for classification only.</comment>
+
+        <sql>
+            INSERT INTO imaging_modality
+                (study_id, code, label_de, label_en, device, kinds_accepted,
+                 laterality_required, ordinal, status_id, created_by_user_id)
+            SELECT study_id, 'OCT_SPECTRALIS', 'OCT (Spectralis)', 'OCT (Spectralis)',
+                   'spectralis', 'e2e', true, 1, 1, 1
+              FROM study WHERE oc_oid = 'S_NAMD';
+        </sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM imaging_modality
+                 WHERE study_id IN (SELECT study_id FROM study WHERE oc_oid = 'S_NAMD');
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Anything the P1-5 map knew that the catalogue does not.
+
+        The seeds above reproduce both rows the map shipped with. A deployment
+        that added its own rows would otherwise lose them the moment the ticker
+        starts reading bindings instead — silently, because a missing tick
+        looks exactly like a modality that was not performed. This copies every
+        map row that has no equivalent binding, creating the modality when
+        there is none to hang it on.
+
+        The map table itself is left in place, unread, and dropped in a later
+        release once deployments have been through this.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-11-02-migrate-performed-item-map" dbms="postgresql">
+        <comment>Carry any custom ingest_performed_item_map rows into bindings.</comment>
+        <!--
+            Two statements, not one with a data-modifying CTE. Postgres does
+            not show a CTE's inserts to a sibling part of the same statement,
+            so a modality created in a WITH clause is invisible to the join
+            that would hang the binding off it — the bindings silently came out
+            empty, which is the exact failure this changeset exists to prevent.
+        -->
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            -- 1. A modality for any device the catalogue has never heard of.
+            --    A map row applies to the study whose CRF actually contains
+            --    its item; a global row (study_id NULL) can therefore land in
+            --    more than one study, which is what it always meant.
+            INSERT INTO imaging_modality
+                (study_id, code, label_de, label_en, device, kinds_accepted,
+                 laterality_required, ordinal, status_id, created_by_user_id)
+            SELECT DISTINCT a.study_id, upper(a.device_key), a.device_key, a.device_key,
+                   a.device_key, 'image,dicom', true, 99, 1, 1
+              FROM (SELECT DISTINCT m.device_key, m.item_oid, s.study_id
+                      FROM ingest_performed_item_map m
+                      JOIN item i ON i.oc_oid = m.item_oid
+                      JOIN item_form_metadata ifm ON ifm.item_id = i.item_id
+                      JOIN crf_version cv ON cv.crf_version_id = ifm.crf_version_id
+                      JOIN event_definition_crf edc ON edc.crf_id = cv.crf_id
+                      JOIN study s ON s.study_id = edc.study_id
+                     WHERE m.study_id IS NULL OR m.study_id = s.study_id) a
+             WHERE NOT EXISTS (
+                   SELECT 1 FROM imaging_modality_item_binding b
+                     JOIN imaging_modality im ON im.imaging_modality_id = b.imaging_modality_id
+                    WHERE im.study_id = a.study_id
+                      AND b.role = 'performed' AND b.item_oid = a.item_oid)
+               AND NOT EXISTS (
+                   SELECT 1 FROM imaging_modality im
+                    WHERE im.study_id = a.study_id
+                      AND lower(COALESCE(im.device, '')) = lower(a.device_key))
+            ON CONFLICT (study_id, code) DO NOTHING;
+
+            -- 2. The binding itself, now that every device has a modality.
+            INSERT INTO imaging_modality_item_binding
+                (imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id)
+            SELECT DISTINCT im.imaging_modality_id, 'performed', 'OU', a.item_oid,
+                   COALESCE(NULLIF(a.performed_value, ''), '1'), 1
+              FROM (SELECT DISTINCT m.device_key, m.item_oid, m.performed_value, s.study_id
+                      FROM ingest_performed_item_map m
+                      JOIN item i ON i.oc_oid = m.item_oid
+                      JOIN item_form_metadata ifm ON ifm.item_id = i.item_id
+                      JOIN crf_version cv ON cv.crf_version_id = ifm.crf_version_id
+                      JOIN event_definition_crf edc ON edc.crf_id = cv.crf_id
+                      JOIN study s ON s.study_id = edc.study_id
+                     WHERE m.study_id IS NULL OR m.study_id = s.study_id) a
+              JOIN imaging_modality im
+                ON im.study_id = a.study_id
+               AND lower(COALESCE(im.device, '')) = lower(a.device_key)
+             WHERE NOT EXISTS (
+                   SELECT 1 FROM imaging_modality_item_binding b
+                     JOIN imaging_modality im2 ON im2.imaging_modality_id = b.imaging_modality_id
+                    WHERE im2.study_id = a.study_id
+                      AND b.role = 'performed' AND b.item_oid = a.item_oid)
+            ON CONFLICT (imaging_modality_id, role, laterality) DO NOTHING;
+        ]]></sql>
+
+        <rollback>
+            <!-- The seeds' own rollbacks remove what they created; this one
+                 leaves the map table untouched, so there is nothing to undo. -->
+            <empty/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

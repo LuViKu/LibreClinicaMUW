@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-029 — a DICOM file that arrived as an upload was pseudonymised before
+      it was kept, and the row says when.
+
+      A camera in the clinic writes the hospital's patient into the header; the
+      sidecar rewrites the file with the subject label before the app records
+      it. The stamp lets the export bundle and an auditor tell a cleaned file
+      from one that came in over C-STORE carrying our own worklist label (which
+      needed no cleaning and has NULL here). Additive; nothing reads it as
+      required.
+    -->
+    <changeSet id="2026-12-02-ingest-item-deidentified" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="deidentified_at"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.deidentified_at — when an uploaded DICOM file's patient identity was replaced.</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="deidentified_at" type="TIMESTAMP"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="deidentified_at"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

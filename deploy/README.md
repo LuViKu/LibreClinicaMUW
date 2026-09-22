@@ -141,7 +141,7 @@ above for the host-hardening scope split.
    stay on the build host where they belong — a few MB instead of
    ~150 MB on disk). Seeds `/opt/libreclinica/config/` from
    `docker/config/`. Creates
-   `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference}` and
+   `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference,retinal-artifacts,dicom-ingest,ingest}` and
    `/var/backups/libreclinica/`. The sparse-checkout pattern is
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.
@@ -280,6 +280,24 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    the actual pulls. Both images roll together unless
    `LIBRECLINICA_RETINAL_IMAGE_TAG` is also set in the env file (it pins
    the sidecar independently of the app).
+
+3. If the release adds new `datainfo.properties` keys, re-run the setup
+   script so they land in `/opt/libreclinica/config/datainfo.properties`.
+   It is idempotent, and the config merge only ever APPENDS keys the file
+   lacks — existing values (SMTP, adminEmail, dbPass, retinal URLs) are
+   left untouched:
+   ```sh
+   sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh
+   sudo systemctl restart libreclinica
+   ```
+   Use the copy under `/opt/libreclinica/deploy/` — it is refreshed from git
+   on every run. The `/root/libreclinica-setup/` bootstrap copy is frozen at
+   first-install and skips newer config logic.
+
+   Skipping this is not fatal but it is silent: a key missing from the host
+   file makes the app fall back to the calling code's hardcoded default, so
+   a new feature flag reads as "off" with nothing in the log to explain it.
+   The release notes call out when a release adds keys.
 
 ### Rebuild a single image without cutting a release
 

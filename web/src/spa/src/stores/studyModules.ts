@@ -127,34 +127,62 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
    * back-compat — semantically it is now the "module id" used in
    * enrollment, no longer a protocol-type discriminator.
    *
-   * <p>If multiple modules are enrolled on the same study, the first
-   * one that resolves to a registered manifest wins. Today the SPI
-   * only supports one active module per study; multi-module support
-   * is a future change (and would route through {@code injectionsFor}
-   * to merge slot lists from each active manifest).
+   * <p>P3.0 — every enrolled module that resolves to a registered
+   * manifest is active, not just the first. A study running both
+   * imaging ingest and the nAMD decision aid needs both, and under the
+   * old rule whichever the backend happened to list second was
+   * silently inert: its routes loaded, its slots never rendered, and
+   * nothing said why.
    */
-  const activeModule = computed<StudyModuleManifest | null>(() => {
+  const activeModules = computed<StudyModuleManifest[]>(() => {
     const study = auth.user?.activeStudy
-    if (!study) return null
+    if (!study) return []
     const enrolledRaw =
       (study as unknown as { enabledModules?: string[] }).enabledModules ?? []
+    const out: StudyModuleManifest[] = []
     for (const moduleId of enrolledRaw) {
       const candidate = findModule(moduleId)
-      if (candidate) return candidate
+      // Enrollment rows can repeat once a site inherits its parent's.
+      if (candidate && !out.includes(candidate)) out.push(candidate)
     }
-    return null
+    return out
   })
 
+  /**
+   * The first active module, for the callers that genuinely want one —
+   * chiefly tests and the {@link useActiveStudyModule} shorthand.
+   * Prefer {@link activeModules}; a host view that renders "the" module
+   * will drop the others.
+   */
+  const activeModule = computed<StudyModuleManifest | null>(
+    () => activeModules.value[0] ?? null,
+  )
+
+  /**
+   * Every entry advertised for a slot, across all active modules, in
+   * enrollment order.
+   *
+   * <p>Entry keys are unique within a module, not across them, so two
+   * modules may both advertise {@code key: 'open-workspace'}. The keys
+   * are namespaced here rather than de-duplicated: dropping one would
+   * make a module invisible for a reason no author could see from
+   * their own file.
+   */
   function injectionsFor<S extends InjectionSlotId>(slotId: S): InjectionEntry<S>[] {
-    const m = activeModule.value
-    if (!m) return []
-    const raw = (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
-    // Wrap lazy-component thunks here (see {@link wrapAsync}) so host
-    // views can just do <component :is="entry.component" />.
-    return raw.map((entry) => ({
-      ...entry,
-      component: wrapAsync(entry.component as Component | (() => Promise<unknown>)),
-    }))
+    const out: InjectionEntry<S>[] = []
+    for (const m of activeModules.value) {
+      const raw = (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
+      for (const entry of raw) {
+        out.push({
+          ...entry,
+          key: `${m.protocolType}:${entry.key}`,
+          // Wrap lazy-component thunks here (see {@link wrapAsync}) so
+          // host views can just do <component :is="entry.component" />.
+          component: wrapAsync(entry.component as Component | (() => Promise<unknown>)),
+        })
+      }
+    }
+    return out
   }
 
   /**
@@ -164,51 +192,58 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
    * {@code immediate: true} so refresh-into-a-bound-study activates
    * the manifest without waiting for the next study switch.
    */
+  async function loadI18nFor(m: StudyModuleManifest): Promise<void> {
+    if (loadedModuleIds.value.has(m.protocolType)) return
+    if (!m.loadI18n) {
+      // No lazy bundle declared — flag as loaded so we don't keep
+      // re-checking on every activation flip.
+      loadedModuleIds.value.add(m.protocolType)
+      return
+    }
+    try {
+      const payload = await m.loadI18n()
+      if (import.meta.env.DEV) {
+        detectI18nCollisions(
+          m.protocolType,
+          'de',
+          i18n.global.getLocaleMessage('de') as Record<string, unknown>,
+          payload.de,
+        )
+        detectI18nCollisions(
+          m.protocolType,
+          'en',
+          i18n.global.getLocaleMessage('en') as Record<string, unknown>,
+          payload.en,
+        )
+      }
+      i18n.global.mergeLocaleMessage('de', payload.de)
+      i18n.global.mergeLocaleMessage('de-AT', payload.de)
+      i18n.global.mergeLocaleMessage('en', payload.en)
+      loadedModuleIds.value.add(m.protocolType)
+    } catch (e) {
+      // Swallow the failure — losing a translation bundle should
+      // not break the app boot. The keys fall back to the i18n
+      // missing-key handler, which logs in dev and silently renders
+      // the key in prod.
+      // eslint-disable-next-line no-console
+      console.warn('[studyModules] loadI18n failed for', m.protocolType, e)
+    }
+  }
+
+  // P3.0 — every active module's bundle, not just the first one's. A
+  // module whose slots render but whose labels resolve to raw i18n keys
+  // looks broken in a way that points at the wrong file.
   watch(
-    activeModule,
-    async (m, prev) => {
-      if (!m || m === prev) return
-      if (loadedModuleIds.value.has(m.protocolType)) return
-      if (!m.loadI18n) {
-        // No lazy bundle declared — flag as loaded so we don't keep
-        // re-checking on every activation flip.
-        loadedModuleIds.value.add(m.protocolType)
-        return
-      }
-      try {
-        const payload = await m.loadI18n()
-        if (import.meta.env.DEV) {
-          detectI18nCollisions(
-            m.protocolType,
-            'de',
-            i18n.global.getLocaleMessage('de') as Record<string, unknown>,
-            payload.de,
-          )
-          detectI18nCollisions(
-            m.protocolType,
-            'en',
-            i18n.global.getLocaleMessage('en') as Record<string, unknown>,
-            payload.en,
-          )
-        }
-        i18n.global.mergeLocaleMessage('de', payload.de)
-        i18n.global.mergeLocaleMessage('de-AT', payload.de)
-        i18n.global.mergeLocaleMessage('en', payload.en)
-        loadedModuleIds.value.add(m.protocolType)
-      } catch (e) {
-        // Swallow the failure — losing a translation bundle should
-        // not break the app boot. The keys fall back to the i18n
-        // missing-key handler, which logs in dev and silently renders
-        // the key in prod.
-        // eslint-disable-next-line no-console
-        console.warn('[studyModules] loadI18n failed for', m.protocolType, e)
-      }
+    activeModules,
+    (mods) => {
+      for (const m of mods) void loadI18nFor(m)
     },
-    { immediate: true },
+    { immediate: true, deep: false },
   )
 
   return {
     activeModule,
+    activeModules,
     loadedModuleIds,
     injectionsFor,
   }

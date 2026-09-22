@@ -17,8 +17,24 @@
 	</query>
 	<query>
 		<name>update</name>
+		<!--
+		  P3.7 — the provenance columns are cleared, not carried.
+
+		  A value written by the platform (an auto-ticked checklist box, an
+		  inference metric) records what produced it. When a person then
+		  corrects that value through a CRF, the row is theirs: leaving
+		  source_kind set would make the export state that a machine wrote a
+		  number a clinician typed, which is the exact false claim the
+		  annotation exists to prevent.
+
+		  Literal NULLs, not placeholders — the parameter positions above are
+		  unchanged, which matters because the DAO binds them by index.
+		  SourcedItemDataWriter has its own SQL and sets these columns
+		  explicitly, so the platform's own writes are unaffected.
+		-->
 		<sql>UPDATE ITEM_DATA SET EVENT_CRF_ID=?,ITEM_ID=?,STATUS_ID=?,
-		VALUE=?,DATE_UPDATED=NOW(),UPDATE_ID=?, ORDINAL =?, OLD_STATUS_ID=?, DELETED=? WHERE
+		VALUE=?,DATE_UPDATED=NOW(),UPDATE_ID=?, ORDINAL =?, OLD_STATUS_ID=?, DELETED=?,
+		SOURCE_KIND=NULL, SOURCE_RETINAL_JOB_ID=NULL, SOURCE_INGEST_ITEM_ID=NULL WHERE
 		ITEM_DATA_ID=?</sql>
 	</query>
 	<!-- added tbh 09/03/2008 -->
@@ -31,8 +47,12 @@
 	<!-- added tbh 09/2008 -->
 	<query>
 		<name>updateValue</name>
+		<!-- Same as `update`: whoever writes a value through this path owns
+		     it, so the platform's claim on the old one is dropped. This is the
+		     CRF data-entry path, so it is the one that actually happens. -->
 		<sql>UPDATE ITEM_DATA SET STATUS_ID=?,
-		VALUE=?,DATE_UPDATED=NOW(),UPDATE_ID=? WHERE
+		VALUE=?,DATE_UPDATED=NOW(),UPDATE_ID=?,
+		SOURCE_KIND=NULL, SOURCE_RETINAL_JOB_ID=NULL, SOURCE_INGEST_ITEM_ID=NULL WHERE
 		ITEM_DATA_ID=?</sql>
 	</query>
 	

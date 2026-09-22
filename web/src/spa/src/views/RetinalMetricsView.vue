@@ -22,7 +22,6 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import FundusOverlay, { type EtdrsRegion } from '@/components/FundusOverlay.vue'
@@ -46,7 +45,7 @@ const RetinalCorrectionFullscreen = defineAsyncComponent(
 import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
-import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
+import PageHeader from '@/components/PageHeader.vue'
 
 /**
  * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
@@ -145,17 +144,16 @@ const displayError = computed<string | null>(() => loadError.value ?? resolveErr
 
 // 2026-06-26 — breadcrumb trail on the per-subject deep link
 // (/subjects/{label}/jobs/{n}): "Studienteilnehmer > {label} > Job #{n}".
-// The by-id route carries no label/seq in the URL, so it renders no trail.
-useViewBreadcrumb(computed(() => {
+// The by-id route carries no label in the URL, so it renders no trail. The
+// job is the H1; register and subject are its ancestors.
+const trail = computed(() => {
   const label = subjectLabelParam.value
-  const seq = subjectSeqParam.value
-  if (label == null || seq == null) return null
+  if (label == null) return []
   return [
     { label: t('nav.subjectMatrix'), to: '/subjects' },
     { label, to: `/subjects/${encodeURIComponent(label)}` },
-    { label: t('retinal.breadcrumb.job', { seq }), to: null },
   ]
-}))
+})
 
 /**
  * 2026-06-22 round 9 follow-up — German status + task labels.
@@ -1038,14 +1036,9 @@ onBeforeUnmount(stopInflightPoll)
 </script>
 
 <template>
-  <div class="flex">
-    <SideRail>
-      <RouterLink to="/" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        {{ t('retinal.nav.home') }}
-      </RouterLink>
-    </SideRail>
+  <div>
 
-    <div class="flex-1 min-w-0 px-8 py-7">
+    <div class="max-w-7xl min-w-0 px-8 py-7 mx-auto">
       <div class="max-w-[1200px] mx-auto">
         <p v-if="(isLoading || resolving) && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
           {{ t('retinal.loading') }}
@@ -1060,6 +1053,7 @@ onBeforeUnmount(stopInflightPoll)
         </div>
 
         <template v-else-if="job">
+          <PageHeader v-if="trail.length" :trail="trail" />
           <!-- ════════ Page header ════════ -->
           <div class="flex items-start justify-between gap-6 mb-5">
             <div class="min-w-0">

@@ -20,7 +20,7 @@ export const dataManagerDe: ManualChapter = {
       steps: [
         'Nach der Anmeldung (und der Auswahl einer Studie) landen Sie auf dem Start-Dashboard.',
         'Sehen Sie die Übersicht der Ihnen zugewiesenen Notizen und Diskrepanzen durch.',
-        'Nutzen Sie die Seitennavigation oder die Dashboard-Links, um eine Aufgabe zu beginnen — die meiste Aufbauarbeit beginnt bei **Studienaufbau** (Build Study).',
+        'Nutzen Sie die obere Leiste oder die Dashboard-Karten, um eine Aufgabe zu beginnen — die meiste Aufbauarbeit beginnt bei **Studienaufbau** (Build Study), dessen Seitenleiste alle Aufbau-Schritte auflistet.',
       ],
       notes: [
         'Die obere Leiste zeigt die aktive Studie/den aktiven Standort, Ihren Namen mit einem farbcodierten **Rollen-Chip**, die Sprachanzeige und **Abmelden**.',
@@ -32,11 +32,11 @@ export const dataManagerDe: ManualChapter = {
       shot: 'data-manager/01-subject-matrix.png',
       goal: 'Aufnahme und Status je Visite über alle Teilnehmenden der Studie hinweg überprüfen.',
       steps: [
-        'Öffnen Sie **Studienteilnehmer** (Subject Matrix) über die Seitennavigation.',
+        'Öffnen Sie **Studienteilnehmer** (Subject Matrix) über die Startseite.',
         'Jede Zeile ist eine teilnehmende Person; die Spalten zeigen **Geschlecht**, **Studienauge** (OD/OS/OU), **Gruppe**, **Aufnahmedatum**, eine Zelle je Visite sowie eine **Signiert**-Anzeige.',
         'Filtern Sie über das Suchfeld oder die Status-Chips, oder setzen Sie das Häkchen bei **nur mit Rückfragen**, um Teilnehmende mit offenen Diskrepanzen zu finden.',
         'Bei Studien mit vielen Visiten nutzen Sie die Pfeilschaltflächen oder **Zur aktuellsten Visite springen**, um durch die Visitenspalten zu scrollen; die Teilnehmerspalte bleibt links fixiert.',
-        'Öffnen Sie **Studien-Statistik** (study metrics) über die Seitenleiste für aggregierte Zählungen.',
+        'Öffnen Sie **Studien-Statistik** (study metrics) über die Schaltfläche neben **Export** für aggregierte Zählungen.',
       ],
       notes: [
         'Ein rotes Abzeichen auf einer Visitenzelle ist die Anzahl der **offenen Rückfragen** (open queries) zu dieser Visite — Ihr Hinweis, in Rückfragen & Diskrepanzen nachzufassen.',

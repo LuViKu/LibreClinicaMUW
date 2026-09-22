@@ -222,7 +222,7 @@ const rootClass = computed(() =>
   <div v-if="store.isOpen && store.schema" :class="rootClass" role="dialog" aria-modal="true">
     <div
       :class="props.asOverlay
-        ? 'mx-auto my-6 max-w-3xl bg-white border border-slate-200 rounded-muw shadow-xl'
+        ? 'mx-auto my-6 max-w-3xl xl:max-w-5xl 2xl:max-w-7xl bg-white border border-slate-200 rounded-muw shadow-xl'
         : 'bg-white border border-slate-200 rounded-muw'"
       data-testid="crf-preview-root"
     >

@@ -18,7 +18,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/01-subject-matrix.png',
       goal: 'Sehen Sie auf einen Blick alle Teilnehmenden der aktiven Studie und deren Fortschritt je Visite.',
       steps: [
-        'Öffnen Sie **Studienteilnehmer** (Subject Matrix) über die Startseite oder die Seitenleiste (`/subjects`).',
+        'Öffnen Sie **Studienteilnehmer** (Subject Matrix) über die Startseite oder die obere Leiste (`/subjects`).',
         'Verwenden Sie das Suchfeld und die Filter-Chips (*all*, *today*, *ready-to-sign*, *open-events*, *all-events-complete*, *signed*), um die Liste einzugrenzen; aktivieren Sie **Nur mit Queries**, um nur Teilnehmende mit offenen Rückfragen anzuzeigen.',
         'Lesen Sie jede Zeile: die fixierte linke Spalte ist die **Subject ID**; die scrollbaren Spalten zeigen eine Status-Plakette je Visite sowie Geschlecht, Studienauge (OD/OS/OU), Gruppe und Einschlussdatum.',
         'Verwenden Sie die Visiten-Steuerung **V1 … VN** (Erste / Vorherige / Nächste / Letzte) oberhalb der Tabelle, um durch die Visiten zu blättern.',
@@ -34,7 +34,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/02-manage-users.png',
       goal: 'Konten anlegen, bearbeiten, deaktivieren/wiederherstellen, entsperren und Passwörter zurücksetzen sowie studienbezogene Rollen zuweisen.',
       steps: [
-        'Öffnen Sie **Nutzerverwaltung** (Manage Users) über die Startseite oder die Seitenleiste (`/manage-users`).',
+        'Öffnen Sie **Nutzerverwaltung** (Manage Users) über die Startseite oder die obere Leiste (`/manage-users`).',
         'Um eine Person hinzuzufügen, klicken Sie auf **Nutzer/-in einladen** (Invite User) und füllen Sie den Einladungsdialog aus; bei Erfolg wird ein Einmalpasswort inline angezeigt — kopieren Sie es und übergeben Sie es über einen sicheren Kanal.',
         'Filtern Sie die Tabelle über das Suchfeld, die Auswahlmenüs **Rolle** und **Auth** sowie das Kontrollkästchen **Nur aktive** (only active).',
         'Nutzen Sie in jeder Zeile die Inline-Aktionen: **Bearbeiten** (Edit), **Deaktivieren / Reaktivieren** (Disable / Restore), **Passwort zurücksetzen** (Reset Password) und **Entsperren** (Unlock) — nur für aktive *Lokal*-Konten angeboten — sowie **Rollen** (Roles).',
@@ -68,7 +68,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/04-build-study.png',
       goal: 'Verfolgen Sie die Checkliste zum Studienaufbau und führen Sie jede Aufbauaufgabe zum Abschluss.',
       steps: [
-        'Öffnen Sie **Studienaufbau** (Build Study) über die Startseite oder die Seitenleiste (`/build-study`).',
+        'Öffnen Sie **Studienaufbau** (Build Study) über die Startseite oder die obere Leiste (`/build-study`).',
         'Lesen Sie die Fortschrittskarte (abgeschlossene Aufgaben, Prozentsatz, Anzahl der Standorte und der eingeschlossenen Teilnehmenden).',
         'Arbeiten Sie die Aufgabenkacheln ab — *Create Study*, *CRF Library*, *Event Definitions*, *Sites*, *Group Classes*, *Rules*, *Manage Users* — jeweils mit einer Status-Plakette. Klicken Sie auf **→ Weiter**, um zu der jeweiligen Aufgabe zu springen.',
         'Klicken Sie bei optionalen Aufgaben mit Nullzähler auf **Als abgeschlossen markieren** (Mark as complete), um diese zu bestätigen.',
@@ -161,7 +161,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/10-datasets.png',
       goal: 'Erstellen Sie wiederverwendbare Export-Datensätze und laden Sie Studiendaten im gewünschten Format herunter.',
       steps: [
-        'Öffnen Sie **Datenexport** (Data Export) über die Startseite oder die Seitenleiste (`/datasets`).',
+        'Öffnen Sie **Datenexport** (Data Export) über die Startseite oder die obere Leiste (`/datasets`).',
         'Klicken Sie für einen schnellen Auszug auf **Schnell-ODM-Export**. Klicken Sie für einen maßgeschneiderten Auszug auf **Neuer Datensatz** und füllen Sie den Datensatz-Assistenten aus.',
         'Erweitern Sie in der Datensatz-Tabelle **View files**, **Open wizard**, um einen Datensatz zu bearbeiten (deaktiviert, sobald er ausgeführt wurde), oder **Remove** / **Restore**, um seinen Lebenszyklus zu verwalten.',
         'Klicken Sie auf **Export now** und wählen Sie ein Format — *odm*, *csv*, *tsv*, *excel*, *sas* oder *spss* — und laden Sie dann die erzeugte Datei herunter.',
@@ -176,7 +176,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/11-import-crf-data.png',
       goal: 'Laden Sie CRF-Daten aus einer ODM-XML-Datei in einem geführten, vierstufigen Assistenten gesammelt ein.',
       steps: [
-        'Öffnen Sie **CRF-Daten importieren** über die Startseite oder die Seitenleiste (`/import-crf-data`).',
+        'Öffnen Sie **CRF-Daten importieren** über die Startseite (`/import-crf-data`).',
         '**Hochladen** (Upload): Ziehen Sie eine `.xml`-Datei in die Ablagezone (oder durchsuchen Sie das Dateisystem) und klicken Sie dann auf **Weiter**.',
         '**Mappen** (Map): Prüfen Sie die erkannten Anzahlen von Teilnehmenden, Visiten, CRFs und Zeilen und fahren Sie dann fort.',
         '**Vorschau & Auflösung** (Preview & Resolve): Prüfen Sie die Statuskarten (*Ready*, *Overwrite*, *Warning*, *Error*) und die zeilenbezogene Tabelle. Lösen Sie Probleme, wählen Sie einen Überschreibmodus und — falls Zeilen ersetzt werden — geben Sie einen **Reason for change** ein, bevor Sie fortfahren.',
@@ -271,15 +271,16 @@ export const administratorDe: ManualChapter = {
       ],
     },
     {
-      id: 'ad-parked', num: '18', title: 'Geparkte Scans', deutsch: 'Parked Scans (cross-study retinal jobs)', route: '/retinal/parked',
+      id: 'ad-inbox', num: '18', title: 'Eingang', deutsch: 'Ingest inbox (all inbound files)', route: '/ingest-inbox',
       roles: ['administrator'],
-      shot: 'administrator/22-parked-scans.png',
-      goal: 'Prüfen Sie retinale Inferenz-Jobs, die ohne Visite hochgeladen wurden und auf die Zuordnung zu einer teilnehmenden Person warten.',
+      shot: 'administrator/22-ingest-inbox.png',
+      goal: 'Prüfen Sie Dateien, die von einer Kamera, der Upload-Seite oder per C-STORE eingegangen sind und noch keiner Visite zugeordnet wurden.',
       steps: [
-        'Öffnen Sie **Geparkte Scans** (`/retinal/parked`) — eine ausschließlich Systemadministrator/-innen vorbehaltene, studienübergreifende Übersicht.',
-        'Jede Zeile zeigt den **Job**, die **PatientId**, das **Auge** (eye), den **Task** und den Zeitpunkt **Hochgeladen** (upload time). Wählen Sie Zeilen aus und verwenden Sie die Zeilen-**Aktion**, um einen geparkten Scan einer Visite einer teilnehmenden Person zuzuordnen, oder **Neu laden**, um zu aktualisieren.',
+        'Öffnen Sie den **Eingang** (`/ingest-inbox`) — die studienübergreifende Übersicht aller eingegangenen Dateien: OCT-Scans, DICOM-Bilder, Fundusfotos.',
+        'Filtern Sie mit den Chips nach Art (**OCT-Scan**, **DICOM-Bild**, **Fundusbild**, **Andere Datei**), nach Status oder nach einem Kennungs-/Dateinamen-Fragment. Jede Karte zeigt Vorschau, Kennungs-Hinweis, Auge, Aufnahmedatum und Herkunft.',
+        '**Zuordnen …** ordnet eine Karte (oder eine Auswahl) der Visite einer teilnehmenden Person zu; **Verwerfen** markiert eine Datei mit Begründung als keine Studiendaten. **Hochladen** öffnet den Uploader für eigene Dateien.',
       ],
-      notes: ['Ausschließlich Administrator/-innen vorbehalten. Geparkte Jobs haben noch keine Verknüpfung zu einer Studienteilnehmerin/einem Studienteilnehmer, weshalb sie hier statt auf einer probandenbezogenen Seite erscheinen.'],
+      notes: ['Studienleitung, Prüfärztin/-arzt und Administrator/-in dürfen zuordnen. Eine Zuordnung setzt in der Visite das Häkchen „durchgeführt“ für die Modalität; das Aufheben nimmt es zurück. Verworfene Dateien löscht die Aufbewahrungsroutine nach 30 Tagen.'],
     },
   ],
 }

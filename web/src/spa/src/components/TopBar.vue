@@ -1,17 +1,31 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 
 import type { UserRole } from '@/types/auth'
 
-interface BreadcrumbItem {
+/** One destination in the primary navigation. */
+export interface NavItem {
+  id: string
+  to: string
   label: string
-  to?: string
 }
 
 interface Props {
-  /** Breadcrumb trail rendered after the brand lockup. */
-  breadcrumb?: BreadcrumbItem[]
+  /**
+   * The active study, as a chip on the right. It used to be the root crumb
+   * of a breadcrumb that sat directly after the primary navigation and read
+   * as its sixth item; as a chip beside the user it is what it is — the
+   * context the session is bound to — and links to the study picker.
+   */
+  studyName?: string
+  /** Where the study chip leads; omit to render it as plain text. */
+  studyTo?: string
+  /** Version and build stamp, shown at the foot of the profile menu. */
+  version?: string
+  buildHash?: string
+  buildDate?: string
   /** Active user's display name. */
   userName?: string
   /**
@@ -25,6 +39,13 @@ interface Props {
   userRoles?: UserRole[]
   /** Single-role projection — kept for back-compat with legacy callers. */
   userRole?: UserRole | null
+  /**
+   * The role's main destinations, rendered inline on wide screens and
+   * inside the profile popover on narrow ones. Until this existed the home
+   * page was the only way between workflows: every cross-workflow move was
+   * home → card → view → home.
+   */
+  navItems?: NavItem[]
   /** Optional logout handler — surfaced inside the popover. */
   onLogout?: () => void
   /**
@@ -37,7 +58,12 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  breadcrumb: () => [],
+  studyName: '',
+  studyTo: undefined,
+  version: '',
+  buildHash: '',
+  buildDate: '',
+  navItems: () => [],
   userName: '',
   userRoles: () => [],
   userRole: null,
@@ -46,10 +72,22 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
+const route = useRoute()
 
-/* 2026-06-21 — nav.modules consumer removed from TopBar; modules are
-   now reached via the subject-detail.workspace CTA only. The slot id
-   stays in the contract for future surfaces. */
+/**
+ * Which nav item is the current one. Prefix matching, except for the home
+ * link — "/" is a prefix of everything, and a home link that is always
+ * highlighted tells the operator nothing.
+ */
+function isCurrent(item: NavItem): boolean {
+  if (item.to === '/') return route.path === '/'
+  return route.path === item.to || route.path.startsWith(item.to + '/')
+}
+
+/* 2026-06-21 — the module nav consumer was removed from TopBar. P3.0
+   retired the orphaned slot with it: modules now reach the operator
+   through the subject-detail.workspace CTA and a landing-page card
+   (home.cards). */
 
 /**
  * Coalesced role set — prefer the explicit multi-role list; fall
@@ -222,48 +260,68 @@ function onReportBugClick() {
         </span>
       </RouterLink>
 
-      <nav v-if="breadcrumb.length" class="flex items-center gap-1.5 text-xs text-slate-500">
-        <template v-for="(item, idx) in breadcrumb" :key="idx">
-          <RouterLink v-if="item.to" :to="item.to" class="hover:text-slate-900 font-medium text-slate-700">
-            {{ item.label }}
-          </RouterLink>
-          <span v-else class="text-slate-900 font-medium">{{ item.label }}</span>
-          <svg v-if="idx < breadcrumb.length - 1" class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </template>
+      <nav
+        v-if="navItems.length"
+        :aria-label="t('topBar.primaryNav')"
+        class="hidden lg:flex items-center gap-0.5 mr-5"
+        data-testid="topbar-primary-nav"
+      >
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.id"
+          :to="item.to"
+          class="px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap"
+          :class="isCurrent(item) ? 'bg-muw-blue-50 text-muw-blue' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'"
+          :aria-current="isCurrent(item) ? 'page' : undefined"
+          :data-testid="`topbar-nav-${item.id}`"
+        >
+          {{ item.label }}
+        </RouterLink>
       </nav>
 
-      <!-- Modules are reached via the subject-detail "Open workspace" CTA,
-           NOT the top-nav. The nav.modules slot id stays in the contract for
-           future use; the host no longer mounts entries here. -->
+      <!-- Modules are reached via the subject-detail "Open workspace" CTA
+           and the landing-page card (home.cards), NOT the top-nav. -->
 
-      <!-- Phase E hardening B — sysadmin-only entry-point to the
-           system-wide audit trail. Gated on Administrator role
-           (sysadmin / techadmin both project to Administrator in
-           UsersApiController.list); the same role gate the
-           backend endpoint enforces. -->
-      <RouterLink
-        v-if="primaryRole === 'Administrator'"
-        to="/system/audit-log"
-        class="ml-auto mr-2 px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100"
-        data-testid="topbar-system-audit-link"
-      >
-        {{ t('topBar.systemAuditLog') }}
-      </RouterLink>
-      <!-- Administrator-only entry-point to the cross-study parked-scans admin
-           view. Parked retinal jobs have no study-subject linkage, so they
-           can't surface on a per-subject page. -->
-      <RouterLink
-        v-if="primaryRole === 'Administrator'"
-        to="/retinal/parked"
-        class="mr-2 px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100"
-        data-testid="topbar-retinal-parked-link"
-      >
-        {{ t('topBar.retinalParked') }}
-      </RouterLink>
+      <div class="ml-auto flex items-center gap-1.5 min-w-0">
+        <!-- The study the session is bound to. A link when a picker exists,
+             so switching studies has an affordance on every page. -->
+        <RouterLink
+          v-if="studyName && studyTo"
+          :to="studyTo"
+          class="hidden sm:inline-flex items-center gap-1.5 max-w-[220px] px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-700 hover:bg-slate-200"
+          :title="t('topBar.switchStudy')"
+          data-testid="topbar-study"
+        >
+          <svg class="w-3.5 h-3.5 text-slate-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M4 20h16M6 20V8l6-4 6 4v12M10 20v-5h4v5" />
+          </svg>
+          <span class="sr-only">{{ t('topBar.study') }}: </span>
+          <span class="truncate">{{ studyName }}</span>
+        </RouterLink>
+        <span
+          v-else-if="studyName"
+          class="hidden sm:inline-flex items-center gap-1.5 max-w-[220px] px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-700"
+          data-testid="topbar-study"
+        >
+          <span class="sr-only">{{ t('topBar.study') }}: </span>
+          <span class="truncate">{{ studyName }}</span>
+        </span>
 
-      <div v-if="userName" class="relative" :class="primaryRole === 'Administrator' ? '' : 'ml-auto'">
+        <!-- Phase E hardening B — sysadmin-only entry-point to the
+             system-wide audit trail. Gated on Administrator role
+             (sysadmin / techadmin both project to Administrator in
+             UsersApiController.list); the same role gate the
+             backend endpoint enforces. -->
+        <RouterLink
+          v-if="primaryRole === 'Administrator'"
+          to="/system/audit-log"
+          class="px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100 whitespace-nowrap"
+          data-testid="topbar-system-audit-link"
+        >
+          {{ t('topBar.systemAuditLog') }}
+        </RouterLink>
+
+      <div v-if="userName" class="relative">
         <button
           ref="triggerEl"
           type="button"
@@ -326,6 +384,23 @@ function onReportBugClick() {
             </li>
           </ul>
 
+          <nav
+            v-if="navItems.length"
+            :aria-label="t('topBar.primaryNav')"
+            class="lg:hidden border-t border-slate-200 mt-1 pt-1.5 px-2"
+          >
+            <RouterLink
+              v-for="item in navItems"
+              :key="`popover-${item.id}`"
+              :to="item.to"
+              class="block px-2 py-1.5 rounded-md hover:bg-slate-100 text-slate-700"
+              :class="isCurrent(item) ? 'font-medium text-muw-blue' : ''"
+              @click="closePopover"
+            >
+              {{ item.label }}
+            </RouterLink>
+          </nav>
+
           <div
             v-if="hasReportBug"
             class="border-t border-slate-200 mt-1 pt-1.5 px-2"
@@ -375,7 +450,21 @@ function onReportBugClick() {
               {{ t('topBar.profile.signOut') }}
             </button>
           </div>
+
+          <!-- Version + build, moved here from the side rail's footer so a
+               page without a rail is not a page without a version. -->
+          <div
+            v-if="version"
+            class="border-t border-slate-200 mt-1 pt-2 px-3 pb-1 text-[10px] text-slate-400"
+            data-testid="topbar-version"
+          >
+            <div>{{ t('topBar.profile.version', { version }) }}</div>
+            <div v-if="buildHash" style="font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;">
+              {{ t('topBar.profile.build', { date: buildDate, hash: buildHash }) }}
+            </div>
+          </div>
         </div>
+      </div>
       </div>
     </div>
   </header>
