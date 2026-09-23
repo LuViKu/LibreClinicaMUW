@@ -2641,7 +2641,9 @@
       "status": {
         "stopped": "Abgebrochen",
         "skipped": "Übersprungen"
-      }
+      },
+      "timeStart": "Uhrzeit",
+      "timeInvalid": "Uhrzeit im Format HH:MM (24 Stunden) angeben."
     },
     "eyeTransition": {
       "title": "{eye} bei {subjectLabel} in andere Studie verlagern",
@@ -2800,15 +2802,18 @@
       "eventDefinition": "Visite",
       "dateStarted": "Startdatum",
       "location": "Ort",
-      "intervalWeeks": "Nächstes Intervall (Wochen)"
+      "intervalWeeks": "Nächstes Intervall (Wochen)",
+      "timeStarted": "Uhrzeit"
     },
     "placeholder": {
       "eventDefinition": "Visite auswählen…",
       "location": "Optional",
-      "intervalWeeks": "z. B. 8"
+      "intervalWeeks": "z. B. 8",
+      "timeStarted": "HH:MM"
     },
     "help": {
-      "intervalWeeks": "Optional — für Treat-and-Extend-Protokolle. Das nächste Visiten-Soll-Datum wird automatisch errechnet."
+      "intervalWeeks": "Optional — für Treat-and-Extend-Protokolle. Das nächste Visiten-Soll-Datum wird automatisch errechnet.",
+      "timeStarted": "Optional. Erscheint in der Worklist der Kamera und bestimmt die Reihenfolge; ohne Uhrzeit gilt die Visite nur für den Tag."
     },
     "submit": "Planen",
     "empty": "Für diese Studie sind keine Visiten verfügbar.",
@@ -2817,7 +2822,8 @@
       "dateRequired": "Startdatum ist erforderlich.",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "intervalInvalid": "Intervall muss eine ganze Zahl ≥ 0 sein.",
-      "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
+      "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen.",
+      "timeInvalid": "Uhrzeit im Format HH:MM (24 Stunden) angeben."
     }
   },
   "ophth": {

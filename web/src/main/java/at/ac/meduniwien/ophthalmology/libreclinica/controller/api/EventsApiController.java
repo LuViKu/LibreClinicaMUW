@@ -121,6 +121,49 @@ public class EventsApiController {
     private static final Logger LOG = LoggerFactory.getLogger(EventsApiController.class);
     private static final SimpleDateFormat ISO_DATE = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
 
+    // A visit's start time, optional. The data model always had it
+    // (study_event.date_start is a timestamp; start_time_flag says whether the
+    // time part means anything) and the old JSP scheduler asked for it; the
+    // SPA dialog only ever sent a date, so every visit was midnight - which is
+    // what a camera worklist then shows as "00:00" for the whole day.
+    private static final SimpleDateFormat ISO_DATE_TIME = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT);
+    private static final SimpleDateFormat HH_MM = new SimpleDateFormat("HH:mm", Locale.ROOT);
+    private static final java.util.regex.Pattern HH_MM_RE = java.util.regex.Pattern.compile("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+
+    /** {@code HH:mm} when the visit's time is meaningful, else null. */
+    static String timeStartedOf(StudyEventBean ev) {
+        if (ev == null || ev.getDateStarted() == null || !ev.getStartTimeFlag()) return null;
+        synchronized (HH_MM) { return HH_MM.format(ev.getDateStarted()); }
+    }
+
+    /** Null when absent or blank; the value when well-formed; throws otherwise. */
+    private static String validTimeOrNull(String timeStarted) {
+        if (timeStarted == null || timeStarted.isBlank()) return null;
+        String t = timeStarted.trim();
+        if (!HH_MM_RE.matcher(t).matches()) {
+            throw new IllegalArgumentException("'timeStarted' must be HH:mm (24h); got '" + timeStarted + "'");
+        }
+        return t;
+    }
+
+    /** {@link #parseStart} for the update lambda, which cannot throw checked exceptions; inputs are pre-validated. */
+    private static Date parseStartQuietly(String dateStarted, String timeOrNull) {
+        try { return parseStart(dateStarted, timeOrNull); }
+        catch (java.text.ParseException e) { throw new IllegalStateException(e); }
+    }
+
+    /** What the audit row records for a start: the date, plus the time when it is meaningful. */
+    private static String startForAudit(Date start, boolean timeMeaningful) {
+        if (start == null) return "";
+        synchronized (ISO_DATE_TIME) { return timeMeaningful ? ISO_DATE_TIME.format(start) : ISO_DATE.format(start); }
+    }
+
+    /** The start as a Date: midnight when no time, the given time otherwise. */
+    private static Date parseStart(String dateStarted, String timeOrNull) throws java.text.ParseException {
+        if (timeOrNull == null) { synchronized (ISO_DATE) { return ISO_DATE.parse(dateStarted); } }
+        synchronized (ISO_DATE_TIME) { return ISO_DATE_TIME.parse(dateStarted + " " + timeOrNull); }
+    }
+
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final VisitIntervalCalculator visitIntervalCalculator;
@@ -622,7 +665,8 @@ public class EventsApiController {
                         status,
                         def.isRepeating(),
                         /* scheduledFor */ null,
-                        /* scheduledIntervalDays */ null));
+                        /* scheduledIntervalDays */ null,
+                        timeStartedOf(ev)));
             }
         }
 
@@ -664,13 +708,20 @@ public class EventsApiController {
             return ResponseEntity.badRequest().body(Map.of("message", "'dateStarted' is required (YYYY-MM-DD)"));
         }
 
+        String timeStarted;
+        try {
+            timeStarted = validTimeOrNull(body.timeStarted());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
         Date startDate;
         try {
-            startDate = ISO_DATE.parse(body.dateStarted());
+            startDate = parseStart(body.dateStarted(), timeStarted);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "'dateStarted' must be YYYY-MM-DD; got '" + body.dateStarted() + "'"));
         }
+        final boolean hasTimeRef = timeStarted != null;
 
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
@@ -738,6 +789,7 @@ public class EventsApiController {
         ev.setStudyEventDefinitionId(def.getId());
         ev.setStudySubjectId(ss.getId());
         ev.setDateStarted(startDate);
+        ev.setStartTimeFlag(hasTimeRef);
         ev.setLocation(body.location() == null ? "" : body.location());
         ev.setSubjectEventStatus(SubjectEventStatus.SCHEDULED);
         ev.setSampleOrdinal(nextOrdinal);
@@ -817,7 +869,8 @@ public class EventsApiController {
                                 "scheduled",
                                 defRef.isRepeating(),
                                 scheduledForDate == null ? null : scheduledForDate.toString(),
-                                bodyRef.scheduledIntervalDays());
+                                bodyRef.scheduledIntervalDays(),
+                                timeStartedOf(created));
 
                         return ResponseEntity.status(201).body(dto);
                     });
@@ -896,19 +949,36 @@ public class EventsApiController {
         }
         // Date validation — pre-parse so we can write back with the
         // same SimpleDateFormat the rest of the controller uses.
+        // timeStarted: absent = leave the time alone; "" = clear it (back to a
+        // date-only visit); HH:mm = set it. A time with no date in the same
+        // request applies to the visit's existing date.
+        String newTime = null;
+        boolean clearTime = false;
+        if (body.timeStarted() != null) {
+            if (body.timeStarted().isBlank()) {
+                clearTime = true;
+            } else {
+                try { newTime = validTimeOrNull(body.timeStarted()); }
+                catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+                }
+            }
+        }
         Date newStart = null;
         boolean clearStart = false;
         if (body.dateStarted() != null) {
             if (body.dateStarted().isBlank()) {
                 clearStart = true;
             } else {
-                try { newStart = ISO_DATE.parse(body.dateStarted()); }
+                try { newStart = parseStart(body.dateStarted(), newTime); }
                 catch (Exception e) {
                     return ResponseEntity.badRequest().body(Map.of("message",
                             "'dateStarted' must be YYYY-MM-DD; got '" + body.dateStarted() + "'"));
                 }
             }
         }
+        final String newTimeRef = newTime;
+        final boolean clearTimeRef = clearTime;
         Date newEnd = null;
         boolean clearEnd = false;
         if (body.dateEnded() != null) {
@@ -1016,15 +1086,28 @@ public class EventsApiController {
                         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
                         java.util.Date now = new java.util.Date();
 
-                        if (bodyRef.dateStarted() != null) {
+                        if (bodyRef.dateStarted() != null || bodyRef.timeStarted() != null) {
                             Date oldStart = evRef.getDateStarted();
-                            Date target = clearStartRef ? null : newStartRef;
-                            if (!java.util.Objects.equals(oldStart, target)) {
+                            boolean oldFlag = evRef.getStartTimeFlag();
+                            Date target;
+                            boolean targetFlag;
+                            if (bodyRef.dateStarted() != null) {
+                                target = clearStartRef ? null : newStartRef;
+                                targetFlag = target != null && newTimeRef != null;
+                            } else if (oldStart == null) {
+                                target = null; targetFlag = false;   // a time without a date to put it on
+                            } else if (clearTimeRef) {
+                                target = parseStartQuietly(ISO_DATE.format(oldStart), null); targetFlag = false;
+                            } else {
+                                target = parseStartQuietly(ISO_DATE.format(oldStart), newTimeRef); targetFlag = true;
+                            }
+                            if (!java.util.Objects.equals(oldStart, target) || oldFlag != targetFlag) {
                                 evRef.setDateStarted(target);
+                                evRef.setStartTimeFlag(targetFlag);
                                 writeEventFieldAudit(auditDAO, ubRef, studyRef, ssRef, evRef,
                                         "date_start",
-                                        oldStart == null ? "" : ISO_DATE.format(oldStart),
-                                        target == null ? "" : ISO_DATE.format(target));
+                                        startForAudit(oldStart, oldFlag),
+                                        startForAudit(target, targetFlag));
                             }
                         }
                         if (bodyRef.dateEnded() != null) {
@@ -1081,7 +1164,8 @@ public class EventsApiController {
                                 statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
                                 def != null && def.isRepeating(),
                                 /* scheduledFor */ null,
-                                /* scheduledIntervalDays */ null);
+                                /* scheduledIntervalDays */ null,
+                                timeStartedOf(refreshed));
                         return ResponseEntity.ok(dto);
                     });
         } catch (Exception e) {
@@ -1651,7 +1735,8 @@ public class EventsApiController {
                 statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
                 def != null && def.isRepeating(),
                 /* scheduledFor */ null,
-                /* scheduledIntervalDays */ null);
+                /* scheduledIntervalDays */ null,
+                timeStartedOf(refreshed));
         return ResponseEntity.ok(dto);
     }
 
@@ -1995,7 +2080,9 @@ public class EventsApiController {
             String eventDefinitionOid,
             String dateStarted,
             String location,
-            Integer scheduledIntervalDays
+            Integer scheduledIntervalDays,
+            /** Optional {@code HH:mm}; absent or blank means a date-only visit. */
+            String timeStarted
     ) {}
 
     /**

@@ -4087,6 +4087,7 @@ export interface components {
         };
         UpdateEventRequest: {
             dateStarted?: string;
+            timeStarted?: string;
             dateEnded?: string;
             location?: string;
             status?: string;
@@ -4106,6 +4107,7 @@ export interface components {
             scheduledFor?: string;
             /** Format: int32 */
             scheduledIntervalDays?: number;
+            timeStarted?: string;
         };
         CreateDatasetRequest: {
             name?: string;
@@ -4703,6 +4705,7 @@ export interface components {
             subjectId?: string;
             eventDefinitionOid?: string;
             dateStarted?: string;
+            timeStarted?: string;
             location?: string;
             /** Format: int32 */
             scheduledIntervalDays?: number;
