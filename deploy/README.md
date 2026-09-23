@@ -362,6 +362,53 @@ local decision it does not make for you.
 If script execution is blocked on the clinic PC by policy, the bridge needs
 to become a signed executable; that is the upgrade path, not a workaround.
 
+### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
+
+The Remidio FOP has no DICOM and nothing can be pushed to it; its app uploads
+every capture to Remidio's cloud. Instead of the photographer re-uploading each
+JPEG through the browser page, the app VM lists that cloud every couple of
+minutes and files new images into the reconciliation inbox itself
+(`source_kind = remidio`). An image binds to its visit automatically when the
+**MRN typed into the Remidio app is the study subject label** and that subject
+has exactly one visit on the exam date; otherwise it waits in the inbox with
+the label and date pre-filled. Name, date of birth and sex are read from the
+API and discarded.
+
+What you need from Remidio (once): the **client identification token** they
+issue to integrators (a JWT; the matching `clientName` is `PACS_GATEWAY`), a
+**dedicated Remidio account** for the integration (its `getAuthToken` call
+invalidates any token another consumer of the same account holds), and the
+site's **custom identifier**, which you set yourself in the Remidio dashboard
+under the site's settings (ours: `muw_vienna`). The backend for our
+organisation is the **Germany** host below — not the India host the public
+docs show.
+
+```properties
+# datainfo.properties on the app VM
+core.remidio.pull.enabled=true
+core.remidio.baseUrl=https://remidio-backend-germany.appspot.com
+core.remidio.clientName=PACS_GATEWAY
+core.remidio.clientIdentificationToken=<the JWT from Remidio>
+core.remidio.email=<the integration account>
+core.remidio.password=<its password>
+core.remidio.siteCustomId=muw_vienna
+core.remidio.pull.intervalSeconds=120
+core.remidio.pull.lookbackDays=3
+```
+
+Restart the app (the scheduler reads the switches on every tick, but the
+properties file is read at boot). The first pass lists the last three days and
+files whatever is not in the inbox yet; from then on the log shows one line per
+pass that found something (`Remidio pull 2026-09-20..2026-09-23: exams=… new=…
+bound=… unbound=…`). An unhandled HTTP 500 from every endpoint means the client
+name is wrong; a 404 *"Site Custom ID … cannot be found"* means the custom
+identifier is not set in the dashboard. Before enabling, the chain can be
+walked by hand with `deploy/remidio/remidio-probe.sh` (reads the same values
+from a local env file; prints tokens masked).
+
+The app VM needs outbound HTTPS to `*.appspot.com` (the gateway) and
+`storage.googleapis.com` (the signed image links, valid for one hour).
+
 ### Rebuild a single image without cutting a release
 
 For ad-hoc rebuilds (e.g. dep CVE refresh on the sidecar, no app change):

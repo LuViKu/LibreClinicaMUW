@@ -361,7 +361,7 @@ public final class IngestBindService {
                 LocalDate fileDate = acq == null ? null : acq.toLocalDate();
                 LocalDate visitDate = visit == null ? null : visit.toLocalDate();
 
-                boolean trustworthy = IngestItemRepository.ACQ_SOURCE_FILE.equals(source);
+                boolean trustworthy = IngestItemRepository.isTrustedAcquisitionSource(source);
                 if (!trustworthy || fileDate == null || visitDate == null) {
                     return new DateCheck(DateCheck.VERDICT_UNVERIFIED, trustworthy ? fileDate : null,
                             visitDate, source);
