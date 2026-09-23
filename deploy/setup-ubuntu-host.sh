@@ -804,6 +804,14 @@ section "Retinal cluster monitor (cron)"
 # do not collide, and cron still gets the output for mail.
 MONITOR_CRON=/etc/cron.d/libreclinica-retinal-monitor
 DATAINFO="${INSTALL_PREFIX}/config/datainfo.properties"
+# The beta.9 host had the probes in root's crontab, by hand, writing to the
+# old unreadable path. Those would run alongside the cron.d entries and
+# double every probe, so any root-crontab line that runs the monitor is
+# dropped here; cron.d is the single owner from now on.
+if crontab -l 2>/dev/null | grep -q 'check-retinal-cluster\.sh'; then
+  log "Removing legacy root-crontab entries for check-retinal-cluster.sh (cron.d owns the monitor now)"
+  crontab -l 2>/dev/null | grep -v 'check-retinal-cluster\.sh' | crontab - || true
+fi
 nodes="$(sed -n 's/^core\.retinalInference\.clusterNodes=//p' "$DATAINFO" 2>/dev/null | tail -1 | tr -d '[:space:]')"
 mlog="$(sed -n 's/^core\.retinalInference\.clusterMonitorLog=//p' "$DATAINFO" 2>/dev/null | tail -1 | tr -d '[:space:]')"
 if [[ -z "$nodes" ]]; then
