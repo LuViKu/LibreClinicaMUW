@@ -38,8 +38,12 @@ import java.util.Map;
  *       and left in the folder</strong> - no error anywhere, the list simply
  *       never reaches the camera. So this renders one record per subject: a
  *       second visit the same day joins the first record's given-name field
- *       ("Baseline + V1"). Verified 2026-09-23, the day a subject with two
- *       visits stopped the whole list.</li>
+ *       ("Baseline+V1", no spaces). Verified 2026-09-23, the day a subject
+ *       with two visits stopped the whole list.</li>
+ *   <li>The given-name line is split on whitespace into given and middle
+ *       name, and a third word is dropped ("Baseline + V1" came back as
+ *       {@code Baseline^+} with the V1 gone). An event label therefore keeps
+ *       at most two words on the camera; the join above uses no spaces.</li>
  *   <li>An empty (0-byte) file is imported and clears the camera's list;
  *       {@code O} is accepted as a sex value. Both verified on the camera
  *       itself on 2026-09-23.</li>
@@ -135,10 +139,15 @@ final class OptomedWorklistFormat {
     private static void appendRecord(StringBuilder sb, List<ScheduledVisitQuery.ScheduledVisit> group) {
         ScheduledVisitQuery.ScheduledVisit lead = group.get(0);
         String label = ascii(lead.subjectLabel(), "UNKNOWN");
+        // Joined WITHOUT spaces. The Client splits the given-name line on
+        // whitespace into given and middle name and drops anything after the
+        // second word: "Baseline + V1" came back as Baseline^+ with V1 gone.
+        // "Baseline+V1" is one word and survives. (The same rule means an
+        // event label keeps at most two words on the camera.)
         StringBuilder given = new StringBuilder();
         for (ScheduledVisitQuery.ScheduledVisit v : group) {
             String e = ascii(v.eventLabel(), "Visit");
-            if (given.length() > 0) given.append(" + ");
+            if (given.length() > 0) given.append('+');
             given.append(e);
         }
         sb.append(scheduledStart(lead)).append(CRLF)

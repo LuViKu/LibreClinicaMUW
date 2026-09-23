@@ -125,7 +125,9 @@ class OptomedWorklistFormatTest {
         // The Client refuses a file that names one PatientID twice - silently,
         // by leaving it in the folder - and the whole list stops reaching the
         // camera. So a second visit the same day merges into the first record:
-        // both labels in the given-name field, the earlier start kept.
+        // both labels in the given-name field, the earlier start kept. Joined
+        // without spaces: the Client splits that line on whitespace into
+        // given/middle and drops a third word ("Baseline + V1" lost the V1).
         byte[] out = OptomedWorklistFormat.render(List.of(
                 visit("HAE-002", "Baseline", "f", "2026-09-23", LocalTime.of(9, 0)),
                 visit("HAE-002", "V1",       "f", "2026-09-23", LocalTime.of(14, 0)),
@@ -134,7 +136,7 @@ class OptomedWorklistFormatTest {
 
         String expected = "20260923090000\r\n"
                 + "HAE-002\r\n"
-                + "Baseline + V1\r\n"
+                + "Baseline+V1\r\n"
                 + "HAE-002\r\n"
                 + "19700101\r\n"
                 + "F\r\n"

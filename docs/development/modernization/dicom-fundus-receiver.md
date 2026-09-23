@@ -307,8 +307,12 @@ error, it simply leaves the file in the folder, and the camera never gets the
 list. Isolated by dropping three files by hand: unique ids with real times
 imported in 6 s; two records with one id sat unconsumed; unique ids with
 midnight times imported in 0.5 s. The formatter therefore renders one record
-per subject (a second visit's label joins the given-name field: "Baseline +
-V1"), and the bridge warns when a dropped file is still there a minute later.
+per subject (a second visit's label joins the given-name field, without
+spaces: `Baseline+V1`), and the bridge warns when a dropped file is still there
+a minute later. The join has no spaces for a reason found the same hour: the
+Client splits the given-name line on whitespace into given and middle name and
+drops a third word — `Baseline + V1` came back as `Baseline^+` with the `V1`
+gone — so an event label keeps at most two words on the camera.
 A subject with two visits on one day also cannot auto-bind on upload —
 `/resolve` reports it ambiguous — so those images go to the inbox.
 
