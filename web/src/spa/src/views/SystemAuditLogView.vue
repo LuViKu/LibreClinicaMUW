@@ -8,6 +8,7 @@ import TimelineMarker from '@/components/TimelineMarker.vue'
 import TimelineEvent from '@/components/TimelineEvent.vue'
 import DiffCard from '@/components/DiffCard.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import SystemRail from '@/components/SystemRail.vue'
 
 import { useSystemAuditLogStore } from '@/stores/systemAuditLog'
 import type { AuditEvent, AuditEventVariant } from '@/types/audit'
@@ -91,6 +92,9 @@ function hasExpandable(ev: AuditEvent): boolean {
 </script>
 
 <template>
+  <div class="flex">
+    <SystemRail />
+
   <div class="flex-1 px-8 py-6">
     <div class="mb-5">
       <div class="text-xs text-slate-500 mb-1">{{ t('auditLog.systemTrail.subtitle') }}</div>
@@ -197,5 +201,6 @@ function hasExpandable(ev: AuditEvent): boolean {
         </TimelineEvent>
       </template>
     </Timeline>
+  </div>
   </div>
 </template>

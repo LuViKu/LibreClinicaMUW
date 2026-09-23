@@ -10,6 +10,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import FieldLabel from '@/components/FieldLabel.vue'
+import SystemRail from '@/components/SystemRail.vue'
 
 import { apiGet, apiPut, ApiError } from '@/api/client'
 
@@ -80,7 +81,10 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-6 py-6">
+  <div class="flex">
+    <SystemRail />
+
+  <div class="flex-1 max-w-2xl px-8 py-6">
     <div class="flex items-baseline justify-between mb-4">
       <h1 class="text-base font-semibold tracking-tight">{{ t('adminPasswordPolicy.title') }}</h1>
     </div>
@@ -135,5 +139,6 @@ onMounted(load)
         </button>
       </div>
     </form>
+  </div>
   </div>
 </template>

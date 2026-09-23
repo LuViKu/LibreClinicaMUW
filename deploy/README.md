@@ -299,6 +299,69 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    a new feature flag reads as "off" with nothing in the log to explain it.
    The release notes call out when a release adds keys.
 
+### Optomed Lumo over USB — the Optomed Bridge tray app
+
+The Lumo cannot join the WPA2-Enterprise WLAN and the institution permits no
+other WLAN, so the camera never reaches `dicom-scp` directly. It does reach a
+clinic PC over USB through the vendor's **Optomed Client**, and that is what
+`deploy/optomed/OptomedBridge.ps1` bridges:
+
+- every **30 seconds** (configurable, floor 10) it fetches
+  `GET /api/v1/device/optomed/worklist.txt` and drops the body into the
+  Client's watched folder as `worklist_optomed_lumo.txt` (the Client imports
+  it, **replaces** its whole list, pushes it to the camera on the next dock,
+  and deletes the file). Seconds, not minutes: the photographer enrols a
+  subject and walks to the dock expecting it on the camera, so the poll has
+  to beat the walk. Polling this often is cheap - one scoped single-day query
+  on the server, and the file is only dropped when its content changed, so
+  the camera is never re-imported needlessly;
+- every few minutes it uploads whatever the Client pulled off the camera
+  (`Studies\*\DICOM\*.dcm`) through the public upload front door, reading
+  `PatientID` + `StudyDate` out of each header and letting `/resolve` pick the
+  visit, so an image whose label matches exactly one visit that day binds
+  itself; the rest land in the reconciliation inbox with the label as a hint.
+
+It runs at login as a tray icon: enable/disable, fetch or upload now, show or
+hide the Optomed Client, and a settings dialog for the base URL, token, Client
+folder and both intervals. It also keeps the Client itself running (starts it
+if it is not) and minimises the Client's window with its taskbar button
+removed, so the bridge's icon is the only one - the Client has no
+minimise-to-tray of its own. Minimised, never hidden: hiding that window from
+outside blanks its WebView2 for good (learned on the real Client). A
+minimised, buttonless window still hides the Client's own dialogs;
+**Show Optomed Client** is the answer when a firmware or pairing prompt
+needs a click.
+Settings live in `%ProgramData%\LibreClinica\optomed-bridge.json` with the
+token DPAPI-protected to the installing user; the log is next to it.
+
+```powershell
+# On the clinic PC, as the user who runs the Optomed Client. Copy the two
+# scripts from deploy/optomed/ somewhere stable first (they run from there).
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-OptomedBridge.ps1 `
+  -BaseUrl https://ecrf.augen.meduniwien.ac.at/LibreClinica
+# then: right-click the tray icon -> Settings... -> paste the token -> Enabled.
+```
+
+Server side, in `/opt/libreclinica/config/datainfo.properties`:
+
+```
+core.optomed.worklist.enabled=true
+core.optomed.worklist.token=<a long random secret - NOT the DICOM token>
+```
+
+and, once the clinic PC has a fixed address, uncomment the `allow`/`deny`
+lines in the `/device/optomed/` location of `deploy/nginx/ecrf.conf`.
+
+The file carries a **placeholder date of birth**, never the real one, and
+the upload pseudonymises every DICOM on the way in - but the Client's
+`Studies\` folder on that PC holds names and dates of birth in every file it
+pulls, so treat that folder as the PHI surface it is. The bridge moves
+uploaded files into `DICOM\_uploaded\`; retention of that folder is a
+local decision it does not make for you.
+
+If script execution is blocked on the clinic PC by policy, the bridge needs
+to become a signed executable; that is the upgrade path, not a workaround.
+
 ### Rebuild a single image without cutting a release
 
 For ad-hoc rebuilds (e.g. dep CVE refresh on the sidecar, no app change):

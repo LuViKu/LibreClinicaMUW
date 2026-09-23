@@ -241,6 +241,65 @@ core.dicom.ingest.token=                     # shared secret, sidecar → app ha
 MPPS · image Query/Retrieve (study-root C-FIND/C-MOVE) · DICOM-TLS · OCT/SEG (DR-022
 follow-up) · PACS forwarding · multi-institution AE management.
 
+## Optomed Lumo over USB — the Client worklist file and the bridge (2026-09-23)
+
+The wireless path above never left the bench. The Lumo speaks WPA2-PSK only;
+the institutional WLAN is WPA2-Enterprise with no PSK SSID, and departments may
+not operate a WLAN of their own. A mobile-hotspot-plus-VPN detour was tested
+and fails for a reason worth recording: iOS does not route Personal Hotspot
+clients through the phone's VPN. What the camera does have is USB to a PC
+running the vendor's **Optomed Client**, and that turned out to carry the whole
+workflow — established against the real Client on 2026-09-23:
+
+| Finding | Consequence |
+|---|---|
+| The Client watches `…\Optomed Lumo\Worklist\` for a file named exactly `worklist_optomed_lumo.txt`, imports it, deletes it | a watched drop-folder with a fixed name: the simplest automation target there is |
+| An import **replaces** the Client's whole worklist (3 in the file → 3 in `worklist.json`, the previous 6 gone) | every fetch sends the complete current list; stale entries vanish on their own; nothing deduplicates |
+| The Client pushes the list to the camera over its USB "Web API" | the camera's list updates on dock, so the photographer docks between patients after enrolling someone |
+| The exported DICOM carries `PatientID` from the worklist, `StudyDate`/`AcquisitionDateTime`, `Laterality`, `Modality=OP` and all three instance UIDs | the upload path has everything: identity, a `source='file'` acquisition date, and duplicate detection |
+| `AccessionNumber` is **camera-generated** and the template has no accession field | the sidecar's `LC<study_event_id>` auto-bind cannot fire; binding goes through label + date via `/resolve` — the same thing the upload page does |
+| The exported header carries the real name and date of birth | the Client's `Studies\` folder on the clinic PC is a PHI surface; ingest pseudonymises, the folder does not |
+
+Two pieces:
+
+- **`OptomedWorklistApiController`** — `GET /api/v1/device/optomed/worklist.txt`,
+  the day's open visits rendered by `OptomedWorklistFormat` in the vendor's
+  six-line CRLF/ASCII shape. It is *not* the DICOM worklist with a different
+  content type: that endpoint is refused at nginx precisely because it hands
+  out real dates of birth behind a shared secret, and this one must be reached
+  from a clinic PC through nginx. It earns the exposure by carrying a
+  placeholder date of birth, having its own token, answering 404 until
+  `core.optomed.worklist.enabled=true`, and honouring
+  `core.dicom.worklist.studyOids`. Same `ScheduledVisitQuery` as the DICOM
+  worklist and the upload page, so the three never disagree about what is open.
+- **`deploy/optomed/OptomedBridge.ps1`** — a tray app on the clinic PC that
+  fetches the file every 30 s by default (dropping it only when the content
+  changed — a poll is one scoped single-day query, so the rate is cheap, and
+  it has to beat the photographer's walk from the enrolment PC to the dock),
+  uploads pulled studies through the public front door with `PatientID` +
+  `StudyDate` read from each header, and lets `/resolve` bind them. Settings in
+  a dialog; token DPAPI-protected; counts and labels in the log, never names.
+  It also acts as the Client's keeper: starts it if it is not running and
+  minimises its window with the taskbar button removed (`SW_MINIMIZE` plus the
+  shell's `ITaskbarList::DeleteTab`, restored with `AddTab` + `SW_RESTORE`).
+  The Client is WinForms hosting a WebView2 with no tray support of its own;
+  its USB and folder watching live in the process, not the window. Minimised,
+  never hidden: `SW_HIDE` from outside detaches the WebView2's render target
+  for good (white, then black, only a Client restart recovers), and DWM
+  cloaking is refused cross-process — all three established on the real
+  Client. Show/Hide in the menu; the window is given back on exit.
+
+Spontaneous enrolment is why the fetch is periodic rather than a morning pull —
+and why it lists *visits*, not subjects: a subject enrolled without today's
+visit scheduled is not on the camera. The worklist is a convenience against
+typos, not a requirement — a label typed on the camera binds exactly the same
+way, because `/resolve` keys on `PatientID` + date and does not know where the
+label came from.
+
+Verified on the Client, still to verify on the camera: that `O` is accepted as
+a sex value (the vendor template shows only `M`/`F`), and that an empty file
+clears the camera's list rather than being ignored.
+
 ## Uploaded DICOM files — the describe endpoint (DR-029, 2026-09-20)
 
 The receiver above answers C-STORE. A Clarus or PlexElite export arrives as a *file* on the combined upload page instead, and the app has no DICOM parser — so the sidecar gained a second, internal entry:

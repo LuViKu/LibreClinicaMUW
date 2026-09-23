@@ -136,18 +136,35 @@ public class IngestInboxApiController {
                              int studyId, String studyName,
                              Integer studyEventId, Integer eventCrfId) {}
 
+    /**
+     * @param acquisitionDateSource where {@code acquisitionDate} came from —
+     *        "file" when it was read out of the file, "operator" when somebody
+     *        typed it, "unknown" for rows that predate the distinction. The
+     *        inbox shows an unverified date differently, because a date the
+     *        uploader supplied on the workbench is the day they searched
+     *        visits by and matches the visit whatever the file says.
+     */
     public record InboxRow(long id, String kind, String sourceKind, String device,
                            String patientId, String laterality, String acquisitionDate,
+                           String acquisitionDateSource,
                            String modality, String originalFilename, Long byteSize,
                            Integer scanIndex, String receivedAt,
                            String previewUrl, boolean hasPreview,
                            Suggestion suggestion) {}
 
+    /**
+     * @param acknowledgeDateMismatch the operator has been shown that the
+     *        file's own acquisition date disagrees with the visit's date and
+     *        wants to file it there anyway. Absent or false, a mismatch comes
+     *        back as 409 rather than being applied.
+     */
     public record BindRequest(Integer studySubjectId, Integer studyEventId, Integer eventCrfId,
-                              String modalityCode, String laterality) {}
+                              String modalityCode, String laterality,
+                              Boolean acknowledgeDateMismatch) {}
 
     public record BulkBindRequest(List<Long> ids, Integer studySubjectId,
-                                  Integer studyEventId, Integer eventCrfId) {}
+                                  Integer studyEventId, Integer eventCrfId,
+                                  Boolean acknowledgeDateMismatch) {}
 
     public record DismissRequest(String reason) {}
 
@@ -185,7 +202,7 @@ public class IngestInboxApiController {
 
         StringBuilder sql = new StringBuilder(
                 "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
-                        + "acquisition_date, modality, original_filename, byte_size, scan_index, "
+                        + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
                         + "received_at, preview_png_path "
                         + "  FROM ingest_item WHERE status = ?");
         List<Object> args = new ArrayList<>();
@@ -269,7 +286,7 @@ public class IngestInboxApiController {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
-                             + "acquisition_date, modality, original_filename, byte_size, scan_index, "
+                             + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
                              + "received_at, preview_png_path, bound_study_subject_id "
                              + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
@@ -375,9 +392,41 @@ public class IngestInboxApiController {
         ResponseEntity<?> targetGuard = guardBindTarget(req.studySubjectId(), session);
         if (targetGuard != null) return targetGuard;
 
+        // What the file says about itself, before it is filed under a day it
+        // may not belong to. A mismatch is refused once and applied on the
+        // second ask; see dateMismatchResponse.
+        IngestBindService.DateCheck dc = binds().checkVisitDate(id, req.studyEventId());
+        if (dc.isMismatch() && !Boolean.TRUE.equals(req.acknowledgeDateMismatch())) {
+            return dateMismatchResponse(id, dc);
+        }
+
         IngestBindService.Result r = binds().bind(id, req.studySubjectId(), req.studyEventId(),
-                req.eventCrfId(), IngestBindService.POLICY_MANUAL, actor(session));
+                req.eventCrfId(), IngestBindService.POLICY_MANUAL, actor(session), dc);
         return bindResponse(r, id, "BOUND");
+    }
+
+    /**
+     * 409 for a file whose own acquisition date disagrees with the visit.
+     *
+     * <p>Not a refusal — a question. The body carries both dates so the SPA can
+     * show what disagrees rather than just that something did, and the operator
+     * re-sends with {@code acknowledgeDateMismatch} to go ahead. Nothing about
+     * the file changes in the meantime.
+     *
+     * <p>Only a date read out of the file gets here at all
+     * ({@link IngestBindService#checkVisitDate}), so this never fires on a date
+     * somebody typed into the upload workbench.
+     */
+    private static ResponseEntity<?> dateMismatchResponse(long id, IngestBindService.DateCheck dc) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", "date_mismatch");
+        body.put("ingestItemId", id);
+        body.put("fileDate", String.valueOf(dc.fileDate()));
+        body.put("visitDate", String.valueOf(dc.visitDate()));
+        body.put("message", "This file says it was acquired on " + dc.fileDate()
+                + ", but the visit is dated " + dc.visitDate()
+                + ". Re-send with acknowledgeDateMismatch to file it there anyway.");
+        return ResponseEntity.status(409).body(body);
     }
 
     // ----- POST /bulk-bind -----
@@ -412,8 +461,18 @@ public class IngestInboxApiController {
         List<Map<String, Object>> skipped = new ArrayList<>();
         for (Long id : req.ids()) {
             if (id == null) continue;
+            // Each file is dated on its own, so one scan from the wrong day
+            // is skipped with its two dates rather than taking the batch down
+            // — the same shape the already-reconciled case uses.
+            IngestBindService.DateCheck dc = binds().checkVisitDate(id, req.studyEventId());
+            if (dc.isMismatch() && !Boolean.TRUE.equals(req.acknowledgeDateMismatch())) {
+                skipped.add(Map.of("id", id, "reason", "DATE_MISMATCH",
+                        "fileDate", String.valueOf(dc.fileDate()),
+                        "visitDate", String.valueOf(dc.visitDate())));
+                continue;
+            }
             IngestBindService.Result r = binds().bind(id, req.studySubjectId(), req.studyEventId(),
-                    req.eventCrfId(), IngestBindService.POLICY_MANUAL, actor);
+                    req.eventCrfId(), IngestBindService.POLICY_MANUAL, actor, dc);
             if (r == IngestBindService.Result.OK) {
                 bound.add(id);
             } else {
@@ -517,6 +576,7 @@ public class IngestInboxApiController {
                 patientId,
                 rs.getString("laterality"),
                 acquisitionDate,
+                rs.getString("acquisition_date_source"),
                 rs.getString("modality"),
                 rs.getString("original_filename"),
                 sizeNull ? null : size,

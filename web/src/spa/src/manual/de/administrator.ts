@@ -192,7 +192,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/12-system-audit-log.png',
       goal: 'Prüfen Sie den institutionsweiten Audit-Trail, einschließlich fehlgeschlagener Operationen und Jobs.',
       steps: [
-        'Rufen Sie **System-Audit-Protokoll** unter `/system/audit-log` auf.',
+        'Öffnen Sie **System-Audit-Protokoll** über die Seitenleiste **System** (`/system/audit-log`).',
         'Filtern Sie nach Akteur/-in, Ereignisvariante (signed, reason-for-change, sdv, admin, data, query, subject-group-change) oder Teilnehmer/-in.',
         'Durchsuchen Sie die nach Datum gruppierte Zeitleiste; klicken Sie auf einen Eintrag mit Chevron, um seinen Vorher-Nachher-Vergleich und den Grund aufzuklappen.',
       ],
@@ -206,7 +206,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/13-system-status.png',
       goal: 'Prüfen Sie den Zustand der laufenden Anwendung nach einem Neustart oder Zwischenfall.',
       steps: [
-        'Rufen Sie **Systemstatus** unter `/admin/system-status` auf.',
+        'Öffnen Sie **Systemstatus** über **System** in der oberen Leiste (`/admin/system-status`) — die Einstiegsseite des Bereichs. Der Eintrag steht rechts neben dem Studien-Chip, weil diese fünf Seiten die Instanz betreffen und keine Studie; die Seitenleiste **System** wechselt zwischen ihnen.',
         'Lesen Sie die drei Panels: **JVM** (Java-Version, Heap, Threads, CPUs), **Database** (Erreichbarkeit, Produkt/Version, Anzahl der Liquibase-Changelogs) und **Application** (Status OK/OutOfMemory, Laufzeit).',
         'Klicken Sie auf **Aktualisieren** (Refresh), um erneut abzufragen; die Zeit der letzten Aktualisierung wird neben der Schaltfläche angezeigt.',
       ],
@@ -218,7 +218,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/14-password-policy.png',
       goal: 'Legen Sie die für lokale Konten durchgesetzten Passwortregeln fest.',
       steps: [
-        'Rufen Sie **Passwort-Richtlinie** unter `/admin/password-policy` auf.',
+        'Öffnen Sie **Passwort-Richtlinie** über die Seitenleiste **System** (`/admin/password-policy`).',
         'Aktivieren Sie die erforderlichen Zeichenklassen (Kleinbuchstaben, Großbuchstaben, Ziffern, Sonderzeichen).',
         'Legen Sie die Längenbeschränkungen fest — *Min Length*, *Max Length* (1–256) — und *Expiration Days* (0 = kein Ablauf).',
         'Verlangen Sie optional eine Passwortänderung bei der Erstanmeldung und klicken Sie dann auf **Save** (oder **Discard**).',
@@ -233,7 +233,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/15-app-config.png',
       goal: 'Sehen Sie, welche Konfiguration die laufende Anwendung tatsächlich liest.',
       steps: [
-        'Rufen Sie **Anwendungskonfiguration** unter `/admin/config` auf.',
+        'Öffnen Sie **Anwendungskonfiguration** über die Seitenleiste **System** (`/admin/config`).',
         'Lesen Sie die Werte: Standard-Zeitzone, Sprache/Land der Nutzenden, Dateikodierung, Betriebssystemname/-architektur, JVM-Optionen, die Remote-Push-URL für die retinale Inferenz sowie ob SSO aktiviert ist.',
         'Klicken Sie auf **Aktualisieren**, um nach einem Neustart erneut einzulesen.',
       ],
@@ -247,7 +247,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/16-scheduled-jobs.png',
       goal: 'Prüfen Sie die Hintergrund-Jobs (Quartz), die die Plattform ausführt.',
       steps: [
-        'Rufen Sie **Geplante Jobs** unter `/admin/jobs` auf.',
+        'Öffnen Sie **Geplante Jobs** über die Seitenleiste **System** (`/admin/jobs`).',
         'Prüfen Sie die Statusleiste des Schedulers (Name, gestartet/Bereitschaft) und die Jobtabelle: Name, Gruppe, Status, vorherige und nächste Auslösezeiten, Beschreibung.',
         'Klicken Sie auf **Aktualisieren**, um erneut abzufragen.',
       ],

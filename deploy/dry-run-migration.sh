@@ -42,7 +42,15 @@ NET_NAME="${PROJECT}-net"
 if [ -n "${1:-}" ]; then
   BACKUP="$1"
 else
-  BACKUP="$(ls -1t "$BACKUP_DIR"/backup-*.sql 2>/dev/null | head -1)"
+  # Match what libreclinica-backup-db actually writes — gzipped dumps named
+  # `libreclinica-<stamp>.sql.gz` — as well as the uncompressed `backup-*.sql`
+  # form the deploy runbook uses for a hand-taken dump. This script originally
+  # globbed only the runbook's name, so on a real host it could never find the
+  # nightly backup and always exited with "no readable backup found".
+  #
+  # The trailing '*' also matches `.sql.gz.1`, left behind on hosts where the
+  # old logrotate stanza renamed the dumps.
+  BACKUP="$(ls -1t "$BACKUP_DIR"/libreclinica-*.sql.gz* "$BACKUP_DIR"/backup-*.sql 2>/dev/null | head -1)"
 fi
 
 IMAGE="${IMAGE:-}"
@@ -104,8 +112,17 @@ if ! docker exec "$PG_NAME" pg_isready -U clinica -d libreclinica >/dev/null 2>&
   exit 1
 fi
 
-if ! docker exec -i "$PG_NAME" psql -q -U clinica -d libreclinica < "$BACKUP" >/dev/null 2>&1; then
-  bad "restoring the backup failed — the dump may be from a newer server"
+# The nightly dumps are gzipped, so feed them through zcat rather than
+# straight into psql. Decompressing to a temp file first would put an
+# unencrypted copy of the trial database on disk; streaming keeps it in
+# the pipe. Matches `.gz` and the rotated `.gz.1` form.
+case "$BACKUP" in
+  *.gz|*.gz.[0-9]*) READ_BACKUP="zcat -f" ;;
+  *)                READ_BACKUP="cat" ;;
+esac
+
+if ! $READ_BACKUP "$BACKUP" | docker exec -i "$PG_NAME" psql -q -U clinica -d libreclinica >/dev/null 2>&1; then
+  bad "restoring the backup failed — the dump may be from a newer server, or not a plain-format dump"
   exit 1
 fi
 ok "backup restored"

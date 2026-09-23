@@ -563,42 +563,83 @@ public class PublicOctUploadController {
 
     /**
      * 2026-06-23 user-feedback round — persist the .e2e acquisition
-     * date on every job sharing this upload's {@code e2e_uuid}.
+     * date on every job sharing this upload's source scan, and on the
+     * {@code ingest_item} the jobs came from.
      *
      * <p>The post-commit pipeline calls {@code /preprocess} once per
      * upload (one e2e file → one bscan.dcm + one acquisition date)
      * but each upload can fan out into multiple jobs (one per task in
-     * the event_definition's retinal panel). The same date applies
-     * to all of them, so the {@code WHERE e2e_uuid = ?} update
+     * the event_definition's retinal panel). The same date applies to
+     * all of them, so one update keyed on the shared {@code e2e_path}
      * touches every fan-out row in a single round-trip.
+     *
+     * <p>2026-09-22 — this used to say {@code WHERE e2e_uuid = ?}.
+     * There is no {@code e2e_uuid} column on {@code
+     * retinal_inference_job} and there never has been; the upload's
+     * UUID lives in the basename of {@code e2e_path} and is a
+     * multipart field name on the sidecar's API, nothing more. Every
+     * call since June therefore raised "column e2e_uuid does not
+     * exist", hit the soft-fail below, and dropped a date the sidecar
+     * had correctly read out of the file — while the SPA's fallback
+     * chain quietly showed visit_date in its place, so the column
+     * looked populated from the outside. Keyed on the primary job's
+     * own {@code e2e_path} now, which is a real column and is what
+     * "sharing this upload" actually means on disk.
+     *
+     * <p>The same date is written to {@code ingest_item} with
+     * {@code acquisition_date_source='file'}, because that row is
+     * where reconciliation reads a date from and a date read out of
+     * the file is the only kind worth checking a visit against.
      *
      * <p>Soft-fails on DB errors: missing the date doesn't break the
      * pipeline, and the SPA's existing fallback chain still surfaces
      * a date (visit_date / completed_at) when the column is null.
      */
-    private void persistAcquisitionDate(String e2eUuid, String iso) {
-        if (e2eUuid == null || e2eUuid.isBlank() || iso == null || iso.isBlank()) return;
+    private void persistAcquisitionDate(long primaryJobId, String e2eUuid, String iso) {
+        if (iso == null || iso.isBlank()) return;
         java.sql.Date date;
         try {
             date = java.sql.Date.valueOf(iso);
         } catch (IllegalArgumentException badDate) {
-            LOG.warn("Preprocess returned an unparseable X-MUW-Acquisition-Date '{}' for e2eUuid={}; skipping update",
-                    iso, e2eUuid);
+            // Neither the header value nor the upload's uuid goes into the log:
+            // the date is read out of a patient's scan and the uuid arrives on
+            // the request, and this repository logs no device- or
+            // user-provided strings. The job id is enough to find the row.
+            LOG.warn("Preprocess returned an unparseable X-MUW-Acquisition-Date for job {}; skipping update",
+                    primaryJobId);
             return;
         }
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "UPDATE retinal_inference_job SET acquisition_date = ? "
-                             + "WHERE e2e_uuid = ? AND acquisition_date IS DISTINCT FROM ?")) {
-            ps.setDate(1, date);
-            ps.setString(2, e2eUuid);
-            ps.setDate(3, date);
-            int updated = ps.executeUpdate();
-            LOG.info("Persisted acquisition_date={} on {} job(s) sharing e2e_uuid={}",
-                    iso, updated, e2eUuid);
+        try (Connection c = dataSource.getConnection()) {
+            int updated;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE retinal_inference_job SET acquisition_date = ? "
+                            + " WHERE e2e_path = (SELECT e2e_path FROM retinal_inference_job WHERE job_id = ?) "
+                            + "   AND acquisition_date IS DISTINCT FROM ?")) {
+                ps.setDate(1, date);
+                ps.setLong(2, primaryJobId);
+                ps.setDate(3, date);
+                updated = ps.executeUpdate();
+            }
+            // The date belongs on the file's own row too — the inbox reads
+            // acquisition_date from ingest_item, not from the job, and the
+            // bind-time visit check only trusts source='file'.
+            int items;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE ingest_item SET acquisition_date = ?, acquisition_date_source = 'file' "
+                            + " WHERE ingest_item_id = (SELECT ingest_item_id FROM retinal_inference_job "
+                            + "                          WHERE job_id = ?) "
+                            + "   AND (acquisition_date IS DISTINCT FROM ? "
+                            + "        OR acquisition_date_source IS DISTINCT FROM 'file')")) {
+                ps.setDate(1, date);
+                ps.setLong(2, primaryJobId);
+                ps.setDate(3, date);
+                items = ps.executeUpdate();
+            }
+            LOG.info("Persisted the file's acquisition date on {} job(s) and {} ingest_item(s) for job {}",
+                    updated, items, primaryJobId);
         } catch (SQLException sqlEx) {
-            LOG.warn("Failed to persist acquisition_date={} for e2eUuid={}: {}",
-                    iso, e2eUuid, sqlEx.getMessage());
+            LOG.warn("Failed to persist the acquisition date for job {}: {}",
+                    primaryJobId, sqlEx.getMessage());
         }
     }
 
@@ -739,7 +780,7 @@ public class PublicOctUploadController {
                         // the SPA's date chain falls back to
                         // visit_date / completed_at as before.
                         if (prep.acquisitionDate() != null && !prep.acquisitionDate().isBlank()) {
-                            persistAcquisitionDate(e2eUuid, prep.acquisitionDate());
+                            persistAcquisitionDate(primaryJobId, e2eUuid, prep.acquisitionDate());
                         }
                     }
                 } catch (Exception prepEx) {
@@ -1170,7 +1211,13 @@ public class PublicOctUploadController {
                 .digest(sha256, byteSize)
                 .scanIndex(scanIndex)
                 .laterality(laterality)
+                // Whatever the uploader gave us. The .e2e does carry a real
+                // acquisition date, but only /preprocess reads it, and that
+                // runs after this row exists — persistAcquisitionDate upgrades
+                // this to source='file' when it comes back.
                 .acquisitionDate(acquisitionDate)
+                .acquisitionDateSource(acquisitionDate == null
+                        ? null : IngestItemRepository.ACQ_SOURCE_OPERATOR)
                 .patientId(patientId)
                 .candidateStudySubjectId(candidateStudySubjectId);
         if (!park) {

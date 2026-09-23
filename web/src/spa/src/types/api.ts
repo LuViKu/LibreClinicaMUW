@@ -3300,6 +3300,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/device/optomed/worklist.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["worklist_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crfs/{crfOid}/versions/{versionOid}/xls": {
         parameters: {
             query?: never;
@@ -3404,6 +3420,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["systemStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/retinal-cluster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["retinalCluster"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4564,6 +4596,7 @@ export interface components {
             eventCrfId?: number;
             modalityCode?: string;
             laterality?: string;
+            acknowledgeDateMismatch?: boolean;
         };
         ImportCrfPreviewDto: {
             /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
@@ -11330,6 +11363,30 @@ export interface operations {
             };
         };
     };
+    worklist_1: {
+        parameters: {
+            query?: {
+                date?: string;
+            };
+            header?: {
+                "X-MUW-Optomed-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     downloadVersionXls: {
         parameters: {
             query?: never;
@@ -11469,6 +11526,26 @@ export interface operations {
         };
     };
     systemStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    retinalCluster: {
         parameters: {
             query?: never;
             header?: never;

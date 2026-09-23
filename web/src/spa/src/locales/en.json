@@ -47,7 +47,7 @@
       "moreErrors": "{n} more error(s)",
       "queuedListTitle": "More errors"
     },
-    "systemAuditLog": "System audit",
+    "system": "System",
     "retinalParked": "Parked scans",
     "primaryNav": "Primary navigation",
     "study": "Active study",
@@ -243,7 +243,25 @@
     "appStatus": "Status",
     "uptime": "Uptime",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "clusterHeading": "Retinal inference cluster",
+    "clusterLoadFailed": "Failed to load cluster status.",
+    "clusterNotConfigured": "No remote cluster configured — core.retinalInference.remotePushUrl is blank.",
+    "clusterTargetIs": "Jobs are sent to {url}",
+    "clusterNode": "Node",
+    "clusterState": "State",
+    "clusterTasks": "Tasks",
+    "clusterGpu": "GPU",
+    "clusterLatency": "Latency",
+    "clusterStateHealthy": "Healthy",
+    "clusterStateDegraded": "Degraded",
+    "clusterStateUnhealthy": "Unhealthy",
+    "clusterStateUnreachable": "Unreachable",
+    "clusterMissingTasks": "missing {tasks}",
+    "clusterMonitorHeading": "Monitor alerts",
+    "clusterMonitorHint": "Last lines of the app-VM cron monitor log. Empty is good.",
+    "clusterMonitorEmpty": "No alerts recorded.",
+    "clusterMonitorUnavailable": "Monitor log not readable: {path}"
   },
   "adminPasswordPolicy": {
     "title": "Password policy",
@@ -3170,7 +3188,11 @@
     "unbindConfirm": "Undo this filing? The CRF value it set is removed too, unless another file from the same device still evidences the visit.",
     "dismiss": "Dismiss",
     "dismissConfirm": "Dismiss this file?",
-    "countAria": "{n} files in the inbox"
+    "countAria": "{n} files in the inbox",
+    "dateMismatchTitle": "The dates do not match",
+    "dateMismatchConfirm": "This file says it was acquired on {fileDate}, but the visit is dated {visitDate}. File it on this visit anyway? Your decision is recorded in the audit trail. ({n} file(s))",
+    "dateUnverified": "not read from the file",
+    "dateFromFile": "read from the file"
   },
   "imagingModalities": {
     "intro": "Which acquisitions this study performs, on which device — and which CRF box a filed file ticks.",
@@ -3229,6 +3251,12 @@
       "portal.todaysVisits": "Today's visits on the upload page",
       "ai.arm.shownGroup": "Group shown AI",
       "ai.arm.hiddenGroup": "Group blinded to AI"
+    }
+  },
+  "system": {
+    "rail": {
+      "heading": "System",
+      "audit": "System audit"
     }
   },
   "subjectUnboundItems": {

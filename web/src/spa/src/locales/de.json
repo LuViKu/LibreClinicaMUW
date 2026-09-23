@@ -47,7 +47,7 @@
       "moreErrors": "{n} weitere Fehler",
       "queuedListTitle": "Weitere Fehler"
     },
-    "systemAuditLog": "System-Audit",
+    "system": "System",
     "retinalParked": "Geparkte Scans",
     "primaryNav": "Hauptnavigation",
     "study": "Aktive Studie",
@@ -243,7 +243,25 @@
     "appStatus": "Status",
     "uptime": "Laufzeit",
     "yes": "Ja",
-    "no": "Nein"
+    "no": "Nein",
+    "clusterHeading": "Retinal-Inference-Cluster",
+    "clusterLoadFailed": "Clusterstatus konnte nicht geladen werden.",
+    "clusterNotConfigured": "Kein Remote-Cluster konfiguriert — core.retinalInference.remotePushUrl ist leer.",
+    "clusterTargetIs": "Jobs gehen an {url}",
+    "clusterNode": "Knoten",
+    "clusterState": "Zustand",
+    "clusterTasks": "Tasks",
+    "clusterGpu": "GPU",
+    "clusterLatency": "Latenz",
+    "clusterStateHealthy": "Gesund",
+    "clusterStateDegraded": "Eingeschränkt",
+    "clusterStateUnhealthy": "Fehlerhaft",
+    "clusterStateUnreachable": "Nicht erreichbar",
+    "clusterMissingTasks": "fehlt: {tasks}",
+    "clusterMonitorHeading": "Monitor-Meldungen",
+    "clusterMonitorHint": "Letzte Zeilen des Cron-Monitor-Logs auf der App-VM. Leer ist gut.",
+    "clusterMonitorEmpty": "Keine Meldungen aufgezeichnet.",
+    "clusterMonitorUnavailable": "Monitor-Log nicht lesbar: {path}"
   },
   "adminPasswordPolicy": {
     "title": "Passwort-Richtlinie",
@@ -3170,7 +3188,11 @@
     "unbindConfirm": "Zuordnung wirklich aufheben? Der dadurch gesetzte CRF-Wert wird ebenfalls entfernt, sofern keine weitere Datei desselben Geräts die Visite belegt.",
     "dismiss": "Verwerfen",
     "dismissConfirm": "Diese Datei wirklich verwerfen?",
-    "countAria": "{n} Dateien im Eingang"
+    "countAria": "{n} Dateien im Eingang",
+    "dateMismatchTitle": "Die Daten stimmen nicht überein",
+    "dateMismatchConfirm": "Diese Datei gibt als Aufnahmedatum {fileDate} an, die Visite ist auf {visitDate} datiert. Trotzdem dieser Visite zuordnen? Ihre Entscheidung wird im Audit-Trail vermerkt. ({n} Datei(en))",
+    "dateUnverified": "nicht aus der Datei gelesen",
+    "dateFromFile": "aus der Datei gelesen"
   },
   "imagingModalities": {
     "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",
@@ -3229,6 +3251,12 @@
       "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
       "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
       "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+    }
+  },
+  "system": {
+    "rail": {
+      "heading": "System",
+      "audit": "System-Audit"
     }
   },
   "subjectUnboundItems": {
