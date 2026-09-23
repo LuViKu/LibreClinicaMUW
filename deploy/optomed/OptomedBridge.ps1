@@ -29,7 +29,14 @@
                into DICOM\_uploaded\.
 
   Runs at login as a tray icon (see Install-OptomedBridge.ps1). Right-click:
-  enable/disable, fetch or upload now, settings, open log, exit.
+  enable/disable, fetch or upload now, show/hide the Optomed Client, settings,
+  open log, exit.
+
+  It also keeps the Optomed Client itself running and out of the way: starts
+  it if it is not running (the whole workflow dies quietly without it), and
+  hides its main window so this icon is the only one - the Client has no
+  minimise-to-tray of its own. Show it from the menu when a dialog of its own
+  needs answering; it is shown again when the bridge exits.
 
   Settings: %ProgramData%\LibreClinica\optomed-bridge.json. The token is
   DPAPI-protected to the user who saved it. Log alongside, rotated at 1 MB.
@@ -91,6 +98,14 @@ function Get-DefaultConfig {
         UploadIntervalMin   = 5
         Device              = 'optomed-lumo'
         Enabled             = $false
+        # The Optomed Client has no minimise-to-tray of its own (a .NET MAUI
+        # app; nothing tray-related in its install, nothing in its settings).
+        # The bridge hides the Client's main window instead and offers
+        # Show/Hide in its menu, so this icon is the only one. The process,
+        # not the window, does the USB and folder watching, so hiding it
+        # changes nothing about the sync - verified on the real Client.
+        HideClientWindow    = $true
+        ClientExe           = (Join-Path $env:LOCALAPPDATA 'Optomed\OptomedClient\OptomedClient.exe')
     }
 }
 
@@ -378,6 +393,93 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 
+# ----------------------------------------------------------------------------
+# the Optomed Client: keep it running, keep its window out of the way
+# ----------------------------------------------------------------------------
+if (-not ('OptomedBridge.Win32' -as [type])) {
+    # FindMainWindow exists because Process.MainWindowHandle is ZERO for a
+    # hidden window - .NET only counts visible ones - which is exactly the
+    # state "Show" has to recover from. Enumerate the process's top-level
+    # windows instead and take the one with a caption; helper and
+    # message-only windows have none.
+    Add-Type -Namespace OptomedBridge -Name Win32 -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+[DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+[DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
+delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+const int GWL_STYLE = -16; const int WS_CAPTION = 0x00C00000;
+public static IntPtr FindMainWindow(uint pid) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((h, l) => {
+        uint p; GetWindowThreadProcessId(h, out p);
+        if (p == pid && (GetWindowLong(h, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) { found = h; return false; }
+        return true;
+    }, IntPtr.Zero);
+    return found;
+}
+'@
+}
+$script:SW_HIDE = 0; $script:SW_SHOW = 5; $script:SW_RESTORE = 9
+$script:ClientShownByUser = $false   # "Show" from the menu stops the bridge re-hiding it
+$script:ClientHwnd = [IntPtr]::Zero  # last handle seen, for when enumeration finds nothing
+
+function Get-ClientProcess {
+    Get-Process -Name OptomedClient -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Start-ClientIfNeeded {
+    if (Get-ClientProcess) { return $false }
+    $exe = $script:Cfg.ClientExe
+    if (-not $exe -or -not (Test-Path $exe)) { return $false }
+    Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) | Out-Null
+    Write-Log 'optomed client: was not running, started it'
+    $true
+}
+
+# The Client's MAUI window may not exist yet right after it starts, so this
+# is re-evaluated on every call. Enumerated by pid rather than read from
+# Process.MainWindowHandle, which is zero once the window is hidden - the
+# first cut used that and "Show" could not find what it had just hidden.
+function Get-ClientWindowHandle {
+    $p = Get-ClientProcess
+    if (-not $p) { $script:ClientHwnd = [IntPtr]::Zero; return [IntPtr]::Zero }
+    $h = [OptomedBridge.Win32]::FindMainWindow([uint32]$p.Id)
+    if ($h -ne [IntPtr]::Zero) { $script:ClientHwnd = $h; return $h }
+    $script:ClientHwnd
+}
+
+function Set-ClientWindowVisible([bool]$visible) {
+    $h = Get-ClientWindowHandle
+    if ($h -eq [IntPtr]::Zero) { return $false }
+    if ($visible) { [OptomedBridge.Win32]::ShowWindow($h, $script:SW_RESTORE) | Out-Null }
+    else          { [OptomedBridge.Win32]::ShowWindow($h, $script:SW_HIDE)    | Out-Null }
+    $true
+}
+
+# Hide once the window exists - polled, because at login the Client (which
+# autostarts too) is usually still coming up when the bridge is already here.
+$hideTimer = New-Object Windows.Forms.Timer
+$hideTimer.Interval = 2000
+$script:HideAttempts = 0
+$hideTimer.Add_Tick({
+    $script:HideAttempts++
+    $h = Get-ClientWindowHandle
+    if ($h -ne [IntPtr]::Zero -and [OptomedBridge.Win32]::IsWindowVisible($h)) {
+        Set-ClientWindowVisible $false | Out-Null
+        Write-Log 'optomed client: window hidden'
+        $hideTimer.Stop()
+    } elseif ($script:HideAttempts -ge 45) {   # 90 s: it is not coming; stop polling
+        $hideTimer.Stop()
+    }
+})
+function Request-ClientHide {
+    if (-not $script:Cfg.HideClientWindow -or $script:ClientShownByUser) { return }
+    $script:HideAttempts = 0
+    $hideTimer.Start()
+}
+
 $script:Cfg = Read-Config
 Write-Log "$script:AppName starting (enabled=$($script:Cfg.Enabled))"
 
@@ -403,6 +505,9 @@ $menu.Items.Add('-') | Out-Null
 $enabledItem = $menu.Items.Add('Enabled'); $enabledItem.CheckOnClick = $true; $enabledItem.Checked = [bool]$script:Cfg.Enabled
 $fetchItem   = $menu.Items.Add('Fetch worklist now')
 $uploadItem  = $menu.Items.Add('Upload studies now')
+$menu.Items.Add('-') | Out-Null
+$showClientItem = $menu.Items.Add('Show Optomed Client')
+$hideClientItem = $menu.Items.Add('Hide Optomed Client')
 $menu.Items.Add('-') | Out-Null
 $settingsItem = $menu.Items.Add('Settings...')
 $logItem      = $menu.Items.Add('Open log')
@@ -443,7 +548,7 @@ function Update-Timers {
     if (-not $script:Cfg.Enabled) { Set-Status 'Disabled' }
 }
 $fetchTimer.Add_Tick({ Invoke-FetchNow })
-$uploadTimer.Add_Tick({ Invoke-UploadNow })
+$uploadTimer.Add_Tick({ if (Start-ClientIfNeeded) { Request-ClientHide }; Invoke-UploadNow })
 
 $enabledItem.Add_Click({
     $script:Cfg.Enabled = $enabledItem.Checked
@@ -455,12 +560,23 @@ $enabledItem.Add_Click({
 $fetchItem.Add_Click({ Invoke-FetchNow })
 $uploadItem.Add_Click({ Invoke-UploadNow })
 $logItem.Add_Click({ if (Test-Path $script:LogPath) { Start-Process notepad.exe $script:LogPath } })
+$showClientItem.Add_Click({
+    $script:ClientShownByUser = $true; $hideTimer.Stop()
+    if (-not (Set-ClientWindowVisible $true)) {
+        if (Start-ClientIfNeeded) { Set-Status 'optomed client: starting' }
+        else { Set-Status 'optomed client: no window found'; Write-Log 'optomed client: show requested but no window found' 'WARN' }
+    }
+})
+$hideClientItem.Add_Click({
+    $script:ClientShownByUser = $false
+    if (-not (Set-ClientWindowVisible $false)) { Request-ClientHide }
+})
 $exitItem.Add_Click({ $tray.Visible = $false; [Windows.Forms.Application]::Exit() })
 
 $settingsItem.Add_Click({
     $f = New-Object Windows.Forms.Form
     $f.Text = "$script:AppName - Settings"; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedDialog'
-    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 300
+    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 334
 
     $y = 14
     function Add-Row([string]$label, [Windows.Forms.Control]$ctl) {
@@ -476,6 +592,7 @@ $settingsItem.Add_Click({
     $nuFetch = New-Object Windows.Forms.NumericUpDown; $nuFetch.Minimum = 10; $nuFetch.Maximum = 3600; $nuFetch.Value = [int]$script:Cfg.WorklistIntervalSec
     $nuUp    = New-Object Windows.Forms.NumericUpDown; $nuUp.Minimum = 1; $nuUp.Maximum = 120; $nuUp.Value = [int]$script:Cfg.UploadIntervalMin
     $cbOn    = New-Object Windows.Forms.CheckBox; $cbOn.Text = 'Enabled'; $cbOn.Checked = [bool]$script:Cfg.Enabled
+    $cbHide  = New-Object Windows.Forms.CheckBox; $cbHide.Text = 'Hide the Optomed Client window (this icon is the only one)'; $cbHide.Checked = [bool]$script:Cfg.HideClientWindow
 
     Add-Row 'Platform base URL' $tbUrl
     Add-Row 'Worklist token' $tbTok
@@ -484,9 +601,10 @@ $settingsItem.Add_Click({
     Add-Row 'Worklist fetch, every (sec)' $nuFetch
     Add-Row 'Study upload, every (min)' $nuUp
     Add-Row '' $cbOn
+    Add-Row '' $cbHide
 
-    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 260
-    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 260
+    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 294
+    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 294
     $f.Controls.AddRange(@($ok, $cancel)); $f.AcceptButton = $ok; $f.CancelButton = $cancel
 
     if ($f.ShowDialog() -eq 'OK') {
@@ -497,7 +615,10 @@ $settingsItem.Add_Click({
         $script:Cfg.WorklistIntervalSec = [int]$nuFetch.Value
         $script:Cfg.UploadIntervalMin = [int]$nuUp.Value
         $script:Cfg.Enabled = $cbOn.Checked
+        $script:Cfg.HideClientWindow = $cbHide.Checked
         Save-Config $script:Cfg
+        if ($script:Cfg.HideClientWindow) { $script:ClientShownByUser = $false; Request-ClientHide }
+        else { Set-ClientWindowVisible $true | Out-Null }
         $enabledItem.Checked = $cbOn.Checked
         Update-Timers
         Write-Log 'settings saved'
@@ -507,11 +628,14 @@ $settingsItem.Add_Click({
 })
 
 Update-Timers
+Start-ClientIfNeeded | Out-Null
+Request-ClientHide
 if ($script:Cfg.Enabled) { Invoke-FetchNow; Invoke-UploadNow }
 
 $ctx = New-Object Windows.Forms.ApplicationContext
 try { [Windows.Forms.Application]::Run($ctx) }
 finally {
+    Set-ClientWindowVisible $true | Out-Null   # the bridge hid it; the bridge gives it back
     $tray.Visible = $false; $tray.Dispose()
     $mutex.ReleaseMutex() | Out-Null
     Write-Log "$script:AppName stopped"

@@ -279,6 +279,11 @@ Two pieces:
   uploads pulled studies through the public front door with `PatientID` +
   `StudyDate` read from each header, and lets `/resolve` bind them. Settings in
   a dialog; token DPAPI-protected; counts and labels in the log, never names.
+  It also acts as the Client's keeper: starts it if it is not running and hides
+  its main window (`ShowWindow(SW_HIDE)` from outside the process — the Client
+  is a .NET MAUI app with no tray support of its own; its USB and folder
+  watching live in the process, not the window, verified live), with Show/Hide
+  in the menu and the window given back on exit.
 
 Spontaneous enrolment is why the fetch is periodic rather than a morning pull —
 and why it lists *visits*, not subjects: a subject enrolled without today's
