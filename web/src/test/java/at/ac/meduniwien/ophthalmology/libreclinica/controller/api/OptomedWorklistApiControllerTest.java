@@ -26,11 +26,13 @@ import org.springframework.test.web.servlet.MockMvc;
  * with the right status, and that a fresh install — no keys at all — answers
  * 404, not a list of the day's patients.
  *
- * <p>Configuration is injected as a map rather than read from
- * {@code CoreResources}, which is why these run identically on every host:
- * the first cut reached {@code CoreResources.getField} from inside MockMvc
- * and got a 500 in CI when that class's static initialisation failed with
- * an {@code Error} the controller's {@code catch (Exception)} did not cover.
+ * <p>Configuration is injected as a map, so all three refusals are exercised
+ * without a configured {@code CoreResources}. These tests went red twice in
+ * CI with a 500 before the cause was read correctly: not configuration, but
+ * {@code produces = text/plain} on the mapping, under which no converter
+ * could write the JSON {@code Map} error bodies. The mapping no longer
+ * declares {@code produces}; the file's content type is set on the success
+ * response itself.
  */
 class OptomedWorklistApiControllerTest extends AbstractApiControllerTest {
 
