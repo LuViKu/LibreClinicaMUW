@@ -393,11 +393,11 @@ core.remidio.email=<the integration account>
 core.remidio.password=<its password>
 core.remidio.siteCustomId=muw_vienna
 core.remidio.pull.intervalSeconds=120
-core.remidio.pull.lookbackDays=3
+core.remidio.pull.lookbackDays=14
 ```
 
 Restart the app (the scheduler reads the switches on every tick, but the
-properties file is read at boot). The first pass lists the last three days and
+properties file is read at boot). The first pass lists the last two weeks and
 files whatever is not in the inbox yet; from then on the log shows one line per
 pass that found something (`Remidio pull 2026-09-20..2026-09-23: exams=… new=…
 bound=… unbound=…`). An unhandled HTTP 500 from every endpoint means the client

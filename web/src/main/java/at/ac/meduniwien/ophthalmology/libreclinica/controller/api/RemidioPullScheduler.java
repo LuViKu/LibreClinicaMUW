@@ -55,7 +55,12 @@ public class RemidioPullScheduler {
     static final String KEY_LOOKBACK_DAYS = "core.remidio.pull.lookbackDays";
     static final int DEFAULT_INTERVAL_SECONDS = 120;
     static final int MIN_INTERVAL_SECONDS = 30;
-    static final int DEFAULT_LOOKBACK_DAYS = 3;
+    /**
+     * Two weeks: wide enough that a phone which syncs late is still caught
+     * without anyone widening anything, and cheap at clinic volume — the
+     * whole window is a few hundred kilobytes of JSON per pass.
+     */
+    static final int DEFAULT_LOOKBACK_DAYS = 14;
     static final int MAX_LOOKBACK_DAYS = 60;
 
     private final DataSource dataSource;

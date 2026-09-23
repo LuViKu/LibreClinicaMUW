@@ -42,14 +42,17 @@ treats the Remidio cloud as a third ingress into the existing `image_ingest`
 queue and the reconciliation inbox ([DR-025](decision-record.md#dr-025--dicom-c-store-receiver-for-handheld-fundus-cameras)), with
 `source_kind = 'remidio'` next to `upload` and `dicom`.
 
-1. **Poll, don't queue (for now).** Every `core.remidio.pull.intervalSeconds`
+1. **Poll, don't queue.** Every `core.remidio.pull.intervalSeconds`
    (default 120) the job logs in if it has no cached bearer, refreshes the
    cached `clientAuthToken` only when a call answers 401, and calls
    `getExamsByDate` for a sliding window (`today − core.remidio.pull.lookbackDays`,
-   default 3 … today) on `core.remidio.siteCustomId`. The queue endpoint is
-   the better contract (each exam delivered once, acknowledged after we
-   persisted it) and the client is written so switching to it is a config flag
-   once Remidio enables `dataQueueEnabled` for our org.
+   default 14 … today) on `core.remidio.siteCustomId`. The queue endpoint
+   would be the tidier contract (each exam delivered once, acknowledged after
+   we persisted it), but it is disabled for our org, its payload has never
+   been observed, and enabling it means asking the vendor — which we choose
+   not to do. Polling needs nothing from anyone: the window is wide enough
+   (two weeks) that a phone that syncs late is still caught, and at clinic
+   volume re-listing it every two minutes costs a few hundred kilobytes.
 2. **Dedupe on Remidio ids, never on content.** A new table
    `remidio_exam` (`remidio_exam_id` PK, `site_custom_id`, `exam_date`,
    `first_seen_at`, `image_count`) and `image_ingest.remidio_image_id`
@@ -155,12 +158,11 @@ What landed on `feature/muw-remidio-pull` (2026-09-23):
    tokens masked, listing summarised as counts).
 
 Still open, deliberately: the status-page tile for `lastSuccess`, a `remidio`
-source badge in the inbox (the inbox does not badge sources today), a
-`getQueueItem` consumer once Remidio enables the queue, and the HealthAEye SOP
-line for the MRN convention. Roll-out behind the flag on beta.10+1, the upload
+source badge in the inbox (the inbox does not badge sources today), and the
+HealthAEye SOP line for the MRN convention. Roll-out behind the flag on beta.10+1, the upload
 page kept in parallel for the first week.
 
-Open with Remidio (asked 2026-09-23): enable the gateway data queue for org
-`5599969650147328`; confirm the Germany backend and `CLOUD` storage location
-for the DPA; whether the FOP app can be pre-filled with a patient list in any
-form (answer expected: no).
+Nothing is asked of Remidio (decision 2026-09-23): the integration runs on the
+token already issued, the polling path needs no org setting flipped, and the
+data-protection facts the record needs — Germany backend, `CLOUD` storage —
+were read from the tenant itself.
