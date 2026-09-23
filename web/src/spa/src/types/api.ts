@@ -3300,6 +3300,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/device/optomed/worklist.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["worklist_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crfs/{crfOid}/versions/{versionOid}/xls": {
         parameters: {
             query?: never;
@@ -11343,6 +11359,30 @@ export interface operations {
                 };
                 content: {
                     "text/csv": unknown;
+                };
+            };
+        };
+    };
+    worklist_1: {
+        parameters: {
+            query?: {
+                date?: string;
+            };
+            header?: {
+                "X-MUW-Optomed-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };
