@@ -93,6 +93,9 @@ services:
       # and DICOM files; dicom-scp pseudonymises an uploaded .dcm in place
       # through this very bind, so it must be one directory on the host.
       - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
+      # monitor: the cluster monitor's log (root cron on the host writes it);
+      # the System Status page tails it. Read-only - the app only reads.
+      - /var/lib/libreclinica/monitor:/var/lib/libreclinica/monitor:ro
 
   db:
     restart: unless-stopped
