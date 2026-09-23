@@ -1,10 +1,10 @@
 # LibreClinica MUW · 1.5.0-beta.9-muw release notes
 
-_Successor to **1.5.0-beta.8-muw**. A short window with a clear cause: the September outage of the GPU cluster, which stopped every OCT job for nineteen days without the application saying so, and the first real reconciliation of a HealthAEye scan, which turned out to verify nothing. Two corrections and three pieces of operability follow from those two days._
+_Successor to **1.5.0-beta.8-muw**. A short window with a clear cause: the September outage of the GPU cluster, which stopped every OCT job for nineteen days without the application saying so, and the first real reconciliation of a HealthAEye scan, which turned out to verify nothing. Two corrections and three pieces of operability follow from those two days. And the HealthAEye camera, which was never going to join the WLAN, now works over a cable._
 
 For older releases see [release-notes-1.5.0-beta.8-muw.md](release-notes-1.5.0-beta.8-muw.md) and its predecessors.
 
-**Deployment-breaking:** none. One changeset, two optional keys, and one nginx change that only matters once you point the retinal pipeline at it. See [Upgrading](#upgrading-the-app-vm).
+**Deployment-breaking:** none. One changeset, four optional keys, and two nginx changes — the retinal failover, which only matters once you point the pipeline at it, and an Optomed location that answers 404 until its keys are set. See [Upgrading](#upgrading-the-app-vm).
 
 ---
 
@@ -40,6 +40,14 @@ Two choices that are easy to get wrong: it probes the **real nodes** (`core.reti
 
 Five instance-level pages — Systemstatus, System-Audit-Protokoll, Passwort-Richtlinie, Anwendungskonfiguration, Geplante Jobs — were linked from nowhere after the beta.8 navigation rework; the manual named their addresses and that was the only way in. They are now the **System** section: one Administrator-only entry in the top bar, kept to the right of the study chip because everything left of the chip is study-scoped and these pages are not, and a side rail on all five pages with the current one highlighted. The cluster panel above is on the first of them.
 
+### The Optomed Lumo works over a cable, and the camera's list keeps up
+
+The DICOM worklist path from beta.8 was verified against the real camera and then never left the bench. The Lumo speaks WPA2-PSK only; the institutional WLAN is WPA2-Enterprise with no PSK SSID; departments may not run a WLAN of their own; and the obvious detour — a phone hotspot with the institutional VPN on the phone — fails because iOS does not route tethered clients through the phone's VPN. What the camera does have is USB to a PC running the vendor's Optomed Client, and that turned out to carry the whole workflow.
+
+- **The worklist reaches the camera as a file.** The Client watches a folder for a file named exactly `worklist_optomed_lumo.txt`, imports it, **replaces** its entire list, pushes it to the camera on the next dock, and deletes the file — established against the real Client, not the manual. A new endpoint, `GET /api/v1/device/optomed/worklist.txt`, renders the day's open visits in the vendor's six-line format, byte for byte what the Client accepted, from the same query the DICOM worklist and the upload page use — so the three never disagree about what is open.
+- **A tray app on the clinic PC does the carrying.** `deploy/optomed/OptomedBridge.ps1` fetches the file every 30 seconds and drops it only when the content changed — the photographer enrols a subject and walks to the dock expecting it on the camera, so the poll has to beat the walk — and uploads what the Client pulls back through the public upload page, reading `PatientID` and `StudyDate` out of each header so that `/resolve` binds an image whose label matches exactly one visit that day. The rest land in the reconciliation inbox with the label as a hint. The camera generates its own accession number, so the sidecar's accession-based auto-bind cannot apply here; label plus date is the same thing the upload page does. Settings in a dialog; the token DPAPI-protected; counts and labels in the log, never names.
+- **Why it is not the DICOM worklist with a different content type.** That endpoint is refused at nginx precisely because it hands out real dates of birth behind a shared secret. This one must be reached from a clinic PC *through* nginx, so it earns that by carrying a placeholder date of birth, having its own token, answering 404 until enabled, and honouring the same per-device study scope. **Off by default:** nothing changes at this release until an operator switches it on.
+
 ---
 
 ## Migrations
@@ -54,7 +62,7 @@ Five instance-level pages — Systemstatus, System-Audit-Protokoll, Passwort-Ric
 
 ## Configuration
 
-Two new keys, both optional. As with beta.8, the bind-mounted `datainfo.properties` replaces the bundled copy rather than overlaying it, so re-run the setup script after rolling the image to have them appended:
+Four new keys, all optional. As with beta.8, the bind-mounted `datainfo.properties` replaces the bundled copy rather than overlaying it, so re-run the setup script after rolling the image to have them appended:
 
 ```sh
 sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh
@@ -65,6 +73,8 @@ sudo systemctl restart libreclinica
 |---|---|---|
 | `core.retinalInference.clusterNodes` | blank (probe `remotePushUrl` alone) | You run the nginx failover; list the real nodes as `name=baseUrl,…` so the panel sees each one |
 | `core.retinalInference.clusterMonitorLog` | `/var/lib/libreclinica/retinal-cluster-monitor.log` | The cron monitor writes elsewhere; blank hides the alerts panel |
+| `core.optomed.worklist.enabled` | `false` — the endpoint answers 404 | A Lumo is docked to a PC running the Optomed Client. It is a list of the day's patients, so it needs the same data-protection sign-off as the today's-visits list |
+| `core.optomed.worklist.token` | blank — 503 once enabled | Together with `enabled`; a long random value, **not** the DICOM token — a secret typed into a camera's config screen must not also open this |
 
 ---
 
@@ -76,6 +86,7 @@ sudo systemctl restart libreclinica
 4. **nginx.** The shipped `deploy/nginx/ecrf.conf` gained the `retinal_cluster` upstream and the 8088 listener. The file is bind-mounted from the deploy checkout, so validate it with the command in `deploy/nginx/README.md` and restart the stack. Then set `core.retinalInference.remotePushUrl=http://nginx:8088` and list the nodes in `core.retinalInference.clusterNodes`. The `remotePushUrl` takes a **base** URL: the client appends `/run` itself, and the old runbook text produced `/run/run`.
 5. **Rotate the shared inference secret.** It shipped as the repository's public placeholder; set a real value on both ends.
 6. **Verify** as an Administrator: **System → Systemstatus** shows every node healthy with 6 of 6 tasks and a latency. A node listed as unreachable is the panel working.
+7. **Optomed Lumo over USB (optional).** Nothing to do unless a Lumo is in use. The shipped `ecrf.conf` also gained a forwarding location for `/pages/api/v1/device/optomed/`, with an allow-list ready to uncomment once the clinic PC has a fixed address. To enable: set the two `core.optomed.worklist.*` keys, restart, then install the bridge on the clinic PC per `deploy/README.md` § "Optomed Lumo over USB". The Client's `Studies\` folder on that PC holds names and dates of birth in every file it pulls; the bridge moves uploaded files aside but does not delete them — retention there is a local decision.
 
 ## Upgrading the cluster
 
@@ -90,6 +101,8 @@ The launcher script and the sidecar's `/health` changed, and both run bare-metal
 - The SAS output needs acceptance by the study statistician.
 - The nAMD thresholds ship behaviour-preserving; adopting the specification's literal figures is a clinical decision.
 - The GPU selection and the cron-safe module loading run only on the cluster and have no automated test on either side; the dry run and the new panel are the check.
+- The Optomed worklist file is verified against the vendor's Client, not yet against the camera: whether it accepts `O` as a sex value (the vendor's template shows only M and F), and whether an empty file clears the camera's list rather than being ignored. Both are a one-dock check.
+- The Optomed bridge runs on the clinic PC as an unsigned PowerShell script. If execution policy there blocks it, a signed executable is the upgrade path, not a workaround.
 - `check-i18n` reports 119 keys where the German and English strings are identical, up from 116 at beta.8. The three new ones are the word "System", which is the same in both languages. The gate was already failing and is not treated as blocking.
 - `pnpm lint` cannot run: the SPA is on ESLint 9, which needs a flat config file, and none exists. Nothing has been linted for as long as that has been true. Worth its own small change.
 
