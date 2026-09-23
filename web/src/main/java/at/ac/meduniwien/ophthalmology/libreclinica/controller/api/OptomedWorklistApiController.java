@@ -97,15 +97,12 @@ public class OptomedWorklistApiController {
      * Where a configuration value comes from. In production that is
      * {@code CoreResources}; in a unit test it is a map.
      *
-     * <p>This exists because of a CI failure, not for elegance. The first cut
-     * read {@code CoreResources.getField} directly inside a
-     * {@code catch (Exception)}, and in a fresh surefire JVM that class's
-     * static initialisation fails with an {@code Error} — which the catch
-     * did not cover, so the "off by default answers 404" test got a 500. A
-     * broader catch would have hidden a static-init failure in production,
-     * where it means an outage; injecting the reader means the gate can be
-     * tested without touching {@code CoreResources} at all, and the 503 and
-     * 401 branches become testable too.
+     * <p>Injected so the gate can be unit-tested without a configured
+     * {@code CoreResources}: with a map behind it, the 404, 503 and 401
+     * branches are all exercised deterministically. (It was introduced while
+     * chasing a CI 500 that turned out to be the mapping's {@code produces},
+     * not configuration at all — see the comment on {@link #worklist}. The
+     * injection stayed because it is the right shape regardless.)
      */
     @FunctionalInterface
     interface ConfigReader {
@@ -141,7 +138,13 @@ public class OptomedWorklistApiController {
      *             picks from, and a week of visits is a longer scroll, not a
      *             better list.
      */
-    @GetMapping(value = "/worklist.txt", produces = MediaType.TEXT_PLAIN_VALUE)
+    // No `produces` here, on purpose. The file itself goes out as text/plain,
+    // set explicitly on the success response below; the 404/503/401 bodies
+    // are JSON maps like every other endpoint's. With produces=text/plain on
+    // the mapping there was no converter able to write a Map as text/plain,
+    // so every refusal became a 500 - on every host, which is what CI showed
+    // twice before the cause was read correctly.
+    @GetMapping(value = "/worklist.txt")
     public ResponseEntity<?> worklist(
             @RequestParam(value = "date", required = false) String date,
             @RequestHeader(value = TOKEN_HEADER, required = false) String token) {
