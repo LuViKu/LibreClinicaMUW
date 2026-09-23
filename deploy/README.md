@@ -362,6 +362,63 @@ local decision it does not make for you.
 If script execution is blocked on the clinic PC by policy, the bridge needs
 to become a signed executable; that is the upgrade path, not a workaround.
 
+### Clarus and Spectralis exports — the Export Watcher tray app
+
+Neither the Zeiss Clarus nor the Heidelberg Spectralis talks to the platform:
+the photographer exports to a folder on the acquisition PC (Clarus one `.dcm`
+per image, HEYEX one `.e2e` per export) and, until this, re-uploaded every
+file through the browser page. `deploy/export-watcher/ExportWatcher.ps1`
+watches that folder and carries each finished file through the same public
+upload front door the page uses (DR-029), so nothing changes server-side:
+
+- **sweep** every 20 s; a file counts as finished when its size has not
+  changed since the last sweep and it can be opened without sharing;
+- **identify** `.dcm` from the header (PatientID, StudyDate, laterality —
+  the Optomed bridge's reader) and `.e2e` from the Heidelberg chunk
+  directory (patient id, acquisition date and laterality per OCT volume —
+  a port of the page's own reader), one upload per volume;
+- **one `/resolve` per sweep** for every scan found, because lookups on the
+  public front door are budgeted at 30 per hour per client; exactly one
+  subject with exactly one visit that day → bound on arrival, otherwise the
+  reconciliation inbox with label and date as hints (an `.e2e` without a
+  visit is *parked*: no inference until somebody binds it);
+- `201` and `409` (already there) move the file to `_uploaded\`; anything
+  else is retried on later sweeps and after five attempts moved to
+  `_failed\`. Nothing is ever deleted.
+
+**One watcher per PC**, each pointed at that PC's own export folder: on the
+Clarus PC it runs beside the Optomed bridge, on the Spectralis PC alone.
+The convention is the one every device ingress here uses — **the patient id
+typed into the device is the study subject label** (Clarus: PatientID; HEYEX:
+the patient id, or after anonymisation the surname slot, where MUW keeps it).
+
+```powershell
+# On each acquisition PC, as the user who exports. Copy deploy/export-watcher/
+# somewhere stable first (the scripts run from there).
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-ExportWatcher.ps1 `
+  -BaseUrl https://ecrf.augen.meduniwien.ac.at/LibreClinica -WatchFolder D:\LibreClinica-Export
+# then: right-click the tray icon (a square; the bridge is a circle) -> Settings... -> Enabled,
+# and point the device's export at that folder.
+```
+
+No secret is entered anywhere: the public front door takes none. Settings
+are in `%ProgramData%\LibreClinica\export-watcher.json`, the log beside
+them (counts and pseudonymous labels only, never names or filenames).
+Before switching it on, check the readers on a real export:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTest -File D:\LibreClinica-Export\some.E2E
+# prints one line per volume: label, date, laterality — nothing is uploaded
+```
+
+`ExportWatcher.ps1 -Once` runs a single headless sweep and exits, for a
+scheduled task instead of the tray, or for testing the chain (it also runs
+on PowerShell 7 on Linux, which is how it was verified from a Mac against the
+dev stack). The exports stay on the PC, moved aside but never deleted; a
+Clarus `.dcm` carries the patient's name in its header until the platform
+pseudonymises its copy on ingest — retention there is a local decision, as
+for the Optomed Client's `Studies\` folder.
+
 ### Rebuild a single image without cutting a release
 
 For ad-hoc rebuilds (e.g. dep CVE refresh on the sidecar, no app change):
