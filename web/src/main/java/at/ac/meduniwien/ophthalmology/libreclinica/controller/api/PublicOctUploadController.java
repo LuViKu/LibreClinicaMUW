@@ -601,8 +601,12 @@ public class PublicOctUploadController {
         try {
             date = java.sql.Date.valueOf(iso);
         } catch (IllegalArgumentException badDate) {
-            LOG.warn("Preprocess returned an unparseable X-MUW-Acquisition-Date '{}' for e2eUuid={}; skipping update",
-                    iso, e2eUuid);
+            // Neither the header value nor the upload's uuid goes into the log:
+            // the date is read out of a patient's scan and the uuid arrives on
+            // the request, and this repository logs no device- or
+            // user-provided strings. The job id is enough to find the row.
+            LOG.warn("Preprocess returned an unparseable X-MUW-Acquisition-Date for job {}; skipping update",
+                    primaryJobId);
             return;
         }
         try (Connection c = dataSource.getConnection()) {
@@ -631,11 +635,11 @@ public class PublicOctUploadController {
                 ps.setDate(3, date);
                 items = ps.executeUpdate();
             }
-            LOG.info("Persisted acquisition_date={} on {} job(s) and {} ingest_item(s) for e2eUuid={}",
-                    iso, updated, items, e2eUuid);
+            LOG.info("Persisted the file's acquisition date on {} job(s) and {} ingest_item(s) for job {}",
+                    updated, items, primaryJobId);
         } catch (SQLException sqlEx) {
-            LOG.warn("Failed to persist acquisition_date={} for e2eUuid={}: {}",
-                    iso, e2eUuid, sqlEx.getMessage());
+            LOG.warn("Failed to persist the acquisition date for job {}: {}",
+                    primaryJobId, sqlEx.getMessage());
         }
     }
 

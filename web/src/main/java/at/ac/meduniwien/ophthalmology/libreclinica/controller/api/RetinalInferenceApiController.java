@@ -713,8 +713,9 @@ public class RetinalInferenceApiController {
         try {
             asDate = java.sql.Date.valueOf(iso);
         } catch (IllegalArgumentException badIso) {
-            LOG.warn("Job {} — acquisition_date '{}' is not parseable as YYYY-MM-DD: {}",
-                    jobId, iso, badIso.getMessage());
+            // The value itself stays out of the log: it is read out of a patient's
+            // scan by the sidecar, and this repository logs no device-provided strings.
+            LOG.warn("Job {} — the acquisition date from the sidecar is not parseable as YYYY-MM-DD", jobId);
             return;
         }
         try (PreparedStatement ps = c.prepareStatement(
@@ -725,7 +726,7 @@ public class RetinalInferenceApiController {
             ps.setDate(3, asDate);
             int rows = ps.executeUpdate();
             if (rows > 0) {
-                LOG.info("Persisted acquisition_date={} on job {}", iso, jobId);
+                LOG.info("Persisted the file's acquisition date on job {}", jobId);
             }
         } catch (SQLException sqlEx) {
             LOG.warn("Job {} — acquisition_date persist failed: {}",
