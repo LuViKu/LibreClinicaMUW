@@ -393,14 +393,18 @@ core.remidio.email=<the integration account>
 core.remidio.password=<its password>
 core.remidio.siteCustomId=muw_vienna
 core.remidio.pull.intervalSeconds=120
-core.remidio.pull.lookbackDays=14
+core.remidio.pull.overlapDays=14
+# where the very first pass starts (ISO date); blank = one year back
+core.remidio.pull.since=2026-06-17
 ```
 
 Restart the app (the scheduler reads the switches on every tick, but the
-properties file is read at boot). The first pass lists the last two weeks and
-files whatever is not in the inbox yet; from then on the log shows one line per
-pass that found something (`Remidio pull 2026-09-20..2026-09-23: exams=… new=…
-bound=… unbound=…`). An unhandled HTTP 500 from every endpoint means the client
+properties file is read at boot). The first pass lists everything from `since`
+in 30-day chunks and files whatever is not in the inbox yet; every later pass
+lists from *(last successful pass − overlapDays)* to today, so a phone that
+syncs late is caught and downtime catches up on its own. The log shows one
+line per pass that found something (`Remidio pull 2026-09-08..2026-09-23:
+exams=… new=… bound=… unbound=…`). An unhandled HTTP 500 from every endpoint means the client
 name is wrong; a 404 *"Site Custom ID … cannot be found"* means the custom
 identifier is not set in the dashboard. Before enabling, the chain can be
 walked by hand with `deploy/remidio/remidio-probe.sh` (reads the same values

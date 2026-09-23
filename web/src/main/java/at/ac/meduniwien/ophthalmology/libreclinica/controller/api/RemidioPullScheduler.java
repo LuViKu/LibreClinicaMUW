@@ -52,16 +52,19 @@ public class RemidioPullScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(RemidioPullScheduler.class);
 
     static final String KEY_INTERVAL_SECONDS = "core.remidio.pull.intervalSeconds";
-    static final String KEY_LOOKBACK_DAYS = "core.remidio.pull.lookbackDays";
+    /** How far behind the last successful pass each pass starts — the late-sync tolerance. */
+    static final String KEY_OVERLAP_DAYS = "core.remidio.pull.overlapDays";
+    /** Where the very first pass starts (ISO date); default one year back. */
+    static final String KEY_SINCE = "core.remidio.pull.since";
     static final int DEFAULT_INTERVAL_SECONDS = 120;
     static final int MIN_INTERVAL_SECONDS = 30;
     /**
-     * Two weeks: wide enough that a phone which syncs late is still caught
-     * without anyone widening anything, and cheap at clinic volume — the
-     * whole window is a few hundred kilobytes of JSON per pass.
+     * Two weeks: how late a phone may sync and still be caught. Not the poll
+     * interval — the listing filters by capture date, not by upload time.
      */
-    static final int DEFAULT_LOOKBACK_DAYS = 14;
-    static final int MAX_LOOKBACK_DAYS = 60;
+    static final int DEFAULT_OVERLAP_DAYS = 14;
+    static final int MAX_OVERLAP_DAYS = 365;
+    static final int DEFAULT_SINCE_DAYS_BACK = 365;
 
     private final DataSource dataSource;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -116,16 +119,15 @@ public class RemidioPullScheduler {
             LOG.info("Remidio pull: client built for site {} on {}", settings.siteCustomId(),
                     settings.baseUrl().replaceFirst("^https?://", ""));
         }
-        LocalDate to = LocalDate.now(RemidioPullService.CLINIC_ZONE);
-        LocalDate from = to.minusDays(lookbackDays());
         try {
-            RemidioPullService.Summary s = new RemidioPullService(dataSource, client).pull(from, to);
+            RemidioPullService.Summary s = new RemidioPullService(dataSource, client)
+                    .catchUp(overlapDays(), firstRunSince());
             lastSuccess = Instant.now();
             lastError = null;
             if (s.newExams() > 0 || s.failed() > 0) {
-                LOG.info("Remidio pull {}..{}: {}", from, to, s.line());
+                LOG.info("Remidio pull {}", s.line());
             } else {
-                LOG.debug("Remidio pull {}..{}: {}", from, to, s.line());
+                LOG.debug("Remidio pull {}", s.line());
             }
             return Optional.of(s);
         } catch (RemidioException e) {
@@ -159,8 +161,21 @@ public class RemidioPullScheduler {
         return Math.max(MIN_INTERVAL_SECONDS, cfgInt(KEY_INTERVAL_SECONDS, DEFAULT_INTERVAL_SECONDS));
     }
 
-    static int lookbackDays() {
-        return Math.max(0, Math.min(MAX_LOOKBACK_DAYS, cfgInt(KEY_LOOKBACK_DAYS, DEFAULT_LOOKBACK_DAYS)));
+    static int overlapDays() {
+        return Math.max(0, Math.min(MAX_OVERLAP_DAYS, cfgInt(KEY_OVERLAP_DAYS, DEFAULT_OVERLAP_DAYS)));
+    }
+
+    /** The configured first-pass start, or a year back when unset or unparseable. */
+    static LocalDate firstRunSince() {
+        String raw = cfg(KEY_SINCE, "");
+        if (!raw.isEmpty()) {
+            try {
+                return LocalDate.parse(raw);
+            } catch (RuntimeException notADate) {
+                LOG.warn("Remidio pull: {} is not an ISO date ('{}') — starting a year back", KEY_SINCE, raw);
+            }
+        }
+        return LocalDate.now(RemidioPullService.CLINIC_ZONE).minusDays(DEFAULT_SINCE_DAYS_BACK);
     }
 
     private static int cfgInt(String key, int def) {

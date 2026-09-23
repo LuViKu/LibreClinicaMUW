@@ -79,4 +79,39 @@
             <dropColumn tableName="ingest_item" columnName="remidio_image_id"/>
         </rollback>
     </changeSet>
+
+    <!--
+      The pull's watermark: when the last fully successful pass ran, per site.
+
+      The listing endpoint filters by the exam's capture date, not by when the
+      capture reached the cloud, so "everything since the last pass" is not a
+      window the API can answer. What it can answer is "everything captured
+      from (last pass minus an overlap) to today" — the overlap covers a phone
+      that syncs late. With no row the first pass lists from a configured start
+      date; with a row, downtime catches up on its own. Advanced only after
+      every chunk of a pass succeeded, so a failed pass is simply redone.
+    -->
+    <changeSet id="2026-12-04-remidio-pull-state" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_pull_state"/>
+            </not>
+        </preConditions>
+        <comment>remidio_pull_state — when the last successful pull pass ran, per site.</comment>
+
+        <createTable tableName="remidio_pull_state">
+            <column name="site_custom_id" type="VARCHAR(64)">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_pull_state" nullable="false"/>
+            </column>
+            <column name="last_success_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="window_from" type="DATE"/>
+            <column name="window_to" type="DATE"/>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="remidio_pull_state"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

@@ -42,17 +42,21 @@ treats the Remidio cloud as a third ingress into the existing `image_ingest`
 queue and the reconciliation inbox ([DR-025](decision-record.md#dr-025--dicom-c-store-receiver-for-handheld-fundus-cameras)), with
 `source_kind = 'remidio'` next to `upload` and `dicom`.
 
-1. **Poll, don't queue.** Every `core.remidio.pull.intervalSeconds`
+1. **Poll from a watermark, don't queue.** Every `core.remidio.pull.intervalSeconds`
    (default 120) the job logs in if it has no cached bearer, refreshes the
    cached `clientAuthToken` only when a call answers 401, and calls
-   `getExamsByDate` for a sliding window (`today − core.remidio.pull.lookbackDays`,
-   default 14 … today) on `core.remidio.siteCustomId`. The queue endpoint
-   would be the tidier contract (each exam delivered once, acknowledged after
-   we persisted it), but it is disabled for our org, its payload has never
-   been observed, and enabling it means asking the vendor — which we choose
-   not to do. Polling needs nothing from anyone: the window is wide enough
-   (two weeks) that a phone that syncs late is still caught, and at clinic
-   volume re-listing it every two minutes costs a few hundred kilobytes.
+   `getExamsByDate` on `core.remidio.siteCustomId` for the window
+   *(last successful pass − `core.remidio.pull.overlapDays`, default 14) … today*;
+   the very first pass lists from `core.remidio.pull.since` (default one
+   year back) in 30-day chunks. The watermark (`remidio_pull_state`) moves
+   only after every chunk succeeded, so a failed pass is redone and downtime
+   catches up by itself. The overlap is not the poll interval: the listing
+   filters by **capture date, not upload time**, so it is how late a phone
+   may sync and still be caught. The queue endpoint would be the tidier
+   contract (each exam delivered once, acknowledged after we persisted it),
+   but it is disabled for our org, its payload has never been observed, and
+   enabling it means asking the vendor — which we choose not to do. Polling
+   needs nothing from anyone.
 2. **Dedupe on Remidio ids, never on content.** A new table
    `remidio_exam` (`remidio_exam_id` PK, `site_custom_id`, `exam_date`,
    `first_seen_at`, `image_count`) and `image_ingest.remidio_image_id`

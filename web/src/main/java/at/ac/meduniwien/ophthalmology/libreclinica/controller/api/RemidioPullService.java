@@ -89,14 +89,33 @@ final class RemidioPullService {
     /** Enough of the file for {@link FileKindSniffer} to say what it is. */
     private static final int SNIFF_BYTES = 512;
 
+    /**
+     * A pass lists at most this many days per call. The listing carries every
+     * image's metadata, and the first pass may reach back a year.
+     */
+    static final int CHUNK_DAYS = 30;
+
     /** What one pass did, for the log and the status page. */
-    record Summary(int exams, int newExams, int images, int bound, int unbound, int duplicates,
-                   int skipped, int failed) {
+    record Summary(LocalDate from, LocalDate to, int exams, int newExams, int images, int bound,
+                   int unbound, int duplicates, int skipped, int failed) {
+
+        static Summary empty(LocalDate from, LocalDate to) {
+            return new Summary(from, to, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        /** The two summaries as one, spanning both windows. */
+        Summary plus(Summary o) {
+            return new Summary(
+                    from == null || (o.from != null && o.from.isBefore(from)) ? o.from : from,
+                    to == null || (o.to != null && o.to.isAfter(to)) ? o.to : to,
+                    exams + o.exams, newExams + o.newExams, images + o.images, bound + o.bound,
+                    unbound + o.unbound, duplicates + o.duplicates, skipped + o.skipped, failed + o.failed);
+        }
 
         String line() {
-            return "exams=" + exams + " new=" + newExams + " images=" + images + " bound=" + bound
-                    + " unbound=" + unbound + " duplicates=" + duplicates + " skipped=" + skipped
-                    + " failed=" + failed;
+            return from + ".." + to + ": exams=" + exams + " new=" + newExams + " images=" + images
+                    + " bound=" + bound + " unbound=" + unbound + " duplicates=" + duplicates
+                    + " skipped=" + skipped + " failed=" + failed;
         }
     }
 
@@ -128,7 +147,51 @@ final class RemidioPullService {
     /* ------------------------------------------------------------------ */
 
     /**
-     * Lists the window and files what is new.
+     * The pass the scheduler runs: from where the last successful pass left
+     * off, minus an overlap, up to today — or, the first time, from
+     * {@code firstRunSince}.
+     *
+     * <p>The overlap is not about the poll interval. The listing filters by the
+     * exam's capture date, not by when the capture reached the cloud, so a
+     * photo taken on Monday and synced from the phone on Thursday sits at
+     * Monday. The overlap is how late a sync may be and still be caught.
+     *
+     * <p>The watermark moves only after every chunk succeeded; a pass that
+     * fails halfway is redone from the old one, and the exams it did file are
+     * skipped by id the second time round.
+     */
+    Summary catchUp(int overlapDays, LocalDate firstRunSince) throws RemidioException {
+        LocalDate today = LocalDate.now(CLINIC_ZONE);
+        LocalDate from = windowStart(lastSuccessDay(), overlapDays, firstRunSince, today);
+        Summary total = Summary.empty(from, today);
+        for (LocalDate[] chunk : chunks(from, today, CHUNK_DAYS)) {
+            total = total.plus(pull(chunk[0], chunk[1]));
+        }
+        recordSuccess(from, today);
+        return total;
+    }
+
+    /** Where a pass starts: behind the last success by the overlap, else the configured beginning; never after today. */
+    static LocalDate windowStart(LocalDate lastSuccessDay, int overlapDays, LocalDate firstRunSince,
+                                 LocalDate today) {
+        LocalDate from = lastSuccessDay != null
+                ? lastSuccessDay.minusDays(Math.max(0, overlapDays))
+                : (firstRunSince != null ? firstRunSince : today.minusDays(365));
+        return from.isAfter(today) ? today : from;
+    }
+
+    /** Inclusive [from, to] cut into consecutive pieces of at most {@code days} days. */
+    static List<LocalDate[]> chunks(LocalDate from, LocalDate to, int days) {
+        List<LocalDate[]> out = new java.util.ArrayList<>();
+        for (LocalDate start = from; !start.isAfter(to); start = start.plusDays(days)) {
+            LocalDate end = start.plusDays(days - 1L);
+            out.add(new LocalDate[] {start, end.isAfter(to) ? to : end});
+        }
+        return out;
+    }
+
+    /**
+     * Lists one window and files what is new.
      *
      * @throws RemidioException when the listing itself fails — nothing was
      *                          filed, the caller decides whether to back off
@@ -154,7 +217,7 @@ final class RemidioPullService {
             }
             if (complete) markSeen(exam, filed);
         }
-        return new Summary(exams.size(), newExams, images, bound, unbound, duplicates, skipped, failed);
+        return new Summary(from, to, exams.size(), newExams, images, bound, unbound, duplicates, skipped, failed);
     }
 
     /* ------------------------------------------------------------------ */
@@ -333,6 +396,43 @@ final class RemidioPullService {
         } catch (SQLException e) {
             LOG.warn("remidio: could not check image {}: {}", imageId, e.getMessage());
             return true;
+        }
+    }
+
+    /** The clinic day of the last fully successful pass for this site, or null before the first. */
+    LocalDate lastSuccessDay() {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT last_success_at FROM remidio_pull_state WHERE site_custom_id = ?")) {
+            ps.setString(1, client.settings().siteCustomId());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                Timestamp ts = rs.getTimestamp(1);
+                return ts == null ? null : ts.toInstant().atZone(CLINIC_ZONE).toLocalDate();
+            }
+        } catch (SQLException e) {
+            // Without the watermark the pass starts from the configured
+            // beginning: more listing, nothing filed twice, nothing lost.
+            LOG.warn("remidio: could not read the pull watermark: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void recordSuccess(LocalDate from, LocalDate to) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO remidio_pull_state (site_custom_id, last_success_at, window_from, window_to) "
+                             + "VALUES (?, ?, ?, ?) "
+                             + "ON CONFLICT (site_custom_id) DO UPDATE SET last_success_at = EXCLUDED.last_success_at, "
+                             + "  window_from = EXCLUDED.window_from, window_to = EXCLUDED.window_to")) {
+            ps.setString(1, client.settings().siteCustomId());
+            ps.setTimestamp(2, Timestamp.from(Instant.now()));
+            ps.setObject(3, from);
+            ps.setObject(4, to);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            // The next pass re-lists from the old watermark; ids keep it honest.
+            LOG.warn("remidio: could not advance the pull watermark: {}", e.getMessage());
         }
     }
 
