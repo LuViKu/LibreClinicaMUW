@@ -4087,10 +4087,10 @@ export interface components {
         };
         UpdateEventRequest: {
             dateStarted?: string;
-            timeStarted?: string;
             dateEnded?: string;
             location?: string;
             status?: string;
+            timeStarted?: string;
         };
         StudyEventDto: {
             id?: string;
@@ -4705,10 +4705,10 @@ export interface components {
             subjectId?: string;
             eventDefinitionOid?: string;
             dateStarted?: string;
-            timeStarted?: string;
             location?: string;
             /** Format: int32 */
             scheduledIntervalDays?: number;
+            timeStarted?: string;
         };
         SignEventRequest: {
             password?: string;
