@@ -28,7 +28,17 @@
 set -u
 ENV_FILE="${1:-$HOME/.remidio.env}"
 [ -f "$ENV_FILE" ] || { echo "env file missing: $ENV_FILE" >&2; exit 1; }
-set -a; . <(sed 's/\r$//' "$ENV_FILE"); set +a
+# Read KEY=value lines ourselves rather than sourcing through a process
+# substitution: under macOS's bash 3.2 `. <(...)` leaves every variable
+# unset, so the probe reported the file as empty on the one machine an
+# operator is most likely to try it from first. Comments and blank lines
+# are skipped, a trailing CR is dropped, and values are taken literally
+# (no quoting or $-expansion — the same bytes the app reads from
+# datainfo.properties).
+while IFS= read -r line || [ -n "$line" ]; do
+  line="${line%$'\r'}"
+  case "$line" in REMIDIO_*=*) export "$line" ;; esac
+done < "$ENV_FILE"
 B="${REMIDIO_BASE_URL%/}"
 NAME="${REMIDIO_CLIENT_NAME:-PACS_GATEWAY}"
 LOOKBACK_DAYS="${LOOKBACK_DAYS:-7}"
