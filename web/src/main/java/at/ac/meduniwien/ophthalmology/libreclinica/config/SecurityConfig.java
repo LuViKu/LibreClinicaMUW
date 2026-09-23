@@ -181,6 +181,15 @@ public class SecurityConfig {
                         // (same shared-secret gate; the Lumo pulls scheduled
                         // visits via the sidecar's C-FIND).
                         "/pages/api/v1/internal/dicom-worklist/**",
+                        // 2026-09-23 — the Optomed Client's worklist file for a
+                        // USB-docked Lumo (the camera cannot join the Enterprise
+                        // WLAN). Reached from a clinic PC THROUGH the proxy, so
+                        // unlike the two internal paths above it is not refused
+                        // at the edge; it earns that by carrying a placeholder
+                        // date of birth, its own X-MUW-Optomed-Token, and being
+                        // off (404) unless core.optomed.worklist.enabled=true.
+                        // See OptomedWorklistApiController.
+                        "/pages/api/v1/device/optomed/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",
