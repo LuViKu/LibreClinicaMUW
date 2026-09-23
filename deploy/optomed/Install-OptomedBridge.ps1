@@ -76,6 +76,8 @@ if (-not (Test-Path $cfgPath)) {
         UploadIntervalMin   = 5
         Device              = 'optomed-lumo'
         Enabled             = $false
+        HideClientWindow    = $true
+        ClientExe           = (Join-Path $env:LOCALAPPDATA 'Optomed\OptomedClient\OptomedClient.exe')
     }
     $cfg | ConvertTo-Json | Set-Content -Path $cfgPath -Encoding UTF8
     Write-Host "seeded $cfgPath (disabled until a token is set in Settings)"

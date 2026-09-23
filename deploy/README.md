@@ -321,8 +321,16 @@ clinic PC over USB through the vendor's **Optomed Client**, and that is what
   visit, so an image whose label matches exactly one visit that day binds
   itself; the rest land in the reconciliation inbox with the label as a hint.
 
-It runs at login as a tray icon: enable/disable, fetch or upload now, and a
-settings dialog for the base URL, token, Client folder and both intervals.
+It runs at login as a tray icon: enable/disable, fetch or upload now, show or
+hide the Optomed Client, and a settings dialog for the base URL, token, Client
+folder and both intervals. It also keeps the Client itself running (starts it
+if it is not) and minimises the Client's window with its taskbar button
+removed, so the bridge's icon is the only one - the Client has no
+minimise-to-tray of its own. Minimised, never hidden: hiding that window from
+outside blanks its WebView2 for good (learned on the real Client). A
+minimised, buttonless window still hides the Client's own dialogs;
+**Show Optomed Client** is the answer when a firmware or pairing prompt
+needs a click.
 Settings live in `%ProgramData%\LibreClinica\optomed-bridge.json` with the
 token DPAPI-protected to the installing user; the log is next to it.
 

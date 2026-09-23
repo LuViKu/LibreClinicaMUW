@@ -279,6 +279,15 @@ Two pieces:
   uploads pulled studies through the public front door with `PatientID` +
   `StudyDate` read from each header, and lets `/resolve` bind them. Settings in
   a dialog; token DPAPI-protected; counts and labels in the log, never names.
+  It also acts as the Client's keeper: starts it if it is not running and
+  minimises its window with the taskbar button removed (`SW_MINIMIZE` plus the
+  shell's `ITaskbarList::DeleteTab`, restored with `AddTab` + `SW_RESTORE`).
+  The Client is WinForms hosting a WebView2 with no tray support of its own;
+  its USB and folder watching live in the process, not the window. Minimised,
+  never hidden: `SW_HIDE` from outside detaches the WebView2's render target
+  for good (white, then black, only a Client restart recovers), and DWM
+  cloaking is refused cross-process — all three established on the real
+  Client. Show/Hide in the menu; the window is given back on exit.
 
 Spontaneous enrolment is why the fetch is periodic rather than a morning pull —
 and why it lists *visits*, not subjects: a subject enrolled without today's
