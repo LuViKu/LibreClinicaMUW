@@ -162,11 +162,16 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
     void updateReturns400OnMalformedTime() throws Exception {
         // The same rule on edit. A blank timeStarted is allowed there (it
         // clears the time), so only a malformed one is refused.
+        // The role gate runs before validation on PUT (a Monitor gets 403
+        // whatever the body says), so the session needs an editing role for
+        // the malformed time to be the thing that is refused.
         mockMvcWith().perform(put("/api/v1/events/42")
                 .contentType("application/json")
                 .content("{\"timeStarted\":\"24:00\"}")
                 .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("'timeStarted' must be HH:mm")));
