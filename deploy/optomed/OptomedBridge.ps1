@@ -34,9 +34,11 @@
 
   It also keeps the Optomed Client itself running and out of the way: starts
   it if it is not running (the whole workflow dies quietly without it), and
-  hides its main window so this icon is the only one - the Client has no
-  minimise-to-tray of its own. Show it from the menu when a dialog of its own
-  needs answering; it is shown again when the bridge exits.
+  minimises its window and removes its taskbar button so this icon is the
+  only one - the Client has no minimise-to-tray of its own. Minimised, never
+  hidden: hiding that window from outside blanks its WebView2 for good. Show
+  it from the menu when a dialog of its own needs answering; it is shown
+  again when the bridge exits.
 
   Settings: %ProgramData%\LibreClinica\optomed-bridge.json. The token is
   DPAPI-protected to the user who saved it. Log alongside, rotated at 1 MB.
@@ -98,12 +100,13 @@ function Get-DefaultConfig {
         UploadIntervalMin   = 5
         Device              = 'optomed-lumo'
         Enabled             = $false
-        # The Optomed Client has no minimise-to-tray of its own (a .NET MAUI
-        # app; nothing tray-related in its install, nothing in its settings).
-        # The bridge hides the Client's main window instead and offers
-        # Show/Hide in its menu, so this icon is the only one. The process,
-        # not the window, does the USB and folder watching, so hiding it
-        # changes nothing about the sync - verified on the real Client.
+        # The Optomed Client has no minimise-to-tray of its own (WinForms
+        # hosting a WebView2; nothing tray-related in its install, nothing
+        # in its settings). The bridge minimises the Client's window and
+        # removes its taskbar button instead, and offers Show/Hide in its
+        # menu, so this icon is the only one. The process, not the window,
+        # does the USB and folder watching, so this changes nothing about
+        # the sync - verified on the real Client.
         HideClientWindow    = $true
         ClientExe           = (Join-Path $env:LOCALAPPDATA 'Optomed\OptomedClient\OptomedClient.exe')
     }
@@ -397,33 +400,30 @@ Add-Type -AssemblyName System.Drawing
 # the Optomed Client: keep it running, keep its window out of the way
 # ----------------------------------------------------------------------------
 if (-not ('OptomedBridge.Win32' -as [type])) {
-    # FindMainWindow exists because Process.MainWindowHandle is ZERO for a
-    # hidden window - .NET only counts visible ones - which is exactly the
-    # state "Show" has to recover from. Enumerate the process's top-level
-    # windows instead and take the one with a caption; helper and
-    # message-only windows have none.
+    # Minimise, never hide. The Client is WinForms hosting a WebView2, and
+    # hiding that window from outside (SW_HIDE) detaches the WebView's
+    # render target: it comes back as a white or black rectangle and no
+    # resize revives it. Minimise/restore is the normal lifecycle and
+    # survives. The taskbar button of the minimised window is removed with
+    # the shell's own ITaskbarList::DeleteTab - the documented way, and the
+    # one the classic tray-minimiser utilities use - and put back with
+    # AddTab on show. DWM cloaking, the other invisible-but-alive option, is
+    # refused for another process's window (E_ACCESSDENIED).
     Add-Type -Namespace OptomedBridge -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-[DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
-[DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-[DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
-delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
-const int GWL_STYLE = -16; const int WS_CAPTION = 0x00C00000;
-public static IntPtr FindMainWindow(uint pid) {
-    IntPtr found = IntPtr.Zero;
-    EnumWindows((h, l) => {
-        uint p; GetWindowThreadProcessId(h, out p);
-        if (p == pid && (GetWindowLong(h, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) { found = h; return false; }
-        return true;
-    }, IntPtr.Zero);
-    return found;
-}
+[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[ComImport, Guid("56FDF342-FD6D-11d0-958A-006097C9A090"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface ITaskbarList { void HrInit(); void AddTab(IntPtr h); void DeleteTab(IntPtr h); void ActivateTab(IntPtr h); void SetActiveAlt(IntPtr h); }
+[ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090")] public class TaskbarListCo { }
+public static void DeleteTab(IntPtr h) { var t = (ITaskbarList)new TaskbarListCo(); t.HrInit(); t.DeleteTab(h); }
+public static void AddTab(IntPtr h)    { var t = (ITaskbarList)new TaskbarListCo(); t.HrInit(); t.AddTab(h); }
 '@
 }
-$script:SW_HIDE = 0; $script:SW_SHOW = 5; $script:SW_RESTORE = 9
-$script:ClientShownByUser = $false   # "Show" from the menu stops the bridge re-hiding it
-$script:ClientHwnd = [IntPtr]::Zero  # last handle seen, for when enumeration finds nothing
+$script:SW_MINIMIZE = 6; $script:SW_RESTORE = 9
+$script:ClientShownByUser = $false   # "Show" from the menu stops the bridge re-minimising it
+$script:ClientHwnd = [IntPtr]::Zero  # last handle seen, for the moments .NET reports none
 
 function Get-ClientProcess {
     Get-Process -Name OptomedClient -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -438,23 +438,41 @@ function Start-ClientIfNeeded {
     $true
 }
 
-# The Client's MAUI window may not exist yet right after it starts, so this
-# is re-evaluated on every call. Enumerated by pid rather than read from
-# Process.MainWindowHandle, which is zero once the window is hidden - the
-# first cut used that and "Show" could not find what it had just hidden.
+# Process.MainWindowHandle is the right handle for a WinForms app, and it
+# stays valid while the window is MINIMISED (only a hidden window zeroes
+# it - which is one more reason this never hides). Re-read on every call:
+# the window may not exist yet right after the Client starts, and
+# Get-Process caches the value. The last handle seen covers the moments
+# .NET reports none, such as while a modal dialog of the Client's is up.
 function Get-ClientWindowHandle {
     $p = Get-ClientProcess
     if (-not $p) { $script:ClientHwnd = [IntPtr]::Zero; return [IntPtr]::Zero }
-    $h = [OptomedBridge.Win32]::FindMainWindow([uint32]$p.Id)
+    $p.Refresh()
+    $h = $p.MainWindowHandle
     if ($h -ne [IntPtr]::Zero) { $script:ClientHwnd = $h; return $h }
     $script:ClientHwnd
 }
 
+# "Hidden" means minimised with no taskbar button; "shown" means restored
+# with its button back. Nothing here changes the window's size or style, and
+# nothing hides it: see the comment on the Win32 type for why.
 function Set-ClientWindowVisible([bool]$visible) {
     $h = Get-ClientWindowHandle
     if ($h -eq [IntPtr]::Zero) { return $false }
-    if ($visible) { [OptomedBridge.Win32]::ShowWindow($h, $script:SW_RESTORE) | Out-Null }
-    else          { [OptomedBridge.Win32]::ShowWindow($h, $script:SW_HIDE)    | Out-Null }
+    if (-not $visible) {
+        [OptomedBridge.Win32]::ShowWindow($h, $script:SW_MINIMIZE) | Out-Null
+        $tries = 0
+        while ($tries -lt 30 -and -not [OptomedBridge.Win32]::IsIconic($h)) { Start-Sleep -Milliseconds 100; $tries++ }
+        # Soft-fail: a shell that refuses leaves an ordinary minimised window,
+        # which is still the right state, just with a button.
+        try { [OptomedBridge.Win32]::DeleteTab($h) } catch { Write-Log "optomed client: taskbar button could not be removed: $($_.Exception.Message)" 'WARN' }
+        return $true
+    }
+    try { [OptomedBridge.Win32]::AddTab($h) } catch { }
+    [OptomedBridge.Win32]::ShowWindow($h, $script:SW_RESTORE) | Out-Null
+    $tries = 0
+    while ($tries -lt 30 -and [OptomedBridge.Win32]::IsIconic($h)) { Start-Sleep -Milliseconds 100; $tries++ }
+    [OptomedBridge.Win32]::SetForegroundWindow($h) | Out-Null
     $true
 }
 
@@ -466,9 +484,9 @@ $script:HideAttempts = 0
 $hideTimer.Add_Tick({
     $script:HideAttempts++
     $h = Get-ClientWindowHandle
-    if ($h -ne [IntPtr]::Zero -and [OptomedBridge.Win32]::IsWindowVisible($h)) {
+    if ($h -ne [IntPtr]::Zero -and [OptomedBridge.Win32]::IsWindowVisible($h) -and -not [OptomedBridge.Win32]::IsIconic($h)) {
         Set-ClientWindowVisible $false | Out-Null
-        Write-Log 'optomed client: window hidden'
+        Write-Log 'optomed client: window minimised, taskbar button removed'
         $hideTimer.Stop()
     } elseif ($script:HideAttempts -ge 45) {   # 90 s: it is not coming; stop polling
         $hideTimer.Stop()
