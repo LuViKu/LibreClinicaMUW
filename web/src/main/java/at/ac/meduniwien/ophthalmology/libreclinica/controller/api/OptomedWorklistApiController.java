@@ -93,11 +93,46 @@ public class OptomedWorklistApiController {
 
     private static final MediaType TEXT_ASCII = new MediaType("text", "plain", StandardCharsets.US_ASCII);
 
+    /**
+     * Where a configuration value comes from. In production that is
+     * {@code CoreResources}; in a unit test it is a map.
+     *
+     * <p>This exists because of a CI failure, not for elegance. The first cut
+     * read {@code CoreResources.getField} directly inside a
+     * {@code catch (Exception)}, and in a fresh surefire JVM that class's
+     * static initialisation fails with an {@code Error} — which the catch
+     * did not cover, so the "off by default answers 404" test got a 500. A
+     * broader catch would have hidden a static-init failure in production,
+     * where it means an outage; injecting the reader means the gate can be
+     * tested without touching {@code CoreResources} at all, and the 503 and
+     * 401 branches become testable too.
+     */
+    @FunctionalInterface
+    interface ConfigReader {
+        /** The raw value, or null when the key is absent or unreadable. */
+        String get(String key);
+    }
+
     private final DataSource dataSource;
+    private final ConfigReader config;
 
     @Autowired
     public OptomedWorklistApiController(@Qualifier("dataSource") DataSource dataSource) {
+        this(dataSource, OptomedWorklistApiController::coreResourcesField);
+    }
+
+    OptomedWorklistApiController(DataSource dataSource, ConfigReader config) {
         this.dataSource = dataSource;
+        this.config = config;
+    }
+
+    /** The production reader: {@code datainfo.properties} via CoreResources. */
+    private static String coreResourcesField(String key) {
+        try {
+            return CoreResources.getField(key);
+        } catch (Exception unreadable) {
+            return null;
+        }
     }
 
     /**
@@ -164,13 +199,8 @@ public class OptomedWorklistApiController {
                 a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     }
 
-    private static String cfg(String key, String dflt) {
-        try {
-            String raw = CoreResources.getField(key);
-            if (raw != null && !raw.isBlank()) return raw.trim();
-        } catch (Exception ignored) {
-            // CoreResources unavailable — use the default.
-        }
-        return dflt;
+    private String cfg(String key, String dflt) {
+        String raw = config.get(key);
+        return (raw == null || raw.isBlank()) ? dflt : raw.trim();
     }
 }
