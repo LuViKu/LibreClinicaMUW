@@ -3065,6 +3065,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/by-event/{studyEventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["byEvent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import/{token}/rows": {
         parameters: {
             query?: never;
@@ -11148,6 +11164,28 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    byEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyEventId: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
