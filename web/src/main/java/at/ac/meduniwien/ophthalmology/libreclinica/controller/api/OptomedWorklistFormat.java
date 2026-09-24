@@ -11,8 +11,11 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * The Optomed Client's worklist text file, byte for byte.
@@ -31,6 +34,19 @@ import java.util.Locale;
  *       six that were there before. So every file is the complete current
  *       list and stale entries fall away on their own. Nothing here deduplicates.</li>
  *   <li>The file is consumed on import, so the folder is empty between drops.</li>
+ *   <li>A file that names the same {@code PatientID} twice is <strong>refused
+ *       and left in the folder</strong> - no error anywhere, the list simply
+ *       never reaches the camera. So this renders one record per subject: a
+ *       second visit the same day joins the first record's given-name field
+ *       ("Baseline+V1", no spaces). Verified 2026-09-23, the day a subject
+ *       with two visits stopped the whole list.</li>
+ *   <li>The given-name line is split on whitespace into given and middle
+ *       name, and a third word is dropped ("Baseline + V1" came back as
+ *       {@code Baseline^+} with the V1 gone). An event label therefore keeps
+ *       at most two words on the camera; the join above uses no spaces.</li>
+ *   <li>An empty (0-byte) file is imported and clears the camera's list;
+ *       {@code O} is accepted as a sex value. Both verified on the camera
+ *       itself on 2026-09-23.</li>
  * </ul>
  *
  * <p>The format is taken from the vendor's template
@@ -92,12 +108,26 @@ final class OptomedWorklistFormat {
      *         camera worklist
      */
     static byte[] render(List<ScheduledVisitQuery.ScheduledVisit> visits) {
-        StringBuilder sb = new StringBuilder(visits.size() * 80 + 8);
-        for (int i = 0; i < visits.size(); i++) {
-            if (i > 0) sb.append(CRLF);          // the blank line between records
-            appendRecord(sb, visits.get(i));
+        // One record per SUBJECT, not per visit. The Client keys its list by
+        // PatientID and refuses - silently, by leaving the file where it is -
+        // any file that names the same id twice. Found on 2026-09-23 when a
+        // subject with two visits that day (Baseline + V1) stopped the whole
+        // list from reaching the camera. A second visit the same day merges
+        // into the first record: its label joins the given-name field, so the
+        // photographer still sees both, and the earlier start is kept (the
+        // query is ordered, so the first seen is the earlier).
+        Map<String, List<ScheduledVisitQuery.ScheduledVisit>> bySubject = new LinkedHashMap<>();
+        for (ScheduledVisitQuery.ScheduledVisit v : visits) {
+            bySubject.computeIfAbsent(ascii(v.subjectLabel(), "UNKNOWN"), k -> new ArrayList<>()).add(v);
         }
-        if (!visits.isEmpty()) {
+        StringBuilder sb = new StringBuilder(bySubject.size() * 80 + 8);
+        boolean first = true;
+        for (List<ScheduledVisitQuery.ScheduledVisit> group : bySubject.values()) {
+            if (!first) sb.append(CRLF);         // the blank line between records
+            first = false;
+            appendRecord(sb, group);
+        }
+        if (!bySubject.isEmpty()) {
             // The template ends its last field with CRLF and then two empty
             // lines: three CRLFs in a row, which is what the Client ingested.
             sb.append(CRLF).append(CRLF);
@@ -105,14 +135,27 @@ final class OptomedWorklistFormat {
         return sb.toString().getBytes(StandardCharsets.US_ASCII);
     }
 
-    private static void appendRecord(StringBuilder sb, ScheduledVisitQuery.ScheduledVisit v) {
-        String label = ascii(v.subjectLabel(), "UNKNOWN");
-        sb.append(scheduledStart(v)).append(CRLF)
+    /** One subject's record, from all of its visits that day (usually one). */
+    private static void appendRecord(StringBuilder sb, List<ScheduledVisitQuery.ScheduledVisit> group) {
+        ScheduledVisitQuery.ScheduledVisit lead = group.get(0);
+        String label = ascii(lead.subjectLabel(), "UNKNOWN");
+        // Joined WITHOUT spaces. The Client splits the given-name line on
+        // whitespace into given and middle name and drops anything after the
+        // second word: "Baseline + V1" came back as Baseline^+ with V1 gone.
+        // "Baseline+V1" is one word and survives. (The same rule means an
+        // event label keeps at most two words on the camera.)
+        StringBuilder given = new StringBuilder();
+        for (ScheduledVisitQuery.ScheduledVisit v : group) {
+            String e = ascii(v.eventLabel(), "Visit");
+            if (given.length() > 0) given.append('+');
+            given.append(e);
+        }
+        sb.append(scheduledStart(lead)).append(CRLF)
           .append(label).append(CRLF)
-          .append(ascii(v.eventLabel(), "Visit")).append(CRLF)
+          .append(ascii(given.toString(), "Visit")).append(CRLF)   // re-capped at MAX_FIELD after the join
           .append(label).append(CRLF)
           .append(PLACEHOLDER_DOB).append(CRLF)
-          .append(sex(v.gender())).append(CRLF);
+          .append(sex(lead.gender())).append(CRLF);
     }
 
     /**
