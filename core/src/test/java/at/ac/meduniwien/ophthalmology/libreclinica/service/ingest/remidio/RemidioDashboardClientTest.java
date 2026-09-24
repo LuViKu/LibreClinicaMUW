@@ -141,6 +141,38 @@ public class RemidioDashboardClientTest {
     }
 
     @Test
+    public void theSiteCheckUsesTheDashboardsOwnSiteListAndNotTheGateway() throws Exception {
+        ScriptedTransport wire = loggedIn().answer(200, ok(
+                "[{\"siteId\":5898310359449600,\"siteName\":\"Vienna\",\"siteDomain\":\"meduniwien.ac.at\"}]"));
+        RemidioDashboardClient client = new RemidioDashboardClient(SETTINGS, wire);
+
+        assertFalse("the configured site is in the list", client.siteMismatch().isPresent());
+
+        Call check = wire.calls.get(1);
+        assertEquals("/api/org/getSites", check.path());
+        assertEquals("rem", check.headers().get("tokentype"));
+        assertFalse("no getAuthToken, so no clientAuthToken to invalidate",
+                check.headers().containsKey("clientAuthToken"));
+    }
+
+    @Test
+    public void aMistypedSiteIdIsReportedWithTheIdsThatDoExist() throws Exception {
+        // One digit wrong - exactly the production failure of 2026-09-24,
+        // where every createPatient came back "The site whose data you're
+        // trying to access cannot be found" once per subject, per pass.
+        RemidioDashboardClient.Settings typo = new RemidioDashboardClient.Settings(
+                "https://remidio.example", "", "dash-token", "bot@example.org", "pw", 5898310359448600L);
+        ScriptedTransport wire = loggedIn().answer(200, ok(
+                "[{\"siteId\":5898310359449600,\"siteName\":\"Vienna\"}]"));
+        RemidioDashboardClient client = new RemidioDashboardClient(typo, wire);
+
+        Optional<java.util.List<Long>> mismatch = client.siteMismatch();
+
+        assertTrue(mismatch.isPresent());
+        assertEquals(java.util.List.of(5898310359449600L), mismatch.get());
+    }
+
+    @Test
     public void mrnsAreUrlEncodedInThePath() throws Exception {
         ScriptedTransport wire = loggedIn().answer(404, "{\"status\":{\"statusCode\":\"NOT_FOUND\"},\"data\":null}");
         RemidioDashboardClient client = new RemidioDashboardClient(SETTINGS, wire);
