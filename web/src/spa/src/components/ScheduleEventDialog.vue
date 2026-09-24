@@ -63,6 +63,10 @@ const today = computed(() => {
 
 const eventDefinitionOid = ref('')
 const dateStarted = ref(today.value)
+// Optional HH:mm. A visit scheduled with a time carries it into the DICOM
+// worklist and the Optomed camera's list (which otherwise show 00:00) and
+// into visit ordering; left blank, the visit is date-only as before.
+const timeStarted = ref('')
 const location = ref('')
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
@@ -88,6 +92,7 @@ const eligibleDefinitions = computed(() =>
 function resetForm() {
   eventDefinitionOid.value = ''
   dateStarted.value = today.value
+  timeStarted.value = ''
   location.value = ''
   fieldErrors.value = {}
   formError.value = null
@@ -131,6 +136,11 @@ async function onSubmit() {
     fieldErrors.value.dateStarted = t('scheduleEvent.error.dateInvalid')
     return
   }
+  const trimmedTime = timeStarted.value.trim()
+  if (trimmedTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmedTime)) {
+    fieldErrors.value.timeStarted = t('scheduleEvent.error.timeInvalid')
+    return
+  }
 
   // nAMD T-and-E — parse the weeks stepper into days. Empty string
   // is "not applicable"; non-empty must be a non-negative integer.
@@ -151,6 +161,7 @@ async function onSubmit() {
       subjectId: props.subjectId,
       eventDefinitionOid: eventDefinitionOid.value,
       dateStarted: dateStarted.value,
+      ...(trimmedTime ? { timeStarted: trimmedTime } : {}),
       ...(trimmedLocation ? { location: trimmedLocation } : {}),
       ...(scheduledIntervalDays != null ? { scheduledIntervalDays } : {}),
     })
@@ -226,6 +237,21 @@ async function onSubmit() {
           :error="!!fieldErrors.dateStarted"
         />
         <ErrorText v-if="fieldErrors.dateStarted">{{ fieldErrors.dateStarted }}</ErrorText>
+      </div>
+
+      <div>
+        <FieldLabel for="schedule-event-time">
+          {{ t('scheduleEvent.field.timeStarted') }}
+        </FieldLabel>
+        <TextInput
+          id="schedule-event-time"
+          v-model="timeStarted"
+          type="time"
+          :placeholder="t('scheduleEvent.placeholder.timeStarted')"
+          :error="!!fieldErrors.timeStarted"
+        />
+        <p class="mt-1 text-xs text-slate-500">{{ t('scheduleEvent.help.timeStarted') }}</p>
+        <ErrorText v-if="fieldErrors.timeStarted">{{ fieldErrors.timeStarted }}</ErrorText>
       </div>
 
       <div>

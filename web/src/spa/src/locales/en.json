@@ -2641,7 +2641,9 @@
       "status": {
         "stopped": "Stopped",
         "skipped": "Skipped"
-      }
+      },
+      "timeStart": "Start time",
+      "timeInvalid": "Time must be HH:MM (24-hour)."
     },
     "eyeTransition": {
       "title": "Transfer {eye} on {subjectLabel} to another study",
@@ -2800,15 +2802,18 @@
       "eventDefinition": "Event definition",
       "dateStarted": "Start date",
       "location": "Location",
-      "intervalWeeks": "Next interval (weeks)"
+      "intervalWeeks": "Next interval (weeks)",
+      "timeStarted": "Start time"
     },
     "placeholder": {
       "eventDefinition": "Select an event definition…",
       "location": "Optional",
-      "intervalWeeks": "e.g. 8"
+      "intervalWeeks": "e.g. 8",
+      "timeStarted": "HH:MM"
     },
     "help": {
-      "intervalWeeks": "Optional — for treat-and-extend protocols. The next visit's due date is computed automatically."
+      "intervalWeeks": "Optional — for treat-and-extend protocols. The next visit's due date is computed automatically.",
+      "timeStarted": "Optional. Shown on the camera worklist and used for ordering; without it the visit is date-only."
     },
     "submit": "Schedule",
     "empty": "No event definitions are available for this study.",
@@ -2817,7 +2822,8 @@
       "dateRequired": "Start date is required.",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "intervalInvalid": "Interval must be a non-negative integer.",
-      "generic": "Could not schedule the event. Please try again."
+      "generic": "Could not schedule the event. Please try again.",
+      "timeInvalid": "Time must be HH:MM (24-hour)."
     }
   },
   "ophth": {

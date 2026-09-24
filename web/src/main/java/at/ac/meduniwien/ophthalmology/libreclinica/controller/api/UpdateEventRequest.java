@@ -34,5 +34,7 @@ public record UpdateEventRequest(
         String dateStarted,
         String dateEnded,
         String location,
-        String status
+        String status,
+        /** Optional {@code HH:mm}. Absent: unchanged. Blank: cleared (date-only visit). */
+        String timeStarted
 ) {}
