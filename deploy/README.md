@@ -372,6 +372,27 @@ local decision it does not make for you.
 If script execution is blocked on the clinic PC by policy, the bridge needs
 to become a signed executable; that is the upgrade path, not a workaround.
 
+### DICOM sidecar (optional, but needed for any DICOM upload)
+
+Every DICOM file the platform takes in - a camera's C-STORE, a Clarus or
+PlexElite export on the upload page, the Optomed bridge's studies - goes
+through the `dicom-scp` sidecar's `/describe`, which pseudonymises the header
+before a row is written. Without the sidecar every DICOM upload is refused
+with **503** ("the DICOM service is not reachable"). It is off by default.
+
+```sh
+sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --dicom
+sudo systemctl restart libreclinica
+sudo docker ps --format '{{.Names}}'      # five services now, dicom-scp among them
+```
+
+`--dicom` sets `COMPOSE_PROFILES=dicom`, mints `DICOM_SCP_INGEST_TOKEN` once,
+pairs it into `core.dicom.ingest.token`, and adds `dicom-scp` to the systemd
+unit's service list (a profile alone cannot add a service to an explicit
+list). The camera-facing port 11112 stays on loopback
+(`LIBRECLINICA_DICOM_BIND_ADDR`) until a camera is wired; set it to the VM's
+internal address then.
+
 ### Rebuild a single image without cutting a release
 
 For ad-hoc rebuilds (e.g. dep CVE refresh on the sidecar, no app change):
