@@ -69,3 +69,17 @@ export interface ImagingPlanEntryWrite {
   laterality: ImagingLaterality | null
   tasks: string[]
 }
+
+/** DR-035 — what applying a plan to already-filed scans did, or would do. */
+export interface ImagingPlanCatchUp {
+  /** OCT volumes filed at visits of this definition. */
+  scans: number
+  /** Existing jobs pointed at their visit. */
+  attached: number
+  /** Analyses started (new or revived). */
+  started: number
+  failed: number
+  dryRun: boolean
+  /** False when the server has no inference dispatcher: nothing can be started. */
+  dispatcherAvailable: boolean
+}

@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 import org.slf4j.Logger;
@@ -106,6 +107,9 @@ public class IngestInboxApiController {
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final StudySubjectFinder studySubjectFinder;
+    /** DR-035 — nullable; without them a bind attaches existing jobs but starts none. */
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalInferenceApiController inferenceController;
 
     private StudyResourceAccess access;
     private IngestBindService binds;
@@ -113,10 +117,21 @@ public class IngestInboxApiController {
     @Autowired
     public IngestInboxApiController(@Qualifier("dataSource") DataSource dataSource,
                                     SiteVisibilityFilter siteVisibilityFilter,
-                                    StudySubjectFinder studySubjectFinder) {
+                                    StudySubjectFinder studySubjectFinder,
+                                    RemoteRetinalInferenceClient remoteClient,
+                                    RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.studySubjectFinder = studySubjectFinder;
+        this.remoteClient = remoteClient;
+        this.inferenceController = inferenceController;
+    }
+
+    /** Test seam: no inference dispatcher. */
+    public IngestInboxApiController(DataSource dataSource,
+                                    SiteVisibilityFilter siteVisibilityFilter,
+                                    StudySubjectFinder studySubjectFinder) {
+        this(dataSource, siteVisibilityFilter, studySubjectFinder, null, null);
     }
 
     private StudyResourceAccess access() {
@@ -125,7 +140,10 @@ public class IngestInboxApiController {
     }
 
     private IngestBindService binds() {
-        if (binds == null) binds = new IngestBindService(dataSource);
+        if (binds == null) {
+            binds = new IngestBindService(dataSource,
+                    new RetinalJobFollower(dataSource, remoteClient, inferenceController));
+        }
         return binds;
     }
 

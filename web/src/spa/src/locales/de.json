@@ -2116,7 +2116,18 @@
       "requiredByModule": "Vom Studienmodul vorausgesetzt",
       "requiredByModuleHint": "Vom aktiven Studienmodul vorausgesetzt und deshalb immer aktiv: {tasks}.",
       "hint": "Angehakte Modalitäten werden bei dieser Visite erwartet. „Erforderlich“ verhindert das Signieren, solange kein Bild dieser Modalität (und ggf. dieses Auges) der Visite zugeordnet ist. Die KI-Tasks laufen auf jedem OCT-Volumen dieser Modalität, sobald es der Visite zugeordnet ist; ohne Eintrag für die OCT-Modalität läuft nichts. Eine Visite ohne Einträge übernimmt die alte Task-Liste (Standard: Flüssigkeit).",
-      "saveError": "Erwartete Bildgebung konnte nicht gespeichert werden."
+      "saveError": "Erwartete Bildgebung konnte nicht gespeichert werden.",
+      "catchUp": {
+        "loading": "Abgelegte Scans werden geprüft …",
+        "none": "An Visiten dieser Definition sind noch keine OCT-Scans abgelegt.",
+        "summary": "{scans} abgelegte(r) OCT-Scan(s) an Visiten dieser Definition; {n} neue Auswertung(en) würden gestartet.",
+        "apply": "Auf abgelegte Scans anwenden",
+        "applying": "Wird angewendet …",
+        "done": "Angewendet: {attached} zugeordnet, {started} gestartet{failedPart}.",
+        "failedPart": ", {failed} fehlgeschlagen",
+        "error": "Die Anwendung auf abgelegte Scans ist fehlgeschlagen.",
+        "hint": "Der Plan gilt für Scans, die ab jetzt abgelegt werden. Diese Aktion holt bereits abgelegte Scans nach: vorhandene Ergebnisse werden zugeordnet, fehlende Auswertungen gestartet. Ergebnisse werden nie gelöscht."
+      }
     }
   },
   "studyForm": {
@@ -3797,7 +3808,8 @@
       "succeeded": "Abgeschlossen",
       "done": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
-      "parked": "Geparkt"
+      "parked": "Geparkt",
+      "cancelled": "Abgebrochen (Scan von Visite entfernt)"
     },
     "task": {
       "fluid": "Flüssigkeit",

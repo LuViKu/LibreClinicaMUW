@@ -15,7 +15,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useImagingModalitiesStore } from '@/stores/imagingModalities'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useConfirm } from '@/composables/useConfirm'
-import type { EventDefinition, EventType, ImagingLaterality, ImagingRequirement } from '@/types/eventDefinition'
+import type {
+  EventDefinition,
+  EventType,
+  ImagingLaterality,
+  ImagingPlanCatchUp,
+  ImagingRequirement,
+} from '@/types/eventDefinition'
 import {
   RETINAL_TASK_OPTIONS,
   buildPlanRows,
@@ -180,6 +186,59 @@ function togglePlanTask(row: PlanRow, task: string): void {
   toggleTask(row, task, requiredTasks.value)
 }
 
+/*
+ * DR-035 — the plan applies to scans filed from now on. The editor shows
+ * what applying it to the already-filed scans would start, and does so only
+ * on a click: a plan edit could fan out hundreds of GPU jobs, and the number
+ * is the administrator's to see first. The preview reflects the SAVED plan,
+ * so it is refreshed after a save.
+ */
+const catchUpPreview = ref<ImagingPlanCatchUp | null>(null)
+const catchUpResult = ref<ImagingPlanCatchUp | null>(null)
+const catchUpLoading = ref(false)
+const catchUpRunning = ref(false)
+const catchUpError = ref(false)
+
+async function loadCatchUpPreview(sedId: number): Promise<void> {
+  if (!studyOid.value || !hasCatalogue.value) return
+  catchUpLoading.value = true
+  catchUpError.value = false
+  try {
+    const p = await eventDefs.previewImagingPlanCatchUp(studyOid.value, sedId)
+    if (editing.value && editing.value.sedId === sedId) catchUpPreview.value = p
+  } finally {
+    catchUpLoading.value = false
+  }
+}
+
+async function runCatchUp(): Promise<void> {
+  if (!editing.value || !studyOid.value) return
+  const sedId = editing.value.sedId
+  catchUpRunning.value = true
+  catchUpError.value = false
+  catchUpResult.value = null
+  try {
+    const r = await eventDefs.runImagingPlanCatchUp(studyOid.value, sedId)
+    if (!r) {
+      catchUpError.value = true
+      return
+    }
+    catchUpResult.value = r
+    await loadCatchUpPreview(sedId)
+  } finally {
+    catchUpRunning.value = false
+  }
+}
+
+watch(editing, (next, prev) => {
+  if (!next || next.sedId !== prev?.sedId) {
+    catchUpPreview.value = null
+    catchUpResult.value = null
+    catchUpError.value = false
+  }
+  if (next && next.sedId !== prev?.sedId) void loadCatchUpPreview(next.sedId)
+})
+
 function toggleRetinalTask(task: string): void {
   if (!editing.value) return
   const current = editing.value.retinalTasks
@@ -224,6 +283,16 @@ async function submitEdit() {
           ? t('eventDefinitions.imagingPlan.saveError')
           : t('eventDefinitions.retinalTasks.saveError')
         return
+      }
+      // DR-035 — the saved plan may now owe work to scans already filed.
+      // Stay in the form with the refreshed number so the administrator can
+      // apply it, rather than closing and hiding the question.
+      if (hasCatalogue.value) {
+        catchUpResult.value = null
+        await loadCatchUpPreview(editing.value.sedId)
+        if (catchUpPreview.value && catchUpPreview.value.scans > 0 && catchUpPreview.value.started > 0) {
+          return
+        }
       }
     }
     editing.value = null
@@ -595,6 +664,40 @@ function openAssignments(row: EventDefinition) {
             <p v-if="requiredTasks.length" class="mt-1 text-[11px] text-slate-500">
               {{ t('eventDefinitions.imagingPlan.requiredByModuleHint', { tasks: requiredTasks.join(', ') }) }}
             </p>
+
+            <!-- DR-035 — the plan applies to scans filed from now on; this
+                 catches up what is already filed, after showing the number. -->
+            <div class="mt-3 rounded border border-amber-200 bg-white/60 p-2.5 text-[11px]" data-testid="ed-edit-plan-catch-up">
+              <p v-if="catchUpLoading" class="text-slate-500">{{ t('eventDefinitions.imagingPlan.catchUp.loading') }}</p>
+              <template v-else-if="catchUpPreview">
+                <p v-if="catchUpPreview.scans === 0" class="text-slate-500">
+                  {{ t('eventDefinitions.imagingPlan.catchUp.none') }}
+                </p>
+                <p v-else class="text-slate-700" data-testid="ed-edit-plan-catch-up-summary">
+                  {{ t('eventDefinitions.imagingPlan.catchUp.summary', { scans: catchUpPreview.scans, n: catchUpPreview.started }) }}
+                </p>
+              </template>
+              <p class="mt-1 text-slate-500">{{ t('eventDefinitions.imagingPlan.catchUp.hint') }}</p>
+              <div class="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  class="px-3 py-1 text-[11px] border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-50"
+                  :disabled="catchUpRunning || !catchUpPreview || catchUpPreview.scans === 0"
+                  data-testid="ed-edit-plan-catch-up-apply"
+                  @click="runCatchUp"
+                >{{ catchUpRunning ? t('eventDefinitions.imagingPlan.catchUp.applying') : t('eventDefinitions.imagingPlan.catchUp.apply') }}</button>
+                <span v-if="catchUpResult" class="text-muw-teal-700" data-testid="ed-edit-plan-catch-up-done">
+                  {{ t('eventDefinitions.imagingPlan.catchUp.done', {
+                    attached: catchUpResult.attached,
+                    started: catchUpResult.started,
+                    failedPart: catchUpResult.failed > 0
+                      ? t('eventDefinitions.imagingPlan.catchUp.failedPart', { failed: catchUpResult.failed })
+                      : '',
+                  }) }}
+                </span>
+                <span v-if="catchUpError" class="text-rose-700">{{ t('eventDefinitions.imagingPlan.catchUp.error') }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- 2026-06-22 — retinal-inference task panel, for a study

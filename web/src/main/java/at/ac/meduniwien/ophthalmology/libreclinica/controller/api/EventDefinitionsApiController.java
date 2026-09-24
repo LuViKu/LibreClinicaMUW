@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,10 +96,22 @@ public class EventDefinitionsApiController {
     private static final Set<String> LEGAL_TYPES = Set.of("scheduled", "unscheduled", "common");
 
     private final DataSource dataSource;
+    /** DR-035 — nullable; the plan catch-up then attaches existing jobs but starts none. */
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalInferenceApiController inferenceController;
 
     @Autowired
-    public EventDefinitionsApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public EventDefinitionsApiController(@Qualifier("dataSource") DataSource dataSource,
+                                         RemoteRetinalInferenceClient remoteClient,
+                                         RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
+        this.remoteClient = remoteClient;
+        this.inferenceController = inferenceController;
+    }
+
+    /** Test seam: no inference dispatcher. */
+    public EventDefinitionsApiController(DataSource dataSource) {
+        this(dataSource, null, null);
     }
 
     /* ----------------------------------------------------------------- */
@@ -517,6 +530,65 @@ public class EventDefinitionsApiController {
         List<ImagingPlanEntryDto> out = new ArrayList<>();
         for (VisitImagingPlan.Entry e : next) out.add(ImagingPlanEntryDto.of(e));
         return ResponseEntity.ok(Map.of("entries", out));
+    }
+
+    /**
+     * GET — what applying the plan to the scans already filed at this
+     * definition's visits would do: how many OCT volumes, how many analyses
+     * would start. Nothing is written.
+     */
+    @GetMapping("/{sedId:[0-9]+}/imaging-plan/catch-up")
+    public ResponseEntity<?> previewImagingPlanCatchUp(@PathVariable("studyOid") String studyOid,
+                                                       @PathVariable("sedId") int sedId,
+                                                       HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ false);
+        if (guard != null) return guard;
+        ResponseEntity<?> owned = requireOwnedDefinition(studyOid, sedId);
+        if (owned != null) return owned;
+        return catchUp(studyOid, sedId, session, true);
+    }
+
+    /**
+     * POST — apply the plan to the scans already filed at this definition's
+     * visits (DR-035). Results that exist are attached, analyses the plan wants
+     * and that have no job are started; nothing is deleted. Explicit rather
+     * than a side effect of saving the plan, because a plan edit could fan out
+     * hundreds of GPU jobs and the administrator should see the number first.
+     */
+    @PostMapping("/{sedId:[0-9]+}/imaging-plan/catch-up")
+    public ResponseEntity<?> runImagingPlanCatchUp(@PathVariable("studyOid") String studyOid,
+                                                   @PathVariable("sedId") int sedId,
+                                                   HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+        ResponseEntity<?> owned = requireOwnedDefinition(studyOid, sedId);
+        if (owned != null) return owned;
+        return catchUp(studyOid, sedId, session, false);
+    }
+
+    private ResponseEntity<?> catchUp(String studyOid, int sedId, HttpSession session, boolean dryRun) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
+        RetinalJobFollower follower = new RetinalJobFollower(dataSource, remoteClient, inferenceController);
+        try {
+            RetinalJobFollower.CatchUp r = follower.catchUp(sedId, new IngestBindService.Actor(me, study), dryRun);
+            if (!dryRun) {
+                LOG.info("Imaging plan catch-up for event_def {} (study {}): scans={} attached={} started={} failed={}",
+                        sedId, studyOid, r.scans(), r.attached(), r.revived() + r.enqueued(), r.failed());
+            }
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("scans", r.scans());
+            body.put("attached", r.attached());
+            body.put("started", r.revived() + r.enqueued());
+            body.put("failed", r.failed());
+            body.put("dryRun", dryRun);
+            body.put("dispatcherAvailable", remoteClient != null && inferenceController != null);
+            return ResponseEntity.ok(body);
+        } catch (SQLException sqlEx) {
+            LOG.error("Imaging plan catch-up failed for event_def {}: {}", sedId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Imaging plan catch-up failed: " + sqlEx.getMessage()));
+        }
     }
 
     /** 404 unless the definition exists and belongs to the study; null when it does. */

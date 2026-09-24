@@ -48,18 +48,30 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemA
  * form kept asserting a modality had been performed on a visit with nothing
  * left to show for it. Undoing a bind now undoes what the bind did.
  *
- * <p>P3.3 adds cancelling the inference jobs a bind started, once
- * {@code retinal_inference_job.ingest_item_id} exists to find them by. Until
- * then no bind starts a job, so there is nothing to cancel.
+ * <p>DR-035 — an OCT volume's retinal inference jobs go where the file goes:
+ * a bind attaches what exists and starts what the visit's imaging plan wants,
+ * an unbind detaches them and cancels those not yet running. See
+ * {@link RetinalJobFollower}.
  */
 public final class IngestBindService {
 
     private static final Logger LOG = LoggerFactory.getLogger(IngestBindService.class);
 
     private final DataSource dataSource;
+    /** DR-035 — the retinal jobs of an OCT volume go where the file goes. */
+    private final RetinalJobFollower jobs;
 
+    /**
+     * Without a dispatcher: unbind still detaches and cancels, bind attaches
+     * what exists but starts nothing (see {@link RetinalJobFollower}).
+     */
     public IngestBindService(DataSource dataSource) {
+        this(dataSource, new RetinalJobFollower(dataSource));
+    }
+
+    public IngestBindService(DataSource dataSource, RetinalJobFollower jobs) {
         this.dataSource = dataSource;
+        this.jobs = jobs;
     }
 
     /** How a binding was arrived at — {@code ingest_item.match_policy}. */
@@ -186,11 +198,28 @@ public final class IngestBindService {
             }
             LOG.info("ingest_item {} bound to study_subject {} ({})",
                     ingestItemId, studySubjectId, matchPolicy);
-            return Result.OK;
         } catch (SQLException e) {
             LOG.error("bind failed for ingest_item {}: {}", ingestItemId, e.getMessage());
             return Result.FAILED;
         }
+
+        // DR-035 — an OCT volume's jobs follow it: results that exist are
+        // attached to this visit, and what the visit's imaging plan still
+        // wants is started. After the bind, and never failing it: the file is
+        // filed either way, and a job that could not start is what the results
+        // page's re-run is for. A file of any other kind is a no-op here.
+        if (studyEventId != null || eventCrfId != null) {
+            try {
+                RetinalJobFollower.Ensured e = jobs.ensure(ingestItemId, actor, false);
+                if (e.skippedBecause() != null && (e.attached() + e.started()) == 0) {
+                    LOG.debug("ingest_item {}: no retinal jobs followed ({})", ingestItemId, e.skippedBecause());
+                }
+            } catch (SQLException | RuntimeException e) {
+                LOG.error("ingest_item {} is bound, but its retinal jobs could not follow: {}",
+                        ingestItemId, e.getMessage());
+            }
+        }
+        return Result.OK;
     }
 
     /* ------------------------------------------------------------------ */
@@ -221,6 +250,17 @@ public final class IngestBindService {
         if (cleared == PerformedItemAutoTicker.ClearOutcome.FAILED) {
             return Result.FAILED;
         }
+        // DR-035 — then the jobs, for the same reason and in the same order:
+        // a failure here leaves a bound file whose jobs still claim the visit,
+        // which is the state being corrected, not a new wrong one.
+        RetinalJobFollower.Detached detachedJobs;
+        try {
+            detachedJobs = jobs.detach(ingestItemId, actor);
+        } catch (SQLException e) {
+            LOG.error("unbind of ingest_item {} refused: its retinal jobs could not be detached: {}",
+                    ingestItemId, e.getMessage());
+            return Result.FAILED;
+        }
 
         try (Connection c = dataSource.getConnection()) {
             int updated;
@@ -236,7 +276,9 @@ public final class IngestBindService {
             if (updated == 0) return existsState(c, ingestItemId);
 
             writeAudit(AuditTypeIds.INGEST_UNBIND, ingestItemId, actor,
-                    "ingested file unbound", "BOUND", "UNBOUND;cleared=" + cleared);
+                    "ingested file unbound", "BOUND", "UNBOUND;cleared=" + cleared
+                            + (detachedJobs.nothing() ? "" : ";jobsDetached=" + detachedJobs.detached()
+                                    + ";jobsCancelled=" + detachedJobs.cancelled()));
             LOG.info("ingest_item {} unbound ({})", ingestItemId, cleared);
             return Result.OK;
         } catch (SQLException e) {
