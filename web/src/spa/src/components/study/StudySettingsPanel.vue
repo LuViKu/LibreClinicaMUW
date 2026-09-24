@@ -130,8 +130,19 @@ async function save(): Promise<void> {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="s in switches" :key="s.key" class="border-t border-slate-100">
-            <td class="py-1.5 pr-3 text-slate-700">{{ t(`studySettings.keys.${s.key}`) }}</td>
+          <tr v-for="s in switches" :key="s.key" class="border-t border-slate-100 align-top">
+            <!-- The keys carry dots (ingest.dicom.enabled), which vue-i18n reads
+                 as a path; the locale files nest them accordingly. The second
+                 line says what the switch does — the first production
+                 administrator saw "studySettings.keys.ingest.dicom.enabled"
+                 and, quite reasonably, asked. -->
+            <td class="py-1.5 pr-3 text-slate-700">
+              <div class="font-medium">{{ t(`studySettings.keys.${s.key}`) }}</div>
+              <div class="mt-0.5 text-[11px] leading-snug text-slate-500 max-w-md" :data-testid="`setting-help-${s.key}`">
+                {{ t(`studySettings.help.${s.key}`) }}
+              </div>
+              <code class="text-[10px] text-slate-400">{{ s.key }}</code>
+            </td>
             <td class="py-1.5 pr-3">
               <select
                 class="px-2 py-1 rounded ring-1 ring-slate-200 bg-white"
@@ -155,8 +166,14 @@ async function save(): Promise<void> {
             </td>
           </tr>
 
-          <tr v-for="s in textSettings" :key="s.key" class="border-t border-slate-100">
-            <td class="py-1.5 pr-3 text-slate-700">{{ t(`studySettings.keys.${s.key}`) }}</td>
+          <tr v-for="s in textSettings" :key="s.key" class="border-t border-slate-100 align-top">
+            <td class="py-1.5 pr-3 text-slate-700">
+              <div class="font-medium">{{ t(`studySettings.keys.${s.key}`) }}</div>
+              <div class="mt-0.5 text-[11px] leading-snug text-slate-500 max-w-md" :data-testid="`setting-help-${s.key}`">
+                {{ t(`studySettings.help.${s.key}`) }}
+              </div>
+              <code class="text-[10px] text-slate-400">{{ s.key }}</code>
+            </td>
             <td class="py-1.5 pr-3">
               <input
                 type="text"
