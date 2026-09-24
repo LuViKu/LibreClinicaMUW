@@ -42,7 +42,7 @@ export interface IngestItem {
    * agrees with the chosen visit whatever the file contains. `'unknown'` is a
    * row written before the distinction existed. Null when there is no date.
    */
-  acquisitionDateSource: 'file' | 'operator' | 'unknown' | null
+  acquisitionDateSource: 'file' | 'device' | 'operator' | 'unknown' | null
   modality: string | null
   originalFilename: string | null
   byteSize: number | null

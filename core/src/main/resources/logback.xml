@@ -603,6 +603,21 @@
     <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.TerminologyIngestScheduler" level="INFO">
         <appender-ref ref="CONSOLE_RAW"/>
     </logger>
+    <!-- DR-031 (2026-09-23): the Remidio pull's one line per pass ("Remidio pull
+         <from>..<to>: exams=… new=… bound=… unbound=…") and its warnings on the
+         console, where the deploy README tells the operator to look. The app
+         logger below is additivity="false" onto JSON_FILE only, so without this
+         the line reached the SIEM feed and nothing else — a pass that worked
+         and a scheduler that never ticked looked identical in docker logs.
+         JSON_FILE is kept so the SIEM still sees it. -->
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RemidioPullScheduler" level="INFO">
+        <appender-ref ref="CONSOLE_RAW"/>
+        <appender-ref ref="JSON_FILE"/>
+    </logger>
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RemidioPullService" level="INFO">
+        <appender-ref ref="CONSOLE_RAW"/>
+        <appender-ref ref="JSON_FILE"/>
+    </logger>
 
   <!-- Phase E.0 (2026-05-30): permanent root → CONSOLE at INFO. This
        was previously commented out, hiding all framework init logs;

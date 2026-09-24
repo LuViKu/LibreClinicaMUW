@@ -69,6 +69,19 @@ public final class IngestItemRepository {
     public static final String ACQ_SOURCE_OPERATOR = "operator";
 
     /**
+     * {@code acquisition_date} was reported by the capturing device's own
+     * cloud — the Remidio exam date, stamped by the camera app at capture.
+     * Nobody typed it, so it is evidence in the same sense a DICOM header is,
+     * and the bind-time visit-date check treats it like {@link #ACQ_SOURCE_FILE}.
+     */
+    public static final String ACQ_SOURCE_DEVICE = "device";
+
+    /** True for the provenances that count as evidence of when the scan was taken. */
+    public static boolean isTrustedAcquisitionSource(String source) {
+        return ACQ_SOURCE_FILE.equals(source) || ACQ_SOURCE_DEVICE.equals(source);
+    }
+
+    /**
      * {@code acquisition_date} predates the provenance column and could have
      * been either. Treated as untrusted, like {@link #ACQ_SOURCE_OPERATOR}.
      */
@@ -196,6 +209,13 @@ public final class IngestItemRepository {
         }
 
         public Builder laterality(String v) { return set("laterality", v, Types.VARCHAR); }
+
+        /**
+         * DR-031 — the Remidio cloud's id of this image. Unique where set, so
+         * the pull's sliding window can re-list an exam without filing an
+         * image twice.
+         */
+        public Builder remidioImageId(String v) { return set("remidio_image_id", v, Types.VARCHAR); }
 
         /**
          * DR-029 — when the file's patient identity was replaced by the

@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-031 — the Remidio cloud pull.
+
+      The Remidio FOP uploads every capture to Remidio's cloud, and the pull
+      job lists that cloud for our site and files each image into ingest_item
+      (source_kind = 'remidio'). Two things have to be remembered across polls
+      so that a sliding window can be re-listed every couple of minutes without
+      filing anything twice:
+
+        remidio_exam            — every exam id the pull has processed, with
+                                  when it was first seen. An exam that is here
+                                  is not downloaded again. Nothing about the
+                                  patient is kept here: the subject label
+                                  already travels on ingest_item.patient_id.
+        ingest_item.remidio_image_id
+                                — the cloud's own image id on the row it became.
+                                  Unique where present, so the same image cannot
+                                  land twice even if the exam row was not
+                                  written (a crash between the two).
+
+      Both are additive. The pull is behind core.remidio.pull.enabled and does
+      nothing until it is switched on.
+    -->
+    <changeSet id="2026-12-04-remidio-exam" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_exam"/>
+            </not>
+        </preConditions>
+        <comment>remidio_exam — which Remidio cloud exams the pull has already processed.</comment>
+
+        <createTable tableName="remidio_exam">
+            <column name="remidio_exam_id" type="VARCHAR(64)">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_exam" nullable="false"/>
+            </column>
+            <column name="site_custom_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exam_date" type="TIMESTAMP"/>
+            <column name="first_seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="image_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="remidio_exam"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-12-04-ingest-item-remidio-image-id" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="remidio_image_id"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.remidio_image_id — the cloud's image id, unique where present.</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="remidio_image_id" type="VARCHAR(64)"/>
+        </addColumn>
+        <sql>
+            CREATE UNIQUE INDEX ux_ingest_item_remidio_image_id
+                ON ingest_item (remidio_image_id)
+                WHERE remidio_image_id IS NOT NULL
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS ux_ingest_item_remidio_image_id</sql>
+            <dropColumn tableName="ingest_item" columnName="remidio_image_id"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      The pull's watermark: when the last fully successful pass ran, per site.
+
+      The listing endpoint filters by the exam's capture date, not by when the
+      capture reached the cloud, so "everything since the last pass" is not a
+      window the API can answer. What it can answer is "everything captured
+      from (last pass minus an overlap) to today" — the overlap covers a phone
+      that syncs late. With no row the first pass lists from a configured start
+      date; with a row, downtime catches up on its own. Advanced only after
+      every chunk of a pass succeeded, so a failed pass is simply redone.
+    -->
+    <changeSet id="2026-12-04-remidio-pull-state" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_pull_state"/>
+            </not>
+        </preConditions>
+        <comment>remidio_pull_state — when the last successful pull pass ran, per site.</comment>
+
+        <createTable tableName="remidio_pull_state">
+            <column name="site_custom_id" type="VARCHAR(64)">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_pull_state" nullable="false"/>
+            </column>
+            <column name="last_success_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="window_from" type="DATE"/>
+            <column name="window_to" type="DATE"/>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="remidio_pull_state"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      The patient sync: which subject labels already exist as patients in
+      Remidio's cloud, and which visits already have an exam there.
+
+      Remidio cannot delete a patient (the dashboard has no such call), so
+      the sync must never create one twice and never create one it is not
+      sure about. remidio_patient remembers every label the sync resolved —
+      found or created — with the cloud's patient id, so a label costs one
+      lookup ever. remidio_visit_exam remembers the exam created for a visit
+      (examCustomId = the visit's accession LC<study_event_id>), which is
+      also how the pull binds a capture made into that exam straight to its
+      visit, the way the Optomed worklist does.
+    -->
+    <changeSet id="2026-12-04-remidio-patient" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_patient"/>
+            </not>
+        </preConditions>
+        <comment>remidio_patient — subject labels resolved to Remidio cloud patient ids.</comment>
+
+        <createTable tableName="remidio_patient">
+            <column name="subject_label" type="VARCHAR(255)">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_patient" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="remidio_patient_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_us" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="remidio_patient"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-12-04-remidio-visit-exam" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_visit_exam"/>
+            </not>
+        </preConditions>
+        <comment>remidio_visit_exam — the Remidio exam created for a scheduled visit.</comment>
+
+        <createTable tableName="remidio_visit_exam">
+            <column name="study_event_id" type="INT">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_visit_exam" nullable="false"/>
+            </column>
+            <column name="remidio_exam_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exam_custom_id" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="remidio_visit_exam" indexName="ix_remidio_visit_exam_exam">
+            <column name="remidio_exam_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="remidio_visit_exam"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

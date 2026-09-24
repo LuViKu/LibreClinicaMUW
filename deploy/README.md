@@ -372,6 +372,83 @@ local decision it does not make for you.
 If script execution is blocked on the clinic PC by policy, the bridge needs
 to become a signed executable; that is the upgrade path, not a workaround.
 
+### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
+
+The Remidio FOP has no DICOM and nothing can be pushed to it; its app uploads
+every capture to Remidio's cloud. Instead of the photographer re-uploading each
+JPEG through the browser page, the app VM lists that cloud every couple of
+minutes and files new images into the reconciliation inbox itself
+(`source_kind = remidio`). An image binds to its visit automatically when the
+**MRN typed into the Remidio app is the study subject label** and that subject
+has exactly one visit on the exam date; otherwise it waits in the inbox with
+the label and date pre-filled. Name, date of birth and sex are read from the
+API and discarded.
+
+What you need from Remidio (once): the **client identification token** they
+issue to integrators (a JWT; the matching `clientName` is `PACS_GATEWAY`), a
+**dedicated Remidio account** for the integration (its `getAuthToken` call
+invalidates any token another consumer of the same account holds), and the
+site's **custom identifier**, which you set yourself in the Remidio dashboard
+under the site's settings (ours: `muw_vienna`). The backend for our
+organisation is the **Germany** host below — not the India host the public
+docs show.
+
+```properties
+# datainfo.properties on the app VM
+core.remidio.pull.enabled=true
+core.remidio.baseUrl=https://remidio-backend-germany.appspot.com
+core.remidio.clientName=PACS_GATEWAY
+core.remidio.clientIdentificationToken=<the JWT from Remidio>
+core.remidio.email=<the integration account>
+core.remidio.password=<its password>
+core.remidio.siteCustomId=muw_vienna
+core.remidio.pull.intervalSeconds=120
+core.remidio.pull.overlapDays=14
+# where the very first pass starts (ISO date); blank = one year back
+core.remidio.pull.since=2026-06-17
+```
+
+Restart the app (the scheduler reads the switches on every tick, but the
+properties file is read at boot). The first pass lists everything from `since`
+in 30-day chunks and files whatever is not in the inbox yet; every later pass
+lists from *(last successful pass − overlapDays)* to today, so a phone that
+syncs late is caught and downtime catches up on its own. The log shows one
+line per pass that found something (`Remidio pull 2026-09-08..2026-09-23:
+exams=… new=… bound=… unbound=…`). An unhandled HTTP 500 from every endpoint means the client
+name is wrong; a 404 *"Site Custom ID … cannot be found"* means the custom
+identifier is not set in the dashboard. Before enabling, the chain can be
+walked by hand with `deploy/remidio/remidio-probe.sh` (reads the same values
+from a local env file; prints tokens masked).
+
+The app VM needs outbound HTTPS to `*.appspot.com` (the gateway) and
+`storage.googleapis.com` (the signed image links, valid for one hour).
+
+**The worklist side — patient sync.** The FOP app shows an *exam list*, not
+a patient list, so for the photographer to pick a subject instead of typing
+it, the subject must exist in Remidio's cloud as a patient with an exam. With
+`core.remidio.patientSync.enabled=true` every pass also takes the visits
+scheduled from yesterday to a week ahead (scope `core.dicom.worklist.studyOids`,
+as the DICOM/Optomed worklists) and creates what is missing: a patient with
+MRN = subject label and placeholder identity, and one exam per visit named
+`<label> <visit>` (e.g. `HAE-002 Baseline`). A capture made into that exam
+is filed against its visit directly. This goes through the web dashboard's
+own API — same account, but the dashboard's client pair and the site's
+numeric id:
+
+```properties
+core.remidio.patientSync.enabled=true
+core.remidio.dashboard.clientName=WEB_DASHBOARD
+core.remidio.dashboard.clientIdentificationToken=<the dashboard's client token>
+core.remidio.siteId=5898310359449600
+```
+
+The dashboard's client token is the one every browser session sends: log in
+to <https://dashboard.remidio.com> with DevTools → Network open and copy the
+`clientIdentificationToken` request header of any call. Remidio has **no
+patient-delete** endpoint, so the sync creates only for live visits in scope
+and looks the MRN up before every create; a typo in a subject label becomes a
+permanent patient in their cloud.
+
 ### DICOM sidecar (optional, but needed for any DICOM upload)
 
 Every DICOM file the platform takes in - a camera's C-STORE, a Clarus or
