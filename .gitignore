@@ -123,3 +123,7 @@ retinal-inference/*.sif
 
 # CI-only DICOM smoke config (token-bearing copy of docker/config)
 docker/config-ci/
+
+# Local env files (credentials for probes, compose overrides) — never commit
+.env
+*.env
