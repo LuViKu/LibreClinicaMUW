@@ -37,8 +37,11 @@ interface StudyModuleManifest {
   routes: RouteRecordRaw[]                        // prefixed by the framework
   injections?: Partial<Record<InjectionSlotId, InjectionEntry[]>>
   loadI18n?: () => Promise<{ de, en }>            // lazy bundle merge
+  requiredRetinalTasks?: readonly string[]        // DR-034: inference tasks the module reads
 }
 ```
+
+`requiredRetinalTasks` names the retinal inference tasks your module's logic depends on (nAMD: `['fluid']`). The visit imaging plan editor (Visits → edit → *Expected imaging*) shows those tasks pressed and not switchable on every OCT-volume modality a visit includes, and forces them into what it saves, so a study enrolled in your module cannot configure away the input the module reads. Declare only what the module actually consumes: every task listed runs on every OCT of every planned visit.
 
 ### Activation
 

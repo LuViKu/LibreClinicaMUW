@@ -12,8 +12,18 @@ import EventCrfAssignmentsDialog from '@/components/EventCrfAssignmentsDialog.vu
 
 import { useEventDefinitionsStore } from '@/stores/eventDefinitions'
 import { useAuthStore } from '@/stores/auth'
+import { useImagingModalitiesStore } from '@/stores/imagingModalities'
+import { useStudyModuleStore } from '@/stores/studyModules'
 import { useConfirm } from '@/composables/useConfirm'
-import type { EventDefinition, EventType } from '@/types/eventDefinition'
+import type { EventDefinition, EventType, ImagingLaterality, ImagingRequirement } from '@/types/eventDefinition'
+import {
+  RETINAL_TASK_OPTIONS,
+  buildPlanRows,
+  requiredTasksOf,
+  toWriteEntries,
+  toggleTask,
+  type PlanRow,
+} from '@/lib/imagingPlan'
 
 /**
  * Phase E A8.2 — event-definition CRUD view.
@@ -27,12 +37,28 @@ import type { EventDefinition, EventType } from '@/types/eventDefinition'
  * re-checks authoritatively against the sysadmin / director /
  * coordinator triad.
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const eventDefs = useEventDefinitionsStore()
 const auth = useAuthStore()
+const modalities = useImagingModalitiesStore()
+const studyModules = useStudyModuleStore()
 const confirm = useConfirm()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
+
+/*
+ * DR-034 — a study with an imaging catalogue plans its visits per modality
+ * (required or optional, which eye, which inference tasks); one without keeps
+ * the older per-visit task chips, which the backend still honours.
+ */
+const hasCatalogue = computed(() => modalities.list.length > 0)
+/** What an enrolled module insists on — shown pressed and not switchable. */
+const requiredTasks = computed(() => requiredTasksOf(studyModules.activeModules))
+function modalityLabel(row: { labelDe: string; labelEn: string }): string {
+  return String(locale.value).toLowerCase().startsWith('de') ? row.labelDe : row.labelEn
+}
+const REQUIREMENT_OPTIONS: readonly ImagingRequirement[] = ['optional', 'required'] as const
+const LATERALITY_OPTIONS: ReadonlyArray<ImagingLaterality | ''> = ['', 'OU', 'OD', 'OS'] as const
 const canManage = computed(() => {
   const role = auth.user?.role
   return role === 'Administrator' || role === 'Data Manager'
@@ -43,10 +69,18 @@ const canManage = computed(() => {
 // see a 403 on click.
 const canLifecycle = computed(() => auth.user?.role === 'Administrator')
 
-onMounted(() => { if (studyOid.value) eventDefs.load(studyOid.value) })
+onMounted(() => {
+  if (studyOid.value) {
+    eventDefs.load(studyOid.value)
+    modalities.load(studyOid.value)
+  }
+})
 
 watch(studyOid, (next) => {
-  if (next) eventDefs.load(next)
+  if (next) {
+    eventDefs.load(next)
+    modalities.load(next)
+  }
 })
 
 interface CreateForm {
@@ -104,20 +138,15 @@ interface EditState {
   repeating: boolean
   /** 2026-06-22 — the int PK; needed to address the retinal-tasks sub-resource. */
   sedId: number
-  /** 2026-06-22 — selected retinal-inference task panel. */
+  /** 2026-06-22 — selected retinal-inference task panel (studies without an imaging catalogue). */
   retinalTasks: string[]
+  /** DR-034 — one row per catalogue modality; `included` rows are the plan. */
+  imagingPlan: PlanRow[]
 }
 const editing = ref<EditState | null>(null)
 const editErrors = ref<Record<string, string>>({})
 const editFormError = ref<string | null>(null)
 const isSavingEdit = ref(false)
-
-/** Allow-list of retinal-inference tasks for the multi-select.
- *  2026-06-24: extended with `layers` (returns the IOWA stack + BM
- *  in one job — what RIS uploads should default to alongside fluid
- *  for CRT computation). `bm` is intentionally not here; `layers`
- *  covers it. */
-const RETINAL_TASK_OPTIONS: readonly string[] = ['fluid', 'ga', 'onl', 'pr', 'layers'] as const
 
 async function openEdit(row: EventDefinition) {
   editing.value = {
@@ -129,16 +158,26 @@ async function openEdit(row: EventDefinition) {
     type: (row.type as EventType) || 'scheduled',
     repeating: row.repeating,
     retinalTasks: [],
+    imagingPlan: [],
   }
   editErrors.value = {}
   editFormError.value = null
-  // Lazy-load the retinal-task panel for this event def.
-  if (studyOid.value && row.sedId) {
-    const tasks = await eventDefs.loadRetinalTasks(studyOid.value, row.sedId)
-    if (editing.value && editing.value.sedId === row.sedId) {
-      editing.value.retinalTasks = tasks
-    }
+  if (!studyOid.value || !row.sedId) return
+  // Both are lazy: the task list for a study without a catalogue, the plan
+  // for one with. Loading both costs one small call and spares a race with
+  // the catalogue still loading when the form opens.
+  const [tasks, entries] = await Promise.all([
+    eventDefs.loadRetinalTasks(studyOid.value, row.sedId),
+    eventDefs.loadImagingPlan(studyOid.value, row.sedId),
+  ])
+  if (editing.value && editing.value.sedId === row.sedId) {
+    editing.value.retinalTasks = tasks
+    editing.value.imagingPlan = buildPlanRows(modalities.list, entries)
   }
+}
+
+function togglePlanTask(row: PlanRow, task: string): void {
+  toggleTask(row, task, requiredTasks.value)
 }
 
 function toggleRetinalTask(task: string): void {
@@ -167,15 +206,23 @@ async function submitEdit() {
       editFormError.value = result.message ?? null
       return
     }
-    // Persist the retinal-task panel alongside the core fields. Failure
-    // here doesn't roll back the event_def update — the core write
-    // already landed; surface the secondary error inline instead.
+    // Persist the imaging plan (or, without a catalogue, the task panel)
+    // alongside the core fields. Failure here doesn't roll back the
+    // event_def update — the core write already landed; surface the
+    // secondary error inline instead.
     if (editing.value.sedId) {
-      const ok = await eventDefs.saveRetinalTasks(
-        studyOid.value, editing.value.sedId, editing.value.retinalTasks,
-      )
+      const ok = hasCatalogue.value
+        ? await eventDefs.saveImagingPlan(
+          studyOid.value, editing.value.sedId,
+          toWriteEntries(editing.value.imagingPlan, requiredTasks.value),
+        )
+        : await eventDefs.saveRetinalTasks(
+          studyOid.value, editing.value.sedId, editing.value.retinalTasks,
+        )
       if (!ok) {
-        editFormError.value = t('eventDefinitions.retinalTasks.saveError')
+        editFormError.value = hasCatalogue.value
+          ? t('eventDefinitions.imagingPlan.saveError')
+          : t('eventDefinitions.retinalTasks.saveError')
         return
       }
     }
@@ -457,12 +504,106 @@ function openAssignments(row: EventDefinition) {
             <label for="ed-edit-repeating" class="text-xs text-slate-700">{{ t('eventDefinitions.repeatingLabel') }}</label>
           </div>
 
-          <!-- 2026-06-22 — retinal-inference task panel. When an OCT
-               scan is committed against this visit, one inference job
-               is enqueued per selected task. An empty selection
-               falls back to "fluid" on commit so today's behaviour
-               is preserved for visits the admin hasn't configured. -->
-          <div class="col-span-2">
+          <!-- DR-034 — the visit imaging plan: one row per catalogue
+               modality. An included row says the visit expects that
+               modality (required rows block signing while missing),
+               for which eye(s), and — on an OCT-volume modality — which
+               inference tasks a filed scan is fanned out to. -->
+          <div v-if="hasCatalogue" class="col-span-2" data-testid="ed-edit-imaging-plan">
+            <FieldLabel for="ed-edit-imaging-plan">{{ t('eventDefinitions.imagingPlan.label') }}</FieldLabel>
+            <table id="ed-edit-imaging-plan" class="mt-1 w-full text-xs">
+              <thead>
+                <tr class="text-left text-slate-500">
+                  <th scope="col" class="py-1 pr-2 font-medium">{{ t('eventDefinitions.imagingPlan.expected') }}</th>
+                  <th scope="col" class="py-1 pr-2 font-medium">{{ t('eventDefinitions.imagingPlan.requirement') }}</th>
+                  <th scope="col" class="py-1 pr-2 font-medium">{{ t('eventDefinitions.imagingPlan.laterality') }}</th>
+                  <th scope="col" class="py-1 font-medium">{{ t('eventDefinitions.imagingPlan.tasks') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in editing.imagingPlan"
+                  :key="`plan-${row.modalityId}`"
+                  class="border-t border-amber-100 align-top"
+                  :data-testid="`ed-edit-plan-${row.code}`"
+                >
+                  <td class="py-1.5 pr-2">
+                    <label class="inline-flex items-center gap-2">
+                      <input
+                        v-model="row.included"
+                        type="checkbox"
+                        class="rounded"
+                        :data-testid="`ed-edit-plan-${row.code}-included`"
+                      />
+                      <span class="text-slate-800">{{ modalityLabel(row) }}</span>
+                      <span class="font-mono text-[10px] text-slate-400">{{ row.code }}</span>
+                    </label>
+                  </td>
+                  <td class="py-1.5 pr-2">
+                    <select
+                      v-model="row.requirement"
+                      class="px-2 py-1 rounded ring-1 ring-slate-200 bg-white disabled:opacity-50"
+                      :disabled="!row.included"
+                      :data-testid="`ed-edit-plan-${row.code}-requirement`"
+                    >
+                      <option v-for="r in REQUIREMENT_OPTIONS" :key="r" :value="r">
+                        {{ t(`eventDefinitions.imagingPlan.requirementOption.${r}`) }}
+                      </option>
+                    </select>
+                  </td>
+                  <td class="py-1.5 pr-2">
+                    <select
+                      v-model="row.laterality"
+                      class="px-2 py-1 rounded ring-1 ring-slate-200 bg-white disabled:opacity-50"
+                      :disabled="!row.included"
+                      :data-testid="`ed-edit-plan-${row.code}-laterality`"
+                    >
+                      <option v-for="l in LATERALITY_OPTIONS" :key="l || 'any'" :value="l">
+                        {{ t(`eventDefinitions.imagingPlan.lateralityOption.${l || 'any'}`) }}
+                      </option>
+                    </select>
+                  </td>
+                  <td class="py-1.5">
+                    <div v-if="row.acceptsE2e" class="flex flex-wrap gap-1.5">
+                      <button
+                        v-for="task in RETINAL_TASK_OPTIONS"
+                        :key="`${row.modalityId}-${task}`"
+                        type="button"
+                        :data-testid="`ed-edit-plan-${row.code}-task-${task}`"
+                        :aria-pressed="row.tasks.includes(task) || requiredTasks.includes(task)"
+                        :disabled="!row.included || requiredTasks.includes(task)"
+                        :title="requiredTasks.includes(task) ? t('eventDefinitions.imagingPlan.requiredByModule') : undefined"
+                        class="inline-flex items-center gap-1 rounded-full text-[11px] font-semibold px-2.5 py-0.5 border transition disabled:cursor-not-allowed"
+                        :class="row.tasks.includes(task) || requiredTasks.includes(task)
+                          ? 'bg-muw-sky-50 border-muw-sky-300 text-muw-sky-700'
+                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50'"
+                        @click="togglePlanTask(row, task)"
+                      >
+                        <span class="font-mono text-[10px] uppercase">{{ task }}</span>
+                        <span class="text-slate-400">·</span>
+                        <span>{{ t(`retinal.task.${task}`) }}</span>
+                      </button>
+                    </div>
+                    <span v-else class="text-slate-400">{{ t('eventDefinitions.imagingPlan.noInference') }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="mt-1.5 text-[11px] text-slate-500">
+              {{ t('eventDefinitions.imagingPlan.hint') }}
+            </p>
+            <p v-if="requiredTasks.length" class="mt-1 text-[11px] text-slate-500">
+              {{ t('eventDefinitions.imagingPlan.requiredByModuleHint', { tasks: requiredTasks.join(', ') }) }}
+            </p>
+          </div>
+
+          <!-- 2026-06-22 — retinal-inference task panel, for a study
+               without an imaging catalogue. When an OCT scan is committed
+               against this visit, one inference job is enqueued per
+               selected task. An empty selection falls back to "fluid" on
+               commit so today's behaviour is preserved for visits the
+               admin hasn't configured. -->
+          <div v-else class="col-span-2">
             <FieldLabel for="ed-edit-retinal-tasks">{{ t('eventDefinitions.retinalTasks.label') }}</FieldLabel>
             <div
               id="ed-edit-retinal-tasks"

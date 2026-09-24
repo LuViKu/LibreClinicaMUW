@@ -111,5 +111,6 @@
   <include  file="migration/lc-muw-2026-12-03-ingest-acquisition-date-source.xml"/>
   <include  file="migration/lc-muw-2026-12-04-remidio-pull.xml"/>
   <include  file="migration/lc-muw-2026-12-05-uploader-health-storage.xml"/>
+  <include  file="migration/lc-muw-2026-12-06-visit-imaging-plan.xml"/>
 </databaseChangeLog>
 

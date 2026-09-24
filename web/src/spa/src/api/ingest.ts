@@ -101,12 +101,37 @@ export interface VisitImages {
    * could not place. Shown on the visit page so nothing is out of sight.
    */
   pendingForSubject: number
+  /**
+   * DR-034 — what the visit definition expects, each entry against what is
+   * filed. Empty when the definition has no imaging plan.
+   */
+  plan: VisitPlanRow[]
+}
+
+/** One expected modality of the visit, with what is present for it. */
+export interface VisitPlanRow {
+  modalityId: number
+  code: string
+  labelDe: string
+  labelEn: string
+  device: string | null
+  requirement: 'required' | 'optional'
+  laterality: 'OD' | 'OS' | 'OU' | null
+  tasks: string[]
+  presentOD: number
+  presentOS: number
+  presentTotal: number
+  satisfied: boolean
 }
 
 export function listIngestByEvent(studyEventId: number | string): Promise<VisitImages> {
-  return apiGet<{ items: IngestItem[]; pendingForSubject?: number }>(
+  return apiGet<{ items: IngestItem[]; pendingForSubject?: number; plan?: VisitPlanRow[] }>(
     `/pages/api/v1/ingest/by-event/${encodeURIComponent(String(studyEventId))}`,
-  ).then((r) => ({ items: r.items ?? [], pendingForSubject: r.pendingForSubject ?? 0 }))
+  ).then((r) => ({
+    items: r.items ?? [],
+    pendingForSubject: r.pendingForSubject ?? 0,
+    plan: r.plan ?? [],
+  }))
 }
 
 export function getIngestItem(id: number): Promise<IngestItem> {

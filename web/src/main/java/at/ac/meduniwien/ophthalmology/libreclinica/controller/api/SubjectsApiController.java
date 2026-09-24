@@ -477,7 +477,7 @@ public class SubjectsApiController {
     /**
      * Phase E.4 M3 — Sign Subject preflight checks endpoint.
      *
-     * <p>Returns five checks the SPA's Sign Subject view consumes (M8
+     * <p>Returns six checks the SPA's Sign Subject view consumes (M8
      * lands the UI; M3 ships the endpoint so M8 doesn't need backend
      * changes). Status semantics per the mockup at
      * {@code docs/development/modernization/phase-e/ux-mockups/investigator-sign-subject.html}.
@@ -535,7 +535,7 @@ public class SubjectsApiController {
      *
      * <p>Extracted so both the {@code GET /preflightForSign} endpoint
      * (M3 — read-only inspection) and the {@code POST /sign} endpoint
-     * (M8 — gating check before persistence) consume the same five
+     * (M8 — gating check before persistence) consume the same six
      * named checks. The M3 endpoint serialises the result verbatim; the
      * M8 endpoint inspects {@link SignPreflightDto#blockingFailures()}
      * to decide whether to proceed (and explicitly tolerates the
@@ -560,6 +560,9 @@ public class SubjectsApiController {
      *       blocker, for the sign action itself).</li>
      *   <li>{@code user-role-can-sign} — pass if Investigator or
      *       Study Director; fail otherwise.</li>
+     *   <li>{@code imaging-complete} — DR-034: fail if any visit's
+     *       required imaging modality has no BOUND file covering the
+     *       eye(s) the plan names; pass when nothing is required.</li>
      * </ul>
      */
     /**
@@ -789,8 +792,15 @@ public class SubjectsApiController {
             );
         }
 
+        // ------ Check 6: imaging-complete (DR-034) ------
+        // Every visit whose definition requires a modality must have a BOUND
+        // file of it, covering the eye(s) the plan names. Visits the casebook
+        // does not count — cancelled, not scheduled, skipped — are left out,
+        // as in check 1. A subject whose visits require nothing passes.
+        SignPreflightDto.CheckRow imagingCheck = computeImagingCheck(events, locale);
+
         List<SignPreflightDto.CheckRow> checks = List.of(
-                eventsCheck, crfsCheck, openQueriesCheck, signedCheck, roleCheck);
+                eventsCheck, crfsCheck, openQueriesCheck, signedCheck, roleCheck, imagingCheck);
         int blocking = 0;
         int warnings = 0;
         for (SignPreflightDto.CheckRow c : checks) {
@@ -3459,6 +3469,98 @@ public class SubjectsApiController {
     private static boolean isRemoved(StudyEventBean ev) {
         Status st = ev == null ? null : ev.getStatus();
         return st != null && (Status.DELETED.equals(st) || Status.AUTO_DELETED.equals(st));
+    }
+
+    /**
+     * DR-034 — the sign preflight's imaging row.
+     *
+     * <p>Fails naming each visit and modality still missing; passes with a
+     * count when every required entry is covered, or when nothing is required.
+     * A lookup failure warns rather than blocks: the check could not be made,
+     * which is worth saying, but a database hiccup is no reason to refuse a
+     * signature the other checks allow.
+     */
+    private SignPreflightDto.CheckRow computeImagingCheck(List<StudyEventBean> events, Locale locale) {
+        int requiredEntries = 0;
+        int visitsWithRequirements = 0;
+        List<String> missing = new ArrayList<>();
+        try (Connection c = dataSource.getConnection()) {
+            Map<Integer, List<VisitImagingPlan.Entry>> requiredBySed = new HashMap<>();
+            Map<Integer, String> nameBySed = new HashMap<>();
+            for (StudyEventBean ev : events) {
+                if (isRemoved(ev)) continue;
+                int st = ev.getSubjectEventStatus() == null ? 0 : ev.getSubjectEventStatus().getId();
+                if (st == 2 || st == 6) continue; // not scheduled / skipped — no imaging expected
+                int sedId = ev.getStudyEventDefinitionId();
+                List<VisitImagingPlan.Entry> required = requiredBySed.get(sedId);
+                if (required == null) {
+                    required = new ArrayList<>();
+                    for (VisitImagingPlan.Entry e : VisitImagingPlan.forDefinition(c, sedId)) {
+                        if (e.required()) required.add(e);
+                    }
+                    requiredBySed.put(sedId, required);
+                    nameBySed.put(sedId, definitionName(c, sedId));
+                }
+                if (required.isEmpty()) continue;
+                visitsWithRequirements++;
+                requiredEntries += required.size();
+                List<VisitImagingPlan.PresentFile> files = VisitImagingPlan.filesOf(c, ev.getId());
+                for (VisitImagingPlan.Coverage cov : VisitImagingPlan.coverage(required, files)) {
+                    if (cov.satisfied()) continue;
+                    VisitImagingPlan.Entry e = cov.entry();
+                    String visit = nameBySed.getOrDefault(sedId, "#" + sedId);
+                    if (ev.getSampleOrdinal() > 1) visit += " (" + ev.getSampleOrdinal() + ")";
+                    String label = "de".equalsIgnoreCase(locale == null ? "" : locale.getLanguage())
+                            ? e.labelDe() : e.labelEn();
+                    missing.add(visit + ": " + label + (e.laterality() == null ? "" : " " + e.laterality()));
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Sign preflight: imaging plan lookup failed: {}", sqlEx.getMessage());
+            return new SignPreflightDto.CheckRow(
+                    "imaging-complete", "warn",
+                    msg(locale, "Required imaging could not be checked",
+                            "Erforderliche Bildgebung konnte nicht geprüft werden"),
+                    msg(locale, "The imaging plan could not be read. Check the visit pages before signing.",
+                            "Der Bildgebungsplan konnte nicht gelesen werden. Bitte die Visitenseiten vor dem Signieren prüfen."));
+        }
+
+        if (requiredEntries == 0) {
+            return new SignPreflightDto.CheckRow(
+                    "imaging-complete", "pass",
+                    msg(locale, "No imaging is required at this subject's visits",
+                            "An den Visiten dieses Teilnehmers ist keine Bildgebung erforderlich"),
+                    msg(locale, "No visit definition marks a modality as required.",
+                            "Keine Visitendefinition kennzeichnet eine Modalität als erforderlich."));
+        }
+        if (missing.isEmpty()) {
+            return new SignPreflightDto.CheckRow(
+                    "imaging-complete", "pass",
+                    msg(locale, "All required images are filed", "Alle erforderlichen Bilder sind abgelegt"),
+                    msg(locale,
+                            requiredEntries + " required imaging entries across " + visitsWithRequirements + " visits are covered.",
+                            requiredEntries + " erforderliche Bildgebungseinträge über " + visitsWithRequirements + " Visiten sind abgedeckt."));
+        }
+        String list = String.join("; ", missing.size() > 6 ? missing.subList(0, 6) : missing)
+                + (missing.size() > 6 ? "; …" : "");
+        return new SignPreflightDto.CheckRow(
+                "imaging-complete", "fail",
+                msg(locale,
+                        missing.size() + " required image(s) missing",
+                        missing.size() + " erforderliche(s) Bild(er) fehlen"),
+                msg(locale,
+                        "Missing: " + list + ". File the images against the visit, or make them optional in the visit definition.",
+                        "Es fehlen: " + list + ". Bilder der Visite zuordnen oder in der Visitendefinition als optional kennzeichnen."));
+    }
+
+    private static String definitionName(Connection c, int sedId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT name FROM study_event_definition WHERE study_event_definition_id = ?")) {
+            ps.setInt(1, sedId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : "#" + sedId;
+            }
+        }
     }
 
     /** Extract YoB if the study collects DoB and the subject has one. */

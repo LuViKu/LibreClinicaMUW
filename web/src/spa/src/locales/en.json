@@ -2095,6 +2095,28 @@
       "scheduled": "Scheduled",
       "unscheduled": "Unscheduled",
       "common": "Common"
+    },
+    "imagingPlan": {
+      "label": "Expected imaging",
+      "expected": "Modality",
+      "requirement": "Requirement",
+      "laterality": "Eye",
+      "tasks": "AI analysis",
+      "requirementOption": {
+        "optional": "Optional",
+        "required": "Required"
+      },
+      "lateralityOption": {
+        "any": "Any",
+        "OU": "Both (OU)",
+        "OD": "Right (OD)",
+        "OS": "Left (OS)"
+      },
+      "noInference": "No AI analysis for this modality",
+      "requiredByModule": "Required by the study module",
+      "requiredByModuleHint": "Required by the active study module and therefore always on: {tasks}.",
+      "hint": "Ticked modalities are expected at this visit. \"Required\" blocks signing while no image of that modality (and eye, if given) is filed against the visit. The AI tasks run on every OCT volume of that modality once it is filed; without an entry for the OCT modality nothing runs. A visit with no entries keeps the older task list (default: fluid).",
+      "saveError": "Could not save the expected imaging."
     }
   },
   "studyForm": {
@@ -2905,6 +2927,15 @@
         "cancel": "Cancel",
         "errorSealed": "The visit is signed or locked — unlock it first.",
         "errorGeneric": "The image could not be removed."
+      },
+      "plan": {
+        "title": "Expected imaging",
+        "present": "{n} present",
+        "missing": {
+          "required": "missing – required",
+          "optional": "missing – optional"
+        },
+        "blocksSigning": "{n} required image(s) missing. The subject cannot be signed until they are filed against the visit."
       }
     }
   },
@@ -3440,7 +3471,7 @@
         }
       },
       "inference": {
-        "enabled": "A filed OCT starts the AI analysis (segmentation, fluid, layers). Off: files are only stored."
+        "enabled": "A filed OCT starts the AI analysis with the tasks from the visit's expected imaging (segmentation, fluid, layers). Off: files are only stored and no job is created."
       },
       "ai": {
         "blinding": {

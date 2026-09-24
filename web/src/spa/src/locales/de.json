@@ -2095,6 +2095,28 @@
       "scheduled": "Geplant",
       "unscheduled": "Außerplanmäßig",
       "common": "Gemeinsam"
+    },
+    "imagingPlan": {
+      "label": "Erwartete Bildgebung",
+      "expected": "Modalität",
+      "requirement": "Anforderung",
+      "laterality": "Auge",
+      "tasks": "KI-Auswertung",
+      "requirementOption": {
+        "optional": "Optional",
+        "required": "Erforderlich"
+      },
+      "lateralityOption": {
+        "any": "Beliebig",
+        "OU": "Beide (OU)",
+        "OD": "Rechts (OD)",
+        "OS": "Links (OS)"
+      },
+      "noInference": "Keine KI-Auswertung für diese Modalität",
+      "requiredByModule": "Vom Studienmodul vorausgesetzt",
+      "requiredByModuleHint": "Vom aktiven Studienmodul vorausgesetzt und deshalb immer aktiv: {tasks}.",
+      "hint": "Angehakte Modalitäten werden bei dieser Visite erwartet. „Erforderlich“ verhindert das Signieren, solange kein Bild dieser Modalität (und ggf. dieses Auges) der Visite zugeordnet ist. Die KI-Tasks laufen auf jedem OCT-Volumen dieser Modalität, sobald es der Visite zugeordnet ist; ohne Eintrag für die OCT-Modalität läuft nichts. Eine Visite ohne Einträge übernimmt die alte Task-Liste (Standard: Flüssigkeit).",
+      "saveError": "Erwartete Bildgebung konnte nicht gespeichert werden."
     }
   },
   "studyForm": {
@@ -2905,6 +2927,15 @@
         "cancel": "Abbrechen",
         "errorSealed": "Die Visite ist unterschrieben oder gesperrt – bitte zuerst entsperren.",
         "errorGeneric": "Das Bild konnte nicht entfernt werden."
+      },
+      "plan": {
+        "title": "Erwartete Bildgebung",
+        "present": "{n} vorhanden",
+        "missing": {
+          "required": "fehlt – erforderlich",
+          "optional": "fehlt – optional"
+        },
+        "blocksSigning": "{n} erforderliche Aufnahme(n) fehlen. Der Teilnehmer kann erst signiert werden, wenn sie der Visite zugeordnet sind."
       }
     }
   },
@@ -3440,7 +3471,7 @@
         }
       },
       "inference": {
-        "enabled": "Ein abgelegtes OCT startet die KI-Auswertung (Segmentierung, Flüssigkeit, Schichten). Aus: Dateien werden nur gespeichert."
+        "enabled": "Ein abgelegtes OCT startet die KI-Auswertung mit den Tasks aus der erwarteten Bildgebung der Visite (Segmentierung, Flüssigkeit, Schichten). Aus: Dateien werden nur gespeichert, kein Job wird angelegt."
       },
       "ai": {
         "blinding": {

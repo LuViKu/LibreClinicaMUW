@@ -391,8 +391,37 @@ public class IngestInboxApiController {
                 LOG.warn("pending-for-subject count failed for study_event {}: {}", studyEventId, e.getMessage());
             }
         }
+        // DR-034 — what the visit expects, against what is there. One row per
+        // plan entry; empty when the visit definition has no plan, in which
+        // case the page shows nothing about expectations.
+        List<Map<String, Object>> plan = new ArrayList<>();
+        try (Connection c = dataSource.getConnection()) {
+            List<VisitImagingPlan.Entry> entries = VisitImagingPlan.forStudyEvent(c, studyEventId);
+            if (!entries.isEmpty()) {
+                List<VisitImagingPlan.PresentFile> files = VisitImagingPlan.filesOf(c, studyEventId);
+                for (VisitImagingPlan.Coverage cov : VisitImagingPlan.coverage(entries, files)) {
+                    VisitImagingPlan.Entry e = cov.entry();
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("modalityId", e.modalityId());
+                    row.put("code", e.code());
+                    row.put("labelDe", e.labelDe());
+                    row.put("labelEn", e.labelEn());
+                    row.put("device", e.device());
+                    row.put("requirement", e.requirement());
+                    row.put("laterality", e.laterality());
+                    row.put("tasks", e.tasks());
+                    row.put("presentOD", cov.presentOD());
+                    row.put("presentOS", cov.presentOS());
+                    row.put("presentTotal", cov.presentTotal());
+                    row.put("satisfied", cov.satisfied());
+                    plan.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("imaging plan lookup failed for study_event {}: {}", studyEventId, e.getMessage());
+        }
         return ResponseEntity.ok(Map.of("items", rows, "studyEventId", studyEventId,
-                "pendingForSubject", pendingForSubject));
+                "pendingForSubject", pendingForSubject, "plan", plan));
     }
 
     @GetMapping("/{id:[0-9]+}/preview")
