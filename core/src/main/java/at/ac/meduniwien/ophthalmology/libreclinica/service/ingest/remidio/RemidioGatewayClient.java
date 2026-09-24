@@ -265,14 +265,18 @@ public class RemidioGatewayClient {
      * ends inclusive, with signed download paths on the images.
      *
      * <p>The path wants the site's <em>custom</em> identifier (set in the
-     * Remidio dashboard); the numeric site id is refused with 404.
+     * Remidio dashboard); the numeric site id is refused with 404. And the
+     * gateway's end date is <em>exclusive</em> — verified 2026-09-24: an exam
+     * captured at 06:51Z that day was absent from {@code …/24-09-2026/…} and
+     * present in {@code …/25-09-2026/…} — so the wire gets the day after
+     * {@code to}, and a caller asking for "today" gets today.
      */
     public List<Exam> examsBetween(LocalDate from, LocalDate to) throws RemidioException {
         if (from == null || to == null || to.isBefore(from)) {
             throw new IllegalArgumentException("window must be from <= to");
         }
-        String path = "/api/gateway/getExamsByDate/" + PATH_DATE.format(from) + "/" + PATH_DATE.format(to)
-                + "/" + settings.siteCustomId() + "?includeFilePaths=true";
+        String path = "/api/gateway/getExamsByDate/" + PATH_DATE.format(from) + "/"
+                + PATH_DATE.format(to.plusDays(1)) + "/" + settings.siteCustomId() + "?includeFilePaths=true";
         JsonNode data = gateway(path, LISTING_TIMEOUT);
         List<Exam> out = new ArrayList<>();
         for (JsonNode e : data) {

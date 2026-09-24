@@ -197,8 +197,9 @@ public class RemidioGatewayClientTest {
         assertEquals(RemidioException.Reason.REMOTE, e.reason());
         assertEquals("NOT_FOUND", e.statusCode());
         assertTrue(e.getMessage().contains("Site Custom ID"));
-        assertEquals("DD-MM-YYYY, the custom site id, file paths requested",
-                "/api/gateway/getExamsByDate/01-09-2026/23-09-2026/muw_vienna?includeFilePaths=true",
+        assertEquals("DD-MM-YYYY, the custom site id, file paths requested — and the gateway's end date is"
+                        + " exclusive, so an inclusive 'to' of the 23rd goes out as the 24th",
+                "/api/gateway/getExamsByDate/01-09-2026/24-09-2026/muw_vienna?includeFilePaths=true",
                 wire.calls.get(2).path());
     }
 

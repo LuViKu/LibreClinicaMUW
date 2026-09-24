@@ -86,7 +86,8 @@ call GET /api/gateway/getSites || exit 4
 call GET /api/gateway/getQueueItem || true
 
 FROM="$(date -d "-${LOOKBACK_DAYS} days" +%d-%m-%Y 2>/dev/null || date -v-"${LOOKBACK_DAYS}"d +%d-%m-%Y)"
-TO="$(date +%d-%m-%Y)"
+# The gateway's end date is exclusive (verified 2026-09-24): ask until tomorrow to include today.
+TO="$(date -d "+1 days" +%d-%m-%Y 2>/dev/null || date -v+1d +%d-%m-%Y)"
 P="/api/gateway/getExamsByDate/$FROM/$TO/$REMIDIO_SITE_CUSTOM_ID?includeFilePaths=true"
 code="$(curl -s -m 120 -K "$HDR" -o "$BODY" -w '%{http_code}' "$B$P")"
 echo "=== GET ${P%%\?*}  -> HTTP $code"
