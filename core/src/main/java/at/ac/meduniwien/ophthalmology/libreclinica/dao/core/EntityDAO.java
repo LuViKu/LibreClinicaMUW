@@ -785,7 +785,9 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
         B answer;
 
         String sql = digester.getQuery(queryName);
-        logger.debug("query: {}, variables: {}", queryName, variables);
+        // The query's name only: its variables are request values and data
+        // (CodeQL java/log-injection, beta.11 release gate).
+        logger.debug("query: {}", queryName);
 
         ArrayList<HashMap<String, Object>> rows = this.select(sql, variables, useCache);
         if(rows.size() > 0) {
