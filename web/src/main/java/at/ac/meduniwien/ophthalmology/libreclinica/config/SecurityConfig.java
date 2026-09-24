@@ -190,6 +190,13 @@ public class SecurityConfig {
                         // off (404) unless core.optomed.worklist.enabled=true.
                         // See OptomedWorklistApiController.
                         "/pages/api/v1/device/optomed/**",
+                        // DR-033 — heartbeats from the uploaders on the
+                        // acquisition PCs (Export Watcher, Optomed Bridge).
+                        // No patient data; bounded fields, 16 KB body, at most
+                        // 50 programs, rows keyed by a random instance id. Off
+                        // (404) with core.uploaderHealth.heartbeat.enabled=false.
+                        // See UploaderHeartbeatApiController.
+                        "/pages/api/v1/device/uploader/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",

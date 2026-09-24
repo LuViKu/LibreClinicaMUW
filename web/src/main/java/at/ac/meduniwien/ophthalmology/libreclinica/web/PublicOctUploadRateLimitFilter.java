@@ -80,6 +80,17 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     static final String UPLOAD_PREFIX = "/pages/api/v1/public/upload/";
 
     /**
+     * DR-033 — heartbeats of the uploaders on the acquisition PCs. Their own
+     * bucket, keyed apart from the upload page's: the Clarus PC runs two
+     * uploaders behind one address, each reporting every two minutes, and a
+     * heartbeat must never cost the Export Watcher one of its lookups.
+     * 240 / hour, one token per 15 s.
+     */
+    static final String HEARTBEAT_PREFIX = "/pages/api/v1/device/uploader/";
+    static final int MAX_HEARTBEATS_PER_HOUR = 240;
+    static final long HEARTBEAT_REFILL_INTERVAL_MS = 15_000L;
+
+    /**
      * Every unauthenticated portal gets the same bucket policy. 2026-09-17 —
      * the DR-025 Remidio image-upload page and the BCVA entry page were added
      * as {@code permitAll} siblings of the OCT portal without any throttle;
@@ -91,6 +102,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
             "/pages/api/v1/public/image-upload/",
             "/pages/api/v1/public/bcva-entry/",
             UPLOAD_PREFIX,
+            HEARTBEAT_PREFIX,
     };
 
     /** The guarded prefix a URI falls under, or null when the filter should not police it. */
@@ -181,7 +193,9 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         long now = nowMs();
         Bucket bucket = buckets.computeIfAbsent(key, k -> commit
                 ? new Bucket(MAX_COMMITS_PER_HOUR, MAX_COMMITS_PER_HOUR, COMMIT_REFILL_INTERVAL_MS, now)
-                : new Bucket(MAX_REQUESTS_PER_HOUR, now));
+                : HEARTBEAT_PREFIX.equals(prefix)
+                        ? new Bucket(MAX_HEARTBEATS_PER_HOUR, MAX_HEARTBEATS_PER_HOUR, HEARTBEAT_REFILL_INTERVAL_MS, now)
+                        : new Bucket(MAX_REQUESTS_PER_HOUR, now));
         bucket.lastTouchedMs.set(now);
         refill(bucket, now);
 
