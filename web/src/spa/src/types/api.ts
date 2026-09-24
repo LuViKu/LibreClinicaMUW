@@ -1924,6 +1924,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/device/uploader/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an uploader's heartbeat
+         * @description Upserts the program's row by its instance id. 200 recorded; 400 malformed; 404 heartbeats switched off; 413 body over 16 KB; 429 too many programs.
+         */
+        post: operations["recordUploaderHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/datasets/{id}/schedules": {
         parameters: {
             query?: never;
@@ -2190,6 +2210,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["submit_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Measure the storage now; the result replaces the page's figures when done */
+        post: operations["rescanStorage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3412,6 +3449,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/uploaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uploaders on the acquisition PCs, and what arrived per device */
+        get: operations["listUploaders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/system-status": {
         parameters: {
             query?: never;
@@ -3420,6 +3474,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["systemStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Storage per file store and filesystem, the database, and the trend over a week */
+        get: operations["storageUsage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3647,6 +3718,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["hardRemoveVersion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/uploaders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget an uploader; it re-appears with its next heartbeat if it still runs */
+        delete: operations["forgetUploader"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4816,6 +4904,49 @@ export interface components {
             newStatus?: string;
             description?: string;
             assignedTo?: string;
+        };
+        /** @description One heartbeat. Times are ages in seconds, never clock readings. */
+        UploaderHeartbeat: {
+            /** @description Random UUID the program generated on first start */
+            instanceId: string;
+            /** @example export-watcher */
+            kind: string;
+            /**
+             * @description The PC's name as the page shows it
+             * @example CLARUS-PC
+             */
+            name?: string;
+            /** @example 2026-09-24 */
+            version?: string;
+            /** @description false in the last heartbeat before the program exits */
+            running?: boolean;
+            /** @enum {string} */
+            stopReason?: "exit" | "session-end";
+            /** @description false while uploading is switched off in the program */
+            enabled?: boolean;
+            /**
+             * Format: int32
+             * @description How often the program reports; offline after three missed
+             * @example 120
+             */
+            heartbeatIntervalSec?: number;
+            /** Format: int64 */
+            secondsSinceActivity?: number;
+            /** Format: int64 */
+            secondsSinceUpload?: number;
+            /** Format: int32 */
+            uploadedToday?: number;
+            /** Format: int32 */
+            pendingFiles?: number;
+            /** Format: int32 */
+            oldestPendingMinutes?: number;
+            /** Format: int32 */
+            failedFiles?: number;
+            /** Format: int64 */
+            diskFreeBytes?: number;
+            /** Format: int64 */
+            diskTotalBytes?: number;
+            problems?: string[];
         };
         CreateScheduleRequest: {
             format?: string;
@@ -9295,6 +9426,30 @@ export interface operations {
             };
         };
     };
+    recordUploaderHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploaderHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     listSchedules: {
         parameters: {
             query?: never;
@@ -9784,6 +9939,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["BugReportResponse"];
+                };
+            };
+        };
+    };
+    rescanStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -11528,7 +11703,47 @@ export interface operations {
             };
         };
     };
+    listUploaders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     systemStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    storageUsage: {
         parameters: {
             query?: never;
             header?: never;
@@ -11861,6 +12076,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CrfVersionUsageReport"];
+                };
+            };
+        };
+    };
+    forgetUploader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
