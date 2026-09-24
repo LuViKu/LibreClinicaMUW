@@ -112,5 +112,6 @@
   <include  file="migration/lc-muw-2026-12-04-remidio-pull.xml"/>
   <include  file="migration/lc-muw-2026-12-05-uploader-health-storage.xml"/>
   <include  file="migration/lc-muw-2026-12-06-visit-imaging-plan.xml"/>
+  <include  file="migration/lc-muw-2026-12-07-retinal-jobs-follow-file.xml"/>
 </databaseChangeLog>
 

@@ -54,7 +54,13 @@ public enum RetinalInferenceJobStatus {
     /** Public-portal upload with no event_crf binding yet. */
     PARKED("parked"),
     /** DR-022 — controller-tracked remote sidecar in flight; worker MUST skip. */
-    REMOTE_PENDING("remote_pending");
+    REMOTE_PENDING("remote_pending"),
+    /**
+     * DR-035 — the file was removed from its visit before this job ran. Not
+     * picked up by any worker; revived (back to queued / remote_pending) if
+     * the file is filed again where the plan wants the task.
+     */
+    CANCELLED("cancelled");
 
     private final String dbValue;
 

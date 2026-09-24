@@ -4,6 +4,7 @@ import { apiDelete as _apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkE
 import type {
   CreateEventDefinitionInput,
   EventDefinition,
+  ImagingPlanCatchUp,
   ImagingPlanEntry,
   ImagingPlanEntryWrite,
   UpdateEventDefinitionInput,
@@ -339,6 +340,28 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     }
   }
 
+  /**
+   * DR-035 — applying the plan to scans already filed. `preview` counts,
+   * `run` does it; both answer the same shape.
+   */
+  async function previewImagingPlanCatchUp(studyOid: string, sedId: number): Promise<ImagingPlanCatchUp | null> {
+    try {
+      return await apiGet<ImagingPlanCatchUp>(`${planUrl(studyOid, sedId)}/catch-up`)
+    } catch (e) {
+      handleNonValidationError(e, 'preview imaging plan catch-up')
+      return null
+    }
+  }
+
+  async function runImagingPlanCatchUp(studyOid: string, sedId: number): Promise<ImagingPlanCatchUp | null> {
+    try {
+      return await apiPost<ImagingPlanCatchUp>(`${planUrl(studyOid, sedId)}/catch-up`, {})
+    } catch (e) {
+      handleNonValidationError(e, 'run imaging plan catch-up')
+      return null
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -358,5 +381,7 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     imagingPlanByDef,
     loadImagingPlan,
     saveImagingPlan,
+    previewImagingPlanCatchUp,
+    runImagingPlanCatchUp,
   }
 })

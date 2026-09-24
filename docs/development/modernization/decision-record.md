@@ -810,10 +810,38 @@ The second problem is the one that decided the shape. A camera that sits in the 
 - One additive table; the old task table stays and keeps working for definitions without a plan. The OCT portal now stamps the study's OCT-volume modality onto the `ingest_item` it creates (when the study has exactly one), so plan coverage sees it.
 - A study that adds an imaging catalogue changes how its visit editor looks: the task chips give way to the plan table. Its existing task lists were migrated into it, so nothing changes in what runs until somebody edits.
 - The MS-39 needs a catalogue row (device key, `kinds_accepted` without `e2e` unless its export is one the pipeline can read) before a visit can require it; the plan is ready for it.
-- Not done here: retinal jobs following a file on unbind (P3.3), and a per-file re-resolution when a plan changes after files were filed — the plan applies to files filed from then on.
+- Retinal jobs following a file on unbind and rebind, and applying a changed plan to files already filed, are DR-035 (same day).
 - Verified 2026-09-24 as far as this machine allows: the pure coverage rules by unit test (`VisitImagingPlanTest`), the SPA by `vue-tsc` and vitest (editor helpers, store, visit page), the Java by language-server diagnostics. The migration and the endpoints have not run against a database here; the beta.11 dry-run migration is the first place they will.
 
 **Reversible** — drop the table and the endpoints; task resolution returns to the per-visit list, the preflight loses one row.
+
+---
+
+## DR-035 — Retinal inference jobs follow the file
+
+**Date:** 2026-09-24
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-034 (visit imaging plan), DR-029 (`ingest_item`), DR-022 (remote GPU sidecar), P3.3 (the inbox lifecycle); `RetinalJobFollower`, `IngestBindService`, `IngestInboxApiController`, `EventDefinitionsApiController` (`…/imaging-plan/catch-up`); migration `lc-muw-2026-12-07-retinal-jobs-follow-file.xml`.
+
+**Context.** A retinal inference job copied its visit ids at enqueue time and never looked at the ingest row again. Three consequences, all found while wiring DR-034: removing a scan from a visit left its jobs there, so the old visit's results tab kept showing metrics from a scan no longer filed against it; an inbox bind started no job at all, so a scan filed after a wrong-visit correction, or one parked at upload and filed later, never got inference; and a plan edit applied only to scans filed from then on. The visit page would now say an OCT is present while its results tab stayed empty.
+
+**Decision.** One primitive — *ensure the plan's jobs exist for this scan at this visit* — used in three places.
+
+1. **Results belong to the scan; the plan decides only what new work starts.** On a bind, every existing job of the file that is not cancelled is attached to the visit (finished results are re-pointed, not re-computed), a cancelled job whose task the plan wants is revived, and a planned task with no job is enqueued and dispatched exactly as the OCT portal does (preprocess once, then the GPU host per task). Jobs are found by `ingest_item_id`, and by content hash and scan index for rows the portal wrote before that column existed. A finished job whose task the current plan does not name is still attached: hiding computed metrics because a configuration changed is not something a clinical system should do quietly.
+2. **Unbind detaches, and cancels what has not started.** Every job of the file loses its visit ids; those still `queued`, `remote_pending` or `parked` become `cancelled` (a new status no worker picks up; the local worker's `IN ('queued','screened')` needs no change). A job already on the GPU finishes and stays detached with its result. Ordered like the CRF tick: jobs first, row second, so a failure leaves a bound file rather than an unbound one whose jobs still claim a visit.
+3. **A plan change is applied on request, not on save.** The editor shows what applying the saved plan to the already-filed scans would do (`GET …/imaging-plan/catch-up`: scans, analyses that would start) and does it on a click (`POST`). A plan edit could fan out hundreds of GPU jobs; the number is the administrator's to see first. After a save that owes work, the form stays open with the number rather than closing.
+4. **A follower without a dispatcher attaches only.** `IngestBindService` built with a data source alone (the image inbox, DICOM auto-bind, Remidio) still detaches and attaches but never enqueues: a `queued` row nobody hands to the GPU host is drained by the local placeholder worker, and a placeholder result on a real visit is worse than none. The inbox and the plan editor are wired with the remote client and the inference controller.
+5. **Gates and trails.** The study's inference switch gates enqueueing here as it does in the portal. Two audit types per file (`retinal_jobs_followed_file`, `retinal_jobs_detached`) with counts; the unbind row also carries them.
+
+**Consequences.**
+
+- No DDL on the job table (status is a VARCHAR without a CHECK, as for `parked` and `remote_pending`); the new status is documented in the column comment and labelled in the SPA.
+- The dedup key (hash, scan index, task) still holds: a revived job is the same row, and an enqueue only happens where no row exists.
+- Not covered: a plan change never cancels running jobs or deletes results; a scan filed at a visit whose definition has no plan follows the older task list and the `fluid` default, as at the portal.
+- Verified 2026-09-24 as far as this machine allows: the diffing rule by unit test (`RetinalJobFollowerTest`), the SPA by `vue-tsc` and vitest, the Java by language-server diagnostics. The database side and the dispatch first run in the beta.11 dry run and dev stack.
+
+**Reversible** — remove the hooks in `IngestBindService`, the endpoints and the status; jobs go back to staying where they were enqueued.
 
 ---
 

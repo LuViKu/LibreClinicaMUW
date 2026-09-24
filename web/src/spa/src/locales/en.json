@@ -2116,7 +2116,18 @@
       "requiredByModule": "Required by the study module",
       "requiredByModuleHint": "Required by the active study module and therefore always on: {tasks}.",
       "hint": "Ticked modalities are expected at this visit. \"Required\" blocks signing while no image of that modality (and eye, if given) is filed against the visit. The AI tasks run on every OCT volume of that modality once it is filed; without an entry for the OCT modality nothing runs. A visit with no entries keeps the older task list (default: fluid).",
-      "saveError": "Could not save the expected imaging."
+      "saveError": "Could not save the expected imaging.",
+      "catchUp": {
+        "loading": "Checking filed scans …",
+        "none": "No OCT scans are filed at visits of this definition yet.",
+        "summary": "{scans} filed OCT scan(s) at visits of this definition; {n} new analysis run(s) would start.",
+        "apply": "Apply to filed scans",
+        "applying": "Applying …",
+        "done": "Applied: {attached} attached, {started} started{failedPart}.",
+        "failedPart": ", {failed} failed",
+        "error": "Applying the plan to filed scans failed.",
+        "hint": "The plan applies to scans filed from now on. This action catches up scans already filed: existing results are attached, missing analyses are started. Results are never deleted."
+      }
     }
   },
   "studyForm": {
@@ -3794,7 +3805,8 @@
       "succeeded": "Done",
       "done": "Done",
       "failed": "Failed",
-      "parked": "Parked"
+      "parked": "Parked",
+      "cancelled": "Cancelled (scan removed from visit)"
     },
     "task": {
       "fluid": "Fluid",
