@@ -581,6 +581,19 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 
+# Launched by hand - a double-click, a shell - rather than by the installer's
+# hidden-window shortcut, the script owns a console window that sits on the
+# desktop for as long as the tray icon lives (2026-09-24, first Windows run).
+# The tray icon is this app's surface, so the console is hidden here, for
+# every way of starting it. -Once and -SelfTest never reach this point: they
+# print to that console and exit.
+Add-Type -Namespace LibreClinicaTray -Name Console -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]   public static extern bool ShowWindow(IntPtr h, int cmd);
+'@
+$ownConsole = [LibreClinicaTray.Console]::GetConsoleWindow()
+if ($ownConsole -ne [IntPtr]::Zero) { [LibreClinicaTray.Console]::ShowWindow($ownConsole, 0) | Out-Null }   # 0 = SW_HIDE
+
 $script:Cfg = Read-Config
 Write-Log "$script:AppName starting (enabled=$($script:Cfg.Enabled), folder=$($script:Cfg.WatchFolder))"
 

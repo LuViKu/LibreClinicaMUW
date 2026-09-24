@@ -441,6 +441,18 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 
+# Launched by hand rather than by the installer's hidden-window shortcut, the
+# script owns a console window that sits on the desktop as long as the tray
+# icon lives. The tray icon is this app's surface; hide the console for every
+# way of starting it (same as the Export Watcher, 2026-09-24). This is our
+# own console - nothing to do with the Optomed Client window handled below.
+Add-Type -Namespace LibreClinicaTray -Name Console -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]   public static extern bool ShowWindow(IntPtr h, int cmd);
+'@
+$ownConsole = [LibreClinicaTray.Console]::GetConsoleWindow()
+if ($ownConsole -ne [IntPtr]::Zero) { [LibreClinicaTray.Console]::ShowWindow($ownConsole, 0) | Out-Null }   # 0 = SW_HIDE
+
 # ----------------------------------------------------------------------------
 # the Optomed Client: keep it running, keep its window out of the way
 # ----------------------------------------------------------------------------
