@@ -105,6 +105,14 @@ export interface GroupAssignmentRandomization {
 export type StudyEye = 'OD' | 'OS' | 'OU'
 
 /** Per-event CRF completion state. */
+/**
+ * The status of one visit as the subject endpoints report it.
+ *
+ * Every value `SubjectsApiController.mapEventRowStatus` can emit. Until
+ * 2026-09-24 this listed six of them while the backend already sent
+ * `stopped` and `skipped` too, so SubjectDetailView had to cast its way
+ * around the union to compare against them.
+ */
 export type EventStatus =
   | 'not-scheduled'
   | 'scheduled'
@@ -112,6 +120,10 @@ export type EventStatus =
   | 'complete'
   | 'signed'
   | 'locked'
+  | 'stopped'
+  | 'skipped'
+  /** Cancelled (soft-deleted server-side); no action is offered on it. */
+  | 'removed'
 
 export type EventCellSnapshot =
   Omit<Required<components['schemas']['EventCellDto']>, 'status'>

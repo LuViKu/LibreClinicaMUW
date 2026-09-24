@@ -344,7 +344,8 @@
       "skipped": "Skipped",
       "not-started": "Not started",
       "signed": "Signed",
-      "locked": "Locked"
+      "locked": "Locked",
+      "removed": "Cancelled"
     },
     "studyCard": {
       "pi": "Site PI",

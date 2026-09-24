@@ -867,6 +867,10 @@ function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'n
     case 'scheduled':
     case 'in-progress':
       return 'info'
+    // A cancelled or interrupted visit reads as inactive, not as an alarm.
+    case 'removed':
+    case 'stopped':
+    case 'skipped':
     case 'not-scheduled':
     default:
       return 'neutral'
