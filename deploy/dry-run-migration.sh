@@ -103,12 +103,27 @@ if ! docker run -d --name "$PG_NAME" --network "$NET_NAME" --network-alias db \
 fi
 
 say "waiting for the throwaway database …"
+# The postgres image starts the server TWICE: once for its init scripts,
+# then for real. pg_isready answers during the first run too, so a restore
+# that starts on its say-so can land on a server that is shutting down —
+# psql exits 2, and this script used to report that as "the dump may be
+# from a newer server". Wait for the init process to declare itself
+# complete, then for a query to succeed twice across a pause.
 for _ in $(seq 1 60); do
-  docker exec "$PG_NAME" pg_isready -U clinica -d libreclinica >/dev/null 2>&1 && break
+  docker logs "$PG_NAME" 2>&1 | grep -q 'PostgreSQL init process complete' && break
   sleep 2
 done
-if ! docker exec "$PG_NAME" pg_isready -U clinica -d libreclinica >/dev/null 2>&1; then
+ready=0
+for _ in $(seq 1 30); do
+  if docker exec "$PG_NAME" psql -qAt -U clinica -d libreclinica -c 'SELECT 1' >/dev/null 2>&1; then
+    sleep 2
+    docker exec "$PG_NAME" psql -qAt -U clinica -d libreclinica -c 'SELECT 1' >/dev/null 2>&1 && { ready=1; break; }
+  fi
+  sleep 2
+done
+if [ "$ready" != "1" ]; then
   bad "the throwaway database never became ready"
+  docker logs "$PG_NAME" 2>&1 | tail -5
   exit 1
 fi
 
@@ -121,10 +136,23 @@ case "$BACKUP" in
   *)                READ_BACKUP="cat" ;;
 esac
 
-if ! $READ_BACKUP "$BACKUP" | docker exec -i "$PG_NAME" psql -q -U clinica -d libreclinica >/dev/null 2>&1; then
-  bad "restoring the backup failed — the dump may be from a newer server, or not a plain-format dump"
+# psql's stderr goes to a temp file, not /dev/null: a failed restore has to
+# say why. Only error text lands there, never the dump.
+PSQL_ERR="$(mktemp)"
+if ! $READ_BACKUP "$BACKUP" | docker exec -i "$PG_NAME" psql -q -U clinica -d libreclinica >/dev/null 2>"$PSQL_ERR"; then
+  bad "restoring the backup failed — psql said:"
+  grep -v '^$' "$PSQL_ERR" | tail -8 | sed 's/^/    /'
+  rm -f "$PSQL_ERR"
   exit 1
 fi
+# A plain-format dump restores with warnings for things that already exist
+# in a fresh database (the public schema, the role); those are not failures.
+# Anything else is worth a look, so show the ERROR lines even on success.
+if grep -q '^ERROR' "$PSQL_ERR"; then
+  say "psql reported errors during restore (the dump still loaded):"
+  grep '^ERROR' "$PSQL_ERR" | sort | uniq -c | sort -rn | head -5 | sed 's/^/    /'
+fi
+rm -f "$PSQL_ERR"
 ok "backup restored"
 
 before="$(docker exec "$PG_NAME" psql -qAt -U clinica -d libreclinica \

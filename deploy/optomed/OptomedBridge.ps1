@@ -71,6 +71,7 @@ $script:LogPath      = Join-Path $script:StateDir 'optomed-bridge.log'
 $script:LastListPath = Join-Path $script:StateDir 'last-worklist.txt'
 $script:UploadedDir  = '_uploaded'
 $script:LastBalloon  = [datetime]::MinValue
+$script:LastStaleWarned = [datetime]::MinValue   # mtime of the last drop file reported as not imported
 
 # ----------------------------------------------------------------------------
 # logging
@@ -271,6 +272,22 @@ function Invoke-WorklistFetch([pscustomobject]$cfg) {
 
     $dropDir = Join-Path $cfg.ClientRoot 'Worklist'
     if (-not (Test-Path $dropDir)) { Write-Log "worklist: drop folder missing: $dropDir" 'ERROR'; return 'drop folder missing' }
+
+    # A file still sitting in the drop folder means the Client REFUSED the
+    # previous one - it says nothing, it just leaves the file - and the camera
+    # has not had a list since. Checked before the fetch, because a refused
+    # file is exactly the case where the server content has NOT changed and
+    # the unchanged-return below would otherwise skip everything. The known
+    # cause is one PatientID twice in a file (the platform now merges those).
+    # Said once per file.
+    $stale = Join-Path $dropDir $script:WorklistName
+    if ((Test-Path $stale) -and ((Get-Date) - (Get-Item $stale).LastWriteTime).TotalSeconds -gt 60) {
+        $mt = (Get-Item $stale).LastWriteTime
+        if ($script:LastStaleWarned -ne $mt) {
+            $script:LastStaleWarned = $mt
+            Write-Log "worklist: the Client did not import the file dropped at $($mt.ToString('HH:mm:ss')) - it refuses a file that names one patient id twice; check the visits scheduled today" 'WARN'
+        }
+    }
 
     $req = New-Object System.Net.Http.HttpRequestMessage 'GET', (Get-ApiUrl $cfg '/api/v1/device/optomed/worklist.txt')
     $req.Headers.TryAddWithoutValidation('X-MUW-Optomed-Token', $token) | Out-Null

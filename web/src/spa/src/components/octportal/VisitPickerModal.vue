@@ -107,6 +107,8 @@ async function load(): Promise<void> {
         dateStarted: p.dateStarted,
         dateEnded: p.dateEnded,
         location: p.location,
+        // The public mirror carries no start time; a portal visit is date-only here.
+        timeStarted: null,
         // Coerce the backend's lowercase-hyphenated status to the
         // StudyEvent union; unknown values render as plain text via
         // the {@link pillClass} default branch.

@@ -296,9 +296,25 @@ typos, not a requirement — a label typed on the camera binds exactly the same
 way, because `/resolve` keys on `PatientID` + date and does not know where the
 label came from.
 
-Verified on the Client, still to verify on the camera: that `O` is accepted as
-a sex value (the vendor template shows only `M`/`F`), and that an empty file
-clears the camera's list rather than being ignored.
+Verified on the camera itself, 2026-09-23: `O` is accepted as a sex value (the
+entry appears; the vendor's template shows only M/F), and an empty — literally
+0-byte — file is imported and **clears the camera's list**, which is what the
+endpoint sends on a day with no visits.
+
+One more rule, found the same afternoon when a subject had two visits in one
+day: **the Client refuses a file that names the same `PatientID` twice** — no
+error, it simply leaves the file in the folder, and the camera never gets the
+list. Isolated by dropping three files by hand: unique ids with real times
+imported in 6 s; two records with one id sat unconsumed; unique ids with
+midnight times imported in 0.5 s. The formatter therefore renders one record
+per subject (a second visit's label joins the given-name field, without
+spaces: `Baseline+V1`), and the bridge warns when a dropped file is still there
+a minute later. The join has no spaces for a reason found the same hour: the
+Client splits the given-name line on whitespace into given and middle name and
+drops a third word — `Baseline + V1` came back as `Baseline^+` with the `V1`
+gone — so an event label keeps at most two words on the camera.
+A subject with two visits on one day also cannot auto-bind on upload —
+`/resolve` reports it ambiguous — so those images go to the inbox.
 
 ## Uploaded DICOM files — the describe endpoint (DR-029, 2026-09-20)
 

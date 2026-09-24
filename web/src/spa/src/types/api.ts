@@ -4090,6 +4090,7 @@ export interface components {
             dateEnded?: string;
             location?: string;
             status?: string;
+            timeStarted?: string;
         };
         StudyEventDto: {
             id?: string;
@@ -4106,6 +4107,7 @@ export interface components {
             scheduledFor?: string;
             /** Format: int32 */
             scheduledIntervalDays?: number;
+            timeStarted?: string;
         };
         CreateDatasetRequest: {
             name?: string;
@@ -4706,6 +4708,7 @@ export interface components {
             location?: string;
             /** Format: int32 */
             scheduledIntervalDays?: number;
+            timeStarted?: string;
         };
         SignEventRequest: {
             password?: string;

@@ -212,6 +212,13 @@ interface EditEventState {
   eventId: string
   eventDefinitionOid: string
   dateStart: string
+  /**
+   * Optional HH:mm, set-only: sent when typed, omitted when blank so an
+   * existing time is left alone. The subject-detail rows do not carry the
+   * visit's time, so the field cannot be pre-filled; clearing a time is not
+   * offered here (yet) - a blank means "unchanged", never "remove".
+   */
+  timeStart: string
   location: string
   status: StudyEventStatus
   fieldError: string | null
@@ -326,6 +333,7 @@ function openEditEvent(ev: {
     eventId: ev.eventId,
     eventDefinitionOid: ev.eventDefinitionOid,
     dateStart: ev.dateStart ?? '',
+    timeStart: '',
     location: ev.location ?? '',
     status: editable,
     fieldError: null,
@@ -360,10 +368,16 @@ async function submitEditEvent() {
     editEvent.value.fieldError = t('subjectDetail.event.dateInvalid')
     return
   }
+  const time = editEvent.value.timeStart.trim()
+  if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    editEvent.value.fieldError = t('subjectDetail.event.timeInvalid')
+    return
+  }
   isSavingEvent.value = true
   try {
     const result = await events.updateEvent(editEvent.value.eventId, {
       dateStarted: date,
+      ...(time ? { timeStarted: time } : {}),
       location: editEvent.value.location.trim(),
       status: editEvent.value.status,
     })
@@ -1430,6 +1444,16 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                         placeholder="TT.MM.JJJJ"
                         :disabled="editEventLocked"
                         @update:model-value="onEditEventDateInput"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel for="edit-event-time">{{ t('subjectDetail.event.timeStart') }}</FieldLabel>
+                      <TextInput
+                        id="edit-event-time"
+                        v-model="editEvent.timeStart"
+                        type="time"
+                        placeholder="HH:MM"
+                        :disabled="editEventLocked"
                       />
                     </div>
                     <div>

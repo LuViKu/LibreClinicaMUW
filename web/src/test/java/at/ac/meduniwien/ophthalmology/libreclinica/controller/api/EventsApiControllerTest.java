@@ -142,6 +142,42 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
+    void scheduleReturns400OnMalformedTime() throws Exception {
+        // timeStarted is optional, but when present it must be HH:mm (24h).
+        // Validated before any DAO is touched, so a mocked DataSource is enough.
+        for (String bad : new String[] {"9:30", "25:00", "09:60", "0930", "9.30", "09:30:00"}) {
+            mockMvcWith().perform(post("/api/v1/events")
+                    .contentType("application/json")
+                    .content("{\"subjectId\":\"M-001\",\"eventDefinitionOid\":\"SE_V1\","
+                            + "\"dateStarted\":\"2026-06-01\",\"timeStarted\":\"" + bad + "\"}")
+                    .session((org.springframework.mock.web.MockHttpSession)
+                            authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message")
+                            .value(containsString("'timeStarted' must be HH:mm")));
+        }
+    }
+
+    @Test
+    void updateReturns400OnMalformedTime() throws Exception {
+        // The same rule on edit. A blank timeStarted is allowed there (it
+        // clears the time), so only a malformed one is refused.
+        // The role gate runs before validation on PUT (a Monitor gets 403
+        // whatever the body says), so the session needs an editing role for
+        // the malformed time to be the thing that is refused.
+        mockMvcWith().perform(put("/api/v1/events/42")
+                .contentType("application/json")
+                .content("{\"timeStarted\":\"24:00\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("'timeStarted' must be HH:mm")));
+    }
+
+    @Test
     void scheduleReturns400OnMalformedDate() throws Exception {
         mockMvcWith().perform(post("/api/v1/events")
                 .contentType("application/json")

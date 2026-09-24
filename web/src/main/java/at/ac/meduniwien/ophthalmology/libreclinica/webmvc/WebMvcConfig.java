@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -74,6 +75,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
  */
 @Configuration
 @ComponentScan("at.ac.meduniwien.ophthalmology.libreclinica.controller")
+// @Scheduled methods on beans scanned into THIS context need a
+// ScheduledAnnotationBeanPostProcessor in THIS context. The root context
+// (SecurityConfig) has @EnableScheduling, but bean post-processors are not
+// inherited by a child context — so RemidioPullScheduler (2026-09-23) and
+// TerminologyIngestScheduler's nightly cron (since 2026-08) were
+// instantiated here and never ticked: one post-processor in the JVM, and
+// it never saw them. Found on the first local run of the Remidio pull,
+// which stayed silent with no log line, no state row, and an idle
+// scheduling thread. The child resolves the TaskScheduler bean through
+// its parent, so this shares the root's scheduler thread rather than
+// adding one.
+@EnableScheduling
 // Phase E.5 follow-up (2026-06-01): springdoc bean-creation configs are
 // re-imported here so OpenApiResource + SpringWebMvcProvider land in the
 // `pages` DispatcherServlet's CHILD context, the only context where the

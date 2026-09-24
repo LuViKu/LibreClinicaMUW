@@ -409,7 +409,7 @@ async function onUnbind(row: IngestItem): Promise<void> {
                 picked. Shown as unverified so it is not mistaken for evidence.
               -->
               <span
-                v-if="row.acquisitionDateSource !== 'file'"
+                v-if="row.acquisitionDateSource !== 'file' && row.acquisitionDateSource !== 'device'"
                 class="italic text-slate-400"
                 :title="t('ingestInbox.dateUnverified')"
               >({{ t('ingestInbox.dateUnverified') }})</span>
