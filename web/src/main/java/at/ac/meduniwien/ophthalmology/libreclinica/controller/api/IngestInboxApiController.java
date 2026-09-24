@@ -168,6 +168,11 @@ public class IngestInboxApiController {
 
     public record DismissRequest(String reason) {}
 
+    /** Optional body of {@code /unbind}: dismiss in the same step, with the reason. */
+    public record UnbindRequest(Boolean dismiss, String reason) {}
+
+    public record BulkDismissRequest(List<Long> ids, String reason) {}
+
     // ----- GET /inbox -----
 
     /**
@@ -330,9 +335,10 @@ public class IngestInboxApiController {
         if (guard != null) return guard;
 
         Integer studyId;
+        String subjectLabel;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT ss.study_id FROM study_event se "
+                     "SELECT ss.study_id, ss.label FROM study_event se "
                              + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
                              + " WHERE se.study_event_id = ?")) {
             ps.setInt(1, studyEventId);
@@ -341,6 +347,7 @@ public class IngestInboxApiController {
                     return ResponseEntity.status(404).body(Map.of("message", "no study_event " + studyEventId));
                 }
                 studyId = rs.getInt(1);
+                subjectLabel = rs.getString(2);
             }
         } catch (SQLException e) {
             LOG.error("visit lookup failed for study_event {}: {}", studyEventId, e.getMessage());
@@ -367,7 +374,25 @@ public class IngestInboxApiController {
             LOG.error("ingest by-event list failed for study_event {}: {}", studyEventId, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "could not list the visit's images"));
         }
-        return ResponseEntity.ok(Map.of("items", rows, "studyEventId", studyEventId));
+        // Files that carry this subject's label but are not filed anywhere —
+        // after "remove from visit: wrong visit", or a capture the resolver
+        // could not place. The visit page says so, so nothing removed from a
+        // visit is out of sight; the count is all it needs.
+        int pendingForSubject = 0;
+        if (subjectLabel != null && !subjectLabel.isBlank()) {
+            try (Connection c = dataSource.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT count(*) FROM ingest_item WHERE status = 'UNBOUND' AND lower(patient_id) = lower(?)")) {
+                ps.setString(1, subjectLabel.trim());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) pendingForSubject = rs.getInt(1);
+                }
+            } catch (SQLException e) {
+                LOG.warn("pending-for-subject count failed for study_event {}: {}", studyEventId, e.getMessage());
+            }
+        }
+        return ResponseEntity.ok(Map.of("items", rows, "studyEventId", studyEventId,
+                "pendingForSubject", pendingForSubject));
     }
 
     @GetMapping("/{id:[0-9]+}/preview")
@@ -555,7 +580,9 @@ public class IngestInboxApiController {
      * operator has to be able to see the data they are about to change.
      */
     @PostMapping(value = "/{id:[0-9]+}/unbind", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> unbind(@PathVariable("id") long id, HttpSession session) {
+    public ResponseEntity<?> unbind(@PathVariable("id") long id,
+                                    @RequestBody(required = false) UnbindRequest req,
+                                    HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
 
@@ -565,7 +592,64 @@ public class IngestInboxApiController {
                     "This file belongs to a study you cannot access");
             if (vis != null) return vis;
         }
-        return bindResponse(binds().unbind(id, actor(session)), id, "UNBOUND");
+        IngestBindService.Actor actor = actor(session);
+        IngestBindService.Result r = binds().unbind(id, actor);
+        // 2026-09-24 — "remove from visit" on the visit page carries the
+        // operator's intent: back to the inbox (wrong visit), or not study
+        // data at all. The second is unbind + dismiss as one request, so the
+        // file never sits in the inbox unreviewed between two clicks; the
+        // trail still shows both steps, each with its actor.
+        if (r == IngestBindService.Result.OK && req != null && Boolean.TRUE.equals(req.dismiss())) {
+            return bindResponse(binds().dismiss(id, req.reason(), actor), id, "DISMISSED");
+        }
+        return bindResponse(r, id, "UNBOUND");
+    }
+
+    // ----- POST /{id}/restore -----
+
+    /**
+     * Bring a dismissed file back into the inbox while the retention window
+     * is open. Role-gated like dismiss: a dismissed row is unbound, so it
+     * belongs to no study to check visibility against.
+     */
+    @PostMapping(value = "/{id:[0-9]+}/restore", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> restore(@PathVariable("id") long id, HttpSession session) {
+        ResponseEntity<?> guard = guards(session);
+        if (guard != null) return guard;
+        return bindResponse(binds().restore(id, actor(session)), id, "UNBOUND");
+    }
+
+    // ----- POST /bulk-dismiss -----
+
+    /**
+     * Dismiss several files at once — a device flushes its whole memory on
+     * first contact, and sixty test exposures are one decision. Applied
+     * independently, like bulk-bind; the response says which were refused.
+     */
+    @PostMapping(value = "/bulk-dismiss", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> bulkDismiss(@RequestBody BulkDismissRequest req, HttpSession session) {
+        ResponseEntity<?> guard = guards(session);
+        if (guard != null) return guard;
+        if (req == null || req.ids() == null || req.ids().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "ids is required"));
+        }
+        if (req.ids().size() > MAX_BULK) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "at most " + MAX_BULK + " files at a time"));
+        }
+        IngestBindService.Actor actor = actor(session);
+        List<Long> dismissed = new ArrayList<>();
+        List<Map<String, Object>> skipped = new ArrayList<>();
+        for (Long id : req.ids()) {
+            if (id == null) continue;
+            IngestBindService.Result r = binds().dismiss(id, req.reason(), actor);
+            if (r == IngestBindService.Result.OK) {
+                dismissed.add(id);
+            } else {
+                skipped.add(Map.of("id", id, "reason", r.name()));
+            }
+        }
+        return ResponseEntity.ok(Map.of("dismissed", dismissed, "skipped", skipped));
     }
 
     // ----- POST /{id}/dismiss -----
@@ -619,6 +703,9 @@ public class IngestInboxApiController {
             case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
             case WRONG_STATE -> ResponseEntity.status(409).body(Map.of(
                     "message", "file " + id + " is not in a state this can be applied to"));
+            case REFUSED_LOCKED -> ResponseEntity.status(409).body(Map.of(
+                    "message", "file " + id + " is filed against a signed or locked visit — un-sign or unlock it first",
+                    "reason", "VISIT_SEALED"));
             case FAILED -> ResponseEntity.internalServerError().body(Map.of("message", "the change failed"));
         };
     }

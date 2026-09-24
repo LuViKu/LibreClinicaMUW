@@ -324,6 +324,10 @@ public class ImageIngestApiController {
             case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
             case WRONG_STATE -> ResponseEntity.status(409).body(Map.of(
                     "message", "image " + id + " is not UNBOUND (already reconciled)"));
+            // #337's sealed-visit guard, answered as the inbox controller does.
+            case REFUSED_LOCKED -> ResponseEntity.status(409).body(Map.of(
+                    "message", "image " + id + " is filed against a signed or locked visit - un-sign or unlock it first",
+                    "reason", "VISIT_SEALED"));
             case FAILED -> ResponseEntity.internalServerError().body(Map.of("message", "bind failed"));
         };
     }
@@ -348,6 +352,9 @@ public class ImageIngestApiController {
             case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
             case WRONG_STATE -> ResponseEntity.status(409).body(Map.of(
                     "message", "image " + id + " is not UNBOUND"));
+            case REFUSED_LOCKED -> ResponseEntity.status(409).body(Map.of(
+                    "message", "image " + id + " is filed against a signed or locked visit - un-sign or unlock it first",
+                    "reason", "VISIT_SEALED"));
             case FAILED -> ResponseEntity.internalServerError().body(Map.of("message", "dismiss failed"));
         };
     }

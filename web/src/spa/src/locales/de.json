@@ -2885,6 +2885,26 @@
         "dicom": "DICOM",
         "upload": "Upload",
         "portal-oct": "OCT-Portal"
+      },
+      "remove": "Aus Visite entfernen",
+      "sealedHint": "Visite ist unterschrieben oder gesperrt – Bilder können nicht entfernt werden.",
+      "pending": "{n} Bild(er) dieses Teilnehmers warten im Eingang auf eine Zuordnung.",
+      "pendingLink": "Eingang öffnen",
+      "removeDialog": {
+        "title": "Bild aus der Visite entfernen",
+        "subtitle": "{kind} · {eye} · {date}",
+        "intro": "Warum wird das Bild entfernt?",
+        "optionPool": "Falsche Visite – zurück in den Eingang",
+        "optionPoolHelp": "Das Bild bleibt erhalten und wird im Eingang neu zugeordnet.",
+        "optionDismiss": "Kein Studienbild – verwerfen",
+        "optionDismissHelp": "Das Bild wird verworfen und nach 30 Tagen gelöscht; bis dahin ist es im Eingang unter „Verworfen“ wiederherstellbar.",
+        "reasonLabel": "Grund (optional)",
+        "reasonPlaceholder": "z. B. Testaufnahme, falsches Auge, Duplikat",
+        "confirmPool": "Zurück in den Eingang",
+        "confirmDismiss": "Verwerfen",
+        "cancel": "Abbrechen",
+        "errorSealed": "Die Visite ist unterschrieben oder gesperrt – bitte zuerst entsperren.",
+        "errorGeneric": "Das Bild konnte nicht entfernt werden."
       }
     }
   },
@@ -3317,7 +3337,14 @@
     "dateMismatchTitle": "Die Daten stimmen nicht überein",
     "dateMismatchConfirm": "Diese Datei gibt als Aufnahmedatum {fileDate} an, die Visite ist auf {visitDate} datiert. Trotzdem dieser Visite zuordnen? Ihre Entscheidung wird im Audit-Trail vermerkt. ({n} Datei(en))",
     "dateUnverified": "nicht aus der Datei gelesen",
-    "dateFromFile": "aus der Datei gelesen"
+    "dateFromFile": "aus der Datei gelesen",
+    "restore": "Wiederherstellen",
+    "restoreConfirm": "Diese Datei zurück in den Eingang holen? Sie wird dann nicht mehr automatisch gelöscht.",
+    "dismissSelected": "Auswahl verwerfen",
+    "dismissSelectedConfirm": "{n} Datei(en) wirklich verwerfen? Sie bleiben 30 Tage im Status „Verworfen“ und können bis dahin wiederhergestellt werden.",
+    "dismissReasonLabel": "Grund (optional)",
+    "someSkippedDismiss": "{n} Datei(en) wurden übersprungen – sie waren bereits bearbeitet.",
+    "visitSealed": "Die Visite ist unterschrieben oder gesperrt – die Zuordnung kann erst nach dem Entsperren aufgehoben werden."
   },
   "imagingModalities": {
     "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",
