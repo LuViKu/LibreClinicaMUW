@@ -3395,15 +3395,70 @@
     "saved": "Saved ✓",
     "bindingsCount": "{n} CRF item binding(s) configured.",
     "keys": {
-      "ingest.dicom.enabled": "DICOM receiving (worklist + C-STORE)",
-      "ingest.image.enabled": "Image upload portal",
-      "ingest.oct.enabled": "OCT upload portal",
-      "inference.enabled": "AI inference",
-      "export.bundle.enabled": "Multimodal export",
-      "portal.todaysVisits": "Today's visits on the upload page",
-      "ai.arm.shownGroup": "Group shown AI",
-      "ai.arm.hiddenGroup": "Group blinded to AI",
-      "ai.blinding.enabled": "AI blinding for treating clinicians (Investigator, CRC)"
+      "ingest": {
+        "dicom": {
+          "enabled": "DICOM receiving (worklist + C-STORE)"
+        },
+        "image": {
+          "enabled": "Image upload portal"
+        },
+        "oct": {
+          "enabled": "OCT upload portal"
+        }
+      },
+      "inference": {
+        "enabled": "AI inference"
+      },
+      "export": {
+        "bundle": {
+          "enabled": "Multimodal export"
+        }
+      },
+      "portal": {
+        "todaysVisits": "Today's visits on the upload page"
+      },
+      "ai": {
+        "arm": {
+          "shownGroup": "Group shown AI",
+          "hiddenGroup": "Group blinded to AI"
+        },
+        "blinding": {
+          "enabled": "AI blinding for treating clinicians (Investigator, CRC)"
+        }
+      }
+    },
+    "help": {
+      "ingest": {
+        "dicom": {
+          "enabled": "DICOM cameras (Optomed Lumo, Clarus export) see this study's visits on the worklist and can send images via C-STORE."
+        },
+        "image": {
+          "enabled": "The login-free upload page accepts fundus images (JPEG/PNG) for this study – e.g. from the Remidio."
+        },
+        "oct": {
+          "enabled": "The login-free upload page accepts Spectralis OCT files (.e2e) for this study."
+        }
+      },
+      "inference": {
+        "enabled": "A filed OCT starts the AI analysis (segmentation, fluid, layers). Off: files are only stored."
+      },
+      "ai": {
+        "blinding": {
+          "enabled": "Investigator and CRC see no AI results (studies with a treatment decision, e.g. nAMD). Off: they see the same analysis pages as a Data Manager – for screening studies such as HealthAEye."
+        },
+        "arm": {
+          "shownGroup": "Name of the randomisation group whose participants may see AI results. Blank: default “AI_SHOWN”.",
+          "hiddenGroup": "Name of the randomisation group whose AI results stay hidden from treating clinicians. Blank: default “AI_HIDDEN”."
+        }
+      },
+      "export": {
+        "bundle": {
+          "enabled": "The multimodal export (images + data as one package) is available for this study."
+        }
+      },
+      "portal": {
+        "todaysVisits": "The login-free upload page lists this study's visits of the day for selection – requires a data-protection sign-off."
+      }
     }
   },
   "system": {
