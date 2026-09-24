@@ -62,9 +62,27 @@
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
       <includeMdcKeyName>reqId</includeMdcKeyName>
     </encoder>
-    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-      <fileNamePattern>${log.dir}.json.%d{yyyy-MM-dd}.gz</fileNamePattern>
-      <maxHistory>30</maxHistory>
+    <!--
+      2026-09-24 — size-and-time rolling with a cap.
+
+      This was TimeBasedRollingPolicy with maxHistory=30 and no size limit
+      at all: one chatty day filled the disk, and thirty of them were
+      allowed to. The SIEM feed is the one appender every logger writes to,
+      so it is the one that runs away — 4 GB in a day was measured on the
+      production VM (see the jdbc loggers below for the cause). The app VM
+      has a single volume shared with Postgres and the image store, so
+      "eventually rotates" is not a bound worth relying on.
+
+      100 MB per file, 2 GB total, 14 days — whichever limit is reached
+      first. A SIEM that ingests continuously does not need a month of
+      local history, and losing the oldest archive beats losing the
+      database to a full disk.
+    -->
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${log.dir}.json.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+      <maxFileSize>100MB</maxFileSize>
+      <maxHistory>14</maxHistory>
+      <totalSizeCap>2GB</totalSizeCap>
     </rollingPolicy>
   </appender>
 
@@ -97,11 +115,14 @@
   
   <appender name="DB_LOGFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <File>${log.dir}-db.log</File>
-    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-      <!-- daily rollover -->
-      <fileNamePattern>${log.dir}-db.%d{yyyy-MM-dd}.log</fileNamePattern>
-      <!-- keep 30 days' worth of history -->
-      <maxHistory>30</maxHistory>
+    <!-- Capped like JSON_FILE above: this is where the jdbc categories land,
+         so turning one of them back up for an afternoon must not be able to
+         fill the volume. -->
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${log.dir}-db.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+      <maxFileSize>100MB</maxFileSize>
+      <maxHistory>14</maxHistory>
+      <totalSizeCap>1GB</totalSizeCap>
     </rollingPolicy>
     <encoder>
       <pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
@@ -557,6 +578,44 @@
     
     <logger additivity="false" name="jdbc.sqltiming">
         <level value="${logLevel}"/>
+        <appender-ref ref="DB_LOGFILE"/>
+    </logger>
+
+    <!--
+      2026-09-24 — the log4jdbc categories nobody declared.
+
+      log4jdbc wraps the DataSource and emits a transcript of every
+      statement at INFO on four categories: jdbc.sqlonly (the SQL),
+      jdbc.audit (every JDBC call, including each setString), jdbc.resultset
+      (every column read) and jdbc.connection. Only jdbc.sqltiming had a
+      logger of its own (above), so the other four inherited <root> at INFO
+      and went to CONSOLE *and* JSON_FILE.
+
+      Measured on the production VM the day the Remidio pull went live:
+      18 MB of JSON in six minutes — about 4 GB a day, most of it
+      "PreparedStatement.setString(3, ...) returned". It also buried the
+      lines an operator is told to watch for: finding one pull summary in
+      docker logs meant grepping past thousands of jdbc lines, and the
+      release before this one had to add explicit CONSOLE_RAW routing for
+      exactly that reason.
+
+      WARN here, not OFF: a real JDBC warning still reaches the log. The
+      statement transcript is a debugging convenience rather than an audit
+      trail — the audit trail is audit_log_event in the database — so it is
+      switched off by default and turned back on by editing one level when
+      somebody needs it. jdbc.sqltiming keeps ${logLevel} and its own file,
+      which is the channel worth having: slow statements, not all of them.
+    -->
+    <logger additivity="false" name="jdbc.sqlonly" level="WARN">
+        <appender-ref ref="DB_LOGFILE"/>
+    </logger>
+    <logger additivity="false" name="jdbc.audit" level="WARN">
+        <appender-ref ref="DB_LOGFILE"/>
+    </logger>
+    <logger additivity="false" name="jdbc.resultset" level="WARN">
+        <appender-ref ref="DB_LOGFILE"/>
+    </logger>
+    <logger additivity="false" name="jdbc.connection" level="WARN">
         <appender-ref ref="DB_LOGFILE"/>
     </logger>
 
