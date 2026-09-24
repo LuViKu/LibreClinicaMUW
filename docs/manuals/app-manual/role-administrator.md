@@ -209,11 +209,15 @@ back to the top.
 **Steps:**
 1. Open **Systemstatus** (System Status) via **System** in the top bar (`/admin/system-status`) — it is the section's landing page.
 2. Read the three panels: **JVM** (Java version, heap used/max, threads, CPUs), **Database** (reachability, product/version, Liquibase changelog count), and **Application** (status OK/OutOfMemory, uptime).
-3. Click **Aktualisieren** (Refresh) to re-poll; the last-refreshed time is shown next to the button.
+3. Below them, the **retinal-inference cluster**: one row per GPU node with its state, the analysis tasks it offers, its GPU and its response time, and the last alerts of the cluster monitor.
+4. **Uploader an den Aufnahme-PCs** (uploaders on the acquisition PCs): one row per upload program (the Export Watcher on the Clarus and Spectralis PCs, the Optomed Bridge beside the Optomed Client) with its state, when it last reported, the files it holds and the ones it gave up on, and the free space on the PC's disk. The states are *In Ordnung* (fine), *Braucht Aufmerksamkeit* (a problem is listed under it), *Ausgeschaltet* (running, uploading switched off), *Beendet* (closed from its menu, red) or *Abgemeldet oder heruntergefahren* (the PC was shut down, grey), and *Keine Meldung* (silent for three reporting intervals: crashed, or the PC lost the network). **Entfernen** (Remove) forgets a program whose PC was replaced; a program that still runs comes back with its next report.
+5. Under it, **Eingänge je Gerät** (arrivals per device): what arrived from each device and by which way in, over the last 90 days. A healthy uploader with no arrivals usually means the export goes into another folder.
+6. **Speicherplatz** (storage): how full each disk is, each file store's size and file count with the change over seven days, the database's size, and — when free space shrank over the last week — roughly how many days remain. The figures are measured once an hour; **Jetzt messen** (measure now) measures immediately.
+7. Click **Aktualisieren** (Refresh) to re-poll all panels; the last-refreshed time is shown next to the button.
 
 ![System Status](screenshots/administrator/13-system-status.png)
 
-**Notes:** Administrator-only; the backend returns 403 for any other session. This is a read-only diagnostics view.
+**Notes:** Administrator-only; the backend returns 403 for any other session. Apart from removing an uploader and starting a measurement, this is a read-only diagnostics view. The uploaders' reports carry counts, ages, disk figures and coded problems only — nothing about a patient.
 
 ## 14. Password Policy
 

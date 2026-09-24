@@ -12,3 +12,4 @@
 * [T031](tests/t031.md "T031 - study audit log")
 * [T038](tests/t032.md "T038 - system management")
 * [T046](tests/t046.md "T046 - fundus image ingest (inbox + upload page)")
+* [T047](tests/t047.md "T047 - System Status (uploaders + storage)")

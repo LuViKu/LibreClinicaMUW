@@ -22,3 +22,4 @@ test documentation for LibreClinica 1.0.0
 | [T015](tests/t015.md) | double data entry |
 | [T031](tests/t031.md) | study audit log |
 | [T046](tests/t046.md) | fundus image ingest — inbox and upload page |
+| [T047](tests/t047.md) | System Status — uploaders on the acquisition PCs, and storage |

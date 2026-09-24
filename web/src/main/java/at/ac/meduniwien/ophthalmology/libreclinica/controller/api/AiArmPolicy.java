@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
  * P3.0 — the trial-blinding rule, in one place.
@@ -168,6 +169,7 @@ public final class AiArmPolicy {
                         + " WHERE sgm.study_subject_id = ? AND sgm.status_id = 1 "
                         + "   AND UPPER(sg.name) IN (UPPER(" + armNameSql("shown", "ss.study_id") + "), "
                         + "                          UPPER(" + armNameSql("hidden", "ss.study_id") + ")) "
+                        + "   AND " + blindingOnSql("ss.study_id")
                         + " LIMIT 1")) {
             ps.setInt(1, studySubjectId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -188,6 +190,17 @@ public final class AiArmPolicy {
     private static String armNameSql(String which, String studyIdExpr) {
         String key = "shown".equals(which) ? "ai.arm.shownGroup" : "ai.arm.hiddenGroup";
         String fallback = "shown".equals(which) ? ARM_SHOWN : ARM_HIDDEN;
+        return settingSql(key, studyIdExpr, fallback);
+    }
+
+    /**
+     * A study setting resolved inline — the site's own row, else the parent
+     * study's, else the fallback. The same two-level lookup
+     * {@code StudySettingService} performs, minus the {@code core.*} property
+     * step, which SQL cannot see; for the keys read here that step has never
+     * been configured on any instance and the code default is what applies.
+     */
+    private static String settingSql(String key, String studyIdExpr, String fallback) {
         return "COALESCE((SELECT st.value FROM study_setting st "
                 + "         WHERE st.setting_key = '" + key + "' "
                 + "           AND st.study_id IN (" + studyIdExpr + ", "
@@ -195,6 +208,19 @@ public final class AiArmPolicy {
                 + "                            WHERE study_id = " + studyIdExpr + "), -1)) "
                 + "         ORDER BY CASE WHEN st.study_id = " + studyIdExpr + " THEN 0 ELSE 1 END "
                 + "         LIMIT 1), '" + fallback + "')";
+    }
+
+    /**
+     * True unless the study has switched blinding off
+     * ({@code ai.blinding.enabled = false}, 2026-09-24). Appended to the arm
+     * lookups so an unblinded study resolves to <em>no arm</em> for every
+     * subject — and no arm is the one answer {@link #maskAiFor} never masks.
+     * Doing it here rather than at the seven masking call sites keeps the
+     * decision in one place, next to the arm vocabulary it belongs with.
+     */
+    private static String blindingOnSql(String studyIdExpr) {
+        return "LOWER(" + settingSql(StudySettingService.AI_BLINDING_ENABLED, studyIdExpr, "true")
+                + ") <> 'false'";
     }
 
     /**
@@ -219,6 +245,7 @@ public final class AiArmPolicy {
                         + "  JOIN study_subject ss ON ss.study_subject_id = ev.study_subject_id "
                         + " WHERE UPPER(sg.name) IN (UPPER(" + armNameSql("shown", "ss.study_id") + "), "
                         + "                          UPPER(" + armNameSql("hidden", "ss.study_id") + ")) "
+                        + "   AND " + blindingOnSql("ss.study_id")
                         + "   AND " + subject + " LIMIT 1")) {
             ps.setInt(1, studyEventId > 0 ? studyEventId : eventCrfId);
             try (ResultSet rs = ps.executeQuery()) {

@@ -13,7 +13,9 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -134,6 +136,42 @@ public class RemidioDashboardClient {
     /* ------------------------------------------------------------------ */
     /* calls                                                               */
     /* ------------------------------------------------------------------ */
+
+    /**
+     * The sites this account can see, as the dashboard's own site list.
+     *
+     * <p>Exists so a misconfigured {@code core.remidio.siteId} can be caught
+     * at the first pass instead of failing identically on every subject
+     * forever. Deliberately the dashboard's own endpoint rather than the
+     * gateway's: this client never calls {@code getAuthToken}, so checking
+     * cannot invalidate a {@code clientAuthToken} the pull is holding.
+     */
+    public List<RemidioGatewayClient.Site> sites() throws RemidioException {
+        JsonNode data = dataOf(authenticated("GET", "/api/org/getSites", null), "/api/org/getSites");
+        List<RemidioGatewayClient.Site> out = new ArrayList<>();
+        for (JsonNode s : data) {
+            out.add(new RemidioGatewayClient.Site(
+                    s.path("siteId").asLong(0), text(s, "siteName"), text(s, "siteDomain")));
+        }
+        return out;
+    }
+
+    /**
+     * Whether the configured {@link Settings#siteId()} is one this account can
+     * write to.
+     *
+     * @return empty when it is; otherwise the ids that *are* available, so the
+     *         caller can name them in one actionable line
+     */
+    public Optional<List<Long>> siteMismatch() throws RemidioException {
+        List<RemidioGatewayClient.Site> sites = sites();
+        for (RemidioGatewayClient.Site s : sites) {
+            if (s.siteId() == settings.siteId()) return Optional.empty();
+        }
+        List<Long> ids = new ArrayList<>(sites.size());
+        for (RemidioGatewayClient.Site s : sites) ids.add(s.siteId());
+        return Optional.of(ids);
+    }
 
     /**
      * The Remidio patient id behind an MRN at our site, or empty when there

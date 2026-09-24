@@ -87,6 +87,18 @@ export function ingestInboxCounts(): Promise<{
   return apiGet('/pages/api/v1/ingest/inbox/counts')
 }
 
+/**
+ * The images filed against one visit — every BOUND ingest item whose
+ * binding names this study event. What the visit page shows under
+ * "Bilder dieser Visite" (2026-09-24). Same row shape as the inbox, so the
+ * preview URL and the eye/device/date columns need no second mapping.
+ */
+export function listIngestByEvent(studyEventId: number | string): Promise<IngestItem[]> {
+  return apiGet<{ items: IngestItem[] }>(
+    `/pages/api/v1/ingest/by-event/${encodeURIComponent(String(studyEventId))}`,
+  ).then((r) => r.items)
+}
+
 export function getIngestItem(id: number): Promise<IngestItem> {
   return apiGet(`/pages/api/v1/ingest/${id}`)
 }

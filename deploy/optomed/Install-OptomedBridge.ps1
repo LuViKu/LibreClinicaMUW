@@ -3,7 +3,7 @@
   Install (or remove) the Optomed Bridge tray app for the current user.
 
 .DESCRIPTION
-  Run once on the clinic PC, as the user who runs the Optomed Client — the
+  Run once on the clinic PC, as the user who runs the Optomed Client - the
   bridge reads that user's Optomed Client folder and protects its token to
   that user with DPAPI, so it must run as them.
 
@@ -86,7 +86,7 @@ if (-not (Test-Path $cfgPath)) {
     if ($BaseUrl -or $ClientRoot) { Write-Warning 'settings file exists; -BaseUrl/-ClientRoot ignored. Change them in the tray Settings dialog.' }
 }
 
-# 2. startup shortcut — hidden window, bypass so a machine policy of
+# 2. startup shortcut - hidden window, bypass so a machine policy of
 #    RemoteSigned does not stop an unsigned script from a network copy.
 $wsh = New-Object -ComObject WScript.Shell
 $lnk = $wsh.CreateShortcut($shortcut)
@@ -99,7 +99,7 @@ $lnk.Save()
 Write-Host "startup shortcut: $shortcut"
 
 # 3. start it now (single-instance: a running bridge simply exits the new one),
-#    and say whether it stayed up — a hidden window that dies in its first
+#    and say whether it stayed up - a hidden window that dies in its first
 #    second is otherwise indistinguishable from one that is running.
 Stop-Bridge
 $p = Start-Process -FilePath $psExe -ArgumentList $lnk.Arguments -WindowStyle Hidden -WorkingDirectory $PSScriptRoot -PassThru

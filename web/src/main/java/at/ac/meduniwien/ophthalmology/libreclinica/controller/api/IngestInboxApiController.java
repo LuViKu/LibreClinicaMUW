@@ -313,10 +313,71 @@ public class IngestInboxApiController {
 
     // ----- GET /{id}/preview -----
 
+    /**
+     * The images filed against one visit: every BOUND row whose binding names
+     * this study event, in the inbox's own row shape so the visit page and
+     * the inbox render a file the same way.
+     *
+     * <p>Gated by study visibility, not by the reconcile role: a bound image
+     * is the subject's data, and whoever may open the subject's visit (a
+     * Monitor included) may see what was captured at it. Added 2026-09-24,
+     * when the visit page showed a scan's AI metrics but nowhere the scans
+     * and photographs themselves.
+     */
+    @GetMapping(value = "/by-event/{studyEventId:[0-9]+}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> byEvent(@PathVariable("studyEventId") int studyEventId, HttpSession session) {
+        ResponseEntity<?> guard = access().guardSession(session);
+        if (guard != null) return guard;
+
+        Integer studyId;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ss.study_id FROM study_event se "
+                             + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                             + " WHERE se.study_event_id = ?")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of("message", "no study_event " + studyEventId));
+                }
+                studyId = rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            LOG.error("visit lookup failed for study_event {}: {}", studyEventId, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not resolve the visit"));
+        }
+        ResponseEntity<?> vis = access().guardStudyVisibility(studyId, session,
+                "This visit belongs to a study you cannot access");
+        if (vis != null) return vis;
+
+        Set<Integer> visible = access().visibleStudyIds(session);
+        List<InboxRow> rows = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
+                             + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                             + "received_at, preview_png_path "
+                             + "  FROM ingest_item WHERE bound_study_event_id = ? AND status = 'BOUND' "
+                             + " ORDER BY laterality NULLS LAST, received_at")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) rows.add(toRow(rs, visible));
+            }
+        } catch (SQLException e) {
+            LOG.error("ingest by-event list failed for study_event {}: {}", studyEventId, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not list the visit's images"));
+        }
+        return ResponseEntity.ok(Map.of("items", rows, "studyEventId", studyEventId));
+    }
+
     @GetMapping("/{id:[0-9]+}/preview")
     public ResponseEntity<?> preview(@PathVariable("id") long id, HttpSession session,
                                      HttpServletResponse response) {
-        ResponseEntity<?> guard = guards(session);
+        // The reconcile-role gate applies to UNBOUND files only (below). A
+        // bound file is a subject's data, and the visit page — which a
+        // Monitor may open — shows its preview; the study-visibility check
+        // is what protects it there.
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         String previewPath;
@@ -348,6 +409,9 @@ public class IngestInboxApiController {
             ResponseEntity<?> vis = access().guardStudyVisibility(subjectStudyId(boundSubjectId), session,
                     "This file belongs to a study you cannot access");
             if (vis != null) return vis;
+        } else {
+            ResponseEntity<?> role = guards(session);
+            if (role != null) return role;
         }
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for file " + id));

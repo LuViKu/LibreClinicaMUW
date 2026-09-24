@@ -261,7 +261,105 @@
     "clusterMonitorHeading": "Monitor alerts",
     "clusterMonitorHint": "Last lines of the app-VM cron monitor log. Empty is good.",
     "clusterMonitorEmpty": "No alerts recorded.",
-    "clusterMonitorUnavailable": "Monitor log not readable: {path}"
+    "clusterMonitorUnavailable": "Monitor log not readable: {path}",
+    "uploaders": {
+      "heading": "Uploaders on the acquisition PCs",
+      "hint": "The Export Watcher (Clarus and Spectralis PCs) and the Optomed Bridge report every two minutes. A program that stops reporting shows as silent; one that was closed, or whose PC was shut down, says so.",
+      "loadFailed": "Failed to load the uploaders.",
+      "heartbeatOff": "Heartbeats are switched off on this server (core.uploaderHealth.heartbeat.enabled=false); the rows below are the last ones received.",
+      "empty": "No uploader has reported yet. The Export Watcher and the Optomed Bridge report from their 24 September 2026 version on; install or update them on the PCs (see the deploy README).",
+      "colProgram": "Program",
+      "colState": "State",
+      "colLastContact": "Last report",
+      "colQueue": "Files",
+      "colDisk": "Disk on the PC",
+      "colActions": "Actions",
+      "statusOk": "OK",
+      "statusWarning": "Needs attention",
+      "statusDisabled": "Switched off",
+      "statusStopped": "Closed",
+      "statusShutdown": "Logged off or shut down",
+      "statusOffline": "Silent",
+      "lastUpload": "last upload {when}",
+      "uploadedToday": "{n} uploaded today",
+      "pending": "{n} waiting",
+      "oldestPending": "oldest for {minutes} min",
+      "failed": "{n} failed (in _failed)",
+      "diskFree": "{free} free of {total}",
+      "remove": "Remove",
+      "removeAria": "Remove {program} on {name}",
+      "removeTitle": "Remove this uploader?",
+      "removeMessage": "{program} on {name} disappears from this list. If it is still running it comes back with its next report, so remove only programs whose PC was replaced or retired.",
+      "removeFailed": "The uploader could not be removed.",
+      "arrivalsHeading": "What arrived, per device",
+      "arrivalsHint": "Every file the platform took in over the last 90 days, by the device it names and the way it came. A healthy uploader with no arrivals usually means the export goes into another folder.",
+      "arrivalsEmpty": "Nothing has arrived in the last 90 days.",
+      "colDevice": "Device",
+      "colIngress": "Way in",
+      "colLastFile": "Last file",
+      "col24h": "24 h",
+      "col7d": "7 days",
+      "deviceUnknown": "not named",
+      "issue": {
+        "serverUnreachable": "cannot reach the platform",
+        "rateLimited": "the platform asked it to slow down (HTTP 429)",
+        "uploadFailed": "the last upload round had failures",
+        "unreadableFiles": "has files it cannot read",
+        "watchFolderMissing": "the export folder does not exist",
+        "worklistNotImported": "the Optomed Client did not import the last worklist",
+        "worklistFailed": "the worklist could not be fetched",
+        "worklistTokenRejected": "the platform rejected the worklist token",
+        "worklistOff": "the worklist is switched off on the platform, so the camera gets no patient list",
+        "noToken": "no worklist token is configured",
+        "dropFolderMissing": "the Optomed Client's worklist folder is missing",
+        "clientNotRunning": "the Optomed Client is not running",
+        "filesFailed": "files were moved to _failed after five attempts",
+        "pendingStale": "files have been waiting 30 minutes or longer",
+        "diskLow": "the PC's disk is almost full"
+      },
+      "source": {
+        "upload": "Upload (page, Export Watcher, Bridge)",
+        "portalOct": "OCT upload (.e2e)",
+        "dicom": "DICOM receiver (network)",
+        "remidio": "Remidio cloud"
+      }
+    },
+    "storage": {
+      "heading": "Storage",
+      "hint": "Measured once an hour on the server: every file store, the disk under it, and the database. The last column compares with the measurement seven days earlier.",
+      "loadFailed": "Failed to load the storage figures.",
+      "rescanFailed": "The measurement could not be started.",
+      "measuredAt": "measured {when}",
+      "scanning": "measuring…",
+      "rescan": "Measure now",
+      "none": "Nothing measured yet. The first measurement is running.",
+      "disk": "Disk with {stores}",
+      "diskFree": "{free} free of {total}",
+      "usedPercent": "{percent} % used",
+      "daysUntilFull": "full in about {days} days at last week's rate",
+      "notFilling": "free space did not shrink last week",
+      "containerLayer": "This is the container's own layer: files here are lost when the container is recreated.",
+      "storeContainerLayer": "not on a mounted volume, lost when the container is recreated",
+      "colStore": "Store",
+      "colSize": "Size",
+      "colFiles": "Files",
+      "colWeek": "Change in 7 days",
+      "absent": "not present on this server",
+      "incomplete": "at least: the measurement stopped at its limit",
+      "database": "Database",
+      "largestTables": "largest: {tables}",
+      "noWeekYet": "No measurement from a week ago yet; the change column fills in after seven days.",
+      "store": {
+        "ingest": "Inbox (images, DICOM)",
+        "dicomIngest": "DICOM receiver",
+        "e2eUploads": "OCT uploads (.e2e)",
+        "retinalArtifacts": "Retinal analysis results",
+        "retinalBscans": "B-scans",
+        "appData": "Attachments and exports",
+        "crfAttachments": "CRF attachments",
+        "logs": "Logs"
+      }
+    }
   },
   "adminPasswordPolicy": {
     "title": "Password policy",
@@ -344,7 +442,8 @@
       "skipped": "Skipped",
       "not-started": "Not started",
       "signed": "Signed",
-      "locked": "Locked"
+      "locked": "Locked",
+      "removed": "Cancelled"
     },
     "studyCard": {
       "pi": "Site PI",
@@ -2596,7 +2695,7 @@
     "eventsCount": "events",
     "scheduleEvent": "Schedule event",
     "openQueries": "Open queries",
-    "openEvent": "Open CRFs",
+    "openEvent": "Open visit",
     "column": {
       "event": "Event",
       "dateStart": "Start date",
@@ -2767,6 +2866,26 @@
       "forbidden": "You do not have access to this event.",
       "network": "Backend unreachable — please retry.",
       "startFailed": "Could not start data entry — please retry."
+    },
+    "images": {
+      "title": "Images of this visit",
+      "count": "{n} image(s)",
+      "empty": "No images for this visit.",
+      "loadFailed": "The images of this visit could not be loaded.",
+      "eye": {
+        "OD": "Right eye (OD)",
+        "OS": "Left eye (OS)",
+        "OU": "Both eyes (OU)",
+        "unknown": "Eye not given"
+      },
+      "noPreview": "No preview",
+      "open": "Open image",
+      "source": {
+        "remidio": "Remidio",
+        "dicom": "DICOM",
+        "upload": "Upload",
+        "portal-oct": "OCT portal"
+      }
     }
   },
   "subjectExport": {
@@ -3256,7 +3375,8 @@
       "export.bundle.enabled": "Multimodal export",
       "portal.todaysVisits": "Today's visits on the upload page",
       "ai.arm.shownGroup": "Group shown AI",
-      "ai.arm.hiddenGroup": "Group blinded to AI"
+      "ai.arm.hiddenGroup": "Group blinded to AI",
+      "ai.blinding.enabled": "AI blinding for treating clinicians (Investigator, CRC)"
     }
   },
   "system": {

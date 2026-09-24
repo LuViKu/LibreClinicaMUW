@@ -609,6 +609,12 @@ public class SubjectsApiController {
         int inProgressEvents = 0;
         int totalSchedulable = 0;
         for (StudyEventBean ev : events) {
+            // A cancelled visit is not part of the casebook either. Without
+            // this it kept its old workflow status, so a visit cancelled
+            // before signing still counted as "scheduled but never started"
+            // and the preflight refused to let the subject be signed — with
+            // a reason the operator could not see on the page.
+            if (isRemoved(ev)) continue;
             int st = ev.getSubjectEventStatus() == null ? 0 : ev.getSubjectEventStatus().getId();
             if (st == 2) continue; // not-scheduled — not part of the casebook
             totalSchedulable++;
@@ -2864,10 +2870,7 @@ public class SubjectsApiController {
         for (StudyEventBean ev : events) {
             StudyEventDefinitionBean def = definitionCache.computeIfAbsent(
                     ev.getStudyEventDefinitionId(), studyEventDefinitionDAO::findByPK);
-            int statusId = ev.getSubjectEventStatus() == null
-                    ? 0
-                    : ev.getSubjectEventStatus().getId();
-            String status = mapSubjectEventStatus(statusId);
+            String status = mapEventRowStatus(ev);
             int eventOpenQueries = openQueriesByEvent.getOrDefault(ev.getId(), 0);
             subjectOpenQueries += eventOpenQueries;
 
@@ -3085,10 +3088,7 @@ public class SubjectsApiController {
         for (StudyEventBean ev : events) {
             StudyEventDefinitionBean def = definitionCache.computeIfAbsent(
                     ev.getStudyEventDefinitionId(), studyEventDefinitionDAO::findByPK);
-            int statusId = ev.getSubjectEventStatus() == null
-                    ? 0
-                    : ev.getSubjectEventStatus().getId();
-            String status = mapSubjectEventStatus(statusId);
+            String status = mapEventRowStatus(ev);
             int eventOpenQueries = openQueriesByEvent.getOrDefault(ev.getId(), 0);
             subjectOpenQueries += eventOpenQueries;
 
@@ -3418,10 +3418,47 @@ public class SubjectsApiController {
             case 2 -> "not-scheduled";
             case 3 -> "in-progress";
             case 4 -> "complete";
+            // 2026-09-24 — 5 and 6 used to fall through to "not-scheduled",
+            // so a stopped or skipped visit was shown as one that had never
+            // been planned. Both statuses are set from this very SPA (the
+            // edit dialog offers them) and both already have labels in it.
+            case 5 -> "stopped";
+            case 6 -> "skipped";
             case 7 -> "locked";
             case 8 -> "signed";
             default -> "not-scheduled";
         };
+    }
+
+    /**
+     * The status the SPA should show for one event row.
+     *
+     * <p>Two different things are called "status" on a {@code study_event}:
+     * the workflow state ({@code subject_event_status_id} — scheduled, in
+     * progress, stopped …) and the lifecycle state ({@code status_id} —
+     * available, deleted). Cancelling a visit soft-deletes it: the lifecycle
+     * status becomes {@link Status#DELETED} (or {@link Status#AUTO_DELETED}
+     * when a subject removal cascaded) while the workflow status is left
+     * untouched.
+     *
+     * <p>Reading only the workflow status therefore reported a cancelled
+     * visit as whatever it had been before — typically "scheduled", which the
+     * SPA renders as *Planned*. The row looked untouched, the operator
+     * cancelled it again, and the second attempt answered "already
+     * cancelled" (found in production testing, 2026-09-24). The lifecycle
+     * state wins, and {@code removed} is the value
+     * {@code EventsApiController.list} already uses for it.
+     */
+    private static String mapEventRowStatus(StudyEventBean ev) {
+        if (isRemoved(ev)) return "removed";
+        return mapSubjectEventStatus(ev.getSubjectEventStatus() == null
+                ? 0 : ev.getSubjectEventStatus().getId());
+    }
+
+    /** True when this event has been cancelled, or cascaded out by a subject removal. */
+    private static boolean isRemoved(StudyEventBean ev) {
+        Status st = ev == null ? null : ev.getStatus();
+        return st != null && (Status.DELETED.equals(st) || Status.AUTO_DELETED.equals(st));
     }
 
     /** Extract YoB if the study collects DoB and the subject has one. */
