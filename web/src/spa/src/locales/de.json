@@ -3368,15 +3368,70 @@
     "saved": "Gespeichert ✓",
     "bindingsCount": "{n} CRF-Item-Zuordnung(en) hinterlegt.",
     "keys": {
-      "ingest.dicom.enabled": "DICOM-Empfang (Worklist + C-STORE)",
-      "ingest.image.enabled": "Bild-Upload (Portal)",
-      "ingest.oct.enabled": "OCT-Upload (Portal)",
-      "inference.enabled": "KI-Auswertung",
-      "export.bundle.enabled": "Multimodaler Export",
-      "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
-      "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
-      "ai.arm.hiddenGroup": "Gruppe „KI verborgen“",
-      "ai.blinding.enabled": "KI-Verblindung für Behandler (Prüfarzt, CRC)"
+      "ingest": {
+        "dicom": {
+          "enabled": "DICOM-Empfang (Worklist + C-STORE)"
+        },
+        "image": {
+          "enabled": "Bild-Upload (Portal)"
+        },
+        "oct": {
+          "enabled": "OCT-Upload (Portal)"
+        }
+      },
+      "inference": {
+        "enabled": "KI-Auswertung"
+      },
+      "export": {
+        "bundle": {
+          "enabled": "Multimodaler Export"
+        }
+      },
+      "portal": {
+        "todaysVisits": "Heutige Visiten auf der Upload-Seite"
+      },
+      "ai": {
+        "arm": {
+          "shownGroup": "Gruppe „KI sichtbar“",
+          "hiddenGroup": "Gruppe „KI verborgen“"
+        },
+        "blinding": {
+          "enabled": "KI-Verblindung für Behandler (Prüfarzt, CRC)"
+        }
+      }
+    },
+    "help": {
+      "ingest": {
+        "dicom": {
+          "enabled": "Kameras mit DICOM (Optomed Lumo, Clarus-Export) sehen die Visiten dieser Studie in der Worklist und können Bilder per C-STORE senden."
+        },
+        "image": {
+          "enabled": "Die Upload-Seite ohne Login nimmt Fundusbilder (JPEG/PNG) für diese Studie an – etwa vom Remidio."
+        },
+        "oct": {
+          "enabled": "Die Upload-Seite ohne Login nimmt Spectralis-OCT-Dateien (.e2e) für diese Studie an."
+        }
+      },
+      "inference": {
+        "enabled": "Ein abgelegtes OCT startet die KI-Auswertung (Segmentierung, Flüssigkeit, Schichten). Aus: Dateien werden nur gespeichert."
+      },
+      "ai": {
+        "blinding": {
+          "enabled": "Prüfarzt und CRC sehen keine KI-Ergebnisse (Studien mit Behandlungsentscheidung, z. B. nAMD). Aus: Sie sehen dieselben Auswertungsseiten wie Data Manager – für Screening-Studien wie HealthAEye."
+        },
+        "arm": {
+          "shownGroup": "Name der Randomisierungsgruppe, deren Teilnehmer KI-Ergebnisse sehen dürfen. Leer: Standard „AI_SHOWN“.",
+          "hiddenGroup": "Name der Randomisierungsgruppe, deren KI-Ergebnisse vor Behandlern verborgen bleiben. Leer: Standard „AI_HIDDEN“."
+        }
+      },
+      "export": {
+        "bundle": {
+          "enabled": "Der multimodale Export (Bilder + Daten als ein Paket) steht für diese Studie zur Verfügung."
+        }
+      },
+      "portal": {
+        "todaysVisits": "Die Upload-Seite ohne Login zeigt die heutigen Visiten dieser Studie zur Auswahl an – erfordert eine Datenschutz-Freigabe."
+      }
     }
   },
   "system": {
