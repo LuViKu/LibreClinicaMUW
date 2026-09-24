@@ -299,6 +299,16 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    a new feature flag reads as "off" with nothing in the log to explain it.
    The release notes call out when a release adds keys.
 
+### Retinal cluster monitor
+
+`setup-ubuntu-host.sh` writes `/etc/cron.d/libreclinica-retinal-monitor`: one
+probe every five minutes per node listed in `core.retinalInference.clusterNodes`,
+each teeing into `core.retinalInference.clusterMonitorLog` (under
+`/var/lib/libreclinica/monitor`, the directory bound read-only into the app so
+**System → Systemstatus** can tail it). Cron still gets the output, so a state
+change mails wherever root's mail goes. Blank `clusterNodes` removes the cron
+and the script says so; change the nodes, re-run the script.
+
 ### Optomed Lumo over USB — the Optomed Bridge tray app
 
 The Lumo cannot join the WPA2-Enterprise WLAN and the institution permits no

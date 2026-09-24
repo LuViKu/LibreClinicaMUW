@@ -107,6 +107,10 @@ RETINAL_OUTPUT_DIR=/var/lib/libreclinica/retinal-inference
 RETINAL_ARTIFACTS_DIR=/var/lib/libreclinica/retinal-artifacts
 DICOM_INGEST_DIR=/var/lib/libreclinica/dicom-ingest
 INGEST_DIR=/var/lib/libreclinica/ingest
+# The cluster monitor's log and state. Its own directory, bound read-only
+# into the app container, because the System Status page tails the log from
+# inside the container and the root of /var/lib/libreclinica is not bound.
+MONITOR_DIR=/var/lib/libreclinica/monitor
 
 # ----------------------------- arg parsing ------------------------------------
 
@@ -335,6 +339,7 @@ install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_OUTPUT_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_ARTIFACTS_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$DICOM_INGEST_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$INGEST_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$MONITOR_DIR"
 
 # Clone or update the repo. The production VM needs only:
 #   - compose.yaml (root file; pulled in by sparse-checkout's implicit
@@ -784,6 +789,57 @@ EOF
 systemctl daemon-reload
 systemctl enable --now libreclinica-backup-db.timer >/dev/null
 log "Enabled libreclinica-backup-db.timer (next run: $(systemctl show libreclinica-backup-db.timer -p NextElapseUSecRealtime --value 2>/dev/null || echo 'unknown'))"
+
+# ----------------------------- cluster monitor --------------------------------
+
+section "Retinal cluster monitor (cron)"
+
+# deploy/check-retinal-cluster.sh probes one inference node and prints only
+# on a state change, so cron mails it. beta.9 also gave the System Status
+# page a panel that tails the monitor's log - but nothing installed the cron,
+# the script wrote no log, and the page's default path was outside every
+# bind the container has. This wires all three: one cron line per node in
+# core.retinalInference.clusterNodes, each teeing into the log the page
+# reads (inside the monitor bind) with its own state file so the counters
+# do not collide, and cron still gets the output for mail.
+MONITOR_CRON=/etc/cron.d/libreclinica-retinal-monitor
+DATAINFO="${INSTALL_PREFIX}/config/datainfo.properties"
+# The beta.9 host had the probes in root's crontab, by hand, writing to the
+# old unreadable path. Those would run alongside the cron.d entries and
+# double every probe, so any root-crontab line that runs the monitor is
+# dropped here; cron.d is the single owner from now on.
+if crontab -l 2>/dev/null | grep -q 'check-retinal-cluster\.sh'; then
+  log "Removing legacy root-crontab entries for check-retinal-cluster.sh (cron.d owns the monitor now)"
+  crontab -l 2>/dev/null | grep -v 'check-retinal-cluster\.sh' | crontab - || true
+fi
+nodes="$(sed -n 's/^core\.retinalInference\.clusterNodes=//p' "$DATAINFO" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+mlog="$(sed -n 's/^core\.retinalInference\.clusterMonitorLog=//p' "$DATAINFO" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+if [[ -z "$nodes" ]]; then
+  rm -f "$MONITOR_CRON"
+  warn "core.retinalInference.clusterNodes is blank - no cluster monitor installed (set it as name=baseUrl,... and re-run)"
+else
+  [[ -n "$mlog" ]] || mlog="${MONITOR_DIR}/retinal-cluster-monitor.log"
+  case "$mlog" in
+    "${MONITOR_DIR}"/*) ;;
+    *) warn "clusterMonitorLog=${mlog} is outside ${MONITOR_DIR}; the app container cannot read it there" ;;
+  esac
+  install -m 0644 -o libreclinica -g libreclinica /dev/null "$mlog" 2>/dev/null || touch "$mlog"
+  {
+    echo "# Installed by setup-ubuntu-host.sh - one probe per node in core.retinalInference.clusterNodes."
+    echo "# Output goes to cron (mail on state change) AND to the log the System Status page tails."
+    echo "SHELL=/bin/bash"
+    echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    IFS=',' read -ra entries <<<"$nodes"
+    for e in "${entries[@]}"; do
+      name="${e%%=*}"; url="${e#*=}"
+      [[ -n "$name" && -n "$url" && "$name" != "$url" ]] || continue
+      url="${url%/}/health"
+      echo "*/5 * * * * root RETINAL_CLUSTER_STATE_FILE=${MONITOR_DIR}/retinal-cluster-${name}.state ${INSTALL_PREFIX}/deploy/check-retinal-cluster.sh ${url} 2>&1 | tee -a ${mlog}"
+    done
+  } > "$MONITOR_CRON"
+  chmod 0644 "$MONITOR_CRON"
+  log "Cluster monitor: $(grep -c '^\*/5' "$MONITOR_CRON") node(s) probed every 5 min -> ${mlog}"
+fi
 
 # ----------------------------- logrotate --------------------------------------
 
