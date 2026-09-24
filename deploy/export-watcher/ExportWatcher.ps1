@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-  Export Watcher — tray app that uploads device exports from a watched folder
+  Export Watcher - tray app that uploads device exports from a watched folder
   to the LibreClinica upload front door: Zeiss Clarus DICOM (.dcm) and
   Heidelberg Spectralis (.e2e).
 
 .DESCRIPTION
   Neither device speaks to the platform. The photographer exports to a folder
-  on the acquisition PC — Clarus writes three .dcm per capture, HEYEX one .e2e per
-  export — and until now re-uploaded every file through the browser page.
+  on the acquisition PC - Clarus writes three .dcm per capture, HEYEX one .e2e per
+  export - and until now re-uploaded every file through the browser page.
   This script watches that folder instead and carries each new file through
   the same public upload API the page uses (DR-029), so nothing changes
   server-side and the file arrives exactly as if uploaded by hand:
@@ -15,18 +15,18 @@
     sweep      every N seconds (default 20): list the watched folder for
                *.dcm and *.e2e. A file counts as finished when its size has
                not changed since the previous sweep AND it can be opened
-               without sharing — an export in progress fails one of the two.
+               without sharing - an export in progress fails one of the two.
                Sub-folders named _uploaded / _failed / _skipped are skipped.
 
     identify   .dcm: PatientID, StudyDate and (Image)Laterality out of the
-               header — the same reader the Optomed bridge uses. A Clarus
+               header - the same reader the Optomed bridge uses. A Clarus
                export is three objects per capture: the photograph, a Raw
                Data object (the vendor's sensor data, 8 MB) and a small OT
                Raw Data object stamped with the export time. Only the
                photograph is an image; the other two are set aside in
                _skipped\ (never deleted) unless UploadNonImage is on.
                .e2e: patient id, acquisition date and laterality per OCT
-               volume out of the Heidelberg chunk directory — a port of the
+               volume out of the Heidelberg chunk directory - a port of the
                upload page's own reader (web/src/spa/src/lib/e2eParser.ts;
                keep the two in step). A file with several volumes is
                uploaded once per volume, as the page does.
@@ -45,18 +45,18 @@
 
   The convention this relies on is the one every device ingress here uses:
   the patient id the photographer types into the device IS the study subject
-  label. Clarus: the DICOM PatientID. Spectralis: the HEYEX patient id —
+  label. Clarus: the DICOM PatientID. Spectralis: the HEYEX patient id -
   or, after HEYEX anonymisation, whatever sits in the surname slot, which is
   where MUW keeps the label (the page reads it the same way).
 
   Runs at login as a tray icon (see Install-ExportWatcher.ps1). Right-click:
   enable/disable, sweep now, settings, open log, exit. One instance per PC;
   on the Clarus PC it runs beside the Optomed bridge, on the Spectralis PC
-  alone — one watcher per export folder, never one watcher for both PCs.
+  alone - one watcher per export folder, never one watcher for both PCs.
 
   Settings: %ProgramData%\LibreClinica\export-watcher.json. No secret: the
   public front door takes none. Log alongside, rotated at 1 MB. Only counts
-  and pseudonymous labels are ever logged — never names, dates of birth or
+  and pseudonymous labels are ever logged - never names, dates of birth or
   filenames (an export is often named after the patient).
 
   What stays on the PC: the exports themselves, moved aside but never
@@ -71,11 +71,14 @@
 
 .PARAMETER SelfTest
   Headless: read -File and print what this script would send for it (label,
-  date, laterality, volumes) — nothing is uploaded. Lets the readers be
+  date, laterality, volumes) - nothing is uploaded. Lets the readers be
   checked on a real export before the watcher is switched on.
 
 .NOTES
-  Windows PowerShell 5.1 — no 6+ features (no ternary, no ??, no -Form).
+  Windows PowerShell 5.1 - no 6+ features (no ternary, no ??, no -Form), and
+    ASCII only: 5.1 reads a BOM-less file as cp1252, so an em-dash inside a
+    string arrives as a smart quote and terminates it (2026-09-24: the script
+    did not parse on Windows at all; it had only ever run on PowerShell 7).
   The headless modes (-Once, -SelfTest) also run on PowerShell 7 on Linux,
   which is how the chain is tested from a Mac against the dev stack.
 #>
@@ -110,7 +113,7 @@ $script:SizeSeen    = @{}
 $script:Attempts    = @{}
 
 # ----------------------------------------------------------------------------
-# logging — counts and labels only
+# logging - counts and labels only
 # ----------------------------------------------------------------------------
 function Write-Log {
     param([string]$Message, [ValidateSet('INFO','WARN','ERROR')][string]$Level = 'INFO')
@@ -126,7 +129,7 @@ function Write-Log {
 }
 
 # ----------------------------------------------------------------------------
-# settings — a JSON file, no secret in it
+# settings - a JSON file, no secret in it
 # ----------------------------------------------------------------------------
 function Get-DefaultConfig {
     [pscustomobject]@{
@@ -159,7 +162,7 @@ function Save-Config([pscustomobject]$cfg) {
 }
 
 # ----------------------------------------------------------------------------
-# HTTP — one client; long timeout because an .e2e is tens of megabytes
+# HTTP - one client; long timeout because an .e2e is tens of megabytes
 # ----------------------------------------------------------------------------
 Add-Type -AssemblyName System.Net.Http
 $script:Http = New-Object System.Net.Http.HttpClient
@@ -170,12 +173,12 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 }
 
 # ----------------------------------------------------------------------------
-# DICOM header reader — only what this script needs (as in OptomedBridge.ps1)
+# DICOM header reader - only what this script needs (as in OptomedBridge.ps1)
 # ----------------------------------------------------------------------------
 $script:LongVRs = @('OB','OW','OF','SQ','UT','UN')
 
 # Length of the element whose 4-byte tag has just been read. 0xFFFFFFFF means
-# undefined (a sequence, or encapsulated pixel data) — compared below as
+# undefined (a sequence, or encapsulated pixel data) - compared below as
 # [uint32]::MaxValue, because PowerShell parses the hex literal 0xFFFFFFFF as
 # the Int32 -1, and a [uint32] length never equals that. Group 0002 is always
 # explicit VR little endian; the dataset's syntax is what 0002,0010 said.
@@ -189,7 +192,7 @@ function Read-ElemLength([IO.BinaryReader]$r, [bool]$explicit) {
 # Positioned just after an undefined-length header: consume the items up to
 # the sequence delimiter, recursing into nested sequences. The Clarus writes
 # undefined-length sequences (SourceImageSequence, AnatomicRegionSequence) in
-# group 0008 — BEFORE the patient group — so a reader that stops at the first
+# group 0008 - BEFORE the patient group - so a reader that stops at the first
 # one never sees the PatientID. Verified on Clarus 700 exports, 2026-09-24.
 function Skip-Sequence([IO.BinaryReader]$r, [bool]$explicit) {
     $fs = $r.BaseStream
@@ -251,13 +254,13 @@ function ConvertTo-IsoDate([string]$da) {
 }
 
 # ----------------------------------------------------------------------------
-# Spectralis .e2e reader — a port of web/src/spa/src/lib/e2eParser.ts
+# Spectralis .e2e reader - a port of web/src/spa/src/lib/e2eParser.ts
 #
 # Chunk directory walk, then per chunk: type 9 (patient id: canonical slot,
 # else the surname slot where MUW keeps the label after anonymisation, else
 # first name), 10004 (B-scan metadata: acquisition time as Windows FILETIME,
 # one volume per patient_db_id/study_id/series_id), 10 (session date as an
-# OLE Automation date — the fallback for fundus-only exports), 3 and 11
+# OLE Automation date - the fallback for fundus-only exports), 3 and 11
 # (laterality). Offsets are the ones in the TypeScript file; change both.
 # ----------------------------------------------------------------------------
 function Read-E2eScans {
@@ -417,7 +420,7 @@ function Resolve-Batch([pscustomobject]$cfg, [object[]]$scans) {
     $payload = @{ scans = $ask } | ConvertTo-Json -Depth 4 -Compress
     $content = New-Object System.Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')
     $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/resolve'), $content).GetAwaiter().GetResult()
-    if (-not $resp.IsSuccessStatusCode) { Write-Log "resolve: HTTP $([int]$resp.StatusCode) — filing without a visit this sweep" 'WARN'; return ,$result }
+    if (-not $resp.IsSuccessStatusCode) { Write-Log "resolve: HTTP $([int]$resp.StatusCode) - filing without a visit this sweep" 'WARN'; return ,$result }
     $r = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
     for ($j = 0; $j -lt $map.Count; $j++) {
         $scan = $r.scans[$j]
@@ -443,7 +446,7 @@ function Send-Commit([pscustomobject]$cfg, [IO.FileInfo]$f, [pscustomobject]$sca
     # An .e2e must name its visit or be parked: the OCT route refuses a
     # scan with neither (400), because a scan on a visit starts inference and
     # one without must not. Parked = the reconciliation inbox, no job until
-    # somebody binds it — the same place an unresolved photo lands.
+    # somebody binds it - the same place an unresolved photo lands.
     if ($scan.Kind -eq 'e2e' -and -not $studyEventId) { $fields['park'] = 'true' }
     foreach ($k in $fields.Keys) {
         if ($null -ne $fields[$k] -and "$($fields[$k])" -ne '') { $mp.Add((New-Object System.Net.Http.StringContent("$($fields[$k])")), $k) }
@@ -535,7 +538,7 @@ function Invoke-Sweep([pscustomobject]$cfg) {
         if (-not $f) { continue }
         if ($filesDone[$path] -eq 'ok') { Move-Aside $f $script:UploadedDir; continue }
         $n = 1 + [int]$script:Attempts[$path]; $script:Attempts[$path] = $n
-        if ($n -ge $script:MaxAttempts) { Write-Log ("upload: giving up on a {0} file after {1} attempts — moved to {2}" -f $f.Extension, $n, $script:FailedDir) 'ERROR'; Move-Aside $f $script:FailedDir }
+        if ($n -ge $script:MaxAttempts) { Write-Log ("upload: giving up on a {0} file after {1} attempts - moved to {2}" -f $f.Extension, $n, $script:FailedDir) 'ERROR'; Move-Aside $f $script:FailedDir }
     }
     $summary = 'uploaded {0} ({1} bound), {2} already there, {3} failed, {4} non-image set aside' -f $ok, $bound, $dup, $fail, $setAside
     Write-Log "sweep: $summary"
