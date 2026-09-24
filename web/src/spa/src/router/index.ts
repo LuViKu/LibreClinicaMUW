@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
+import { canViewRetinalMetrics } from '@/lib/retinalAccess'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
@@ -336,6 +337,11 @@ const router = createRouter({
         // so dropping Investigator blocks both); they see OCT scans only inside
         // the nAMD module, cohort-gated. Server-side masking backs this up.
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+        // …unless the active study has switched blinding off
+        // (ai.blinding.enabled = false, 2026-09-24): a screening study has no
+        // treatment decision to protect, and there the physician is the
+        // reader. See guard() and lib/retinalAccess.
+        blinded: true,
       },
     },
     /* 2026-06-26 — per-subject deep link to a retinal job. Same view as
@@ -352,6 +358,7 @@ const router = createRouter({
         title: 'Retinal scan metrics',
         // Trial blinding — see /retinal-jobs/:jobId above. Not a physician surface.
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+        blinded: true,
       },
     },
     /* P3.3 — the cross-study parked-scans admin is gone. It existed because
@@ -578,9 +585,17 @@ export function guard(
     // satisfies any required entry. The CRC → Investigator
     // inheritance survives unchanged.
     const actualRoles = userRolesFromAuth(auth)
-    const ok = required.some((r) =>
+    let ok = required.some((r) =>
       actualRoles.some((actual) => roleSatisfies(actual, r)),
     )
+    // Trial blinding, per study (2026-09-24). A route marked `blinded`
+    // excludes the treating roles by its role list; the active study can
+    // lift that with ai.blinding.enabled = false, which /me reports in
+    // activeStudy.settings. Anything else about the route is unchanged —
+    // a role the route never listed and blinding never covered stays out.
+    if (!ok && to.meta.blinded === true) {
+      ok = canViewRetinalMetrics(actualRoles, auth.user?.activeStudy?.settings)
+    }
     if (!ok) return { name: 'home' }
   }
 

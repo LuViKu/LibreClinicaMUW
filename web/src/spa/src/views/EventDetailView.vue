@@ -11,6 +11,7 @@ import { useEventDetailStore } from '@/stores/eventDetail'
 import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { listIngestByEvent, type IngestItem } from '@/api/ingest'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -35,6 +36,60 @@ const store = useEventDetailStore()
 // per-event-name conditionals in shared code.
 const studyModules = useStudyModuleStore()
 const panelInjections = computed(() => studyModules.injectionsFor('event-detail.panels'))
+
+/*
+ * 2026-09-24 — the images filed against this visit.
+ *
+ * Until now the visit page showed a scan's AI metrics and nowhere the
+ * scans and photographs themselves; a bound fundus image was visible only
+ * in the reconciliation inbox, an operator surface with no per-visit view.
+ * One panel, grouped by eye, thumbnails from the same preview endpoint the
+ * inbox uses (which enforces study visibility server-side).
+ */
+// The API client prepends CONTEXT_PATH for fetches; a raw <img src> does not.
+const CONTEXT_PATH = '/LibreClinica'
+const visitImages = ref<IngestItem[]>([])
+const visitImagesLoading = ref(false)
+const visitImagesError = ref(false)
+
+async function loadVisitImages(id: string): Promise<void> {
+  visitImagesLoading.value = true
+  visitImagesError.value = false
+  try {
+    visitImages.value = await listIngestByEvent(id)
+  } catch {
+    visitImages.value = []
+    visitImagesError.value = true
+  } finally {
+    visitImagesLoading.value = false
+  }
+}
+
+type EyeKey = 'OD' | 'OS' | 'OU' | 'unknown'
+const EYE_ORDER: EyeKey[] = ['OD', 'OS', 'OU', 'unknown']
+
+/** The visit's images by eye, in OD / OS / OU / unspecified order, empty groups dropped. */
+const visitImagesByEye = computed<Array<{ eye: EyeKey; items: IngestItem[] }>>(() => {
+  const groups = new Map<EyeKey, IngestItem[]>()
+  for (const img of visitImages.value) {
+    const key = ((img.laterality ?? '').toUpperCase() as EyeKey)
+    const eye: EyeKey = key === 'OD' || key === 'OS' || key === 'OU' ? key : 'unknown'
+    const list = groups.get(eye) ?? []
+    list.push(img)
+    groups.set(eye, list)
+  }
+  return EYE_ORDER.filter((e) => groups.has(e)).map((e) => ({ eye: e, items: groups.get(e)! }))
+})
+
+function previewSrc(img: IngestItem): string {
+  return `${CONTEXT_PATH}${img.previewUrl}`
+}
+
+function sourceLabel(img: IngestItem): string {
+  const key = `eventDetail.images.source.${img.sourceKind}`
+  const label = t(key)
+  return label === key ? img.sourceKind : label
+}
 
 /**
  * 2026-06-21 user-feedback round 5 — manual "Visite abschließen"
@@ -91,9 +146,11 @@ const startingEdcId = ref<number | null>(null)
 
 onMounted(() => {
   void store.load(eventId.value)
+  void loadVisitImages(eventId.value)
 })
 watch(eventId, (id) => {
   void store.load(id)
+  void loadVisitImages(id)
 })
 
 const event = computed(() => store.event)
@@ -378,6 +435,80 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               </td>
             </tr>
           </DenseTable>
+        </section>
+
+        <!-- 2026-09-24 — the images filed against this visit, by eye. -->
+        <section
+          class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5"
+          data-testid="event-detail-images"
+        >
+          <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {{ t('eventDetail.images.title') }}
+            </h2>
+            <span class="text-xs text-slate-500">
+              {{ t('eventDetail.images.count', { n: visitImages.length }) }}
+            </span>
+          </div>
+
+          <p v-if="visitImagesError" class="px-5 py-4 text-xs text-red-700" data-testid="event-detail-images-error">
+            {{ t('eventDetail.images.loadFailed') }}
+          </p>
+          <p
+            v-else-if="!visitImagesLoading && visitImages.length === 0"
+            class="px-5 py-6 text-xs text-slate-500 italic"
+            data-testid="event-detail-images-empty"
+          >
+            {{ t('eventDetail.images.empty') }}
+          </p>
+          <div v-else class="px-5 py-4 space-y-4">
+            <div v-for="group in visitImagesByEye" :key="group.eye">
+              <h3 class="text-xs font-medium text-slate-600 mb-2">
+                {{ t(`eventDetail.images.eye.${group.eye}`) }}
+              </h3>
+              <ul class="flex flex-wrap gap-3">
+                <li
+                  v-for="img in group.items"
+                  :key="img.id"
+                  class="w-40"
+                  data-testid="event-detail-image"
+                >
+                  <a
+                    v-if="img.hasPreview"
+                    :href="previewSrc(img)"
+                    target="_blank"
+                    rel="noopener"
+                    :title="t('eventDetail.images.open')"
+                    class="block border border-slate-200 rounded overflow-hidden bg-slate-50"
+                  >
+                    <img
+                      :src="previewSrc(img)"
+                      :alt="`${img.kind} ${img.laterality ?? ''}`.trim()"
+                      class="w-40 h-40 object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                  <div
+                    v-else
+                    class="w-40 h-40 border border-dashed border-slate-300 rounded flex items-center justify-center text-xs text-slate-400"
+                  >
+                    {{ t('eventDetail.images.noPreview') }}
+                  </div>
+                  <div class="mt-1 text-[11px] leading-tight text-slate-600">
+                    <div>
+                      <span class="font-mono uppercase">{{ img.kind }}</span>
+                      <span v-if="img.device"> · {{ img.device }}</span>
+                    </div>
+                    <div class="text-slate-500">
+                      <span v-if="img.acquisitionDate">{{ formatDate(img.acquisitionDate) }}</span>
+                      <span v-else>—</span>
+                      · {{ sourceLabel(img) }}
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
         </section>
 
         <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.

@@ -2695,7 +2695,7 @@
     "eventsCount": "events",
     "scheduleEvent": "Schedule event",
     "openQueries": "Open queries",
-    "openEvent": "Open CRFs",
+    "openEvent": "Open visit",
     "column": {
       "event": "Event",
       "dateStart": "Start date",
@@ -2866,6 +2866,26 @@
       "forbidden": "You do not have access to this event.",
       "network": "Backend unreachable — please retry.",
       "startFailed": "Could not start data entry — please retry."
+    },
+    "images": {
+      "title": "Images of this visit",
+      "count": "{n} image(s)",
+      "empty": "No images for this visit.",
+      "loadFailed": "The images of this visit could not be loaded.",
+      "eye": {
+        "OD": "Right eye (OD)",
+        "OS": "Left eye (OS)",
+        "OU": "Both eyes (OU)",
+        "unknown": "Eye not given"
+      },
+      "noPreview": "No preview",
+      "open": "Open image",
+      "source": {
+        "remidio": "Remidio",
+        "dicom": "DICOM",
+        "upload": "Upload",
+        "portal-oct": "OCT portal"
+      }
     }
   },
   "subjectExport": {
@@ -3355,7 +3375,8 @@
       "export.bundle.enabled": "Multimodal export",
       "portal.todaysVisits": "Today's visits on the upload page",
       "ai.arm.shownGroup": "Group shown AI",
-      "ai.arm.hiddenGroup": "Group blinded to AI"
+      "ai.arm.hiddenGroup": "Group blinded to AI",
+      "ai.blinding.enabled": "AI blinding for treating clinicians (Investigator, CRC)"
     }
   },
   "system": {
