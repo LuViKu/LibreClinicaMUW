@@ -84,10 +84,36 @@ queue and the reconciliation inbox ([DR-025](decision-record.md#dr-025--dicom-c-
    operator performs today for a page upload without a visit. The date check
    from [PR #312](https://github.com/LuViKu/LibreClinicaMUW/pull/312)
    applies unchanged.
-5. **Photographer convention.** The MRN typed into the Remidio app **is the
-   study subject label** (`HAE-002`), nothing else; name and DOB fields get the
-   same placeholder discipline as the Optomed worklist. This is the entire
-   "worklist" for this device and belongs in the HealthAEye SOP.
+5. **The worklist side, through the dashboard's own API (added 2026-09-24).**
+   The gateway is read-only, but the web dashboard's private API is not:
+   `POST /api/patient/createPatient` (the `checksum` field it sends is an
+   empty string — nothing signed), `POST /api/exam/createExam`, and
+   `GET /api/patient/getPatientWithExams/{mrn}?siteId&deviceType=FOP` as the
+   exists-check (404 `NOT_FOUND` = free). Verified from a script on
+   2026-09-23; portal-created records reach the phone (2026-09-24). And the
+   phone showed the shape that matters: **the FOP app has an exam list, not
+   a patient list** — a patient without an exam is invisible. So the
+   *patient sync* (`RemidioPatientSyncService`, flag
+   `core.remidio.patientSync.enabled`) takes the same scheduled visits the
+   DICOM/Optomed worklists serve (`ScheduledVisitQuery`, scope
+   `core.dicom.worklist.studyOids`) for yesterday…+7 days and creates what is
+   missing: a patient per subject label (MRN and first name = the label,
+   last name = the study, DOB = epoch, sex mapped onto MALE/FEMALE) and one
+   exam per visit named `<label> <visit>`. `remidio_patient` and
+   `remidio_visit_exam` remember both, and the pull binds a capture made
+   into a synced exam straight to its visit (`match_policy = worklist`) —
+   label + date is the fallback for captures the photographer starts by
+   hand. **Remidio cannot delete a patient** (the dashboard's bundle lists
+   `createPatient`/`editPatient` and reads, nothing else), so the sync is
+   conservative: only live visits in scope, one lookup before every create,
+   never anything speculative. The dashboard identity is the same account as
+   the pull with the dashboard's client pair (`WEB_DASHBOARD` + the public
+   client token every browser session sends) and `tokentype: rem`; the
+   gateway pair is refused on those paths and vice versa. Being the web
+   app's private contract it can change without notice — hence its own flag,
+   and the pull never depends on it.
+   The manual convention stays as the fallback: an MRN typed into the app
+   **is the study subject label**; this belongs in the HealthAEye SOP.
 6. **Secrets and switches in `datainfo.properties`**, mirroring
    `core.optomed.worklist.*`: `core.remidio.pull.enabled` (default `false`),
    `core.remidio.baseUrl`, `core.remidio.clientName` (`PACS_GATEWAY`),

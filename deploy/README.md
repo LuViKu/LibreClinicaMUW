@@ -413,6 +413,32 @@ from a local env file; prints tokens masked).
 The app VM needs outbound HTTPS to `*.appspot.com` (the gateway) and
 `storage.googleapis.com` (the signed image links, valid for one hour).
 
+**The worklist side — patient sync.** The FOP app shows an *exam list*, not
+a patient list, so for the photographer to pick a subject instead of typing
+it, the subject must exist in Remidio's cloud as a patient with an exam. With
+`core.remidio.patientSync.enabled=true` every pass also takes the visits
+scheduled from yesterday to a week ahead (scope `core.dicom.worklist.studyOids`,
+as the DICOM/Optomed worklists) and creates what is missing: a patient with
+MRN = subject label and placeholder identity, and one exam per visit named
+`<label> <visit>` (e.g. `HAE-002 Baseline`). A capture made into that exam
+is filed against its visit directly. This goes through the web dashboard's
+own API — same account, but the dashboard's client pair and the site's
+numeric id:
+
+```properties
+core.remidio.patientSync.enabled=true
+core.remidio.dashboard.clientName=WEB_DASHBOARD
+core.remidio.dashboard.clientIdentificationToken=<the dashboard's client token>
+core.remidio.siteId=5898310359449600
+```
+
+The dashboard's client token is the one every browser session sends: log in
+to <https://dashboard.remidio.com> with DevTools → Network open and copy the
+`clientIdentificationToken` request header of any call. Remidio has **no
+patient-delete** endpoint, so the sync creates only for live visits in scope
+and looks the MRN up before every create; a typo in a subject label becomes a
+permanent patient in their cloud.
+
 ### DICOM sidecar (optional, but needed for any DICOM upload)
 
 Every DICOM file the platform takes in - a camera's C-STORE, a Clarus or

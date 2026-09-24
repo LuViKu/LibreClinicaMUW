@@ -23,6 +23,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioDashboardClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient.RemidioException;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient.Settings;
@@ -66,15 +67,28 @@ public class RemidioPullScheduler {
     static final int MAX_OVERLAP_DAYS = 365;
     static final int DEFAULT_SINCE_DAYS_BACK = 365;
 
+    /** The patient sync (the Remidio side of the worklist) — its own flag, its own client. */
+    static final String KEY_SYNC_CREATE_EXAMS = "core.remidio.patientSync.createExams";
+    static final String KEY_SYNC_AHEAD_DAYS = "core.remidio.patientSync.aheadDays";
+    static final String KEY_SYNC_BEHIND_DAYS = "core.remidio.patientSync.behindDays";
+    static final int DEFAULT_SYNC_AHEAD_DAYS = 7;
+    static final int DEFAULT_SYNC_BEHIND_DAYS = 1;
+    static final int MAX_SYNC_DAYS = 60;
+
     private final DataSource dataSource;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private volatile Settings activeSettings;
     private volatile RemidioGatewayClient client;
+    private volatile RemidioDashboardClient.Settings activeSyncSettings;
+    private volatile RemidioDashboardClient syncClient;
     private volatile Instant lastAttempt;
     private volatile Instant lastSuccess;
     private volatile String lastError;
+    private volatile Instant lastSyncSuccess;
+    private volatile String lastSyncError;
     private volatile boolean warnedUnconfigured;
+    private volatile boolean warnedSyncUnconfigured;
 
     public RemidioPullScheduler(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
@@ -88,10 +102,60 @@ public class RemidioPullScheduler {
         if (last != null && Duration.between(last, now).getSeconds() < intervalSeconds()) return;
         if (!running.compareAndSet(false, true)) return;
         try {
+            // The sync first: a visit scheduled a minute ago should be on the
+            // phone before its capture could possibly come back through the pull.
+            if (patientSyncEnabled()) syncOnce();
             runOnce();
         } finally {
             running.set(false);
         }
+    }
+
+    /**
+     * One pass of the patient sync: every subject with a visit scheduled
+     * from {@code behindDays} ago to {@code aheadDays} ahead exists in
+     * Remidio, with an exam per visit. Never throws.
+     */
+    public Optional<RemidioPatientSyncService.Summary> syncOnce() {
+        RemidioDashboardClient.Settings settings = RemidioDashboardClient.Settings.fromConfig();
+        if (!settings.isConfigured()) {
+            if (!warnedSyncUnconfigured) {
+                LOG.warn("Remidio patient sync is enabled but not configured — {} is empty", settings.missing());
+                warnedSyncUnconfigured = true;
+            }
+            lastSyncError = "not configured: " + settings.missing();
+            return Optional.empty();
+        }
+        warnedSyncUnconfigured = false;
+        if (syncClient == null || !settings.equals(activeSyncSettings)) {
+            syncClient = new RemidioDashboardClient(settings);
+            activeSyncSettings = settings;
+        }
+        LocalDate today = LocalDate.now(RemidioPullService.CLINIC_ZONE);
+        LocalDate from = today.minusDays(syncBehindDays());
+        LocalDate to = today.plusDays(syncAheadDays());
+        try {
+            RemidioPatientSyncService.Summary s = new RemidioPatientSyncService(dataSource, syncClient)
+                    .sync(from, to, syncCreateExams());
+            lastSyncSuccess = Instant.now();
+            lastSyncError = null;
+            if (s.patientsCreated() > 0 || s.examsCreated() > 0 || s.failed() > 0) {
+                LOG.info("Remidio patient sync {}", s.line());
+            } else {
+                LOG.debug("Remidio patient sync {}", s.line());
+            }
+            return Optional.of(s);
+        } catch (RemidioException e) {
+            lastSyncError = e.reason() + ": " + e.getMessage();
+            LOG.warn("Remidio patient sync failed ({}): {}", e.reason(), e.getMessage());
+            if (e.reason() == RemidioException.Reason.UNAUTHORIZED) {
+                syncClient.reset();
+            }
+        } catch (RuntimeException e) {
+            lastSyncError = e.getClass().getSimpleName() + ": " + e.getMessage();
+            LOG.error("Remidio patient sync failed unexpectedly: {}", e.toString(), e);
+        }
+        return Optional.empty();
     }
 
     /**
@@ -153,8 +217,33 @@ public class RemidioPullScheduler {
         return lastError;
     }
 
+    /** When the sync last completed without error, for the status page. */
+    public Optional<Instant> lastSyncSuccess() {
+        return Optional.ofNullable(lastSyncSuccess);
+    }
+
+    public String lastSyncError() {
+        return lastSyncError;
+    }
+
     public static boolean enabled() {
         return "true".equalsIgnoreCase(cfg(RemidioGatewayClient.KEY_ENABLED, "false"));
+    }
+
+    public static boolean patientSyncEnabled() {
+        return "true".equalsIgnoreCase(cfg(RemidioDashboardClient.KEY_ENABLED, "false"));
+    }
+
+    static boolean syncCreateExams() {
+        return !"false".equalsIgnoreCase(cfg(KEY_SYNC_CREATE_EXAMS, "true"));
+    }
+
+    static int syncAheadDays() {
+        return Math.max(0, Math.min(MAX_SYNC_DAYS, cfgInt(KEY_SYNC_AHEAD_DAYS, DEFAULT_SYNC_AHEAD_DAYS)));
+    }
+
+    static int syncBehindDays() {
+        return Math.max(0, Math.min(MAX_SYNC_DAYS, cfgInt(KEY_SYNC_BEHIND_DAYS, DEFAULT_SYNC_BEHIND_DAYS)));
     }
 
     static int intervalSeconds() {

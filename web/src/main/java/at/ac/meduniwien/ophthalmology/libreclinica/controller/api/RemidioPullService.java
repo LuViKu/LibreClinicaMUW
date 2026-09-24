@@ -261,10 +261,23 @@ final class RemidioPullService {
         LocalDate date = dateOf(image.date(), exam.examDate());
         String mrn = blankToNull(exam.mrn());
 
-        // The visit, if the label and the day name exactly one.
+        // The visit. First choice: the exam is one the patient sync created
+        // for a scheduled visit (remidio_visit_exam) — then the capture names
+        // its visit outright, like a worklist-driven C-STORE. Otherwise the
+        // label and the day, if they name exactly one.
         ImageIngestBinding.EventTarget target = null;
         Integer candidateSubject = null;
-        if (mrn != null) {
+        String policy = POLICY_MRN;
+        Integer syncedVisit = visitOfExam(exam.id());
+        if (syncedVisit != null) {
+            try (Connection c = dataSource.getConnection()) {
+                target = ImageIngestBinding.resolveEventTarget(c, syncedVisit);
+            } catch (SQLException e) {
+                LOG.warn("remidio: could not resolve visit {} of exam {}: {}", syncedVisit, exam.id(), e.getMessage());
+            }
+            if (target != null) policy = IngestBindService.POLICY_WORKLIST;
+        }
+        if (target == null && mrn != null) {
             try {
                 IngestResolutionService.Resolution r = resolution.resolve(mrn, date, null);
                 IngestResolutionService.ResolveCandidate c = r.single().orElse(null);
@@ -300,7 +313,7 @@ final class RemidioPullService {
                     .remidioImageId(image.id())
                     .candidateStudySubjectId(target == null ? candidateSubject : null);
             if (target != null) {
-                item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), POLICY_MRN);
+                item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), policy);
             }
             id = item.insert(c);
         } catch (SQLException e) {
@@ -315,11 +328,12 @@ final class RemidioPullService {
         }
 
         if (target != null) {
-            ImageIngestBinding.writeSystemBindAudit(dataSource, id, POLICY_MRN, target.studyEventId());
+            ImageIngestBinding.writeSystemBindAudit(dataSource, id, policy, target.studyEventId());
             ImageIngestBinding.tickPerformed(dataSource, id, target, SOURCE_KIND, DEVICE, laterality, null);
         }
-        LOG.info("remidio: ingest_item {} landed {} (exam {}, image {}, {})", id,
-                target == null ? "UNBOUND" : "BOUND", exam.id(), image.id(), laterality == null ? "-" : laterality);
+        LOG.info("remidio: ingest_item {} landed {}{} (exam {}, image {}, {})", id,
+                target == null ? "UNBOUND" : "BOUND", target == null ? "" : " by " + policy,
+                exam.id(), image.id(), laterality == null ? "-" : laterality);
         return target == null ? Outcome.UNBOUND : Outcome.BOUND;
     }
 
@@ -382,6 +396,27 @@ final class RemidioPullService {
             // sha256 guards would then refuse one by one.
             LOG.warn("remidio: could not check exam {}: {}", examId, e.getMessage());
             return true;
+        }
+    }
+
+    /** The visit the patient sync created this exam for, or null when it is not one of ours. */
+    private Integer visitOfExam(String remidioExamId) {
+        long examId;
+        try {
+            examId = Long.parseLong(remidioExamId);
+        } catch (NumberFormatException notNumeric) {
+            return null;
+        }
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_event_id FROM remidio_visit_exam WHERE remidio_exam_id = ?")) {
+            ps.setLong(1, examId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : null;
+            }
+        } catch (SQLException e) {
+            LOG.warn("remidio: could not look up the visit of exam {}: {}", remidioExamId, e.getMessage());
+            return null;
         }
     }
 

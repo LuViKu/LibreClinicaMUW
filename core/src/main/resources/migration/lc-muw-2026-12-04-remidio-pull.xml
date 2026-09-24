@@ -114,4 +114,79 @@
             <dropTable tableName="remidio_pull_state"/>
         </rollback>
     </changeSet>
+
+    <!--
+      The patient sync: which subject labels already exist as patients in
+      Remidio's cloud, and which visits already have an exam there.
+
+      Remidio cannot delete a patient (the dashboard has no such call), so
+      the sync must never create one twice and never create one it is not
+      sure about. remidio_patient remembers every label the sync resolved —
+      found or created — with the cloud's patient id, so a label costs one
+      lookup ever. remidio_visit_exam remembers the exam created for a visit
+      (examCustomId = the visit's accession LC<study_event_id>), which is
+      also how the pull binds a capture made into that exam straight to its
+      visit, the way the Optomed worklist does.
+    -->
+    <changeSet id="2026-12-04-remidio-patient" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_patient"/>
+            </not>
+        </preConditions>
+        <comment>remidio_patient — subject labels resolved to Remidio cloud patient ids.</comment>
+
+        <createTable tableName="remidio_patient">
+            <column name="subject_label" type="VARCHAR(255)">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_patient" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="remidio_patient_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_us" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="remidio_patient"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-12-04-remidio-visit-exam" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="remidio_visit_exam"/>
+            </not>
+        </preConditions>
+        <comment>remidio_visit_exam — the Remidio exam created for a scheduled visit.</comment>
+
+        <createTable tableName="remidio_visit_exam">
+            <column name="study_event_id" type="INT">
+                <constraints primaryKey="true" primaryKeyName="pk_remidio_visit_exam" nullable="false"/>
+            </column>
+            <column name="remidio_exam_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exam_custom_id" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="remidio_visit_exam" indexName="ix_remidio_visit_exam_exam">
+            <column name="remidio_exam_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="remidio_visit_exam"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
