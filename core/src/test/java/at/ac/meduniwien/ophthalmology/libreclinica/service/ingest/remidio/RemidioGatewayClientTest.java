@@ -64,7 +64,8 @@ public class RemidioGatewayClientTest {
         @Override
         public Response send(String method, URI uri, Map<String, String> headers, String jsonBody,
                              Duration timeout) {
-            calls.add(new Call(method, uri.getPath() + (uri.getQuery() == null ? "" : "?" + uri.getQuery()),
+            // raw: the path as sent on the wire; getPath() would decode %2F back to "/".
+            calls.add(new Call(method, uri.getRawPath() + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery()),
                     Map.copyOf(headers), jsonBody));
             if (answers.isEmpty()) throw new IllegalStateException("unexpected call " + method + " " + uri);
             return answers.poll();
