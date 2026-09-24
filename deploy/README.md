@@ -146,8 +146,9 @@ above for the host-hardening scope split.
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.
 7. **Env file** — `/etc/libreclinica/env`. On first run it generates a 32-char
-   Postgres password; on re-run it preserves the existing secret and only
-   updates the image-tag pin.
+   Postgres password; on re-run it preserves the existing secrets and touches
+   the image-tag pin only when `--image-tag` (or the matching env var) was
+   given.
 8. **systemd unit** — `libreclinica.service`. Uses
    `compose.yaml` + `deploy/compose.production.yaml`. Both `libreclinica`
    and `retinal-inference` images are pulled from ghcr.io on every start
@@ -271,11 +272,15 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    The `Release image` workflow fires and pushes BOTH:
    - `ghcr.io/luviku/libreclinicamuw:<release-tag>` (+ `latest`)
    - `ghcr.io/luviku/libreclinicamuw/retinal-inference:<release-tag>` (+ `latest`)
-2. On the VM:
+2. On the VM — pin the tag through the script, so one command does the
+   checkout, the new config keys and the pin together:
    ```sh
-   sudo sed -i 's|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=<new-tag>|' /etc/libreclinica/env
+   sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --image-tag <new-tag>
    sudo systemctl restart libreclinica
    ```
+   Editing `/etc/libreclinica/env` by hand also works, but do it *after* the
+   script — and note that a re-run **without** `--image-tag` now leaves the pin
+   alone (it used to reset it to `latest`, silently unpinning the host).
    `pull_policy: always` on both services in the production overlay handles
    the actual pulls. Both images roll together unless
    `LIBRECLINICA_RETINAL_IMAGE_TAG` is also set in the env file (it pins
@@ -293,6 +298,13 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    Use the copy under `/opt/libreclinica/deploy/` — it is refreshed from git
    on every run. The `/root/libreclinica-setup/` bootstrap copy is frozen at
    first-install and skips newer config logic.
+
+   Because that refresh replaces the running script, the script **hands over to
+   its updated self** once the checkout is done (one `re-running the new copy`
+   line in the output, then the run starts again from the top — every block is
+   idempotent). Before beta.10 it carried on with the old text against the new
+   tree instead, which rejected that release's new flag and skipped a whole new
+   section without saying so.
 
    Skipping this is not fatal but it is silent: a key missing from the host
    file makes the app fall back to the calling code's hardcoded default, so

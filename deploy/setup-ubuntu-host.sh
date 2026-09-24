@@ -49,6 +49,12 @@ set -euo pipefail
 
 # ----------------------------- defaults ---------------------------------------
 
+# Whether the operator actually named a tag — as a flag or, per the header, as
+# an env var. An existing env file's pin is only rewritten when they did; see
+# the --image-tag flag and the env-file block. Evaluated before the default
+# below, because afterwards "was it set?" is unanswerable.
+IMAGE_TAG_GIVEN=${IMAGE_TAG_GIVEN:-0}
+[[ -n "${LIBRECLINICA_IMAGE_TAG:-}" ]] && IMAGE_TAG_GIVEN=1
 : "${LIBRECLINICA_IMAGE_TAG:=latest}"
 : "${LIBRECLINICA_TRUSTED_CIDRS:=}"      # comma-separated list, e.g. "10.0.0.0/8,192.168.0.0/16" — consumed by SSO header trust
 : "${LIBRECLINICA_TIMEZONE:=Europe/Vienna}"
@@ -121,9 +127,17 @@ MONITOR_DIR=/var/lib/libreclinica/monitor
 
 # ----------------------------- arg parsing ------------------------------------
 
+# How we were invoked, and what this file looked like at startup — both needed
+# by the re-exec after the repo checkout replaces this script mid-run.
+ORIGINAL_ARGS=("$@")
+SELF_SNAPSHOT="$(mktemp /tmp/libreclinica-setup-self.XXXXXX)"
+if [[ -r "${BASH_SOURCE[0]}" ]]; then
+  cp "${BASH_SOURCE[0]}" "$SELF_SNAPSHOT"
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --image-tag)        LIBRECLINICA_IMAGE_TAG="$2"; shift 2 ;;
+    --image-tag)        LIBRECLINICA_IMAGE_TAG="$2"; IMAGE_TAG_GIVEN=1; shift 2 ;;
     --trusted-cidrs)    LIBRECLINICA_TRUSTED_CIDRS="$2"; shift 2 ;;
     --timezone)         LIBRECLINICA_TIMEZONE="$2"; shift 2 ;;
     --host-port)        LIBRECLINICA_HOST_PORT="$2"; shift 2 ;;
@@ -424,6 +438,30 @@ fi
 rm -f "$ASKPASS_HELPER"
 trap - EXIT
 
+# ----------------------------- re-exec the updated self ------------------------
+# bash reads a script incrementally from its open file descriptor. The block
+# above just replaced this very file (the operator runs the copy under
+# ${INSTALL_PREFIX}/deploy, which is what the runbook says to use), so from
+# here on we would keep executing the OLD text against the NEW tree. On the
+# beta.10 deploy that meant a run which appended the release's new config keys
+# — the template is read at runtime, so that part was current — while silently
+# skipping a whole new section (the cluster-monitor cron) and rejecting the
+# release's new flag. Nothing in the output said so.
+#
+# So: if the file we were started from no longer matches what is running, hand
+# over to the new copy with the same arguments. REEXECED guards against a loop
+# if the comparison ever misfires.
+if [[ -z "${LIBRECLINICA_SETUP_REEXECED:-}" ]]; then
+  self="${BASH_SOURCE[0]}"
+  if [[ -r "$self" ]] && ! cmp -s "$self" "$SELF_SNAPSHOT"; then
+    log "This script was updated by the checkout above — re-running the new copy"
+    rm -f "$SELF_SNAPSHOT"
+    LIBRECLINICA_SETUP_REEXECED=1 IMAGE_TAG_GIVEN="$IMAGE_TAG_GIVEN" \
+      exec bash "$self" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
+  fi
+fi
+rm -f "$SELF_SNAPSHOT"
+
 # ----------------------------- env file (secrets) -----------------------------
 
 section "Environment file"
@@ -482,8 +520,20 @@ EOF
   log "Generated $ENV_FILE (Postgres password rolled, 32 chars; GHCR token persisted)"
 else
   log "$ENV_FILE already exists; preserving secrets"
-  # Update the image-tag pin on re-runs if --image-tag changed.
-  sed -i "s|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}|" "$ENV_FILE"
+  # The image-tag pin: only rewritten when the operator named one.
+  #
+  # This used to rewrite unconditionally, from this script's own default. A
+  # re-run without --image-tag therefore replaced whatever the host was pinned
+  # to with `latest` — silently unpinning a clinical system, and undoing the
+  # `sed` the runbook tells you to do first (beta.10 deploy, 2026-09-24).
+  # Re-running to pick up new config keys must not change which image runs.
+  if [[ "$IMAGE_TAG_GIVEN" == "1" ]]; then
+    sed -i "s|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}|" "$ENV_FILE"
+    log "Image tag pinned to ${LIBRECLINICA_IMAGE_TAG}"
+  else
+    current_tag="$(sed -n 's/^LIBRECLINICA_IMAGE_TAG=//p' "$ENV_FILE" | tail -1)"
+    log "Image tag left at ${current_tag:-<unset>} (pass --image-tag to change it)"
+  fi
   # Ensure the host bind is set. The base compose.yaml defaults to loopback,
   # so without an active LIBRECLINICA_BIND_ADDR=0.0.0.0 here the app is
   # unreachable to the separate-host reverse proxy. Add it if missing (older
