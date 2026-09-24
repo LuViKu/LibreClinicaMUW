@@ -384,6 +384,12 @@ local decision it does not make for you.
 If script execution is blocked on the clinic PC by policy, the bridge needs
 to become a signed executable; that is the upgrade path, not a workaround.
 
+The bridge reports to the **System Status** page every two minutes (see
+"Uploaders and storage on the System Status page" below): running or not,
+switched on or not, how many pulled images wait and for how long, whether
+the Optomed Client runs, and what went wrong in the last worklist fetch or
+upload round.
+
 ### Clarus and Spectralis exports — the Export Watcher tray app
 
 Neither the Zeiss Clarus nor the Heidelberg Spectralis talks to the platform:
@@ -439,6 +445,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTes
 # (a Clarus Raw Data object prints "[non-image object: set aside]")
 ```
 
+Like the bridge, the watcher reports to the **System Status** page every two
+minutes, switched on or not; each PC appears under its computer name unless
+*Name on the status page* is set in its settings.
+
 `ExportWatcher.ps1 -Once` runs a single headless sweep and exits, for a
 scheduled task instead of the tray, or for testing the chain (it also runs
 on PowerShell 7 on Linux, which is how it was verified from a Mac against the
@@ -446,6 +456,50 @@ dev stack). The exports stay on the PC, moved aside but never deleted; a
 Clarus `.dcm` carries the patient's name in its header until the platform
 pseudonymises its copy on ingest — retention there is a local decision, as
 for the Optomed Client's `Studies\` folder.
+
+### Uploaders and storage on the System Status page (DR-033)
+
+**System → Systemstatus** shows two panels beyond the app server itself.
+
+**Uploader an den Aufnahme-PCs.** The Export Watcher (Clarus and Spectralis
+PCs) and the Optomed Bridge each post a heartbeat to
+`POST /api/v1/device/uploader/heartbeat` every two minutes. The page shows,
+per program, one of five states:
+
+| State | Meaning | What to do |
+|---|---|---|
+| In Ordnung | reported within three intervals, nothing wrong | nothing |
+| Braucht Aufmerksamkeit | a problem is listed under it (platform unreachable, files in `_failed\`, a file waiting 30 min or more, disk almost full, worklist refused by the Optomed Client ...) | read the listed problem |
+| Ausgeschaltet | the program runs but uploading is switched off in its menu | switch it on, or accept that files pile up |
+| Beendet / Abgemeldet oder heruntergefahren | the program said it was closing: from its menu (red) or because Windows ended the session (grey) | a red one: start it again on that PC |
+| Keine Meldung | nothing for three intervals, never sooner than five minutes: crashed, or the PC lost the network | check the PC |
+
+Below it, *Eingänge je Gerät* counts what actually arrived per device and way
+in over the last 90 days, from every ingress (watcher, bridge, upload page,
+DICOM receiver, Remidio pull). A healthy program with no arrivals usually
+means the export goes into another folder. A heartbeat carries counts, ages,
+disk figures and coded problems only; nothing about a patient. To check a PC
+by hand:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -Heartbeat
+powershell -NoProfile -ExecutionPolicy Bypass -File .\OptomedBridge.ps1 -Heartbeat
+# heartbeat as 'CLARUS-PC' (export-watcher 2026-09-24) to https://…: recorded
+```
+
+A replaced PC's row can be removed on the page; a program that still runs
+comes back with its next heartbeat. Heartbeats are on by default;
+`core.uploaderHealth.heartbeat.enabled=false` in `datainfo.properties` turns
+the endpoint off.
+
+**Speicherplatz.** Once an hour the app measures every file store (bytes and
+files), the disk under each, and the database, and keeps 90 days of
+measurements. The page shows how full each disk is, the change per store over
+the last seven days, and, when free space shrank over that week, roughly how
+many days remain at that rate. *Jetzt messen* measures immediately. The app
+data directory (`/usr/local/tomcat/libreclinica.data`: CRF attachments and
+dataset exports) is listed with its path: it is an anonymous Docker volume,
+not under `/var/lib/libreclinica`, so it is not in any backup of that root.
 
 ### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
 

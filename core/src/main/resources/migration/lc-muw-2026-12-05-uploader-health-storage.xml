@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-033 — the System Status page sees the uploaders on the acquisition
+      PCs and the storage the platform uses.
+
+        uploader_instance     — one row per uploader program (Export Watcher,
+                                Optomed Bridge) that has sent a heartbeat,
+                                keyed by the random instance id the program
+                                generated for itself on first start. The row
+                                holds the LAST heartbeat only: health is a
+                                current state, not a history. Nothing about a
+                                patient travels in a heartbeat — counts, ages,
+                                disk figures and coded problems.
+
+        storage_usage_sample  — what an hourly scan measured: bytes and files
+                                per file store, the free space on the
+                                filesystem each store lives on, and the
+                                database size (store_key = 'database'). Kept
+                                for 90 days so the page can show a trend and
+                                an estimate of when the disk fills.
+
+      Both are additive and read by nothing but the System Status page.
+    -->
+    <changeSet id="2026-12-05-uploader-instance" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="uploader_instance"/>
+            </not>
+        </preConditions>
+        <comment>uploader_instance — the last heartbeat of each uploader program on an acquisition PC.</comment>
+
+        <createTable tableName="uploader_instance">
+            <column autoIncrement="true" name="uploader_instance_id" type="SERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_uploader_instance" nullable="false"/>
+            </column>
+            <column name="instance_uid" type="VARCHAR(36)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="ux_uploader_instance_uid"/>
+            </column>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="VARCHAR(32)"/>
+            <column name="first_seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="running" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stop_reason" type="VARCHAR(20)"/>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="heartbeat_interval_sec" type="INT" defaultValueNumeric="120">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_activity_at" type="TIMESTAMP"/>
+            <column name="last_upload_at" type="TIMESTAMP"/>
+            <column name="uploaded_today" type="INT"/>
+            <column name="pending_files" type="INT"/>
+            <column name="oldest_pending_minutes" type="INT"/>
+            <column name="failed_files" type="INT"/>
+            <column name="disk_free_bytes" type="BIGINT"/>
+            <column name="disk_total_bytes" type="BIGINT"/>
+            <column name="problems" type="VARCHAR(440)"/>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="uploader_instance"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-12-05-storage-usage-sample" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="storage_usage_sample"/>
+            </not>
+        </preConditions>
+        <comment>storage_usage_sample — hourly sizes of the file stores, their filesystems, and the database.</comment>
+
+        <createTable tableName="storage_usage_sample">
+            <column autoIncrement="true" name="storage_usage_sample_id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_storage_usage_sample" nullable="false"/>
+            </column>
+            <column name="sampled_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="store_key" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="store_path" type="VARCHAR(512)"/>
+            <column name="present" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_bytes" type="BIGINT"/>
+            <column name="file_count" type="BIGINT"/>
+            <column name="complete" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fs_key" type="VARCHAR(200)"/>
+            <column name="fs_type" type="VARCHAR(40)"/>
+            <column name="fs_total_bytes" type="BIGINT"/>
+            <column name="fs_usable_bytes" type="BIGINT"/>
+        </createTable>
+        <createIndex tableName="storage_usage_sample" indexName="ix_storage_usage_sample_store_time">
+            <column name="store_key"/>
+            <column name="sampled_at"/>
+        </createIndex>
+        <createIndex tableName="storage_usage_sample" indexName="ix_storage_usage_sample_time">
+            <column name="sampled_at"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="storage_usage_sample"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
