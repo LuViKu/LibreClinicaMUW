@@ -524,6 +524,12 @@ patient-delete** endpoint, so the sync creates only for live visits in scope
 and looks the MRN up before every create; a typo in a subject label becomes a
 permanent patient in their cloud.
 
+`core.remidio.siteId` is the **numeric** site id, not the custom identifier the
+pull uses, and it is checked once at the first pass: if it is not a site this
+account can write to, the log says so and names the ids that are, and the sync
+stays off until it is corrected. (A mistyped digit otherwise fails on every
+subject, every two minutes, with only a per-subject "site cannot be found".)
+
 ### DICOM sidecar (optional, but needed for any DICOM upload)
 
 Every DICOM file the platform takes in - a camera's C-STORE, a Clarus or

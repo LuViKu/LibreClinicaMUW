@@ -100,6 +100,11 @@ final class RemidioPatientSyncService {
 
         Map<String, Long> known = knownPatients();
         int found = 0, created = 0, exams = 0, failed = 0, labels = 0;
+        // One line per distinct reason, not per subject. A misconfiguration
+        // fails identically on every label, and logging it N times per pass
+        // says nothing the first one did not — while burying anything else
+        // that went wrong in the same pass.
+        Map<String, Integer> failureReasons = new java.util.LinkedHashMap<>();
         for (ScheduledVisitQuery.ScheduledVisit v : visits) {
             String label = v.subjectLabel() == null ? "" : v.subjectLabel().trim();
             if (label.isEmpty()) continue;
@@ -123,8 +128,7 @@ final class RemidioPatientSyncService {
                 } catch (RemidioException e) {
                     if (isFatal(e)) throw e;
                     failed++;
-                    LOG.warn("remidio sync: patient for a subject label could not be resolved ({}): {}",
-                            e.reason(), e.getMessage());
+                    note(failureReasons, "resolving a subject's patient", e);
                     continue;
                 }
             }
@@ -139,12 +143,19 @@ final class RemidioPatientSyncService {
                 } catch (RemidioException e) {
                     if (isFatal(e)) throw e;
                     failed++;
-                    LOG.warn("remidio sync: exam for visit {} could not be created ({}): {}",
-                            v.studyEventId(), e.reason(), e.getMessage());
+                    note(failureReasons, "creating a visit's exam", e);
                 }
             }
         }
+        failureReasons.forEach((reason, count) ->
+                LOG.warn("remidio sync: {} item(s) failed — {}", count, reason));
         return new Summary(from, to, visits.size(), labels, found, created, exams, failed);
+    }
+
+    /** Counts one failure under its reason, so the pass can report each once. */
+    private static void note(Map<String, Integer> reasons, String what, RemidioException e) {
+        String key = what + " (" + e.reason() + "): " + e.getMessage();
+        reasons.merge(key, 1, Integer::sum);
     }
 
     /* ------------------------------------------------------------------ */
