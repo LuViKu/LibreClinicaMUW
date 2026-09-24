@@ -2,7 +2,7 @@
 .SYNOPSIS
   Install (or remove) the Export Watcher tray app for the current user.
 .DESCRIPTION
-  Run once on the acquisition PC (the Clarus PC, the Spectralis PC — one
+  Run once on the acquisition PC (the Clarus PC, the Spectralis PC - one
   watcher per PC, each pointed at that PC's own export folder), as the user
   who exports. What it does:
     1. creates %ProgramData%\LibreClinica and seeds export-watcher.json if
@@ -75,7 +75,7 @@ if (-not (Test-Path $cfgPath)) {
 $folder = (Get-Content $cfgPath -Raw | ConvertFrom-Json).WatchFolder
 if (-not (Test-Path $folder)) { New-Item -ItemType Directory -Force $folder | Out-Null; Write-Host "created export folder $folder" }
 
-# 2. startup shortcut — hidden window, bypass so a machine policy of
+# 2. startup shortcut - hidden window, bypass so a machine policy of
 #    RemoteSigned does not stop an unsigned script from a network copy.
 $wsh = New-Object -ComObject WScript.Shell
 $lnk = $wsh.CreateShortcut($shortcut)
@@ -88,7 +88,7 @@ $lnk.Save()
 Write-Host "startup shortcut: $shortcut"
 
 # 3. start it now (single-instance: a running watcher simply exits the new one),
-#    and say whether it stayed up — a hidden window that dies in its first
+#    and say whether it stayed up - a hidden window that dies in its first
 #    second is otherwise indistinguishable from one that is running.
 Stop-Watcher
 $p = Start-Process -FilePath $psExe -ArgumentList $lnk.Arguments -WindowStyle Hidden -WorkingDirectory $PSScriptRoot -PassThru

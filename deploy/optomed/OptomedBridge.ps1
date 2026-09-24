@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Optomed Bridge — tray app that carries the LibreClinica worklist to the
+  Optomed Bridge - tray app that carries the LibreClinica worklist to the
   Optomed Client and the Client's pulled studies back to LibreClinica.
 
 .DESCRIPTION
@@ -42,7 +42,7 @@
 
   Settings: %ProgramData%\LibreClinica\optomed-bridge.json. The token is
   DPAPI-protected to the user who saved it. Log alongside, rotated at 1 MB.
-  Only counts and pseudonymous labels are ever logged — never names, dates of
+  Only counts and pseudonymous labels are ever logged - never names, dates of
   birth or filenames (the Client names folders after the patient).
 
 .PARAMETER SelfTest
@@ -51,7 +51,7 @@
   verified on a real export without a tray session.
 
 .PARAMETER Heartbeat
-  Headless: send one heartbeat to the platform and print the answer — the
+  Headless: send one heartbeat to the platform and print the answer - the
   quickest check that this PC reaches the platform and shows up on the
   System Status page.
 
@@ -61,11 +61,11 @@
   drive is, whether the Optomed Client runs, and coded problems from the
   last worklist fetch and the last upload round (the worklist refused by the
   Client, a rejected token, the platform unreachable ...). Counts, ages and
-  codes only — no label, no filename, nothing about a patient. It says
+  codes only - no label, no filename, nothing about a patient. It says
   "stopped" when closed from its menu or when Windows ends the session.
 
 .NOTES
-  Windows PowerShell 5.1 — no 6+ features (no -Form, no ?? etc.).
+  Windows PowerShell 5.1 - no 6+ features (no -Form, no ?? etc.).
 #>
 [CmdletBinding()]
 param(
@@ -82,7 +82,7 @@ $ErrorActionPreference = 'Stop'
 $script:AppName      = 'Optomed Bridge'
 # Shown on the System Status page beside this PC's name. Bump with every
 # change to this script, so a PC still running an old copy stands out.
-$script:Version      = '2026-09-24'
+$script:Version      = '2026-09-24.2'
 $script:Kind         = 'optomed-bridge'
 $script:WorklistName = 'worklist_optomed_lumo.txt'   # the one filename the Client imports
 $script:StateDir     = Split-Path -Parent $ConfigPath
@@ -109,7 +109,7 @@ function Write-Log {
 }
 
 # ----------------------------------------------------------------------------
-# settings — a JSON file; the token DPAPI-protected to the saving user
+# settings - a JSON file; the token DPAPI-protected to the saving user
 # ----------------------------------------------------------------------------
 function Get-DefaultConfig {
     [pscustomobject]@{
@@ -129,7 +129,7 @@ function Get-DefaultConfig {
         # the sync - verified on the real Client.
         HideClientWindow    = $true
         ClientExe           = (Join-Path $env:LOCALAPPDATA 'Optomed\OptomedClient\OptomedClient.exe')
-        # DR-033 — the System Status page. InstanceId is generated on first
+        # DR-033 - the System Status page. InstanceId is generated on first
         # start and identifies this installation's row: keep it with the
         # settings file, never copy it to another PC. DisplayName blank =
         # the computer name.
@@ -179,7 +179,7 @@ function Unprotect-Token([string]$protected) {
 }
 
 # ----------------------------------------------------------------------------
-# HTTP — one client, one token header
+# HTTP - one client, one token header
 # ----------------------------------------------------------------------------
 Add-Type -AssemblyName System.Net.Http
 $script:Http = New-Object System.Net.Http.HttpClient
@@ -190,7 +190,7 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 }
 
 # ----------------------------------------------------------------------------
-# health — what the heartbeat reports (DR-033). Counts, ages, disk figures and
+# health - what the heartbeat reports (DR-033). Counts, ages, disk figures and
 # coded problems; never a label, a filename or anything about a patient.
 # The shared part is kept word for word as in ExportWatcher.ps1.
 # ----------------------------------------------------------------------------
@@ -339,7 +339,7 @@ function Send-StopHeartbeat([pscustomobject]$cfg, [string]$reason) {
 }
 
 # ----------------------------------------------------------------------------
-# DICOM header reader — only what this script needs
+# DICOM header reader - only what this script needs
 #
 # The Lumo's export is a Part-10 file, explicit VR little-endian for the
 # dataset (transfer syntax JPEG Baseline). The tags wanted all sit below group
@@ -350,7 +350,7 @@ function Send-StopHeartbeat([pscustomobject]$cfg, [string]$reason) {
 $script:LongVRs = @('OB','OW','OF','SQ','UT','UN')
 
 # Length of the element whose 4-byte tag has just been read. 0xFFFFFFFF means
-# undefined (a sequence, or encapsulated pixel data) — compared below as
+# undefined (a sequence, or encapsulated pixel data) - compared below as
 # [uint32]::MaxValue, because PowerShell parses the hex literal 0xFFFFFFFF as
 # the Int32 -1, and a [uint32] length never equals that. Group 0002 is always
 # explicit VR little endian; the dataset's syntax is what 0002,0010 said.
@@ -364,7 +364,7 @@ function Read-ElemLength([IO.BinaryReader]$r, [bool]$explicit) {
 # Positioned just after an undefined-length header: consume the items up to
 # the sequence delimiter, recursing into nested sequences. The Clarus writes
 # undefined-length sequences (SourceImageSequence, AnatomicRegionSequence) in
-# group 0008 — BEFORE the patient group — so a reader that stops at the first
+# group 0008 - BEFORE the patient group - so a reader that stops at the first
 # one never sees the PatientID. Verified on Clarus 700 exports, 2026-09-24.
 function Skip-Sequence([IO.BinaryReader]$r, [bool]$explicit) {
     $fs = $r.BaseStream
@@ -409,7 +409,7 @@ function Read-DicomTags {
 
             $len = Read-ElemLength $r ($isMeta -or $explicit)
             # An undefined-length sequence: nothing wanted lies inside one,
-            # but the patient group lies beyond it — step over, never stop.
+            # but the patient group lies beyond it - step over, never stop.
             if ($len -eq [uint32]::MaxValue) { Skip-Sequence $r $explicit; continue }
             $bytes = $r.ReadBytes([int]$len)
 
@@ -523,7 +523,7 @@ function Resolve-Visit([pscustomobject]$cfg, [string]$patientId, [string]$scanDa
     }
     $r = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
     $scan = $r.scans[0]
-    # 'suggested' = one subject with exactly one visit on that date — the only
+    # 'suggested' = one subject with exactly one visit on that date - the only
     # state in which binding without a person is defensible.
     if ($scan.state -eq 'suggested' -and $scan.candidates.Count -eq 1 -and $scan.candidates[0].matchingEvent) {
         return $scan.candidates[0].matchingEvent.studyEventId
@@ -603,7 +603,7 @@ function Move-Uploaded([IO.FileInfo]$f) {
 }
 
 # ----------------------------------------------------------------------------
-# self-test — headless
+# self-test - headless
 # ----------------------------------------------------------------------------
 if ($SelfTest) {
     if ($DicomFile) {
@@ -617,7 +617,7 @@ if ($SelfTest) {
         exit 0
     }
     # With -ConfigPath pointing at a real (or legacy) settings file, show what
-    # Read-Config makes of it — this is how the minutes->seconds migration is
+    # Read-Config makes of it - this is how the minutes->seconds migration is
     # checked without a tray session.
     if (Test-Path $ConfigPath) {
         $loaded = Read-Config
@@ -653,6 +653,18 @@ if (-not $mutex.WaitOne(0, $false)) { exit 0 }   # already running
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
+
+# Launched by hand rather than by the installer's hidden-window shortcut, the
+# script owns a console window that sits on the desktop as long as the tray
+# icon lives. The tray icon is this app's surface; hide the console for every
+# way of starting it (same as the Export Watcher, 2026-09-24). This is our
+# own console - nothing to do with the Optomed Client window handled below.
+Add-Type -Namespace LibreClinicaTray -Name Console -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]   public static extern bool ShowWindow(IntPtr h, int cmd);
+'@
+$ownConsole = [LibreClinicaTray.Console]::GetConsoleWindow()
+if ($ownConsole -ne [IntPtr]::Zero) { [LibreClinicaTray.Console]::ShowWindow($ownConsole, 0) | Out-Null }   # 0 = SW_HIDE
 
 # ----------------------------------------------------------------------------
 # the Optomed Client: keep it running, keep its window out of the way
@@ -814,7 +826,7 @@ $uploadTimer = New-Object Windows.Forms.Timer
 function Update-Timers {
     # Worklist in seconds: the photographer enrols a subject and walks to the
     # dock expecting it on the camera, so the poll has to beat the walk. Cheap
-    # on both ends — the fetch is one scoped single-day query and the file is
+    # on both ends - the fetch is one scoped single-day query and the file is
     # only dropped when it changed. Uploads stay in minutes; nobody waits on them.
     $fetchTimer.Interval  = [Math]::Max(10, [int]$script:Cfg.WorklistIntervalSec) * 1000
     $uploadTimer.Interval = [Math]::Max(1, [int]$script:Cfg.UploadIntervalMin) * 60000
@@ -826,7 +838,7 @@ function Update-Timers {
 $fetchTimer.Add_Tick({ Invoke-FetchNow })
 $uploadTimer.Add_Tick({ if (Start-ClientIfNeeded) { Request-ClientHide }; Invoke-UploadNow })
 
-# DR-033 — the heartbeat runs whether the bridge is on or off: "switched off"
+# DR-033 - the heartbeat runs whether the bridge is on or off: "switched off"
 # is one of the things the System Status page needs to see.
 $hbTimer = New-Object Windows.Forms.Timer
 $hbTimer.Interval = [Math]::Max(30, [int]$script:Cfg.HeartbeatIntervalSec) * 1000
