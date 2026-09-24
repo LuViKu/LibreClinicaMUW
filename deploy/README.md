@@ -496,10 +496,17 @@ the endpoint off.
 files), the disk under each, and the database, and keeps 90 days of
 measurements. The page shows how full each disk is, the change per store over
 the last seven days, and, when free space shrank over that week, roughly how
-many days remain at that rate. *Jetzt messen* measures immediately. The app
-data directory (`/usr/local/tomcat/libreclinica.data`: CRF attachments and
-dataset exports) is listed with its path: it is an anonymous Docker volume,
-not under `/var/lib/libreclinica`, so it is not in any backup of that root.
+many days remain at that rate. *Jetzt messen* measures immediately.
+
+The app's own data directory (`/usr/local/tomcat/libreclinica.data`: CRF
+attachments, dataset exports) and Tomcat's logs are bound from
+`/var/lib/libreclinica/app-data` and `/var/lib/libreclinica/tomcat-logs`.
+Until 2026-09-24 they were anonymous Docker volumes, and because the unit
+restarts with `compose down` + `up`, every restart started the app on empty
+ones and left the old ones behind. The first setup run with this change copies
+the running container's current contents into the two directories; after the
+restart that follows, remove what earlier restarts left behind with
+`sudo docker volume prune` (unnamed, unused volumes only).
 
 ### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
 

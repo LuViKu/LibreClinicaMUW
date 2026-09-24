@@ -96,6 +96,15 @@ services:
       # monitor: the cluster monitor's log (root cron on the host writes it);
       # the System Status page tails it. Read-only - the app only reads.
       - /var/lib/libreclinica/monitor:/var/lib/libreclinica/monitor:ro
+      # app-data and tomcat-logs (2026-09-24): the image declares both paths as
+      # VOLUMEs, and unbound they became anonymous volumes. The unit restarts
+      # with `compose down` + `up`, which creates FRESH anonymous volumes every
+      # time - each upgrade and each reboot left the previous ones behind, and
+      # with them the CRF file attachments and dataset exports (filePath) the
+      # app had written. Bound here, they are ordinary directories under
+      # /var/lib/libreclinica like every other store.
+      - /var/lib/libreclinica/app-data:/usr/local/tomcat/libreclinica.data
+      - /var/lib/libreclinica/tomcat-logs:/usr/local/tomcat/logs
 
   db:
     restart: unless-stopped
