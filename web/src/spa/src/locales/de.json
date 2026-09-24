@@ -344,7 +344,8 @@
       "skipped": "Übersprungen",
       "not-started": "Nicht begonnen",
       "signed": "Signiert",
-      "locked": "Gesperrt"
+      "locked": "Gesperrt",
+      "removed": "Storniert"
     },
     "studyCard": {
       "pi": "Studienleitung",
