@@ -907,9 +907,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["previewImagingPlanCatchUp"];
+        get?: never;
         put?: never;
         post: operations["runImagingPlanCatchUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/imaging-plan/catch-up/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewImagingPlanCatchUp"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7665,7 +7681,7 @@ export interface operations {
             };
         };
     };
-    previewImagingPlanCatchUp: {
+    runImagingPlanCatchUp: {
         parameters: {
             query?: never;
             header?: never;
@@ -7688,7 +7704,7 @@ export interface operations {
             };
         };
     };
-    runImagingPlanCatchUp: {
+    previewImagingPlanCatchUp: {
         parameters: {
             query?: never;
             header?: never;
