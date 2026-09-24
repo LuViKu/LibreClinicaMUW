@@ -261,7 +261,105 @@
     "clusterMonitorHeading": "Monitor-Meldungen",
     "clusterMonitorHint": "Letzte Zeilen des Cron-Monitor-Logs auf der App-VM. Leer ist gut.",
     "clusterMonitorEmpty": "Keine Meldungen aufgezeichnet.",
-    "clusterMonitorUnavailable": "Monitor-Log nicht lesbar: {path}"
+    "clusterMonitorUnavailable": "Monitor-Log nicht lesbar: {path}",
+    "uploaders": {
+      "heading": "Uploader an den Aufnahme-PCs",
+      "hint": "Der Export Watcher (Clarus- und Spectralis-PC) und die Optomed Bridge melden sich alle zwei Minuten. Ein Programm, das sich nicht mehr meldet, erscheint als stumm; eines, das beendet oder mit dem PC heruntergefahren wurde, sagt das.",
+      "loadFailed": "Die Uploader konnten nicht geladen werden.",
+      "heartbeatOff": "Heartbeats sind auf diesem Server ausgeschaltet (core.uploaderHealth.heartbeat.enabled=false); die Zeilen unten sind die zuletzt empfangenen.",
+      "empty": "Noch hat sich kein Uploader gemeldet. Export Watcher und Optomed Bridge melden sich ab ihrer Version vom 24. September 2026; auf den PCs installieren oder aktualisieren (siehe Deploy-README).",
+      "colProgram": "Programm",
+      "colState": "Zustand",
+      "colLastContact": "Letzte Meldung",
+      "colQueue": "Dateien",
+      "colDisk": "Festplatte des PCs",
+      "colActions": "Aktionen",
+      "statusOk": "In Ordnung",
+      "statusWarning": "Braucht Aufmerksamkeit",
+      "statusDisabled": "Ausgeschaltet",
+      "statusStopped": "Beendet",
+      "statusShutdown": "Abgemeldet oder heruntergefahren",
+      "statusOffline": "Keine Meldung",
+      "lastUpload": "letzter Upload {when}",
+      "uploadedToday": "heute {n} hochgeladen",
+      "pending": "{n} wartend",
+      "oldestPending": "älteste seit {minutes} min",
+      "failed": "{n} fehlgeschlagen (in _failed)",
+      "diskFree": "{free} frei von {total}",
+      "remove": "Entfernen",
+      "removeAria": "{program} auf {name} entfernen",
+      "removeTitle": "Diesen Uploader entfernen?",
+      "removeMessage": "{program} auf {name} verschwindet aus der Liste. Läuft es noch, erscheint es mit der nächsten Meldung wieder; nur Programme entfernen, deren PC ersetzt oder ausgemustert wurde.",
+      "removeFailed": "Der Uploader konnte nicht entfernt werden.",
+      "arrivalsHeading": "Eingänge je Gerät",
+      "arrivalsHint": "Alle Dateien der letzten 90 Tage, nach dem Gerät, das sie nennen, und dem Weg, auf dem sie kamen. Ein gesunder Uploader ohne Eingänge heißt meist: Der Export landet in einem anderen Ordner.",
+      "arrivalsEmpty": "In den letzten 90 Tagen ist nichts eingegangen.",
+      "colDevice": "Gerät",
+      "colIngress": "Weg",
+      "colLastFile": "Letzte Datei",
+      "col24h": "24 Std.",
+      "col7d": "7 Tage",
+      "deviceUnknown": "nicht angegeben",
+      "issue": {
+        "serverUnreachable": "erreicht die Plattform nicht",
+        "rateLimited": "die Plattform hat gebremst (HTTP 429)",
+        "uploadFailed": "die letzte Upload-Runde hatte Fehler",
+        "unreadableFiles": "hat Dateien, die es nicht lesen kann",
+        "watchFolderMissing": "der Exportordner fehlt",
+        "worklistNotImported": "der Optomed Client hat die letzte Worklist nicht übernommen",
+        "worklistFailed": "die Worklist konnte nicht abgerufen werden",
+        "worklistTokenRejected": "die Plattform hat den Worklist-Token abgelehnt",
+        "worklistOff": "die Worklist ist auf der Plattform ausgeschaltet, die Kamera bekommt keine Patientenliste",
+        "noToken": "kein Worklist-Token eingerichtet",
+        "dropFolderMissing": "der Worklist-Ordner des Optomed Client fehlt",
+        "clientNotRunning": "der Optomed Client läuft nicht",
+        "filesFailed": "Dateien wurden nach fünf Versuchen nach _failed verschoben",
+        "pendingStale": "Dateien warten seit 30 Minuten oder länger",
+        "diskLow": "die Festplatte des PCs ist fast voll"
+      },
+      "source": {
+        "upload": "Upload (Seite, Export Watcher, Bridge)",
+        "portalOct": "OCT-Upload (.e2e)",
+        "dicom": "DICOM-Empfang (Netzwerk)",
+        "remidio": "Remidio-Cloud"
+      }
+    },
+    "storage": {
+      "heading": "Speicherplatz",
+      "hint": "Einmal pro Stunde auf dem Server gemessen: jeder Dateispeicher, die Festplatte darunter und die Datenbank. Die letzte Spalte vergleicht mit der Messung vor sieben Tagen.",
+      "loadFailed": "Die Speicherangaben konnten nicht geladen werden.",
+      "rescanFailed": "Die Messung konnte nicht gestartet werden.",
+      "measuredAt": "gemessen {when}",
+      "scanning": "wird gemessen …",
+      "rescan": "Jetzt messen",
+      "none": "Noch nichts gemessen. Die erste Messung läuft.",
+      "disk": "Festplatte mit {stores}",
+      "diskFree": "{free} frei von {total}",
+      "usedPercent": "{percent} % belegt",
+      "daysUntilFull": "voll in etwa {days} Tagen beim Tempo der letzten Woche",
+      "notFilling": "der freie Platz ist letzte Woche nicht geschrumpft",
+      "containerLayer": "Das ist die eigene Schicht des Containers: Dateien hier gehen verloren, wenn der Container neu erstellt wird.",
+      "storeContainerLayer": "nicht auf einem eingehängten Volume, geht beim Neuerstellen des Containers verloren",
+      "colStore": "Speicher",
+      "colSize": "Größe",
+      "colFiles": "Dateien",
+      "colWeek": "Änderung in 7 Tagen",
+      "absent": "auf diesem Server nicht vorhanden",
+      "incomplete": "mindestens: die Messung hat ihr Limit erreicht",
+      "database": "Datenbank",
+      "largestTables": "größte: {tables}",
+      "noWeekYet": "Noch keine Messung von vor einer Woche; die Änderungsspalte füllt sich nach sieben Tagen.",
+      "store": {
+        "ingest": "Eingang (Bilder, DICOM)",
+        "dicomIngest": "DICOM-Empfang",
+        "e2eUploads": "OCT-Uploads (.e2e)",
+        "retinalArtifacts": "Netzhaut-Auswertungen",
+        "retinalBscans": "B-Scans",
+        "appData": "Anhänge und Exporte",
+        "crfAttachments": "CRF-Anhänge",
+        "logs": "Protokolle"
+      }
+    }
   },
   "adminPasswordPolicy": {
     "title": "Passwort-Richtlinie",
@@ -344,7 +442,8 @@
       "skipped": "Übersprungen",
       "not-started": "Nicht begonnen",
       "signed": "Signiert",
-      "locked": "Gesperrt"
+      "locked": "Gesperrt",
+      "removed": "Storniert"
     },
     "studyCard": {
       "pi": "Studienleitung",
@@ -1996,6 +2095,39 @@
       "scheduled": "Geplant",
       "unscheduled": "Außerplanmäßig",
       "common": "Gemeinsam"
+    },
+    "imagingPlan": {
+      "label": "Erwartete Bildgebung",
+      "expected": "Modalität",
+      "requirement": "Anforderung",
+      "laterality": "Auge",
+      "tasks": "KI-Auswertung",
+      "requirementOption": {
+        "optional": "Optional",
+        "required": "Erforderlich"
+      },
+      "lateralityOption": {
+        "any": "Beliebig",
+        "OU": "Beide (OU)",
+        "OD": "Rechts (OD)",
+        "OS": "Links (OS)"
+      },
+      "noInference": "Keine KI-Auswertung für diese Modalität",
+      "requiredByModule": "Vom Studienmodul vorausgesetzt",
+      "requiredByModuleHint": "Vom aktiven Studienmodul vorausgesetzt und deshalb immer aktiv: {tasks}.",
+      "hint": "Angehakte Modalitäten werden bei dieser Visite erwartet. „Erforderlich“ verhindert das Signieren, solange kein Bild dieser Modalität (und ggf. dieses Auges) der Visite zugeordnet ist. Die KI-Tasks laufen auf jedem OCT-Volumen dieser Modalität, sobald es der Visite zugeordnet ist; ohne Eintrag für die OCT-Modalität läuft nichts. Eine Visite ohne Einträge übernimmt die alte Task-Liste (Standard: Flüssigkeit).",
+      "saveError": "Erwartete Bildgebung konnte nicht gespeichert werden.",
+      "catchUp": {
+        "loading": "Abgelegte Scans werden geprüft …",
+        "none": "An Visiten dieser Definition sind noch keine OCT-Scans abgelegt.",
+        "summary": "{scans} abgelegte(r) OCT-Scan(s) an Visiten dieser Definition; {n} neue Auswertung(en) würden gestartet.",
+        "apply": "Auf abgelegte Scans anwenden",
+        "applying": "Wird angewendet …",
+        "done": "Angewendet: {attached} zugeordnet, {started} gestartet{failedPart}.",
+        "failedPart": ", {failed} fehlgeschlagen",
+        "error": "Die Anwendung auf abgelegte Scans ist fehlgeschlagen.",
+        "hint": "Der Plan gilt für Scans, die ab jetzt abgelegt werden. Diese Aktion holt bereits abgelegte Scans nach: vorhandene Ergebnisse werden zugeordnet, fehlende Auswertungen gestartet. Ergebnisse werden nie gelöscht."
+      }
     }
   },
   "studyForm": {
@@ -2596,7 +2728,7 @@
     "eventsCount": "Visiten",
     "scheduleEvent": "Visite planen",
     "openQueries": "Offene Rückfragen",
-    "openEvent": "CRFs öffnen",
+    "openEvent": "Visite öffnen",
     "column": {
       "event": "Visite",
       "dateStart": "Startdatum",
@@ -2767,6 +2899,55 @@
       "forbidden": "Kein Zugriff auf diese Visite.",
       "network": "Backend nicht erreichbar — bitte später erneut versuchen.",
       "startFailed": "Datenerfassung konnte nicht gestartet werden — bitte erneut versuchen."
+    },
+    "images": {
+      "title": "Bilder dieser Visite",
+      "count": "{n} Bild(er)",
+      "empty": "Keine Bilder für diese Visite.",
+      "loadFailed": "Die Bilder dieser Visite konnten nicht geladen werden.",
+      "eye": {
+        "OD": "Rechtes Auge (OD)",
+        "OS": "Linkes Auge (OS)",
+        "OU": "Beide Augen (OU)",
+        "unknown": "Auge nicht angegeben"
+      },
+      "noPreview": "Keine Vorschau",
+      "open": "Bild öffnen",
+      "source": {
+        "remidio": "Remidio",
+        "dicom": "DICOM",
+        "upload": "Upload",
+        "portal-oct": "OCT-Portal"
+      },
+      "remove": "Aus Visite entfernen",
+      "sealedHint": "Visite ist unterschrieben oder gesperrt – Bilder können nicht entfernt werden.",
+      "pending": "{n} Bild(er) dieses Teilnehmers warten im Eingang auf eine Zuordnung.",
+      "pendingLink": "Eingang öffnen",
+      "removeDialog": {
+        "title": "Bild aus der Visite entfernen",
+        "subtitle": "{kind} · {eye} · {date}",
+        "intro": "Warum wird das Bild entfernt?",
+        "optionPool": "Falsche Visite – zurück in den Eingang",
+        "optionPoolHelp": "Das Bild bleibt erhalten und wird im Eingang neu zugeordnet.",
+        "optionDismiss": "Kein Studienbild – verwerfen",
+        "optionDismissHelp": "Das Bild wird verworfen und nach 30 Tagen gelöscht; bis dahin ist es im Eingang unter „Verworfen“ wiederherstellbar.",
+        "reasonLabel": "Grund (optional)",
+        "reasonPlaceholder": "z. B. Testaufnahme, falsches Auge, Duplikat",
+        "confirmPool": "Zurück in den Eingang",
+        "confirmDismiss": "Verwerfen",
+        "cancel": "Abbrechen",
+        "errorSealed": "Die Visite ist unterschrieben oder gesperrt – bitte zuerst entsperren.",
+        "errorGeneric": "Das Bild konnte nicht entfernt werden."
+      },
+      "plan": {
+        "title": "Erwartete Bildgebung",
+        "present": "{n} vorhanden",
+        "missing": {
+          "required": "fehlt – erforderlich",
+          "optional": "fehlt – optional"
+        },
+        "blocksSigning": "{n} erforderliche Aufnahme(n) fehlen. Der Teilnehmer kann erst signiert werden, wenn sie der Visite zugeordnet sind."
+      }
     }
   },
   "subjectExport": {
@@ -3198,7 +3379,14 @@
     "dateMismatchTitle": "Die Daten stimmen nicht überein",
     "dateMismatchConfirm": "Diese Datei gibt als Aufnahmedatum {fileDate} an, die Visite ist auf {visitDate} datiert. Trotzdem dieser Visite zuordnen? Ihre Entscheidung wird im Audit-Trail vermerkt. ({n} Datei(en))",
     "dateUnverified": "nicht aus der Datei gelesen",
-    "dateFromFile": "aus der Datei gelesen"
+    "dateFromFile": "aus der Datei gelesen",
+    "restore": "Wiederherstellen",
+    "restoreConfirm": "Diese Datei zurück in den Eingang holen? Sie wird dann nicht mehr automatisch gelöscht.",
+    "dismissSelected": "Auswahl verwerfen",
+    "dismissSelectedConfirm": "{n} Datei(en) wirklich verwerfen? Sie bleiben 30 Tage im Status „Verworfen“ und können bis dahin wiederhergestellt werden.",
+    "dismissReasonLabel": "Grund (optional)",
+    "someSkippedDismiss": "{n} Datei(en) wurden übersprungen – sie waren bereits bearbeitet.",
+    "visitSealed": "Die Visite ist unterschrieben oder gesperrt – die Zuordnung kann erst nach dem Entsperren aufgehoben werden."
   },
   "imagingModalities": {
     "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",
@@ -3249,14 +3437,70 @@
     "saved": "Gespeichert ✓",
     "bindingsCount": "{n} CRF-Item-Zuordnung(en) hinterlegt.",
     "keys": {
-      "ingest.dicom.enabled": "DICOM-Empfang (Worklist + C-STORE)",
-      "ingest.image.enabled": "Bild-Upload (Portal)",
-      "ingest.oct.enabled": "OCT-Upload (Portal)",
-      "inference.enabled": "KI-Auswertung",
-      "export.bundle.enabled": "Multimodaler Export",
-      "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
-      "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
-      "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+      "ingest": {
+        "dicom": {
+          "enabled": "DICOM-Empfang (Worklist + C-STORE)"
+        },
+        "image": {
+          "enabled": "Bild-Upload (Portal)"
+        },
+        "oct": {
+          "enabled": "OCT-Upload (Portal)"
+        }
+      },
+      "inference": {
+        "enabled": "KI-Auswertung"
+      },
+      "export": {
+        "bundle": {
+          "enabled": "Multimodaler Export"
+        }
+      },
+      "portal": {
+        "todaysVisits": "Heutige Visiten auf der Upload-Seite"
+      },
+      "ai": {
+        "arm": {
+          "shownGroup": "Gruppe „KI sichtbar“",
+          "hiddenGroup": "Gruppe „KI verborgen“"
+        },
+        "blinding": {
+          "enabled": "KI-Verblindung für Behandler (Prüfarzt, CRC)"
+        }
+      }
+    },
+    "help": {
+      "ingest": {
+        "dicom": {
+          "enabled": "Kameras mit DICOM (Optomed Lumo, Clarus-Export) sehen die Visiten dieser Studie in der Worklist und können Bilder per C-STORE senden."
+        },
+        "image": {
+          "enabled": "Die Upload-Seite ohne Login nimmt Fundusbilder (JPEG/PNG) für diese Studie an – etwa vom Remidio."
+        },
+        "oct": {
+          "enabled": "Die Upload-Seite ohne Login nimmt Spectralis-OCT-Dateien (.e2e) für diese Studie an."
+        }
+      },
+      "inference": {
+        "enabled": "Ein abgelegtes OCT startet die KI-Auswertung mit den Tasks aus der erwarteten Bildgebung der Visite (Segmentierung, Flüssigkeit, Schichten). Aus: Dateien werden nur gespeichert, kein Job wird angelegt."
+      },
+      "ai": {
+        "blinding": {
+          "enabled": "Prüfarzt und CRC sehen keine KI-Ergebnisse (Studien mit Behandlungsentscheidung, z. B. nAMD). Aus: Sie sehen dieselben Auswertungsseiten wie Data Manager – für Screening-Studien wie HealthAEye."
+        },
+        "arm": {
+          "shownGroup": "Name der Randomisierungsgruppe, deren Teilnehmer KI-Ergebnisse sehen dürfen. Leer: Standard „AI_SHOWN“.",
+          "hiddenGroup": "Name der Randomisierungsgruppe, deren KI-Ergebnisse vor Behandlern verborgen bleiben. Leer: Standard „AI_HIDDEN“."
+        }
+      },
+      "export": {
+        "bundle": {
+          "enabled": "Der multimodale Export (Bilder + Daten als ein Paket) steht für diese Studie zur Verfügung."
+        }
+      },
+      "portal": {
+        "todaysVisits": "Die Upload-Seite ohne Login zeigt die heutigen Visiten dieser Studie zur Auswahl an – erfordert eine Datenschutz-Freigabe."
+      }
     }
   },
   "system": {
@@ -3564,7 +3808,8 @@
       "succeeded": "Abgeschlossen",
       "done": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
-      "parked": "Geparkt"
+      "parked": "Geparkt",
+      "cancelled": "Abgebrochen (Scan von Visite entfernt)"
     },
     "task": {
       "fluid": "Flüssigkeit",

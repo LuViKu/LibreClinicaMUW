@@ -58,7 +58,12 @@ function mountView() {
   // The view carries the System section rail, which reads the route. This
   // test has no router and is not about navigation, so the rail is stubbed —
   // as the build-page tests stub BuildStudyRail. SystemRail has its own test.
-  return mount(AdminSystemStatusView, { global: { plugins: [i18n], stubs: { SystemRail: true } } })
+  // The DR-033 uploader and storage panels fetch their own endpoints and
+  // have their own tests; here they are stubbed so the cluster assertions
+  // (row counts, absent tables) see only the cluster table.
+  return mount(AdminSystemStatusView, {
+    global: { plugins: [i18n], stubs: { SystemRail: true, UploaderHealthPanel: true, StorageUsagePanel: true } },
+  })
 }
 
 describe('AdminSystemStatusView — retinal cluster panel', () => {
@@ -119,6 +124,24 @@ describe('AdminSystemStatusView — retinal cluster panel', () => {
     await flushPromises()
 
     expect(w.text()).toContain('No alerts recorded.')
+  })
+
+  it('passes the refresh button on to the uploader and storage panels, and not the first load', async () => {
+    routeBy(CLUSTER)
+    const w = mountView()
+    await flushPromises()
+
+    const uploaders = w.findComponent({ name: 'UploaderHealthPanel' })
+    const storage = w.findComponent({ name: 'StorageUsagePanel' })
+    expect(uploaders.exists()).toBe(true)
+    expect(storage.exists()).toBe(true)
+    // they load themselves on mount; the page's first load must not ask twice
+    expect(uploaders.props('refreshKey')).toBe(0)
+
+    await w.find('button').trigger('click')
+    await flushPromises()
+    expect(uploaders.props('refreshKey')).toBe(1)
+    expect(storage.props('refreshKey')).toBe(1)
   })
 
   it('keeps the JVM/DB/application panels when only the cluster request fails', async () => {

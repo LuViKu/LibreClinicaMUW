@@ -89,6 +89,35 @@ public class RemidioPullScheduler {
     private volatile String lastSyncError;
     private volatile boolean warnedUnconfigured;
     private volatile boolean warnedSyncUnconfigured;
+    private volatile boolean siteChecked;
+    private volatile boolean siteOk;
+
+    /**
+     * Keeps an unchanging summary from being repeated at INFO every pass.
+     *
+     * <p>A pass that fails the same way every two minutes says nothing new
+     * after the first line, and at that rate it pushes everything else out of
+     * the log. An unchanged line drops to DEBUG, but repeats at INFO once an
+     * hour so a persistent problem never becomes invisible.
+     */
+    private static final class Repeat {
+        private static final Duration REMIND_AFTER = Duration.ofHours(1);
+        private String last;
+        private Instant at;
+
+        synchronized boolean worthInfo(String line) {
+            Instant now = Instant.now();
+            if (!line.equals(last) || at == null || Duration.between(at, now).compareTo(REMIND_AFTER) >= 0) {
+                last = line;
+                at = now;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private final Repeat pullLine = new Repeat();
+    private final Repeat syncLine = new Repeat();
 
     public RemidioPullScheduler(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
@@ -130,7 +159,40 @@ public class RemidioPullScheduler {
         if (syncClient == null || !settings.equals(activeSyncSettings)) {
             syncClient = new RemidioDashboardClient(settings);
             activeSyncSettings = settings;
+            siteChecked = false;
         }
+        // A wrong core.remidio.siteId is indistinguishable, per subject, from
+        // any other remote refusal: every createPatient comes back "The site
+        // whose data you're trying to access cannot be found" and the pass
+        // reports failed=N, every two minutes, for as long as it stands. It
+        // happened on the first production pass (a mistyped digit). So the
+        // site is checked once per settings change, against the dashboard's
+        // own site list, and the sync refuses to run rather than hammering
+        // the vendor with calls that cannot succeed.
+        if (!siteChecked) {
+            try {
+                var mismatch = syncClient.siteMismatch();
+                if (mismatch.isPresent()) {
+                    lastSyncError = "core.remidio.siteId=" + settings.siteId() + " is not a site of this account";
+                    LOG.error("Remidio patient sync disabled: core.remidio.siteId={} is not a site this account"
+                                    + " can write to. Available: {}. Fix the key and restart.",
+                            settings.siteId(), mismatch.get());
+                    siteChecked = true;
+                    siteOk = false;
+                } else {
+                    LOG.info("Remidio patient sync: site {} confirmed", settings.siteId());
+                    siteChecked = true;
+                    siteOk = true;
+                }
+            } catch (RemidioException e) {
+                // Could not ask — do not conclude anything, and do not run:
+                // the pass would fail on every item for the same reason.
+                lastSyncError = "site check " + e.reason() + ": " + e.getMessage();
+                LOG.warn("Remidio patient sync: could not verify the site ({}): {}", e.reason(), e.getMessage());
+                return Optional.empty();
+            }
+        }
+        if (!siteOk) return Optional.empty();
         LocalDate today = LocalDate.now(RemidioPullService.CLINIC_ZONE);
         LocalDate from = today.minusDays(syncBehindDays());
         LocalDate to = today.plusDays(syncAheadDays());
@@ -139,7 +201,8 @@ public class RemidioPullScheduler {
                     .sync(from, to, syncCreateExams());
             lastSyncSuccess = Instant.now();
             lastSyncError = null;
-            if (s.patientsCreated() > 0 || s.examsCreated() > 0 || s.failed() > 0) {
+            boolean notable = s.patientsCreated() > 0 || s.examsCreated() > 0 || s.failed() > 0;
+            if (notable && syncLine.worthInfo(s.line())) {
                 LOG.info("Remidio patient sync {}", s.line());
             } else {
                 LOG.debug("Remidio patient sync {}", s.line());
@@ -180,15 +243,16 @@ public class RemidioPullScheduler {
         if (client == null || !settings.equals(activeSettings)) {
             client = new RemidioGatewayClient(settings);
             activeSettings = settings;
-            LOG.info("Remidio pull: client built for site {} on {}", settings.siteCustomId(),
-                    settings.baseUrl().replaceFirst("^https?://", ""));
+            // Neither the site id nor the host: both come from the configuration,
+            // and a log line carries nothing configured (CodeQL java/sensitive-log).
+            LOG.info("Remidio pull: client built for the configured site");
         }
         try {
             RemidioPullService.Summary s = new RemidioPullService(dataSource, client)
                     .catchUp(overlapDays(), firstRunSince());
             lastSuccess = Instant.now();
             lastError = null;
-            if (s.newExams() > 0 || s.failed() > 0) {
+            if ((s.newExams() > 0 || s.failed() > 0) && pullLine.worthInfo(s.line())) {
                 LOG.info("Remidio pull {}", s.line());
             } else {
                 LOG.debug("Remidio pull {}", s.line());
@@ -261,7 +325,7 @@ public class RemidioPullScheduler {
             try {
                 return LocalDate.parse(raw);
             } catch (RuntimeException notADate) {
-                LOG.warn("Remidio pull: {} is not an ISO date ('{}') — starting a year back", KEY_SINCE, raw);
+                LOG.warn("Remidio pull: {} is not an ISO date (yyyy-mm-dd) — starting a year back", KEY_SINCE);
             }
         }
         return LocalDate.now(RemidioPullService.CLINIC_ZONE).minusDays(DEFAULT_SINCE_DAYS_BACK);

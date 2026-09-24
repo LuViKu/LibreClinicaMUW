@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      2026-09-24 (DR-034) — the visit imaging plan.
+
+      What a visit definition expects from the imaging catalogue: one row per
+      (visit definition, modality) saying whether the modality is required or
+      optional at that visit, which eye(s) it must cover, and which retinal
+      inference tasks run on a file of that modality once it is filed against
+      the visit.
+
+      This replaces the per-visit task list in event_definition_retinal_task,
+      which knew only "this visit runs fluid + layers" and applied it to every
+      OCT that arrived — with a posterior and an anterior segment OCT in the
+      same study, layer segmentation on the anterior volume is nonsense. The
+      old table stays: a visit definition with no plan rows still resolves its
+      tasks from it (and then from the 'fluid' default), so a study without an
+      imaging catalogue behaves exactly as before.
+
+      The sign preflight reads the required rows: a visit whose required
+      modality has no BOUND ingest_item blocks signing, the way an unfinished
+      CRF does.
+    -->
+    <changeSet id="2026-12-06-event-definition-imaging-table" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="event_definition_imaging"/></not>
+        </preConditions>
+        <createTable tableName="event_definition_imaging">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="study_event_definition_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="imaging_modality_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requirement" type="VARCHAR(16)" defaultValue="optional">
+                <constraints nullable="false"/>
+            </column>
+            <!-- OD / OS / OU, or NULL when any eye satisfies the entry. -->
+            <column name="laterality" type="VARCHAR(2)"/>
+            <!-- Comma-separated retinal task codes; '' runs nothing. Only
+                 meaningful for a modality that accepts OCT volumes. -->
+            <column name="retinal_tasks" type="VARCHAR(128)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="INT"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            constraintName="fk_event_def_imaging_event_def"
+            baseTableName="event_definition_imaging"
+            baseColumnNames="study_event_definition_id"
+            referencedTableName="study_event_definition"
+            referencedColumnNames="study_event_definition_id"
+            onDelete="CASCADE"
+            onUpdate="RESTRICT"/>
+
+        <addForeignKeyConstraint
+            constraintName="fk_event_def_imaging_modality"
+            baseTableName="event_definition_imaging"
+            baseColumnNames="imaging_modality_id"
+            referencedTableName="imaging_modality"
+            referencedColumnNames="imaging_modality_id"
+            onDelete="CASCADE"
+            onUpdate="RESTRICT"/>
+
+        <addForeignKeyConstraint
+            constraintName="fk_event_def_imaging_user"
+            baseTableName="event_definition_imaging"
+            baseColumnNames="created_by_user_id"
+            referencedTableName="user_account"
+            referencedColumnNames="user_id"
+            onDelete="RESTRICT"
+            onUpdate="RESTRICT"/>
+
+        <addUniqueConstraint
+            constraintName="ux_event_def_imaging"
+            tableName="event_definition_imaging"
+            columnNames="study_event_definition_id,imaging_modality_id"/>
+
+        <createIndex
+            tableName="event_definition_imaging"
+            indexName="idx_event_def_imaging_def">
+            <column name="study_event_definition_id"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE event_definition_imaging
+            ADD CONSTRAINT ck_event_def_imaging_requirement
+            CHECK (requirement IN ('required','optional'));
+            ALTER TABLE event_definition_imaging
+            ADD CONSTRAINT ck_event_def_imaging_laterality
+            CHECK (laterality IS NULL OR laterality IN ('OD','OS','OU'));
+        </sql>
+        <rollback>
+            <!-- constraints, the index and the foreign keys go with the table -->
+            <dropTable tableName="event_definition_imaging"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      Carry the per-visit task lists over. A study that has exactly one active
+      catalogue modality accepting OCT volumes ('e2e' in kinds_accepted) gets
+      one optional plan row per visit definition with that modality, carrying
+      the visit's tasks in their stored order. Two such modalities (posterior
+      and anterior OCT) is the case the plan exists for, and there the
+      administrator says which gets the tasks; nothing is guessed and the
+      legacy fallback keeps those visits running as before until then.
+    -->
+    <changeSet id="2026-12-06-event-definition-imaging-migrate-tasks" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="event_definition_retinal_task"/>
+        </preConditions>
+        <sql>
+            INSERT INTO event_definition_imaging
+                (study_event_definition_id, imaging_modality_id, requirement, laterality, retinal_tasks, created_by_user_id)
+            SELECT t.study_event_definition_id,
+                   m.imaging_modality_id,
+                   'optional',
+                   NULL,
+                   string_agg(t.task, ',' ORDER BY t.id),
+                   NULL
+              FROM event_definition_retinal_task t
+              JOIN study_event_definition sed
+                ON sed.study_event_definition_id = t.study_event_definition_id
+              JOIN imaging_modality m
+                ON m.study_id = sed.study_id
+               AND COALESCE(m.status_id, 1) = 1
+               AND (',' || lower(COALESCE(m.kinds_accepted, '')) || ',') LIKE '%,e2e,%'
+             WHERE (SELECT count(*) FROM imaging_modality m2
+                     WHERE m2.study_id = sed.study_id
+                       AND COALESCE(m2.status_id, 1) = 1
+                       AND (',' || lower(COALESCE(m2.kinds_accepted, '')) || ',') LIKE '%,e2e,%') = 1
+               AND NOT EXISTS (SELECT 1 FROM event_definition_imaging e
+                                WHERE e.study_event_definition_id = t.study_event_definition_id
+                                  AND e.imaging_modality_id = m.imaging_modality_id)
+             GROUP BY t.study_event_definition_id, m.imaging_modality_id;
+        </sql>
+        <rollback>
+            <!-- Only the carried-over rows: they are the ones written without a
+                 user. A plan saved in the editor records who saved it and stays. -->
+            <sql>DELETE FROM event_definition_imaging WHERE created_by_user_id IS NULL</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

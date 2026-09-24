@@ -424,4 +424,9 @@ public final class AuditTypeIds {
      * row.
      */
     public static final int STUDY_SETTING_CHANGED            = 134;
+
+    /** DR-035 — jobs attached to, or started for, a scan filed against a visit (per ingest_item). */
+    public static final int RETINAL_JOBS_FOLLOWED_FILE       = 135;
+    /** DR-035 — jobs detached from a visit because the scan was removed from it (per ingest_item). */
+    public static final int RETINAL_JOBS_DETACHED            = 136;
 }

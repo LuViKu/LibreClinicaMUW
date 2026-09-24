@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 import org.slf4j.Logger;
@@ -106,6 +107,9 @@ public class IngestInboxApiController {
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final StudySubjectFinder studySubjectFinder;
+    /** DR-035 — nullable; without them a bind attaches existing jobs but starts none. */
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalInferenceApiController inferenceController;
 
     private StudyResourceAccess access;
     private IngestBindService binds;
@@ -113,10 +117,21 @@ public class IngestInboxApiController {
     @Autowired
     public IngestInboxApiController(@Qualifier("dataSource") DataSource dataSource,
                                     SiteVisibilityFilter siteVisibilityFilter,
-                                    StudySubjectFinder studySubjectFinder) {
+                                    StudySubjectFinder studySubjectFinder,
+                                    RemoteRetinalInferenceClient remoteClient,
+                                    RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.studySubjectFinder = studySubjectFinder;
+        this.remoteClient = remoteClient;
+        this.inferenceController = inferenceController;
+    }
+
+    /** Test seam: no inference dispatcher. */
+    public IngestInboxApiController(DataSource dataSource,
+                                    SiteVisibilityFilter siteVisibilityFilter,
+                                    StudySubjectFinder studySubjectFinder) {
+        this(dataSource, siteVisibilityFilter, studySubjectFinder, null, null);
     }
 
     private StudyResourceAccess access() {
@@ -125,7 +140,10 @@ public class IngestInboxApiController {
     }
 
     private IngestBindService binds() {
-        if (binds == null) binds = new IngestBindService(dataSource);
+        if (binds == null) {
+            binds = new IngestBindService(dataSource,
+                    new RetinalJobFollower(dataSource, remoteClient, inferenceController));
+        }
         return binds;
     }
 
@@ -167,6 +185,11 @@ public class IngestInboxApiController {
                                   Boolean acknowledgeDateMismatch) {}
 
     public record DismissRequest(String reason) {}
+
+    /** Optional body of {@code /unbind}: dismiss in the same step, with the reason. */
+    public record UnbindRequest(Boolean dismiss, String reason) {}
+
+    public record BulkDismissRequest(List<Long> ids, String reason) {}
 
     // ----- GET /inbox -----
 
@@ -313,10 +336,120 @@ public class IngestInboxApiController {
 
     // ----- GET /{id}/preview -----
 
+    /**
+     * The images filed against one visit: every BOUND row whose binding names
+     * this study event, in the inbox's own row shape so the visit page and
+     * the inbox render a file the same way.
+     *
+     * <p>Gated by study visibility, not by the reconcile role: a bound image
+     * is the subject's data, and whoever may open the subject's visit (a
+     * Monitor included) may see what was captured at it. Added 2026-09-24,
+     * when the visit page showed a scan's AI metrics but nowhere the scans
+     * and photographs themselves.
+     */
+    @GetMapping(value = "/by-event/{studyEventId:[0-9]+}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> byEvent(@PathVariable("studyEventId") int studyEventId, HttpSession session) {
+        ResponseEntity<?> guard = access().guardSession(session);
+        if (guard != null) return guard;
+
+        Integer studyId;
+        String subjectLabel;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ss.study_id, ss.label FROM study_event se "
+                             + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                             + " WHERE se.study_event_id = ?")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of("message", "no study_event " + studyEventId));
+                }
+                studyId = rs.getInt(1);
+                subjectLabel = rs.getString(2);
+            }
+        } catch (SQLException e) {
+            LOG.error("visit lookup failed for study_event {}: {}", studyEventId, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not resolve the visit"));
+        }
+        ResponseEntity<?> vis = access().guardStudyVisibility(studyId, session,
+                "This visit belongs to a study you cannot access");
+        if (vis != null) return vis;
+
+        Set<Integer> visible = access().visibleStudyIds(session);
+        List<InboxRow> rows = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
+                             + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                             + "received_at, preview_png_path "
+                             + "  FROM ingest_item WHERE bound_study_event_id = ? AND status = 'BOUND' "
+                             + " ORDER BY laterality NULLS LAST, received_at")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) rows.add(toRow(rs, visible));
+            }
+        } catch (SQLException e) {
+            LOG.error("ingest by-event list failed for study_event {}: {}", studyEventId, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not list the visit's images"));
+        }
+        // Files that carry this subject's label but are not filed anywhere —
+        // after "remove from visit: wrong visit", or a capture the resolver
+        // could not place. The visit page says so, so nothing removed from a
+        // visit is out of sight; the count is all it needs.
+        int pendingForSubject = 0;
+        if (subjectLabel != null && !subjectLabel.isBlank()) {
+            try (Connection c = dataSource.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT count(*) FROM ingest_item WHERE status = 'UNBOUND' AND lower(patient_id) = lower(?)")) {
+                ps.setString(1, subjectLabel.trim());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) pendingForSubject = rs.getInt(1);
+                }
+            } catch (SQLException e) {
+                LOG.warn("pending-for-subject count failed for study_event {}: {}", studyEventId, e.getMessage());
+            }
+        }
+        // DR-034 — what the visit expects, against what is there. One row per
+        // plan entry; empty when the visit definition has no plan, in which
+        // case the page shows nothing about expectations.
+        List<Map<String, Object>> plan = new ArrayList<>();
+        try (Connection c = dataSource.getConnection()) {
+            List<VisitImagingPlan.Entry> entries = VisitImagingPlan.forStudyEvent(c, studyEventId);
+            if (!entries.isEmpty()) {
+                List<VisitImagingPlan.PresentFile> files = VisitImagingPlan.filesOf(c, studyEventId);
+                for (VisitImagingPlan.Coverage cov : VisitImagingPlan.coverage(entries, files)) {
+                    VisitImagingPlan.Entry e = cov.entry();
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("modalityId", e.modalityId());
+                    row.put("code", e.code());
+                    row.put("labelDe", e.labelDe());
+                    row.put("labelEn", e.labelEn());
+                    row.put("device", e.device());
+                    row.put("requirement", e.requirement());
+                    row.put("laterality", e.laterality());
+                    row.put("tasks", e.tasks());
+                    row.put("presentOD", cov.presentOD());
+                    row.put("presentOS", cov.presentOS());
+                    row.put("presentTotal", cov.presentTotal());
+                    row.put("satisfied", cov.satisfied());
+                    plan.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("imaging plan lookup failed for study_event {}: {}", studyEventId, e.getMessage());
+        }
+        return ResponseEntity.ok(Map.of("items", rows, "studyEventId", studyEventId,
+                "pendingForSubject", pendingForSubject, "plan", plan));
+    }
+
     @GetMapping("/{id:[0-9]+}/preview")
     public ResponseEntity<?> preview(@PathVariable("id") long id, HttpSession session,
                                      HttpServletResponse response) {
-        ResponseEntity<?> guard = guards(session);
+        // The reconcile-role gate applies to UNBOUND files only (below). A
+        // bound file is a subject's data, and the visit page — which a
+        // Monitor may open — shows its preview; the study-visibility check
+        // is what protects it there.
+        ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
         String previewPath;
@@ -348,6 +481,9 @@ public class IngestInboxApiController {
             ResponseEntity<?> vis = access().guardStudyVisibility(subjectStudyId(boundSubjectId), session,
                     "This file belongs to a study you cannot access");
             if (vis != null) return vis;
+        } else {
+            ResponseEntity<?> role = guards(session);
+            if (role != null) return role;
         }
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for file " + id));
@@ -491,7 +627,9 @@ public class IngestInboxApiController {
      * operator has to be able to see the data they are about to change.
      */
     @PostMapping(value = "/{id:[0-9]+}/unbind", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> unbind(@PathVariable("id") long id, HttpSession session) {
+    public ResponseEntity<?> unbind(@PathVariable("id") long id,
+                                    @RequestBody(required = false) UnbindRequest req,
+                                    HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
 
@@ -501,7 +639,64 @@ public class IngestInboxApiController {
                     "This file belongs to a study you cannot access");
             if (vis != null) return vis;
         }
-        return bindResponse(binds().unbind(id, actor(session)), id, "UNBOUND");
+        IngestBindService.Actor actor = actor(session);
+        IngestBindService.Result r = binds().unbind(id, actor);
+        // 2026-09-24 — "remove from visit" on the visit page carries the
+        // operator's intent: back to the inbox (wrong visit), or not study
+        // data at all. The second is unbind + dismiss as one request, so the
+        // file never sits in the inbox unreviewed between two clicks; the
+        // trail still shows both steps, each with its actor.
+        if (r == IngestBindService.Result.OK && req != null && Boolean.TRUE.equals(req.dismiss())) {
+            return bindResponse(binds().dismiss(id, req.reason(), actor), id, "DISMISSED");
+        }
+        return bindResponse(r, id, "UNBOUND");
+    }
+
+    // ----- POST /{id}/restore -----
+
+    /**
+     * Bring a dismissed file back into the inbox while the retention window
+     * is open. Role-gated like dismiss: a dismissed row is unbound, so it
+     * belongs to no study to check visibility against.
+     */
+    @PostMapping(value = "/{id:[0-9]+}/restore", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> restore(@PathVariable("id") long id, HttpSession session) {
+        ResponseEntity<?> guard = guards(session);
+        if (guard != null) return guard;
+        return bindResponse(binds().restore(id, actor(session)), id, "UNBOUND");
+    }
+
+    // ----- POST /bulk-dismiss -----
+
+    /**
+     * Dismiss several files at once — a device flushes its whole memory on
+     * first contact, and sixty test exposures are one decision. Applied
+     * independently, like bulk-bind; the response says which were refused.
+     */
+    @PostMapping(value = "/bulk-dismiss", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> bulkDismiss(@RequestBody BulkDismissRequest req, HttpSession session) {
+        ResponseEntity<?> guard = guards(session);
+        if (guard != null) return guard;
+        if (req == null || req.ids() == null || req.ids().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "ids is required"));
+        }
+        if (req.ids().size() > MAX_BULK) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "at most " + MAX_BULK + " files at a time"));
+        }
+        IngestBindService.Actor actor = actor(session);
+        List<Long> dismissed = new ArrayList<>();
+        List<Map<String, Object>> skipped = new ArrayList<>();
+        for (Long id : req.ids()) {
+            if (id == null) continue;
+            IngestBindService.Result r = binds().dismiss(id, req.reason(), actor);
+            if (r == IngestBindService.Result.OK) {
+                dismissed.add(id);
+            } else {
+                skipped.add(Map.of("id", id, "reason", r.name()));
+            }
+        }
+        return ResponseEntity.ok(Map.of("dismissed", dismissed, "skipped", skipped));
     }
 
     // ----- POST /{id}/dismiss -----
@@ -555,6 +750,9 @@ public class IngestInboxApiController {
             case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
             case WRONG_STATE -> ResponseEntity.status(409).body(Map.of(
                     "message", "file " + id + " is not in a state this can be applied to"));
+            case REFUSED_LOCKED -> ResponseEntity.status(409).body(Map.of(
+                    "message", "file " + id + " is filed against a signed or locked visit — un-sign or unlock it first",
+                    "reason", "VISIT_SEALED"));
             case FAILED -> ResponseEntity.internalServerError().body(Map.of("message", "the change failed"));
         };
     }

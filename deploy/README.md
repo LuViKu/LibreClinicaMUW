@@ -146,8 +146,9 @@ above for the host-hardening scope split.
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.
 7. **Env file** — `/etc/libreclinica/env`. On first run it generates a 32-char
-   Postgres password; on re-run it preserves the existing secret and only
-   updates the image-tag pin.
+   Postgres password; on re-run it preserves the existing secrets and touches
+   the image-tag pin only when `--image-tag` (or the matching env var) was
+   given.
 8. **systemd unit** — `libreclinica.service`. Uses
    `compose.yaml` + `deploy/compose.production.yaml`. Both `libreclinica`
    and `retinal-inference` images are pulled from ghcr.io on every start
@@ -271,11 +272,15 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    The `Release image` workflow fires and pushes BOTH:
    - `ghcr.io/luviku/libreclinicamuw:<release-tag>` (+ `latest`)
    - `ghcr.io/luviku/libreclinicamuw/retinal-inference:<release-tag>` (+ `latest`)
-2. On the VM:
+2. On the VM — pin the tag through the script, so one command does the
+   checkout, the new config keys and the pin together:
    ```sh
-   sudo sed -i 's|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=<new-tag>|' /etc/libreclinica/env
+   sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --image-tag <new-tag>
    sudo systemctl restart libreclinica
    ```
+   Editing `/etc/libreclinica/env` by hand also works, but do it *after* the
+   script — and note that a re-run **without** `--image-tag` now leaves the pin
+   alone (it used to reset it to `latest`, silently unpinning the host).
    `pull_policy: always` on both services in the production overlay handles
    the actual pulls. Both images roll together unless
    `LIBRECLINICA_RETINAL_IMAGE_TAG` is also set in the env file (it pins
@@ -293,6 +298,13 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    Use the copy under `/opt/libreclinica/deploy/` — it is refreshed from git
    on every run. The `/root/libreclinica-setup/` bootstrap copy is frozen at
    first-install and skips newer config logic.
+
+   Because that refresh replaces the running script, the script **hands over to
+   its updated self** once the checkout is done (one `re-running the new copy`
+   line in the output, then the run starts again from the top — every block is
+   idempotent). Before beta.10 it carried on with the old text against the new
+   tree instead, which rejected that release's new flag and skipped a whole new
+   section without saying so.
 
    Skipping this is not fatal but it is silent: a key missing from the host
    file makes the app fall back to the calling code's hardcoded default, so
@@ -372,6 +384,12 @@ local decision it does not make for you.
 If script execution is blocked on the clinic PC by policy, the bridge needs
 to become a signed executable; that is the upgrade path, not a workaround.
 
+The bridge reports to the **System Status** page every two minutes (see
+"Uploaders and storage on the System Status page" below): running or not,
+switched on or not, how many pulled images wait and for how long, whether
+the Optomed Client runs, and what went wrong in the last worklist fetch or
+upload round.
+
 ### Clarus and Spectralis exports — the Export Watcher tray app
 
 Neither the Zeiss Clarus nor the Heidelberg Spectralis talks to the platform:
@@ -427,6 +445,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTes
 # (a Clarus Raw Data object prints "[non-image object: set aside]")
 ```
 
+Like the bridge, the watcher reports to the **System Status** page every two
+minutes, switched on or not; each PC appears under its computer name unless
+*Name on the status page* is set in its settings.
+
 `ExportWatcher.ps1 -Once` runs a single headless sweep and exits, for a
 scheduled task instead of the tray, or for testing the chain (it also runs
 on PowerShell 7 on Linux, which is how it was verified from a Mac against the
@@ -434,6 +456,50 @@ dev stack). The exports stay on the PC, moved aside but never deleted; a
 Clarus `.dcm` carries the patient's name in its header until the platform
 pseudonymises its copy on ingest — retention there is a local decision, as
 for the Optomed Client's `Studies\` folder.
+
+### Uploaders and storage on the System Status page (DR-033)
+
+**System → Systemstatus** shows two panels beyond the app server itself.
+
+**Uploader an den Aufnahme-PCs.** The Export Watcher (Clarus and Spectralis
+PCs) and the Optomed Bridge each post a heartbeat to
+`POST /api/v1/device/uploader/heartbeat` every two minutes. The page shows,
+per program, one of five states:
+
+| State | Meaning | What to do |
+|---|---|---|
+| In Ordnung | reported within three intervals, nothing wrong | nothing |
+| Braucht Aufmerksamkeit | a problem is listed under it (platform unreachable, files in `_failed\`, a file waiting 30 min or more, disk almost full, worklist refused by the Optomed Client ...) | read the listed problem |
+| Ausgeschaltet | the program runs but uploading is switched off in its menu | switch it on, or accept that files pile up |
+| Beendet / Abgemeldet oder heruntergefahren | the program said it was closing: from its menu (red) or because Windows ended the session (grey) | a red one: start it again on that PC |
+| Keine Meldung | nothing for three intervals, never sooner than five minutes: crashed, or the PC lost the network | check the PC |
+
+Below it, *Eingänge je Gerät* counts what actually arrived per device and way
+in over the last 90 days, from every ingress (watcher, bridge, upload page,
+DICOM receiver, Remidio pull). A healthy program with no arrivals usually
+means the export goes into another folder. A heartbeat carries counts, ages,
+disk figures and coded problems only; nothing about a patient. To check a PC
+by hand:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -Heartbeat
+powershell -NoProfile -ExecutionPolicy Bypass -File .\OptomedBridge.ps1 -Heartbeat
+# heartbeat as 'CLARUS-PC' (export-watcher 2026-09-24) to https://…: recorded
+```
+
+A replaced PC's row can be removed on the page; a program that still runs
+comes back with its next heartbeat. Heartbeats are on by default;
+`core.uploaderHealth.heartbeat.enabled=false` in `datainfo.properties` turns
+the endpoint off.
+
+**Speicherplatz.** Once an hour the app measures every file store (bytes and
+files), the disk under each, and the database, and keeps 90 days of
+measurements. The page shows how full each disk is, the change per store over
+the last seven days, and, when free space shrank over that week, roughly how
+many days remain at that rate. *Jetzt messen* measures immediately. The app
+data directory (`/usr/local/tomcat/libreclinica.data`: CRF attachments and
+dataset exports) is listed with its path: it is an anonymous Docker volume,
+not under `/var/lib/libreclinica`, so it is not in any backup of that root.
 
 ### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
 
@@ -511,6 +577,12 @@ to <https://dashboard.remidio.com> with DevTools → Network open and copy the
 patient-delete** endpoint, so the sync creates only for live visits in scope
 and looks the MRN up before every create; a typo in a subject label becomes a
 permanent patient in their cloud.
+
+`core.remidio.siteId` is the **numeric** site id, not the custom identifier the
+pull uses, and it is checked once at the first pass: if it is not a site this
+account can write to, the log says so and names the ids that are, and the sync
+stays off until it is corrected. (A mistyped digit otherwise fails on every
+subject, every two minutes, with only a per-subject "site cannot be found".)
 
 ### DICOM sidecar (optional, but needed for any DICOM upload)
 

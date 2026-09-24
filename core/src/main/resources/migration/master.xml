@@ -110,5 +110,8 @@
   <include  file="migration/lc-muw-2026-12-02-imaging-modality-dicom-kinds.xml"/>
   <include  file="migration/lc-muw-2026-12-03-ingest-acquisition-date-source.xml"/>
   <include  file="migration/lc-muw-2026-12-04-remidio-pull.xml"/>
+  <include  file="migration/lc-muw-2026-12-05-uploader-health-storage.xml"/>
+  <include  file="migration/lc-muw-2026-12-06-visit-imaging-plan.xml"/>
+  <include  file="migration/lc-muw-2026-12-07-retinal-jobs-follow-file.xml"/>
 </databaseChangeLog>
 

@@ -342,7 +342,7 @@ public class RemidioGatewayClient {
         ensureAuthenticated();
         Response r = exchange("GET", path, gatewayHeaders(), null, timeout);
         if (r.status() == 401) {
-            LOG.info("Remidio gateway answered 401 on {} — re-authenticating once", pathOnly(path));
+            LOG.info("Remidio gateway answered 401 on {} — re-authenticating once", endpointOf(path));
             reset();
             ensureAuthenticated();
             r = exchange("GET", path, gatewayHeaders(), null, timeout);
@@ -420,7 +420,7 @@ public class RemidioGatewayClient {
             return transport.send(method, uri, headers, body, timeout);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            LOG.warn("Remidio gateway unreachable on {}: {}", pathOnly(path), e.getClass().getSimpleName());
+            LOG.warn("Remidio gateway unreachable on {}: {}", endpointOf(path), e.getClass().getSimpleName());
             throw new RemidioException(RemidioException.Reason.UNREACHABLE, 0, null,
                     "the Remidio gateway did not answer");
         } catch (IllegalArgumentException bad) {
@@ -446,7 +446,7 @@ public class RemidioGatewayClient {
         String message = root == null ? null : text(root.path("status"), "message");
         if (r.status() / 100 != 2) {
             LOG.warn("Remidio gateway answered HTTP {} ({}) on {}", r.status(),
-                    code == null ? "no envelope" : code, pathOnly(path));
+                    code == null ? "no envelope" : code, endpointOf(path));
             throw new RemidioException(RemidioException.Reason.REMOTE, r.status(), code,
                     message != null ? message : "the Remidio gateway answered HTTP " + r.status());
         }
@@ -529,10 +529,25 @@ public class RemidioGatewayClient {
         }
     }
 
-    /** The path without its query string — which is where a signed credential would be. */
-    private static String pathOnly(String path) {
-        int q = path.indexOf('?');
-        return q < 0 ? path : path.substring(0, q);
+    /** The endpoints this client calls, in the words a log line may use. */
+    private static final String[] ENDPOINTS = {
+            "/api/user/loginUser", "/api/gateway/getAuthToken",
+            "/api/gateway/getExamsByDate", "/api/gateway/getSites"};
+
+    /**
+     * The endpoint a path calls, as one of the fixed names above and never
+     * the path itself: {@code getExamsByDate} carries the site's custom id,
+     * which comes from the configuration, and a log line carries nothing that
+     * was configured (CodeQL java/sensitive-log, beta.11 release gate). The
+     * query string, where a signed credential would be, is dropped with it.
+     */
+    private static String endpointOf(String path) {
+        if (path != null) {
+            for (String e : ENDPOINTS) {
+                if (path.startsWith(e)) return e;
+            }
+        }
+        return "another endpoint";
     }
 
     private static void closeQuietly(InputStream in) {

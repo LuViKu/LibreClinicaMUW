@@ -55,6 +55,9 @@ const manifest: StudyModuleManifest = {
     de: ((await import('./locales/de.json')) as { default: Record<string, unknown> }).default,
     en: ((await import('./locales/en.json')) as { default: Record<string, unknown> }).default,
   }),
+  // Treat-and-extend reads the fluid segmentation of each visit's OCT; a
+  // visit plan without it would leave the workspace with nothing to decide on.
+  requiredRetinalTasks: ['fluid'],
 }
 
 export default manifest

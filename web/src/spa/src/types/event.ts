@@ -20,6 +20,8 @@ export type StudyEventStatus =
   | 'skipped'
   | 'locked'
   | 'signed'
+  /** Cancelled — `EventsApiController.list` reports soft-deleted events as this. */
+  | 'removed'
 
 export type StudyEvent =
   Omit<Required<components['schemas']['StudyEventDto']>, 'status' | 'dateEnded' | 'location' | 'timeStarted'>
@@ -72,6 +74,12 @@ export type ScheduleEventRequest =
 import type { UserRole } from './auth'
 
 export function canEditEvent(role: UserRole, status: StudyEventStatus): boolean {
+  // A cancelled visit is not editable — the backend refuses both the edit
+  // and a second cancel ("already cancelled"), so offering either only
+  // produces an error the operator cannot act on. Found in production
+  // testing 2026-09-24, when a cancelled visit still showed its old status
+  // and its full action menu.
+  if (status === 'removed') return false
   if (status === 'signed' || status === 'locked') return false
   return (
     role === 'Investigator' ||

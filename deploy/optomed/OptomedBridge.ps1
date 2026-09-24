@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Optomed Bridge — tray app that carries the LibreClinica worklist to the
+  Optomed Bridge - tray app that carries the LibreClinica worklist to the
   Optomed Client and the Client's pulled studies back to LibreClinica.
 
 .DESCRIPTION
@@ -42,7 +42,7 @@
 
   Settings: %ProgramData%\LibreClinica\optomed-bridge.json. The token is
   DPAPI-protected to the user who saved it. Log alongside, rotated at 1 MB.
-  Only counts and pseudonymous labels are ever logged — never names, dates of
+  Only counts and pseudonymous labels are ever logged - never names, dates of
   birth or filenames (the Client names folders after the patient).
 
 .PARAMETER SelfTest
@@ -50,12 +50,27 @@
   reads, or with no file, round-trip the config store. Lets the hard part be
   verified on a real export without a tray session.
 
+.PARAMETER Heartbeat
+  Headless: send one heartbeat to the platform and print the answer - the
+  quickest check that this PC reaches the platform and shows up on the
+  System Status page.
+
+  The tray app sends one every HeartbeatIntervalSec (default 120), switched
+  on or not (DR-033): whether it runs, whether it is switched on, how many
+  pulled images wait for upload and for how long, how full the Client's
+  drive is, whether the Optomed Client runs, and coded problems from the
+  last worklist fetch and the last upload round (the worklist refused by the
+  Client, a rejected token, the platform unreachable ...). Counts, ages and
+  codes only - no label, no filename, nothing about a patient. It says
+  "stopped" when closed from its menu or when Windows ends the session.
+
 .NOTES
-  Windows PowerShell 5.1 — no 6+ features (no -Form, no ?? etc.).
+  Windows PowerShell 5.1 - no 6+ features (no -Form, no ?? etc.).
 #>
 [CmdletBinding()]
 param(
     [switch]$SelfTest,
+    [switch]$Heartbeat,
     [string]$DicomFile,
     [string]$ConfigPath = (Join-Path $env:ProgramData 'LibreClinica\optomed-bridge.json')
 )
@@ -65,6 +80,10 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $script:AppName      = 'Optomed Bridge'
+# Shown on the System Status page beside this PC's name. Bump with every
+# change to this script, so a PC still running an old copy stands out.
+$script:Version      = '2026-09-24.2'
+$script:Kind         = 'optomed-bridge'
 $script:WorklistName = 'worklist_optomed_lumo.txt'   # the one filename the Client imports
 $script:StateDir     = Split-Path -Parent $ConfigPath
 $script:LogPath      = Join-Path $script:StateDir 'optomed-bridge.log'
@@ -86,11 +105,11 @@ function Write-Log {
         $line = '{0} {1,-5} {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Level, $Message
         Add-Content -Path $script:LogPath -Value $line -Encoding UTF8
     } catch { }
-    if ($SelfTest) { Write-Host $Message }
+    if ($SelfTest -or $Heartbeat) { Write-Host $Message }
 }
 
 # ----------------------------------------------------------------------------
-# settings — a JSON file; the token DPAPI-protected to the saving user
+# settings - a JSON file; the token DPAPI-protected to the saving user
 # ----------------------------------------------------------------------------
 function Get-DefaultConfig {
     [pscustomobject]@{
@@ -110,6 +129,13 @@ function Get-DefaultConfig {
         # the sync - verified on the real Client.
         HideClientWindow    = $true
         ClientExe           = (Join-Path $env:LOCALAPPDATA 'Optomed\OptomedClient\OptomedClient.exe')
+        # DR-033 - the System Status page. InstanceId is generated on first
+        # start and identifies this installation's row: keep it with the
+        # settings file, never copy it to another PC. DisplayName blank =
+        # the computer name.
+        InstanceId          = ''
+        DisplayName         = ''
+        HeartbeatIntervalSec = 120
     }
 }
 
@@ -153,7 +179,7 @@ function Unprotect-Token([string]$protected) {
 }
 
 # ----------------------------------------------------------------------------
-# HTTP — one client, one token header
+# HTTP - one client, one token header
 # ----------------------------------------------------------------------------
 Add-Type -AssemblyName System.Net.Http
 $script:Http = New-Object System.Net.Http.HttpClient
@@ -164,7 +190,156 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 }
 
 # ----------------------------------------------------------------------------
-# DICOM header reader — only what this script needs
+# health - what the heartbeat reports (DR-033). Counts, ages, disk figures and
+# coded problems; never a label, a filename or anything about a patient.
+# The shared part is kept word for word as in ExportWatcher.ps1.
+# ----------------------------------------------------------------------------
+# Its own client with a short timeout: a heartbeat that hangs must not hold
+# the tray for the two minutes an upload is allowed.
+$script:HbHttp = New-Object System.Net.Http.HttpClient
+$script:HbHttp.Timeout = [TimeSpan]::FromSeconds(10)
+$script:HbLastCode = -1           # the last heartbeat's HTTP status; a change is logged, a repeat is not
+$script:StopSent = $false
+$script:LastActivityUtc = $null   # end of the last worklist fetch or upload round
+$script:LastUploadUtc = $null     # the last 201
+$script:UploadedDay = (Get-Date).Date
+$script:UploadedToday = 0
+# Two sets, because the two jobs run on their own timers: a worklist fetch
+# must not clear the problems of the last upload round, nor the other way.
+$script:Problems = @{ worklist = @{}; upload = @{} }
+
+function Add-Problem([string]$set, [string]$code) { $script:Problems[$set][$code] = $true }
+
+function Add-Uploaded {
+    if ((Get-Date).Date -ne $script:UploadedDay) { $script:UploadedDay = (Get-Date).Date; $script:UploadedToday = 0 }
+    $script:UploadedToday++
+    $script:LastUploadUtc = [datetime]::UtcNow
+}
+
+function Get-UploadedToday {
+    if ((Get-Date).Date -ne $script:UploadedDay) { return 0 }
+    $script:UploadedToday
+}
+
+function Get-InstanceId([pscustomobject]$cfg) {
+    if (-not $cfg.InstanceId) {
+        $cfg.InstanceId = [guid]::NewGuid().ToString()
+        try { Save-Config $cfg } catch { Write-Log "config: could not save the new instance id: $($_.Exception.Message)" 'WARN' }
+    }
+    $cfg.InstanceId
+}
+
+function Get-DisplayName([pscustomobject]$cfg) {
+    if ($cfg.DisplayName) { return [string]$cfg.DisplayName }
+    if ($env:COMPUTERNAME) { return $env:COMPUTERNAME }
+    [Environment]::MachineName
+}
+
+# When a file arrived in the folder: a copy keeps the original's LastWriteTime
+# but gets a new CreationTime, so the later of the two.
+function Get-ArrivedUtc([IO.FileInfo]$f) {
+    if ($f.CreationTimeUtc -gt $f.LastWriteTimeUtc) { $f.CreationTimeUtc } else { $f.LastWriteTimeUtc }
+}
+
+function Get-DiskInfo([string]$path) {
+    try {
+        $root = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($path))
+        if (-not $root -or $root.StartsWith('\\')) { return $null }   # a share: DriveInfo cannot size it
+        $d = New-Object IO.DriveInfo($root)
+        if (-not $d.IsReady) { return $null }
+        [pscustomobject]@{ Free = [int64]$d.AvailableFreeSpace; Total = [int64]$d.TotalSize }
+    } catch { $null }
+}
+
+# The images the Client pulled off the camera that wait for upload: every
+# Studies\*\DICOM\*.dcm not yet moved into DICOM\_uploaded\.
+function Get-PendingStudies([pscustomobject]$cfg) {
+    $studies = Join-Path $cfg.ClientRoot 'Studies'
+    if (-not (Test-Path -LiteralPath $studies)) { return @() }
+    @(Get-ChildItem -LiteralPath $studies -Recurse -Filter *.dcm -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Directory.Name -eq 'DICOM' })
+}
+
+# A network failure, or a file that could not be read? The first is the
+# platform's or the network's problem, the second this PC's.
+function Get-FailureKind($errorRecord) {
+    $e = $errorRecord.Exception
+    while ($e) {
+        if ($e -is [System.Net.Http.HttpRequestException] -or $e -is [System.Threading.Tasks.TaskCanceledException] -or
+            $e -is [System.Net.WebException] -or $e -is [System.Net.Sockets.SocketException]) { return 'server-unreachable' }
+        $e = $e.InnerException
+    }
+    'unreadable-files'
+}
+
+function Get-HeartbeatBody([pscustomobject]$cfg, [bool]$running, [string]$stopReason) {
+    $problems = New-Object Collections.ArrayList
+    foreach ($set in @('worklist', 'upload')) {
+        foreach ($k in $script:Problems[$set].Keys) { if (-not $problems.Contains($k)) { [void]$problems.Add($k) } }
+    }
+    if (-not (Get-Process -Name OptomedClient -ErrorAction SilentlyContinue)) { [void]$problems.Add('client-not-running') }
+    $body = [ordered]@{
+        instanceId           = (Get-InstanceId $cfg)
+        kind                 = $script:Kind
+        name                 = (Get-DisplayName $cfg)
+        version              = $script:Version
+        running              = $running
+        enabled              = [bool]$cfg.Enabled
+        heartbeatIntervalSec = [int]$cfg.HeartbeatIntervalSec
+        uploadedToday        = [int](Get-UploadedToday)
+    }
+    if (-not $running) { $body.stopReason = $stopReason }
+    $now = [datetime]::UtcNow
+    if ($script:LastActivityUtc) { $body.secondsSinceActivity = [int64]($now - $script:LastActivityUtc).TotalSeconds }
+    if ($script:LastUploadUtc) { $body.secondsSinceUpload = [int64]($now - $script:LastUploadUtc).TotalSeconds }
+    $pending = @(Get-PendingStudies $cfg)
+    $body.pendingFiles = $pending.Count
+    if ($pending.Count -gt 0) {
+        $oldest = $now
+        foreach ($f in $pending) { $a = Get-ArrivedUtc $f; if ($a -lt $oldest) { $oldest = $a } }
+        $body.oldestPendingMinutes = [int][Math]::Floor(($now - $oldest).TotalMinutes)
+    }
+    if (Test-Path -LiteralPath $cfg.ClientRoot) {
+        $disk = Get-DiskInfo $cfg.ClientRoot
+        if ($disk) { $body.diskFreeBytes = $disk.Free; $body.diskTotalBytes = $disk.Total }
+    }
+    $body.problems = @($problems.ToArray())
+    $body
+}
+
+# One heartbeat. Never throws: a platform that cannot be reached is exactly
+# when the rest of the program must carry on. Returns the HTTP status (0 when
+# nothing answered).
+function Send-Heartbeat([pscustomobject]$cfg, [bool]$running = $true, [string]$stopReason = '') {
+    $code = 0
+    try {
+        $json = Get-HeartbeatBody $cfg $running $stopReason | ConvertTo-Json -Depth 4 -Compress
+        $content = New-Object System.Net.Http.StringContent($json, [Text.Encoding]::UTF8, 'application/json')
+        $resp = $script:HbHttp.PostAsync((Get-ApiUrl $cfg '/api/v1/device/uploader/heartbeat'), $content).GetAwaiter().GetResult()
+        $code = [int]$resp.StatusCode
+    } catch { $code = 0 }
+    if ($code -ne $script:HbLastCode) {
+        $script:HbLastCode = $code
+        switch ($code) {
+            200     { Write-Log 'heartbeat: reporting to the platform' }
+            0       { Write-Log 'heartbeat: the platform does not answer' 'WARN' }
+            404     { Write-Log 'heartbeat: the platform does not take heartbeats (an older version, or switched off there)' 'WARN' }
+            429     { Write-Log 'heartbeat: the platform refused it (HTTP 429: too many uploaders registered, or too many heartbeats from this address)' 'WARN' }
+            default { Write-Log "heartbeat: HTTP $code" 'WARN' }
+        }
+    }
+    $code
+}
+
+# The last word before the program ends. Sent once, however it ends.
+function Send-StopHeartbeat([pscustomobject]$cfg, [string]$reason) {
+    if ($script:StopSent) { return }
+    $script:StopSent = $true
+    Send-Heartbeat $cfg $false $reason | Out-Null
+}
+
+# ----------------------------------------------------------------------------
+# DICOM header reader - only what this script needs
 #
 # The Lumo's export is a Part-10 file, explicit VR little-endian for the
 # dataset (transfer syntax JPEG Baseline). The tags wanted all sit below group
@@ -175,7 +350,7 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 $script:LongVRs = @('OB','OW','OF','SQ','UT','UN')
 
 # Length of the element whose 4-byte tag has just been read. 0xFFFFFFFF means
-# undefined (a sequence, or encapsulated pixel data) — compared below as
+# undefined (a sequence, or encapsulated pixel data) - compared below as
 # [uint32]::MaxValue, because PowerShell parses the hex literal 0xFFFFFFFF as
 # the Int32 -1, and a [uint32] length never equals that. Group 0002 is always
 # explicit VR little endian; the dataset's syntax is what 0002,0010 said.
@@ -189,7 +364,7 @@ function Read-ElemLength([IO.BinaryReader]$r, [bool]$explicit) {
 # Positioned just after an undefined-length header: consume the items up to
 # the sequence delimiter, recursing into nested sequences. The Clarus writes
 # undefined-length sequences (SourceImageSequence, AnatomicRegionSequence) in
-# group 0008 — BEFORE the patient group — so a reader that stops at the first
+# group 0008 - BEFORE the patient group - so a reader that stops at the first
 # one never sees the PatientID. Verified on Clarus 700 exports, 2026-09-24.
 function Skip-Sequence([IO.BinaryReader]$r, [bool]$explicit) {
     $fs = $r.BaseStream
@@ -234,7 +409,7 @@ function Read-DicomTags {
 
             $len = Read-ElemLength $r ($isMeta -or $explicit)
             # An undefined-length sequence: nothing wanted lies inside one,
-            # but the patient group lies beyond it — step over, never stop.
+            # but the patient group lies beyond it - step over, never stop.
             if ($len -eq [uint32]::MaxValue) { Skip-Sequence $r $explicit; continue }
             $bytes = $r.ReadBytes([int]$len)
 
@@ -266,12 +441,25 @@ function ConvertTo-IsoDate([string]$da) {
 # ----------------------------------------------------------------------------
 # worklist: platform -> Client drop folder
 # ----------------------------------------------------------------------------
+# The problems the heartbeat reports for the worklist are those of the last
+# fetch: rebuilt on every fetch, so one that went away stops being reported.
 function Invoke-WorklistFetch([pscustomobject]$cfg) {
+    $script:Problems['worklist'] = @{}
+    try { Invoke-WorklistFetchCore $cfg }
+    catch {
+        $kind = Get-FailureKind $_
+        Add-Problem 'worklist' $(if ($kind -eq 'server-unreachable') { $kind } else { 'worklist-failed' })
+        throw
+    }
+    finally { $script:LastActivityUtc = [datetime]::UtcNow }
+}
+
+function Invoke-WorklistFetchCore([pscustomobject]$cfg) {
     $token = Unprotect-Token $cfg.TokenProtected
-    if (-not $token) { Write-Log 'worklist: no token configured' 'WARN'; return 'no token' }
+    if (-not $token) { Add-Problem 'worklist' 'no-token'; Write-Log 'worklist: no token configured' 'WARN'; return 'no token' }
 
     $dropDir = Join-Path $cfg.ClientRoot 'Worklist'
-    if (-not (Test-Path $dropDir)) { Write-Log "worklist: drop folder missing: $dropDir" 'ERROR'; return 'drop folder missing' }
+    if (-not (Test-Path $dropDir)) { Add-Problem 'worklist' 'drop-folder-missing'; Write-Log "worklist: drop folder missing: $dropDir" 'ERROR'; return 'drop folder missing' }
 
     # A file still sitting in the drop folder means the Client REFUSED the
     # previous one - it says nothing, it just leaves the file - and the camera
@@ -282,6 +470,7 @@ function Invoke-WorklistFetch([pscustomobject]$cfg) {
     # Said once per file.
     $stale = Join-Path $dropDir $script:WorklistName
     if ((Test-Path $stale) -and ((Get-Date) - (Get-Item $stale).LastWriteTime).TotalSeconds -gt 60) {
+        Add-Problem 'worklist' 'worklist-not-imported'
         $mt = (Get-Item $stale).LastWriteTime
         if ($script:LastStaleWarned -ne $mt) {
             $script:LastStaleWarned = $mt
@@ -294,8 +483,12 @@ function Invoke-WorklistFetch([pscustomobject]$cfg) {
     $resp = $script:Http.SendAsync($req).GetAwaiter().GetResult()
     $body = $resp.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
     if (-not $resp.IsSuccessStatusCode) {
-        Write-Log "worklist: HTTP $([int]$resp.StatusCode)" 'ERROR'
-        return "HTTP $([int]$resp.StatusCode)"
+        $code = [int]$resp.StatusCode
+        # 404 is the platform's worklist switched off (it answers 404 while
+        # core.optomed.worklist.enabled=false); 401 a token that does not match.
+        Add-Problem 'worklist' $(switch ($code) { 401 { 'worklist-token-rejected' } 404 { 'worklist-off' } default { 'worklist-failed' } })
+        Write-Log "worklist: HTTP $code" 'ERROR'
+        return "HTTP $code"
     }
 
     # Drop only on change. The Client consumes the file, so the reference copy
@@ -324,10 +517,13 @@ function Resolve-Visit([pscustomobject]$cfg, [string]$patientId, [string]$scanDa
     $payload = @{ scans = @(@{ patientId = $patientId; scanDate = $scanDate; laterality = $laterality }) } | ConvertTo-Json -Depth 4 -Compress
     $content = New-Object System.Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')
     $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/resolve'), $content).GetAwaiter().GetResult()
-    if (-not $resp.IsSuccessStatusCode) { return $null }
+    if (-not $resp.IsSuccessStatusCode) {
+        if ([int]$resp.StatusCode -eq 429) { Add-Problem 'upload' 'rate-limited' }
+        return $null
+    }
     $r = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
     $scan = $r.scans[0]
-    # 'suggested' = one subject with exactly one visit on that date — the only
+    # 'suggested' = one subject with exactly one visit on that date - the only
     # state in which binding without a person is defensible.
     if ($scan.state -eq 'suggested' -and $scan.candidates.Count -eq 1 -and $scan.candidates[0].matchingEvent) {
         return $scan.candidates[0].matchingEvent.studyEventId
@@ -348,7 +544,15 @@ function Send-Commit([pscustomobject]$cfg, [string]$path, [hashtable]$fields) {
     [pscustomobject]@{ Status = [int]$resp.StatusCode; Body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() }
 }
 
+# As for the worklist: the problems of the last upload round.
 function Invoke-StudyUpload([pscustomobject]$cfg) {
+    $script:Problems['upload'] = @{}
+    try { Invoke-StudyUploadCore $cfg }
+    catch { Add-Problem 'upload' (Get-FailureKind $_); throw }
+    finally { $script:LastActivityUtc = [datetime]::UtcNow }
+}
+
+function Invoke-StudyUploadCore([pscustomobject]$cfg) {
     $studies = Join-Path $cfg.ClientRoot 'Studies'
     if (-not (Test-Path $studies)) { return 'no Studies folder' }
     $files = Get-ChildItem -Path $studies -Recurse -Filter *.dcm -File |
@@ -373,16 +577,17 @@ function Invoke-StudyUpload([pscustomobject]$cfg) {
                 device = $cfg.Device; studyEventId = $eventId
             }
             switch ($r.Status) {
-                201 { $ok++; if ($eventId) { $bound++ }; Move-Uploaded $f }
+                201 { $ok++; if ($eventId) { $bound++ }; Move-Uploaded $f; Add-Uploaded }
                 409 { $dup++; Move-Uploaded $f }
                 default {
                     $fail++
+                    Add-Problem 'upload' $(if ($r.Status -eq 429) { 'rate-limited' } else { 'upload-failed' })
                     $why = ($r.Body -replace '\s+', ' ')
                     Write-Log ("upload: HTTP {0} for label '{1}' ({2})" -f $r.Status, $label, $why.Substring(0, [Math]::Min(120, $why.Length))) 'WARN'
                 }
             }
         } catch {
-            $fail++; Write-Log "upload: $($_.Exception.Message)" 'ERROR'
+            $fail++; Add-Problem 'upload' (Get-FailureKind $_); Write-Log "upload: $($_.Exception.Message)" 'ERROR'
         }
         Start-Sleep -Milliseconds 750     # the public front door is rate-limited per client
     }
@@ -398,7 +603,7 @@ function Move-Uploaded([IO.FileInfo]$f) {
 }
 
 # ----------------------------------------------------------------------------
-# self-test — headless
+# self-test - headless
 # ----------------------------------------------------------------------------
 if ($SelfTest) {
     if ($DicomFile) {
@@ -412,7 +617,7 @@ if ($SelfTest) {
         exit 0
     }
     # With -ConfigPath pointing at a real (or legacy) settings file, show what
-    # Read-Config makes of it — this is how the minutes->seconds migration is
+    # Read-Config makes of it - this is how the minutes->seconds migration is
     # checked without a tray session.
     if (Test-Path $ConfigPath) {
         $loaded = Read-Config
@@ -431,6 +636,14 @@ if ($SelfTest) {
     exit 0
 }
 
+if ($Heartbeat) {
+    $cfg = Read-Config
+    $code = Send-Heartbeat $cfg
+    $answer = if ($code -eq 200) { 'recorded' } elseif ($code -eq 0) { 'no answer' } else { "HTTP $code" }
+    Write-Host ("heartbeat as '{0}' ({1} {2}) to {3}: {4}" -f (Get-DisplayName $cfg), $script:Kind, $script:Version, $cfg.BaseUrl, $answer)
+    if ($code -eq 200) { exit 0 } else { exit 1 }
+}
+
 # ----------------------------------------------------------------------------
 # tray app
 # ----------------------------------------------------------------------------
@@ -440,6 +653,18 @@ if (-not $mutex.WaitOne(0, $false)) { exit 0 }   # already running
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
+
+# Launched by hand rather than by the installer's hidden-window shortcut, the
+# script owns a console window that sits on the desktop as long as the tray
+# icon lives. The tray icon is this app's surface; hide the console for every
+# way of starting it (same as the Export Watcher, 2026-09-24). This is our
+# own console - nothing to do with the Optomed Client window handled below.
+Add-Type -Namespace LibreClinicaTray -Name Console -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]   public static extern bool ShowWindow(IntPtr h, int cmd);
+'@
+$ownConsole = [LibreClinicaTray.Console]::GetConsoleWindow()
+if ($ownConsole -ne [IntPtr]::Zero) { [LibreClinicaTray.Console]::ShowWindow($ownConsole, 0) | Out-Null }   # 0 = SW_HIDE
 
 # ----------------------------------------------------------------------------
 # the Optomed Client: keep it running, keep its window out of the way
@@ -601,7 +826,7 @@ $uploadTimer = New-Object Windows.Forms.Timer
 function Update-Timers {
     # Worklist in seconds: the photographer enrols a subject and walks to the
     # dock expecting it on the camera, so the poll has to beat the walk. Cheap
-    # on both ends — the fetch is one scoped single-day query and the file is
+    # on both ends - the fetch is one scoped single-day query and the file is
     # only dropped when it changed. Uploads stay in minutes; nobody waits on them.
     $fetchTimer.Interval  = [Math]::Max(10, [int]$script:Cfg.WorklistIntervalSec) * 1000
     $uploadTimer.Interval = [Math]::Max(1, [int]$script:Cfg.UploadIntervalMin) * 60000
@@ -613,12 +838,19 @@ function Update-Timers {
 $fetchTimer.Add_Tick({ Invoke-FetchNow })
 $uploadTimer.Add_Tick({ if (Start-ClientIfNeeded) { Request-ClientHide }; Invoke-UploadNow })
 
+# DR-033 - the heartbeat runs whether the bridge is on or off: "switched off"
+# is one of the things the System Status page needs to see.
+$hbTimer = New-Object Windows.Forms.Timer
+$hbTimer.Interval = [Math]::Max(30, [int]$script:Cfg.HeartbeatIntervalSec) * 1000
+$hbTimer.Add_Tick({ Send-Heartbeat $script:Cfg | Out-Null })
+
 $enabledItem.Add_Click({
     $script:Cfg.Enabled = $enabledItem.Checked
     Save-Config $script:Cfg
     Update-Timers
     Write-Log ("enabled={0}" -f $script:Cfg.Enabled)
     if ($script:Cfg.Enabled) { Invoke-FetchNow }
+    Send-Heartbeat $script:Cfg | Out-Null
 })
 $fetchItem.Add_Click({ Invoke-FetchNow })
 $uploadItem.Add_Click({ Invoke-UploadNow })
@@ -634,12 +866,15 @@ $hideClientItem.Add_Click({
     $script:ClientShownByUser = $false
     if (-not (Set-ClientWindowVisible $false)) { Request-ClientHide }
 })
-$exitItem.Add_Click({ $tray.Visible = $false; [Windows.Forms.Application]::Exit() })
+$exitItem.Add_Click({ Send-StopHeartbeat $script:Cfg 'exit'; $tray.Visible = $false; [Windows.Forms.Application]::Exit() })
+# Logoff or shutdown: say so, so the page shows an evening, not an outage.
+# Raised on this (STA, message-pumping) thread, where the script can run.
+[Microsoft.Win32.SystemEvents]::add_SessionEnding({ Send-StopHeartbeat $script:Cfg 'session-end' })
 
 $settingsItem.Add_Click({
     $f = New-Object Windows.Forms.Form
     $f.Text = "$script:AppName - Settings"; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedDialog'
-    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 334
+    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 368
 
     $y = 14
     function Add-Row([string]$label, [Windows.Forms.Control]$ctl) {
@@ -654,6 +889,7 @@ $settingsItem.Add_Click({
     $tbDev   = New-Object Windows.Forms.TextBox; $tbDev.Text = $script:Cfg.Device
     $nuFetch = New-Object Windows.Forms.NumericUpDown; $nuFetch.Minimum = 10; $nuFetch.Maximum = 3600; $nuFetch.Value = [int]$script:Cfg.WorklistIntervalSec
     $nuUp    = New-Object Windows.Forms.NumericUpDown; $nuUp.Minimum = 1; $nuUp.Maximum = 120; $nuUp.Value = [int]$script:Cfg.UploadIntervalMin
+    $tbName  = New-Object Windows.Forms.TextBox; $tbName.Text = $script:Cfg.DisplayName
     $cbOn    = New-Object Windows.Forms.CheckBox; $cbOn.Text = 'Enabled'; $cbOn.Checked = [bool]$script:Cfg.Enabled
     $cbHide  = New-Object Windows.Forms.CheckBox; $cbHide.Text = 'Hide the Optomed Client window (this icon is the only one)'; $cbHide.Checked = [bool]$script:Cfg.HideClientWindow
 
@@ -663,11 +899,12 @@ $settingsItem.Add_Click({
     Add-Row 'Device name (on upload)' $tbDev
     Add-Row 'Worklist fetch, every (sec)' $nuFetch
     Add-Row 'Study upload, every (min)' $nuUp
+    Add-Row 'Name on the status page' $tbName
     Add-Row '' $cbOn
     Add-Row '' $cbHide
 
-    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 294
-    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 294
+    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 328
+    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 328
     $f.Controls.AddRange(@($ok, $cancel)); $f.AcceptButton = $ok; $f.CancelButton = $cancel
 
     if ($f.ShowDialog() -eq 'OK') {
@@ -677,6 +914,7 @@ $settingsItem.Add_Click({
         $script:Cfg.Device = $tbDev.Text.Trim()
         $script:Cfg.WorklistIntervalSec = [int]$nuFetch.Value
         $script:Cfg.UploadIntervalMin = [int]$nuUp.Value
+        $script:Cfg.DisplayName = $tbName.Text.Trim()
         $script:Cfg.Enabled = $cbOn.Checked
         $script:Cfg.HideClientWindow = $cbHide.Checked
         Save-Config $script:Cfg
@@ -686,6 +924,7 @@ $settingsItem.Add_Click({
         Update-Timers
         Write-Log 'settings saved'
         if ($script:Cfg.Enabled) { Invoke-FetchNow }
+        Send-Heartbeat $script:Cfg | Out-Null
     }
     $f.Dispose()
 })
@@ -694,10 +933,16 @@ Update-Timers
 Start-ClientIfNeeded | Out-Null
 Request-ClientHide
 if ($script:Cfg.Enabled) { Invoke-FetchNow; Invoke-UploadNow }
+Send-Heartbeat $script:Cfg | Out-Null
+$hbTimer.Start()
 
 $ctx = New-Object Windows.Forms.ApplicationContext
 try { [Windows.Forms.Application]::Run($ctx) }
 finally {
+    $hbTimer.Stop()
+    # However it ended (the menu, a crash): the page should not wait three
+    # intervals to learn it. A no-op when Exit or the session end said so already.
+    Send-StopHeartbeat $script:Cfg 'exit'
     Set-ClientWindowVisible $true | Out-Null   # the bridge hid it; the bridge gives it back
     $tray.Visible = $false; $tray.Dispose()
     $mutex.ReleaseMutex() | Out-Null

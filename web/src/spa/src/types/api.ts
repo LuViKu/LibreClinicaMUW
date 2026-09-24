@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/imaging-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImagingPlan"];
+        put: operations["setImagingPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{parentOid}/sites/{siteOid}": {
         parameters: {
             query?: never;
@@ -884,6 +900,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/imaging-plan/catch-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runImagingPlanCatchUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/imaging-plan/catch-up/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewImagingPlanCatchUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/event-definitions/reorder": {
         parameters: {
             query?: never;
@@ -1508,6 +1556,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingest/{id}/dismiss": {
         parameters: {
             query?: never;
@@ -1566,6 +1630,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["commitStaffUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/bulk-dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bulkDismiss"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1693,7 +1773,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore_6"];
+        post: operations["restore_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1741,7 +1821,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore_7"];
+        post: operations["restore_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1918,6 +1998,26 @@ export interface paths {
         get: operations["getThread"];
         put?: never;
         post: operations["appendThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device/uploader/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an uploader's heartbeat
+         * @description Upserts the program's row by its instance id. 200 recorded; 400 malformed; 404 heartbeats switched off; 413 body over 16 KB; 429 too many programs.
+         */
+        post: operations["recordUploaderHeartbeat"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2190,6 +2290,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["submit_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Measure the storage now; the result replaces the page's figures when done */
+        post: operations["rescanStorage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3028,6 +3145,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/by-event/{studyEventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["byEvent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import/{token}/rows": {
         parameters: {
             query?: never;
@@ -3412,6 +3545,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/uploaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uploaders on the acquisition PCs, and what arrived per device */
+        get: operations["listUploaders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/system-status": {
         parameters: {
             query?: never;
@@ -3420,6 +3570,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["systemStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Storage per file store and filesystem, the database, and the trend over a week */
+        get: operations["storageUsage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3647,6 +3814,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["hardRemoveVersion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/uploaders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget an uploader; it re-appears with its next heartbeat if it still runs */
+        delete: operations["forgetUploader"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4586,6 +4770,10 @@ export interface components {
             dicomPath?: string;
             previewPngPath?: string;
         };
+        UnbindRequest: {
+            dismiss?: boolean;
+            reason?: string;
+        };
         DismissRequest: {
             reason?: string;
         };
@@ -4599,6 +4787,10 @@ export interface components {
             modalityCode?: string;
             laterality?: string;
             acknowledgeDateMismatch?: boolean;
+        };
+        BulkDismissRequest: {
+            ids?: number[];
+            reason?: string;
         };
         ImportCrfPreviewDto: {
             /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
@@ -4816,6 +5008,49 @@ export interface components {
             newStatus?: string;
             description?: string;
             assignedTo?: string;
+        };
+        /** @description One heartbeat. Times are ages in seconds, never clock readings. */
+        UploaderHeartbeat: {
+            /** @description Random UUID the program generated on first start */
+            instanceId: string;
+            /** @example export-watcher */
+            kind: string;
+            /**
+             * @description The PC's name as the page shows it
+             * @example CLARUS-PC
+             */
+            name?: string;
+            /** @example 2026-09-24 */
+            version?: string;
+            /** @description false in the last heartbeat before the program exits */
+            running?: boolean;
+            /** @enum {string} */
+            stopReason?: "exit" | "session-end";
+            /** @description false while uploading is switched off in the program */
+            enabled?: boolean;
+            /**
+             * Format: int32
+             * @description How often the program reports; offline after three missed
+             * @example 120
+             */
+            heartbeatIntervalSec?: number;
+            /** Format: int64 */
+            secondsSinceActivity?: number;
+            /** Format: int64 */
+            secondsSinceUpload?: number;
+            /** Format: int32 */
+            uploadedToday?: number;
+            /** Format: int32 */
+            pendingFiles?: number;
+            /** Format: int32 */
+            oldestPendingMinutes?: number;
+            /** Format: int32 */
+            failedFiles?: number;
+            /** Format: int64 */
+            diskFreeBytes?: number;
+            /** Format: int64 */
+            diskTotalBytes?: number;
+            problems?: string[];
         };
         CreateScheduleRequest: {
             format?: string;
@@ -6039,6 +6274,58 @@ export interface operations {
         };
     };
     setRetinalTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getImagingPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    setImagingPlan: {
         parameters: {
             query?: never;
             header?: never;
@@ -7394,6 +7681,52 @@ export interface operations {
             };
         };
     };
+    runImagingPlanCatchUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    previewImagingPlanCatchUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     reorder: {
         parameters: {
             query?: never;
@@ -8493,6 +8826,32 @@ export interface operations {
             };
             cookie?: never;
         };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UnbindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    restore_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
         requestBody?: never;
         responses: {
             /** @description OK */
@@ -8605,6 +8964,30 @@ export interface operations {
                     /** Format: binary */
                     file: string;
                 };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    bulkDismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDismissRequest"];
             };
         };
         responses: {
@@ -8823,7 +9206,7 @@ export interface operations {
             };
         };
     };
-    restore_6: {
+    restore_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -8894,7 +9277,7 @@ export interface operations {
             };
         };
     };
-    restore_7: {
+    restore_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -9291,6 +9674,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DiscrepancyNoteDto"];
+                };
+            };
+        };
+    };
+    recordUploaderHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploaderHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -9784,6 +10191,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["BugReportResponse"];
+                };
+            };
+        };
+    };
+    rescanStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -10988,6 +11415,28 @@ export interface operations {
             };
         };
     };
+    byEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyEventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     listRows: {
         parameters: {
             query?: {
@@ -11528,7 +11977,47 @@ export interface operations {
             };
         };
     };
+    listUploaders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     systemStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    storageUsage: {
         parameters: {
             query?: never;
             header?: never;
@@ -11861,6 +12350,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CrfVersionUsageReport"];
+                };
+            };
+        };
+    };
+    forgetUploader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };

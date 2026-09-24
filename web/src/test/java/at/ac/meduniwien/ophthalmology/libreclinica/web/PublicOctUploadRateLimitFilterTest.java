@@ -191,6 +191,23 @@ class PublicOctUploadRateLimitFilterTest {
         assertEquals(429, invoke(filter, "10.0.0.11", image).getStatus());
     }
 
+    @Test
+    void heartbeatsHaveTheirOwnBudgetAndNeverSpendTheLookups() throws Exception {
+        // DR-033 — two uploaders behind the Clarus PC's one address report
+        // every two minutes; a heartbeat must not cost the watcher a /resolve.
+        ClockableFilter filter = new ClockableFilter(0L);
+        String heartbeat = "/pages/api/v1/device/uploader/heartbeat";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_HEARTBEATS_PER_HOUR; i++) {
+            assertEquals(200, invoke(filter, "10.0.0.12", heartbeat).getStatus(), "heartbeat " + i);
+        }
+        assertEquals(429, invoke(filter, "10.0.0.12", heartbeat).getStatus());
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR,
+                filter.currentTokens("10.0.0.12", PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+        assertEquals(200, invoke(filter, "10.0.0.12", "/pages/api/v1/public/upload/resolve").getStatus());
+        filter.nowMs = PublicOctUploadRateLimitFilter.HEARTBEAT_REFILL_INTERVAL_MS + 1L;
+        assertEquals(200, invoke(filter, "10.0.0.12", heartbeat).getStatus());
+    }
+
     /* ---- helpers ----------------------------------------------------- */
 
     private static MockHttpServletResponse invoke(PublicOctUploadRateLimitFilter filter,

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      2026-09-24 (DR-035) — retinal inference jobs follow the file.
+
+      A job copied its visit ids at enqueue time and never looked at the
+      ingest row again. Removing a scan from a visit left its jobs — and their
+      metrics — on that visit; filing it elsewhere started nothing. Now
+      unbind detaches the file's jobs (and cancels those not yet running),
+      and bind attaches what exists and enqueues what the visit's imaging
+      plan still wants.
+
+      Two additions, no DDL on the job table (status is VARCHAR(20) without a
+      CHECK, as for 'parked' and 'remote_pending'): the 'cancelled' status is
+      documented in the column comment, and two audit types record the
+      follow-on work per file.
+    -->
+    <changeSet id="2026-12-07-retinal-job-cancelled-status-comment" author="muw" dbms="postgresql">
+        <sql>
+            COMMENT ON COLUMN retinal_inference_job.status IS
+            'queued | screening | screened | segmenting | done | failed | parked | remote_pending | cancelled. cancelled (DR-035): the file was removed from its visit before this job ran; revived if the file is filed again where the plan wants the task.';
+        </sql>
+    </changeSet>
+
+    <changeSet id="2026-12-07-audit-type-retinal-jobs-followed" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 135;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="135"/>
+            <column name="name" value="retinal_jobs_followed_file"/>
+            <column name="display_name" value="Retinal jobs attached or started for a filed scan"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 135</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-12-07-audit-type-retinal-jobs-detached" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 136;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="136"/>
+            <column name="name" value="retinal_jobs_detached"/>
+            <column name="display_name" value="Retinal jobs detached from a visit (scan removed)"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 136</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

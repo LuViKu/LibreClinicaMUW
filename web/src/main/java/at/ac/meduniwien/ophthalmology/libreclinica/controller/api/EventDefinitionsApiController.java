@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,10 +96,22 @@ public class EventDefinitionsApiController {
     private static final Set<String> LEGAL_TYPES = Set.of("scheduled", "unscheduled", "common");
 
     private final DataSource dataSource;
+    /** DR-035 — nullable; the plan catch-up then attaches existing jobs but starts none. */
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalInferenceApiController inferenceController;
 
     @Autowired
-    public EventDefinitionsApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public EventDefinitionsApiController(@Qualifier("dataSource") DataSource dataSource,
+                                         RemoteRetinalInferenceClient remoteClient,
+                                         RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
+        this.remoteClient = remoteClient;
+        this.inferenceController = inferenceController;
+    }
+
+    /** Test seam: no inference dispatcher. */
+    public EventDefinitionsApiController(DataSource dataSource) {
+        this(dataSource, null, null);
     }
 
     /* ----------------------------------------------------------------- */
@@ -303,6 +316,304 @@ public class EventDefinitionsApiController {
         LOG.info("Retinal tasks updated for event_def {} (study {}): {} → {}",
                 sedId, studyOid, previous, normalised);
         return ResponseEntity.ok(Map.of("tasks", new ArrayList<>(normalised)));
+    }
+
+    /* ================================================================= */
+    /* DR-034 — the visit imaging plan                                    */
+    /* ================================================================= */
+
+    private static final Set<String> REQUIREMENTS =
+            Set.of(VisitImagingPlan.REQUIRED, VisitImagingPlan.OPTIONAL);
+    private static final Set<String> PLAN_LATERALITIES = Set.of("OD", "OS", "OU");
+
+    /** One plan row as the SPA sees it. */
+    public record ImagingPlanEntryDto(int modalityId, String code, String labelDe, String labelEn,
+                                      String device, String kindsAccepted, String requirement,
+                                      String laterality, List<String> tasks) {
+        static ImagingPlanEntryDto of(VisitImagingPlan.Entry e) {
+            return new ImagingPlanEntryDto(e.modalityId(), e.code(), e.labelDe(), e.labelEn(),
+                    e.device(), e.kindsAccepted(), e.requirement(), e.laterality(), e.tasks());
+        }
+    }
+
+    /**
+     * GET — what this visit definition expects from the imaging catalogue:
+     * one entry per modality, required or optional, which eye(s), and the
+     * inference tasks a file of that modality is fanned out to. An empty
+     * list means the visit expects nothing and inference falls back to the
+     * older per-visit task list.
+     */
+    @GetMapping("/{sedId:[0-9]+}/imaging-plan")
+    public ResponseEntity<?> getImagingPlan(@PathVariable("studyOid") String studyOid,
+                                            @PathVariable("sedId") int sedId,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ false);
+        if (guard != null) return guard;
+        ResponseEntity<?> owned = requireOwnedDefinition(studyOid, sedId);
+        if (owned != null) return owned;
+
+        try (Connection c = dataSource.getConnection()) {
+            List<ImagingPlanEntryDto> out = new ArrayList<>();
+            for (VisitImagingPlan.Entry e : VisitImagingPlan.forDefinition(c, sedId)) {
+                out.add(ImagingPlanEntryDto.of(e));
+            }
+            return ResponseEntity.ok(Map.of("entries", out));
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to load the imaging plan for event_def {}: {}", sedId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to load the imaging plan: " + sqlEx.getMessage()));
+        }
+    }
+
+    /**
+     * PUT — replace the plan atomically. Body:
+     * {@code {"entries":[{"modalityId":3,"requirement":"required","laterality":"OU","tasks":["fluid"]}]}}.
+     * Every modality must belong to this study; tasks are only accepted on a
+     * modality that takes OCT volumes, because nothing else is ever inferred
+     * on. One bad entry rejects the whole request.
+     */
+    @PutMapping("/{sedId:[0-9]+}/imaging-plan")
+    public ResponseEntity<?> setImagingPlan(@PathVariable("studyOid") String studyOid,
+                                            @PathVariable("sedId") int sedId,
+                                            @RequestBody Map<String, Object> body,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+        ResponseEntity<?> owned = requireOwnedDefinition(studyOid, sedId);
+        if (owned != null) return owned;
+
+        Object raw = body == null ? null : body.get("entries");
+        if (!(raw instanceof List<?> list)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Body must be {\"entries\": [...]}"));
+        }
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionBean sed = (StudyEventDefinitionBean)
+                new StudyEventDefinitionDAO(dataSource).findByPK(sedId);
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+
+        record Wanted(int modalityId, String requirement, String laterality, List<String> tasks) {}
+        java.util.LinkedHashMap<Integer, Wanted> wanted = new java.util.LinkedHashMap<>();
+        for (Object entry : list) {
+            if (!(entry instanceof Map<?, ?> m)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Every entries element must be an object"));
+            }
+            Object idRaw = m.get("modalityId");
+            if (!(idRaw instanceof Number n)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Every entry needs a numeric modalityId"));
+            }
+            int modalityId = n.intValue();
+            if (wanted.containsKey(modalityId)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Modality " + modalityId + " is listed twice"));
+            }
+            String requirement = m.get("requirement") == null
+                    ? VisitImagingPlan.OPTIONAL
+                    : String.valueOf(m.get("requirement")).trim().toLowerCase(java.util.Locale.ROOT);
+            if (!REQUIREMENTS.contains(requirement)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "requirement must be one of " + REQUIREMENTS));
+            }
+            String laterality = null;
+            Object latRaw = m.get("laterality");
+            if (latRaw != null && !String.valueOf(latRaw).isBlank()) {
+                laterality = String.valueOf(latRaw).trim().toUpperCase(java.util.Locale.ROOT);
+                if (!PLAN_LATERALITIES.contains(laterality)) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "laterality must be one of " + PLAN_LATERALITIES + " or absent"));
+                }
+            }
+            List<String> tasks = new ArrayList<>();
+            Object tasksRaw = m.get("tasks");
+            if (tasksRaw != null) {
+                if (!(tasksRaw instanceof List<?> tl)) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "tasks must be an array"));
+                }
+                for (Object t : tl) {
+                    if (!(t instanceof String s) || s.isBlank()) {
+                        return ResponseEntity.badRequest().body(Map.of("message",
+                                "Every tasks entry must be a non-blank string"));
+                    }
+                    String norm = s.trim().toLowerCase(java.util.Locale.ROOT);
+                    if (!ALLOWED_RETINAL_TASKS.contains(norm)) {
+                        return ResponseEntity.badRequest().body(Map.of("message",
+                                "Unknown task '" + s + "' — expected one of " + ALLOWED_RETINAL_TASKS));
+                    }
+                    if (!tasks.contains(norm)) tasks.add(norm);
+                }
+            }
+            wanted.put(modalityId, new Wanted(modalityId, requirement, laterality, tasks));
+        }
+
+        List<VisitImagingPlan.Entry> previous;
+        List<VisitImagingPlan.Entry> next;
+        try (Connection c = dataSource.getConnection()) {
+            // Every named modality must be this study's, and tasks only make
+            // sense where an OCT volume can arrive.
+            Map<Integer, String> kindsById = new java.util.HashMap<>();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT imaging_modality_id, kinds_accepted FROM imaging_modality "
+                            + " WHERE study_id = ? AND COALESCE(status_id, 1) NOT IN (5, 7)")) {
+                ps.setInt(1, study.getId());
+                try (var rs = ps.executeQuery()) {
+                    while (rs.next()) kindsById.put(rs.getInt(1), rs.getString(2));
+                }
+            }
+            for (Wanted w : wanted.values()) {
+                if (!kindsById.containsKey(w.modalityId())) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "Modality " + w.modalityId() + " is not an active entry of study " + studyOid));
+                }
+                if (!w.tasks().isEmpty()
+                        && !VisitImagingPlan.acceptsKind(kindsById.get(w.modalityId()), "e2e")) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "Modality " + w.modalityId() + " does not accept OCT volumes, "
+                                    + "so no inference task can run on it"));
+                }
+            }
+
+            c.setAutoCommit(false);
+            try {
+                previous = VisitImagingPlan.forDefinition(c, sedId);
+                try (PreparedStatement ps = c.prepareStatement(
+                        "DELETE FROM event_definition_imaging WHERE study_event_definition_id = ?")) {
+                    ps.setInt(1, sedId);
+                    ps.executeUpdate();
+                }
+                if (!wanted.isEmpty()) {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "INSERT INTO event_definition_imaging "
+                                    + "(study_event_definition_id, imaging_modality_id, requirement, "
+                                    + " laterality, retinal_tasks, created_by_user_id) "
+                                    + "VALUES (?, ?, ?, ?, ?, ?)")) {
+                        for (Wanted w : wanted.values()) {
+                            ps.setInt(1, sedId);
+                            ps.setInt(2, w.modalityId());
+                            ps.setString(3, w.requirement());
+                            if (w.laterality() == null) ps.setNull(4, java.sql.Types.VARCHAR);
+                            else ps.setString(4, w.laterality());
+                            ps.setString(5, VisitImagingPlan.joinTasks(w.tasks()));
+                            ps.setInt(6, me.getId());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
+                next = VisitImagingPlan.forDefinition(c, sedId);
+                c.commit();
+            } catch (SQLException inner) {
+                c.rollback();
+                throw inner;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to replace the imaging plan for event_def {}: {}", sedId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to replace the imaging plan: " + sqlEx.getMessage()));
+        }
+
+        String before = VisitImagingPlan.describe(previous);
+        String after = VisitImagingPlan.describe(next);
+        if (!before.equals(after)) {
+            writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, sed,
+                    "imaging_plan", before, after);
+        }
+        // Ids and sizes only: the OID is a request path value and the plan
+        // text comes from the body (CodeQL java/log-injection); the audit row
+        // above carries the plan itself.
+        LOG.info("Imaging plan updated for event_def {} (study {}): {} entries before, {} after",
+                sedId, study.getId(), previous.size(), next.size());
+
+        List<ImagingPlanEntryDto> out = new ArrayList<>();
+        for (VisitImagingPlan.Entry e : next) out.add(ImagingPlanEntryDto.of(e));
+        return ResponseEntity.ok(Map.of("entries", out));
+    }
+
+    /**
+     * POST {@code .../catch-up/preview} — what applying the plan to the scans
+     * already filed at this definition's visits would do: how many OCT
+     * volumes, how many analyses would start. Nothing is written.
+     *
+     * <p>A POST although it only reads: it shares its code with the run
+     * below, and only a dry-run flag keeps the writes and the GPU dispatch
+     * out of it. A GET reaching code that can start jobs is a cross-site
+     * request away from starting them (CodeQL
+     * java/csrf-unprotected-request-type, beta.11 release gate).
+     */
+    @PostMapping("/{sedId:[0-9]+}/imaging-plan/catch-up/preview")
+    public ResponseEntity<?> previewImagingPlanCatchUp(@PathVariable("studyOid") String studyOid,
+                                                       @PathVariable("sedId") int sedId,
+                                                       HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ false);
+        if (guard != null) return guard;
+        ResponseEntity<?> owned = requireOwnedDefinition(studyOid, sedId);
+        if (owned != null) return owned;
+        return catchUp(studyOid, sedId, session, true);
+    }
+
+    /**
+     * POST — apply the plan to the scans already filed at this definition's
+     * visits (DR-035). Results that exist are attached, analyses the plan wants
+     * and that have no job are started; nothing is deleted. Explicit rather
+     * than a side effect of saving the plan, because a plan edit could fan out
+     * hundreds of GPU jobs and the administrator should see the number first.
+     */
+    @PostMapping("/{sedId:[0-9]+}/imaging-plan/catch-up")
+    public ResponseEntity<?> runImagingPlanCatchUp(@PathVariable("studyOid") String studyOid,
+                                                   @PathVariable("sedId") int sedId,
+                                                   HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+        ResponseEntity<?> owned = requireOwnedDefinition(studyOid, sedId);
+        if (owned != null) return owned;
+        return catchUp(studyOid, sedId, session, false);
+    }
+
+    private ResponseEntity<?> catchUp(String studyOid, int sedId, HttpSession session, boolean dryRun) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
+        RetinalJobFollower follower = new RetinalJobFollower(dataSource, remoteClient, inferenceController);
+        try {
+            RetinalJobFollower.CatchUp r = follower.catchUp(sedId, new IngestBindService.Actor(me, study), dryRun);
+            if (!dryRun) {
+                LOG.info("Imaging plan catch-up for event_def {} (study {}): scans={} attached={} started={} failed={}",
+                        sedId, study.getId(), r.scans(), r.attached(), r.revived() + r.enqueued(), r.failed());
+            }
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("scans", r.scans());
+            body.put("attached", r.attached());
+            body.put("started", r.revived() + r.enqueued());
+            body.put("failed", r.failed());
+            body.put("dryRun", dryRun);
+            body.put("dispatcherAvailable", remoteClient != null && inferenceController != null);
+            return ResponseEntity.ok(body);
+        } catch (SQLException sqlEx) {
+            LOG.error("Imaging plan catch-up failed for event_def {}: {}", sedId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Imaging plan catch-up failed: " + sqlEx.getMessage()));
+        }
+    }
+
+    /** 404 unless the definition exists and belongs to the study; null when it does. */
+    private ResponseEntity<?> requireOwnedDefinition(String studyOid, int sedId) {
+        StudyEventDefinitionBean sed = (StudyEventDefinitionBean)
+                new StudyEventDefinitionDAO(dataSource).findByPK(sedId);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_definition with id " + sedId));
+        }
+        StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
+        if (sed.getStudyId() != study.getId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Event definition " + sedId + " is not part of study " + studyOid));
+        }
+        return null;
     }
 
     /* ----------------------------------------------------------------- */

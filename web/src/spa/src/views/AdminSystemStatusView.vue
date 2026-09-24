@@ -13,6 +13,12 @@
  * app-VM cron monitor's log. Born of an outage nobody could see from
  * inside the app for nineteen days.
  *
+ * 2026-09-24 (DR-033) — two more panels, each with its own request for the
+ * same reason: the uploaders on the acquisition PCs (their heartbeats and
+ * what arrived per device), and the storage the platform uses (the newest
+ * hourly scan, a week's trend, the database). The page's refresh button
+ * re-fetches them through `refreshKey`.
+ *
  * Sysadmin-only — the backend returns 403 for non-sysadmin sessions
  * and the SPA router meta below requires the Administrator role.
  */
@@ -20,6 +26,8 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SystemRail from '@/components/SystemRail.vue'
+import StorageUsagePanel from '@/components/system/StorageUsagePanel.vue'
+import UploaderHealthPanel from '@/components/system/UploaderHealthPanel.vue'
 import { apiGet, ApiError } from '@/api/client'
 
 const { t } = useI18n()
@@ -77,6 +85,8 @@ const clusterError = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const lastRefreshed = ref<number | null>(null)
+/** Bumped by the refresh button; the two DR-033 panels re-fetch on it. */
+const refreshKey = ref(0)
 
 async function loadSystem() {
   error.value = null
@@ -110,6 +120,12 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+/** The button: the page's own requests, and the panels' through their key. */
+function refresh() {
+  refreshKey.value++
+  return load()
 }
 
 const stateClass: Record<ClusterNodeState, string> = {
@@ -152,7 +168,7 @@ onMounted(load)
       <h1 class="text-base font-semibold tracking-tight">{{ t('adminSystemStatus.title') }}</h1>
       <div class="flex items-center gap-3 text-xs text-slate-500">
         <span v-if="lastRefreshed">{{ t('adminSystemStatus.refreshedAt', { ts: new Date(lastRefreshed).toLocaleTimeString() }) }}</span>
-        <button type="button" class="px-3 py-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 text-xs muw-focus" :disabled="loading" @click="load">
+        <button type="button" class="px-3 py-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 text-xs muw-focus" :disabled="loading" @click="refresh">
           {{ loading ? t('common.loading') : t('adminSystemStatus.refresh') }}
         </button>
       </div>
@@ -265,6 +281,9 @@ onMounted(load)
         </div>
       </template>
     </section>
+
+    <UploaderHealthPanel :refresh-key="refreshKey" />
+    <StorageUsagePanel :refresh-key="refreshKey" />
   </div>
   </div>
 </template>

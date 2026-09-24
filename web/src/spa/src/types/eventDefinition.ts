@@ -39,3 +39,47 @@ export interface UpdateEventDefinitionInput {
   type?: EventType
   repeating?: boolean
 }
+
+/**
+ * DR-034 — one row of a visit definition's imaging plan: a catalogue modality
+ * this visit expects, whether it is required, which eye(s), and the inference
+ * tasks a file of that modality is fanned out to once filed.
+ */
+export type ImagingRequirement = 'required' | 'optional'
+export type ImagingLaterality = 'OD' | 'OS' | 'OU'
+
+export interface ImagingPlanEntry {
+  modalityId: number
+  code: string
+  labelDe: string
+  labelEn: string
+  device: string | null
+  /** Comma-separated; tasks are only meaningful when this contains `e2e`. */
+  kindsAccepted: string
+  requirement: ImagingRequirement
+  /** Null when any eye satisfies the entry. */
+  laterality: ImagingLaterality | null
+  tasks: string[]
+}
+
+/** What the PUT takes — the catalogue columns are the backend's to fill. */
+export interface ImagingPlanEntryWrite {
+  modalityId: number
+  requirement: ImagingRequirement
+  laterality: ImagingLaterality | null
+  tasks: string[]
+}
+
+/** DR-035 — what applying a plan to already-filed scans did, or would do. */
+export interface ImagingPlanCatchUp {
+  /** OCT volumes filed at visits of this definition. */
+  scans: number
+  /** Existing jobs pointed at their visit. */
+  attached: number
+  /** Analyses started (new or revived). */
+  started: number
+  failed: number
+  dryRun: boolean
+  /** False when the server has no inference dispatcher: nothing can be started. */
+  dispatcherAvailable: boolean
+}

@@ -22,6 +22,8 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
@@ -46,18 +48,30 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemA
  * form kept asserting a modality had been performed on a visit with nothing
  * left to show for it. Undoing a bind now undoes what the bind did.
  *
- * <p>P3.3 adds cancelling the inference jobs a bind started, once
- * {@code retinal_inference_job.ingest_item_id} exists to find them by. Until
- * then no bind starts a job, so there is nothing to cancel.
+ * <p>DR-035 — an OCT volume's retinal inference jobs go where the file goes:
+ * a bind attaches what exists and starts what the visit's imaging plan wants,
+ * an unbind detaches them and cancels those not yet running. See
+ * {@link RetinalJobFollower}.
  */
 public final class IngestBindService {
 
     private static final Logger LOG = LoggerFactory.getLogger(IngestBindService.class);
 
     private final DataSource dataSource;
+    /** DR-035 — the retinal jobs of an OCT volume go where the file goes. */
+    private final RetinalJobFollower jobs;
 
+    /**
+     * Without a dispatcher: unbind still detaches and cancels, bind attaches
+     * what exists but starts nothing (see {@link RetinalJobFollower}).
+     */
     public IngestBindService(DataSource dataSource) {
+        this(dataSource, new RetinalJobFollower(dataSource));
+    }
+
+    public IngestBindService(DataSource dataSource, RetinalJobFollower jobs) {
         this.dataSource = dataSource;
+        this.jobs = jobs;
     }
 
     /** How a binding was arrived at — {@code ingest_item.match_policy}. */
@@ -101,6 +115,11 @@ public final class IngestBindService {
         WRONG_STATE,
         /** No such row. */
         NOT_FOUND,
+        /**
+         * The visit the file is filed against is signed or locked — attested
+         * data; nothing about it may change without un-signing first.
+         */
+        REFUSED_LOCKED,
         /** The database refused. */
         FAILED
     }
@@ -179,11 +198,28 @@ public final class IngestBindService {
             }
             LOG.info("ingest_item {} bound to study_subject {} ({})",
                     ingestItemId, studySubjectId, matchPolicy);
-            return Result.OK;
         } catch (SQLException e) {
             LOG.error("bind failed for ingest_item {}: {}", ingestItemId, e.getMessage());
             return Result.FAILED;
         }
+
+        // DR-035 — an OCT volume's jobs follow it: results that exist are
+        // attached to this visit, and what the visit's imaging plan still
+        // wants is started. After the bind, and never failing it: the file is
+        // filed either way, and a job that could not start is what the results
+        // page's re-run is for. A file of any other kind is a no-op here.
+        if (studyEventId != null || eventCrfId != null) {
+            try {
+                RetinalJobFollower.Ensured e = jobs.ensure(ingestItemId, actor, false);
+                if (e.skippedBecause() != null && (e.attached() + e.started()) == 0) {
+                    LOG.debug("ingest_item {}: no retinal jobs followed ({})", ingestItemId, e.skippedBecause());
+                }
+            } catch (SQLException | RuntimeException e) {
+                LOG.error("ingest_item {} is bound, but its retinal jobs could not follow: {}",
+                        ingestItemId, e.getMessage());
+            }
+        }
+        return Result.OK;
     }
 
     /* ------------------------------------------------------------------ */
@@ -199,6 +235,12 @@ public final class IngestBindService {
      */
     public Result unbind(long ingestItemId, Actor actor) {
         int actorId = actor.userId() != null ? actor.userId() : systemActorId();
+        // 2026-09-24 — a signed or locked visit is attested data. Bind and
+        // dismiss never had to ask (a signed visit is never a bind target),
+        // but unbind did, and did not: a file could be pulled off a signed
+        // visit and its CRF tick retracted, silently altering what a
+        // physician had signed. Cancel already refuses the same way.
+        if (boundVisitIsSealed(ingestItemId)) return Result.REFUSED_LOCKED;
         // Undo the CRF value FIRST. If the row goes UNBOUND and then this
         // fails, the form is left asserting something with no file behind it;
         // in the other order a failure leaves a bound file, which is merely the
@@ -206,6 +248,17 @@ public final class IngestBindService {
         PerformedItemAutoTicker.ClearOutcome cleared =
                 new PerformedItemAutoTicker(dataSource).clearPerformed(ingestItemId, actorId);
         if (cleared == PerformedItemAutoTicker.ClearOutcome.FAILED) {
+            return Result.FAILED;
+        }
+        // DR-035 — then the jobs, for the same reason and in the same order:
+        // a failure here leaves a bound file whose jobs still claim the visit,
+        // which is the state being corrected, not a new wrong one.
+        RetinalJobFollower.Detached detachedJobs;
+        try {
+            detachedJobs = jobs.detach(ingestItemId, actor);
+        } catch (SQLException e) {
+            LOG.error("unbind of ingest_item {} refused: its retinal jobs could not be detached: {}",
+                    ingestItemId, e.getMessage());
             return Result.FAILED;
         }
 
@@ -223,11 +276,92 @@ public final class IngestBindService {
             if (updated == 0) return existsState(c, ingestItemId);
 
             writeAudit(AuditTypeIds.INGEST_UNBIND, ingestItemId, actor,
-                    "ingested file unbound", "BOUND", "UNBOUND;cleared=" + cleared);
+                    "ingested file unbound", "BOUND", "UNBOUND;cleared=" + cleared
+                            + (detachedJobs.nothing() ? "" : ";jobsDetached=" + detachedJobs.detached()
+                                    + ";jobsCancelled=" + detachedJobs.cancelled()));
             LOG.info("ingest_item {} unbound ({})", ingestItemId, cleared);
             return Result.OK;
         } catch (SQLException e) {
             LOG.error("unbind failed for ingest_item {}: {}", ingestItemId, e.getMessage());
+            return Result.FAILED;
+        }
+    }
+
+    /**
+     * True when the file is bound to a visit that is signed or locked, or to
+     * a subject that is. Unknown or unbound reads as not sealed: the caller's
+     * own state check answers those cases with the right message.
+     */
+    private boolean boundVisitIsSealed(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT se.subject_event_status_id, ss.status_id "
+                             + "  FROM ingest_item ii "
+                             + "  JOIN study_event se ON se.study_event_id = ii.bound_study_event_id "
+                             + "  JOIN study_subject ss ON ss.study_subject_id = ii.bound_study_subject_id "
+                             + " WHERE ii.ingest_item_id = ? AND ii.status = 'BOUND'")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                int eventStatus = rs.getInt(1);
+                int subjectStatus = rs.getInt(2);
+                return eventStatus == SubjectEventStatus.SIGNED.getId()
+                        || eventStatus == SubjectEventStatus.LOCKED.getId()
+                        || subjectStatus == Status.SIGNED.getId()
+                        || subjectStatus == Status.LOCKED.getId();
+            }
+        } catch (SQLException e) {
+            // Fail closed: if the question cannot be answered, treat the
+            // visit as sealed rather than alter attested data on a guess.
+            LOG.warn("could not check the visit state of ingest_item {} — refusing the unbind: {}",
+                    ingestItemId, e.getMessage());
+            return true;
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* restore                                                             */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Bring a DISMISSED file back into the inbox, before the retention sweep
+     * removes it.
+     *
+     * <p>Dismissal was the only lifecycle step here with no way back — during
+     * the 30-day window the only recovery was a hand edit of the row. The
+     * reverse of {@link #dismiss}: status back to UNBOUND, the dismissal's
+     * message and actor cleared, and an audit row under the dismiss type
+     * whose values read {@code DISMISSED → UNBOUND}; the reason it had been
+     * dismissed for survives in that trail.
+     */
+    public Result restore(long ingestItemId, Actor actor) {
+        try (Connection c = dataSource.getConnection()) {
+            String previousMessage = null;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT status_message FROM ingest_item WHERE ingest_item_id = ? AND status = 'DISMISSED'")) {
+                ps.setLong(1, ingestItemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) previousMessage = rs.getString(1);
+                }
+            }
+            int updated;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE ingest_item SET status='UNBOUND', status_message=NULL, "
+                            + "bound_by_user_id=NULL, bound_at=NULL "
+                            + " WHERE ingest_item_id=? AND status='DISMISSED'")) {
+                ps.setLong(1, ingestItemId);
+                updated = ps.executeUpdate();
+            }
+            if (updated == 0) return existsState(c, ingestItemId);
+
+            writeAudit(AuditTypeIds.IMAGE_DISMISS, ingestItemId, actor,
+                    "ingested file restored from dismissed",
+                    "DISMISSED" + (previousMessage == null || previousMessage.isBlank() ? "" : ";reason=" + previousMessage),
+                    "UNBOUND");
+            LOG.info("ingest_item {} restored from DISMISSED", ingestItemId);
+            return Result.OK;
+        } catch (SQLException e) {
+            LOG.error("restore failed for ingest_item {}: {}", ingestItemId, e.getMessage());
             return Result.FAILED;
         }
     }
@@ -435,6 +569,13 @@ public final class IngestBindService {
     /** Never throws: a completed transition must not be undone by a failed log. */
     private void writeAudit(int auditType, long ingestItemId, Actor actor,
                             String label, String oldValue, String newValue) {
+        // The audit row's entity id is an int; the id arrived from a request
+        // path as a long. Out of range means no such row was ever changed
+        // (CodeQL java/tainted-numeric-cast, beta.11 release gate).
+        if (ingestItemId <= 0 || ingestItemId > Integer.MAX_VALUE) {
+            LOG.warn("could not audit {}: ingest_item id out of the audit column's range", label);
+            return;
+        }
         try {
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), auditType,
                     actor.user(), actor.study(), null, label,

@@ -11,6 +11,8 @@ import { useEventDetailStore } from '@/stores/eventDetail'
 import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
+import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -25,7 +27,7 @@ import PageHeader from '@/components/PageHeader.vue'
  * the v1 bridge.
  */
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEventDetailStore()
@@ -35,6 +37,95 @@ const store = useEventDetailStore()
 // per-event-name conditionals in shared code.
 const studyModules = useStudyModuleStore()
 const panelInjections = computed(() => studyModules.injectionsFor('event-detail.panels'))
+
+/*
+ * 2026-09-24 — the images filed against this visit.
+ *
+ * Until now the visit page showed a scan's AI metrics and nowhere the
+ * scans and photographs themselves; a bound fundus image was visible only
+ * in the reconciliation inbox, an operator surface with no per-visit view.
+ * One panel, grouped by eye, thumbnails from the same preview endpoint the
+ * inbox uses (which enforces study visibility server-side).
+ */
+// The API client prepends CONTEXT_PATH for fetches; a raw <img src> does not.
+const CONTEXT_PATH = '/LibreClinica'
+const visitImages = ref<IngestItem[]>([])
+const visitImagesLoading = ref(false)
+const visitImagesError = ref(false)
+/** Unbound files in the inbox carrying this subject's label — nothing removed from a visit is out of sight. */
+const visitPending = ref(0)
+/** DR-034 — what the visit definition expects, each entry against what is filed. Empty: no plan. */
+const visitPlan = ref<VisitPlanRow[]>([])
+const visitPlanMissing = computed(() => visitPlan.value.filter((p) => p.requirement === 'required' && !p.satisfied).length)
+function planLabel(row: VisitPlanRow): string {
+  return String(locale.value).toLowerCase().startsWith('de') ? row.labelDe : row.labelEn
+}
+
+/*
+ * "Aus Visite entfernen" — the operator says whether the image goes back to
+ * the inbox (wrong visit) or is dismissed (not a study image); see
+ * RemoveVisitImageDialog. Not offered on a signed or locked visit: the
+ * backend refuses anyway, and a button that only ever errors is worse than
+ * none.
+ */
+const removeTarget = ref<IngestItem | null>(null)
+const removeOpen = ref(false)
+const visitSealed = computed(() => {
+  const s = event.value?.status
+  return s === 'signed' || s === 'locked'
+})
+function openRemove(img: IngestItem): void {
+  removeTarget.value = img
+  removeOpen.value = true
+}
+async function onImageRemoved(): Promise<void> {
+  removeTarget.value = null
+  await loadVisitImages(eventId.value)
+}
+
+async function loadVisitImages(id: string): Promise<void> {
+  visitImagesLoading.value = true
+  visitImagesError.value = false
+  try {
+    const res = await listIngestByEvent(id)
+    visitImages.value = res.items
+    visitPending.value = res.pendingForSubject
+    visitPlan.value = res.plan
+  } catch {
+    visitImages.value = []
+    visitPending.value = 0
+    visitPlan.value = []
+    visitImagesError.value = true
+  } finally {
+    visitImagesLoading.value = false
+  }
+}
+
+type EyeKey = 'OD' | 'OS' | 'OU' | 'unknown'
+const EYE_ORDER: EyeKey[] = ['OD', 'OS', 'OU', 'unknown']
+
+/** The visit's images by eye, in OD / OS / OU / unspecified order, empty groups dropped. */
+const visitImagesByEye = computed<Array<{ eye: EyeKey; items: IngestItem[] }>>(() => {
+  const groups = new Map<EyeKey, IngestItem[]>()
+  for (const img of visitImages.value) {
+    const key = ((img.laterality ?? '').toUpperCase() as EyeKey)
+    const eye: EyeKey = key === 'OD' || key === 'OS' || key === 'OU' ? key : 'unknown'
+    const list = groups.get(eye) ?? []
+    list.push(img)
+    groups.set(eye, list)
+  }
+  return EYE_ORDER.filter((e) => groups.has(e)).map((e) => ({ eye: e, items: groups.get(e)! }))
+})
+
+function previewSrc(img: IngestItem): string {
+  return `${CONTEXT_PATH}${img.previewUrl}`
+}
+
+function sourceLabel(img: IngestItem): string {
+  const key = `eventDetail.images.source.${img.sourceKind}`
+  const label = t(key)
+  return label === key ? img.sourceKind : label
+}
 
 /**
  * 2026-06-21 user-feedback round 5 — manual "Visite abschließen"
@@ -91,9 +182,11 @@ const startingEdcId = ref<number | null>(null)
 
 onMounted(() => {
   void store.load(eventId.value)
+  void loadVisitImages(eventId.value)
 })
 watch(eventId, (id) => {
   void store.load(id)
+  void loadVisitImages(id)
 })
 
 const event = computed(() => store.event)
@@ -379,6 +472,149 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
             </tr>
           </DenseTable>
         </section>
+
+        <!-- 2026-09-24 — the images filed against this visit, by eye. -->
+        <section
+          class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5"
+          data-testid="event-detail-images"
+        >
+          <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {{ t('eventDetail.images.title') }}
+            </h2>
+            <span class="text-xs text-slate-500">
+              {{ t('eventDetail.images.count', { n: visitImages.length }) }}
+            </span>
+          </div>
+
+          <!-- DR-034 — what this visit expects, against what is filed. -->
+          <ul
+            v-if="visitPlan.length"
+            class="px-5 py-3 border-b border-slate-200 bg-slate-50 grid gap-1 sm:grid-cols-2 text-xs"
+            :aria-label="t('eventDetail.images.plan.title')"
+            data-testid="event-detail-plan"
+          >
+            <li
+              v-for="p in visitPlan"
+              :key="`plan-${p.modalityId}`"
+              class="flex items-center gap-2"
+              :data-testid="`event-detail-plan-${p.code}`"
+              :data-satisfied="p.satisfied ? 'true' : 'false'"
+            >
+              <span
+                class="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
+                :class="p.satisfied
+                  ? 'bg-muw-teal-100 text-muw-teal-800'
+                  : p.requirement === 'required' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'"
+                aria-hidden="true"
+              >{{ p.satisfied ? '✓' : p.requirement === 'required' ? '!' : '–' }}</span>
+              <span class="text-slate-800">{{ planLabel(p) }}</span>
+              <span v-if="p.laterality" class="font-mono text-[10px] text-slate-500">{{ p.laterality }}</span>
+              <span class="text-slate-500">
+                {{ p.satisfied
+                  ? t('eventDetail.images.plan.present', { n: p.presentTotal })
+                  : t(`eventDetail.images.plan.missing.${p.requirement}`) }}
+              </span>
+            </li>
+          </ul>
+          <p
+            v-if="visitPlanMissing > 0"
+            class="px-5 py-2 border-b border-rose-100 bg-rose-50 text-xs text-rose-800"
+            data-testid="event-detail-plan-missing"
+          >
+            {{ t('eventDetail.images.plan.blocksSigning', { n: visitPlanMissing }) }}
+          </p>
+
+          <p v-if="visitImagesError" class="px-5 py-4 text-xs text-red-700" data-testid="event-detail-images-error">
+            {{ t('eventDetail.images.loadFailed') }}
+          </p>
+          <p
+            v-else-if="!visitImagesLoading && visitImages.length === 0"
+            class="px-5 py-6 text-xs text-slate-500 italic"
+            data-testid="event-detail-images-empty"
+          >
+            {{ t('eventDetail.images.empty') }}
+          </p>
+          <div v-else class="px-5 py-4 space-y-4">
+            <div v-for="group in visitImagesByEye" :key="group.eye">
+              <h3 class="text-xs font-medium text-slate-600 mb-2">
+                {{ t(`eventDetail.images.eye.${group.eye}`) }}
+              </h3>
+              <ul class="flex flex-wrap gap-3">
+                <li
+                  v-for="img in group.items"
+                  :key="img.id"
+                  class="w-40"
+                  data-testid="event-detail-image"
+                >
+                  <a
+                    v-if="img.hasPreview"
+                    :href="previewSrc(img)"
+                    target="_blank"
+                    rel="noopener"
+                    :title="t('eventDetail.images.open')"
+                    class="block border border-slate-200 rounded overflow-hidden bg-slate-50"
+                  >
+                    <img
+                      :src="previewSrc(img)"
+                      :alt="`${img.kind} ${img.laterality ?? ''}`.trim()"
+                      class="w-40 h-40 object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                  <div
+                    v-else
+                    class="w-40 h-40 border border-dashed border-slate-300 rounded flex items-center justify-center text-xs text-slate-400"
+                  >
+                    {{ t('eventDetail.images.noPreview') }}
+                  </div>
+                  <div class="mt-1 text-[11px] leading-tight text-slate-600">
+                    <div>
+                      <span class="font-mono uppercase">{{ img.kind }}</span>
+                      <span v-if="img.device"> · {{ img.device }}</span>
+                    </div>
+                    <div class="text-slate-500">
+                      <span v-if="img.acquisitionDate">{{ formatDate(img.acquisitionDate) }}</span>
+                      <span v-else>—</span>
+                      · {{ sourceLabel(img) }}
+                    </div>
+                    <button
+                      v-if="!visitSealed"
+                      type="button"
+                      class="mt-1 text-[11px] text-slate-500 hover:text-rose-700 underline"
+                      :data-testid="`event-detail-image-remove-${img.id}`"
+                      @click="openRemove(img)"
+                    >{{ t('eventDetail.images.remove') }}</button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p
+            v-if="visitSealed && visitImages.length > 0"
+            class="px-5 pb-3 text-[11px] text-slate-400"
+          >
+            {{ t('eventDetail.images.sealedHint') }}
+          </p>
+          <p
+            v-if="visitPending > 0"
+            class="px-5 py-2.5 border-t border-slate-200 bg-amber-50 text-xs text-amber-900 flex items-center gap-2"
+            data-testid="event-detail-images-pending"
+          >
+            <span>{{ t('eventDetail.images.pending', { n: visitPending }) }}</span>
+            <RouterLink to="/ingest" class="underline hover:text-amber-950">
+              {{ t('eventDetail.images.pendingLink') }}
+            </RouterLink>
+          </p>
+        </section>
+
+        <RemoveVisitImageDialog
+          v-if="removeTarget"
+          v-model:open="removeOpen"
+          :image="removeTarget"
+          @removed="onImageRemoved"
+          @close="removeTarget = null"
+        />
 
         <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.
              One panel per existing CRF row; the read-API quietly returns

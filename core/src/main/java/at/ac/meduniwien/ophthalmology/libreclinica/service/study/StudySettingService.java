@@ -74,6 +74,21 @@ public class StudySettingService {
     public static final String AI_ARM_SHOWN_GROUP = "ai.arm.shownGroup";
     public static final String AI_ARM_HIDDEN_GROUP = "ai.arm.hiddenGroup";
 
+    /**
+     * Whether treating clinicians are blinded to AI output in this study.
+     *
+     * <p>On by default — the rule was written for nAMD, where a physician
+     * seeing fluid volumes would influence the treatment the trial measures,
+     * and a rule like that must not switch itself off by omission. A
+     * screening study (HealthAEye, 2026-09-24) has no such arm and no such
+     * decision, and there the physician <em>is</em> the reader of the AI's
+     * output; set this to {@code false} and the Investigator sees the same
+     * metrics pages a Data Manager does. Consulted by the SPA's route guard
+     * (via {@code /me}) and by {@code AiArmPolicy}'s arm resolution, so the
+     * two cannot disagree.
+     */
+    public static final String AI_BLINDING_ENABLED = "ai.blinding.enabled";
+
     /** Whether a subject's files may be exported as a multimodal bundle. */
     public static final String EXPORT_BUNDLE_ENABLED = "export.bundle.enabled";
 
@@ -98,6 +113,7 @@ public class StudySettingService {
             INFERENCE_ENABLED,
             AI_ARM_SHOWN_GROUP,
             AI_ARM_HIDDEN_GROUP,
+            AI_BLINDING_ENABLED,
             EXPORT_BUNDLE_ENABLED,
             PORTAL_TODAYS_VISITS);
 
@@ -115,6 +131,7 @@ public class StudySettingService {
     static {
         // key -> { core.* property, code default }
         FALLBACKS.put(INFERENCE_ENABLED, new String[] { "core.retinalInference.enabled", "true" });
+        FALLBACKS.put(AI_BLINDING_ENABLED, new String[] { "core.ai.blinding.enabled", "true" });
         FALLBACKS.put(EXPORT_BUNDLE_ENABLED, new String[] { "core.export.bundle.enabled", "false" });
         FALLBACKS.put(PORTAL_TODAYS_VISITS, new String[] { "core.ingest.portal.todaysVisits", "false" });
     }

@@ -221,3 +221,65 @@ describe('EventDetailView', () => {
     expect(w.find('[data-test="event-detail-back"]').exists()).toBe(false)
   })
 })
+
+/**
+ * DR-034 — the visit page shows what the visit definition expects against
+ * what is filed, and says when a missing required image blocks signing.
+ */
+describe('EventDetailView expected imaging', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+  })
+
+  function planResponse(plan: unknown[]) {
+    return { items: [], studyEventId: 42, pendingForSubject: 0, plan }
+  }
+
+  async function mountWithPlan(plan: unknown[]) {
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/ingest/by-event/')
+        ? Promise.resolve(planResponse(plan))
+        : Promise.resolve(TWO_ROWS),
+    )
+    return mountAt(42)
+  }
+
+  it('renders nothing about expectations when the visit definition has no plan', async () => {
+    const w = await mountWithPlan([])
+    expect(w.find('[data-testid="event-detail-plan"]').exists()).toBe(false)
+    expect(w.find('[data-testid="event-detail-plan-missing"]').exists()).toBe(false)
+  })
+
+  it('lists each expected modality with its eye and whether it is present, and flags a missing required one', async () => {
+    const w = await mountWithPlan([
+      { modalityId: 1, code: 'OCT', labelDe: 'OCT', labelEn: 'OCT volume', device: 'spectralis',
+        requirement: 'required', laterality: 'OU', tasks: ['fluid'],
+        presentOD: 1, presentOS: 0, presentTotal: 1, satisfied: false },
+      { modalityId: 2, code: 'CLARUS', labelDe: 'Fundusfoto', labelEn: 'Fundus photo', device: 'clarus',
+        requirement: 'optional', laterality: null, tasks: [],
+        presentOD: 1, presentOS: 1, presentTotal: 2, satisfied: true },
+    ])
+    const rows = w.findAll('[data-testid^="event-detail-plan-"]').filter((n) => n.element.tagName === 'LI')
+    expect(rows).toHaveLength(2)
+    const oct = w.get('[data-testid="event-detail-plan-OCT"]')
+    expect(oct.attributes('data-satisfied')).toBe('false')
+    expect(oct.text()).toContain('OCT volume')
+    expect(oct.text()).toContain('OU')
+    expect(oct.text()).toContain('missing – required')
+    const clarus = w.get('[data-testid="event-detail-plan-CLARUS"]')
+    expect(clarus.attributes('data-satisfied')).toBe('true')
+    expect(clarus.text()).toContain('2 present')
+    expect(w.get('[data-testid="event-detail-plan-missing"]').text()).toContain('1 required image(s) missing')
+  })
+
+  it('does not warn when only an optional modality is missing', async () => {
+    const w = await mountWithPlan([
+      { modalityId: 2, code: 'CLARUS', labelDe: 'Fundusfoto', labelEn: 'Fundus photo', device: 'clarus',
+        requirement: 'optional', laterality: null, tasks: [],
+        presentOD: 0, presentOS: 0, presentTotal: 0, satisfied: false },
+    ])
+    expect(w.get('[data-testid="event-detail-plan-CLARUS"]').text()).toContain('missing – optional')
+    expect(w.find('[data-testid="event-detail-plan-missing"]').exists()).toBe(false)
+  })
+})
