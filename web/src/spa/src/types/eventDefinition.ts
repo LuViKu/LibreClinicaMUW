@@ -39,3 +39,33 @@ export interface UpdateEventDefinitionInput {
   type?: EventType
   repeating?: boolean
 }
+
+/**
+ * DR-034 — one row of a visit definition's imaging plan: a catalogue modality
+ * this visit expects, whether it is required, which eye(s), and the inference
+ * tasks a file of that modality is fanned out to once filed.
+ */
+export type ImagingRequirement = 'required' | 'optional'
+export type ImagingLaterality = 'OD' | 'OS' | 'OU'
+
+export interface ImagingPlanEntry {
+  modalityId: number
+  code: string
+  labelDe: string
+  labelEn: string
+  device: string | null
+  /** Comma-separated; tasks are only meaningful when this contains `e2e`. */
+  kindsAccepted: string
+  requirement: ImagingRequirement
+  /** Null when any eye satisfies the entry. */
+  laterality: ImagingLaterality | null
+  tasks: string[]
+}
+
+/** What the PUT takes — the catalogue columns are the backend's to fill. */
+export interface ImagingPlanEntryWrite {
+  modalityId: number
+  requirement: ImagingRequirement
+  laterality: ImagingLaterality | null
+  tasks: string[]
+}

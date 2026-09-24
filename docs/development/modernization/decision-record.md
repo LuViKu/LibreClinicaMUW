@@ -787,6 +787,36 @@ The second problem is the one that decided the shape. A camera that sits in the 
 
 ---
 
+## DR-034 — A visit definition says which images it expects, and what runs on them
+
+**Date:** 2026-09-24
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-029 (the one front door, `ingest_item`), the imaging catalogue (`imaging_modality`, migration `lc-muw-2026-11-02`), the per-visit task list (`event_definition_retinal_task`, migration `lc-muw-2026-06-22`), `StudySettingService.INFERENCE_ENABLED`; `VisitImagingPlan`, `EventDefinitionsApiController`, `SubjectsApiController#computeImagingCheck`, `IngestInboxApiController#byEvent`, `PublicOctUploadController`; migration `lc-muw-2026-12-06-visit-imaging-plan.xml`.
+
+**Context.** Two things were missing from a visit definition. It could not say which images a visit needs: a subject could be signed with no OCT filed against a visit whose protocol requires one, and nothing on the visit page said an image was expected at all. And what it could say about inference — a list of tasks per visit — applied to every OCT that arrived: a study with a posterior-segment OCT (Spectralis) and an anterior-segment OCT (CSO MS-39) at the same visit would run retinal layer segmentation on the anterior volume. The study setting `inference.enabled` existed, was shown on the settings panel, and was read by nothing.
+
+**Decision.**
+
+1. **One plan row per (visit definition, catalogue modality)** in `event_definition_imaging`: whether the modality is *required* or *optional* at that visit, which eye(s) it must cover (OD, OS, OU, or any), and the retinal inference tasks a file of that modality is fanned out to. Tasks are accepted only on a modality whose `kinds_accepted` includes `e2e`; nothing else is ever inferred on. Edited at Visits → edit → *Expected imaging*, `GET`/`PUT …/event-definitions/{sedId}/imaging-plan`, audited as one `imaging_plan` field change.
+2. **Task resolution is per (visit definition × file's modality).** A visit definition with a plan runs the entry's tasks on a file of that modality and *nothing* on a file whose modality has no entry or is unknown — a plan that names what runs on what is a plan that says nothing runs on the rest. A visit definition without a plan keeps the older per-visit list, then the `fluid` default, so a study without an imaging catalogue behaves exactly as before. The migration carries every existing task list into a plan row where the study has exactly one OCT-volume modality; with two, the administrator says which one, and the fallback covers the interim.
+3. **`inference.enabled` is real.** Off, the OCT portal files the scan and creates no job (audited and answered as `BOUND`). It gates automatic enqueueing only; a re-run started by hand from the results page is a person's decision and is not gated.
+4. **Required imaging blocks signing.** The sign preflight gains `imaging-complete`: for every counted visit (not cancelled, not unscheduled, not skipped), every required entry needs a BOUND `ingest_item` of that modality covering the named eye(s) — OU needs OD and OS, or a file marked OU. It fails naming each visit and modality still missing. A lookup failure warns rather than blocks. Matching is by the file's catalogue id; a file that was never classified matches by device key, so what the DICOM listener and the Export Watcher filed before this change still counts.
+5. **The visit page shows expected against present** — one line per entry, satisfied or not, and a banner when a required one is missing — from the same coverage the preflight uses (`plan` on `GET /api/v1/ingest/by-event/{id}`).
+6. **A study module may insist on tasks.** `StudyModuleManifest.requiredRetinalTasks` (nAMD: `fluid`) is shown pressed and not switchable in the editor and forced into every saved OCT-volume entry, so a study enrolled in the module cannot configure away the input the module reads.
+
+**Consequences.**
+
+- One additive table; the old task table stays and keeps working for definitions without a plan. The OCT portal now stamps the study's OCT-volume modality onto the `ingest_item` it creates (when the study has exactly one), so plan coverage sees it.
+- A study that adds an imaging catalogue changes how its visit editor looks: the task chips give way to the plan table. Its existing task lists were migrated into it, so nothing changes in what runs until somebody edits.
+- The MS-39 needs a catalogue row (device key, `kinds_accepted` without `e2e` unless its export is one the pipeline can read) before a visit can require it; the plan is ready for it.
+- Not done here: retinal jobs following a file on unbind (P3.3), and a per-file re-resolution when a plan changes after files were filed — the plan applies to files filed from then on.
+- Verified 2026-09-24 as far as this machine allows: the pure coverage rules by unit test (`VisitImagingPlanTest`), the SPA by `vue-tsc` and vitest (editor helpers, store, visit page), the Java by language-server diagnostics. The migration and the endpoints have not run against a database here; the beta.11 dry-run migration is the first place they will.
+
+**Reversible** — drop the table and the endpoints; task resolution returns to the per-visit list, the preflight loses one row.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

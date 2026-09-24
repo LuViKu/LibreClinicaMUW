@@ -4,6 +4,8 @@ import { apiDelete as _apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkE
 import type {
   CreateEventDefinitionInput,
   EventDefinition,
+  ImagingPlanEntry,
+  ImagingPlanEntryWrite,
   UpdateEventDefinitionInput,
 } from '@/types/eventDefinition'
 
@@ -251,6 +253,7 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     isLoading.value = false
     error.value = null
     retinalTasksByDef.value = {}
+    imagingPlanByDef.value = {}
   }
 
   /* ----------------------------------------------------------------- */
@@ -297,6 +300,45 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     }
   }
 
+  /* ----------------------------------------------------------------- */
+  /* DR-034 — the visit imaging plan.                                  */
+  /* ----------------------------------------------------------------- */
+
+  /** Cached plan per event_definition id; the edit form loads it when it opens. */
+  const imagingPlanByDef = ref<Record<number, ImagingPlanEntry[]>>({})
+
+  function planUrl(studyOid: string, sedId: number): string {
+    return `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${sedId}/imaging-plan`
+  }
+
+  async function loadImagingPlan(studyOid: string, sedId: number): Promise<ImagingPlanEntry[]> {
+    try {
+      const resp = await apiGet<{ entries: ImagingPlanEntry[] }>(planUrl(studyOid, sedId))
+      const entries = Array.isArray(resp?.entries) ? resp.entries : []
+      imagingPlanByDef.value = { ...imagingPlanByDef.value, [sedId]: entries }
+      return entries
+    } catch (e) {
+      handleNonValidationError(e, 'load imaging plan')
+      return []
+    }
+  }
+
+  async function saveImagingPlan(
+    studyOid: string,
+    sedId: number,
+    entries: ImagingPlanEntryWrite[],
+  ): Promise<boolean> {
+    try {
+      const resp = await apiPut<{ entries: ImagingPlanEntry[] }>(planUrl(studyOid, sedId), { entries })
+      const next = Array.isArray(resp?.entries) ? resp.entries : []
+      imagingPlanByDef.value = { ...imagingPlanByDef.value, [sedId]: next }
+      return true
+    } catch (e) {
+      handleNonValidationError(e, 'save imaging plan')
+      return false
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -313,5 +355,8 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     retinalTasksByDef,
     loadRetinalTasks,
     saveRetinalTasks,
+    imagingPlanByDef,
+    loadImagingPlan,
+    saveImagingPlan,
   }
 })

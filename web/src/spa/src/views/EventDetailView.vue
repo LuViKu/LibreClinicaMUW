@@ -11,7 +11,7 @@ import { useEventDetailStore } from '@/stores/eventDetail'
 import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
-import { listIngestByEvent, type IngestItem } from '@/api/ingest'
+import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
 import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
@@ -27,7 +27,7 @@ import PageHeader from '@/components/PageHeader.vue'
  * the v1 bridge.
  */
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEventDetailStore()
@@ -54,6 +54,12 @@ const visitImagesLoading = ref(false)
 const visitImagesError = ref(false)
 /** Unbound files in the inbox carrying this subject's label — nothing removed from a visit is out of sight. */
 const visitPending = ref(0)
+/** DR-034 — what the visit definition expects, each entry against what is filed. Empty: no plan. */
+const visitPlan = ref<VisitPlanRow[]>([])
+const visitPlanMissing = computed(() => visitPlan.value.filter((p) => p.requirement === 'required' && !p.satisfied).length)
+function planLabel(row: VisitPlanRow): string {
+  return String(locale.value).toLowerCase().startsWith('de') ? row.labelDe : row.labelEn
+}
 
 /*
  * "Aus Visite entfernen" — the operator says whether the image goes back to
@@ -84,9 +90,11 @@ async function loadVisitImages(id: string): Promise<void> {
     const res = await listIngestByEvent(id)
     visitImages.value = res.items
     visitPending.value = res.pendingForSubject
+    visitPlan.value = res.plan
   } catch {
     visitImages.value = []
     visitPending.value = 0
+    visitPlan.value = []
     visitImagesError.value = true
   } finally {
     visitImagesLoading.value = false
@@ -478,6 +486,44 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               {{ t('eventDetail.images.count', { n: visitImages.length }) }}
             </span>
           </div>
+
+          <!-- DR-034 — what this visit expects, against what is filed. -->
+          <ul
+            v-if="visitPlan.length"
+            class="px-5 py-3 border-b border-slate-200 bg-slate-50 grid gap-1 sm:grid-cols-2 text-xs"
+            :aria-label="t('eventDetail.images.plan.title')"
+            data-testid="event-detail-plan"
+          >
+            <li
+              v-for="p in visitPlan"
+              :key="`plan-${p.modalityId}`"
+              class="flex items-center gap-2"
+              :data-testid="`event-detail-plan-${p.code}`"
+              :data-satisfied="p.satisfied ? 'true' : 'false'"
+            >
+              <span
+                class="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
+                :class="p.satisfied
+                  ? 'bg-muw-teal-100 text-muw-teal-800'
+                  : p.requirement === 'required' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'"
+                aria-hidden="true"
+              >{{ p.satisfied ? '✓' : p.requirement === 'required' ? '!' : '–' }}</span>
+              <span class="text-slate-800">{{ planLabel(p) }}</span>
+              <span v-if="p.laterality" class="font-mono text-[10px] text-slate-500">{{ p.laterality }}</span>
+              <span class="text-slate-500">
+                {{ p.satisfied
+                  ? t('eventDetail.images.plan.present', { n: p.presentTotal })
+                  : t(`eventDetail.images.plan.missing.${p.requirement}`) }}
+              </span>
+            </li>
+          </ul>
+          <p
+            v-if="visitPlanMissing > 0"
+            class="px-5 py-2 border-b border-rose-100 bg-rose-50 text-xs text-rose-800"
+            data-testid="event-detail-plan-missing"
+          >
+            {{ t('eventDetail.images.plan.blocksSigning', { n: visitPlanMissing }) }}
+          </p>
 
           <p v-if="visitImagesError" class="px-5 py-4 text-xs text-red-700" data-testid="event-detail-images-error">
             {{ t('eventDetail.images.loadFailed') }}

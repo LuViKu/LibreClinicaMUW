@@ -115,6 +115,13 @@ export interface StudyModuleManifest {
   }
   /** Lazy i18n loader — merged into vue-i18n on activation. */
   loadI18n?: () => Promise<{ de: Record<string, unknown>; en: Record<string, unknown> }>
+  /**
+   * DR-034 — retinal inference tasks this module's decision logic depends on.
+   * The visit imaging plan editor keeps them switched on for every OCT-volume
+   * modality a visit includes, so a study enrolled in the module cannot
+   * configure away the input the module reads.
+   */
+  requiredRetinalTasks?: readonly string[]
 }
 
 // 2026-09-18 — the visitScheduler hook was removed. It was declared here and

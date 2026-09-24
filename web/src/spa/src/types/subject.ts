@@ -396,6 +396,8 @@ export interface StudyOption {
  *  - `open-queries`        — warn-only, never blocks
  *  - `subject-not-signed`  — subject hasn't been signed yet
  *  - `user-role-can-sign`  — user is Investigator or Study Director
+ *  - `imaging-complete`    — DR-034: every required imaging modality of
+ *                            every counted visit has a filed image
  *
  * `status` is `'pass'` / `'warn'` / `'fail'`. The M8 view collapses
  * these to `'pass'` / `'warn'` / `'blocker'` for the
@@ -411,6 +413,7 @@ export type PreflightCheck =
       | 'open-queries'
       | 'subject-not-signed'
       | 'user-role-can-sign'
+      | 'imaging-complete'
     status: 'pass' | 'warn' | 'fail'
   }
 

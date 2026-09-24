@@ -40,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResoluti
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,7 +103,7 @@ public class PublicOctUploadController {
     private static final Logger LOG = LoggerFactory.getLogger(PublicOctUploadController.class);
 
     /** Default task when the portal commits — see class-Javadoc on v1 task selection. */
-    private static final String DEFAULT_TASK = "fluid";
+    private static final String DEFAULT_TASK = VisitImagingPlan.DEFAULT_TASK;
 
     /** Laterality field gate. OU is rejected — the .e2e parser only ever emits OD/OS. */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
@@ -393,21 +394,42 @@ public class PublicOctUploadController {
         } else {
             status = RetinalInferenceJobStatus.QUEUED.dbValue();
         }
-        // 2026-06-22 — per-event-definition default task list. When the
-        // upload is bound to an event_crf or study_event we look up the
-        // configured panel for its event_definition and enqueue ONE
-        // retinal_inference_job per task in that set. Parked uploads
-        // and event_definitions with no config fall back to DEFAULT_TASK
-        // so pre-multi-task behaviour is preserved.
-        List<String> tasks;
-        if (eventCrfId != null) {
-            tasks = resolveDefaultRetinalTasksByEventCrf(eventCrfId);
-            if (tasks.isEmpty()) tasks = List.of(DEFAULT_TASK);
-        } else if (studyEventId != null) {
-            tasks = resolveDefaultRetinalTasksByStudyEvent(studyEventId);
-            if (tasks.isEmpty()) tasks = List.of(DEFAULT_TASK);
-        } else {
-            tasks = List.of(DEFAULT_TASK);
+        // DR-034 — which tasks run is the visit's imaging plan's call, per
+        // modality: the entry for "OCT volume" at this visit definition names
+        // them, a visit definition without a plan keeps its older per-visit
+        // list, and a study without either runs the fluid default. The study's
+        // inference switch gates all of it — a study that turned inference off
+        // files the scan and enqueues nothing. One job per task.
+        //
+        // Failure to read any of that files the scan without a job rather than
+        // guessing a task: the results page can start one by hand, whereas a
+        // job that ran against a switched-off study cannot be un-run.
+        List<String> tasks = List.of();
+        Integer modalityId = null;
+        if (!park) {
+            try (Connection c = dataSource.getConnection()) {
+                Integer studyId = VisitImagingPlan.studyOfBinding(c, eventCrfId, studyEventId);
+                if (studyId != null) modalityId = VisitImagingPlan.e2eModalityOf(c, studyId);
+                if (studyId != null && !new StudySettingService(dataSource)
+                        .isEnabled(studyId, StudySettingService.INFERENCE_ENABLED)) {
+                    LOG.info("Public OCT upload — inference is switched off for study {}; "
+                            + "filing the scan without a job", studyId);
+                } else {
+                    VisitImagingPlan.TaskResolution resolved =
+                            VisitImagingPlan.tasksFor(c, eventCrfId, studyEventId, modalityId);
+                    tasks = resolved.tasks();
+                    if (tasks.isEmpty()) {
+                        LOG.info("Public OCT upload — the visit's imaging plan runs nothing on this "
+                                + "scan ({}, modality {}); filing it without a job",
+                                resolved.source(), modalityId);
+                    }
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("Public OCT upload — could not resolve the visit's imaging plan "
+                        + "(eventCrfId={}, studyEventId={}): {} — filing the scan without a job",
+                        eventCrfId, studyEventId, sqlEx.getMessage());
+                tasks = List.of();
+            }
         }
 
         // P3.3 — the scan becomes a row in the one queue before anything is
@@ -425,7 +447,8 @@ public class PublicOctUploadController {
         List<Map<String, Object>> jobInfos = new ArrayList<>();
         try (Connection c = dataSource.getConnection()) {
             ingestItemId = insertIngestItem(c, absolutePath, originalFilename, e2eSha256, fileSize(savedPath),
-                    lat, scanIndex, pid, auditStudySubjectId, scanDate, eventCrfId, studyEventId, park);
+                    lat, scanIndex, pid, auditStudySubjectId, scanDate, eventCrfId, studyEventId, park,
+                    modalityId);
             if (!park) {
                 for (String task : tasks) {
                     long jId = insertJob(c, eventCrfId, studyEventId, task, absolutePath, lat, status,
@@ -475,9 +498,12 @@ public class PublicOctUploadController {
         // and the operator said they would file it later, which is the event
         // worth recording. Negated so the entity id cannot collide with a job
         // id in the same audit_table.
+        // A bound scan the plan runs nothing on is audited the same way, as
+        // BOUND: the file arrived and was filed, and there was no job to log.
+        String noJobStatus = park ? "UNBOUND" : "BOUND";
         if (jobIds.isEmpty()) {
             writePublicOctUploadAuditRow("ingest_item", ingestItemId,
-                    auditStudySubjectId, pid, lat, "UNBOUND");
+                    auditStudySubjectId, pid, lat, noJobStatus);
         } else {
             for (long jid : jobIds) {
                 writePublicOctUploadAuditRow(jid, auditStudySubjectId, pid, lat, status);
@@ -499,7 +525,7 @@ public class PublicOctUploadController {
         // read by people with no clinical role.
         LOG.info("Public OCT upload — ingest_item {} job {} {} (lat={}, scanIndex={}, "
                 + "eventCrfId={}, studyEventId={}, disambiguated={})",
-                ingestItemId, jobId, jobIds.isEmpty() ? "UNBOUND" : status,
+                ingestItemId, jobId, jobIds.isEmpty() ? noJobStatus : status,
                 lat, scanIndex, eventCrfId, studyEventId, disambiguated);
 
         // 2026-06-19 — fire the preprocess + remote-inference dispatch
@@ -535,7 +561,7 @@ public class PublicOctUploadController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jobId", jobId);
         body.put("ingestItemId", ingestItemId);
-        body.put("status", jobIds.isEmpty() ? "UNBOUND" : status);
+        body.put("status", jobIds.isEmpty() ? noJobStatus : status);
         body.put("jobs", jobInfos);
         return ResponseEntity.status(201).body(body);
     }
@@ -641,67 +667,6 @@ public class PublicOctUploadController {
             LOG.warn("Failed to persist the acquisition date for job {}: {}",
                     primaryJobId, sqlEx.getMessage());
         }
-    }
-
-    /**
-     * 2026-06-22 — resolve the configured retinal-task panel for the
-     * event_definition that owns this event_crf. Returns the lowercase
-     * task tokens ordered as stored. Empty list when the event_def has
-     * no config (the caller falls back to DEFAULT_TASK in that case).
-     *
-     * <p>Joins event_crf → study_event → study_event_definition →
-     * event_definition_retinal_task so a single round-trip resolves
-     * the panel without surfacing the event-definition id to the
-     * caller.
-     */
-    private List<String> resolveDefaultRetinalTasksByEventCrf(int eventCrfId) {
-        List<String> out = new ArrayList<>();
-        String sql = "SELECT t.task "
-                + "  FROM event_crf ec "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
-                + "  JOIN event_definition_retinal_task t "
-                + "    ON t.study_event_definition_id = se.study_event_definition_id "
-                + " WHERE ec.event_crf_id = ? "
-                + " ORDER BY t.id";
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, eventCrfId);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) out.add(rs.getString(1));
-            }
-        } catch (SQLException sqlEx) {
-            LOG.warn("Failed to resolve default retinal tasks for event_crf {}: {}",
-                    eventCrfId, sqlEx.getMessage());
-        }
-        return out;
-    }
-
-    /**
-     * 2026-06-23 — sibling of {@link #resolveDefaultRetinalTasksByEventCrf}
-     * for the planned-visit binding path. When the operator picks a
-     * scheduled visit (no CRF yet) the panel still comes from the
-     * event_definition; we just take the shorter join path through
-     * study_event directly.
-     */
-    private List<String> resolveDefaultRetinalTasksByStudyEvent(int studyEventId) {
-        List<String> out = new ArrayList<>();
-        String sql = "SELECT t.task "
-                + "  FROM study_event se "
-                + "  JOIN event_definition_retinal_task t "
-                + "    ON t.study_event_definition_id = se.study_event_definition_id "
-                + " WHERE se.study_event_id = ? "
-                + " ORDER BY t.id";
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, studyEventId);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) out.add(rs.getString(1));
-            }
-        } catch (SQLException sqlEx) {
-            LOG.warn("Failed to resolve default retinal tasks for study_event {}: {}",
-                    studyEventId, sqlEx.getMessage());
-        }
-        return out;
     }
 
     /**
@@ -1203,7 +1168,8 @@ public class PublicOctUploadController {
                                   String sha256, long byteSize, String laterality, int scanIndex,
                                   String patientId, Integer candidateStudySubjectId,
                                   LocalDate acquisitionDate, Integer eventCrfId,
-                                  Integer studyEventId, boolean park) throws SQLException {
+                                  Integer studyEventId, boolean park,
+                                  Integer imagingModalityId) throws SQLException {
         var item = IngestItemRepository
                 .newItem(IngestArtifactStore.Kind.E2E, "portal-oct", e2ePath)
                 .originalFilename(originalFilename)
@@ -1219,6 +1185,9 @@ public class PublicOctUploadController {
                 .acquisitionDateSource(acquisitionDate == null
                         ? null : IngestItemRepository.ACQ_SOURCE_OPERATOR)
                 .patientId(patientId)
+                // DR-034 — the study's OCT-volume catalogue entry, when it has
+                // exactly one; what the visit's imaging plan is checked against.
+                .imagingModalityId(imagingModalityId)
                 .candidateStudySubjectId(candidateStudySubjectId);
         if (!park) {
             ImageIngestBinding.EventTarget target = resolveBindTarget(c, eventCrfId, studyEventId);
