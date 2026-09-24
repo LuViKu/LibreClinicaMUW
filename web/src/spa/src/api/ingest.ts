@@ -93,10 +93,20 @@ export function ingestInboxCounts(): Promise<{
  * "Bilder dieser Visite" (2026-09-24). Same row shape as the inbox, so the
  * preview URL and the eye/device/date columns need no second mapping.
  */
-export function listIngestByEvent(studyEventId: number | string): Promise<IngestItem[]> {
-  return apiGet<{ items: IngestItem[] }>(
+export interface VisitImages {
+  items: IngestItem[]
+  /**
+   * Unbound files in the inbox that carry this visit's subject label — what
+   * "remove from visit: wrong visit" leaves behind, or a capture the resolver
+   * could not place. Shown on the visit page so nothing is out of sight.
+   */
+  pendingForSubject: number
+}
+
+export function listIngestByEvent(studyEventId: number | string): Promise<VisitImages> {
+  return apiGet<{ items: IngestItem[]; pendingForSubject?: number }>(
     `/pages/api/v1/ingest/by-event/${encodeURIComponent(String(studyEventId))}`,
-  ).then((r) => r.items)
+  ).then((r) => ({ items: r.items ?? [], pendingForSubject: r.pendingForSubject ?? 0 }))
 }
 
 export function getIngestItem(id: number): Promise<IngestItem> {
@@ -168,8 +178,34 @@ export function bulkBindIngestItems(
  * This also undoes what the bind caused: the visit's "modality performed" tick
  * goes with it, unless another file from the same device still evidences it.
  */
-export function unbindIngestItem(id: number): Promise<{ ingestItemId: number; status: string }> {
-  return apiPost(`/pages/api/v1/ingest/${id}/unbind`, {})
+/**
+ * Take a file off its visit. Plain: back to the inbox (wrong visit). With
+ * `dismiss`: unbind and dismiss in one request (not study data), with the
+ * reason — so the file never sits in the inbox unreviewed between two clicks.
+ * The backend refuses (409, `reason: 'VISIT_SEALED'`) when the visit is
+ * signed or locked.
+ */
+export function unbindIngestItem(
+  id: number,
+  opts?: { dismiss?: boolean; reason?: string },
+): Promise<{ ingestItemId: number; status: string }> {
+  return apiPost(`/pages/api/v1/ingest/${id}/unbind`, {
+    dismiss: opts?.dismiss === true,
+    reason: opts?.reason ?? null,
+  })
+}
+
+/** Bring a dismissed file back into the inbox while the retention window is open. */
+export function restoreIngestItem(id: number): Promise<{ ingestItemId: number; status: string }> {
+  return apiPost(`/pages/api/v1/ingest/${id}/restore`, {})
+}
+
+/** Dismiss several unbound files at once; the response says which were refused. */
+export function bulkDismissIngestItems(
+  ids: number[],
+  reason?: string,
+): Promise<{ dismissed: number[]; skipped: Array<{ id: number; reason: string }> }> {
+  return apiPost('/pages/api/v1/ingest/bulk-dismiss', { ids, reason: reason ?? null })
 }
 
 export function dismissIngestItem(

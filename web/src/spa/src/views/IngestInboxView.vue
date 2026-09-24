@@ -18,13 +18,16 @@ import { useI18n } from 'vue-i18n'
 
 import AssignIngestDialog from '@/components/ingest/AssignIngestDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { ApiError } from '@/api/client'
 import {
   bindIngestItem,
   bulkBindIngestItems,
+  bulkDismissIngestItems,
   dismissIngestItem,
   ingestInboxCounts,
   isDateMismatch,
   listIngestInbox,
+  restoreIngestItem,
   unbindIngestItem,
   type IngestItem,
   type IngestKind,
@@ -58,6 +61,11 @@ const KINDS: IngestKind[] = ['e2e', 'dicom', 'image', 'other']
 
 const selectedCount = computed(() => selected.value.size)
 const canUnbind = computed(() => status.value === 'BOUND')
+// A dismissed file can come back while the retention window is open —
+// until 2026-09-24 the only way was a hand edit of the row.
+const canRestore = computed(() => status.value === 'DISMISSED')
+// Bulk dismiss only where dismiss applies: the working queue.
+const canDismissSelection = computed(() => status.value === 'UNBOUND')
 
 function previewSrc(row: IngestItem): string {
   return `${CONTEXT_PATH}${row.previewUrl}`
@@ -238,9 +246,47 @@ async function onUnbind(row: IngestItem): Promise<void> {
     await unbindIngestItem(row.id)
     removeRow(row.id)
   } catch (e) {
+    // The backend refuses to touch a signed or locked visit; say that in
+    // words rather than showing the raw 409.
+    const body = e instanceof ApiError ? (e.body as { reason?: string } | null) : null
+    error.value = body?.reason === 'VISIT_SEALED'
+      ? t('ingestInbox.visitSealed')
+      : e instanceof Error ? e.message : String(e)
+  } finally {
+    busyId.value = null
+  }
+}
+
+async function onRestore(row: IngestItem): Promise<void> {
+  if (!(await confirm({ message: t('ingestInbox.restoreConfirm') }))) return
+  busyId.value = row.id
+  error.value = null
+  try {
+    await restoreIngestItem(row.id)
+    removeRow(row.id)
+    void loadCounts()
+  } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     busyId.value = null
+  }
+}
+
+async function onDismissSelected(): Promise<void> {
+  const ids = [...selected.value]
+  if (ids.length === 0) return
+  if (!(await confirm({ message: t('ingestInbox.dismissSelectedConfirm', { n: ids.length }), danger: true }))) return
+  error.value = null
+  try {
+    const res = await bulkDismissIngestItems(ids)
+    res.dismissed.forEach(removeRow)
+    if (res.skipped.length > 0) {
+      error.value = t('ingestInbox.someSkippedDismiss', { n: res.skipped.length })
+    }
+    selected.value = new Set()
+    void loadCounts()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
   }
 }
 </script>
@@ -345,6 +391,13 @@ async function onUnbind(row: IngestItem): Promise<void> {
         data-testid="bulk-bind"
         @click="openAssign(null)"
       >{{ t('ingestInbox.bindSelected') }}</button>
+      <button
+        v-if="canDismissSelection"
+        type="button"
+        class="px-3 py-1.5 text-[12px] font-medium rounded-lg border border-slate-300 text-slate-700 bg-white hover:bg-slate-50"
+        data-testid="bulk-dismiss"
+        @click="onDismissSelected"
+      >{{ t('ingestInbox.dismissSelected') }}</button>
       <button
         type="button"
         class="text-[12px] text-slate-500 hover:text-slate-700 underline"
@@ -453,12 +506,20 @@ async function onUnbind(row: IngestItem): Promise<void> {
               @click="onUnbind(row)"
             >{{ t('ingestInbox.unbind') }}</button>
             <button
-              v-if="!canUnbind"
+              v-if="!canUnbind && !canRestore"
               type="button"
               class="px-3 py-1.5 text-[12px] font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               :disabled="busyId === row.id"
               @click="onDismiss(row)"
             >{{ t('ingestInbox.dismiss') }}</button>
+            <button
+              v-if="canRestore"
+              type="button"
+              class="px-3 py-1.5 text-[12px] font-medium rounded-lg border border-muw-teal-300 text-muw-teal-800 hover:bg-muw-teal-50 disabled:opacity-50"
+              :disabled="busyId === row.id"
+              :data-testid="`restore-${row.id}`"
+              @click="onRestore(row)"
+            >{{ t('ingestInbox.restore') }}</button>
           </div>
         </div>
       </div>

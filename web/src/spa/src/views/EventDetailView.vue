@@ -12,6 +12,7 @@ import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 import { listIngestByEvent, type IngestItem } from '@/api/ingest'
+import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -51,14 +52,41 @@ const CONTEXT_PATH = '/LibreClinica'
 const visitImages = ref<IngestItem[]>([])
 const visitImagesLoading = ref(false)
 const visitImagesError = ref(false)
+/** Unbound files in the inbox carrying this subject's label — nothing removed from a visit is out of sight. */
+const visitPending = ref(0)
+
+/*
+ * "Aus Visite entfernen" — the operator says whether the image goes back to
+ * the inbox (wrong visit) or is dismissed (not a study image); see
+ * RemoveVisitImageDialog. Not offered on a signed or locked visit: the
+ * backend refuses anyway, and a button that only ever errors is worse than
+ * none.
+ */
+const removeTarget = ref<IngestItem | null>(null)
+const removeOpen = ref(false)
+const visitSealed = computed(() => {
+  const s = event.value?.status
+  return s === 'signed' || s === 'locked'
+})
+function openRemove(img: IngestItem): void {
+  removeTarget.value = img
+  removeOpen.value = true
+}
+async function onImageRemoved(): Promise<void> {
+  removeTarget.value = null
+  await loadVisitImages(eventId.value)
+}
 
 async function loadVisitImages(id: string): Promise<void> {
   visitImagesLoading.value = true
   visitImagesError.value = false
   try {
-    visitImages.value = await listIngestByEvent(id)
+    const res = await listIngestByEvent(id)
+    visitImages.value = res.items
+    visitPending.value = res.pendingForSubject
   } catch {
     visitImages.value = []
+    visitPending.value = 0
     visitImagesError.value = true
   } finally {
     visitImagesLoading.value = false
@@ -504,12 +532,43 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                       <span v-else>—</span>
                       · {{ sourceLabel(img) }}
                     </div>
+                    <button
+                      v-if="!visitSealed"
+                      type="button"
+                      class="mt-1 text-[11px] text-slate-500 hover:text-rose-700 underline"
+                      :data-testid="`event-detail-image-remove-${img.id}`"
+                      @click="openRemove(img)"
+                    >{{ t('eventDetail.images.remove') }}</button>
                   </div>
                 </li>
               </ul>
             </div>
           </div>
+          <p
+            v-if="visitSealed && visitImages.length > 0"
+            class="px-5 pb-3 text-[11px] text-slate-400"
+          >
+            {{ t('eventDetail.images.sealedHint') }}
+          </p>
+          <p
+            v-if="visitPending > 0"
+            class="px-5 py-2.5 border-t border-slate-200 bg-amber-50 text-xs text-amber-900 flex items-center gap-2"
+            data-testid="event-detail-images-pending"
+          >
+            <span>{{ t('eventDetail.images.pending', { n: visitPending }) }}</span>
+            <RouterLink to="/ingest" class="underline hover:text-amber-950">
+              {{ t('eventDetail.images.pendingLink') }}
+            </RouterLink>
+          </p>
         </section>
+
+        <RemoveVisitImageDialog
+          v-if="removeTarget"
+          v-model:open="removeOpen"
+          :image="removeTarget"
+          @removed="onImageRemoved"
+          @close="removeTarget = null"
+        />
 
         <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.
              One panel per existing CRF row; the read-API quietly returns

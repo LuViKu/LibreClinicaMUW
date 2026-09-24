@@ -2885,6 +2885,26 @@
         "dicom": "DICOM",
         "upload": "Upload",
         "portal-oct": "OCT portal"
+      },
+      "remove": "Remove from visit",
+      "sealedHint": "Visit is signed or locked — images cannot be removed.",
+      "pending": "{n} image(s) of this participant are waiting in the inbox to be filed.",
+      "pendingLink": "Open inbox",
+      "removeDialog": {
+        "title": "Remove image from the visit",
+        "subtitle": "{kind} · {eye} · {date}",
+        "intro": "Why is the image being removed?",
+        "optionPool": "Wrong visit — back to the inbox",
+        "optionPoolHelp": "The image is kept and re-filed from the inbox.",
+        "optionDismiss": "Not a study image — dismiss",
+        "optionDismissHelp": "The image is dismissed and deleted after 30 days; until then it can be restored from the inbox under “Dismissed”.",
+        "reasonLabel": "Reason (optional)",
+        "reasonPlaceholder": "e.g. test exposure, wrong eye, duplicate",
+        "confirmPool": "Back to inbox",
+        "confirmDismiss": "Dismiss",
+        "cancel": "Cancel",
+        "errorSealed": "The visit is signed or locked — unlock it first.",
+        "errorGeneric": "The image could not be removed."
       }
     }
   },
@@ -3317,7 +3337,14 @@
     "dateMismatchTitle": "The dates do not match",
     "dateMismatchConfirm": "This file says it was acquired on {fileDate}, but the visit is dated {visitDate}. File it on this visit anyway? Your decision is recorded in the audit trail. ({n} file(s))",
     "dateUnverified": "not read from the file",
-    "dateFromFile": "read from the file"
+    "dateFromFile": "read from the file",
+    "restore": "Restore",
+    "restoreConfirm": "Bring this file back into the inbox? It will no longer be deleted automatically.",
+    "dismissSelected": "Dismiss selection",
+    "dismissSelectedConfirm": "Dismiss {n} file(s)? They stay in “Dismissed” for 30 days and can be restored until then.",
+    "dismissReasonLabel": "Reason (optional)",
+    "someSkippedDismiss": "{n} file(s) were skipped — they had already been handled.",
+    "visitSealed": "The visit is signed or locked — the binding can only be removed after it is unlocked."
   },
   "imagingModalities": {
     "intro": "Which acquisitions this study performs, on which device — and which CRF box a filed file ticks.",

@@ -22,6 +22,8 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
@@ -101,6 +103,11 @@ public final class IngestBindService {
         WRONG_STATE,
         /** No such row. */
         NOT_FOUND,
+        /**
+         * The visit the file is filed against is signed or locked — attested
+         * data; nothing about it may change without un-signing first.
+         */
+        REFUSED_LOCKED,
         /** The database refused. */
         FAILED
     }
@@ -199,6 +206,12 @@ public final class IngestBindService {
      */
     public Result unbind(long ingestItemId, Actor actor) {
         int actorId = actor.userId() != null ? actor.userId() : systemActorId();
+        // 2026-09-24 — a signed or locked visit is attested data. Bind and
+        // dismiss never had to ask (a signed visit is never a bind target),
+        // but unbind did, and did not: a file could be pulled off a signed
+        // visit and its CRF tick retracted, silently altering what a
+        // physician had signed. Cancel already refuses the same way.
+        if (boundVisitIsSealed(ingestItemId)) return Result.REFUSED_LOCKED;
         // Undo the CRF value FIRST. If the row goes UNBOUND and then this
         // fails, the form is left asserting something with no file behind it;
         // in the other order a failure leaves a bound file, which is merely the
@@ -228,6 +241,85 @@ public final class IngestBindService {
             return Result.OK;
         } catch (SQLException e) {
             LOG.error("unbind failed for ingest_item {}: {}", ingestItemId, e.getMessage());
+            return Result.FAILED;
+        }
+    }
+
+    /**
+     * True when the file is bound to a visit that is signed or locked, or to
+     * a subject that is. Unknown or unbound reads as not sealed: the caller's
+     * own state check answers those cases with the right message.
+     */
+    private boolean boundVisitIsSealed(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT se.subject_event_status_id, ss.status_id "
+                             + "  FROM ingest_item ii "
+                             + "  JOIN study_event se ON se.study_event_id = ii.bound_study_event_id "
+                             + "  JOIN study_subject ss ON ss.study_subject_id = ii.bound_study_subject_id "
+                             + " WHERE ii.ingest_item_id = ? AND ii.status = 'BOUND'")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                int eventStatus = rs.getInt(1);
+                int subjectStatus = rs.getInt(2);
+                return eventStatus == SubjectEventStatus.SIGNED.getId()
+                        || eventStatus == SubjectEventStatus.LOCKED.getId()
+                        || subjectStatus == Status.SIGNED.getId()
+                        || subjectStatus == Status.LOCKED.getId();
+            }
+        } catch (SQLException e) {
+            // Fail closed: if the question cannot be answered, treat the
+            // visit as sealed rather than alter attested data on a guess.
+            LOG.warn("could not check the visit state of ingest_item {} — refusing the unbind: {}",
+                    ingestItemId, e.getMessage());
+            return true;
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* restore                                                             */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Bring a DISMISSED file back into the inbox, before the retention sweep
+     * removes it.
+     *
+     * <p>Dismissal was the only lifecycle step here with no way back — during
+     * the 30-day window the only recovery was a hand edit of the row. The
+     * reverse of {@link #dismiss}: status back to UNBOUND, the dismissal's
+     * message and actor cleared, and an audit row under the dismiss type
+     * whose values read {@code DISMISSED → UNBOUND}; the reason it had been
+     * dismissed for survives in that trail.
+     */
+    public Result restore(long ingestItemId, Actor actor) {
+        try (Connection c = dataSource.getConnection()) {
+            String previousMessage = null;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT status_message FROM ingest_item WHERE ingest_item_id = ? AND status = 'DISMISSED'")) {
+                ps.setLong(1, ingestItemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) previousMessage = rs.getString(1);
+                }
+            }
+            int updated;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE ingest_item SET status='UNBOUND', status_message=NULL, "
+                            + "bound_by_user_id=NULL, bound_at=NULL "
+                            + " WHERE ingest_item_id=? AND status='DISMISSED'")) {
+                ps.setLong(1, ingestItemId);
+                updated = ps.executeUpdate();
+            }
+            if (updated == 0) return existsState(c, ingestItemId);
+
+            writeAudit(AuditTypeIds.IMAGE_DISMISS, ingestItemId, actor,
+                    "ingested file restored from dismissed",
+                    "DISMISSED" + (previousMessage == null || previousMessage.isBlank() ? "" : ";reason=" + previousMessage),
+                    "UNBOUND");
+            LOG.info("ingest_item {} restored from DISMISSED", ingestItemId);
+            return Result.OK;
+        } catch (SQLException e) {
+            LOG.error("restore failed for ingest_item {}: {}", ingestItemId, e.getMessage());
             return Result.FAILED;
         }
     }
