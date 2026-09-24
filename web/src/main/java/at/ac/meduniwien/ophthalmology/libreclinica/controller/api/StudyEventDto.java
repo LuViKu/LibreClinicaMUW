@@ -56,5 +56,7 @@ public record StudyEventDto(
         String status,
         boolean repeating,
         String scheduledFor,
-        Integer scheduledIntervalDays
+        Integer scheduledIntervalDays,
+        /** {@code HH:mm} when the visit has a meaningful start time, else null. */
+        String timeStarted
 ) {}

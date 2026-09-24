@@ -71,6 +71,7 @@ $script:LogPath      = Join-Path $script:StateDir 'optomed-bridge.log'
 $script:LastListPath = Join-Path $script:StateDir 'last-worklist.txt'
 $script:UploadedDir  = '_uploaded'
 $script:LastBalloon  = [datetime]::MinValue
+$script:LastStaleWarned = [datetime]::MinValue   # mtime of the last drop file reported as not imported
 
 # ----------------------------------------------------------------------------
 # logging
@@ -173,6 +174,40 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 # ----------------------------------------------------------------------------
 $script:LongVRs = @('OB','OW','OF','SQ','UT','UN')
 
+# Length of the element whose 4-byte tag has just been read. 0xFFFFFFFF means
+# undefined (a sequence, or encapsulated pixel data) — compared below as
+# [uint32]::MaxValue, because PowerShell parses the hex literal 0xFFFFFFFF as
+# the Int32 -1, and a [uint32] length never equals that. Group 0002 is always
+# explicit VR little endian; the dataset's syntax is what 0002,0010 said.
+function Read-ElemLength([IO.BinaryReader]$r, [bool]$explicit) {
+    if (-not $explicit) { return $r.ReadUInt32() }
+    $vr = [Text.Encoding]::ASCII.GetString($r.ReadBytes(2))
+    if ($script:LongVRs -contains $vr) { $r.ReadUInt16() | Out-Null; return $r.ReadUInt32() }
+    [uint32]$r.ReadUInt16()
+}
+
+# Positioned just after an undefined-length header: consume the items up to
+# the sequence delimiter, recursing into nested sequences. The Clarus writes
+# undefined-length sequences (SourceImageSequence, AnatomicRegionSequence) in
+# group 0008 — BEFORE the patient group — so a reader that stops at the first
+# one never sees the PatientID. Verified on Clarus 700 exports, 2026-09-24.
+function Skip-Sequence([IO.BinaryReader]$r, [bool]$explicit) {
+    $fs = $r.BaseStream
+    while ($fs.Position -lt $fs.Length) {
+        $group = $r.ReadUInt16(); $elem = $r.ReadUInt16(); $len = $r.ReadUInt32()
+        if ($group -ne 0xFFFE) { throw 'malformed DICOM sequence' }
+        if ($elem -eq 0xE0DD) { return }                            # sequence delimiter
+        if ($elem -ne 0xE000) { throw 'malformed DICOM sequence' }
+        if ($len -ne [uint32]::MaxValue) { $fs.Position += $len; continue }
+        while ($fs.Position -lt $fs.Length) {                       # undefined-length item
+            $g = $r.ReadUInt16(); $e = $r.ReadUInt16()
+            if ($g -eq 0xFFFE -and $e -eq 0xE00D) { $r.ReadUInt32() | Out-Null; break }   # item delimiter
+            $l = Read-ElemLength $r $explicit
+            if ($l -eq [uint32]::MaxValue) { Skip-Sequence $r $explicit } else { $fs.Position += $l }
+        }
+    }
+}
+
 function Read-DicomTags {
     param([string]$Path)
     $fs = [IO.File]::OpenRead($Path)
@@ -187,8 +222,7 @@ function Read-DicomTags {
         $out  = @{}
         foreach ($name in $want.Values) { $out[$name] = '' }
         $transfer = ''
-        $explicit = $true
-
+        $explicit = $true   # no syntax given: assume explicit
         while ($fs.Position -lt $fs.Length) {
             $group = $r.ReadUInt16(); $elem = $r.ReadUInt16()
             $key = ('{0:x4}{1:x4}' -f $group, $elem)
@@ -197,17 +231,11 @@ function Read-DicomTags {
             # syntax is whatever 0002,0010 said.
             $isMeta = ($group -eq 2)
             if (-not $isMeta -and $group -gt 0x0020) { break }   # everything wanted has been passed
-            if (-not $isMeta -and -not $transfer) { $explicit = $true }  # no syntax given: assume explicit
 
-            if ($isMeta -or $explicit) {
-                $vr = [Text.Encoding]::ASCII.GetString($r.ReadBytes(2))
-                if ($script:LongVRs -contains $vr) { $r.ReadUInt16() | Out-Null; $len = $r.ReadUInt32() }
-                else                                { $len = [uint32]$r.ReadUInt16() }
-            } else {
-                $vr = ''; $len = $r.ReadUInt32()
-            }
-
-            if ($len -eq 0xFFFFFFFF) { break }   # undefined-length sequence: nothing wanted lies inside one
+            $len = Read-ElemLength $r ($isMeta -or $explicit)
+            # An undefined-length sequence: nothing wanted lies inside one,
+            # but the patient group lies beyond it — step over, never stop.
+            if ($len -eq [uint32]::MaxValue) { Skip-Sequence $r $explicit; continue }
             $bytes = $r.ReadBytes([int]$len)
 
             if ($key -eq '00020010') {
@@ -244,6 +272,22 @@ function Invoke-WorklistFetch([pscustomobject]$cfg) {
 
     $dropDir = Join-Path $cfg.ClientRoot 'Worklist'
     if (-not (Test-Path $dropDir)) { Write-Log "worklist: drop folder missing: $dropDir" 'ERROR'; return 'drop folder missing' }
+
+    # A file still sitting in the drop folder means the Client REFUSED the
+    # previous one - it says nothing, it just leaves the file - and the camera
+    # has not had a list since. Checked before the fetch, because a refused
+    # file is exactly the case where the server content has NOT changed and
+    # the unchanged-return below would otherwise skip everything. The known
+    # cause is one PatientID twice in a file (the platform now merges those).
+    # Said once per file.
+    $stale = Join-Path $dropDir $script:WorklistName
+    if ((Test-Path $stale) -and ((Get-Date) - (Get-Item $stale).LastWriteTime).TotalSeconds -gt 60) {
+        $mt = (Get-Item $stale).LastWriteTime
+        if ($script:LastStaleWarned -ne $mt) {
+            $script:LastStaleWarned = $mt
+            Write-Log "worklist: the Client did not import the file dropped at $($mt.ToString('HH:mm:ss')) - it refuses a file that names one patient id twice; check the visits scheduled today" 'WARN'
+        }
+    }
 
     $req = New-Object System.Net.Http.HttpRequestMessage 'GET', (Get-ApiUrl $cfg '/api/v1/device/optomed/worklist.txt')
     $req.Headers.TryAddWithoutValidation('X-MUW-Optomed-Token', $token) | Out-Null
@@ -363,6 +407,7 @@ if ($SelfTest) {
         Write-Host ("PatientID      : {0}" -f $t.PatientID)
         Write-Host ("StudyDate      : {0}  -> {1}" -f $t.StudyDate, (ConvertTo-IsoDate $t.StudyDate))
         Write-Host ("Laterality     : {0}  -> {1}" -f $t.Laterality, (ConvertTo-Laterality $t.Laterality))
+        Write-Host ("ImageLaterality: {0}  -> {1}" -f $t.ImageLaterality, (ConvertTo-Laterality $t.ImageLaterality))
         Write-Host ("SOPInstanceUID : {0}" -f $t.SOPInstanceUID)
         exit 0
     }

@@ -109,5 +109,6 @@
   <include  file="migration/lc-muw-2026-12-02-ingest-item-deidentified.xml"/>
   <include  file="migration/lc-muw-2026-12-02-imaging-modality-dicom-kinds.xml"/>
   <include  file="migration/lc-muw-2026-12-03-ingest-acquisition-date-source.xml"/>
+  <include  file="migration/lc-muw-2026-12-04-remidio-pull.xml"/>
 </databaseChangeLog>
 

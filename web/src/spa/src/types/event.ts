@@ -22,11 +22,13 @@ export type StudyEventStatus =
   | 'signed'
 
 export type StudyEvent =
-  Omit<Required<components['schemas']['StudyEventDto']>, 'status' | 'dateEnded' | 'location'>
+  Omit<Required<components['schemas']['StudyEventDto']>, 'status' | 'dateEnded' | 'location' | 'timeStarted'>
   & {
     status: StudyEventStatus
     dateEnded: string | null
     location: string | null
+    /** `HH:mm` when the visit has a meaningful start time; null for a date-only visit. */
+    timeStarted: string | null
   }
 
 /**

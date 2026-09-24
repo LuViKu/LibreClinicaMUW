@@ -58,6 +58,13 @@ set -euo pipefail
 : "${LIBRECLINICA_BACKUP_RETENTION_DAYS:=30}"
 : "${LIBRECLINICA_GHCR_USER:=LuViKu}"    # GitHub username the PAT belongs to
 : "${LIBRECLINICA_GHCR_TOKEN:=}"         # classic PAT with 'repo' + 'read:packages' scopes (GHCR needs a classic token). See deploy/README.md for minting instructions.
+# DICOM sidecar (DR-025/DR-029). `--dicom` switches the compose profile on,
+# pairs one shared secret between the sidecar (DICOM_SCP_INGEST_TOKEN) and
+# the app (core.dicom.ingest.token), and adds the service to the systemd
+# unit. Without the sidecar every DICOM upload is refused with 503, because
+# the sidecar is what pseudonymises the header before a row is written.
+: "${LIBRECLINICA_DICOM:=}"              # set to 1 (or pass --dicom) to run the dicom-scp sidecar
+: "${LIBRECLINICA_DICOM_BIND_ADDR:=127.0.0.1}"   # C-STORE port 11112 stays on loopback until a camera needs it
 
 # Production mail (SMTP). Stamped into datainfo.properties so a fresh deploy can
 # send email out of the box — the repo's dev default points mailHost at the
@@ -107,6 +114,10 @@ RETINAL_OUTPUT_DIR=/var/lib/libreclinica/retinal-inference
 RETINAL_ARTIFACTS_DIR=/var/lib/libreclinica/retinal-artifacts
 DICOM_INGEST_DIR=/var/lib/libreclinica/dicom-ingest
 INGEST_DIR=/var/lib/libreclinica/ingest
+# The cluster monitor's log and state. Its own directory, bound read-only
+# into the app container, because the System Status page tails the log from
+# inside the container and the root of /var/lib/libreclinica is not bound.
+MONITOR_DIR=/var/lib/libreclinica/monitor
 
 # ----------------------------- arg parsing ------------------------------------
 
@@ -120,6 +131,7 @@ while [[ $# -gt 0 ]]; do
     --backup-days)      LIBRECLINICA_BACKUP_RETENTION_DAYS="$2"; shift 2 ;;
     --ghcr-user)        LIBRECLINICA_GHCR_USER="$2"; shift 2 ;;
     --ghcr-token)       LIBRECLINICA_GHCR_TOKEN="$2"; shift 2 ;;
+    --dicom)            LIBRECLINICA_DICOM=1; shift ;;
     -h|--help)
       sed -n '/^# ---/,/^# ---/p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -335,6 +347,7 @@ install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_OUTPUT_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_ARTIFACTS_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$DICOM_INGEST_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$INGEST_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$MONITOR_DIR"
 
 # Clone or update the repo. The production VM needs only:
 #   - compose.yaml (root file; pulled in by sparse-checkout's implicit
@@ -455,6 +468,14 @@ LIBRECLINICA_SSO_TRUSTED_CIDRS=127.0.0.1/32,${LIBRECLINICA_TRUSTED_CIDRS:-10.0.0
 
 # Retinal inference adapter — placeholder until the MIRAGE model lands.
 RETINAL_INFERENCE_ADAPTER=placeholder
+
+# DICOM sidecar (dicom-scp). COMPOSE_PROFILES=dicom runs it; the token must
+# equal core.dicom.ingest.token in datainfo.properties (the setup script pairs
+# them when run with --dicom). 11112 is the camera-facing C-STORE port; keep
+# it on loopback until a camera is actually being wired.
+COMPOSE_PROFILES=
+DICOM_SCP_INGEST_TOKEN=
+LIBRECLINICA_DICOM_BIND_ADDR=${LIBRECLINICA_DICOM_BIND_ADDR}
 EOF
   chown libreclinica:libreclinica "$ENV_FILE"
   chmod 0640 "$ENV_FILE"
@@ -468,6 +489,13 @@ else
   # unreachable to the separate-host reverse proxy. Add it if missing (older
   # env files, or ones that pre-date this knob); never clobber an operator's
   # explicit value (e.g. a narrowed internal-IP bind).
+  for k in COMPOSE_PROFILES DICOM_SCP_INGEST_TOKEN LIBRECLINICA_DICOM_BIND_ADDR; do
+    if ! grep -q "^${k}=" "$ENV_FILE"; then
+      v=""; [[ "$k" == "LIBRECLINICA_DICOM_BIND_ADDR" ]] && v="${LIBRECLINICA_DICOM_BIND_ADDR}"
+      printf '\n# %s (added on setup re-run; see the DICOM sidecar notes in deploy/README.md)\n%s=%s\n' "$k" "$k" "$v" >> "$ENV_FILE"
+      log "Added ${k} to $ENV_FILE"
+    fi
+  done
   if ! grep -q '^LIBRECLINICA_BIND_ADDR=' "$ENV_FILE"; then
     printf '\n# Host interface for port 8080 (added on setup re-run). 0.0.0.0 so the\n# separate-host reverse proxy can reach it; narrow to the VM internal IP.\nLIBRECLINICA_BIND_ADDR=0.0.0.0\n' >> "$ENV_FILE"
     log "Added LIBRECLINICA_BIND_ADDR=0.0.0.0 to $ENV_FILE"
@@ -486,6 +514,21 @@ else
     } >> "$ENV_FILE"
   fi
 fi
+
+# --dicom: profile on, and a shared secret minted once. An explicit non-empty
+# DICOM_SCP_INGEST_TOKEN already in the env file is kept - it may be the one
+# the app is configured with.
+if [[ "${LIBRECLINICA_DICOM}" == "1" ]]; then
+  sed -i 's|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=dicom|' "$ENV_FILE"
+  if [[ -z "$(sed -n 's/^DICOM_SCP_INGEST_TOKEN=//p' "$ENV_FILE" | tail -1)" ]]; then
+    sed -i "s|^DICOM_SCP_INGEST_TOKEN=.*|DICOM_SCP_INGEST_TOKEN=$(gen_secret)|" "$ENV_FILE"
+    log "Minted DICOM_SCP_INGEST_TOKEN in $ENV_FILE"
+  fi
+  log "DICOM sidecar enabled (COMPOSE_PROFILES=dicom)"
+fi
+DICOM_TOKEN="$(sed -n 's/^DICOM_SCP_INGEST_TOKEN=//p' "$ENV_FILE" | tail -1)"
+DICOM_PROFILE_ON=0
+grep -qE '^COMPOSE_PROFILES=.*\bdicom\b' "$ENV_FILE" && DICOM_PROFILE_ON=1
 
 # The active Postgres password drives both the DB container (POSTGRES_PASSWORD
 # above) and the app's datainfo.properties dbPass below — they must match or the
@@ -664,6 +707,24 @@ else
   warn "  $DATAINFO_FILE not found — could not sync dbPass / mail config"
 fi
 
+# ----------------------------- DICOM token pairing ----------------------------
+
+# The app authenticates its /describe calls to the sidecar with
+# core.dicom.ingest.token, and the sidecar checks the same header against
+# DICOM_SCP_INGEST_TOKEN. One secret, two homes. Stamp the app's half from
+# the env file when the app's is blank; never overwrite a value an operator
+# set, but say so when the two disagree, because that is a 503 on every
+# DICOM upload with nothing in the log to explain it.
+if [[ -n "${DICOM_TOKEN}" && -f "${DATAINFO_FILE:-/dev/null}" ]]; then
+  app_tok="$(sed -n 's/^core\.dicom\.ingest\.token=//p' "$DATAINFO_FILE" | tail -1)"
+  if [[ -z "$app_tok" ]]; then
+    sed -i "s|^core.dicom.ingest.token=.*|core.dicom.ingest.token=${DICOM_TOKEN}|" "$DATAINFO_FILE"
+    log "datainfo.properties core.dicom.ingest.token paired with DICOM_SCP_INGEST_TOKEN"
+  elif [[ "$app_tok" != "$DICOM_TOKEN" ]]; then
+    warn "core.dicom.ingest.token differs from DICOM_SCP_INGEST_TOKEN in $ENV_FILE - DICOM uploads will get 503 until they match"
+  fi
+fi
+
 # ----------------------------- systemd unit -----------------------------------
 
 section "systemd unit"
@@ -675,6 +736,15 @@ section "systemd unit"
 # The retinal-inference sidecar has no GHCR image yet (placeholder
 # adapter ships from source), so compose builds it locally on first
 # start and reuses the cached image on subsequent restarts.
+# Services are named explicitly (mailcrab is dev-only and must not start),
+# which means a compose profile alone can never add one: on the beta.9 host
+# COMPOSE_PROFILES=dicom was set and the sidecar still did not come up. The
+# list therefore follows the profile.
+COMPOSE_SERVICES="libreclinica db retinal-inference nginx"
+if [[ "$DICOM_PROFILE_ON" == "1" ]]; then
+  COMPOSE_SERVICES="${COMPOSE_SERVICES} dicom-scp"
+  log "systemd unit will also start dicom-scp"
+fi
 cat >/etc/systemd/system/libreclinica.service <<EOF
 [Unit]
 Description=LibreClinicaMUW compose stack
@@ -691,7 +761,7 @@ EnvironmentFile=${ENV_FILE}
 # Bring up only the production-relevant services. mailcrab is excluded
 # because production SMTP is the institutional MUW relay (configure via
 # ${RUNTIME_CONFIG}/datainfo.properties).
-ExecStart=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml up --remove-orphans -d libreclinica db retinal-inference nginx
+ExecStart=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml up --remove-orphans -d ${COMPOSE_SERVICES}
 ExecStop=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml down
 TimeoutStartSec=900
 
@@ -784,6 +854,57 @@ EOF
 systemctl daemon-reload
 systemctl enable --now libreclinica-backup-db.timer >/dev/null
 log "Enabled libreclinica-backup-db.timer (next run: $(systemctl show libreclinica-backup-db.timer -p NextElapseUSecRealtime --value 2>/dev/null || echo 'unknown'))"
+
+# ----------------------------- cluster monitor --------------------------------
+
+section "Retinal cluster monitor (cron)"
+
+# deploy/check-retinal-cluster.sh probes one inference node and prints only
+# on a state change, so cron mails it. beta.9 also gave the System Status
+# page a panel that tails the monitor's log - but nothing installed the cron,
+# the script wrote no log, and the page's default path was outside every
+# bind the container has. This wires all three: one cron line per node in
+# core.retinalInference.clusterNodes, each teeing into the log the page
+# reads (inside the monitor bind) with its own state file so the counters
+# do not collide, and cron still gets the output for mail.
+MONITOR_CRON=/etc/cron.d/libreclinica-retinal-monitor
+DATAINFO="${INSTALL_PREFIX}/config/datainfo.properties"
+# The beta.9 host had the probes in root's crontab, by hand, writing to the
+# old unreadable path. Those would run alongside the cron.d entries and
+# double every probe, so any root-crontab line that runs the monitor is
+# dropped here; cron.d is the single owner from now on.
+if crontab -l 2>/dev/null | grep -q 'check-retinal-cluster\.sh'; then
+  log "Removing legacy root-crontab entries for check-retinal-cluster.sh (cron.d owns the monitor now)"
+  crontab -l 2>/dev/null | grep -v 'check-retinal-cluster\.sh' | crontab - || true
+fi
+nodes="$(sed -n 's/^core\.retinalInference\.clusterNodes=//p' "$DATAINFO" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+mlog="$(sed -n 's/^core\.retinalInference\.clusterMonitorLog=//p' "$DATAINFO" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+if [[ -z "$nodes" ]]; then
+  rm -f "$MONITOR_CRON"
+  warn "core.retinalInference.clusterNodes is blank - no cluster monitor installed (set it as name=baseUrl,... and re-run)"
+else
+  [[ -n "$mlog" ]] || mlog="${MONITOR_DIR}/retinal-cluster-monitor.log"
+  case "$mlog" in
+    "${MONITOR_DIR}"/*) ;;
+    *) warn "clusterMonitorLog=${mlog} is outside ${MONITOR_DIR}; the app container cannot read it there" ;;
+  esac
+  install -m 0644 -o libreclinica -g libreclinica /dev/null "$mlog" 2>/dev/null || touch "$mlog"
+  {
+    echo "# Installed by setup-ubuntu-host.sh - one probe per node in core.retinalInference.clusterNodes."
+    echo "# Output goes to cron (mail on state change) AND to the log the System Status page tails."
+    echo "SHELL=/bin/bash"
+    echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    IFS=',' read -ra entries <<<"$nodes"
+    for e in "${entries[@]}"; do
+      name="${e%%=*}"; url="${e#*=}"
+      [[ -n "$name" && -n "$url" && "$name" != "$url" ]] || continue
+      url="${url%/}/health"
+      echo "*/5 * * * * root RETINAL_CLUSTER_STATE_FILE=${MONITOR_DIR}/retinal-cluster-${name}.state ${INSTALL_PREFIX}/deploy/check-retinal-cluster.sh ${url} 2>&1 | tee -a ${mlog}"
+    done
+  } > "$MONITOR_CRON"
+  chmod 0644 "$MONITOR_CRON"
+  log "Cluster monitor: $(grep -c '^\*/5' "$MONITOR_CRON") node(s) probed every 5 min -> ${mlog}"
+fi
 
 # ----------------------------- logrotate --------------------------------------
 

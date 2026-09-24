@@ -60,6 +60,39 @@ describe('ScheduleEventDialog — nAMD interval handling', () => {
     seedEventDefinitions()
   })
 
+  it('puts timeStarted on the wire only when a time was entered', async () => {
+    const events = useEventsStore()
+    const scheduleSpy = vi.spyOn(events, 'schedule').mockResolvedValue({
+      id: '42', subjectId: 'S-001', eventDefinitionOid: 'V1', eventLabel: 'Visit 1',
+      ordinal: 1, dateStarted: '2026-06-19', dateEnded: null, location: null,
+      status: 'scheduled', repeating: false,
+    } as unknown as ReturnType<typeof events.schedule> extends Promise<infer T> ? T : never)
+
+    const wrapper = mountDialog()
+    await flushPromises()
+    const defSelect = document.body.querySelector('select#schedule-event-def') as HTMLSelectElement
+    defSelect.value = 'V1'
+    defSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    const dateInput = document.body.querySelector('input#schedule-event-date') as HTMLInputElement
+    dateInput.value = '19/06/2026'
+    dateInput.dispatchEvent(new Event('input', { bubbles: true }))
+    const timeInput = document.body.querySelector('input#schedule-event-time') as HTMLInputElement
+    timeInput.value = '09:30'
+    timeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+
+    const submit = Array.from(document.body.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Schedule')
+    submit!.click()
+    await flushPromises()
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(1)
+    const payload = scheduleSpy.mock.calls[0][0]
+    expect(payload.dateStarted).toBe('2026-06-19')
+    expect(payload.timeStarted).toBe('09:30')
+    wrapper.unmount()
+  })
+
   it('omits scheduledIntervalDays when the field is left blank', async () => {
     const events = useEventsStore()
     const scheduleSpy = vi.spyOn(events, 'schedule').mockResolvedValue({
@@ -102,6 +135,7 @@ describe('ScheduleEventDialog — nAMD interval handling', () => {
     const payload = scheduleSpy.mock.calls[0][0]
     expect(payload.dateStarted).toBe('2026-06-19')
     expect('scheduledIntervalDays' in payload).toBe(false)
+    expect('timeStarted' in payload).toBe(false)   // blank time: not on the wire, date-only visit
     wrapper.unmount()
   })
 

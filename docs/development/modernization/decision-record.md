@@ -733,6 +733,30 @@ The second problem is the one that decided the shape. A camera that sits in the 
 
 ---
 
+## DR-032 — Device exports reach the platform from the folder they are exported to
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-025 (Optomed bridge, the precedent), DR-029 (the one front door), DR-031 (Remidio pull); `deploy/export-watcher/ExportWatcher.ps1`; `web/src/spa/src/lib/e2eParser.ts` (the reader this ports).
+
+**Context.** Two of the HealthAEye modalities have no path to the platform at all: the Zeiss Clarus exports three DICOM objects per capture (the photograph and two Raw Data objects) and the Heidelberg Spectralis one `.e2e` per export, both to a folder on the acquisition PC, and the photographer re-uploads each file through the browser page. The page works, but it is a second job per capture done by the person least placed to do it, and it is where files get forgotten. The Optomed bridge (DR-025) already solved the same shape for the Lumo: a tray app on the clinic PC reads the header, asks `/resolve`, and posts through the public front door.
+
+**Decision.** A second tray app of the same shape, **one instance per acquisition PC**, each watching that PC's export folder: on the Clarus PC beside the bridge, on the Spectralis PC alone. It reuses the bridge's DICOM reader and **ports the page's `.e2e` reader** (chunk directory → patient id, acquisition date, laterality per volume) so an export with several volumes is uploaded once per volume, as the page does. It makes **one `/resolve` call per sweep** for all scans found, because the public front door budgets lookups at 30 per hour per client and a Clarus session is easily 40 files. An `.e2e` that does not resolve is **parked** (`park=true`): the OCT route refuses a scan with neither a visit nor the park flag, because a scan on a visit starts inference and one without must not. No server change: the watcher speaks exactly the API the page speaks, and the item that lands is indistinguishable from a hand upload.
+
+**Consequences.**
+
+- The convention every device ingress here now shares is spelled out once: *the patient id typed into the device is the study subject label* — Clarus PatientID, HEYEX patient id or, after anonymisation, the surname slot where MUW keeps it, Remidio MRN, Optomed worklist entry. It belongs in the HealthAEye SOP.
+- The two `.e2e` readers must be kept in step; the PowerShell port names the TypeScript file and repeats its offsets. A format drift shows up first as a parked file with an empty label.
+- An `.e2e` date the watcher read out of the file arrives at the server as an operator-typed one (`acquisition_date_source = operator`), because the form field cannot say where it came from — the page's client-side parse has the same limit. So the bind-time date check from #312 does not cover `.e2e` uploads from either. A trusted `dateSource=file` hint from the two readers is the follow-up if that matters.
+- The exports stay on the PC, moved aside and never deleted; Clarus headers carry names until the platform's copy is pseudonymised on ingest. Retention on the PC is a local decision, as for the Optomed `Studies\` folder.
+- Verified 2026-09-23 from a Mac, in a PowerShell 7 container against the dev stack: a real Spectralis export (two volumes) bound to its subject's visit of that day with inference queued, a synthetic unknown-label `.e2e` parked into the inbox with its hints, Lumo and Clarus-shaped DICOMs recognised (duplicates answered 409 and moved aside), a fresh DICOM filed. The tray itself is the bridge's, unchanged in shape.
+- Verified 2026-09-24 on real Clarus 700 exports: the photograph (JPEG baseline, Ophthalmic Photography 8-bit) reads label, date and eye, files bound to a visit of that day and pseudonymised by the sidecar; the two Raw Data objects the Clarus writes beside it are set aside. Two reader defects surfaced and are fixed in both the watcher and the Optomed bridge: the reader stopped at the first undefined-length sequence (the Clarus writes two in group 0008, before the patient group), and the undefined-length sentinel was written as the hex literal `0xFFFFFFFF`, which PowerShell parses as the Int32 -1, so the check never matched.
+
+**Reversible** — a script on two PCs; uninstall removes the startup shortcut. No schema, no server code.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
