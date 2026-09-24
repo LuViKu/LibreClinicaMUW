@@ -243,8 +243,9 @@ public class RemidioPullScheduler {
         if (client == null || !settings.equals(activeSettings)) {
             client = new RemidioGatewayClient(settings);
             activeSettings = settings;
-            LOG.info("Remidio pull: client built for site {} on {}", settings.siteCustomId(),
-                    settings.baseUrl().replaceFirst("^https?://", ""));
+            // Neither the site id nor the host: both come from the configuration,
+            // and a log line carries nothing configured (CodeQL java/sensitive-log).
+            LOG.info("Remidio pull: client built for the configured site");
         }
         try {
             RemidioPullService.Summary s = new RemidioPullService(dataSource, client)
@@ -324,7 +325,7 @@ public class RemidioPullScheduler {
             try {
                 return LocalDate.parse(raw);
             } catch (RuntimeException notADate) {
-                LOG.warn("Remidio pull: {} is not an ISO date ('{}') — starting a year back", KEY_SINCE, raw);
+                LOG.warn("Remidio pull: {} is not an ISO date (yyyy-mm-dd) — starting a year back", KEY_SINCE);
             }
         }
         return LocalDate.now(RemidioPullService.CLINIC_ZONE).minusDays(DEFAULT_SINCE_DAYS_BACK);

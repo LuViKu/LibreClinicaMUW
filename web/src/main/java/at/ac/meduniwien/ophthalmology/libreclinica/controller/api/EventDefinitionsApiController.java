@@ -524,8 +524,11 @@ public class EventDefinitionsApiController {
             writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, sed,
                     "imaging_plan", before, after);
         }
-        LOG.info("Imaging plan updated for event_def {} (study {}): [{}] → [{}]",
-                sedId, studyOid, before, after);
+        // Ids and sizes only: the OID is a request path value and the plan
+        // text comes from the body (CodeQL java/log-injection); the audit row
+        // above carries the plan itself.
+        LOG.info("Imaging plan updated for event_def {} (study {}): {} entries before, {} after",
+                sedId, study.getId(), previous.size(), next.size());
 
         List<ImagingPlanEntryDto> out = new ArrayList<>();
         for (VisitImagingPlan.Entry e : next) out.add(ImagingPlanEntryDto.of(e));
@@ -533,11 +536,17 @@ public class EventDefinitionsApiController {
     }
 
     /**
-     * GET — what applying the plan to the scans already filed at this
-     * definition's visits would do: how many OCT volumes, how many analyses
-     * would start. Nothing is written.
+     * POST {@code .../catch-up/preview} — what applying the plan to the scans
+     * already filed at this definition's visits would do: how many OCT
+     * volumes, how many analyses would start. Nothing is written.
+     *
+     * <p>A POST although it only reads: it shares its code with the run
+     * below, and only a dry-run flag keeps the writes and the GPU dispatch
+     * out of it. A GET reaching code that can start jobs is a cross-site
+     * request away from starting them (CodeQL
+     * java/csrf-unprotected-request-type, beta.11 release gate).
      */
-    @GetMapping("/{sedId:[0-9]+}/imaging-plan/catch-up")
+    @PostMapping("/{sedId:[0-9]+}/imaging-plan/catch-up/preview")
     public ResponseEntity<?> previewImagingPlanCatchUp(@PathVariable("studyOid") String studyOid,
                                                        @PathVariable("sedId") int sedId,
                                                        HttpSession session) {
@@ -574,7 +583,7 @@ public class EventDefinitionsApiController {
             RetinalJobFollower.CatchUp r = follower.catchUp(sedId, new IngestBindService.Actor(me, study), dryRun);
             if (!dryRun) {
                 LOG.info("Imaging plan catch-up for event_def {} (study {}): scans={} attached={} started={} failed={}",
-                        sedId, studyOid, r.scans(), r.attached(), r.revived() + r.enqueued(), r.failed());
+                        sedId, study.getId(), r.scans(), r.attached(), r.revived() + r.enqueued(), r.failed());
             }
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("scans", r.scans());

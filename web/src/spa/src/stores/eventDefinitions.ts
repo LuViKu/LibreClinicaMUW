@@ -346,7 +346,9 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
    */
   async function previewImagingPlanCatchUp(studyOid: string, sedId: number): Promise<ImagingPlanCatchUp | null> {
     try {
-      return await apiGet<ImagingPlanCatchUp>(`${planUrl(studyOid, sedId)}/catch-up`)
+      // A POST although it only counts: see the controller (a GET must not
+      // reach code that can start analyses).
+      return await apiPost<ImagingPlanCatchUp>(`${planUrl(studyOid, sedId)}/catch-up/preview`, {})
     } catch (e) {
       handleNonValidationError(e, 'preview imaging plan catch-up')
       return null

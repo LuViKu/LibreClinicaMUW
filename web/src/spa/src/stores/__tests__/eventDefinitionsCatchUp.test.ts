@@ -3,7 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 
 /**
  * DR-035 — the store's side of applying a plan to already-filed scans:
- * preview is a GET, run is a POST, both to the plan's catch-up sub-resource,
+ * preview and run are both POSTs to the plan's catch-up sub-resource (the
+ * preview to its /preview, so no GET can reach code that starts analyses),
  * and a failure comes back as null with the message on `error`.
  */
 vi.mock('@/api/client', async () => {
@@ -33,12 +34,12 @@ describe('useEventDefinitionsStore imaging plan catch-up', () => {
     apiPostMock.mockReset()
   })
 
-  it('previews with a GET and writes nothing', async () => {
-    apiGetMock.mockResolvedValueOnce(COUNTS)
+  it('previews with a POST to /preview, never a GET', async () => {
+    apiPostMock.mockResolvedValueOnce(COUNTS)
     const store = useEventDefinitionsStore()
     expect(await store.previewImagingPlanCatchUp('S_DEFAULTS1', 7)).toEqual(COUNTS)
-    expect(apiGetMock).toHaveBeenCalledWith(URL)
-    expect(apiPostMock).not.toHaveBeenCalled()
+    expect(apiPostMock).toHaveBeenCalledWith(`${URL}/preview`, {})
+    expect(apiGetMock).not.toHaveBeenCalled()
   })
 
   it('runs with a POST', async () => {

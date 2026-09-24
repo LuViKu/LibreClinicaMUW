@@ -502,6 +502,12 @@ public final class RetinalJobFollower {
 
     private void audit(int type, long ingestItemId, IngestBindService.Actor actor,
                        String label, String oldValue, String newValue) {
+        // The audit row's entity id is an int; the id arrived from a request
+        // path as a long. Out of range means no such row was ever changed.
+        if (ingestItemId <= 0 || ingestItemId > Integer.MAX_VALUE) {
+            LOG.warn("could not audit {}: ingest_item id out of the audit column's range", label);
+            return;
+        }
         try {
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), type,
                     actor.user(), actor.study(), null, label,
