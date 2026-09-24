@@ -74,6 +74,19 @@
   date, laterality, volumes) — nothing is uploaded. Lets the readers be
   checked on a real export before the watcher is switched on.
 
+.PARAMETER Heartbeat
+  Headless: send one heartbeat to the platform and print the answer — the
+  quickest check that this PC reaches the platform and shows up on the
+  System Status page. Nothing is uploaded.
+
+  The tray app sends one every HeartbeatIntervalSec (default 120), switched
+  on or not (DR-033): whether it runs, whether uploading is on, how many
+  export files wait and for how long, how many went to _failed\, how full
+  the export drive is, and coded problems from the last sweep. Counts, ages
+  and codes only — no label, no filename, nothing about a patient. It says
+  "stopped" when closed from its menu or when Windows ends the session, so
+  the page can tell a PC switched off in the evening from a crash.
+
 .NOTES
   Windows PowerShell 5.1 — no 6+ features (no ternary, no ??, no -Form).
   The headless modes (-Once, -SelfTest) also run on PowerShell 7 on Linux,
@@ -83,6 +96,7 @@
 param(
     [switch]$Once,
     [switch]$SelfTest,
+    [switch]$Heartbeat,
     [string]$File,
     [string]$ConfigPath = (Join-Path $(if ($env:ProgramData) { $env:ProgramData } else { $HOME }) 'LibreClinica\export-watcher.json')
 )
@@ -92,6 +106,10 @@ $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
 $script:AppName     = 'Export Watcher'
+# Shown on the System Status page beside this PC's name. Bump with every
+# change to this script, so a PC still running an old copy stands out.
+$script:Version     = '2026-09-24'
+$script:Kind        = 'export-watcher'
 $script:StateDir    = Split-Path -Parent $ConfigPath
 $script:LogPath     = Join-Path $script:StateDir 'export-watcher.log'
 $script:UploadedDir = '_uploaded'
@@ -137,6 +155,13 @@ function Get-DefaultConfig {
         DeviceE2e      = 'spectralis'  # on an .e2e upload (OCT_SPECTRALIS and the Spectralis image rows)
         UploadNonImage = $false       # also upload Raw Data / report objects (see 'identify' above)
         Enabled        = $false
+        # DR-033 — the System Status page. InstanceId is generated on first
+        # start and identifies this installation's row: keep it with the
+        # settings file, never copy it to another PC. DisplayName blank =
+        # the computer name.
+        InstanceId     = ''
+        DisplayName    = ''
+        HeartbeatIntervalSec = 120
     }
 }
 
@@ -167,6 +192,160 @@ $script:Http.Timeout = [TimeSpan]::FromMinutes(15)
 
 function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
     $cfg.BaseUrl.TrimEnd('/') + '/pages' + $path
+}
+
+# ----------------------------------------------------------------------------
+# health — what the heartbeat reports (DR-033). Counts, ages, disk figures and
+# coded problems; never a label, a filename or anything about a patient.
+# ----------------------------------------------------------------------------
+# Its own client with a short timeout: a heartbeat that hangs must not hold
+# the tray for the fifteen minutes an .e2e upload is allowed.
+$script:HbHttp = New-Object System.Net.Http.HttpClient
+$script:HbHttp.Timeout = [TimeSpan]::FromSeconds(10)
+$script:HbLastCode = -1           # the last heartbeat's HTTP status; a change is logged, a repeat is not
+$script:StopSent = $false
+$script:LastActivityUtc = $null   # end of the last sweep
+$script:LastUploadUtc = $null     # the last 201
+$script:UploadedDay = (Get-Date).Date
+$script:UploadedToday = 0
+# code -> $true, rebuilt by every sweep: the problems of the last sweep that ran
+$script:SweepProblems = @{}
+
+function Add-Problem([string]$code) { $script:SweepProblems[$code] = $true }
+
+function Add-Uploaded {
+    if ((Get-Date).Date -ne $script:UploadedDay) { $script:UploadedDay = (Get-Date).Date; $script:UploadedToday = 0 }
+    $script:UploadedToday++
+    $script:LastUploadUtc = [datetime]::UtcNow
+}
+
+function Get-UploadedToday {
+    if ((Get-Date).Date -ne $script:UploadedDay) { return 0 }
+    $script:UploadedToday
+}
+
+function Get-InstanceId([pscustomobject]$cfg) {
+    if (-not $cfg.InstanceId) {
+        $cfg.InstanceId = [guid]::NewGuid().ToString()
+        try { Save-Config $cfg } catch { Write-Log "config: could not save the new instance id: $($_.Exception.Message)" 'WARN' }
+    }
+    $cfg.InstanceId
+}
+
+function Get-DisplayName([pscustomobject]$cfg) {
+    if ($cfg.DisplayName) { return [string]$cfg.DisplayName }
+    if ($env:COMPUTERNAME) { return $env:COMPUTERNAME }
+    [Environment]::MachineName
+}
+
+# The export files under $root that wait for upload, and how many were given
+# up on. _uploaded\ and _skipped\ are not entered: they only grow, and a
+# year of Clarus exports is a hundred thousand files nobody needs to list
+# every twenty seconds.
+function Get-WatchedFiles([string]$root) {
+    $pending = New-Object Collections.ArrayList
+    $failed = 0
+    $dirs = New-Object Collections.Stack
+    $dirs.Push($root)
+    while ($dirs.Count -gt 0) {
+        $dir = $dirs.Pop()
+        foreach ($e in @(Get-ChildItem -LiteralPath $dir -ErrorAction SilentlyContinue)) {
+            if ($e.PSIsContainer) {
+                if ($e.Name -eq $script:FailedDir) {
+                    $failed += @(Get-ChildItem -LiteralPath $e.FullName -File -ErrorAction SilentlyContinue |
+                                 Where-Object { $_.Extension -match '^\.(dcm|e2e)$' }).Count
+                } elseif ($e.Name -ne $script:UploadedDir -and $e.Name -ne $script:SkippedDir) {
+                    $dirs.Push($e.FullName)
+                }
+            } elseif ($e.Extension -match '^\.(dcm|e2e)$') {
+                [void]$pending.Add($e)
+            }
+        }
+    }
+    [pscustomobject]@{ Pending = @($pending.ToArray()); Failed = $failed }
+}
+
+# When a file arrived in the folder: a copy keeps the original's LastWriteTime
+# (a 2021 capture exported today would look two years late) but gets a new
+# CreationTime, so the later of the two.
+function Get-ArrivedUtc([IO.FileInfo]$f) {
+    if ($f.CreationTimeUtc -gt $f.LastWriteTimeUtc) { $f.CreationTimeUtc } else { $f.LastWriteTimeUtc }
+}
+
+function Get-DiskInfo([string]$path) {
+    try {
+        $root = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($path))
+        if (-not $root -or $root.StartsWith('\\')) { return $null }   # a share: DriveInfo cannot size it
+        $d = New-Object IO.DriveInfo($root)
+        if (-not $d.IsReady) { return $null }
+        [pscustomobject]@{ Free = [int64]$d.AvailableFreeSpace; Total = [int64]$d.TotalSize }
+    } catch { $null }
+}
+
+function Get-HeartbeatBody([pscustomobject]$cfg, [bool]$running, [string]$stopReason) {
+    $problems = New-Object Collections.ArrayList
+    foreach ($k in $script:SweepProblems.Keys) { [void]$problems.Add($k) }
+    $body = [ordered]@{
+        instanceId           = (Get-InstanceId $cfg)
+        kind                 = $script:Kind
+        name                 = (Get-DisplayName $cfg)
+        version              = $script:Version
+        running              = $running
+        enabled              = [bool]$cfg.Enabled
+        heartbeatIntervalSec = [int]$cfg.HeartbeatIntervalSec
+        uploadedToday        = [int](Get-UploadedToday)
+    }
+    if (-not $running) { $body.stopReason = $stopReason }
+    $now = [datetime]::UtcNow
+    if ($script:LastActivityUtc) { $body.secondsSinceActivity = [int64]($now - $script:LastActivityUtc).TotalSeconds }
+    if ($script:LastUploadUtc) { $body.secondsSinceUpload = [int64]($now - $script:LastUploadUtc).TotalSeconds }
+    if (Test-Path -LiteralPath $cfg.WatchFolder) {
+        $w = Get-WatchedFiles $cfg.WatchFolder
+        $body.pendingFiles = $w.Pending.Count
+        $body.failedFiles = $w.Failed
+        if ($w.Pending.Count -gt 0) {
+            $oldest = $now
+            foreach ($f in $w.Pending) { $a = Get-ArrivedUtc $f; if ($a -lt $oldest) { $oldest = $a } }
+            $body.oldestPendingMinutes = [int][Math]::Floor(($now - $oldest).TotalMinutes)
+        }
+        $disk = Get-DiskInfo $cfg.WatchFolder
+        if ($disk) { $body.diskFreeBytes = $disk.Free; $body.diskTotalBytes = $disk.Total }
+    } elseif (-not $problems.Contains('watch-folder-missing')) {
+        [void]$problems.Add('watch-folder-missing')
+    }
+    $body.problems = @($problems.ToArray())
+    $body
+}
+
+# One heartbeat. Never throws: a platform that cannot be reached is exactly
+# when the rest of the program must carry on. Returns the HTTP status (0 when
+# nothing answered).
+function Send-Heartbeat([pscustomobject]$cfg, [bool]$running = $true, [string]$stopReason = '') {
+    $code = 0
+    try {
+        $json = Get-HeartbeatBody $cfg $running $stopReason | ConvertTo-Json -Depth 4 -Compress
+        $content = New-Object System.Net.Http.StringContent($json, [Text.Encoding]::UTF8, 'application/json')
+        $resp = $script:HbHttp.PostAsync((Get-ApiUrl $cfg '/api/v1/device/uploader/heartbeat'), $content).GetAwaiter().GetResult()
+        $code = [int]$resp.StatusCode
+    } catch { $code = 0 }
+    if ($code -ne $script:HbLastCode) {
+        $script:HbLastCode = $code
+        switch ($code) {
+            200     { Write-Log 'heartbeat: reporting to the platform' }
+            0       { Write-Log 'heartbeat: the platform does not answer' 'WARN' }
+            404     { Write-Log 'heartbeat: the platform does not take heartbeats (an older version, or switched off there)' 'WARN' }
+            429     { Write-Log 'heartbeat: the platform refused it (HTTP 429: too many uploaders registered, or too many heartbeats from this address)' 'WARN' }
+            default { Write-Log "heartbeat: HTTP $code" 'WARN' }
+        }
+    }
+    $code
+}
+
+# The last word before the program ends. Sent once, however it ends.
+function Send-StopHeartbeat([pscustomobject]$cfg, [string]$reason) {
+    if ($script:StopSent) { return }
+    $script:StopSent = $true
+    Send-Heartbeat $cfg $false $reason | Out-Null
 }
 
 # ----------------------------------------------------------------------------
@@ -417,7 +596,11 @@ function Resolve-Batch([pscustomobject]$cfg, [object[]]$scans) {
     $payload = @{ scans = $ask } | ConvertTo-Json -Depth 4 -Compress
     $content = New-Object System.Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')
     $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/resolve'), $content).GetAwaiter().GetResult()
-    if (-not $resp.IsSuccessStatusCode) { Write-Log "resolve: HTTP $([int]$resp.StatusCode) — filing without a visit this sweep" 'WARN'; return ,$result }
+    if (-not $resp.IsSuccessStatusCode) {
+        if ([int]$resp.StatusCode -eq 429) { Add-Problem 'rate-limited' }
+        Write-Log "resolve: HTTP $([int]$resp.StatusCode) — filing without a visit this sweep" 'WARN'
+        return ,$result
+    }
     $r = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
     for ($j = 0; $j -lt $map.Count; $j++) {
         $scan = $r.scans[$j]
@@ -471,12 +654,27 @@ function Move-Aside([IO.FileInfo]$f, [string]$sub) {
     $script:SizeSeen.Remove($f.FullName); $script:Attempts.Remove($f.FullName)
 }
 
+# The problems the heartbeat reports are those of the last sweep: rebuilt on
+# every sweep, so one that went away stops being reported by itself.
 function Invoke-Sweep([pscustomobject]$cfg) {
+    $script:SweepProblems = @{}
+    try { Invoke-SweepCore $cfg }
+    catch {
+        # Whatever the sweep did not handle itself was the network or the platform.
+        Add-Problem 'server-unreachable'
+        throw
+    }
+    finally { $script:LastActivityUtc = [datetime]::UtcNow }
+}
+
+function Invoke-SweepCore([pscustomobject]$cfg) {
     $root = $cfg.WatchFolder
-    if (-not (Test-Path $root)) { Write-Log "sweep: watch folder missing: $root" 'ERROR'; return 'watch folder missing' }
-    $files = @(Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -match '^\.(dcm|e2e)$' -and
-                       $_.FullName -notmatch ('[\\/](' + [regex]::Escape($script:UploadedDir) + '|' + [regex]::Escape($script:FailedDir) + '|' + [regex]::Escape($script:SkippedDir) + ')[\\/]') })
+    if (-not (Test-Path $root)) {
+        Add-Problem 'watch-folder-missing'
+        Write-Log "sweep: watch folder missing: $root" 'ERROR'
+        return 'watch folder missing'
+    }
+    $files = @((Get-WatchedFiles $root).Pending)
     if ($files.Count -eq 0) { return 'nothing to upload' }
     $ready = @($files | Where-Object { Test-Settled $_ })
     if ($ready.Count -eq 0) { return ('{0} file(s) still being written' -f $files.Count) }
@@ -494,6 +692,7 @@ function Invoke-Sweep([pscustomobject]$cfg) {
             foreach ($s in $scans) { [void]$work.Add(@{ File = $f; Scan = $s }) }
         } catch {
             $unreadable++
+            Add-Problem 'unreadable-files'
             $n = 1 + [int]$script:Attempts[$f.FullName]; $script:Attempts[$f.FullName] = $n
             Write-Log ("identify: unreadable {0} file (attempt {1}): {2}" -f $f.Extension, $n, $_.Exception.Message) 'WARN'
             if ($n -ge $script:MaxAttempts) { Move-Aside $f $script:FailedDir }
@@ -516,16 +715,18 @@ function Invoke-Sweep([pscustomobject]$cfg) {
         try {
             $r = Send-Commit $cfg $f $s $ev
             switch ($r.Status) {
-                201 { $ok++; if ($ev) { $bound++ }; $filesDone[$f.FullName] = 'ok' }
+                201 { $ok++; if ($ev) { $bound++ }; $filesDone[$f.FullName] = 'ok'; Add-Uploaded }
                 409 { $dup++; if (-not $filesDone.ContainsKey($f.FullName)) { $filesDone[$f.FullName] = 'ok' } }
                 default {
                     $fail++; $filesDone[$f.FullName] = 'failed'
+                    Add-Problem $(if ($r.Status -eq 429) { 'rate-limited' } else { 'upload-failed' })
                     $why = ($r.Body -replace '\s+', ' ')
                     Write-Log ("upload: HTTP {0} for label '{1}' ({2})" -f $r.Status, $s.PatientId, $why.Substring(0, [Math]::Min(120, $why.Length))) 'WARN'
                 }
             }
         } catch {
             $fail++; $filesDone[$f.FullName] = 'failed'
+            Add-Problem 'server-unreachable'
             Write-Log "upload: $($_.Exception.Message)" 'ERROR'
         }
         Start-Sleep -Milliseconds 500     # the public front door is rate-limited per client
@@ -557,6 +758,14 @@ if ($SelfTest) {
     exit 0
 }
 
+if ($Heartbeat) {
+    $cfg = Read-Config
+    $code = Send-Heartbeat $cfg
+    $answer = if ($code -eq 200) { 'recorded' } elseif ($code -eq 0) { 'no answer' } else { "HTTP $code" }
+    Write-Host ("heartbeat as '{0}' ({1} {2}) to {3}: {4}" -f (Get-DisplayName $cfg), $script:Kind, $script:Version, $cfg.BaseUrl, $answer)
+    if ($code -eq 200) { exit 0 } else { exit 1 }
+}
+
 if ($Once) {
     $cfg = Read-Config
     Write-Log "$script:AppName one sweep of $($cfg.WatchFolder) against $($cfg.BaseUrl)"
@@ -565,6 +774,10 @@ if ($Once) {
     Start-Sleep -Seconds 2
     $summary = Invoke-Sweep $cfg
     Write-Host "result: $summary"
+    # A scheduled-task deployment reports like the tray does; set
+    # HeartbeatIntervalSec to the task's interval so the page does not read
+    # the gaps between runs as silence.
+    Send-Heartbeat $cfg | Out-Null
     exit 0
 }
 
@@ -632,22 +845,32 @@ function Update-Timers {
 }
 $sweepTimer.Add_Tick({ Invoke-SweepNow })
 
+# DR-033 — the heartbeat runs whether uploading is on or off: "switched off"
+# is one of the things the System Status page needs to see.
+$hbTimer = New-Object Windows.Forms.Timer
+$hbTimer.Interval = [Math]::Max(30, [int]$script:Cfg.HeartbeatIntervalSec) * 1000
+$hbTimer.Add_Tick({ Send-Heartbeat $script:Cfg | Out-Null })
+
 $enabledItem.Add_Click({
     $script:Cfg.Enabled = $enabledItem.Checked
     Save-Config $script:Cfg
     Update-Timers
     Write-Log ("enabled={0}" -f $script:Cfg.Enabled)
     if ($script:Cfg.Enabled) { Invoke-SweepNow }
+    Send-Heartbeat $script:Cfg | Out-Null
 })
 $sweepItem.Add_Click({ Invoke-SweepNow })
 $folderItem.Add_Click({ if (Test-Path $script:Cfg.WatchFolder) { Start-Process explorer.exe $script:Cfg.WatchFolder } })
 $logItem.Add_Click({ if (Test-Path $script:LogPath) { Start-Process notepad.exe $script:LogPath } })
-$exitItem.Add_Click({ $tray.Visible = $false; [Windows.Forms.Application]::Exit() })
+$exitItem.Add_Click({ Send-StopHeartbeat $script:Cfg 'exit'; $tray.Visible = $false; [Windows.Forms.Application]::Exit() })
+# Logoff or shutdown: say so, so the page shows an evening, not an outage.
+# Raised on this (STA, message-pumping) thread, where the script can run.
+[Microsoft.Win32.SystemEvents]::add_SessionEnding({ Send-StopHeartbeat $script:Cfg 'session-end' })
 
 $settingsItem.Add_Click({
     $f = New-Object Windows.Forms.Form
     $f.Text = "$script:AppName - Settings"; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedDialog'
-    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 266
+    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 300
 
     $y = 14
     function Add-Row([string]$label, [Windows.Forms.Control]$ctl) {
@@ -661,6 +884,7 @@ $settingsItem.Add_Click({
     $tbDcm    = New-Object Windows.Forms.TextBox; $tbDcm.Text = $script:Cfg.DeviceDicom
     $tbE2e    = New-Object Windows.Forms.TextBox; $tbE2e.Text = $script:Cfg.DeviceE2e
     $nuSweep  = New-Object Windows.Forms.NumericUpDown; $nuSweep.Minimum = 5; $nuSweep.Maximum = 3600; $nuSweep.Value = [int]$script:Cfg.SweepIntervalSec
+    $tbName   = New-Object Windows.Forms.TextBox; $tbName.Text = $script:Cfg.DisplayName
     $cbOn     = New-Object Windows.Forms.CheckBox; $cbOn.Text = 'Enabled'; $cbOn.Checked = [bool]$script:Cfg.Enabled
 
     Add-Row 'Platform base URL' $tbUrl
@@ -668,10 +892,11 @@ $settingsItem.Add_Click({
     Add-Row 'Device name for .dcm' $tbDcm
     Add-Row 'Device name for .e2e' $tbE2e
     Add-Row 'Sweep every (sec)' $nuSweep
+    Add-Row 'Name on the status page' $tbName
     Add-Row '' $cbOn
 
-    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 226
-    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 226
+    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 260
+    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 260
     $f.Controls.AddRange(@($ok, $cancel)); $f.AcceptButton = $ok; $f.CancelButton = $cancel
 
     if ($f.ShowDialog() -eq 'OK') {
@@ -680,22 +905,30 @@ $settingsItem.Add_Click({
         $script:Cfg.DeviceDicom = $tbDcm.Text.Trim()
         $script:Cfg.DeviceE2e = $tbE2e.Text.Trim()
         $script:Cfg.SweepIntervalSec = [int]$nuSweep.Value
+        $script:Cfg.DisplayName = $tbName.Text.Trim()
         $script:Cfg.Enabled = $cbOn.Checked
         Save-Config $script:Cfg
         $enabledItem.Checked = $cbOn.Checked
         Update-Timers
         Write-Log 'settings saved'
         if ($script:Cfg.Enabled) { Invoke-SweepNow }
+        Send-Heartbeat $script:Cfg | Out-Null
     }
     $f.Dispose()
 })
 
 Update-Timers
 if ($script:Cfg.Enabled) { Invoke-SweepNow }
+Send-Heartbeat $script:Cfg | Out-Null
+$hbTimer.Start()
 
 $ctx = New-Object Windows.Forms.ApplicationContext
 try { [Windows.Forms.Application]::Run($ctx) }
 finally {
+    $hbTimer.Stop()
+    # However it ended (the menu, a crash): the page should not wait three
+    # intervals to learn it. A no-op when Exit or the session end said so already.
+    Send-StopHeartbeat $script:Cfg 'exit'
     $tray.Visible = $false; $tray.Dispose()
     $mutex.ReleaseMutex() | Out-Null
     Write-Log "$script:AppName stopped"
