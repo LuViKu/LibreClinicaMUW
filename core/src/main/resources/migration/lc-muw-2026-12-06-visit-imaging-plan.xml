@@ -101,6 +101,10 @@
             ADD CONSTRAINT ck_event_def_imaging_laterality
             CHECK (laterality IS NULL OR laterality IN ('OD','OS','OU'));
         </sql>
+        <rollback>
+            <!-- constraints, the index and the foreign keys go with the table -->
+            <dropTable tableName="event_definition_imaging"/>
+        </rollback>
     </changeSet>
 
     <!--
@@ -141,6 +145,11 @@
                                   AND e.imaging_modality_id = m.imaging_modality_id)
              GROUP BY t.study_event_definition_id, m.imaging_modality_id;
         </sql>
+        <rollback>
+            <!-- Only the carried-over rows: they are the ones written without a
+                 user. A plan saved in the editor records who saved it and stays. -->
+            <sql>DELETE FROM event_definition_imaging WHERE created_by_user_id IS NULL</sql>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>
