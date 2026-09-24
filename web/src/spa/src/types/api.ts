@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/imaging-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImagingPlan"];
+        put: operations["setImagingPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{parentOid}/sites/{siteOid}": {
         parameters: {
             query?: never;
@@ -884,6 +900,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/imaging-plan/catch-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewImagingPlanCatchUp"];
+        put?: never;
+        post: operations["runImagingPlanCatchUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/event-definitions/reorder": {
         parameters: {
             query?: never;
@@ -1508,6 +1540,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingest/{id}/dismiss": {
         parameters: {
             query?: never;
@@ -1566,6 +1614,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["commitStaffUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/bulk-dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bulkDismiss"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1693,7 +1757,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore_6"];
+        post: operations["restore_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1741,7 +1805,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore_7"];
+        post: operations["restore_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4690,6 +4754,10 @@ export interface components {
             dicomPath?: string;
             previewPngPath?: string;
         };
+        UnbindRequest: {
+            dismiss?: boolean;
+            reason?: string;
+        };
         DismissRequest: {
             reason?: string;
         };
@@ -4703,6 +4771,10 @@ export interface components {
             modalityCode?: string;
             laterality?: string;
             acknowledgeDateMismatch?: boolean;
+        };
+        BulkDismissRequest: {
+            ids?: number[];
+            reason?: string;
         };
         ImportCrfPreviewDto: {
             /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
@@ -6214,6 +6286,58 @@ export interface operations {
             };
         };
     };
+    getImagingPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    setImagingPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     update_7: {
         parameters: {
             query?: never;
@@ -7541,6 +7665,52 @@ export interface operations {
             };
         };
     };
+    previewImagingPlanCatchUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    runImagingPlanCatchUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     reorder: {
         parameters: {
             query?: never;
@@ -8640,6 +8810,32 @@ export interface operations {
             };
             cookie?: never;
         };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UnbindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    restore_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
         requestBody?: never;
         responses: {
             /** @description OK */
@@ -8752,6 +8948,30 @@ export interface operations {
                     /** Format: binary */
                     file: string;
                 };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    bulkDismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDismissRequest"];
             };
         };
         responses: {
@@ -8970,7 +9190,7 @@ export interface operations {
             };
         };
     };
-    restore_6: {
+    restore_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -9041,7 +9261,7 @@ export interface operations {
             };
         };
     };
-    restore_7: {
+    restore_8: {
         parameters: {
             query?: never;
             header?: never;
