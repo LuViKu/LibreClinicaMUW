@@ -2596,7 +2596,7 @@
     "eventsCount": "Visiten",
     "scheduleEvent": "Visite planen",
     "openQueries": "Offene Rückfragen",
-    "openEvent": "CRFs öffnen",
+    "openEvent": "Visite öffnen",
     "column": {
       "event": "Visite",
       "dateStart": "Startdatum",
@@ -2767,6 +2767,26 @@
       "forbidden": "Kein Zugriff auf diese Visite.",
       "network": "Backend nicht erreichbar — bitte später erneut versuchen.",
       "startFailed": "Datenerfassung konnte nicht gestartet werden — bitte erneut versuchen."
+    },
+    "images": {
+      "title": "Bilder dieser Visite",
+      "count": "{n} Bild(er)",
+      "empty": "Keine Bilder für diese Visite.",
+      "loadFailed": "Die Bilder dieser Visite konnten nicht geladen werden.",
+      "eye": {
+        "OD": "Rechtes Auge (OD)",
+        "OS": "Linkes Auge (OS)",
+        "OU": "Beide Augen (OU)",
+        "unknown": "Auge nicht angegeben"
+      },
+      "noPreview": "Keine Vorschau",
+      "open": "Bild öffnen",
+      "source": {
+        "remidio": "Remidio",
+        "dicom": "DICOM",
+        "upload": "Upload",
+        "portal-oct": "OCT-Portal"
+      }
     }
   },
   "subjectExport": {
@@ -3256,7 +3276,8 @@
       "export.bundle.enabled": "Multimodaler Export",
       "portal.todaysVisits": "Heutige Visiten auf der Upload-Seite",
       "ai.arm.shownGroup": "Gruppe „KI sichtbar“",
-      "ai.arm.hiddenGroup": "Gruppe „KI verborgen“"
+      "ai.arm.hiddenGroup": "Gruppe „KI verborgen“",
+      "ai.blinding.enabled": "KI-Verblindung für Behandler (Prüfarzt, CRC)"
     }
   },
   "system": {

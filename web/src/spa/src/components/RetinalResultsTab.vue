@@ -19,6 +19,8 @@ import { RouterLink } from 'vue-router'
 import DenseTable from './DenseTable.vue'
 import StatusPill from './StatusPill.vue'
 import { useRetinalJobStore } from '@/stores/retinalJob'
+import { useAuthStore } from '@/stores/auth'
+import { userMayViewRetinalMetrics } from '@/lib/retinalAccess'
 import type { RetinalJobSummary, RetinalJobStatus } from '@/api/retinal'
 
 interface Props {
@@ -30,6 +32,13 @@ interface Props {
 const { t } = useI18n()
 const props = defineProps<Props>()
 const store = useRetinalJobStore()
+const auth = useAuthStore()
+
+// The metrics page is role-gated (trial blinding, per study since
+// 2026-09-24). A link the router will bounce to the home page is worse
+// than no link: the physician saw "Metriken anzeigen", clicked, and landed
+// on the dashboard with no explanation. Offer it only where it opens.
+const mayOpenMetrics = computed(() => userMayViewRetinalMetrics(auth.user))
 
 const isSubjectScope = computed(() => props.studySubjectId != null)
 
@@ -155,12 +164,14 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
         <td class="px-5 py-2.5 text-xs font-mono text-slate-600">{{ formatTimestamp(job.completedAt) }}</td>
         <td class="px-5 py-2.5 text-right text-xs">
           <RouterLink
+            v-if="mayOpenMetrics"
             :to="`/retinal-jobs/${job.jobId}`"
             class="text-muw-blue hover:underline"
             data-testid="retinal-results-view-link"
           >
             {{ t('retinal.results.viewMetricsLink') }}
           </RouterLink>
+          <span v-else class="text-slate-400" data-testid="retinal-results-view-blinded">—</span>
         </td>
       </tr>
     </DenseTable>

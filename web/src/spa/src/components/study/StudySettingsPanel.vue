@@ -41,6 +41,7 @@ const ORDER = [
   'ingest.image.enabled',
   'ingest.oct.enabled',
   'inference.enabled',
+  'ai.blinding.enabled',
   'export.bundle.enabled',
   'portal.todaysVisits',
 ]
