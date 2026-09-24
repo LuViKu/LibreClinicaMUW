@@ -365,8 +365,8 @@ to become a signed executable; that is the upgrade path, not a workaround.
 ### Clarus and Spectralis exports — the Export Watcher tray app
 
 Neither the Zeiss Clarus nor the Heidelberg Spectralis talks to the platform:
-the photographer exports to a folder on the acquisition PC (Clarus one `.dcm`
-per image, HEYEX one `.e2e` per export) and, until this, re-uploaded every
+the photographer exports to a folder on the acquisition PC (Clarus three
+`.dcm` per capture, HEYEX one `.e2e` per export) and, until this, re-uploaded every
 file through the browser page. `deploy/export-watcher/ExportWatcher.ps1`
 watches that folder and carries each finished file through the same public
 upload front door the page uses (DR-029), so nothing changes server-side:
@@ -385,6 +385,11 @@ upload front door the page uses (DR-029), so nothing changes server-side:
 - `201` and `409` (already there) move the file to `_uploaded\`; anything
   else is retried on later sweeps and after five attempts moved to
   `_failed\`. Nothing is ever deleted.
+- A Clarus export is **three objects per capture**: the photograph, a Raw
+  Data object with the vendor's sensor data (about 8 MB) and a small OT Raw
+  Data object stamped with the export time. Only the photograph is an image
+  the visit can show; the other two go to `_skipped\` (kept, not uploaded)
+  unless `UploadNonImage` is set to `true` in the settings file.
 
 **One watcher per PC**, each pointed at that PC's own export folder: on the
 Clarus PC it runs beside the Optomed bridge, on the Spectralis PC alone.
@@ -409,6 +414,7 @@ Before switching it on, check the readers on a real export:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTest -File D:\LibreClinica-Export\some.E2E
 # prints one line per volume: label, date, laterality — nothing is uploaded
+# (a Clarus Raw Data object prints "[non-image object: set aside]")
 ```
 
 `ExportWatcher.ps1 -Once` runs a single headless sweep and exits, for a

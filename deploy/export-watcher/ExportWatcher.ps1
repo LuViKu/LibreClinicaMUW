@@ -6,7 +6,7 @@
 
 .DESCRIPTION
   Neither device speaks to the platform. The photographer exports to a folder
-  on the acquisition PC — Clarus writes one .dcm per image, HEYEX one .e2e per
+  on the acquisition PC — Clarus writes three .dcm per capture, HEYEX one .e2e per
   export — and until now re-uploaded every file through the browser page.
   This script watches that folder instead and carries each new file through
   the same public upload API the page uses (DR-029), so nothing changes
@@ -16,10 +16,15 @@
                *.dcm and *.e2e. A file counts as finished when its size has
                not changed since the previous sweep AND it can be opened
                without sharing — an export in progress fails one of the two.
-               Sub-folders named _uploaded / _failed are skipped.
+               Sub-folders named _uploaded / _failed / _skipped are skipped.
 
     identify   .dcm: PatientID, StudyDate and (Image)Laterality out of the
-               header — the same reader the Optomed bridge uses.
+               header — the same reader the Optomed bridge uses. A Clarus
+               export is three objects per capture: the photograph, a Raw
+               Data object (the vendor's sensor data, 8 MB) and a small OT
+               Raw Data object stamped with the export time. Only the
+               photograph is an image; the other two are set aside in
+               _skipped\ (never deleted) unless UploadNonImage is on.
                .e2e: patient id, acquisition date and laterality per OCT
                volume out of the Heidelberg chunk directory — a port of the
                upload page's own reader (web/src/spa/src/lib/e2eParser.ts;
@@ -91,6 +96,12 @@ $script:StateDir    = Split-Path -Parent $ConfigPath
 $script:LogPath     = Join-Path $script:StateDir 'export-watcher.log'
 $script:UploadedDir = '_uploaded'
 $script:FailedDir   = '_failed'
+$script:SkippedDir  = '_skipped'
+# SOP classes that are not images: Raw Data (the Clarus writes one per
+# capture plus one at export time), structured reports, presentation
+# states, encapsulated documents. Set aside unless UploadNonImage is on.
+$script:NonImageSopPrefixes = @('1.2.840.10008.5.1.4.1.1.66', '1.2.840.10008.5.1.4.1.1.88.',
+                                '1.2.840.10008.5.1.4.1.1.11.', '1.2.840.10008.5.1.4.1.1.104.')
 $script:MaxAttempts = 5
 $script:LastBalloon = [datetime]::MinValue
 # path -> size seen at the previous sweep; a file is settled when it matches.
@@ -124,6 +135,7 @@ function Get-DefaultConfig {
         SweepIntervalSec = 20
         DeviceDicom    = 'clarus'      # the device key on a .dcm upload (imaging catalogue: FUNDUS_CLARUS)
         DeviceE2e      = 'spectralis'  # on an .e2e upload (OCT_SPECTRALIS and the Spectralis image rows)
+        UploadNonImage = $false       # also upload Raw Data / report objects (see 'identify' above)
         Enabled        = $false
     }
 }
@@ -162,9 +174,45 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 # ----------------------------------------------------------------------------
 $script:LongVRs = @('OB','OW','OF','SQ','UT','UN')
 
+# Length of the element whose 4-byte tag has just been read. 0xFFFFFFFF means
+# undefined (a sequence, or encapsulated pixel data) — compared below as
+# [uint32]::MaxValue, because PowerShell parses the hex literal 0xFFFFFFFF as
+# the Int32 -1, and a [uint32] length never equals that. Group 0002 is always
+# explicit VR little endian; the dataset's syntax is what 0002,0010 said.
+function Read-ElemLength([IO.BinaryReader]$r, [bool]$explicit) {
+    if (-not $explicit) { return $r.ReadUInt32() }
+    $vr = [Text.Encoding]::ASCII.GetString($r.ReadBytes(2))
+    if ($script:LongVRs -contains $vr) { $r.ReadUInt16() | Out-Null; return $r.ReadUInt32() }
+    [uint32]$r.ReadUInt16()
+}
+
+# Positioned just after an undefined-length header: consume the items up to
+# the sequence delimiter, recursing into nested sequences. The Clarus writes
+# undefined-length sequences (SourceImageSequence, AnatomicRegionSequence) in
+# group 0008 — BEFORE the patient group — so a reader that stops at the first
+# one never sees the PatientID. Verified on Clarus 700 exports, 2026-09-24.
+function Skip-Sequence([IO.BinaryReader]$r, [bool]$explicit) {
+    $fs = $r.BaseStream
+    while ($fs.Position -lt $fs.Length) {
+        $group = $r.ReadUInt16(); $elem = $r.ReadUInt16(); $len = $r.ReadUInt32()
+        if ($group -ne 0xFFFE) { throw 'malformed DICOM sequence' }
+        if ($elem -eq 0xE0DD) { return }                            # sequence delimiter
+        if ($elem -ne 0xE000) { throw 'malformed DICOM sequence' }
+        if ($len -ne [uint32]::MaxValue) { $fs.Position += $len; continue }
+        while ($fs.Position -lt $fs.Length) {                       # undefined-length item
+            $g = $r.ReadUInt16(); $e = $r.ReadUInt16()
+            if ($g -eq 0xFFFE -and $e -eq 0xE00D) { $r.ReadUInt32() | Out-Null; break }   # item delimiter
+            $l = Read-ElemLength $r $explicit
+            if ($l -eq [uint32]::MaxValue) { Skip-Sequence $r $explicit } else { $fs.Position += $l }
+        }
+    }
+}
+
 function Read-DicomTags {
     param([string]$Path)
-    $tags = @{ PatientID = ''; StudyDate = ''; Laterality = ''; ImageLaterality = '' }
+    $tags = @{ PatientID = ''; StudyDate = ''; Laterality = ''; ImageLaterality = ''; SOPClassUID = '' }
+    $want = @{ '0008,0016' = 'SOPClassUID'; '0008,0020' = 'StudyDate'; '0010,0020' = 'PatientID'
+               '0020,0060' = 'Laterality'; '0020,0062' = 'ImageLaterality' }
     $fs = [IO.File]::Open($Path, 'Open', 'Read', 'Read')
     try {
         $r = New-Object IO.BinaryReader($fs)
@@ -174,34 +222,21 @@ function Read-DicomTags {
         $explicit = $true
         while ($fs.Position -lt $fs.Length) {
             $group = $r.ReadUInt16(); $elem = $r.ReadUInt16()
-            if ($group -gt 0x0020) { break }
-            $vr = ''
-            if ($explicit -or $group -eq 2) {
-                $vr = [Text.Encoding]::ASCII.GetString($r.ReadBytes(2))
-                if ($vr -match '^[A-Z]{2}$') {
-                    if ($script:LongVRs -contains $vr) { $r.ReadUInt16() | Out-Null; $len = $r.ReadUInt32() }
-                    else { $len = [uint32]$r.ReadUInt16() }
-                } else {
-                    # not a VR: implicit little endian — rewind and read a 4-byte length
-                    $fs.Position -= 2; $vr = ''; $len = $r.ReadUInt32(); $explicit = $false
-                }
-            } else { $len = $r.ReadUInt32() }
-            if ($len -eq 0xFFFFFFFF) { break }   # undefined length: a sequence; nothing wanted lies beyond
-            $key = ('{0:X4},{1:X4}' -f $group, $elem)
-            if ($key -in @('0010,0020','0008,0020','0020,0060','0020,0062')) {
-                $val = [Text.Encoding]::ASCII.GetString($r.ReadBytes([int]$len)).Trim([char]0, ' ')
-                switch ($key) {
-                    '0010,0020' { $tags.PatientID = $val }
-                    '0008,0020' { $tags.StudyDate = $val }
-                    '0020,0060' { $tags.Laterality = $val }
-                    '0020,0062' { $tags.ImageLaterality = $val }
-                }
-            } else {
-                if ($group -eq 2 -and $elem -eq 0x0010) {
-                    $ts = [Text.Encoding]::ASCII.GetString($r.ReadBytes([int]$len)).Trim([char]0, ' ')
-                    $explicit = ($ts -ne '1.2.840.10008.1.2')
-                } else { $fs.Position += $len }
+            if ($group -gt 0x0020) { break }                        # everything wanted has been passed
+            if ($group -ne 2 -and $explicit) {
+                # no VR where one should be: implicit little endian without a meta header
+                $probe = [Text.Encoding]::ASCII.GetString($r.ReadBytes(2)); $fs.Position -= 2
+                if ($probe -notmatch '^[A-Z]{2}$') { $explicit = $false }
             }
+            $len = Read-ElemLength $r ($explicit -or $group -eq 2)
+            if ($len -eq [uint32]::MaxValue) { Skip-Sequence $r $explicit; continue }
+            $key = ('{0:X4},{1:X4}' -f $group, $elem)
+            if ($want.ContainsKey($key)) {
+                $tags[$want[$key]] = [Text.Encoding]::ASCII.GetString($r.ReadBytes([int]$len)).Trim([char]0, ' ')
+            } elseif ($group -eq 2 -and $elem -eq 0x0010) {
+                $ts = [Text.Encoding]::ASCII.GetString($r.ReadBytes([int]$len)).Trim([char]0, ' ')
+                $explicit = ($ts -ne '1.2.840.10008.1.2')
+            } else { $fs.Position += $len }
         }
     } finally { $fs.Dispose() }
     $tags
@@ -353,14 +388,15 @@ function Get-FileScans([pscustomobject]$cfg, [IO.FileInfo]$f) {
         $t = Read-DicomTags $f.FullName
         $lat = $null
         if ($t.ImageLaterality) { $lat = ConvertTo-Laterality $t.ImageLaterality } elseif ($t.Laterality) { $lat = ConvertTo-Laterality $t.Laterality }
-        return ,@([pscustomobject]@{ PatientId = $t.PatientID; ScanDate = (ConvertTo-IsoDate $t.StudyDate); Laterality = $lat; ScanIndex = 0; Device = $cfg.DeviceDicom; Kind = 'dicom' })
+        $nonImage = [bool]@($script:NonImageSopPrefixes | Where-Object { $t.SOPClassUID.StartsWith($_) })
+        return ,@([pscustomobject]@{ PatientId = $t.PatientID; ScanDate = (ConvertTo-IsoDate $t.StudyDate); Laterality = $lat; ScanIndex = 0; Device = $cfg.DeviceDicom; Kind = 'dicom'; NonImage = $nonImage })
     }
     $scans = Read-E2eScans $f.FullName
     if ($scans.Count -eq 0) {
         # a file with no volume chunk at all: send it once, undated, so the inbox gets it
-        return ,@([pscustomobject]@{ PatientId = ''; ScanDate = $null; Laterality = $null; ScanIndex = 0; Device = $cfg.DeviceE2e; Kind = 'e2e' })
+        return ,@([pscustomobject]@{ PatientId = ''; ScanDate = $null; Laterality = $null; ScanIndex = 0; Device = $cfg.DeviceE2e; Kind = 'e2e'; NonImage = $false })
     }
-    ,@($scans | ForEach-Object { [pscustomobject]@{ PatientId = $_.PatientId; ScanDate = $_.ScanDate; Laterality = $_.Laterality; ScanIndex = $_.ScanIndex; Device = $cfg.DeviceE2e; Kind = 'e2e' } })
+    ,@($scans | ForEach-Object { [pscustomobject]@{ PatientId = $_.PatientId; ScanDate = $_.ScanDate; Laterality = $_.Laterality; ScanIndex = $_.ScanIndex; Device = $cfg.DeviceE2e; Kind = 'e2e'; NonImage = $false } })
 }
 
 # ----------------------------------------------------------------------------
@@ -440,17 +476,22 @@ function Invoke-Sweep([pscustomobject]$cfg) {
     if (-not (Test-Path $root)) { Write-Log "sweep: watch folder missing: $root" 'ERROR'; return 'watch folder missing' }
     $files = @(Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Extension -match '^\.(dcm|e2e)$' -and
-                       $_.FullName -notmatch ('[\\/](' + [regex]::Escape($script:UploadedDir) + '|' + [regex]::Escape($script:FailedDir) + ')[\\/]') })
+                       $_.FullName -notmatch ('[\\/](' + [regex]::Escape($script:UploadedDir) + '|' + [regex]::Escape($script:FailedDir) + '|' + [regex]::Escape($script:SkippedDir) + ')[\\/]') })
     if ($files.Count -eq 0) { return 'nothing to upload' }
     $ready = @($files | Where-Object { Test-Settled $_ })
     if ($ready.Count -eq 0) { return ('{0} file(s) still being written' -f $files.Count) }
 
     # identify everything first, so one /resolve covers the sweep
     $work = New-Object Collections.ArrayList   # @{ File; Scan }
-    $unreadable = 0
+    $unreadable = 0; $setAside = 0
     foreach ($f in $ready) {
         try {
-            foreach ($s in (Get-FileScans $cfg $f)) { [void]$work.Add(@{ File = $f; Scan = $s }) }
+            $scans = @(Get-FileScans $cfg $f)
+            if (-not $cfg.UploadNonImage -and @($scans | Where-Object { -not $_.NonImage }).Count -eq 0) {
+                # a Raw Data object or a report, not a picture: not for the visit
+                $setAside++; Move-Aside $f $script:SkippedDir; continue
+            }
+            foreach ($s in $scans) { [void]$work.Add(@{ File = $f; Scan = $s }) }
         } catch {
             $unreadable++
             $n = 1 + [int]$script:Attempts[$f.FullName]; $script:Attempts[$f.FullName] = $n
@@ -458,7 +499,11 @@ function Invoke-Sweep([pscustomobject]$cfg) {
             if ($n -ge $script:MaxAttempts) { Move-Aside $f $script:FailedDir }
         }
     }
-    if ($work.Count -eq 0) { return ('nothing readable ({0} unreadable)' -f $unreadable) }
+    if ($work.Count -eq 0) {
+        $summary = 'nothing to upload ({0} unreadable, {1} non-image set aside)' -f $unreadable, $setAside
+        if ($setAside -gt 0) { Write-Log "sweep: $summary" }
+        return $summary
+    }
 
     $scans = @($work | ForEach-Object { $_.Scan })
     $events = Resolve-Batch $cfg $scans
@@ -492,7 +537,7 @@ function Invoke-Sweep([pscustomobject]$cfg) {
         $n = 1 + [int]$script:Attempts[$path]; $script:Attempts[$path] = $n
         if ($n -ge $script:MaxAttempts) { Write-Log ("upload: giving up on a {0} file after {1} attempts — moved to {2}" -f $f.Extension, $n, $script:FailedDir) 'ERROR'; Move-Aside $f $script:FailedDir }
     }
-    $summary = 'uploaded {0} ({1} bound), {2} already there, {3} failed' -f $ok, $bound, $dup, $fail
+    $summary = 'uploaded {0} ({1} bound), {2} already there, {3} failed, {4} non-image set aside' -f $ok, $bound, $dup, $fail, $setAside
     Write-Log "sweep: $summary"
     $summary
 }
@@ -506,7 +551,8 @@ if ($SelfTest) {
     $f = Get-Item $File
     Write-Host ("{0} ({1:N0} bytes)" -f $f.Extension, $f.Length)
     foreach ($s in (Get-FileScans $cfg $f)) {
-        Write-Host ("  scan {0}: label='{1}' date={2} laterality={3} device={4}" -f $s.ScanIndex, $s.PatientId, $(if ($s.ScanDate) { $s.ScanDate } else { '-' }), $(if ($s.Laterality) { $s.Laterality } else { '-' }), $s.Device)
+        $note = $(if ($s.NonImage) { ' [non-image object: set aside]' } else { '' })
+        Write-Host ("  scan {0}: label='{1}' date={2} laterality={3} device={4}{5}" -f $s.ScanIndex, $s.PatientId, $(if ($s.ScanDate) { $s.ScanDate } else { '-' }), $(if ($s.Laterality) { $s.Laterality } else { '-' }), $s.Device, $note)
     }
     exit 0
 }
