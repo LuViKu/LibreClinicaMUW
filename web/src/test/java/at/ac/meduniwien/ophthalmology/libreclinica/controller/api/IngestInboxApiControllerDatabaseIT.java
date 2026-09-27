@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -67,7 +69,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     @AfterEach
     void cleanRows() throws Exception {
         exec("DELETE FROM audit_log_event WHERE audit_table IN ('ingest_item', 'item_data') "
-                + "AND audit_log_event_type_id IN (127, 128, 129, 130)");
+                + "AND audit_log_event_type_id IN (127, 128, 129, 130, 137)");
         exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + ITEM_ID);
         exec("DELETE FROM ingest_item WHERE original_filename LIKE '" + MARKER + "%'");
         exec("DELETE FROM imaging_modality WHERE code = 'INBOX_IT'");
@@ -442,6 +444,146 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 // The retention sweep deletes the file later; the row is then
                 // the only record it ever existed.
                 assertEquals("test exposure", rs.getString(1));
+            }
+        }
+    }
+
+    /**
+     * 2026-09-27 — the trail says which file, and why, without whose.
+     *
+     * <p>The dismissal carries the reason and the file's reference; the
+     * reference never carries the original file name, which can hold the
+     * patient's name. Restoring is its own type: it was written under the
+     * dismiss type and read as a second dismissal. The system audit log shows
+     * both rows with their titles, the file, and the reason.
+     */
+    @Test
+    void dismissingAndRestoringLeaveATrailThatNamesTheFile() throws Exception {
+        long id = seed("image", "upload", "remidio", null);
+        mockMvc().perform(post("/api/v1/ingest/" + id + "/dismiss")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"test exposure\"}")
+                        .session(dm()))
+                .andExpect(status().isOk());
+        mockMvc().perform(post("/api/v1/ingest/" + id + "/restore").session(dm()))
+                .andExpect(status().isOk());
+
+        long dismissRow;
+        long restoreRow;
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT audit_id, audit_log_event_type_id, entity_name, old_value, new_value, "
+                             + "       reason_for_change "
+                             + "  FROM audit_log_event "
+                             + " WHERE audit_table = 'ingest_item' AND entity_id = ? ORDER BY audit_id")) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next(), "the dismissal is recorded");
+                dismissRow = rs.getLong("audit_id");
+                assertEquals(AuditTypeIds.IMAGE_DISMISS, rs.getInt("audit_log_event_type_id"));
+                String reference = rs.getString("entity_name");
+                assertTrue(reference.startsWith("file #" + id + " · remidio · image · received "),
+                        "which file, in words that outlive it: " + reference);
+                assertFalse(reference.contains(MARKER), "never the original file name");
+                assertEquals("UNBOUND", rs.getString("old_value"));
+                assertEquals("DISMISSED", rs.getString("new_value"));
+                assertEquals("test exposure", rs.getString("reason_for_change"));
+
+                assertTrue(rs.next(), "the restore is recorded");
+                restoreRow = rs.getLong("audit_id");
+                assertEquals(AuditTypeIds.INGEST_RESTORE, rs.getInt("audit_log_event_type_id"));
+                assertEquals(reference, rs.getString("entity_name"));
+                assertEquals("DISMISSED;reason=test exposure", rs.getString("old_value"));
+                assertEquals("UNBOUND", rs.getString("new_value"));
+                assertFalse(rs.next());
+            }
+        }
+
+        MockHttpSession sysadmin = dm();
+        ((UserAccountBean) sysadmin.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        MockMvcBuilders.standaloneSetup(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
+                .build()
+                .perform(get("/api/v1/audit/system").session(sysadmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + dismissRow + "')].title").value(
+                        org.hamcrest.Matchers.hasItem("Ingested file dismissed")))
+                .andExpect(jsonPath("$[?(@.id == '" + dismissRow + "')].reason").value(
+                        org.hamcrest.Matchers.hasItem("test exposure")))
+                .andExpect(jsonPath("$[?(@.id == '" + dismissRow + "' && @.details =~ /^file #" + id + " .*/)]")
+                        .exists())
+                .andExpect(jsonPath("$[?(@.id == '" + restoreRow + "')].title").value(
+                        org.hamcrest.Matchers.hasItem("Ingested file restored")));
+    }
+
+    /**
+     * 2026-09-27 — filing a file to a visit, and taking it off, change that
+     * visit's source data, so both rows record the visit and appear in the
+     * study's own audit log. The dismissal of a never-filed file does not.
+     */
+    @Test
+    void aBindAndAnUnbindRecordTheirVisitAndReachTheStudyLog() throws Exception {
+        mapDeviceToItem();
+        long id = seed("dicom", "dicom", DEVICE, null);
+        mockMvc().perform(post("/api/v1/ingest/" + id + "/bind")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"studySubjectId\":" + STUDY_SUBJECT_ID
+                                + ",\"studyEventId\":" + STUDY_EVENT_ID
+                                + ",\"eventCrfId\":" + EVENT_CRF_ID + "}")
+                        .session(dm()))
+                .andExpect(status().isOk());
+        mockMvc().perform(post("/api/v1/ingest/" + id + "/unbind").session(dm()))
+                .andExpect(status().isOk());
+        long dismissed = seed("image", "upload", "remidio", null);
+        mockMvc().perform(post("/api/v1/ingest/" + dismissed + "/dismiss")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"wrong patient\"}")
+                        .session(dm()))
+                .andExpect(status().isOk());
+
+        long bindRow = auditRowOf(id, AuditTypeIds.IMAGE_BIND);
+        long unbindRow = auditRowOf(id, AuditTypeIds.INGEST_UNBIND);
+        long dismissRow = auditRowOf(dismissed, AuditTypeIds.IMAGE_DISMISS);
+        assertEquals(Integer.valueOf(STUDY_EVENT_ID), visitColumnOf(bindRow), "the visit the file was filed to");
+        assertEquals(Integer.valueOf(STUDY_EVENT_ID), visitColumnOf(unbindRow), "the visit the file was taken off");
+        assertNull(visitColumnOf(dismissRow), "a file that was never filed names no visit");
+
+        MockHttpSession studyLog = sessionAs(Role.ADMIN);
+        ((StudyUserRoleBean) studyLog.getAttribute("userRole")).setStudyId(1);
+        MockMvcBuilders.standaloneSetup(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
+                .build()
+                .perform(get("/api/v1/audit").session(studyLog))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(bindRow))))
+                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(unbindRow))))
+                .andExpect(jsonPath("$[*].id",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(String.valueOf(dismissRow)))));
+    }
+
+    private long auditRowOf(long ingestItemId, int type) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT MAX(audit_id) FROM audit_log_event "
+                             + "WHERE audit_table = 'ingest_item' AND entity_id = ? AND audit_log_event_type_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            ps.setInt(2, type);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                long row = rs.getLong(1);
+                assertFalse(rs.wasNull(), "no type " + type + " row for file " + ingestItemId);
+                return row;
+            }
+        }
+    }
+
+    private Integer visitColumnOf(long auditId) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_event_id FROM audit_log_event WHERE audit_id = ?")) {
+            ps.setLong(1, auditId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                int v = rs.getInt(1);
+                return rs.wasNull() ? null : v;
             }
         }
     }

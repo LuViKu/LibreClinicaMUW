@@ -44,6 +44,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
@@ -298,9 +299,10 @@ public class IngestUploadApiController {
             LOG.warn("could not attribute OCT upload ingest_item {} to its uploader: {}", id, e.getMessage());
         }
         try {
+            String reference = IngestFileReference.describe(dataSource, id);
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.OCT_UPLOAD_PUBLIC,
                     actor.user(), actor.study(), null, "OCT scan uploaded by a logged-in user",
-                    "ingest_item", (int) id, "status", "", status);
+                    "ingest_item", (int) id, reference == null ? "status" : reference, "", status);
         } catch (RuntimeException e) {
             LOG.warn("could not audit the staff OCT upload of ingest_item {}: {}", id, e.getMessage());
         }

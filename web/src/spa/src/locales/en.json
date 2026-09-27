@@ -695,6 +695,11 @@
     "showingCount": "{visible} of {total} events shown",
     "empty": "No events match the current filter.",
     "by": "by",
+    "values": {
+      "before": "Before",
+      "after": "After",
+      "value": "Value"
+    },
     "heading": {
       "today": "Today",
       "yesterday": "Yesterday"

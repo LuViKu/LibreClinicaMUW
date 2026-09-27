@@ -695,6 +695,11 @@
     "showingCount": "{visible} von {total} Ereignissen sichtbar",
     "empty": "Keine Ereignisse für den aktuellen Filter.",
     "by": "von",
+    "values": {
+      "before": "Vorher",
+      "after": "Nachher",
+      "value": "Wert"
+    },
     "heading": {
       "today": "Heute",
       "yesterday": "Gestern"
