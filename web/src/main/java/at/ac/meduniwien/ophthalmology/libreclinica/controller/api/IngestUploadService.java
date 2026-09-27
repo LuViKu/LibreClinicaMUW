@@ -561,7 +561,8 @@ final class IngestUploadService {
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), AuditTypeIds.IMAGE_BIND,
                     actor.user(), actor.study(), null, "uploaded file filed against a visit",
                     "ingest_item", (int) id, reference == null ? "status" : reference, "UNBOUND",
-                    "BOUND;match_policy=" + policy + ";study_event_id=" + target.studyEventId());
+                    "BOUND;match_policy=" + policy + ";study_event_id=" + target.studyEventId(),
+                    null, target.studyEventId());
         } catch (RuntimeException e) {
             LOG.warn("could not audit the bind of ingest_item {}: {}", id, e.getMessage());
         }

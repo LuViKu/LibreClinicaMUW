@@ -38,9 +38,9 @@ final class AuditRowContext {
 
     /** One audit row as stored. */
     record Row(int auditId, Timestamp auditDate, String auditTable, int entityId,
-               String entityName, int eventCrfId, int typeId, String oldValue,
-               String newValue, String reason, String userName, String typeName,
-               String typeDisplay) {
+               String entityName, int eventCrfId, int studyEventId, int typeId,
+               String oldValue, String newValue, String reason, String userName,
+               String typeName, String typeDisplay) {
 
         static Row read(ResultSet rs) throws SQLException {
             return new Row(
@@ -50,6 +50,7 @@ final class AuditRowContext {
                     rs.getInt("entity_id"),
                     rs.getString("entity_name"),
                     rs.getInt("event_crf_id"),
+                    rs.getInt("study_event_id"),
                     rs.getInt("audit_log_event_type_id"),
                     rs.getString("old_value"),
                     rs.getString("new_value"),
@@ -63,9 +64,15 @@ final class AuditRowContext {
             return table.equalsIgnoreCase(auditTable);
         }
 
-        /** The visit this row is about, from its locator or its own values. */
+        /**
+         * The visit this row is about: a visit row's own entity, else the
+         * row's visit column (written by the heritage triggers and, since
+         * 2026-09-27, by the ingest writers), else, for an ingest row written
+         * before that, the visit in its values.
+         */
         Integer visitId() {
             if (on("study_event")) return entityId > 0 ? entityId : null;
+            if (studyEventId > 0) return studyEventId;
             if (on("ingest_item")) return AuditRowLabels.studyEventIdIn(newValue, oldValue);
             return null;
         }

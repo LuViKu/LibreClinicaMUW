@@ -515,6 +515,79 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                         org.hamcrest.Matchers.hasItem("Ingested file restored")));
     }
 
+    /**
+     * 2026-09-27 — filing a file to a visit, and taking it off, change that
+     * visit's source data, so both rows record the visit and appear in the
+     * study's own audit log. The dismissal of a never-filed file does not.
+     */
+    @Test
+    void aBindAndAnUnbindRecordTheirVisitAndReachTheStudyLog() throws Exception {
+        mapDeviceToItem();
+        long id = seed("dicom", "dicom", DEVICE, null);
+        mockMvc().perform(post("/api/v1/ingest/" + id + "/bind")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"studySubjectId\":" + STUDY_SUBJECT_ID
+                                + ",\"studyEventId\":" + STUDY_EVENT_ID
+                                + ",\"eventCrfId\":" + EVENT_CRF_ID + "}")
+                        .session(dm()))
+                .andExpect(status().isOk());
+        mockMvc().perform(post("/api/v1/ingest/" + id + "/unbind").session(dm()))
+                .andExpect(status().isOk());
+        long dismissed = seed("image", "upload", "remidio", null);
+        mockMvc().perform(post("/api/v1/ingest/" + dismissed + "/dismiss")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"wrong patient\"}")
+                        .session(dm()))
+                .andExpect(status().isOk());
+
+        long bindRow = auditRowOf(id, AuditTypeIds.IMAGE_BIND);
+        long unbindRow = auditRowOf(id, AuditTypeIds.INGEST_UNBIND);
+        long dismissRow = auditRowOf(dismissed, AuditTypeIds.IMAGE_DISMISS);
+        assertEquals(Integer.valueOf(STUDY_EVENT_ID), visitColumnOf(bindRow), "the visit the file was filed to");
+        assertEquals(Integer.valueOf(STUDY_EVENT_ID), visitColumnOf(unbindRow), "the visit the file was taken off");
+        assertNull(visitColumnOf(dismissRow), "a file that was never filed names no visit");
+
+        MockHttpSession studyLog = sessionAs(Role.ADMIN);
+        ((StudyUserRoleBean) studyLog.getAttribute("userRole")).setStudyId(1);
+        MockMvcBuilders.standaloneSetup(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
+                .build()
+                .perform(get("/api/v1/audit").session(studyLog))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(bindRow))))
+                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(unbindRow))))
+                .andExpect(jsonPath("$[*].id",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(String.valueOf(dismissRow)))));
+    }
+
+    private long auditRowOf(long ingestItemId, int type) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT MAX(audit_id) FROM audit_log_event "
+                             + "WHERE audit_table = 'ingest_item' AND entity_id = ? AND audit_log_event_type_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            ps.setInt(2, type);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                long row = rs.getLong(1);
+                assertFalse(rs.wasNull(), "no type " + type + " row for file " + ingestItemId);
+                return row;
+            }
+        }
+    }
+
+    private Integer visitColumnOf(long auditId) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_event_id FROM audit_log_event WHERE audit_id = ?")) {
+            ps.setLong(1, auditId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                int v = rs.getInt(1);
+                return rs.wasNull() ? null : v;
+            }
+        }
+    }
+
     /* ---------------- bulk ---------------- */
 
     @Test

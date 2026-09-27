@@ -147,8 +147,8 @@ final class ImageIngestBinding {
         // Same column set and NULL-user convention as the portals' own audit
         // writers (PublicOctUploadController.writePublicOctUploadAuditRow).
         String sql = "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
-                + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
-                + "VALUES (?, now(), NULL, ?, ?, ?, ?, ?)";
+                + "user_id, audit_table, entity_id, entity_name, old_value, new_value, study_event_id) "
+                + "VALUES (?, now(), NULL, ?, ?, ?, ?, ?, ?)";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, AuditTypeIds.IMAGE_BIND);
@@ -162,6 +162,13 @@ final class ImageIngestBinding {
             // Pack the policy + visit into new_value so the audit view can
             // explain a bind that has no user behind it.
             ps.setString(6, "BOUND;match_policy=" + matchPolicy + ";study_event_id=" + studyEventId);
+            // The visit again, in the column the per-study audit log places
+            // rows by, so the bind shows in that visit's study.
+            if (studyEventId > 0) {
+                ps.setInt(7, studyEventId);
+            } else {
+                ps.setNull(7, java.sql.Types.INTEGER);
+            }
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.warn("could not audit the system bind of ingest_item {}: {}",

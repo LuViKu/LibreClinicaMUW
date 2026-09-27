@@ -174,7 +174,9 @@ public class AuditApiController {
             -- audit_log_event_type lookup join (NULL type id) visible.
             WHERE COALESCE(alet.is_user_visible, true) = true
             AND (
-              ( a.audit_table = 'item_data' AND a.entity_id IN (
+              ( a.audit_table = 'item_data'
+                AND a.audit_log_event_type_id IS DISTINCT FROM 129
+                AND a.entity_id IN (
                   SELECT id.item_data_id FROM item_data id
                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
                     JOIN study_event se ON se.study_event_id = ec.study_event_id
@@ -217,10 +219,42 @@ public class AuditApiController {
                   SELECT transition_id FROM eye_cohort_transition
                   WHERE source_study_id IN __IN__
                      OR target_study_id IN __IN__))
+              -- 2026-09-27: auto-tick rows (129) sit on item_data but hold
+              -- the ingest file's id as entity_id, so the item_data branch
+              -- matched them to whichever item shared that number, in any
+              -- study. They are placed by the CRF they record instead, which
+              -- also covers every such row already written.
+              OR ( a.audit_log_event_type_id = 129 AND a.event_crf_id IN (
+                  SELECT ec.event_crf_id FROM event_crf ec
+                    JOIN study_event se ON se.study_event_id = ec.study_event_id
+                    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
+                  WHERE ss.study_id IN __IN__))
+              -- 2026-09-27: a file filed to or taken off a visit changes
+              -- that visit's source data, so the row belongs in the visit's
+              -- study. Binds, unbinds and the analysis jobs following a file
+              -- record the visit in study_event_id; camera and upload binds
+              -- written before that recorded it only in new_value. A row
+              -- about a file that was never filed (dismissal, restore) names
+              -- no visit and stays in the system log.
+              OR ( a.audit_table = 'ingest_item' AND COALESCE(a.study_event_id,
+                    CAST(substring(a.new_value
+                         FROM '(?:^|;)study_event_id=([0-9]{1,9})(?:;|$)') AS integer)) IN (
+                  SELECT se.study_event_id FROM study_event se
+                    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
+                  WHERE ss.study_id IN __IN__))
             )
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
+
+    /** How many visibility IN-lists the per-study template has; each binds the visible ids. */
+    static final int STUDY_SCOPED_IN_SLOTS = countOccurrences(STUDY_SCOPED_AUDIT_SQL_TEMPLATE, "__IN__");
+
+    private static int countOccurrences(String text, String token) {
+        int n = 0;
+        for (int i = text.indexOf(token); i >= 0; i = text.indexOf(token, i + token.length())) n++;
+        return n;
+    }
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
@@ -453,17 +487,20 @@ public class AuditApiController {
         List<AuditRowContext.Row> rows = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            // 9 IN-clause slots × n ids each (item_data, event_crf,
+            // One IN-clause slot per branch × n ids each (item_data, event_crf,
             // study_subject, subject, study_event, study, dataset,
-            // eye_cohort_transition[source], eye_cohort_transition[target]) —
+            // eye_cohort_transition[source], eye_cohort_transition[target],
+            // auto-tick CRF, ingest visit) —
             // the study branch was added Phase E.6 / 2026-06-03 for
             // identity edits, dataset added Phase E.6 / 2026-06-05
             // for dataset-export audit events, eye_cohort_transition
             // added Phase E.6 follow-up 2026-06-11 (two slots — the
             // row is visible from BOTH source-study and target-study
             // side, so the WHERE clause ORs the two IN tests).
+            // The count comes from the template, so adding a branch cannot
+            // leave a slot unbound.
             int bindIdx = 1;
-            for (int branch = 0; branch < 9; branch++) {
+            for (int branch = 0; branch < STUDY_SCOPED_IN_SLOTS; branch++) {
                 for (Integer sid : visibleStudyIds) {
                     ps.setInt(bindIdx++, sid);
                 }

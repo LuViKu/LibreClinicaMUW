@@ -217,6 +217,26 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     }
 
     /**
+     * 2026-09-27 — auto-tick rows (129) are placed by their CRF, not by the
+     * file id they hold where an item id belongs; ingest rows by the visit
+     * they record. Every visibility slot in the template is bound.
+     */
+    @Test
+    void sqlTemplatePlacesAutoTickAndIngestRowsByWhatTheyRecord() throws Exception {
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        f.setAccessible(true);
+        String sql = (String) f.get(null);
+        assertTrue(sql.contains("a.audit_log_event_type_id IS DISTINCT FROM 129"),
+                "the item_data branch must not match auto-tick rows by their number");
+        assertTrue(sql.contains("a.audit_log_event_type_id = 129 AND a.event_crf_id IN ("),
+                "auto-tick rows are placed by the CRF they record");
+        assertTrue(sql.contains("a.audit_table = 'ingest_item' AND COALESCE(a.study_event_id,"),
+                "ingest rows are placed by the visit they record");
+        assertEquals(11, AuditApiController.STUDY_SCOPED_IN_SLOTS,
+                "nine branches before, plus auto-tick and ingest; eye-cohort has two slots");
+    }
+
+    /**
      * Pins that dataset-export rows (type 52) fall into the "admin" bucket.
      * The SPA's audit-log view uses the variant chip to colour-code rows —
      * dropping these into "data" by accident would break operator pivoting

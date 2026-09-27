@@ -149,6 +149,8 @@ public final class RetinalJobFollower {
      */
     public Detached detach(long ingestItemId, IngestBindService.Actor actor) throws SQLException {
         try (Connection c = dataSource.getConnection()) {
+            // Still filed at this point: the unbind runs after this.
+            Integer visit = visitOf(c, ingestItemId);
             int cancelled;
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE retinal_inference_job SET status = ?, "
@@ -170,7 +172,7 @@ public final class RetinalJobFollower {
             if (!out.nothing()) {
                 audit(AuditTypeIds.RETINAL_JOBS_DETACHED, ingestItemId, actor,
                         "retinal jobs detached from the visit", "attached",
-                        "detached=" + detached + ";cancelled=" + cancelled);
+                        "detached=" + detached + ";cancelled=" + cancelled, visit);
                 LOG.info("ingest_item {}: {} retinal job(s) detached, {} cancelled",
                         ingestItemId, detached, cancelled);
             }
@@ -279,7 +281,8 @@ public final class RetinalJobFollower {
                 audit(AuditTypeIds.RETINAL_JOBS_FOLLOWED_FILE, ingestItemId, actor,
                         "retinal jobs followed the scan to its visit", "unattached",
                         "attached=" + attached + ";revived=" + revived + ";enqueued=" + enqueued
-                                + ";tasks=" + String.join(",", wanted));
+                                + ";tasks=" + String.join(",", wanted),
+                        visitOf(c, ingestItemId));
                 LOG.info("ingest_item {}: retinal jobs followed the scan — attached={} revived={} enqueued={} (plan: {})",
                         ingestItemId, attached, revived, enqueued, wanted);
             }
@@ -501,8 +504,31 @@ public final class RetinalJobFollower {
         return m;
     }
 
+    /**
+     * The visit a filed scan belongs to: its own, else its CRF's. Null for a
+     * scan that is not filed.
+     */
+    private static Integer visitOf(Connection c, long ingestItemId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT COALESCE(ii.bound_study_event_id, ec.study_event_id) "
+                        + "  FROM ingest_item ii "
+                        + "  LEFT JOIN event_crf ec ON ec.event_crf_id = ii.bound_event_crf_id "
+                        + " WHERE ii.ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int id = rs.getInt(1);
+                return rs.wasNull() ? null : id;
+            }
+        }
+    }
+
+    /**
+     * {@code visit} goes into {@code study_event_id}, so the per-study audit
+     * log shows the row in that visit's study.
+     */
     private void audit(int type, long ingestItemId, IngestBindService.Actor actor,
-                       String label, String oldValue, String newValue) {
+                       String label, String oldValue, String newValue, Integer visit) {
         // The audit row's entity id is an int; the id arrived from a request
         // path as a long. Out of range means no such row was ever changed.
         if (ingestItemId <= 0 || ingestItemId > Integer.MAX_VALUE) {
@@ -514,7 +540,7 @@ public final class RetinalJobFollower {
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), type,
                     actor.user(), actor.study(), null, label,
                     "ingest_item", (int) ingestItemId, reference == null ? "retinal_jobs" : reference,
-                    oldValue, newValue);
+                    oldValue, newValue, null, visit);
         } catch (RuntimeException e) {
             LOG.warn("could not audit {} of ingest_item {}: {}", label, ingestItemId, e.getMessage());
         }

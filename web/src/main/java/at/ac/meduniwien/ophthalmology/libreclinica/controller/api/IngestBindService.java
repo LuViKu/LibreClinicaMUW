@@ -180,7 +180,9 @@ public final class IngestBindService {
             }
             if (updated == 0) return existsState(c, ingestItemId);
 
-            writeBindAudit(ingestItemId, studyEventId, matchPolicy, actor, dateCheck);
+            writeBindAudit(ingestItemId,
+                    studyEventId != null ? studyEventId : visitOfCrf(c, eventCrfId),
+                    matchPolicy, actor, dateCheck);
 
             // The file on the visit is the evidence that this device was used
             // on it, so the checklist box follows from the bind rather than
@@ -284,7 +286,8 @@ public final class IngestBindService {
                     previousVisit == null ? "BOUND" : "BOUND;study_event_id=" + previousVisit,
                     "UNBOUND;cleared=" + cleared
                             + (detachedJobs.nothing() ? "" : ";jobsDetached=" + detachedJobs.detached()
-                                    + ";jobsCancelled=" + detachedJobs.cancelled()));
+                                    + ";jobsCancelled=" + detachedJobs.cancelled()),
+                    null, previousVisit);
             LOG.info("ingest_item {} unbound ({})", ingestItemId, cleared);
             return Result.OK;
         } catch (SQLException e) {
@@ -403,9 +406,12 @@ public final class IngestBindService {
             }
             if (updated == 0) return existsState(c, ingestItemId);
 
+            // No visit: a file that was never filed is not study data, so the
+            // row stays out of every study's audit log, including the log of
+            // a subject the file was only suggested for.
             writeAudit(AuditTypeIds.IMAGE_DISMISS, ingestItemId, actor,
                     "ingested file dismissed", "UNBOUND", "DISMISSED",
-                    reason == null || reason.isBlank() ? null : message);
+                    reason == null || reason.isBlank() ? null : message, null);
             return Result.OK;
         } catch (SQLException e) {
             LOG.error("dismiss failed for ingest_item {}: {}", ingestItemId, e.getMessage());
@@ -417,11 +423,31 @@ public final class IngestBindService {
     /* helpers                                                             */
     /* ------------------------------------------------------------------ */
 
-    /** The visit a BOUND file is filed against, or null. */
+    /**
+     * The visit a BOUND file is filed against, or null: its own visit, else
+     * the visit of the CRF it is filed to.
+     */
     private static Integer boundVisit(Connection c, long ingestItemId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT bound_study_event_id FROM ingest_item WHERE ingest_item_id = ? AND status = 'BOUND'")) {
+                "SELECT COALESCE(ii.bound_study_event_id, ec.study_event_id) "
+                        + "  FROM ingest_item ii "
+                        + "  LEFT JOIN event_crf ec ON ec.event_crf_id = ii.bound_event_crf_id "
+                        + " WHERE ii.ingest_item_id = ? AND ii.status = 'BOUND'")) {
             ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int id = rs.getInt(1);
+                return rs.wasNull() ? null : id;
+            }
+        }
+    }
+
+    /** The visit a CRF belongs to, or null. */
+    private static Integer visitOfCrf(Connection c, Integer eventCrfId) throws SQLException {
+        if (eventCrfId == null || eventCrfId <= 0) return null;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT study_event_id FROM event_crf WHERE event_crf_id = ?")) {
+            ps.setInt(1, eventCrfId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 int id = rs.getInt(1);
@@ -589,12 +615,12 @@ public final class IngestBindService {
             }
         }
         writeAudit(AuditTypeIds.IMAGE_BIND, ingestItemId, actor,
-                "ingested file bound", "UNBOUND", newValue.toString());
+                "ingested file bound", "UNBOUND", newValue.toString(), null, studyEventId);
     }
 
     private void writeAudit(int auditType, long ingestItemId, Actor actor,
                             String label, String oldValue, String newValue) {
-        writeAudit(auditType, ingestItemId, actor, label, oldValue, newValue, null);
+        writeAudit(auditType, ingestItemId, actor, label, oldValue, newValue, null, null);
     }
 
     /**
@@ -605,9 +631,14 @@ public final class IngestBindService {
      * removed the file and its inbox row. The column held the marker
      * {@code status} before; that is the fallback when the reference cannot
      * be read.
+     *
+     * <p>{@code visit} is the visit the row concerns: the one a file was
+     * filed to or taken off. The per-study audit log shows the row in that
+     * visit's study; a row without one appears only in the system log.
      */
     private void writeAudit(int auditType, long ingestItemId, Actor actor,
-                            String label, String oldValue, String newValue, String reason) {
+                            String label, String oldValue, String newValue, String reason,
+                            Integer visit) {
         // The audit row's entity id is an int; the id arrived from a request
         // path as a long. Out of range means no such row was ever changed
         // (CodeQL java/tainted-numeric-cast, beta.11 release gate).
@@ -620,7 +651,7 @@ public final class IngestBindService {
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), auditType,
                     actor.user(), actor.study(), null, label,
                     "ingest_item", (int) ingestItemId, reference == null ? "status" : reference,
-                    oldValue, newValue, reason);
+                    oldValue, newValue, reason, visit);
         } catch (RuntimeException e) {
             LOG.warn("could not audit {} of ingest_item {}: {}", label, ingestItemId, e.getMessage());
         }

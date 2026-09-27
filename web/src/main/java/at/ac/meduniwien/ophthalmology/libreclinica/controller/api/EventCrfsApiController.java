@@ -1666,6 +1666,23 @@ public class EventCrfsApiController {
                                         int entityId, String columnName,
                                         String oldValue, String newValue,
                                         String reason) {
+        writeAuditEvent(dao, auditTypeId, user, study, ss, actionMessage, auditTable,
+                entityId, columnName, oldValue, newValue, reason, null);
+    }
+
+    /**
+     * As above, recording the visit the row concerns in {@code study_event_id}.
+     * The per-study audit log places rows about things that are not themselves
+     * study records by that column, such as a file filed to or taken off a
+     * visit. Null or not positive leaves it NULL.
+     */
+    public static void writeAuditEvent(AuditEventDAO dao, int auditTypeId,
+                                        UserAccountBean user,
+                                        StudyBean study, StudySubjectBean ss,
+                                        String actionMessage, String auditTable,
+                                        int entityId, String columnName,
+                                        String oldValue, String newValue,
+                                        String reason, Integer studyEventId) {
         // `study`/`ss` are accepted (and intentionally unused on the
         // write path) so callers can keep their existing signatures —
         // study + subject context is reconstructed at read time by
@@ -1678,8 +1695,8 @@ public class EventCrfsApiController {
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
                              + "user_id, audit_table, entity_id, entity_name, old_value, new_value, "
-                             + "reason_for_change) "
-                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?, ?)")) {
+                             + "reason_for_change, study_event_id) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, auditTypeId);
             if (user == null) {
                 ps.setNull(2, java.sql.Types.INTEGER);
@@ -1696,6 +1713,11 @@ public class EventCrfsApiController {
             } else {
                 String r = reason.trim();
                 ps.setString(8, r.length() > 1000 ? r.substring(0, 1000) : r);
+            }
+            if (studyEventId == null || studyEventId <= 0) {
+                ps.setNull(9, java.sql.Types.INTEGER);
+            } else {
+                ps.setInt(9, studyEventId);
             }
             ps.executeUpdate();
         } catch (SQLException e) {

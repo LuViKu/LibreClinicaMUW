@@ -32,14 +32,23 @@ that ship with it fix three things.
   checksum prefix, never the file name, so it outlives the retention sweep
   without keeping patient identifiers. Binds and unbinds record the visit.
 
-Still open:
+Two placement gaps in the per-study log are fixed in the same change:
 
 - **Auto-tick rows (129).** They sit on `item_data` but store the file's id
-  as `entity_id`, so the per-study log's `item_data` branch matches them to
-  whatever item happens to share that id. The view reads their item from
-  `entity_name`, but which study's log shows them is still wrong.
-- **Inbox actions in the study log.** `ingest_item` rows appear only in the
-  system log. The per-study query has no branch for them.
+  as `entity_id`, so the `item_data` branch matched them to whatever item
+  shared that number, in any study, and left them out of their own. The
+  per-study query now places them by `event_crf_id`, the CRF they record.
+  This covers rows already written; none were modified.
+- **Inbox actions in the study log.** Filing a file to a visit, taking it
+  off, and the analysis jobs that follow it change that visit's source data.
+  Those rows now record the visit in `audit_log_event.study_event_id`, and
+  the per-study query places them in that visit's study. Camera and upload
+  binds written before recorded the visit only in `new_value`, which the
+  query also reads. Manual binds and unbinds written before did not record
+  it and stay in the system log. A dismissal or restore of a file that was
+  never filed names no visit and stays in the system log too, even when the
+  file had a suggested subject: it is not study data, and a dismissal often
+  means the wrong patient.
 
 ## 2026-06-12 update — canonical-helper unification (audit_event → audit_log_event)
 
