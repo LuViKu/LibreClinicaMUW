@@ -21,7 +21,6 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
 /**
@@ -156,7 +155,8 @@ final class ImageIngestBinding {
             ps.setString(2, "ingest_item");
             ps.setInt(3, (int) imageIngestId);
             // Which file, in words that survive the retention sweep.
-            String reference = IngestFileReference.describe(c, imageIngestId);
+            String reference = at.ac.meduniwien.ophthalmology.libreclinica.service.ingest
+                    .IngestFileReference.describe(c, imageIngestId);
             ps.setString(4, reference == null ? "status" : reference);
             ps.setString(5, "UNBOUND");
             // Pack the policy + visit into new_value so the audit view can
