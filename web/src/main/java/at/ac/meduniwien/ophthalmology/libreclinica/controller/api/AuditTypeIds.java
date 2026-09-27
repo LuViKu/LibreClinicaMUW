@@ -384,6 +384,14 @@ public final class AuditTypeIds {
     public static final int IMAGE_DISMISS                    = 128;
 
     /**
+     * P1-5 — a bound file ticked its modality's "performed" item. Written by
+     * {@code PerformedItemAutoTicker} in core, which keeps its own literal;
+     * auditTable = {@code item_data}, but entityId is the ingest_item id and
+     * entity_name the item OID, which the audit view reads accordingly.
+     */
+    public static final int IMAGE_PERFORMED_AUTOTICK         = 129;
+
+    /**
      * P3.2 — a BOUND {@code ingest_item} was returned to the inbox, undoing
      * what the bind caused.
      *
@@ -429,4 +437,22 @@ public final class AuditTypeIds {
     public static final int RETINAL_JOBS_FOLLOWED_FILE       = 135;
     /** DR-035 — jobs detached from a visit because the scan was removed from it (per ingest_item). */
     public static final int RETINAL_JOBS_DETACHED            = 136;
+
+    /*
+     * 137-140 (lc-muw-2026-12-08-audit-labels-and-context.xml). Each was
+     * written under an id that already meant something else: a restore under
+     * the dismiss type, a CRF reopen and restore under 11 (the event_crf
+     * trigger's "double data entry completed"), and a reason-for-change note
+     * under 27 (the study_subject trigger's "moved to another site").
+     * AuditRowLabels maps rows written before these existed.
+     */
+
+    /** A dismissed file brought back into the inbox. */
+    public static final int INGEST_RESTORE                   = 137;
+    /** A completed CRF reopened for editing. */
+    public static final int EVENT_CRF_REOPENED               = 138;
+    /** A removed CRF restored. */
+    public static final int EVENT_CRF_RESTORED               = 139;
+    /** The reason given for changing a value after the CRF was completed; carries the reason. */
+    public static final int ITEM_DATA_REASON_FOR_CHANGE      = 140;
 }

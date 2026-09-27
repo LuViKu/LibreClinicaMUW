@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
@@ -263,6 +264,9 @@ public final class IngestBindService {
         }
 
         try (Connection c = dataSource.getConnection()) {
+            // Read before the update clears it: the trail should say which
+            // visit the file was taken off, not only that it was.
+            Integer previousVisit = boundVisit(c, ingestItemId);
             int updated;
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE ingest_item SET status='UNBOUND', match_policy=NULL, "
@@ -276,7 +280,9 @@ public final class IngestBindService {
             if (updated == 0) return existsState(c, ingestItemId);
 
             writeAudit(AuditTypeIds.INGEST_UNBIND, ingestItemId, actor,
-                    "ingested file unbound", "BOUND", "UNBOUND;cleared=" + cleared
+                    "ingested file unbound",
+                    previousVisit == null ? "BOUND" : "BOUND;study_event_id=" + previousVisit,
+                    "UNBOUND;cleared=" + cleared
                             + (detachedJobs.nothing() ? "" : ";jobsDetached=" + detachedJobs.detached()
                                     + ";jobsCancelled=" + detachedJobs.cancelled()));
             LOG.info("ingest_item {} unbound ({})", ingestItemId, cleared);
@@ -330,9 +336,10 @@ public final class IngestBindService {
      * <p>Dismissal was the only lifecycle step here with no way back — during
      * the 30-day window the only recovery was a hand edit of the row. The
      * reverse of {@link #dismiss}: status back to UNBOUND, the dismissal's
-     * message and actor cleared, and an audit row under the dismiss type
-     * whose values read {@code DISMISSED → UNBOUND}; the reason it had been
-     * dismissed for survives in that trail.
+     * message and actor cleared, and an audit row of its own type whose values
+     * read {@code DISMISSED → UNBOUND}; the reason it had been dismissed for
+     * survives in that trail. Restores were written under the dismiss type
+     * until 2026-09-27, and read as dismissals.
      */
     public Result restore(long ingestItemId, Actor actor) {
         try (Connection c = dataSource.getConnection()) {
@@ -354,7 +361,7 @@ public final class IngestBindService {
             }
             if (updated == 0) return existsState(c, ingestItemId);
 
-            writeAudit(AuditTypeIds.IMAGE_DISMISS, ingestItemId, actor,
+            writeAudit(AuditTypeIds.INGEST_RESTORE, ingestItemId, actor,
                     "ingested file restored from dismissed",
                     "DISMISSED" + (previousMessage == null || previousMessage.isBlank() ? "" : ";reason=" + previousMessage),
                     "UNBOUND");
@@ -375,7 +382,8 @@ public final class IngestBindService {
      *
      * <p>A test exposure, an image of the wrong patient, whatever a device
      * flushes on first contact. The reason is kept because the retention sweep
-     * deletes the file later and the row is the only record that it existed.
+     * deletes the file later: the audit row, which carries the reason and the
+     * file's reference, is then the only record that it existed.
      */
     public Result dismiss(long ingestItemId, String reason, Actor actor) {
         String message = (reason == null || reason.isBlank()) ? "dismissed" : reason.trim();
@@ -396,7 +404,8 @@ public final class IngestBindService {
             if (updated == 0) return existsState(c, ingestItemId);
 
             writeAudit(AuditTypeIds.IMAGE_DISMISS, ingestItemId, actor,
-                    "ingested file dismissed", "UNBOUND", "DISMISSED");
+                    "ingested file dismissed", "UNBOUND", "DISMISSED",
+                    reason == null || reason.isBlank() ? null : message);
             return Result.OK;
         } catch (SQLException e) {
             LOG.error("dismiss failed for ingest_item {}: {}", ingestItemId, e.getMessage());
@@ -407,6 +416,19 @@ public final class IngestBindService {
     /* ------------------------------------------------------------------ */
     /* helpers                                                             */
     /* ------------------------------------------------------------------ */
+
+    /** The visit a BOUND file is filed against, or null. */
+    private static Integer boundVisit(Connection c, long ingestItemId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT bound_study_event_id FROM ingest_item WHERE ingest_item_id = ? AND status = 'BOUND'")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int id = rs.getInt(1);
+                return rs.wasNull() ? null : id;
+            }
+        }
+    }
 
     /** Tell "no such row" from "wrong state", so the caller can say which. */
     private static Result existsState(Connection c, long ingestItemId) throws SQLException {
@@ -553,6 +575,10 @@ public final class IngestBindService {
             return;
         }
         StringBuilder newValue = new StringBuilder("BOUND;match_policy=").append(matchPolicy);
+        // The visit, as the system and upload binds already record it, so the
+        // audit view can name the subject and visit without reading the
+        // file's current binding, which a later unbind clears.
+        if (studyEventId != null) newValue.append(";study_event_id=").append(studyEventId);
         if (dateCheck != null) {
             newValue.append(";acquisition_date=").append(dateCheck.verdict());
             if (dateCheck.isMismatch()) {
@@ -566,9 +592,22 @@ public final class IngestBindService {
                 "ingested file bound", "UNBOUND", newValue.toString());
     }
 
-    /** Never throws: a completed transition must not be undone by a failed log. */
     private void writeAudit(int auditType, long ingestItemId, Actor actor,
                             String label, String oldValue, String newValue) {
+        writeAudit(auditType, ingestItemId, actor, label, oldValue, newValue, null);
+    }
+
+    /**
+     * Never throws: a completed transition must not be undone by a failed log.
+     *
+     * <p>The entity name carries the file's reference ({@link IngestFileReference}),
+     * so the row still says which file it was after the retention sweep has
+     * removed the file and its inbox row. The column held the marker
+     * {@code status} before; that is the fallback when the reference cannot
+     * be read.
+     */
+    private void writeAudit(int auditType, long ingestItemId, Actor actor,
+                            String label, String oldValue, String newValue, String reason) {
         // The audit row's entity id is an int; the id arrived from a request
         // path as a long. Out of range means no such row was ever changed
         // (CodeQL java/tainted-numeric-cast, beta.11 release gate).
@@ -577,9 +616,11 @@ public final class IngestBindService {
             return;
         }
         try {
+            String reference = IngestFileReference.describe(dataSource, ingestItemId);
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), auditType,
                     actor.user(), actor.study(), null, label,
-                    "ingest_item", (int) ingestItemId, "status", oldValue, newValue);
+                    "ingest_item", (int) ingestItemId, reference == null ? "status" : reference,
+                    oldValue, newValue, reason);
         } catch (RuntimeException e) {
             LOG.warn("could not audit {} of ingest_item {}: {}", label, ingestItemId, e.getMessage());
         }

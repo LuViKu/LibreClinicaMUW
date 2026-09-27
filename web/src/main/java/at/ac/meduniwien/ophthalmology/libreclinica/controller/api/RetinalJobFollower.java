@@ -27,6 +27,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
@@ -509,9 +510,11 @@ public final class RetinalJobFollower {
             return;
         }
         try {
+            String reference = IngestFileReference.describe(dataSource, ingestItemId);
             EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), type,
                     actor.user(), actor.study(), null, label,
-                    "ingest_item", (int) ingestItemId, "retinal_jobs", oldValue, newValue);
+                    "ingest_item", (int) ingestItemId, reference == null ? "retinal_jobs" : reference,
+                    oldValue, newValue);
         } catch (RuntimeException e) {
             LOG.warn("could not audit {} of ingest_item {}: {}", label, ingestItemId, e.getMessage());
         }

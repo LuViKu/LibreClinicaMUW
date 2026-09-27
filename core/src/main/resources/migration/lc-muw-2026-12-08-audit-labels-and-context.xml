@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      2026-09-27 — the audit trail says what each row records.
+
+      lc-muw-2026-06-02-audit-event-type-display-names.xml gave the heritage
+      types human labels, but from id 9 onwards many of them were shifted off
+      the meaning the database triggers write them with. The live
+      study_event trigger writes 24 when a visit's start date changes, and
+      the log called that "Study event reset"; 19 (visit completed) read
+      "Study event location updated", 21 (visit skipped) read "Study event
+      started", 27 (subject moved to another site) read "Discrepancy note
+      added". The recorded rows were always right. Only the labels were
+      wrong, and in an audit trail a wrong label misstates what happened.
+
+      The first changeset puts every affected label back on the meaning its
+      writer gives it: the event_crf, study_event, study_subject and
+      repeating item_data triggers (latest definitions in 3.8, amethyst and
+      3.6). No audit row is touched; the label is looked up, not copied.
+
+      Two ids were also being written by MUW code with the old, wrong meaning:
+      11 for reopening and for restoring a CRF, and 27 for a reason-for-change
+      note. Those writers get types of their own (138-140), and the audit view
+      maps rows written before this change by what they record (table and
+      column marker) rather than by id alone. 137 gives restoring a dismissed
+      file its own type; it was written under 128 and read as a dismissal.
+    -->
+    <changeSet id="2026-12-08-audit-type-labels-heritage-meaning" author="muw">
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF interview details changed"/>
+            <where>audit_log_event_type_id = 9</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF initial data entry completed"/>
+            <where>audit_log_event_type_id = 10</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF double data entry completed"/>
+            <where>audit_log_event_type_id = 11</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF marked complete with e-signature"/>
+            <where>audit_log_event_type_id = 14</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF initial data entry completed with e-signature"/>
+            <where>audit_log_event_type_id = 15</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF double data entry completed with e-signature"/>
+            <where>audit_log_event_type_id = 16</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event data entry started"/>
+            <where>audit_log_event_type_id = 18</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event completed"/>
+            <where>audit_log_event_type_id = 19</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event stopped"/>
+            <where>audit_log_event_type_id = 20</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event skipped"/>
+            <where>audit_log_event_type_id = 21</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event locked"/>
+            <where>audit_log_event_type_id = 22</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event start date changed"/>
+            <where>audit_log_event_type_id = 24</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event end date changed"/>
+            <where>audit_log_event_type_id = 25</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event location changed"/>
+            <where>audit_log_event_type_id = 26</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject reassigned to another site"/>
+            <where>audit_log_event_type_id = 27</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Item value added in a repeating group"/>
+            <where>audit_log_event_type_id = 30</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event signed"/>
+            <where>audit_log_event_type_id = 31</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="SDV status changed"/>
+            <where>audit_log_event_type_id = 32</where>
+        </update>
+        <rollback>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Date of interview updated"/>
+                <where>audit_log_event_type_id = 9</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="CRF locked"/>
+                <where>audit_log_event_type_id = 10</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="CRF unlocked"/>
+                <where>audit_log_event_type_id = 11</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Subject signed"/>
+                <where>audit_log_event_type_id = 14</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="CRF data entry started"/>
+                <where>audit_log_event_type_id = 15</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="CRF revalidated"/>
+                <where>audit_log_event_type_id = 16</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event date changed"/>
+                <where>audit_log_event_type_id = 18</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event location updated"/>
+                <where>audit_log_event_type_id = 19</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event status changed"/>
+                <where>audit_log_event_type_id = 20</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event started"/>
+                <where>audit_log_event_type_id = 21</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event ended"/>
+                <where>audit_log_event_type_id = 22</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event reset"/>
+                <where>audit_log_event_type_id = 24</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event archived"/>
+                <where>audit_log_event_type_id = 25</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Study event unarchived"/>
+                <where>audit_log_event_type_id = 26</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Discrepancy note added"/>
+                <where>audit_log_event_type_id = 27</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Item data revalidated"/>
+                <where>audit_log_event_type_id = 30</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="Subject signed (e-signature)"/>
+                <where>audit_log_event_type_id = 31</where>
+            </update>
+            <update tableName="audit_log_event_type">
+                <column name="display_name" value="SDV verified"/>
+                <where>audit_log_event_type_id = 32</where>
+            </update>
+        </rollback>
+    </changeSet>
+
+    <!-- A dismissed file brought back into the inbox. Restores were written under 128, so a restore read as a dismissal. -->
+    <changeSet id="2026-12-08-audit-type-ingest-restore" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 137;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="137"/>
+            <column name="name" value="ingest_restore"/>
+            <column name="display_name" value="Ingested file restored"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 137</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!-- A completed CRF reopened for editing. Was written under 11, which the event_crf trigger uses for a completed double data entry. -->
+    <changeSet id="2026-12-08-audit-type-event-crf-reopened" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 138;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="138"/>
+            <column name="name" value="event_crf_reopened"/>
+            <column name="display_name" value="CRF reopened"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 138</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!-- A removed CRF restored. Was written under 11 as well. -->
+    <changeSet id="2026-12-08-audit-type-event-crf-restored" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 139;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="139"/>
+            <column name="name" value="event_crf_restored"/>
+            <column name="display_name" value="CRF restored"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 139</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!-- The reason given for changing a value after the CRF was completed, with the reason itself. Was written under 27, which the study_subject trigger uses for a site reassignment. -->
+    <changeSet id="2026-12-08-audit-type-item-data-reason-for-change" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 140;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="140"/>
+            <column name="name" value="item_data_reason_for_change"/>
+            <column name="display_name" value="Reason for change recorded"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 140</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -8,6 +8,39 @@ ALCOA+). This document captures the 2026-06-11 evaluation of that coverage,
 the dual-audit-table architecture finding, the 11 confirmed gaps, and the
 gap closures that landed in the same PR.
 
+## 2026-09-27 update: labels and context
+
+The audit views showed rows under the wrong label and without their context.
+`lc-muw-2026-12-08-audit-labels-and-context.xml` and the audit view changes
+that ship with it fix three things.
+
+- **Labels.** The 2026-06-02 display names had shifted many heritage types off
+  the meaning their triggers write. For example, 24, a visit's start date
+  changing, read "Study event reset", and 27, a subject moving to another
+  site, read "Discrepancy note added". Ids 9, 10, 11, 14-16, 18-22, 24-27, 30,
+  31 and 32 now carry the meaning of their writer. Audit rows are not touched.
+- **Ids with two meanings.** MUW code wrote 11 for reopening and for restoring
+  a CRF, 27 for a reason-for-change note, and restores of a dismissed file
+  under 128. Those writers now use 137 (file restored), 138 (CRF reopened),
+  139 (CRF restored) and 140 (reason for change recorded, with the reason).
+  The audit view reads older rows as the type they record, using their table
+  and column marker (`AuditRowLabels.effectiveType`).
+- **Context.** Visit rows show their subject and visit. Failures show the
+  operation and the error. Rows with a single value show it. Ingest rows
+  record the file's reference in `entity_name`, and a dismissal records its
+  reason. The reference is the id, device, kind, eye, arrival time and
+  checksum prefix, never the file name, so it outlives the retention sweep
+  without keeping patient identifiers. Binds and unbinds record the visit.
+
+Still open:
+
+- **Auto-tick rows (129).** They sit on `item_data` but store the file's id
+  as `entity_id`, so the per-study log's `item_data` branch matches them to
+  whatever item happens to share that id. The view reads their item from
+  `entity_name`, but which study's log shows them is still wrong.
+- **Inbox actions in the study log.** `ingest_item` rows appear only in the
+  system log. The per-study query has no branch for them.
+
 ## 2026-06-12 update — canonical-helper unification (audit_event → audit_log_event)
 
 The dual-table architecture identified in the 2026-06-11 evaluation has been

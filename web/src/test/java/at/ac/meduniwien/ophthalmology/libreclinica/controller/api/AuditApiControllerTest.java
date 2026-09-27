@@ -135,6 +135,25 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
         assertEquals("Signed", AuditApiController.prettifyValue("study_event", "Status", "8"));
     }
 
+    /**
+     * 2026-09-27 — the visit trigger writes the removal (23) and restore (35)
+     * of a visit with its entity status, and every other visit status change
+     * with its subject-event status, both under the marker "Status". A newly
+     * scheduled visit's previous status is written as 0, meaning none.
+     */
+    @Test
+    void prettifyReadsAVisitsStatusSetByTheRowsType() {
+        assertEquals("Available", AuditApiController.prettifyValue(23, "study_event", "Status", "1"));
+        assertEquals("Removed", AuditApiController.prettifyValue(23, "study_event", "Status", "5"));
+        assertEquals("Removed", AuditApiController.prettifyValue(35, "study_event", "Status", "5"));
+        assertEquals("Stopped", AuditApiController.prettifyValue(20, "study_event", "Status", "5"));
+        assertEquals("Scheduled", AuditApiController.prettifyValue(17, "study_event", "Status", "1"));
+        assertEquals("", AuditApiController.prettifyValue(17, "study_event", "Status", "0"));
+        // Other markers are unaffected.
+        assertEquals("2026-09-24 00:00:00",
+                AuditApiController.prettifyValue(24, "study_event", "Start date", "2026-09-24 00:00:00"));
+    }
+
     @Test
     void prettifyMapsSdvStatusBooleansToSemanticLabels() {
         assertEquals("SDV complete",
