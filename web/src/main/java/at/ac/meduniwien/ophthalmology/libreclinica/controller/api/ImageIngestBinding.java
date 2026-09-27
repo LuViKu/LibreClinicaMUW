@@ -21,6 +21,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
 /**
@@ -107,7 +108,7 @@ final class ImageIngestBinding {
      */
     static EventTarget resolveEventTargetForPortal(Connection c, int studyEventId, LocalDate onDate)
             throws SQLException {
-        LocalDate day = onDate == null ? LocalDate.now() : onDate;
+        LocalDate day = onDate == null ? ClinicZone.today() : onDate;
         String sql = "SELECT se.study_subject_id, ec.event_crf_id "
                 + "  FROM study_event se "
                 + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "

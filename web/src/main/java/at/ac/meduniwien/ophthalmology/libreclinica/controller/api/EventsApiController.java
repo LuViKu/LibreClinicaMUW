@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
@@ -1970,10 +1971,11 @@ public class EventsApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
 
+        java.time.LocalDate today = ClinicZone.today();
         java.time.LocalDate d0 = parseIsoDateOrNullForDue(from);
         java.time.LocalDate d1 = parseIsoDateOrNullForDue(to);
-        if (d0 == null) d0 = java.time.LocalDate.now().minusDays(DUE_DEFAULT_WINDOW_DAYS);
-        if (d1 == null) d1 = java.time.LocalDate.now().plusDays(DUE_DEFAULT_WINDOW_DAYS);
+        if (d0 == null) d0 = today.minusDays(DUE_DEFAULT_WINDOW_DAYS);
+        if (d1 == null) d1 = today.plusDays(DUE_DEFAULT_WINDOW_DAYS);
         if (d1.isBefore(d0)) {
             return ResponseEntity.badRequest().body(Map.of("message", "'to' is before 'from'"));
         }
@@ -1997,7 +1999,6 @@ public class EventsApiController {
                     : Set.of();
         }
 
-        java.time.LocalDate today = java.time.LocalDate.now();
         List<DueVisitDto> out = new ArrayList<>();
         try {
             for (ScheduledVisitQuery.ScheduledVisit v :

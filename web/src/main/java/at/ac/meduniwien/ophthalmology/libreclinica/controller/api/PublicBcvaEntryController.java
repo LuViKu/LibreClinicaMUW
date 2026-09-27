@@ -39,6 +39,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
 
 /**
@@ -194,8 +195,8 @@ public class PublicBcvaEntryController {
      * been entered.
      *
      * @param studyOid {@code study.oc_oid} (e.g. {@code S_RIS_DEMO}).
-     * @param dateRaw  ISO yyyy-MM-dd; defaults to "today" in the
-     *                 server's local zone.
+     * @param dateRaw  ISO yyyy-MM-dd; defaults to today in the clinic's
+     *                 zone ({@link ClinicZone}).
      */
     @GetMapping(path = "/{studyOid}/visits", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listVisits(@PathVariable("studyOid") String studyOid,
@@ -203,7 +204,7 @@ public class PublicBcvaEntryController {
         LocalDate date;
         try {
             date = dateRaw == null || dateRaw.isBlank()
-                    ? LocalDate.now()
+                    ? ClinicZone.today()
                     : LocalDate.parse(dateRaw, ISO_DATE);
         } catch (DateTimeParseException e) {
             return ResponseEntity.badRequest().body(Map.of(

@@ -19,6 +19,7 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 import org.slf4j.Logger;
@@ -93,7 +94,7 @@ public class DicomWorklistApiController {
         }
 
         LocalDate d0 = parseIsoDateOrNull(from);
-        if (d0 == null) d0 = LocalDate.now();
+        if (d0 == null) d0 = ClinicZone.today();
         LocalDate d1 = parseIsoDateOrNull(to);
         if (d1 == null) d1 = d0;
         if (d1.isBefore(d0)) {

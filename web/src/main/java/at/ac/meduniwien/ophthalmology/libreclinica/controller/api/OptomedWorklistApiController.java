@@ -18,6 +18,7 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 import org.slf4j.Logger;
@@ -164,7 +165,7 @@ public class OptomedWorklistApiController {
         }
 
         LocalDate day = parseIsoDateOrNull(date);
-        if (day == null) day = LocalDate.now();
+        if (day == null) day = ClinicZone.today();
 
         Set<Integer> allowed = StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY);
         List<ScheduledVisitQuery.ScheduledVisit> visits;

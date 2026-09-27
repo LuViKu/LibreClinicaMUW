@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -641,7 +642,7 @@ class EyeCohortTransitionApiControllerDatabaseIT extends AbstractApiControllerDa
         setStudyEye(1, "OD");
         unenrollSubjectFromStudy(targetStudyId, 1);
 
-        String futureIso = java.time.LocalDate.now().plusDays(7).toString();
+        String futureIso = ClinicZone.today().plusDays(7).toString();
         mockMvc().perform(post("/api/v1/subjects/M-001/eyes/OD/transition")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"targetStudyOid\":\"" + TARGET_STUDY_OID + "\","
