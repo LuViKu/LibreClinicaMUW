@@ -116,7 +116,8 @@ E2E_UPLOADS_DIR=/var/lib/libreclinica/e2e-uploads
 RETINAL_OUTPUT_DIR=/var/lib/libreclinica/retinal-inference
 # The remaining file stores (deploy/compose.production.yaml binds every store
 # under /var/lib/libreclinica at the same path in every container that
-# touches it; the backup timer tars them from here).
+# touches it). The nightly timer backs up the database only; the stores are
+# covered by whatever backs up this VM's disk.
 RETINAL_ARTIFACTS_DIR=/var/lib/libreclinica/retinal-artifacts
 DICOM_INGEST_DIR=/var/lib/libreclinica/dicom-ingest
 INGEST_DIR=/var/lib/libreclinica/ingest
@@ -124,6 +125,13 @@ INGEST_DIR=/var/lib/libreclinica/ingest
 # into the app container, because the System Status page tails the log from
 # inside the container and the root of /var/lib/libreclinica is not bound.
 MONITOR_DIR=/var/lib/libreclinica/monitor
+# The app's own data directory (filePath: CRF file attachments, dataset
+# exports, the regenerated xslt/rules) and Tomcat's logs. Bound from here since
+# 2026-09-24; before, they were anonymous volumes that every `compose down` +
+# `up` (each restart of the unit) replaced with empty ones.
+APP_DATA_DIR=/var/lib/libreclinica/app-data
+TOMCAT_LOGS_DIR=/var/lib/libreclinica/tomcat-logs
+APP_CONTAINER=libreclinica-muw-libreclinica-1
 
 # ----------------------------- arg parsing ------------------------------------
 
@@ -362,6 +370,34 @@ install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_ARTIFACTS_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$DICOM_INGEST_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$INGEST_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$MONITOR_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$APP_DATA_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$TOMCAT_LOGS_DIR"
+
+# One-time move off the anonymous volumes. While the running app container
+# still has its data directory (or logs) on an anonymous volume and the new
+# directory is empty, copy the current contents over, so the restart that
+# follows this script finds them bound. Idempotent: once the container runs
+# with the bind (mount type "bind"), or the directory has content, nothing
+# is copied. Older anonymous volumes left by earlier restarts are not
+# touched; `docker volume prune` removes them once this is deployed.
+move_off_anonymous_volume() {
+  local container_path="$1" host_dir="$2" mount_type
+  docker inspect "$APP_CONTAINER" >/dev/null 2>&1 || return 0
+  mount_type="$(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"${container_path}\"}}{{.Type}}{{end}}{{end}}" "$APP_CONTAINER" 2>/dev/null || true)"
+  [[ "$mount_type" == "volume" ]] || return 0
+  if [[ -n "$(ls -A "$host_dir" 2>/dev/null)" ]]; then
+    warn "${host_dir} is not empty; not copying ${container_path} over it"
+    return 0
+  fi
+  if docker cp "${APP_CONTAINER}:${container_path}/." "$host_dir/"; then
+    chown -R libreclinica:libreclinica "$host_dir"
+    log "Copied ${container_path} out of its anonymous volume into ${host_dir} ($(du -sh "$host_dir" | cut -f1)); the restart binds it"
+  else
+    warn "could not copy ${container_path} out of ${APP_CONTAINER}; it starts empty after the restart"
+  fi
+}
+move_off_anonymous_volume /usr/local/tomcat/libreclinica.data "$APP_DATA_DIR"
+move_off_anonymous_volume /usr/local/tomcat/logs "$TOMCAT_LOGS_DIR"
 
 # Clone or update the repo. The production VM needs only:
 #   - compose.yaml (root file; pulled in by sparse-checkout's implicit
