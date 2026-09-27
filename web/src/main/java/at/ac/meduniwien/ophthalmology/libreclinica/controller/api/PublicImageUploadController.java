@@ -31,6 +31,7 @@ import java.util.UUID;
 
 import javax.sql.DataSource;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
@@ -151,7 +152,7 @@ public class PublicImageUploadController {
             return ResponseEntity.status(404).body(Map.of("message", "not found"));
         }
         LocalDate day = parseIsoDateOrNull(date);
-        if (day == null) day = LocalDate.now();
+        if (day == null) day = ClinicZone.today();
 
         try {
             List<PortalVisit> out = new ArrayList<>();

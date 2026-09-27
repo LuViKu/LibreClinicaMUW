@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioDashboardClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient;
@@ -193,7 +194,7 @@ public class RemidioPullScheduler {
             }
         }
         if (!siteOk) return Optional.empty();
-        LocalDate today = LocalDate.now(RemidioPullService.CLINIC_ZONE);
+        LocalDate today = LocalDate.now(ClinicZone.zone());
         LocalDate from = today.minusDays(syncBehindDays());
         LocalDate to = today.plusDays(syncAheadDays());
         try {
@@ -328,7 +329,7 @@ public class RemidioPullScheduler {
                 LOG.warn("Remidio pull: {} is not an ISO date (yyyy-mm-dd) — starting a year back", KEY_SINCE);
             }
         }
-        return LocalDate.now(RemidioPullService.CLINIC_ZONE).minusDays(DEFAULT_SINCE_DAYS_BACK);
+        return LocalDate.now(ClinicZone.zone()).minusDays(DEFAULT_SINCE_DAYS_BACK);
     }
 
     private static int cfgInt(String key, int def) {

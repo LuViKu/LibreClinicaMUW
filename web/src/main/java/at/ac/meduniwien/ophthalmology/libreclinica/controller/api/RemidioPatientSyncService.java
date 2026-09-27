@@ -26,6 +26,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioDashboardClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient.RemidioException;
 
@@ -191,7 +192,7 @@ final class RemidioPatientSyncService {
     static long examDateMs(String isoDate, LocalTime time) {
         LocalDate day = LocalDate.parse(isoDate);
         return day.atTime(time == null ? LocalTime.NOON : time)
-                .atZone(RemidioPullService.CLINIC_ZONE).toInstant().toEpochMilli();
+                .atZone(ClinicZone.zone()).toInstant().toEpochMilli();
     }
 
     /** Unreachable or refused: the rest of the pass would fail the same way. */

@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
@@ -429,7 +430,7 @@ public class SubjectsApiController {
             ));
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = ClinicZone.today();
         if (!dicomReceiverConfigured() || !studyOnWorklist(ss.getStudyId())) {
             return ResponseEntity.ok(new CameraWorklistDto(today.toString(), false, List.of(), List.of()));
         }
@@ -1935,7 +1936,7 @@ public class SubjectsApiController {
         // ---- yearOfBirth: optional; 1900..currentYear when present ----
         if (body.yearOfBirth() != null) {
             int yob = body.yearOfBirth();
-            int thisYear = java.time.LocalDate.now().getYear();
+            int thisYear = ClinicZone.today().getYear();
             if (yob < 1900 || yob > thisYear) {
                 errors.add(new ValidationErrorBody.FieldError("yearOfBirth",
                         "Year of birth must be between 1900 and " + thisYear + "."));
@@ -2673,7 +2674,7 @@ public class SubjectsApiController {
         // ---- yearOfBirth: optional; if present 1900..currentYear ----
         if (body.yearOfBirth() != null) {
             int yob = body.yearOfBirth();
-            int thisYear = LocalDate.now().getYear();
+            int thisYear = ClinicZone.today().getYear();
             if (yob < 1900 || yob > thisYear) {
                 errors.add(new ValidationErrorBody.FieldError("yearOfBirth",
                         "Year of birth must be between 1900 and " + thisYear + "."));
@@ -2693,7 +2694,7 @@ public class SubjectsApiController {
                 errors.add(new ValidationErrorBody.FieldError("enrolledOn",
                         "Enrolment date must be a valid ISO date (YYYY-MM-DD)."));
             }
-            if (parsed != null && parsed.isAfter(LocalDate.now())) {
+            if (parsed != null && parsed.isAfter(ClinicZone.today())) {
                 errors.add(new ValidationErrorBody.FieldError("enrolledOn",
                         "Enrolment date must not be in the future."));
             }

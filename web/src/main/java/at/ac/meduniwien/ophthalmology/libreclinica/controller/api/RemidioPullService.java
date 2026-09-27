@@ -21,7 +21,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 
@@ -30,6 +29,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
@@ -82,9 +82,6 @@ final class RemidioPullService {
      * one subject, who had exactly one visit on the exam date.
      */
     static final String POLICY_MRN = "mrn";
-
-    /** The cloud stamps instants; a visit is a day in the clinic's zone. */
-    static final ZoneId CLINIC_ZONE = ZoneId.of("Europe/Vienna");
 
     /** Enough of the file for {@link FileKindSniffer} to say what it is. */
     private static final int SNIFF_BYTES = 512;
@@ -161,7 +158,7 @@ final class RemidioPullService {
      * skipped by id the second time round.
      */
     Summary catchUp(int overlapDays, LocalDate firstRunSince) throws RemidioException {
-        LocalDate today = LocalDate.now(CLINIC_ZONE);
+        LocalDate today = LocalDate.now(ClinicZone.zone());
         LocalDate from = windowStart(lastSuccessDay(), overlapDays, firstRunSince, today);
         Summary total = Summary.empty(from, today);
         for (LocalDate[] chunk : chunks(from, today, CHUNK_DAYS)) {
@@ -355,7 +352,7 @@ final class RemidioPullService {
     /** The image's own capture instant when it has one, else the exam's, as a clinic day. */
     static LocalDate dateOf(Instant imageDate, Instant examDate) {
         Instant at = imageDate != null ? imageDate : examDate;
-        return at == null ? null : at.atZone(CLINIC_ZONE).toLocalDate();
+        return at == null ? null : at.atZone(ClinicZone.zone()).toLocalDate();
     }
 
     /** A filename that says where it came from, and contains nothing a path could misread. */
@@ -443,7 +440,7 @@ final class RemidioPullService {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 Timestamp ts = rs.getTimestamp(1);
-                return ts == null ? null : ts.toInstant().atZone(CLINIC_ZONE).toLocalDate();
+                return ts == null ? null : ts.toInstant().atZone(ClinicZone.zone()).toLocalDate();
             }
         } catch (SQLException e) {
             // Without the watermark the pass starts from the configured

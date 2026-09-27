@@ -26,6 +26,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 /**
@@ -150,7 +151,7 @@ class DueVisitsApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     /** No params → a window around today, well-formed even when empty. */
     @Test
     void noParamsGiveAWindowAroundToday() throws Exception {
-        String today = java.time.LocalDate.now().toString();
+        String today = ClinicZone.today().toString();
         mockMvcWith(Set.of(1)).perform(get("/api/v1/events/due").session(session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visits").isArray())

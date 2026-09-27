@@ -13,8 +13,6 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,6 +40,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
@@ -309,7 +308,7 @@ public class SubjectExportApiController {
 
         String filename = sanitizeFilename(ss.getLabel())
                 + "_" + fmt
-                + "_" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)
+                + "_" + ClinicZone.today().format(DateTimeFormatter.BASIC_ISO_DATE)
                 + "." + extension;
 
         LOG.info("Subject export: subject {} (label={}) study {} format={} bytes={} by user={}",
@@ -390,7 +389,7 @@ public class SubjectExportApiController {
         emitExportAudit(currentUser.getId(), ss.getId(), ss.getLabel(), "bundle");
 
         String filename = sanitizeFilename(ss.getLabel()) + "_bundle_"
-                + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".zip";
+                + ClinicZone.today().format(DateTimeFormatter.BASIC_ISO_DATE) + ".zip";
 
         // Written straight to the response rather than handed back as a
         // StreamingResponseBody: this endpoint's declared return type is
@@ -480,7 +479,7 @@ public class SubjectExportApiController {
                 snap.studySubject().getEnrollmentDate() == null
                         ? "—" : CasebookRenderer.isoDate(snap.studySubject().getEnrollmentDate()));
         addIdRow(identity, normal, "Study OID", snap.study().getOid());
-        addIdRow(identity, normal, "Generated", LocalDate.now().toString());
+        addIdRow(identity, normal, "Generated", ClinicZone.today().toString());
         doc.add(identity);
         doc.add(new Paragraph(" "));
 

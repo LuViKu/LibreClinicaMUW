@@ -23,6 +23,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody.FieldError;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DatabaseChangeLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequirementsDao;
@@ -256,6 +257,9 @@ public class AdminApiController {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("defaultTimezone", TimeZone.getDefault().getID());
+        // The server runs, and stores timestamps, in UTC; calendar dates
+        // ("today" for worklists and due visits) follow the clinic's zone.
+        body.put("clinicZone", ClinicZone.zone().getId());
         body.put("userLanguage", System.getProperty("user.language"));
         body.put("userCountry", System.getProperty("user.country"));
         body.put("fileEncoding", System.getProperty("file.encoding"));

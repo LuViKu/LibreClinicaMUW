@@ -30,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -328,7 +329,7 @@ public class EyeCohortTransitionsApiController {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "transitionedAt must be an ISO date (yyyy-MM-dd)."));
             }
-            if (transitionedOn.isAfter(java.time.LocalDate.now())) {
+            if (transitionedOn.isAfter(ClinicZone.today())) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "transitionedAt must not be in the future."));
             }
@@ -974,7 +975,7 @@ public class EyeCohortTransitionsApiController {
                                             java.time.LocalDate transitionedOn)
             throws SQLException {
         java.sql.Date enrollment = java.sql.Date.valueOf(
-                transitionedOn != null ? transitionedOn : java.time.LocalDate.now());
+                transitionedOn != null ? transitionedOn : ClinicZone.today());
         String sql = "INSERT INTO study_subject (label, subject_id, study_id, status_id, "
                 + "date_created, owner_id, oc_oid, study_eye, enrollment_date) "
                 + "VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?)";
