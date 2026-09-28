@@ -253,7 +253,7 @@ public class RemidioPullScheduler {
                     .catchUp(overlapDays(), firstRunSince());
             lastSuccess = Instant.now();
             lastError = null;
-            if ((s.newExams() > 0 || s.failed() > 0) && pullLine.worthInfo(s.line())) {
+            if ((s.newExams() > 0 || s.reopened() > 0 || s.failed() > 0) && pullLine.worthInfo(s.line())) {
                 LOG.info("Remidio pull {}", s.line());
             } else {
                 LOG.debug("Remidio pull {}", s.line());

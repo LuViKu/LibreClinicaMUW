@@ -9,7 +9,9 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -87,9 +89,9 @@ class RemidioPullServiceTest {
     @Test
     void summariesAddUpAcrossChunks() {
         RemidioPullService.Summary a = new RemidioPullService.Summary(
-                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 30), 5, 2, 4, 3, 1, 0, 0, 0);
+                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 30), 5, 2, 0, 4, 3, 1, 0, 0, 0);
         RemidioPullService.Summary b = new RemidioPullService.Summary(
-                LocalDate.of(2026, 8, 31), LocalDate.of(2026, 9, 23), 7, 1, 2, 0, 2, 1, 0, 1);
+                LocalDate.of(2026, 8, 31), LocalDate.of(2026, 9, 23), 7, 1, 1, 2, 0, 2, 1, 0, 1);
 
         RemidioPullService.Summary sum = RemidioPullService.Summary.empty(null, null).plus(a).plus(b);
 
@@ -97,6 +99,7 @@ class RemidioPullServiceTest {
         assertEquals(LocalDate.of(2026, 9, 23), sum.to());
         assertEquals(12, sum.exams());
         assertEquals(3, sum.newExams());
+        assertEquals(1, sum.reopened());
         assertEquals(6, sum.images());
         assertEquals(3, sum.bound());
         assertEquals(3, sum.unbound());
@@ -112,5 +115,31 @@ class RemidioPullServiceTest {
 
         assertEquals("ex_1_im_2_OD.jpg", RemidioPullService.filenameFor(exam, image, "OD", ".jpg"));
         assertEquals("ex_1_im_2.png", RemidioPullService.filenameFor(exam, image, null, ".png"));
+    }
+
+    @Test
+    void anExamIsReopenedWhenItOffersMoreImagesThanWereHandled() {
+        assertTrue(RemidioPullService.needsPass(null, 0), "an exam never handled gets a pass, even empty");
+        assertTrue(RemidioPullService.needsPass(null, 2));
+        assertTrue(RemidioPullService.needsPass(0, 1),
+                "an exam first listed empty (a synced visit) reopens when a capture arrives");
+        assertTrue(RemidioPullService.needsPass(1, 2), "the second eye uploaded after the first");
+        assertFalse(RemidioPullService.needsPass(0, 0));
+        assertFalse(RemidioPullService.needsPass(2, 2), "nothing new, nothing to do");
+        assertFalse(RemidioPullService.needsPass(2, 1), "an image removed in the cloud reopens nothing");
+        assertFalse(RemidioPullService.needsPass(Integer.MAX_VALUE, 5), "a failed lookup counts as handled");
+    }
+
+    @Test
+    void onlyImagesWithAnIdAndALinkCountAsDownloadable() {
+        Image ready = new Image("im-1", "ex-1", null, "RIGHT", null, null, null,
+                "https://x/1.jpg", null, "FOP", "fopImages", "STANDARD");
+        Image noLinkYet = new Image("im-2", "ex-1", null, "LEFT", null, null, null,
+                null, null, "FOP", "fopImages", "STANDARD");
+        Image noId = new Image(null, "ex-1", null, "LEFT", null, null, null,
+                "https://x/3.jpg", null, "FOP", "fopImages", "STANDARD");
+
+        assertEquals(0, RemidioPullService.downloadable(List.of()));
+        assertEquals(1, RemidioPullService.downloadable(List.of(ready, noLinkYet, noId)));
     }
 }
