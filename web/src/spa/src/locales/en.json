@@ -3392,7 +3392,15 @@
     "dismissSelectedConfirm": "Dismiss {n} file(s)? They stay in “Dismissed” for 30 days and can be restored until then.",
     "dismissReasonLabel": "Reason (optional)",
     "someSkippedDismiss": "{n} file(s) were skipped — they had already been handled.",
-    "visitSealed": "The visit is signed or locked — the binding can only be removed after it is unlocked."
+    "visitSealed": "The visit is signed or locked — the binding can only be removed after it is unlocked.",
+    "twin": {
+      "filed": "The same picture is already filed under {label} (file #{id}).",
+      "filedElsewhere": "The same picture is already filed in another study (file #{id}).",
+      "unfiled": "The same picture is already waiting in the inbox under the label {label} (file #{id}).",
+      "unfiledNoLabel": "The same picture is already waiting in the inbox without a label (file #{id}).",
+      "dismissed": "The same picture was already dismissed (file #{id}).",
+      "bindAnyway": "File this one anyway?"
+    }
   },
   "imagingModalities": {
     "intro": "Which acquisitions this study performs, on which device — and which CRF box a filed file ticks.",
@@ -3606,7 +3614,9 @@
       "inInbox": "In the inbox",
       "noEvent": "No visit found — pick one or upload without a visit.",
       "noLabel": "No label — search the patient, pick a visit or upload without one.",
-      "alreadyUploadedDetail": "An identical file is already in the inbox as"
+      "alreadyUploadedDetail": "An identical file is already in the inbox as",
+      "heldBack": "Held back",
+      "heldBackDetail": "The same picture is already here under another label (file #{id}). The file waits in the inbox for review."
     },
     "actions": {
       "uploadWithoutVisit": "Upload without visit"
@@ -3618,7 +3628,8 @@
       "sent": "sent",
       "duplicate": "already there",
       "refused": "refused",
-      "confirmAll": "Confirm {n}"
+      "confirmAll": "Confirm {n}",
+      "held": "held back"
     },
     "staff": {
       "title": "Upload acquisitions",

@@ -207,6 +207,23 @@ describe('uploadWorkbench store', () => {
     expect(store.rows[0].existingIngestItemId).toBe(7)
   })
 
+  /**
+   * DR-036 — the backend answers 201 but says the file was held back: the
+   * same picture is already there under another label. The row must not
+   * read as filed on the visit the operator picked.
+   */
+  it('a file held back for a contested picture is shown as held, not sent', async () => {
+    api.commitFile.mockResolvedValue({
+      ingestItemId: 12, jobId: null, kind: 'image', format: 'png', status: 'UNBOUND', heldBack: true, sameImageAs: 7,
+    })
+    const store = useUploadWorkbenchStore()
+    await store.addFiles([pngFile()])
+    await store.park(store.rows[0].rowId)
+    expect(store.rows[0].state).toBe('held')
+    expect(store.rows[0].sameImageAs).toBe(7)
+    expect(store.rows[0].ingestItemId).toBe(12)
+  })
+
   it('undo goes by ingest item for images and by job for OCT scans', async () => {
     api.undoItem.mockResolvedValue(undefined)
     api.undoJob.mockResolvedValue(undefined)

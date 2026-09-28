@@ -32,6 +32,7 @@ import {
   type IngestItem,
   type IngestKind,
   type IngestStatus,
+  type IngestTwin,
 } from '@/api/ingest'
 
 const { t } = useI18n()
@@ -201,13 +202,34 @@ async function askDateMismatch(
   if (ok) await runBind(ids, studySubjectId, studyEventId, eventCrfId, true)
 }
 
-function bindSuggested(row: IngestItem): void {
+/**
+ * DR-036 — what the inbox says about an earlier file with the same picture:
+ * where it is (filed, waiting, dismissed) and under which label, when the
+ * caller may see it.
+ */
+function twinText(twin: IngestTwin): string {
+  const p = { id: twin.ingestItemId, label: twin.label ?? '' }
+  if (twin.status === 'DISMISSED') return t('ingestInbox.twin.dismissed', p)
+  if (twin.status === 'BOUND') return twin.label ? t('ingestInbox.twin.filed', p) : t('ingestInbox.twin.filedElsewhere', p)
+  return twin.label ? t('ingestInbox.twin.unfiled', p) : t('ingestInbox.twin.unfiledNoLabel', p)
+}
+
+/** Filing a file whose picture is already here is a decision; ask before the dialog opens. */
+async function twinAcknowledged(twin: IngestTwin | null | undefined): Promise<boolean> {
+  if (!twin) return true
+  return confirm({ message: `${twinText(twin)} ${t('ingestInbox.twin.bindAnyway')}` })
+}
+
+async function bindSuggested(row: IngestItem): Promise<void> {
   const s = row.suggestion
   if (!s) return
+  if (!(await twinAcknowledged(row.twin))) return
   void runBind([row.id], s.studySubjectId, s.studyEventId, s.eventCrfId)
 }
 
-function openAssign(row: IngestItem | null): void {
+async function openAssign(row: IngestItem | null): Promise<void> {
+  const contested = row ? row.twin : rows.value.find((r) => selected.value.has(r.id) && r.twin)?.twin
+  if (!(await twinAcknowledged(contested))) return
   dialogRow.value = row
   dialogOpen.value = true
 }
@@ -480,6 +502,16 @@ async function onDismissSelected(): Promise<void> {
               label: row.suggestion.subjectLabel,
               study: row.suggestion.studyName,
             }) }}
+          </p>
+
+          <!-- DR-036 — the same picture is already here as another file. Said
+               on the card, so nobody files it a second time without knowing. -->
+          <p
+            v-if="row.twin"
+            class="mt-2 text-[12px] text-amber-800 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-2 py-1.5"
+            :data-testid="`twin-${row.id}`"
+          >
+            {{ twinText(row.twin) }}
           </p>
 
           <div class="mt-auto pt-3 flex flex-wrap gap-2">

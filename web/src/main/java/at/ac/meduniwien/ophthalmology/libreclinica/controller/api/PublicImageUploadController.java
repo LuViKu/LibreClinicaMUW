@@ -264,9 +264,27 @@ public class PublicImageUploadController {
                             "that visit is not scheduled for the submitted date"));
                 }
             }
+            // DR-036 — the same picture under the same label is refused;
+            // under another label it lands unfiled with a trail. See IngestTwins.
+            String pixelSha256 = IngestUploadService.fingerprintOf(saved);
+            IngestTwins.Twin twin = IngestTwins.find(c, pixelSha256);
+            String claimedLabel = target != null
+                    ? IngestTwins.subjectLabel(c, target.studySubjectId()) : blankToNull(patientId);
+            IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
+            if (verdict == IngestTwins.Verdict.DUPLICATE) {
+                deleteQuietly(saved);
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "Diese Datei wurde bereits hochgeladen.",
+                        "duplicate", true, "existingIngestItemId", twin.ingestItemId()));
+            }
+            boolean held = verdict == IngestTwins.Verdict.HELD;
+            if (held) target = null;
             String dev = normaliseDevice(device);
             long id = insert(c, saved.toString(), file.getOriginalFilename(), contentType,
-                    blankToNull(patientId), lat, sd, dev, target);
+                    blankToNull(patientId), lat, sd, dev, pixelSha256, target);
+            if (held) {
+                IngestTwins.writeHeldAudit(dataSource, id, twin, claimedLabel, null, "upload");
+            }
             if (target != null) {
                 ImageIngestBinding.writeSystemBindAudit(dataSource, id, "portal", target.studyEventId());
                 // The image on the visit is the evidence that this camera was
@@ -277,8 +295,14 @@ public class PublicImageUploadController {
             }
             LOG.info("public image upload: enqueued ingest_item_id={} status={}",
                     id, target == null ? "UNBOUND" : "BOUND");
-            return ResponseEntity.status(201).body(Map.of(
-                    "imageIngestId", id, "status", target == null ? "UNBOUND" : "BOUND"));
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("imageIngestId", id);
+            body.put("status", target == null ? "UNBOUND" : "BOUND");
+            if (held) {
+                body.put("heldBack", true);
+                body.put("sameImageAs", twin.ingestItemId());
+            }
+            return ResponseEntity.status(201).body(body);
         } catch (SQLException e) {
             deleteQuietly(saved);
             LOG.error("public image upload: INSERT failed: {}", e.getMessage());
@@ -288,7 +312,7 @@ public class PublicImageUploadController {
 
     private long insert(Connection c, String storedPath, String originalFilename, String contentType,
                         String patientId, String laterality, LocalDate studyDate, String device,
-                        ImageIngestBinding.EventTarget target) throws SQLException {
+                        String pixelSha256, ImageIngestBinding.EventTarget target) throws SQLException {
         // P3.1 — the statement lives in IngestItemRepository, shared with the
         // DICOM ingress.
         //
@@ -302,6 +326,7 @@ public class PublicImageUploadController {
                 .previewPngPath(storedPath)
                 .originalFilename(originalFilename)
                 .contentType(contentType)
+                .pixelSha256(pixelSha256)
                 .patientId(patientId)
                 .laterality(laterality)
                 // A form field, not the image's metadata: a JPEG from a

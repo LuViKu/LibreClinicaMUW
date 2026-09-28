@@ -27,6 +27,18 @@ export interface IngestSuggestion {
   eventCrfId: number | null
 }
 
+/**
+ * DR-036 — an earlier file that shows the same picture as this one. `label`
+ * is the subject it was filed to when the caller may see that study, else the
+ * patient id it arrived with, else null.
+ */
+export interface IngestTwin {
+  ingestItemId: number
+  status: IngestStatus
+  label: string | null
+  receivedAt: string | null
+}
+
 export interface IngestItem {
   id: number
   kind: IngestKind
@@ -52,6 +64,7 @@ export interface IngestItem {
   previewUrl: string
   hasPreview: boolean
   suggestion: IngestSuggestion | null
+  twin: IngestTwin | null
 }
 
 export interface InboxFilters {

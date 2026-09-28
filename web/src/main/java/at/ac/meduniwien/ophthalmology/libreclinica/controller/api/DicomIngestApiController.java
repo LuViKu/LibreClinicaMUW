@@ -8,13 +8,16 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import javax.sql.DataSource;
@@ -92,7 +95,8 @@ public class DicomIngestApiController {
             String laterality,      // OD / OS / OU, nullable
             String sourceAeTitle,
             String dicomPath,        // path under the shared ingest store
-            String previewPngPath    // nullable
+            String previewPngPath,   // nullable
+            String pixelSha256       // DR-036 — SHA-256 of the decoded pixels; nullable
     ) {}
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -122,7 +126,28 @@ public class DicomIngestApiController {
                 // Re-sent C-STORE — idempotent, return the existing row.
                 return ResponseEntity.ok(dupBody(existing));
             }
-            Inserted ins = insert(c, req);
+            // A study answering one of our worklist items comes back with our
+            // accession → land it BOUND to that visit. Anything else lands
+            // UNBOUND for the inbox.
+            ImageIngestBinding.EventTarget target = resolveWorklistTarget(c, req.accessionNumber());
+            // DR-036 — the same picture under the same label is the camera
+            // sending a capture again: answered like a re-sent SOP instance,
+            // and the sidecar's copy is not kept. Under another label it
+            // lands unfiled, whatever the accession said. See IngestTwins.
+            String label = target != null ? IngestTwins.subjectLabel(c, target.studySubjectId()) : req.patientId();
+            IngestTwins.Twin twin = IngestTwins.find(c, req.pixelSha256());
+            IngestTwins.Verdict verdict = IngestTwins.verdict(twin, label);
+            if (verdict == IngestTwins.Verdict.DUPLICATE) {
+                discardStored(req.dicomPath(), req.previewPngPath());
+                LOG.info("DICOM ingest: same picture as ingest_item {} under the same label — not kept",
+                        twin.ingestItemId());
+                return ResponseEntity.ok(dupBody(twin.ingestItemId()));
+            }
+            boolean held = verdict == IngestTwins.Verdict.HELD;
+            Inserted ins = insert(c, req, held ? null : target);
+            if (held) {
+                IngestTwins.writeHeldAudit(dataSource, ins.id(), twin, label, null, "dicom");
+            }
             if (ins.boundStudyEventId() != null) {
                 // Nobody clicked "bind" — the worklist accession did. Leave a
                 // trail so a bound image can always be explained.
@@ -135,8 +160,16 @@ public class DicomIngestApiController {
                         dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(),
                         req.laterality(), null);
             }
-            LOG.info("DICOM ingest: ingest_item_id={} status={}", ins.id(), ins.status());
-            return ResponseEntity.status(201).body(Map.of("imageIngestId", ins.id(), "status", ins.status()));
+            LOG.info("DICOM ingest: ingest_item_id={} status={}{}", ins.id(), ins.status(),
+                    held ? " (held back, same picture as ingest_item " + twin.ingestItemId() + ")" : "");
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("imageIngestId", ins.id());
+            body.put("status", ins.status());
+            if (held) {
+                body.put("heldBack", true);
+                body.put("sameImageAs", twin.ingestItemId());
+            }
+            return ResponseEntity.status(201).body(body);
         } catch (SQLException e) {
             // Race on the sop_instance_uid unique index — treat as idempotent.
             if ("23505".equals(e.getSQLState())) {
@@ -154,6 +187,24 @@ public class DicomIngestApiController {
 
     private static Map<String, Object> dupBody(long id) {
         return Map.of("imageIngestId", id, "duplicate", true);
+    }
+
+    /**
+     * Remove what the sidecar stored for a file the platform will not keep.
+     * Only inside the ingest stores; a path anywhere else is left alone.
+     */
+    private static void discardStored(String... paths) {
+        IngestArtifactStore store = new IngestArtifactStore();
+        for (String p : paths) {
+            if (p == null || p.isBlank()) continue;
+            store.resolveConfined(p).ifPresent(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    LOG.warn("DICOM ingest: could not remove a duplicate's file: {}", e.getMessage());
+                }
+            });
+        }
     }
 
     private record Inserted(long id, String status, Integer boundStudyEventId,
@@ -180,11 +231,10 @@ public class DicomIngestApiController {
                 : ImageIngestBinding.resolveEventTarget(c, studyEventId);
     }
 
-    private Inserted insert(Connection c, DicomIngestRequest r) throws SQLException {
+    /** @param target the visit the worklist named, or null to land UNBOUND */
+    private Inserted insert(Connection c, DicomIngestRequest r, ImageIngestBinding.EventTarget target)
+            throws SQLException {
         LocalDate studyDate = parseIsoDateOrNull(r.studyDate());
-        // A study answering one of our worklist items comes back with our accession
-        // → land it BOUND to that visit. Anything else lands UNBOUND for the inbox.
-        ImageIngestBinding.EventTarget target = resolveWorklistTarget(c, r.accessionNumber());
         String status = target != null ? "BOUND" : "UNBOUND";
         // P3.1 — the statement lives in IngestItemRepository, shared with the
         // upload portal. source_kind and content_type are fixed here because
@@ -204,6 +254,7 @@ public class DicomIngestApiController {
                 .seriesInstanceUid(r.seriesInstanceUid())
                 .modality(r.modality())
                 .sourceAeTitle(r.sourceAeTitle())
+                .pixelSha256(isBlank(r.pixelSha256()) ? null : r.pixelSha256().trim())
                 // P3.4 — a camera that identifies itself classifies its own
                 // images: no operator has to say which acquisition this is.
                 .imagingModalityId(modalityForAeTitle(c, deviceKeyOf(r), target))

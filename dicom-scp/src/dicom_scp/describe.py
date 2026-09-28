@@ -1,5 +1,10 @@
 """HTTP entry for DICOM files that arrive as uploads rather than over C-STORE (DR-029).
 
+Two routes on one port: ``/describe`` (below) and ``/fingerprint`` (DR-036),
+which answers the picture digest of a file already in the store without
+touching it — how the app fills the digest in for files that arrived before
+it existed.
+
 The app has no DICOM parser; this sidecar has one. A file the upload page
 stored on the shared volume is handed over by path, and the sidecar answers
 with the same identity/exam tags it posts for a received C-STORE, a preview
@@ -22,6 +27,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pydicom
 from pydicom.errors import InvalidDicomError
 
 from . import config, deidentify, store, tags
@@ -63,6 +69,12 @@ def describe_file(path: Path, pseudonym: str | None, drop_private: bool) -> dict
     return payload
 
 
+def fingerprint_file(path: Path) -> dict:
+    """The picture digest of one file, read-only. Raises on a non-DICOM file."""
+    ds = pydicom.dcmread(str(path))
+    return {"pixelSha256": tags.pixel_sha256(ds)}
+
+
 class DescribeHandler(BaseHTTPRequestHandler):
     server_version = "dicom-scp-describe/1"
 
@@ -80,7 +92,7 @@ class DescribeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 — http.server's naming
         settings = config.settings
-        if self.path != "/describe":
+        if self.path not in ("/describe", "/fingerprint"):
             self._json(404, {"message": "not found"})
             return
         if not settings.ingest_token or self.headers.get(TOKEN_HEADER) != settings.ingest_token:
@@ -112,7 +124,10 @@ class DescribeHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            payload = describe_file(path, pseudonym, settings.deidentify_drop_private)
+            if self.path == "/fingerprint":
+                payload = fingerprint_file(path)
+            else:
+                payload = describe_file(path, pseudonym, settings.deidentify_drop_private)
         except InvalidDicomError:
             self._json(422, {"message": "not a DICOM file"})
             return

@@ -34,6 +34,7 @@ const counts = computed(() => ({
   nopatient: props.rows.filter((r) => r.state === 'nopatient').length,
   ambiguous: props.rows.filter((r) => r.state === 'ambiguous').length,
   duplicate: props.rows.filter((r) => r.state === 'duplicate').length,
+  held: props.rows.filter((r) => r.state === 'held').length,
   error: props.rows.filter((r) => r.state === 'error').length,
 }))
 </script>
@@ -58,6 +59,7 @@ const counts = computed(() => ({
       <PortalStatusPill v-if="counts.nopatient" tone="bad">{{ counts.nopatient }} {{ t('octPortal.summary.noPatientSuffix') }}</PortalStatusPill>
       <PortalStatusPill v-if="counts.ambiguous" tone="suggest">{{ counts.ambiguous }} {{ t('octPortal.summary.ambiguousSuffix') }}</PortalStatusPill>
       <PortalStatusPill v-if="counts.duplicate" tone="ok">{{ counts.duplicate }} {{ t('uploadPortal.summary.duplicate') }}</PortalStatusPill>
+      <PortalStatusPill v-if="counts.held" tone="suggest">{{ counts.held }} {{ t('uploadPortal.summary.held') }}</PortalStatusPill>
       <PortalStatusPill v-if="counts.error" tone="bad">{{ counts.error }} {{ t('uploadPortal.summary.refused') }}</PortalStatusPill>
       <button
         v-if="counts.suggested > 0"

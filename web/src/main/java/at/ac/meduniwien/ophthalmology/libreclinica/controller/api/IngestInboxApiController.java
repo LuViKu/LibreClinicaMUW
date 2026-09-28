@@ -104,6 +104,11 @@ public class IngestInboxApiController {
 
     private static final IngestArtifactStore ARTIFACT_STORE = new IngestArtifactStore();
 
+    /** DR-036 — the earliest other row that shows the same picture, so the inbox can say so. */
+    private static final String TWIN_COLUMN = "(SELECT MIN(t.ingest_item_id) FROM ingest_item t "
+            + " WHERE t.pixel_sha256 = ingest_item.pixel_sha256 "
+            + "   AND t.ingest_item_id <> ingest_item.ingest_item_id) AS twin_id";
+
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final StudySubjectFinder studySubjectFinder;
@@ -168,7 +173,15 @@ public class IngestInboxApiController {
                            String modality, String originalFilename, Long byteSize,
                            Integer scanIndex, String receivedAt,
                            String previewUrl, boolean hasPreview,
-                           Suggestion suggestion) {}
+                           Suggestion suggestion, Twin twin) {}
+
+    /**
+     * DR-036 — an earlier file that shows the same picture as this one.
+     *
+     * @param label the twin's bound subject's label when the caller may see
+     *              that study, else the patient id it arrived with, else null
+     */
+    public record Twin(long ingestItemId, String status, String label, String receivedAt) {}
 
     /**
      * @param acknowledgeDateMismatch the operator has been shown that the
@@ -226,7 +239,7 @@ public class IngestInboxApiController {
         StringBuilder sql = new StringBuilder(
                 "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                         + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
-                        + "received_at, preview_png_path "
+                        + "received_at, preview_png_path, " + TWIN_COLUMN
                         + "  FROM ingest_item WHERE status = ?");
         List<Object> args = new ArrayList<>();
         args.add(wantedStatus);
@@ -310,7 +323,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
-                             + "received_at, preview_png_path, bound_study_subject_id "
+                             + "received_at, preview_png_path, bound_study_subject_id, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -381,7 +394,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
-                             + "received_at, preview_png_path "
+                             + "received_at, preview_png_path, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE bound_study_event_id = ? AND status = 'BOUND' "
                              + " ORDER BY laterality NULLS LAST, received_at")) {
             ps.setInt(1, studyEventId);
@@ -766,6 +779,8 @@ public class IngestInboxApiController {
         boolean sizeNull = rs.wasNull();
         int scan = rs.getInt("scan_index");
         boolean scanNull = rs.wasNull();
+        long twinId = rs.getLong("twin_id");
+        Twin twin = rs.wasNull() ? null : describeTwin(twinId, visible);
         return new InboxRow(
                 id,
                 rs.getString("kind"),
@@ -782,7 +797,25 @@ public class IngestInboxApiController {
                 received != null ? received.toInstant().toString() : null,
                 "/pages/api/v1/ingest/" + id + "/preview",
                 rs.getString("preview_png_path") != null,
-                buildSuggestion(patientId, acquisitionDate, visible));
+                buildSuggestion(patientId, acquisitionDate, visible),
+                twin);
+    }
+
+    /**
+     * DR-036 — the twin as the inbox shows it. A twin filed in a study the
+     * caller cannot see is named by its number only: the label would say
+     * which subject of that study a picture belongs to.
+     */
+    private Twin describeTwin(long twinId, Set<Integer> visible) {
+        IngestTwins.Twin t = IngestTwins.load(dataSource, twinId);
+        if (t == null) return null;
+        String label = t.label();
+        if (t.boundStudySubjectId() != null && visible != null) {
+            Integer studyId = subjectStudyId(t.boundStudySubjectId());
+            if (studyId == null || !visible.contains(studyId)) label = null;
+        }
+        return new Twin(t.ingestItemId(), t.status(), label,
+                t.receivedAt() == null ? null : t.receivedAt().toString());
     }
 
     /**

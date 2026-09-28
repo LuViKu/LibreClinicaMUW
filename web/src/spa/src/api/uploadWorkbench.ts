@@ -202,6 +202,13 @@ export interface CommitResponse {
   imagingModalityId?: number | null
   deidentified?: boolean
   jobs?: Array<{ jobId: number; task: string; status: string }>
+  /**
+   * DR-036 — the same picture is already here under another label, so the
+   * file landed in the inbox unfiled whatever visit was named; `sameImageAs`
+   * is the row it matches.
+   */
+  heldBack?: boolean
+  sameImageAs?: number | null
 }
 
 /**

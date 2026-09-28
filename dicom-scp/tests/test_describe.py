@@ -111,6 +111,41 @@ def test_a_described_file_comes_back_pseudonymised_with_its_exam_tags(served):
     assert back.PatientBirthDate == ""
 
 
+def test_the_fingerprint_route_digests_the_picture_without_touching_the_file(served):
+    root, port = served
+    path = root / "old.dcm"
+    _write_export(path)
+
+    status, payload = _post(port, {"path": str(path)}, path="/fingerprint")
+
+    assert status == 200
+    assert isinstance(payload["pixelSha256"], str) and len(payload["pixelSha256"]) == 64
+    assert list(payload) == ["pixelSha256"], "nothing else about the file travels"
+    assert str(pydicom.dcmread(str(path)).PatientName) == "Muster^Max", "read-only"
+    # The same digest the describe route reports, before and after pseudonymisation.
+    status, described = _post(port, {"path": str(path), "pseudonym": "HAE-001"})
+    assert status == 200
+    assert described["pixelSha256"] == payload["pixelSha256"]
+    assert _post(port, {"path": str(path)}, path="/fingerprint")[1]["pixelSha256"] == payload["pixelSha256"]
+    # Same picture, another label, another SOP instance: same digest.
+    other = root / "again.dcm"
+    _write_export(other)
+    assert _post(port, {"path": str(other)}, path="/fingerprint")[1]["pixelSha256"] == payload["pixelSha256"]
+
+
+def test_the_fingerprint_route_is_gated_and_confined_like_describe(served, tmp_path):
+    root, port = served
+    path = root / "old.dcm"
+    _write_export(path)
+    assert _post(port, {"path": str(path)}, token=None, path="/fingerprint")[0] == 401
+    outside = tmp_path / "elsewhere.dcm"
+    _write_export(outside)
+    assert _post(port, {"path": str(outside)}, path="/fingerprint")[0] == 403
+    not_dicom = root / "photo.dcm"
+    not_dicom.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 300)
+    assert _post(port, {"path": str(not_dicom)}, path="/fingerprint")[0] == 422
+
+
 def test_the_token_is_required(served):
     root, port = served
     path = root / "upload.dcm"
