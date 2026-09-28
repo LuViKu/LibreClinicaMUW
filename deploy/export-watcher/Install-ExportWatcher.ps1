@@ -65,6 +65,8 @@ if (-not (Test-Path $cfgPath)) {
         DeviceDicom      = 'clarus'
         DeviceE2e        = 'spectralis'
         Enabled          = $false
+        DeleteUploaded   = $false     # retention of _uploaded\: off until switched on in Settings
+        DeleteUploadedAfterDays = 30
     }
     $cfg | ConvertTo-Json | Set-Content -Path $cfgPath -Encoding UTF8
     Write-Host "seeded $cfgPath (disabled until switched on in Settings)"
