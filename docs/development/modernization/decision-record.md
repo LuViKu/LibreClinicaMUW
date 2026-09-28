@@ -845,6 +845,34 @@ The second problem is the one that decided the shape. A camera that sits in the 
 
 ---
 
+## DR-036 — The platform recognises the same picture under another label
+
+**Date:** 2026-09-28
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** DR-029 (`ingest_item`, the combined upload page), DR-025 (C-STORE receiver), DR-031 (Remidio pull), DR-032 (Export Watcher), P3.3 (the inbox lifecycle); `ImageFingerprint` (core), `IngestTwins`, `IngestFingerprintBackfill`, `dicom_scp.tags.pixel_sha256` and the sidecar's `/fingerprint` route; migration `lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml` (`ingest_item.pixel_sha256`, audit type 141).
+
+**Context.** Every ingress refuses a file it already holds, by the file's SHA-256 (and a DICOM object's SOP instance UID). That catches a file sent twice. It does not catch what the study team asked about while the acquisition PCs were being set up: the same capture exported a second time with a different patient id typed at the device. A Clarus or HEYEX re-export rewrites the patient tags, a photo re-saved from a phone gallery gets new EXIF, so the bytes differ while the picture is the same, and the second copy was filed against whichever subject the second label named. The user's first thought was a ledger on the acquisition PCs; that would have made every PC a second source of truth about what the platform holds, and it would not have covered the browser page or the Remidio cloud.
+
+**Decision.** The platform keeps a digest of the picture beside the digest of the file, and every ingress asks the same question before it writes a row.
+
+1. **`pixel_sha256` is a digest of what the file shows.** JPEG: the entropy-coded scan from the first SOS marker, nothing before it. PNG: the IDAT payloads. DICOM: the decoded pixel array, computed by the sidecar that already decodes the file for its preview (the app has no DICOM parser, and is not getting one for this). Spectralis `.e2e`: one digest per OCT volume over its image chunks, ordered by slice and kind, with the volumes grouped and numbered exactly as the upload page's own header reader does it, so the digest of volume *n* here is the digest of the volume the page called *n*. Metadata that a re-export rewrites — patient records, directory pointers, APPn segments, text chunks — plays no part. Nothing is read into memory whole; a 200 MB volume is walked by position.
+2. **Same picture, same label: a duplicate.** The second file is refused the way a byte-identical one is, pointing at the row that exists, and the second copy is not kept. The C-STORE receiver answers success, so the camera marks its capture as sent.
+3. **Same picture, another label: held.** Two labels for one picture is a mistake somebody has to look at, and the platform does not decide which label is right. The file lands in the inbox unfiled, whatever visit the uploader, the worklist accession or the Remidio exam named, carrying the label it was claimed for as its hint; no inference job starts for an OCT volume; an audit row (type 141, `ingest_duplicate_held`) against the new file names the earlier one and both labels. A dismissed twin is treated the same way, because a re-upload of something somebody rejected is also a decision for a person. The inbox shows the pair on each card, asks before either is filed anyway, and a bind made in spite of it records `same_image_as`. The upload page shows the row as *held back*, not as filed.
+4. **Older files are digested in the background.** An hourly job fills the column for rows that predate it, from the files on disk, up to two thousand an hour; a file that cannot be read is remembered for the life of the JVM and not tried again every hour. DICOM rows wait for a run that has the sidecar.
+5. **The acquisition PCs stay dumb.** The Export Watcher's retention setting (deleting uploaded exports after a chosen number of days) is the only state they keep, and it is not a record of what the platform holds.
+
+**Consequences.**
+
+- One nullable column and a partial index; no row is rewritten. The digest is deliberately not unique: two rows with the same picture are the case the column exists to find.
+- The check adds one read of the stored file per upload (an image is read once more; an `.e2e` volume once, by position) and one indexed lookup. The DICOM digest rides on the describe call the upload already makes, and on the C-STORE payload.
+- Not covered: a picture cropped, re-compressed or rotated by hand is a different picture. A DICOM file transcoded to another transfer syntax by a device digests the same only when its decoder yields the same pixels. Two labels that differ only in spelling are the same label (trimmed, case-insensitive) — the rule every device ingress already applies to labels.
+- Verified 2026-09-28 by unit tests for each format (`ImageFingerprintTest`: a JPEG comment or EXIF block, a PNG text chunk and an `.e2e` patient record leave the digest alone; a changed scan, image chunk or B-scan moves it; the volume numbering matches the page's fixtures), by the verdict table (`IngestTwinsTest`), the sidecar's pytest, vitest for the inbox and the upload page, and by integration tests on each ingress (`DicomIngestApiControllerDatabaseIT`, `PublicUploadControllerDatabaseIT`, `IngestInboxApiControllerDatabaseIT`, `IngestFingerprintBackfillDatabaseIT`).
+
+**Reversible** — drop the column, the index and the audit type; every ingress goes back to the file digest alone. The backfill component and `IngestTwins` are removed with them.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

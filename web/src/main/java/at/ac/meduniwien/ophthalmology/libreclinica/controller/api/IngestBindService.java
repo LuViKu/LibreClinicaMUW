@@ -614,6 +614,10 @@ public final class IngestBindService {
                         .append(";visit_date=").append(dateCheck.visitDate());
             }
         }
+        // DR-036 — the same picture is already here as another file; the
+        // operator filed this one anyway, and the trail says so.
+        IngestTwins.Twin twin = IngestTwins.twinOf(dataSource, ingestItemId);
+        if (twin != null) newValue.append(";same_image_as=").append(twin.ingestItemId());
         writeAudit(AuditTypeIds.IMAGE_BIND, ingestItemId, actor,
                 "ingested file bound", "UNBOUND", newValue.toString(), null, studyEventId);
     }

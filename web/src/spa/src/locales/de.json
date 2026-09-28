@@ -3392,7 +3392,15 @@
     "dismissSelectedConfirm": "{n} Datei(en) wirklich verwerfen? Sie bleiben 30 Tage im Status „Verworfen“ und können bis dahin wiederhergestellt werden.",
     "dismissReasonLabel": "Grund (optional)",
     "someSkippedDismiss": "{n} Datei(en) wurden übersprungen – sie waren bereits bearbeitet.",
-    "visitSealed": "Die Visite ist unterschrieben oder gesperrt – die Zuordnung kann erst nach dem Entsperren aufgehoben werden."
+    "visitSealed": "Die Visite ist unterschrieben oder gesperrt – die Zuordnung kann erst nach dem Entsperren aufgehoben werden.",
+    "twin": {
+      "filed": "Dasselbe Bild ist bereits unter {label} abgelegt (Datei #{id}).",
+      "filedElsewhere": "Dasselbe Bild ist bereits in einer anderen Studie abgelegt (Datei #{id}).",
+      "unfiled": "Dasselbe Bild wartet bereits im Eingang unter der Kennung {label} (Datei #{id}).",
+      "unfiledNoLabel": "Dasselbe Bild wartet bereits ohne Kennung im Eingang (Datei #{id}).",
+      "dismissed": "Dasselbe Bild wurde bereits verworfen (Datei #{id}).",
+      "bindAnyway": "Diese Datei trotzdem zuordnen?"
+    }
   },
   "imagingModalities": {
     "intro": "Welche Aufnahmen diese Studie durchführt, mit welchem Gerät – und welches CRF-Feld eine zugeordnete Datei ankreuzt.",
@@ -3606,7 +3614,9 @@
       "inInbox": "Im Eingang",
       "noEvent": "Keine Visite gefunden — bitte wählen oder ohne Visite hochladen.",
       "noLabel": "Keine Kennung — Patient suchen, Visite wählen oder ohne Visite hochladen.",
-      "alreadyUploadedDetail": "Identische Datei existiert bereits als Eingang"
+      "alreadyUploadedDetail": "Identische Datei existiert bereits als Eingang",
+      "heldBack": "Zurückgehalten",
+      "heldBackDetail": "Dasselbe Bild ist bereits unter einer anderen Kennung vorhanden (Datei #{id}). Die Datei liegt zur Prüfung im Eingang."
     },
     "actions": {
       "uploadWithoutVisit": "Ohne Visite hochladen"
@@ -3618,7 +3628,8 @@
       "sent": "übermittelt",
       "duplicate": "bereits vorhanden",
       "refused": "abgelehnt",
-      "confirmAll": "{n} bestätigen"
+      "confirmAll": "{n} bestätigen",
+      "held": "zurückgehalten"
     },
     "staff": {
       "title": "Aufnahmen hochladen",

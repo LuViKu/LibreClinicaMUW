@@ -153,6 +153,15 @@ public final class IngestItemRepository {
         /** Which scan within a multi-scan file; absent for single artifacts. */
         public Builder scanIndex(Integer v) { return set("scan_index", v, Types.INTEGER); }
 
+        /**
+         * DR-036 — the digest of the picture the file shows, independent of
+         * its metadata ({@link ImageFingerprint}; the DICOM sidecar's
+         * {@code pixelSha256}). Null when the picture could not be read. Not
+         * unique by design: a second row with the same digest is the case the
+         * column exists to find.
+         */
+        public Builder pixelSha256(String v) { return set("pixel_sha256", v, Types.VARCHAR); }
+
         /* ---------------- the device ---------------- */
 
         /**

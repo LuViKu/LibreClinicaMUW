@@ -455,4 +455,14 @@ public final class AuditTypeIds {
     public static final int EVENT_CRF_RESTORED               = 139;
     /** The reason given for changing a value after the CRF was completed; carries the reason. */
     public static final int ITEM_DATA_REASON_FOR_CHANGE      = 140;
+
+    /**
+     * DR-036 — a file held back at ingest because the same picture is already
+     * known under another label, or was dismissed. Written by
+     * {@code IngestTwins.writeHeldAudit} against the new, unfiled row;
+     * {@code new_value} packs {@code same_image_as=<ingest_item_id>} and the
+     * two labels. Seeded by
+     * {@code lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml}.
+     */
+    public static final int INGEST_DUPLICATE_HELD            = 141;
 }

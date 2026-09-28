@@ -294,6 +294,24 @@ final class RemidioPullService {
             }
         }
 
+        // DR-036 — the same picture already here: under the same label the
+        // cloud listed a capture twice, or somebody uploaded the export by
+        // hand, so it is not filed again; under another label it lands
+        // unfiled with a trail, whatever visit it would have gone to.
+        String pixelSha256 = IngestUploadService.fingerprintOf(path);
+        IngestTwins.Twin twin = IngestTwins.find(dataSource, pixelSha256);
+        String claimedLabel = target != null
+                ? IngestTwins.subjectLabel(dataSource, target.studySubjectId()) : mrn;
+        IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
+        if (verdict == IngestTwins.Verdict.DUPLICATE) {
+            deleteQuietly(path);
+            LOG.info("remidio: image {} of exam {} shows the same picture as ingest_item {} — not filed again",
+                    image.id(), exam.id(), twin.ingestItemId());
+            return Outcome.DUPLICATE;
+        }
+        boolean held = verdict == IngestTwins.Verdict.HELD;
+        if (held) target = null;
+
         long id;
         try (Connection c = dataSource.getConnection()) {
             var item = IngestItemRepository
@@ -303,6 +321,7 @@ final class RemidioPullService {
                     .originalFilename(filenameFor(exam, image, laterality, sniffed.extension()))
                     .contentType(sniffed.contentType())
                     .digest(stored.sha256(), stored.byteSize())
+                    .pixelSha256(pixelSha256)
                     .patientId(mrn)
                     .laterality(laterality)
                     .acquisitionDate(date)
@@ -324,6 +343,9 @@ final class RemidioPullService {
             return Outcome.FAILED;
         }
 
+        if (held) {
+            IngestTwins.writeHeldAudit(dataSource, id, twin, claimedLabel, null, SOURCE_KIND);
+        }
         if (target != null) {
             ImageIngestBinding.writeSystemBindAudit(dataSource, id, policy, target.studyEventId());
             ImageIngestBinding.tickPerformed(dataSource, id, target, SOURCE_KIND, DEVICE, laterality, null);

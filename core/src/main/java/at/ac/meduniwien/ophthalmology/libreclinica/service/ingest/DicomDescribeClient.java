@@ -56,12 +56,19 @@ public class DicomDescribeClient {
     /** A widefield export is tens of megabytes; decoding it for a preview takes a moment. */
     public static final Duration TIMEOUT = Duration.ofSeconds(90);
 
-    /** What the sidecar says about a file — exam and device, never the patient. */
+    /**
+     * What the sidecar says about a file — exam and device, never the patient.
+     *
+     * @param pixelSha256 DR-036 — SHA-256 of the decoded pixel array, the
+     *                    file's picture without its tags; null when the
+     *                    sidecar predates it or could not decode the pixels
+     */
     public record Description(String sopInstanceUid, String sopClassUid, String studyInstanceUid,
                               String seriesInstanceUid, String modality, String laterality,
                               LocalDate studyDate, LocalDate acquisitionDate,
                               String manufacturer, String manufacturerModelName,
-                              String previewPngPath, boolean identityRemoved, int changedTags) {}
+                              String previewPngPath, boolean identityRemoved, int changedTags,
+                              String pixelSha256) {}
 
     /** Why a description could not be had, so the caller can pick a status code. */
     public static class DescribeException extends Exception {
@@ -182,7 +189,75 @@ public class DicomDescribeClient {
                 text(n, "manufacturer"), text(n, "manufacturerModelName"),
                 text(n, "previewPngPath"),
                 n.path("identityRemoved").asBoolean(false),
-                n.path("changedTags").asInt(0));
+                n.path("changedTags").asInt(0),
+                text(n, "pixelSha256"));
+    }
+
+    /**
+     * DR-036 — the picture digest of a DICOM file already in the store, for
+     * rows written before the digest existed. Nothing about the file is
+     * changed: the sidecar decodes the pixels and answers with their SHA-256.
+     *
+     * @return the digest, or null when the sidecar could not decode the pixels
+     */
+    public String fingerprint(Path file) throws DescribeException {
+        if (!isConfigured()) {
+            throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
+                    "no DICOM describe sidecar is configured (" + KEY_URL + ")");
+        }
+        ObjectNode body = json.createObjectNode();
+        body.put("path", file.toAbsolutePath().toString());
+        HttpRequest request;
+        try {
+            request = HttpRequest.newBuilder(URI.create(fingerprintUrl()))
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .header(TOKEN_HEADER, token)
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+                    .build();
+        } catch (IllegalArgumentException | IOException bad) {
+            throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
+                    "the DICOM describe URL is not usable: " + bad.getMessage());
+        }
+        HttpResponse<String> response;
+        try {
+            response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            LOG.warn("DICOM fingerprint sidecar unreachable: {}", e.getClass().getSimpleName());
+            throw new DescribeException(DescribeException.Reason.UNREACHABLE,
+                    "the DICOM describe sidecar did not answer");
+        }
+        int status = response.statusCode();
+        if (status == 422) {
+            throw new DescribeException(DescribeException.Reason.NOT_DICOM, "not a DICOM file");
+        }
+        if (status / 100 != 2) {
+            LOG.warn("DICOM fingerprint sidecar answered HTTP {}", status);
+            throw new DescribeException(DescribeException.Reason.REJECTED,
+                    "the DICOM describe sidecar refused (HTTP " + status + ")");
+        }
+        try {
+            return text(json.readTree(response.body()), "pixelSha256");
+        } catch (IOException | RuntimeException malformed) {
+            throw new DescribeException(DescribeException.Reason.REJECTED,
+                    "the DICOM describe sidecar answered malformed JSON");
+        }
+    }
+
+    /**
+     * The fingerprint endpoint sits beside the describe one on the same
+     * server: {@code …/describe} becomes {@code …/fingerprint}, and a URL
+     * that does not end in {@code /describe} gets {@code /fingerprint}
+     * appended.
+     */
+    String fingerprintUrl() {
+        String base = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        if (base.endsWith("/describe")) {
+            return base.substring(0, base.length() - "/describe".length()) + "/fingerprint";
+        }
+        return base + "/fingerprint";
     }
 
     private static String text(JsonNode n, String field) {

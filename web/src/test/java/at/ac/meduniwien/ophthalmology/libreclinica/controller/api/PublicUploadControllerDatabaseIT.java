@@ -399,6 +399,85 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(1, countRows("kind = 'image'"));
     }
 
+    /* ---------------- DR-036: the same picture again ---------------- */
+
+    /** The same PNG re-saved with a text chunk: different bytes, one picture. */
+    private static byte[] pngWithTextChunk() throws IOException {
+        int afterHeader = 8 + 4 + 4 + 13 + 4;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        out.write(PNG, 0, afterHeader);
+        byte[] type = "tEXt".getBytes(StandardCharsets.US_ASCII);
+        byte[] data = "Comment\0re-exported".getBytes(StandardCharsets.ISO_8859_1);
+        out.write(java.nio.ByteBuffer.allocate(4).putInt(data.length).array());
+        out.write(type);
+        out.write(data);
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(type);
+        crc.update(data);
+        out.write(java.nio.ByteBuffer.allocate(4).putInt((int) crc.getValue()).array());
+        out.write(PNG, afterHeader, PNG.length - afterHeader);
+        return out.toByteArray();
+    }
+
+    @Test
+    void theSamePictureUnderTheSameLabelIsADuplicate() throws Exception {
+        long first = idOf(mockMvc().perform(multipart(BASE + "/commit")
+                .file(part("a.png", "image/png", PNG)).param("patientId", "M-001"))
+                .andExpect(status().isCreated()).andReturn());
+        byte[] again = pngWithTextChunk();
+        assertFalse(java.util.Arrays.equals(PNG, again));
+        long before = filesUnder(STORE_ROOT);
+        mockMvc().perform(multipart(BASE + "/commit")
+                .file(part("a-again.png", "image/png", again)).param("patientId", "m-001 "))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.duplicate").value(true))
+                .andExpect(jsonPath("$.existingIngestItemId").value(first));
+        assertEquals(1, countRows("kind = 'image'"));
+        assertEquals(before, filesUnder(STORE_ROOT), "the second copy is not kept");
+    }
+
+    /**
+     * The same picture claimed for another subject, with a visit picked: the
+     * visit is not followed, the file waits in the inbox with both labels in
+     * the trail, and the exact-bytes path still recognises it.
+     */
+    @Test
+    void theSamePictureUnderAnotherLabelIsHeldBackUnfiled() throws Exception {
+        long first = idOf(mockMvc().perform(multipart(BASE + "/commit")
+                .file(part("a.png", "image/png", PNG)).param("patientId", "M-002"))
+                .andExpect(status().isCreated()).andReturn());
+        MvcResult r = mockMvc().perform(multipart(BASE + "/commit")
+                .file(part("b.png", "image/png", pngWithTextChunk()))
+                .param("studyEventId", "3")
+                .param("scanDate", "2021-01-04"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("UNBOUND"))
+                .andExpect(jsonPath("$.heldBack").value(true))
+                .andExpect(jsonPath("$.sameImageAs").value(first))
+                .andReturn();
+        long held = idOf(r);
+        try (Connection c = DATA_SOURCE.getConnection();
+             ResultSet rs = row(c, held, "status, patient_id, bound_study_event_id, pixel_sha256")) {
+            assertEquals("UNBOUND", rs.getString("status"));
+            assertEquals("M-001", rs.getString("patient_id"), "the label it was claimed for stays as the hint");
+            rs.getInt("bound_study_event_id");
+            assertTrue(rs.wasNull());
+            assertNotNull(rs.getString("pixel_sha256"));
+        }
+        try (Connection c = DATA_SOURCE.getConnection();
+             ResultSet a = row(c, first, "pixel_sha256");
+             ResultSet b = row(c, held, "pixel_sha256")) {
+            assertEquals(a.getString(1), b.getString(1), "one picture, one digest");
+        }
+        assertEquals(1, auditRows(AuditTypeIds.INGEST_DUPLICATE_HELD, held, true));
+        assertEquals(0, auditRows(AuditTypeIds.IMAGE_BIND, held, true), "nothing was filed");
+        // An unfiled held file is still the same bytes as far as dedup goes.
+        mockMvc().perform(multipart(BASE + "/commit")
+                .file(part("c.png", "image/png", PNG)).param("patientId", "M-003"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.existingIngestItemId").value(first));
+    }
+
     @Test
     void theSameSopInstanceTwiceIsADuplicate() throws Exception {
         long first = idOf(mockMvc().perform(multipart(BASE + "/commit")

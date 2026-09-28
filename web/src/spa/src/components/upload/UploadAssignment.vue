@@ -185,6 +185,18 @@ const withoutVisitLabel = computed(() =>
         </div>
       </template>
 
+      <!-- DR-036 — the same picture is already here under another label. The
+           file is in the inbox, not on the visit the operator picked; the
+           platform does not choose between two labels for one picture. -->
+      <template v-else-if="props.row.state === 'held'">
+        <div class="flex items-center gap-2 mb-1.5">
+          <PortalStatusPill tone="suggest">{{ t('uploadPortal.assignment.heldBack') }}</PortalStatusPill>
+        </div>
+        <div class="inline-flex items-center gap-2 text-[12px] text-slate-600" data-testid="row-held">
+          {{ t('uploadPortal.assignment.heldBackDetail', { id: props.row.sameImageAs ?? '?' }) }}
+        </div>
+      </template>
+
       <template v-else-if="props.row.state === 'error'">
         <div class="inline-flex items-center gap-2 text-[12px] text-rose-700" data-testid="row-error">
           <span>
@@ -312,7 +324,7 @@ const withoutVisitLabel = computed(() =>
         </div>
       </template>
 
-      <template v-else-if="props.row.state === 'error' || props.row.state === 'duplicate'">
+      <template v-else-if="props.row.state === 'error' || props.row.state === 'duplicate' || props.row.state === 'held'">
         <button
           type="button"
           class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 min-h-8 min-w-8"

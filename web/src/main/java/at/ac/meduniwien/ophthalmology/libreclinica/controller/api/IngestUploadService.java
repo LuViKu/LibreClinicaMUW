@@ -34,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
@@ -97,9 +98,14 @@ final class IngestUploadService {
 
     sealed interface Outcome permits Created, Duplicate, Rejected, Undone {}
 
+    /**
+     * @param sameImageAs DR-036 — set when the file was held back: the row
+     *        that already shows the same picture under another label. The
+     *        file then landed UNBOUND whatever visit was named.
+     */
     record Created(long ingestItemId, String kind, String format, String status, String laterality,
                    LocalDate acquisitionDate, String device, Integer imagingModalityId,
-                   boolean deidentified) implements Outcome {}
+                   boolean deidentified, Long sameImageAs) implements Outcome {}
 
     record Duplicate(long existingIngestItemId, Long existingJobId) implements Outcome {}
 
@@ -216,6 +222,21 @@ final class IngestUploadService {
                 }
             }
 
+            // DR-036 — the picture itself, after the bytes and the SOP UID.
+            // Same picture under the same label: sent twice, refused like
+            // the byte-identical case. Under another label: held in the
+            // inbox unfiled, whatever visit was named, and the trail says
+            // which earlier file it matches. See IngestTwins.
+            String pixelSha256 = desc != null ? desc.pixelSha256() : fingerprintOf(path);
+            IngestTwins.Twin twin = IngestTwins.find(dataSource, pixelSha256);
+            String claimedLabel = target != null ? target.subjectLabel() : blankToNull(up.patientId());
+            IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
+            if (verdict == IngestTwins.Verdict.DUPLICATE) {
+                return discard(path, preview, new Duplicate(twin.ingestItemId(), null));
+            }
+            boolean held = verdict == IngestTwins.Verdict.HELD;
+            if (held) target = null;
+
             String device = deviceFor(up, desc);
             String laterality = desc != null && desc.laterality() != null
                     ? desc.laterality() : normaliseLaterality(up.laterality());
@@ -248,7 +269,10 @@ final class IngestUploadService {
                         .originalFilename(up.file().getOriginalFilename())
                         .contentType(up.sniffed().contentType())
                         .digest(stored.sha256(), stored.byteSize())
-                        .patientId(blankToNull(up.patientId()))
+                        .pixelSha256(pixelSha256)
+                        // A held file keeps the label it was claimed for as
+                        // its hint, so the inbox shows both labels side by side.
+                        .patientId(held ? claimedLabel : blankToNull(up.patientId()))
                         .laterality(laterality)
                         .acquisitionDate(acquisition)
                         .acquisitionDateSource(acquisitionSource)
@@ -268,6 +292,9 @@ final class IngestUploadService {
                 id = item.insert(c);
             }
 
+            if (held) {
+                IngestTwins.writeHeldAudit(dataSource, id, twin, claimedLabel, up.actor(), SOURCE_KIND);
+            }
             if (target != null) {
                 writeBindAudit(id, target, policy, up.actor());
                 // The file on the visit is the evidence that this device was
@@ -277,11 +304,12 @@ final class IngestUploadService {
                                 target.eventCrfId()),
                         SOURCE_KIND, device, laterality, up.actor().userId());
             }
-            LOG.info("upload: ingest_item {} ({}) landed {} via {}", id, up.sniffed().format(),
-                    target == null ? "UNBOUND" : "BOUND", up.channel());
+            LOG.info("upload: ingest_item {} ({}) landed {} via {}{}", id, up.sniffed().format(),
+                    target == null ? "UNBOUND" : "BOUND", up.channel(),
+                    held ? " — held back, same picture as ingest_item " + twin.ingestItemId() : "");
             return new Created(id, kind.dir(), up.sniffed().format(),
                     target == null ? "UNBOUND" : "BOUND", laterality, acquisition, device, modalityId,
-                    desc != null && desc.identityRemoved());
+                    desc != null && desc.identityRemoved(), held ? twin.ingestItemId() : null);
         } catch (SQLException e) {
             // The race-safe dedup index fires here when two operators upload
             // the same bytes at once; the earlier row wins.
@@ -571,6 +599,19 @@ final class IngestUploadService {
     private int systemActorId() {
         Integer id = PerformedItemAutoTicker.systemUserId(dataSource);
         return id == null ? 0 : id;
+    }
+
+    /**
+     * DR-036 — the picture digest of an image file. Null when it cannot be
+     * read, which means only that no twin is looked for.
+     */
+    static String fingerprintOf(Path path) {
+        try {
+            return ImageFingerprint.ofImage(path);
+        } catch (IOException | RuntimeException e) {
+            LOG.warn("upload: could not fingerprint the image: {}", e.getClass().getSimpleName());
+            return null;
+        }
     }
 
     private static Outcome discard(Path stored, String preview, Outcome outcome) {

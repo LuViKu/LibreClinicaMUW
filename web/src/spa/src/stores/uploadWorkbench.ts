@@ -50,6 +50,8 @@ export type RowState =
   | 'committing'
   | 'committed'
   | 'duplicate'
+  /** DR-036 — sent, but the same picture is already here under another label: in the inbox, unfiled. */
+  | 'held'
 
 export type Laterality = 'OD' | 'OS' | 'OU'
 
@@ -78,6 +80,8 @@ export interface UploadRow {
   committedAt?: Date
   existingIngestItemId?: number
   existingJobId?: number
+  /** DR-036 — for a held row, the earlier file that shows the same picture. */
+  sameImageAs?: number
   fileHash?: string
 }
 
@@ -131,7 +135,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   const counts = computed(() => {
     const byState: Record<RowState, number> = {
       parsing: 0, suggested: 0, confirmed: 0, novisit: 0, nopatient: 0,
-      ambiguous: 0, error: 0, committing: 0, committed: 0, duplicate: 0,
+      ambiguous: 0, error: 0, committing: 0, committed: 0, duplicate: 0, held: 0,
     }
     for (const r of rows.value) byState[r.state] = (byState[r.state] ?? 0) + 1
     return byState
@@ -456,9 +460,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
         uploadPct.value = new Map(uploadPct.value)
       })
       patch(row.rowId, {
-        state: 'committed',
+        // A held file is in the inbox, not on the visit: say so rather than
+        // showing the visit the operator picked as done.
+        state: res.heldBack ? 'held' : 'committed',
         jobId: res.jobId ?? undefined,
         ingestItemId: res.ingestItemId,
+        sameImageAs: res.heldBack && res.sameImageAs != null ? res.sameImageAs : undefined,
         committedAt: new Date(),
         laterality: (res.laterality as Laterality | null | undefined) ?? row.laterality,
         date: res.acquisitionDate ?? row.date,

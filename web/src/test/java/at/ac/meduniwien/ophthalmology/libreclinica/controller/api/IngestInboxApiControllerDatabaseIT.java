@@ -69,7 +69,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     @AfterEach
     void cleanRows() throws Exception {
         exec("DELETE FROM audit_log_event WHERE audit_table IN ('ingest_item', 'item_data') "
-                + "AND audit_log_event_type_id IN (127, 128, 129, 130, 137)");
+                + "AND audit_log_event_type_id IN (127, 128, 129, 130, 137, 141)");
         exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + ITEM_ID);
         exec("DELETE FROM ingest_item WHERE original_filename LIKE '" + MARKER + "%'");
         exec("DELETE FROM imaging_modality WHERE code = 'INBOX_IT'");
@@ -633,6 +633,72 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         // The row has a stored_path but no preview_png_path.
         mockMvc().perform(get("/api/v1/ingest/" + id + "/preview").session(dm()))
                 .andExpect(status().isNotFound());
+    }
+
+    /* ---------------- DR-036: twins ---------------- */
+
+    private void setPixelSha256(long id, String fp) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE ingest_item SET pixel_sha256 = ? WHERE ingest_item_id = ?")) {
+            ps.setString(1, fp);
+            ps.setLong(2, id);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Two files that show the same picture point at each other in the inbox,
+     * and filing one of them anyway is recorded with the other's number.
+     */
+    @Test
+    void aFileWhosePictureIsAlreadyKnownSaysSo() throws Exception {
+        long earlier = seed("image", "upload", "remidio", "HAE-001");
+        long later = seed("image", "upload", "remidio", "HAE-002");
+        long unrelated = seed("image", "upload", "remidio", "HAE-003");
+        setPixelSha256(earlier, "c".repeat(64));
+        setPixelSha256(later, "c".repeat(64));
+        setPixelSha256(unrelated, "d".repeat(64));
+
+        mockMvc().perform(get("/api/v1/ingest/inbox").session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.id == " + later + ")].twin.ingestItemId").value(
+                        org.hamcrest.Matchers.hasItem((int) earlier)))
+                .andExpect(jsonPath("$.items[?(@.id == " + later + ")].twin.label").value(
+                        org.hamcrest.Matchers.hasItem("HAE-001")))
+                .andExpect(jsonPath("$.items[?(@.id == " + later + ")].twin.status").value(
+                        org.hamcrest.Matchers.hasItem("UNBOUND")))
+                .andExpect(jsonPath("$.items[?(@.id == " + earlier + ")].twin.ingestItemId").value(
+                        org.hamcrest.Matchers.hasItem((int) later)))
+                .andExpect(jsonPath("$.items[?(@.id == " + unrelated + ")].twin").value(
+                        org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.nullValue())));
+
+        mockMvc().perform(get("/api/v1/ingest/" + later).session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.twin.ingestItemId").value(earlier));
+
+        mockMvc().perform(post("/api/v1/ingest/" + later + "/bind")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"studySubjectId\":" + STUDY_SUBJECT_ID
+                                + ",\"studyEventId\":" + STUDY_EVENT_ID + "}")
+                        .session(dm()))
+                .andExpect(status().isOk());
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT new_value FROM audit_log_event WHERE audit_log_event_type_id = ? "
+                             + "   AND audit_table = 'ingest_item' AND entity_id = ?")) {
+            ps.setInt(1, AuditTypeIds.IMAGE_BIND);
+            ps.setLong(2, later);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).endsWith(";same_image_as=" + earlier), rs.getString(1));
+            }
+        }
+        // Filed now: the twin's label is the subject it was filed to.
+        mockMvc().perform(get("/api/v1/ingest/" + earlier).session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.twin.status").value("BOUND"))
+                .andExpect(jsonPath("$.twin.label").value("M-001"));
     }
 
     @Test
