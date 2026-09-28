@@ -666,13 +666,15 @@ public class EventCrfsApiController {
                             itemDataIdAfter, currentStudy, currentUser, reason);
                     if (rfcDn != null) {
                         rfcCreatedCount++;
-                        // Also emit an audit_event row tagged item_data_rfc so
-                        // the audit-log view (M10) can correlate the RFC with
-                        // the item_data update.
-                        writeAuditEvent(auditDAO, /* type=27 Discrepancy note added */ 27,
+                        // Also emit an audit row carrying the reason itself, so
+                        // the audit log says why the value changed and not only
+                        // that a note exists. Its own type since 2026-09-27:
+                        // it was written under 27, the study_subject trigger's
+                        // "moved to another site".
+                        writeAuditEvent(auditDAO, AuditTypeIds.ITEM_DATA_REASON_FOR_CHANGE,
                                 currentUser, currentStudy, ss,
                                 "item_data_rfc", "item_data", itemDataIdAfter,
-                                itemOid, oldValue, newValue);
+                                itemOid, oldValue, newValue, reason);
                     }
                 }
             }
@@ -970,7 +972,7 @@ public class EventCrfsApiController {
         eventCrfDAO.markIncomplete(ecb);
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDAO, /* type=11 CRF unlocked / reopened */ 11,
+        writeAuditEvent(auditDAO, AuditTypeIds.EVENT_CRF_REOPENED,
                 currentUser, currentStudy, ss,
                 "event_crf_reopen", "event_crf", ecb.getId(),
                 /* columnName */ "date_completed",
@@ -1599,7 +1601,7 @@ public class EventCrfsApiController {
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDao, /* type=11 CRF unlocked / restored */ 11,
+        writeAuditEvent(auditDao, AuditTypeIds.EVENT_CRF_RESTORED,
                 currentUser, currentStudy, ss,
                 "event_crf_restore", "event_crf", ecb.getId(),
                 "status_id", "AUTO_DELETED", "AVAILABLE");
@@ -1647,6 +1649,40 @@ public class EventCrfsApiController {
                                         String actionMessage, String auditTable,
                                         int entityId, String columnName,
                                         String oldValue, String newValue) {
+        writeAuditEvent(dao, auditTypeId, user, study, ss, actionMessage, auditTable,
+                entityId, columnName, oldValue, newValue, null);
+    }
+
+    /**
+     * As above, recording why: {@code reason} goes into
+     * {@code reason_for_change}, which the audit views show beneath the row.
+     * Capped at the column's 1000 characters. A null user writes a NULL
+     * {@code user_id}, the convention for rows no person performed.
+     */
+    public static void writeAuditEvent(AuditEventDAO dao, int auditTypeId,
+                                        UserAccountBean user,
+                                        StudyBean study, StudySubjectBean ss,
+                                        String actionMessage, String auditTable,
+                                        int entityId, String columnName,
+                                        String oldValue, String newValue,
+                                        String reason) {
+        writeAuditEvent(dao, auditTypeId, user, study, ss, actionMessage, auditTable,
+                entityId, columnName, oldValue, newValue, reason, null);
+    }
+
+    /**
+     * As above, recording the visit the row concerns in {@code study_event_id}.
+     * The per-study audit log places rows about things that are not themselves
+     * study records by that column, such as a file filed to or taken off a
+     * visit. Null or not positive leaves it NULL.
+     */
+    public static void writeAuditEvent(AuditEventDAO dao, int auditTypeId,
+                                        UserAccountBean user,
+                                        StudyBean study, StudySubjectBean ss,
+                                        String actionMessage, String auditTable,
+                                        int entityId, String columnName,
+                                        String oldValue, String newValue,
+                                        String reason, Integer studyEventId) {
         // `study`/`ss` are accepted (and intentionally unused on the
         // write path) so callers can keep their existing signatures —
         // study + subject context is reconstructed at read time by
@@ -1658,15 +1694,31 @@ public class EventCrfsApiController {
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
-                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
-                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value, "
+                             + "reason_for_change, study_event_id) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, auditTypeId);
-            ps.setInt(2, user.getId());
+            if (user == null) {
+                ps.setNull(2, java.sql.Types.INTEGER);
+            } else {
+                ps.setInt(2, user.getId());
+            }
             ps.setString(3, auditTable);
             ps.setInt(4, entityId);
             ps.setString(5, columnName == null ? "" : columnName);
             ps.setString(6, oldValue == null ? "" : oldValue);
             ps.setString(7, newValue == null ? "" : newValue);
+            if (reason == null || reason.isBlank()) {
+                ps.setNull(8, java.sql.Types.VARCHAR);
+            } else {
+                String r = reason.trim();
+                ps.setString(8, r.length() > 1000 ? r.substring(0, 1000) : r);
+            }
+            if (studyEventId == null || studyEventId <= 0) {
+                ps.setNull(9, java.sql.Types.INTEGER);
+            } else {
+                ps.setInt(9, studyEventId);
+            }
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.warn("Audit-write failed for {} ({}.{} entity {}) — continuing without audit row: {}",

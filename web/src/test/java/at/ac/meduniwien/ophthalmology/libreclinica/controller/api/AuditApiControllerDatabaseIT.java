@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -138,6 +139,135 @@ class AuditApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                         .session(adminSession(targetStudyId, TARGET_STUDY_OID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(rowAuditId("S_AUDIT_TGT")))));
+    }
+
+    /* ====================================================================== */
+    /* 2026-09-27 — rows placed by what they record                           */
+    /* ====================================================================== */
+
+    /** Demo seed: study 1's visit 3 for M-001, with CRF 3. */
+    private static final int STUDY_ID = 1;
+    private static final String STUDY_OID = "S_DEFAULTS1";
+    private static final int VISIT = 3;
+    private static final int CRF = 3;
+    private static final int NO_SUCH_ID = 987_654_321;
+
+    /**
+     * An auto-tick row (129) holds the file's id where the item's belongs.
+     * It must appear in the study of the CRF it records, and not in a study
+     * where some item happens to share the file's number.
+     */
+    @Test
+    void anAutoTickRowIsPlacedByItsCrfNotByItsNumber() throws Exception {
+        long inItsStudy = insertAudit(129, "item_data", NO_SUCH_ID, "I_AUDIT_IT", null,
+                "1 (from file 1)", CRF, null);
+        long numberMatchesOnly = insertAudit(129, "item_data", anItemOfTheStudy(), "I_AUDIT_IT", null,
+                "1 (from file 2)", NO_SUCH_ID, null);
+        try {
+            mockMvc().perform(get("/api/v1/audit").session(adminSession(STUDY_ID, STUDY_OID)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(inItsStudy))))
+                    .andExpect(jsonPath("$[*].id", not(hasItem(String.valueOf(numberMatchesOnly)))));
+        } finally {
+            deleteAudit(inItsStudy, numberMatchesOnly);
+        }
+    }
+
+    /**
+     * A file filed to or taken off a visit is in that visit's study log, by
+     * the visit column or, for binds written before it, by the visit in the
+     * row's value. A file that was never filed, and a visit elsewhere, are not.
+     */
+    @Test
+    void aFileFiledToAVisitIsInThatVisitsStudyLog() throws Exception {
+        long filed = insertAudit(127, "ingest_item", NO_SUCH_ID, "file #" + NO_SUCH_ID, "UNBOUND",
+                "BOUND;match_policy=manual;study_event_id=" + VISIT, null, VISIT);
+        long filedBefore = insertAudit(127, "ingest_item", NO_SUCH_ID, "status", "UNBOUND",
+                "BOUND;match_policy=worklist;study_event_id=" + VISIT, null, null);
+        long neverFiled = insertAudit(128, "ingest_item", NO_SUCH_ID, "file #" + NO_SUCH_ID, "UNBOUND",
+                "DISMISSED", null, null);
+        long elsewhere = insertAudit(127, "ingest_item", NO_SUCH_ID, "file #" + NO_SUCH_ID, "UNBOUND",
+                "BOUND;match_policy=manual;study_event_id=" + NO_SUCH_ID, null, NO_SUCH_ID);
+        try {
+            mockMvc().perform(get("/api/v1/audit").session(adminSession(STUDY_ID, STUDY_OID)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(filed))))
+                    .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(filedBefore))))
+                    .andExpect(jsonPath("$[*].id", not(hasItem(String.valueOf(neverFiled)))))
+                    .andExpect(jsonPath("$[*].id", not(hasItem(String.valueOf(elsewhere)))))
+                    // Whose visit it was, as the log names it.
+                    .andExpect(jsonPath("$[?(@.id == '" + filed + "')].subjectId",
+                            hasItem(subjectOfVisit(VISIT))));
+        } finally {
+            deleteAudit(filed, filedBefore, neverFiled, elsewhere);
+        }
+    }
+
+    private static long insertAudit(int type, String table, int entityId, String entityName,
+                                    String oldValue, String newValue, Integer eventCrfId,
+                                    Integer studyEventId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, user_id, "
+                             + "audit_table, entity_id, entity_name, old_value, new_value, "
+                             + "event_crf_id, study_event_id) "
+                             + "VALUES (?, NOW(), 1, ?, ?, ?, ?, ?, ?, ?) RETURNING audit_id")) {
+            ps.setInt(1, type);
+            ps.setString(2, table);
+            ps.setInt(3, entityId);
+            ps.setString(4, entityName);
+            ps.setString(5, oldValue);
+            ps.setString(6, newValue);
+            if (eventCrfId == null) ps.setNull(7, java.sql.Types.INTEGER); else ps.setInt(7, eventCrfId);
+            if (studyEventId == null) ps.setNull(8, java.sql.Types.INTEGER); else ps.setInt(8, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    private static void deleteAudit(long... ids) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("DELETE FROM audit_log_event WHERE audit_id = ?")) {
+            for (long id : ids) {
+                ps.setLong(1, id);
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    /** An item_data id that belongs to the study, for the number to collide with. */
+    private static int anItemOfTheStudy() throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT MIN(id.item_data_id) FROM item_data id "
+                             + "JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id "
+                             + "JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                             + "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                             + "WHERE ss.study_id = ?")) {
+            ps.setInt(1, STUDY_ID);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                int id = rs.getInt(1);
+                if (rs.wasNull()) throw new IllegalStateException("the demo seed has no item_data in study 1");
+                return id;
+            }
+        }
+    }
+
+    private static String subjectOfVisit(int studyEventId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ss.label FROM study_event se "
+                             + "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                             + "WHERE se.study_event_id = ?")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
     }
 
     /* ====================================================================== */

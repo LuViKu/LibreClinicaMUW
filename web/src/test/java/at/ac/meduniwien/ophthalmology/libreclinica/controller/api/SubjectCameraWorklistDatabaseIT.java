@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 /**
@@ -106,13 +107,13 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$.offered").value(false))
                 .andExpect(jsonPath("$.today.length()").value(0))
                 .andExpect(jsonPath("$.otherOpen.length()").value(0))
-                .andExpect(jsonPath("$.date").value(LocalDate.now().toString()));
+                .andExpect(jsonPath("$.date").value(ClinicZone.today().toString()));
     }
 
     @Test
     void aVisitScheduledTodayIsOnTheCamerasList() throws Exception {
         receiverConfigured();
-        int id = insertVisit(LocalDate.now(), /* scheduled */ 1);
+        int id = insertVisit(ClinicZone.today(), /* scheduled */ 1);
         try {
             mockMvc().perform(get("/api/v1/subjects/M-001/worklist").session(authenticatedSession()))
                     .andExpect(status().isOk())
@@ -122,7 +123,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
                     .andExpect(jsonPath("$.today[?(@.studyEventId == " + id + ")].status")
                             .value("scheduled"))
                     .andExpect(jsonPath("$.today[?(@.studyEventId == " + id + ")].date")
-                            .value(LocalDate.now().toString()))
+                            .value(ClinicZone.today().toString()))
                     .andExpect(jsonPath("$.otherOpen[?(@.studyEventId == " + id + ")]").isEmpty());
         } finally {
             deleteVisit(id);
@@ -133,7 +134,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void theSubjectOidAddressesTheSameSubject() throws Exception {
         receiverConfigured();
-        int id = insertVisit(LocalDate.now(), 1);
+        int id = insertVisit(ClinicZone.today(), 1);
         try {
             mockMvc().perform(get("/api/v1/subjects/SS_M001/worklist").session(authenticatedSession()))
                     .andExpect(status().isOk())
@@ -152,7 +153,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void aVisitOnAnotherDayIsOpenButNotOnTodaysList() throws Exception {
         receiverConfigured();
-        LocalDate nextWeek = LocalDate.now().plusDays(7);
+        LocalDate nextWeek = ClinicZone.today().plusDays(7);
         int id = insertVisit(nextWeek, 1);
         try {
             mockMvc().perform(get("/api/v1/subjects/M-001/worklist").session(authenticatedSession()))
@@ -170,7 +171,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void aVisitInDataEntryTodayIsStillOnTheList() throws Exception {
         receiverConfigured();
-        int id = insertVisit(LocalDate.now(), /* data entry started */ 3);
+        int id = insertVisit(ClinicZone.today(), /* data entry started */ 3);
         try {
             mockMvc().perform(get("/api/v1/subjects/M-001/worklist").session(authenticatedSession()))
                     .andExpect(status().isOk())
@@ -185,7 +186,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void aCompletedVisitTodayIsNeitherListedNorOpen() throws Exception {
         receiverConfigured();
-        int id = insertVisit(LocalDate.now(), /* completed */ 4);
+        int id = insertVisit(ClinicZone.today(), /* completed */ 4);
         try {
             mockMvc().perform(get("/api/v1/subjects/M-001/worklist").session(authenticatedSession()))
                     .andExpect(status().isOk())
@@ -205,7 +206,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
     void aStudyOutsideTheCamerasScopeIsNotOffered() throws Exception {
         receiverConfigured();
         LIVE_DATAINFO.setProperty(SCOPE_KEY, "S_RIS_DEMO");
-        int id = insertVisit(LocalDate.now(), 1);
+        int id = insertVisit(ClinicZone.today(), 1);
         try {
             mockMvc().perform(get("/api/v1/subjects/M-001/worklist").session(authenticatedSession()))
                     .andExpect(status().isOk())
@@ -220,7 +221,7 @@ class SubjectCameraWorklistDatabaseIT extends AbstractApiControllerDatabaseIT {
     void aStudyInsideTheCamerasScopeIsOffered() throws Exception {
         receiverConfigured();
         LIVE_DATAINFO.setProperty(SCOPE_KEY, "S_RIS_DEMO, " + studyOid(1));
-        int id = insertVisit(LocalDate.now(), 1);
+        int id = insertVisit(ClinicZone.today(), 1);
         try {
             mockMvc().perform(get("/api/v1/subjects/M-001/worklist").session(authenticatedSession()))
                     .andExpect(status().isOk())

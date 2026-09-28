@@ -6,7 +6,7 @@ import SelectInput from '@/components/SelectInput.vue'
 import Timeline from '@/components/Timeline.vue'
 import TimelineMarker from '@/components/TimelineMarker.vue'
 import TimelineEvent from '@/components/TimelineEvent.vue'
-import DiffCard from '@/components/DiffCard.vue'
+import AuditValueChange from '@/components/audit/AuditValueChange.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import SystemRail from '@/components/SystemRail.vue'
 
@@ -85,7 +85,7 @@ function toggle(id: string): void {
 }
 function isExpanded(id: string): boolean { return expanded.value.has(id) }
 function hasExpandable(ev: AuditEvent): boolean {
-  return (ev.before != null && ev.after != null)
+  return ev.before != null || ev.after != null
     || (ev.details != null && ev.details !== '')
     || (ev.reason != null && ev.reason !== '')
 }
@@ -192,10 +192,7 @@ function hasExpandable(ev: AuditEvent): boolean {
             :id="`sysaudit-${ev.id}-body`"
             class="mt-2 space-y-2"
           >
-            <DiffCard v-if="ev.before != null && ev.after != null">
-              <template #before>{{ ev.before }}</template>
-              <template #after>{{ ev.after }}</template>
-            </DiffCard>
+            <AuditValueChange :before="ev.before" :after="ev.after" />
             <p v-if="ev.reason" class="text-xs text-slate-600 italic">&ldquo;{{ ev.reason }}&rdquo;</p>
           </div>
         </TimelineEvent>

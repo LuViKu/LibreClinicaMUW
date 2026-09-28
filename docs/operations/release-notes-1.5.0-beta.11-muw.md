@@ -81,8 +81,13 @@ Two per-study settings are new or now enforced, under **Studienaufbau → Plattf
 ## Upgrading the app VM
 
 1. **Back up** the database and the file stores; `deploy/dry-run-migration.sh` rehearses the three migration files against last night's dump.
-2. **Roll the image** through the setup script: `sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --image-tag 1.5.0-beta.11-muw` (with `--dicom` if a camera speaks DICOM to this host). Expect one *re-running the new copy* line on this first run; the tag is not touched otherwise.
-3. **After start**, glance at `docker logs`: the JDBC transcript is gone, and a malformed log policy would show here first.
+2. **Pin the image and restart.** The setup script pins the tag and appends new keys but **does not restart the stack**; the restart is what pulls the new images and runs the migrations:
+   ```sh
+   sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --image-tag 1.5.0-beta.11-muw   # --dicom too, if a camera speaks DICOM here
+   sudo systemctl restart libreclinica
+   ```
+   Expect one *re-running the new copy* line on this first run of the script; the tag is not touched otherwise.
+3. **After the restart**, glance at `docker logs`: the JDBC transcript is gone, and a malformed log policy would show here first.
 4. **Update the device scripts** on every acquisition PC: the Export Watcher on the Clarus and Spectralis PCs (the beta.10 copy does not start on Windows), the Optomed Bridge on its PC. Each appears on **System → Systemstatus** within two minutes; `ExportWatcher.ps1 -Heartbeat` and `OptomedBridge.ps1 -Heartbeat` check it by hand.
 5. **HealthAEye:** to let the treating physicians see the AI output, set *KI-Verblindung für Behandler* to *Aus* in its Plattform-Einstellungen. To give its visits per-modality inference, fill *Expected imaging* on its visit definitions; until then its OCT tasks run from the old list.
 

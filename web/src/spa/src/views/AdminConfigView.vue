@@ -17,6 +17,8 @@ const { t } = useI18n()
 
 interface AdminConfig {
   defaultTimezone: string
+  /** Absent from backends before the clinic zone existed. */
+  clinicZone?: string | null
   userLanguage: string | null
   userCountry: string | null
   fileEncoding: string | null
@@ -73,6 +75,7 @@ onMounted(load)
     <dl v-if="data" class="text-xs bg-white rounded-md border border-slate-200 divide-y divide-slate-100">
       <div v-for="(entry, i) in [
         { k: 'adminConfig.defaultTimezone',    v: data.defaultTimezone },
+        { k: 'adminConfig.clinicZone',         v: data.clinicZone },
         { k: 'adminConfig.userLanguage',       v: data.userLanguage },
         { k: 'adminConfig.userCountry',        v: data.userCountry },
         { k: 'adminConfig.fileEncoding',       v: data.fileEncoding },

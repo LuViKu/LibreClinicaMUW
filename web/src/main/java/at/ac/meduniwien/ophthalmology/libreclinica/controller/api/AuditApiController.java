@@ -93,9 +93,17 @@ import org.springframework.web.bind.annotation.RestController;
  *       moved between treatment-arm groups; lets the SPA render the
  *       before/after group labels separately from generic admin
  *       events). Phase E.5 #2 promoted these out of the admin bucket.</li>
+ *   <li>140 → {@code reason-for-change}; 137-139 → {@code data}</li>
  *   <li>any row with non-blank {@code reason_for_change} → {@code
- *       reason-for-change} (overrides the type mapping)</li>
+ *       reason-for-change} (overrides the type mapping), except rows about
+ *       an ingested file, whose reason is a dismissal's</li>
  * </ul>
+ *
+ * <p>Since 2026-09-27 each row is labelled by what it records
+ * ({@link AuditRowLabels#effectiveType}), not by its id alone: 11, 27 and
+ * 128 were written with two meanings each. Visit and ingest rows name their
+ * subject and visit, ingest rows their file, and failures their operation
+ * and error ({@link AuditRowContext}).
  *
  * <p>Server-side filters narrow by actor / variant / subjectId so
  * the response stays small on noisy studies. The SPA additionally
@@ -166,7 +174,9 @@ public class AuditApiController {
             -- audit_log_event_type lookup join (NULL type id) visible.
             WHERE COALESCE(alet.is_user_visible, true) = true
             AND (
-              ( a.audit_table = 'item_data' AND a.entity_id IN (
+              ( a.audit_table = 'item_data'
+                AND a.audit_log_event_type_id IS DISTINCT FROM 129
+                AND a.entity_id IN (
                   SELECT id.item_data_id FROM item_data id
                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
                     JOIN study_event se ON se.study_event_id = ec.study_event_id
@@ -209,10 +219,42 @@ public class AuditApiController {
                   SELECT transition_id FROM eye_cohort_transition
                   WHERE source_study_id IN __IN__
                      OR target_study_id IN __IN__))
+              -- 2026-09-27: auto-tick rows (129) sit on item_data but hold
+              -- the ingest file's id as entity_id, so the item_data branch
+              -- matched them to whichever item shared that number, in any
+              -- study. They are placed by the CRF they record instead, which
+              -- also covers every such row already written.
+              OR ( a.audit_log_event_type_id = 129 AND a.event_crf_id IN (
+                  SELECT ec.event_crf_id FROM event_crf ec
+                    JOIN study_event se ON se.study_event_id = ec.study_event_id
+                    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
+                  WHERE ss.study_id IN __IN__))
+              -- 2026-09-27: a file filed to or taken off a visit changes
+              -- that visit's source data, so the row belongs in the visit's
+              -- study. Binds, unbinds and the analysis jobs following a file
+              -- record the visit in study_event_id; camera and upload binds
+              -- written before that recorded it only in new_value. A row
+              -- about a file that was never filed (dismissal, restore) names
+              -- no visit and stays in the system log.
+              OR ( a.audit_table = 'ingest_item' AND COALESCE(a.study_event_id,
+                    CAST(substring(a.new_value
+                         FROM '(?:^|;)study_event_id=([0-9]{1,9})(?:;|$)') AS integer)) IN (
+                  SELECT se.study_event_id FROM study_event se
+                    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
+                  WHERE ss.study_id IN __IN__))
             )
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
+
+    /** How many visibility IN-lists the per-study template has; each binds the visible ids. */
+    static final int STUDY_SCOPED_IN_SLOTS = countOccurrences(STUDY_SCOPED_AUDIT_SQL_TEMPLATE, "__IN__");
+
+    private static int countOccurrences(String text, String token) {
+        int n = 0;
+        for (int i = text.indexOf(token); i >= 0; i = text.indexOf(token, i + token.length())) n++;
+        return n;
+    }
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
@@ -407,92 +449,13 @@ public class AuditApiController {
     private List<AuditEventDto> collectSystemWideRows(
             String actorFilter, String variantFilter, String subjectIdFilter)
             throws SQLException {
-
-        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
-        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
-        ItemDAO itemDao = new ItemDAO(dataSource);
-        Map<Integer, String> ssLabelCache = new HashMap<>();
-        Map<Integer, Integer> subjectToStudySubjectCache = new HashMap<>();
-        Map<Integer, EventCRFBean> ecCache = new HashMap<>();
-        Map<Integer, ItemDataBean> itemDataCache = new HashMap<>();
-        Map<Integer, ItemBean> itemCache = new HashMap<>();
-
-        List<AuditEventDto> out = new ArrayList<>();
+        List<AuditRowContext.Row> rows = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(SYSTEM_WIDE_AUDIT_SQL);
              ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                Integer auditId = rs.getInt("audit_id");
-                Timestamp ts = rs.getTimestamp("audit_date");
-                String auditTable = rs.getString("audit_table");
-                int entityId = rs.getInt("entity_id");
-                String entityName = rs.getString("entity_name");
-                int eventCrfId = rs.getInt("event_crf_id");
-                int typeId = rs.getInt("audit_log_event_type_id");
-                String oldVal = rs.getString("old_value");
-                String newVal = rs.getString("new_value");
-                String reason = rs.getString("reason_for_change");
-                String userName = rs.getString("user_name");
-                String typeName = rs.getString("type_name");
-                String typeDisplay = rs.getString("type_display_name");
-
-                String variant = variantForType(typeId, reason);
-                String actor = (userName == null || userName.isBlank()) ? "system" : userName;
-                String title;
-                if (typeDisplay != null && !typeDisplay.isBlank()) {
-                    title = typeDisplay;
-                } else if (typeName != null && !typeName.isBlank()) {
-                    title = typeName;
-                } else {
-                    title = "Audit event #" + auditId;
-                }
-
-                String subjectLabel = resolveSubjectLabel(
-                        auditTable, entityId, eventCrfId,
-                        ssDao, ecDao, ssLabelCache, subjectToStudySubjectCache, ecCache);
-                String scope = resolveScope(
-                        auditTable, entityId, eventCrfId,
-                        itemDataDao, itemDao, itemDataCache, itemCache);
-
-                if (actorFilter != null && !actorFilter.isBlank()
-                        && !actorFilter.equalsIgnoreCase(actor)) continue;
-                if (variantFilter != null && !variantFilter.isBlank()
-                        && !variantFilter.equalsIgnoreCase(variant)) continue;
-                if (subjectIdFilter != null && !subjectIdFilter.isBlank()
-                        && (subjectLabel == null || !subjectIdFilter.equalsIgnoreCase(subjectLabel)))
-                    continue;
-
-                String occurredAt = ts == null ? null
-                        : ts.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
-
-                String prettyOld = prettifyValue(auditTable, typeName, oldVal);
-                String prettyNew = prettifyValue(auditTable, typeName, newVal);
-
-                String details = null;
-                if (("study".equalsIgnoreCase(auditTable)
-                        || "user_account".equalsIgnoreCase(auditTable)
-                        || "dataset".equalsIgnoreCase(auditTable))
-                        && entityName != null && !entityName.isBlank()) {
-                    details = entityName;
-                }
-
-                out.add(new AuditEventDto(
-                        String.valueOf(auditId),
-                        occurredAt,
-                        variant,
-                        actor,
-                        /* actorRole */ null,
-                        title,
-                        subjectLabel,
-                        scope,
-                        details,
-                        blankToNull(prettyOld),
-                        blankToNull(prettyNew),
-                        blankToNull(reason)));
-            }
+            while (rs.next()) rows.add(AuditRowContext.Row.read(rs));
         }
-        return out;
+        return toDtos(rows, actorFilter, variantFilter, subjectIdFilter);
     }
 
     /**
@@ -521,7 +484,44 @@ public class AuditApiController {
         String inClause = buildInClause(visibleStudyIds.size());
         String sql = STUDY_SCOPED_AUDIT_SQL_TEMPLATE.replace("__IN__", inClause);
 
-        // Caches for the per-row subject/item resolution.
+        List<AuditRowContext.Row> rows = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            // One IN-clause slot per branch × n ids each (item_data, event_crf,
+            // study_subject, subject, study_event, study, dataset,
+            // eye_cohort_transition[source], eye_cohort_transition[target],
+            // auto-tick CRF, ingest visit) —
+            // the study branch was added Phase E.6 / 2026-06-03 for
+            // identity edits, dataset added Phase E.6 / 2026-06-05
+            // for dataset-export audit events, eye_cohort_transition
+            // added Phase E.6 follow-up 2026-06-11 (two slots — the
+            // row is visible from BOTH source-study and target-study
+            // side, so the WHERE clause ORs the two IN tests).
+            // The count comes from the template, so adding a branch cannot
+            // leave a slot unbound.
+            int bindIdx = 1;
+            for (int branch = 0; branch < STUDY_SCOPED_IN_SLOTS; branch++) {
+                for (Integer sid : visibleStudyIds) {
+                    ps.setInt(bindIdx++, sid);
+                }
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) rows.add(AuditRowContext.Row.read(rs));
+            }
+        }
+        return toDtos(rows, actorFilter, variantFilter, subjectIdFilter);
+    }
+
+    /**
+     * Rows to DTOs, shared by both collectors: label each row by what it
+     * records, resolve its subject, visit and file, prettify its values, and
+     * apply the actor / variant / subject filters. Subject and scope lookups
+     * that existed before stay as they were; the rest fills what they left
+     * empty.
+     */
+    private List<AuditEventDto> toDtos(List<AuditRowContext.Row> rows,
+                                       String actorFilter, String variantFilter, String subjectIdFilter)
+            throws SQLException {
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         EventCRFDAO ecDao = new EventCRFDAO(dataSource);
         ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
@@ -531,132 +531,142 @@ public class AuditApiController {
         Map<Integer, EventCRFBean> ecCache = new HashMap<>();
         Map<Integer, ItemDataBean> itemDataCache = new HashMap<>();
         Map<Integer, ItemBean> itemCache = new HashMap<>();
-
-        List<AuditEventDto> out = new ArrayList<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            // 9 IN-clause slots × n ids each (item_data, event_crf,
-            // study_subject, subject, study_event, study, dataset,
-            // eye_cohort_transition[source], eye_cohort_transition[target]) —
-            // the study branch was added Phase E.6 / 2026-06-03 for
-            // identity edits, dataset added Phase E.6 / 2026-06-05
-            // for dataset-export audit events, eye_cohort_transition
-            // added Phase E.6 follow-up 2026-06-11 (two slots — the
-            // row is visible from BOTH source-study and target-study
-            // side, so the WHERE clause ORs the two IN tests).
-            int bindIdx = 1;
-            for (int branch = 0; branch < 9; branch++) {
-                for (Integer sid : visibleStudyIds) {
-                    ps.setInt(bindIdx++, sid);
-                }
-            }
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    Integer auditId = rs.getInt("audit_id");
-                    Timestamp ts = rs.getTimestamp("audit_date");
-                    String auditTable = rs.getString("audit_table");
-                    int entityId = rs.getInt("entity_id");
-                    String entityName = rs.getString("entity_name");
-                    int eventCrfId = rs.getInt("event_crf_id");
-                    int typeId = rs.getInt("audit_log_event_type_id");
-                    String oldVal = rs.getString("old_value");
-                    String newVal = rs.getString("new_value");
-                    String reason = rs.getString("reason_for_change");
-                    String userName = rs.getString("user_name");
-                    String typeName = rs.getString("type_name");
-                    String typeDisplay = rs.getString("type_display_name");
-
-                    String variant = variantForType(typeId, reason);
-                    String actor = (userName == null || userName.isBlank()) ? "system" : userName;
-                    // A5 — prefer the curated display name when available;
-                    // fall back to the legacy `name` column (lowercase
-                    // snake-case keys) for any type without a display row.
-                    String title;
-                    if (typeDisplay != null && !typeDisplay.isBlank()) {
-                        title = typeDisplay;
-                    } else if (typeName != null && !typeName.isBlank()) {
-                        title = typeName;
-                    } else {
-                        title = "Audit event #" + auditId;
-                    }
-
-                    String subjectLabel = resolveSubjectLabel(
-                            auditTable, entityId, eventCrfId,
-                            ssDao, ecDao, ssLabelCache, subjectToStudySubjectCache, ecCache);
-                    String scope = resolveScope(
-                            auditTable, entityId, eventCrfId,
-                            itemDataDao, itemDao, itemDataCache, itemCache);
-
-                    // Apply server-side filters before serialising.
-                    if (actorFilter != null && !actorFilter.isBlank()
-                            && !actorFilter.equalsIgnoreCase(actor)) continue;
-                    if (variantFilter != null && !variantFilter.isBlank()
-                            && !variantFilter.equalsIgnoreCase(variant)) continue;
-                    if (subjectIdFilter != null && !subjectIdFilter.isBlank()
-                            && (subjectLabel == null || !subjectIdFilter.equalsIgnoreCase(subjectLabel)))
-                        continue;
-
-                    String occurredAt = ts == null ? null
-                            : ts.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
-
-                    // A5 — prettify the raw before/after columns.
-                    // Status-code mapping is keyed on (audit_table,
-                    // type_name) because entity_name (the audit row's
-                    // column-name marker) isn't a separate DB column —
-                    // the trigger packs it into `name` for legacy rows
-                    // and into the type_name we already fetched.
-                    String prettyOld = prettifyValue(auditTable, typeName, oldVal);
-                    String prettyNew = prettifyValue(auditTable, typeName, newVal);
-
-                    // Phase E.6 (2026-06-03): for study-identity edits (and
-                    // user-profile edits — type 50, written via
-                    // MeApiController.emitProfileAudit) the row's entity_name
-                    // holds the column key that changed. Surface it as
-                    // `details` so operators can tell at a glance whether
-                    // "name", "sponsor", "principalInvestigator" etc. changed
-                    // without having to compare the before/after strings.
-                    // Phase E.6 (2026-06-05): dataset rows reuse this slot
-                    // for their study/dataset label written by
-                    // ExportAuditService.emitExportAudit ("Study X/CRF
-                    // Dataset Y") so the SPA timeline shows the right
-                    // export context.
-                    String details = null;
-                    if (("study".equalsIgnoreCase(auditTable)
-                            || "user_account".equalsIgnoreCase(auditTable)
-                            || "dataset".equalsIgnoreCase(auditTable))
-                            && entityName != null && !entityName.isBlank()) {
-                        details = entityName;
-                    }
-
-                    out.add(new AuditEventDto(
-                            String.valueOf(auditId),
-                            occurredAt,
-                            variant,
-                            actor,
-                            /* actorRole */ null,
-                            title,
-                            subjectLabel,
-                            scope,
-                            details,
-                            blankToNull(prettyOld),
-                            blankToNull(prettyNew),
-                            blankToNull(reason)));
-                }
-            }
+        AuditRowContext context;
+        try {
+            context = AuditRowContext.load(dataSource, rows);
+        } catch (SQLException e) {
+            // The rows themselves loaded; show them as before rather than
+            // failing the page over the extra context.
+            LOG.warn("Audit log: visit / file / type context unavailable: {}", e.getMessage());
+            context = AuditRowContext.empty();
         }
 
+        List<AuditEventDto> out = new ArrayList<>();
+        for (AuditRowContext.Row r : rows) {
+            String auditTable = r.auditTable();
+            int typeId = r.typeId();
+            // A row written under an id that meant something else at the
+            // time reads as the type it records (AuditRowLabels).
+            int effectiveType = AuditRowLabels.effectiveType(typeId, auditTable,
+                    r.entityName(), r.oldValue(), r.newValue());
+            String variant = AuditRowLabels.variant(effectiveType, auditTable, r.reason());
+            String actor = (r.userName() == null || r.userName().isBlank()) ? "system" : r.userName();
+            String title = titleFor(r, effectiveType, context);
+
+            String subjectLabel = resolveSubjectLabel(
+                    auditTable, r.entityId(), r.eventCrfId(),
+                    ssDao, ecDao, ssLabelCache, subjectToStudySubjectCache, ecCache);
+            String scope;
+            if (typeId == AuditTypeIds.IMAGE_PERFORMED_AUTOTICK) {
+                // The auto-tick row sits on item_data but holds the file's id
+                // where the item_data id belongs; its entity name is the item.
+                scope = blankToNull(r.entityName());
+            } else {
+                scope = resolveScope(auditTable, r.entityId(), r.eventCrfId(),
+                        itemDataDao, itemDao, itemDataCache, itemCache);
+            }
+            // Visit rows and ingest rows name a visit; show whose and which.
+            AuditRowContext.Visit visit = context.visit(r.visitId());
+            if (visit != null) {
+                if (subjectLabel == null) subjectLabel = visit.subjectLabel();
+                if (scope == null) scope = visit.label();
+            }
+
+            // Apply server-side filters before serialising.
+            if (actorFilter != null && !actorFilter.isBlank()
+                    && !actorFilter.equalsIgnoreCase(actor)) continue;
+            if (variantFilter != null && !variantFilter.isBlank()
+                    && !variantFilter.equalsIgnoreCase(variant)) continue;
+            if (subjectIdFilter != null && !subjectIdFilter.isBlank()
+                    && (subjectLabel == null || !subjectIdFilter.equalsIgnoreCase(subjectLabel)))
+                continue;
+
+            Timestamp ts = r.auditDate();
+            String occurredAt = ts == null ? null
+                    : ts.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+
+            String before;
+            String after;
+            if (AuditRowLabels.isFailure(typeId)) {
+                // The error is packed as class|message|request id.
+                before = null;
+                after = AuditRowLabels.formatFailure(r.newValue());
+            } else {
+                // A5 — prettify the raw before/after columns, keyed on the
+                // row's column marker (entity_name).
+                before = blankToNull(prettifyValue(typeId, auditTable, r.entityName(), r.oldValue()));
+                after = blankToNull(prettifyValue(typeId, auditTable, r.entityName(), r.newValue()));
+            }
+
+            out.add(new AuditEventDto(
+                    String.valueOf(r.auditId()),
+                    occurredAt,
+                    variant,
+                    actor,
+                    /* actorRole */ null,
+                    title,
+                    subjectLabel,
+                    scope,
+                    detailsFor(r, context),
+                    before,
+                    after,
+                    blankToNull(r.reason())));
+        }
         return out;
+    }
+
+    /**
+     * The row's title: its own type's display name, unless it records another
+     * type ({@link AuditRowLabels#effectiveType}); then that type's.
+     */
+    private static String titleFor(AuditRowContext.Row r, int effectiveType, AuditRowContext context) {
+        if (effectiveType != r.typeId()) {
+            String recorded = context.typeTitle(effectiveType);
+            if (recorded != null) return recorded;
+        }
+        if (r.typeDisplay() != null && !r.typeDisplay().isBlank()) return r.typeDisplay();
+        if (r.typeName() != null && !r.typeName().isBlank()) return r.typeName();
+        return "Audit event #" + r.auditId();
+    }
+
+    /**
+     * The short line shown next to the title.
+     *
+     * <ul>
+     *   <li>Study, user and dataset rows: the entity name, which holds the
+     *       changed column or the export label (Phase E.6).</li>
+     *   <li>Failures: the operation that failed.</li>
+     *   <li>Ingest rows: the file's reference. Rows written before the
+     *       reference was recorded hold a bare column marker; for those it is
+     *       read from the file while the file exists.</li>
+     * </ul>
+     */
+    private static String detailsFor(AuditRowContext.Row r, AuditRowContext context) {
+        String entityName = r.entityName();
+        if (AuditRowLabels.isFailure(r.typeId())) return blankToNull(entityName);
+        if (r.on("ingest_item")) {
+            if (!AuditRowLabels.isBareMarker(entityName)) return entityName.trim();
+            return r.entityId() > 0 ? context.file(r.entityId()) : null;
+        }
+        if ((r.on("study") || r.on("user_account") || r.on("dataset"))
+                && entityName != null && !entityName.isBlank()) {
+            return entityName;
+        }
+        return null;
     }
 
     /* ----------------------------------------------------------------- */
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
 
-    private static String variantForType(int typeId, String reasonForChange) {
+    static String variantForType(int typeId, String reasonForChange) {
         if (reasonForChange != null && !reasonForChange.isBlank()) {
             return "reason-for-change";
         }
         return switch (typeId) {
+            // A reason-for-change note carries its reason (140, since
+            // 2026-09-27); rows written before read as 140 too.
+            case 140 -> "reason-for-change";
             case 31 -> "signed";
             case 32 -> "sdv";
             // Subject-group-map lifecycle (types 28 + 29 — "added to
@@ -706,6 +716,9 @@ public class AuditApiController {
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
                  17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
                  30, 35, 40, 41,
+            // CRF reopened (138) and restored (139), a dismissed file
+            // restored (137) — 2026-09-27.
+                 137, 138, 139,
             // Eye-cohort transition (57) — per-subject clinical event,
             // not admin config. Discrepancy-note threading + create
             // (71-74) and the subject-demographics update (100) also
@@ -798,8 +811,8 @@ public class AuditApiController {
      * <p>Two passes:
      * <ol>
      *   <li>Status-code mapping. Keyed on {@code (audit_table,
-     *       type_name)} where {@code type_name} is the legacy
-     *       lowercase snake-case key set by the trigger. Numeric
+     *       marker)} where {@code marker} is the row's column marker,
+     *       {@code entity_name}, as the trigger writes it. Numeric
      *       status ids ({@code "1"}, {@code "8"}, etc.) become human
      *       labels ({@code "Available"}, {@code "Signed"}, etc.).</li>
      *   <li>Boolean prettification. Raw {@code "TRUE"}/{@code "FALSE"}
@@ -809,9 +822,9 @@ public class AuditApiController {
      * <p>Anything outside both mapping tables falls through unchanged
      * (e.g. ISO dates, free-text fields).
      */
-    static String prettifyValue(String auditTable, String typeName, String raw) {
+    static String prettifyValue(String auditTable, String marker, String raw) {
         if (raw == null) return null;
-        String mapped = mapStatusCode(auditTable, typeName, raw);
+        String mapped = mapStatusCode(auditTable, marker, raw);
         if (mapped != null) return mapped;
         // Boolean prettification — strip whitespace before comparing
         // because some triggers emit padded strings.
@@ -822,8 +835,36 @@ public class AuditApiController {
     }
 
     /**
+     * As {@link #prettifyValue(String, String, String)}, knowing the row's
+     * type. A visit's {@code Status} marker means two different status sets:
+     * the heritage trigger writes the removal (23) and restore (35) of a visit
+     * with its entity status, and every other visit status change with its
+     * subject-event status. A newly scheduled visit's previous status is
+     * written as {@code 0}, which means none.
+     *
+     * <p>The marker is the row's {@code entity_name}. Until 2026-09-27 the
+     * callers passed the type's name here, which never equals
+     * {@code "Status"}, so visit, CRF and subject status changes were shown
+     * as raw numbers.
+     */
+    static String prettifyValue(int typeId, String auditTable, String marker, String raw) {
+        if (raw == null) return null;
+        if ("study_event".equalsIgnoreCase(auditTable) && marker != null
+                && "Status".equalsIgnoreCase(marker.trim())) {
+            String t = raw.trim();
+            if (typeId == 23 || typeId == 35) {
+                String entityStatus = mapEntityStatus(t);
+                if (entityStatus != null) return entityStatus;
+            } else if ("0".equals(t)) {
+                return "";
+            }
+        }
+        return prettifyValue(auditTable, marker, raw);
+    }
+
+    /**
      * Map a raw status-id string to its human label per the
-     * (audit_table, type_name) pair. Returns {@code null} when no
+     * (audit_table, column marker) pair. Returns {@code null} when no
      * mapping applies — caller falls back to the raw value.
      *
      * <p>Status id sets:
@@ -838,9 +879,9 @@ public class AuditApiController {
      *       → "SDV complete" / "SDV pending".</li>
      * </ul>
      */
-    static String mapStatusCode(String auditTable, String typeName, String raw) {
-        if (auditTable == null || typeName == null || raw == null) return null;
-        String t = typeName.trim();
+    static String mapStatusCode(String auditTable, String marker, String raw) {
+        if (auditTable == null || marker == null || raw == null) return null;
+        String t = marker.trim();
         // EventCRF SDV Status — true/false mapping rather than numeric.
         if ("event_crf".equalsIgnoreCase(auditTable) && "EventCRF SDV Status".equalsIgnoreCase(t)) {
             String r = raw.trim();

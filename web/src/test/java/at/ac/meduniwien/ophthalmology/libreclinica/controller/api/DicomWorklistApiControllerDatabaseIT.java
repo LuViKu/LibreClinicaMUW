@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.LocalDate;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 /**
@@ -153,7 +153,7 @@ class DicomWorklistApiControllerDatabaseIT extends AbstractApiControllerDatabase
     /** No params → today only; the demo seed has no visit today, so it is empty but well-formed. */
     @Test
     void worklist_withoutParams_defaultsToToday() throws Exception {
-        String today = LocalDate.now().toString();
+        String today = ClinicZone.today().toString();
         mockMvc().perform(get("/api/v1/internal/dicom-worklist")
                 .header("X-MUW-Dicom-Token", TOKEN))
                 .andExpect(status().isOk())
@@ -235,7 +235,7 @@ class DicomWorklistApiControllerDatabaseIT extends AbstractApiControllerDatabase
     /** Unparseable dates fall back to the default window instead of 400/500. */
     @Test
     void worklist_garbageDates_fallBackToToday() throws Exception {
-        String today = LocalDate.now().toString();
+        String today = ClinicZone.today().toString();
         mockMvc().perform(get("/api/v1/internal/dicom-worklist")
                 .param("from", "not-a-date").param("to", "also-not")
                 .header("X-MUW-Dicom-Token", TOKEN))
