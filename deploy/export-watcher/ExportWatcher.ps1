@@ -59,10 +59,13 @@
   and pseudonymous labels are ever logged - never names, dates of birth or
   filenames (an export is often named after the patient).
 
-  What stays on the PC: the exports themselves, moved aside but never
-  deleted, and for Clarus those carry the patient's name in the header until
-  the platform pseudonymises its copy on ingest. Retention there is a local
-  decision, as for the Optomed Client's Studies\ folder.
+  What stays on the PC: the exports themselves, moved into _uploaded\ and
+  kept there until the retention setting removes them. That is off by
+  default: nothing is deleted unless someone switches it on in Settings and
+  says after how many days. A Clarus export carries the patient's name in
+  its header until the platform pseudonymises its copy on ingest, which is
+  the reason to switch it on; the device keeps the original capture and the
+  platform the pseudonymised copy. _skipped\ and _failed\ are never touched.
 
 .PARAMETER Once
   Headless: run one sweep against the configured folder and exit with a
@@ -111,7 +114,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 $script:AppName     = 'Export Watcher'
 # Shown on the System Status page beside this PC's name. Bump with every
 # change to this script, so a PC still running an old copy stands out.
-$script:Version     = '2026-09-24.2'
+$script:Version     = '2026-09-28.1'
 $script:Kind        = 'export-watcher'
 $script:StateDir    = Split-Path -Parent $ConfigPath
 $script:LogPath     = Join-Path $script:StateDir 'export-watcher.log'
@@ -125,6 +128,9 @@ $script:NonImageSopPrefixes = @('1.2.840.10008.5.1.4.1.1.66', '1.2.840.10008.5.1
                                 '1.2.840.10008.5.1.4.1.1.11.', '1.2.840.10008.5.1.4.1.1.104.')
 $script:MaxAttempts = 5
 $script:LastBalloon = [datetime]::MinValue
+# retention of uploaded exports: runs at most once an hour (see Invoke-Retention)
+$script:LastRetentionUtc = [datetime]::MinValue
+$script:RetentionEveryMinutes = 60
 # path -> size seen at the previous sweep; a file is settled when it matches.
 $script:SizeSeen    = @{}
 # path -> failed attempts this session.
@@ -158,6 +164,11 @@ function Get-DefaultConfig {
         DeviceE2e      = 'spectralis'  # on an .e2e upload (OCT_SPECTRALIS and the Spectralis image rows)
         UploadNonImage = $false       # also upload Raw Data / report objects (see 'identify' above)
         Enabled        = $false
+        # Retention of uploaded exports (2026-09-28). Off by default: nothing
+        # is deleted unless a person switches it on, here or in Settings, and
+        # says after how many days. Only _uploaded\ is ever touched.
+        DeleteUploaded = $false
+        DeleteUploadedAfterDays = 30
         # DR-033 - the System Status page. InstanceId is generated on first
         # start and identifies this installation's row: keep it with the
         # settings file, never copy it to another PC. DisplayName blank =
@@ -653,8 +664,46 @@ function Test-Settled([IO.FileInfo]$f) {
 function Move-Aside([IO.FileInfo]$f, [string]$sub) {
     $dest = Join-Path $f.DirectoryName $sub
     if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Force $dest | Out-Null }
-    Move-Item -Force $f.FullName (Join-Path $dest $f.Name)
+    $target = Join-Path $dest $f.Name
+    Move-Item -Force $f.FullName $target
+    if ($sub -eq $script:UploadedDir) {
+        # Stamp the copy with the upload time; the retention counts from it.
+        # The export date is inside the file, and a copy that has served its
+        # purpose has no other use for its timestamp.
+        try { (Get-Item -LiteralPath $target).LastWriteTimeUtc = [datetime]::UtcNow } catch { }
+    }
     $script:SizeSeen.Remove($f.FullName); $script:Attempts.Remove($f.FullName)
+}
+
+# ----------------------------------------------------------------------------
+# retention of uploaded exports (2026-09-28)
+# ----------------------------------------------------------------------------
+# With DeleteUploaded on, deletes the files in _uploaded\ that were uploaded
+# more than DeleteUploadedAfterDays ago: only that folder, only its top level,
+# only .dcm and .e2e files. The upload time is the copy's modification time,
+# which Move-Aside stamps; a copy from before this version carries the
+# export's own time, which is earlier, so it goes no later than it should.
+# At most once an hour: _uploaded\ can hold a year of exports, and listing it
+# every twenty seconds is what Get-WatchedFiles avoids. Counts only in the
+# log, never a filename.
+function Invoke-Retention([pscustomobject]$cfg) {
+    if (-not [bool]$cfg.DeleteUploaded) { return }
+    $days = [int]$cfg.DeleteUploadedAfterDays
+    if ($days -lt 1) { Write-Log 'retention: DeleteUploadedAfterDays must be at least 1; nothing deleted' 'WARN'; return }
+    $now = [datetime]::UtcNow
+    if (($now - $script:LastRetentionUtc).TotalMinutes -lt $script:RetentionEveryMinutes) { return }
+    $script:LastRetentionUtc = $now
+    $dir = Join-Path $cfg.WatchFolder $script:UploadedDir
+    if (-not (Test-Path -LiteralPath $dir)) { return }
+    $cutoff = $now.AddDays(-$days)
+    $deleted = 0; $failed = 0; $kept = 0
+    foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '^\.(dcm|e2e)$' })) {
+        if ($f.LastWriteTimeUtc -ge $cutoff) { $kept++; continue }
+        try { Remove-Item -LiteralPath $f.FullName -Force; $deleted++ } catch { $failed++ }
+    }
+    if ($deleted -gt 0 -or $failed -gt 0) {
+        Write-Log ("retention: deleted {0} uploaded export(s) older than {1} day(s); {2} kept, {3} could not be deleted" -f $deleted, $days, $kept, $failed)
+    }
 }
 
 # The problems the heartbeat reports are those of the last sweep: rebuilt on
@@ -677,6 +726,7 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
         Write-Log "sweep: watch folder missing: $root" 'ERROR'
         return 'watch folder missing'
     }
+    try { Invoke-Retention $cfg } catch { Write-Log "retention: $($_.Exception.Message)" 'WARN' }
     $files = @((Get-WatchedFiles $root).Pending)
     if ($files.Count -eq 0) { return 'nothing to upload' }
     $ready = @($files | Where-Object { Test-Settled $_ })
@@ -886,7 +936,7 @@ $exitItem.Add_Click({ Send-StopHeartbeat $script:Cfg 'exit'; $tray.Visible = $fa
 $settingsItem.Add_Click({
     $f = New-Object Windows.Forms.Form
     $f.Text = "$script:AppName - Settings"; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedDialog'
-    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 300
+    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 368
 
     $y = 14
     function Add-Row([string]$label, [Windows.Forms.Control]$ctl) {
@@ -901,6 +951,9 @@ $settingsItem.Add_Click({
     $tbE2e    = New-Object Windows.Forms.TextBox; $tbE2e.Text = $script:Cfg.DeviceE2e
     $nuSweep  = New-Object Windows.Forms.NumericUpDown; $nuSweep.Minimum = 5; $nuSweep.Maximum = 3600; $nuSweep.Value = [int]$script:Cfg.SweepIntervalSec
     $tbName   = New-Object Windows.Forms.TextBox; $tbName.Text = $script:Cfg.DisplayName
+    $cbDel    = New-Object Windows.Forms.CheckBox; $cbDel.Text = 'Delete uploaded exports from _uploaded'; $cbDel.Checked = [bool]$script:Cfg.DeleteUploaded
+    $nuKeep   = New-Object Windows.Forms.NumericUpDown; $nuKeep.Minimum = 1; $nuKeep.Maximum = 3650
+    $nuKeep.Value = [Math]::Min(3650, [Math]::Max(1, [int]$script:Cfg.DeleteUploadedAfterDays))
     $cbOn     = New-Object Windows.Forms.CheckBox; $cbOn.Text = 'Enabled'; $cbOn.Checked = [bool]$script:Cfg.Enabled
 
     Add-Row 'Platform base URL' $tbUrl
@@ -909,10 +962,12 @@ $settingsItem.Add_Click({
     Add-Row 'Device name for .e2e' $tbE2e
     Add-Row 'Sweep every (sec)' $nuSweep
     Add-Row 'Name on the status page' $tbName
+    Add-Row 'Uploaded exports' $cbDel
+    Add-Row 'Delete them after (days)' $nuKeep
     Add-Row '' $cbOn
 
-    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 260
-    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 260
+    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 328
+    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 328
     $f.Controls.AddRange(@($ok, $cancel)); $f.AcceptButton = $ok; $f.CancelButton = $cancel
 
     if ($f.ShowDialog() -eq 'OK') {
@@ -922,11 +977,15 @@ $settingsItem.Add_Click({
         $script:Cfg.DeviceE2e = $tbE2e.Text.Trim()
         $script:Cfg.SweepIntervalSec = [int]$nuSweep.Value
         $script:Cfg.DisplayName = $tbName.Text.Trim()
+        $script:Cfg.DeleteUploaded = $cbDel.Checked
+        $script:Cfg.DeleteUploadedAfterDays = [int]$nuKeep.Value
         $script:Cfg.Enabled = $cbOn.Checked
         Save-Config $script:Cfg
         $enabledItem.Checked = $cbOn.Checked
         Update-Timers
-        Write-Log 'settings saved'
+        # a changed retention applies on the next sweep, not in an hour
+        $script:LastRetentionUtc = [datetime]::MinValue
+        Write-Log ("settings saved (delete uploaded exports: {0}, after {1} day(s))" -f $script:Cfg.DeleteUploaded, $script:Cfg.DeleteUploadedAfterDays)
         if ($script:Cfg.Enabled) { Invoke-SweepNow }
         Send-Heartbeat $script:Cfg | Out-Null
     }
