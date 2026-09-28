@@ -14,7 +14,8 @@
 # This restores the latest backup into a throwaway Postgres, boots the
 # candidate image against it, and reports the changesets that were applied.
 # It never touches the production database or the running stack: it uses its
-# own compose project name, its own container, and a temporary port.
+# own compose project name, its own container, and a temporary port. And it
+# leaves nothing behind: its containers go with their volumes (unless KEEP=1).
 #
 # USAGE (on the VM, as the deploy user):
 #   deploy/dry-run-migration.sh [path/to/backup.sql]
@@ -67,10 +68,16 @@ bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; }
 cleanup() {
   if [ "${KEEP:-0}" = "1" ]; then
     say "KEEP=1 — leaving $PG_NAME and $APP_NAME running."
+    say "When done: docker rm -fv $APP_NAME $PG_NAME && docker network rm $NET_NAME"
     return
   fi
-  docker rm -f "$APP_NAME" >/dev/null 2>&1
-  docker rm -f "$PG_NAME" >/dev/null 2>&1
+  # -v takes the containers' anonymous volumes with them. The postgres image
+  # keeps its data directory on one, so without it every dry run left the
+  # restored copy of the production database behind as an unused Docker
+  # volume, with the app's data and log volumes beside it: clinical data
+  # outside every managed store, kept until someone pruned volumes.
+  docker rm -fv "$APP_NAME" >/dev/null 2>&1
+  docker rm -fv "$PG_NAME" >/dev/null 2>&1
   docker network rm "$NET_NAME" >/dev/null 2>&1
 }
 trap cleanup EXIT
