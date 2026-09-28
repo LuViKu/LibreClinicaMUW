@@ -504,9 +504,14 @@ attachments, dataset exports) and Tomcat's logs are bound from
 Until 2026-09-24 they were anonymous Docker volumes, and because the unit
 restarts with `compose down` + `up`, every restart started the app on empty
 ones and left the old ones behind. The first setup run with this change copies
-the running container's current contents into the two directories; after the
-restart that follows, remove what earlier restarts left behind with
-`sudo docker volume prune` (unnamed, unused volumes only).
+the running container's current contents into the two directories. If the
+stack is not running at that moment, there is no container to copy from: the
+script warns, and the files are in the stopped container's volume, now unused
+(the beta.12 release notes, *Upgrading the app VM*, step 4, show how to find
+them). After the restart that follows, remove what earlier restarts left
+behind with `sudo docker volume prune` (unnamed, unused volumes only). Migration
+dry runs before 2026-09-28 also left a restored copy of the database in such
+a volume each time; `deploy/dry-run-migration.sh` now removes its volumes.
 
 ### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
 
