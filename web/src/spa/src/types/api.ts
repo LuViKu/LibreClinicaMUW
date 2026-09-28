@@ -4769,6 +4769,7 @@ export interface components {
             sourceAeTitle?: string;
             dicomPath?: string;
             previewPngPath?: string;
+            pixelSha256?: string;
         };
         UnbindRequest: {
             dismiss?: boolean;
