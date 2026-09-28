@@ -60,8 +60,17 @@ queue and the reconciliation inbox ([DR-025](decision-record.md#dr-025--dicom-c-
 2. **Dedupe on Remidio ids, never on content.** A new table
    `remidio_exam` (`remidio_exam_id` PK, `site_custom_id`, `exam_date`,
    `first_seen_at`, `image_count`) and `image_ingest.remidio_image_id`
-   (unique, nullable) — an exam is fetched once; an image is stored once; an
-   `EDITED` variant is ignored (we keep `STANDARD` only). The 1-hour URL expiry
+   (unique, nullable) — an image is stored once; an `EDITED` variant is
+   ignored (we keep `STANDARD` only). An exam is looked at again whenever its
+   listing offers more downloadable images (an id and a signed URL) than
+   `image_count` recorded the last time every image was handled; inside it,
+   images already filed are recognised by id before any download.
+   *Amended 2026-09-28:* the first rule was "an exam is fetched once". An exam
+   is listed before the phone uploads into it — the patient sync creates one
+   per scheduled visit days ahead, and a sitting uploads image by image — so
+   that rule closed synced exams at zero images and silently skipped every
+   capture made into them afterwards. A row the old rule left at zero reopens
+   by itself under the new one. The 1-hour URL expiry
    means download happens in the same poll that discovers the exam, never
    deferred.
 3. **One `image_ingest` row per image, identified like an upload.** The
@@ -175,8 +184,8 @@ What landed on `feature/muw-remidio-pull` (2026-09-23):
    one-click bind (`match_policy = 'mrn'`, subject to the study's
    `ingest.image.enabled` setting) or `UNBOUND` with the candidate subject
    recorded; system bind audit + performed-tick as the worklist path does. An
-   exam is marked seen only once all its images were handled, so a failed
-   download is retried next poll. `RemidioPullServiceTest` covers the mapping.
+   exam's image count is recorded only once all its images were handled, so a
+   failed download is retried next poll. `RemidioPullServiceTest` covers the mapping.
 4. **`RemidioPullScheduler`**: `@Scheduled` fixed-delay tick every 30 s, runs a
    pass when `intervalSeconds` elapsed, reads every switch from
    `datainfo.properties` on each tick, rebuilds the client when the settings
