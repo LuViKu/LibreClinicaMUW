@@ -24,6 +24,9 @@ import java.util.Date;
 @SuppressWarnings("all")
 public class ExpressionTreeHelper {
 
+    // Date operands are CRF item values (a date of birth, if the CRF collects
+    // one) and rules run on every save, so they are never logged.
+
     protected static final Logger logger = LoggerFactory.getLogger(ExpressionTreeHelper.class.getName());
     final static String yyyyMMddDashes = "[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}";
     final static String yyyyMMddSlashes = "[0-9]{4}/[0-9]{1,2}/[0-9]{1,2}";
@@ -45,7 +48,6 @@ public class ExpressionTreeHelper {
 
 
     static Date getDate(String dateString) {
-        logger.info("DateString : " + dateString);
         String[] componentsOfDate = dateString.split("[/|.|-]");
         if (componentsOfDate.length == 3) {
             dateString = componentsOfDate[0] + "-" + componentsOfDate[1] + "-" + componentsOfDate[2];
@@ -62,7 +64,6 @@ public class ExpressionTreeHelper {
     }
     
     static Date getDateFromddMMMyyyyDashes(String dateString) {
-        logger.info("DateString : " + dateString);
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("dd-MMM-yyyy");
             Date d = sdf.parse(dateString);
@@ -73,7 +74,6 @@ public class ExpressionTreeHelper {
     }
 
     static private boolean isDate(String dateString, String format, String dateRegexp) {
-        logger.info("DateString : " + dateString);
 
         if (!dateString.matches(dateRegexp)) {
             return false;
@@ -146,11 +146,11 @@ public class ExpressionTreeHelper {
         try {
             theDate = sdf.parse(dateString);
         } catch (ParseException e) {
-            logger.info("dateString="+dateString+" failed parse format: "+dateFormat);
+            logger.debug("date operand does not parse as {}", dateFormat);
             return false;
         }
         if (!sdf.format(theDate).equals(dateString)) {
-            logger.info("dateSring="+dateString+" has been parsed to "+theDate+" which cannot be formatted back to "+dateString);
+            logger.debug("date operand is not in canonical {} form", dateFormat);
             return false;
         }
         return true;

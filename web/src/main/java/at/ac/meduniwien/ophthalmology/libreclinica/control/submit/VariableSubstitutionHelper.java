@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 
 /**
  * Performs the variable substitution in the CRF fields that support it.
@@ -103,14 +104,20 @@ public class VariableSubstitutionHelper {
             tokensMap.put("item['" + item.getName() + "']", encode(value));
         }
 
-        if (LOG.isDebugEnabled()) {
-            for(String key : tokensMap.keySet()) {
-                LOG.debug("Substitution context: {} = {}", key, tokensMap.get(key));
-            }
-        }
+        logSubstitutionContext(LOG, tokensMap);
 
         return tokensMap;
 
+    }
+
+    /**
+     * The token values are the subject label and every item value of the
+     * event CRF, so only the token names are logged.
+     */
+    static void logSubstitutionContext(Logger log, Map<String, String> tokensMap) {
+        if (log.isDebugEnabled()) {
+            log.debug("Substitution context tokens: {}", new TreeSet<>(tokensMap.keySet()));
+        }
     }
 
     private static String encode(String value) {

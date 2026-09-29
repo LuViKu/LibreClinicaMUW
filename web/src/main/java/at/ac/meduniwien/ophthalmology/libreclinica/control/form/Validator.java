@@ -678,11 +678,14 @@ public class Validator {
                 Validation v = (Validation) fieldValidations.get(i);
                 logger.debug("fieldName=" + fieldName);
                 validate(fieldName, v);
+                // The value itself is not logged: fields include passwords
+                // and CRF item data.
                 if (errors.containsKey(fieldName)) {
-                    logger.debug("found an error for " + fieldName + " v-type: " + v.getType() + " " + v.getErrorMessage() + ": " + getFieldValue(fieldName));
+                    logger.debug("found an error for " + fieldName + " v-type: " + v.getType() + " " + v.getErrorMessage() + ": "
+                        + describeLength(getFieldValue(fieldName)));
                 } else {
                     logger.debug("did NOT find an error for " + fieldName + " v-type: " + v.getType() + " " + v.getErrorMessage() + ": "
-                        + getFieldValue(fieldName));
+                        + describeLength(getFieldValue(fieldName)));
                 }
             }
         }
@@ -1164,6 +1167,10 @@ break;
     /*
      * Instead of rewriting the whole Validation do this.
      */
+    private static String describeLength(String value) {
+        return value == null ? "no value" : value.length() + " characters";
+    }
+
     protected String getFieldValue(String fieldName) {
         return request.getParameter(fieldName) == null ? request.getAttribute(fieldName) == null ? null : request.getAttribute(fieldName).toString() : request
                 .getParameter(fieldName);
@@ -1845,7 +1852,7 @@ break;
             }
             return false;
         }
-        logger.debug("value matches initial: found " + oldValue + " versus " + fieldValue);
+        logger.debug("value matches initial: comparing " + describeLength(oldValue) + " against " + describeLength(fieldValue));
         return fieldValue.equals(oldValue);
     }
 
