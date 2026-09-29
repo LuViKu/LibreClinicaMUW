@@ -6,7 +6,7 @@ psycopg2-binary==2.9.10
 pydicom==3.0.2
 numpy==2.4.6
 # FastAPI multipart parsing for POST /run (DR-022).
-python-multipart==0.0.20
+python-multipart==0.0.32
 # DR-024 — oct-converter + pillow live in the sibling muw-e2e-converter
 # package now and are pip-installed separately in the Dockerfile when
 # building the LOCAL retinal-preprocess image. The cluster posture
