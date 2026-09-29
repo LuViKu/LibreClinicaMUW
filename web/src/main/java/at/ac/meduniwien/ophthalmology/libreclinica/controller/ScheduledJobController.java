@@ -26,6 +26,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExtractPropertyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.XsltTriggerService;
@@ -46,6 +47,7 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -78,6 +80,10 @@ public class ScheduledJobController {
 
     @RequestMapping("/listCurrentScheduledJobs")
     public ModelMap listScheduledJobs(HttpServletRequest request, HttpServletResponse response) throws SchedulerException{
+        if (!mayProceed(request)) {
+            redirectToMainMenu(request, response);
+            return null;
+        }
         // Phase B.4 jmesa PR 7c (cohort 5c): the factory.createTable().render()
         // call is gone. The JSP shell now includes a vanilla-JS fragment that
         // fetches /pages/listCurrentScheduledJobsData asynchronously.
@@ -110,6 +116,10 @@ public class ScheduledJobController {
     @ResponseBody
     public void listScheduledJobsData(HttpServletRequest request, HttpServletResponse response)
             throws SchedulerException, IOException {
+        if (!mayProceed(request)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
         Locale locale = LocaleResolver.getLocale(request);
         ResourceBundleProvider.updateLocale(locale);
 
@@ -192,13 +202,23 @@ public class ScheduledJobController {
         try { return Integer.parseInt(s); } catch (NumberFormatException nfe) { return 0; }
     }
 
-    @RequestMapping("/cancelScheduledJob")
+    /**
+     * Cancels (or reschedules) an export job. POST only, system or technical
+     * administrators only — the same audience as the Jobs page that links here.
+     * The {@code redirection} field is honoured only for known views.
+     */
+    @RequestMapping(value = "/cancelScheduledJob", method = RequestMethod.POST)
     public String cancelScheduledJob(HttpServletRequest request, HttpServletResponse response,
             @RequestParam("theJobName") String theJobName,
             @RequestParam("theJobGroupName") String theJobGroupName,
             @RequestParam("theTriggerName") String triggerName,
             @RequestParam("theTriggerGroupName") String triggerGroupName,
-            @RequestParam("redirection") String redirection, ModelMap model) throws SchedulerException {
+            @RequestParam(value = "redirection", required = false) String redirection, ModelMap model) throws SchedulerException {
+
+        if (!mayProceed(request)) {
+            redirectToMainMenu(request, response);
+            return null;
+        }
 
     	JobKey jobKey = new JobKey(theJobName, theJobGroupName);
     	TriggerKey triggerKey = new TriggerKey(triggerName, triggerGroupName);
@@ -253,9 +273,27 @@ public class ScheduledJobController {
             logger.debug("jobDetails>" + scheduler.getJobDetail(jobKey));
         }
         
-        sdvUtil.forwardRequestFromController(request, response, "/pages/" + redirection);
+        sdvUtil.forwardToView(request, response, redirection, SDVUtil.VIEW_SCHEDULED_JOBS);
         
         return null;
+    }
+
+    /**
+     * The scheduled-jobs pages list and cancel every study's export jobs, so
+     * they are for system and technical administrators — the same rule as
+     * {@code ViewAllJobsServlet}, the page that links here.
+     */
+    private boolean mayProceed(HttpServletRequest request) {
+        UserAccountBean user = (UserAccountBean) request.getSession().getAttribute("userBean");
+        return user != null && (user.isSysAdmin() || user.isTechAdmin());
+    }
+
+    private void redirectToMainMenu(HttpServletRequest request, HttpServletResponse response) {
+        try {
+            response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
+        } catch (IOException e) {
+            logger.error("Error while redirecting to MainMenu: ", e);
+        }
     }
 
     private void interruptQuartzJob(Scheduler scheduler, String jobName, String jobGroup) throws SchedulerException {

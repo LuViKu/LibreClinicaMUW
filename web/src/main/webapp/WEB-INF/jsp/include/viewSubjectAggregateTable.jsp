@@ -8,8 +8,9 @@
 <%-- Phase B.4 jmesa PR 7b (cohort 5b): per-subject SDV table rendered
      via vanilla-JS fetch + DOM render against /pages/viewSubjectAggregateData.
      The form's hidden inputs (theStudySubjectId, redirection) are
-     populated by per-row event handlers, then the form posts to
-     /pages/sdvStudySubject or /pages/unSdvStudySubject (legacy). --%>
+     populated by per-row event handlers, then the form POSTs (the
+     handlers refuse GET) to /pages/sdvStudySubject or
+     /pages/unSdvStudySubject (legacy). --%>
 <div id="viewSubjectAggregateWrap">
     <table id="viewSubjectAggregateTable" class="aka_form" style="width:100%; border-collapse: collapse;">
         <thead id="viewSubjectAggregateHead">
@@ -93,7 +94,7 @@
     // Form-submit helpers exposed for inline onclick handlers.
     window.sdvAggregateSubmit = function (studySubjectId) {
         var f = document.forms['sdvForm'];
-        f.method = 'GET';
+        f.method = 'POST';
         f.action = ctx + '/pages/sdvStudySubject';
         f.theStudySubjectId.value = studySubjectId;
         f.submit();
@@ -101,7 +102,7 @@
     window.sdvAggregateUncheck = function (studySubjectId) {
         if (!confirm(uncheckSdvConfirm)) return;
         var f = document.forms['sdvForm'];
-        f.method = 'GET';
+        f.method = 'POST';
         f.action = ctx + '/pages/unSdvStudySubject';
         f.theStudySubjectId.value = studySubjectId;
         f.submit();
