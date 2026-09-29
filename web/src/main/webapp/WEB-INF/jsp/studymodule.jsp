@@ -36,6 +36,18 @@
 <jsp:include page="include/sideInfo.jsp"/>
 
 <script type="text/javascript">
+    // The module switches change study parameters, so their handlers accept
+    // POST only: submit the link's URL from a throw-away form (the switches
+    // sit inside the page's main form, and forms cannot nest).
+    function studyModulePost(url){
+        var f = document.createElement('form');
+        f.method = 'post';
+        f.action = url;
+        document.body.appendChild(f);
+        f.submit();
+        return false;
+    }
+
     function prompt(elementName){
         var bool = confirm(
                 "<fmt:message key="study_module_uncheck" bundle="${pagemessage}"/>");
@@ -562,13 +574,13 @@
                       <c:url var="deactivateParticipate" value="studymodule/${currentStudy.oid}/deactivate"/>
                       <c:choose>
                           <c:when test="${participateOCStatus == 'disabled' && !empty participateStatus}">
-                              <a href="${reactivateParticipate}" id="reactivateParticipateAccess"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
+                              <a href="${reactivateParticipate}" id="reactivateParticipateAccess" onclick="return studyModulePost(this.href);"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
                           </c:when>
                           <c:when test="${participateOCStatus == 'disabled'}">
                               <a href="javascript:;" id="requestParticipateAccess"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
                           </c:when>
                           <c:otherwise>
-                              <a href="${deactivateParticipate}" id="removeParticipateAccess"><img src="../images/bt_Remove.gif" border="0" alt="<fmt:message key="disable" bundle="${resword}"/>" title="<fmt:message key="disable" bundle="${resword}"/>"/></a>
+                              <a href="${deactivateParticipate}" id="removeParticipateAccess" onclick="return studyModulePost(this.href);"><img src="../images/bt_Remove.gif" border="0" alt="<fmt:message key="disable" bundle="${resword}"/>" title="<fmt:message key="disable" bundle="${resword}"/>"/></a>
                           </c:otherwise>
                       </c:choose>
                   </td>
@@ -600,7 +612,7 @@
                       <c:url var="deactivateRandomization" value="studymodule/${currentStudy.oid}/deactivaterandomization"/>
                       <c:choose>
                           <c:when test="${randomizationOCStatus == 'disabled' && !empty randomizationStatus}">
-                              <a href="${reactivateRandomization}" id="reactivateRandomizationAccess"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
+                              <a href="${reactivateRandomization}" id="reactivateRandomizationAccess" onclick="return studyModulePost(this.href);"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
                           </c:when>
                           <c:when test="${randomizationOCStatus == 'disabled'}">
                               <a href="javascript:;" id="requestRandomizationAccess"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
@@ -609,7 +621,7 @@
                               <a href="javascript:;" id="requestRandomizationAccess" ><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
                           </c:when>
                           <c:otherwise>
-                              <a href="${deactivateRandomization}" id="removeRandomizeAccess"><img src="../images/bt_Remove.gif" border="0" alt="<fmt:message key="disable" bundle="${resword}"/>" title="<fmt:message key="disable" bundle="${resword}"/>"/></a>
+                              <a href="${deactivateRandomization}" id="removeRandomizeAccess" onclick="return studyModulePost(this.href);"><img src="../images/bt_Remove.gif" border="0" alt="<fmt:message key="disable" bundle="${resword}"/>" title="<fmt:message key="disable" bundle="${resword}"/>"/></a>
                           </c:otherwise>
                       </c:choose>
                   </td>

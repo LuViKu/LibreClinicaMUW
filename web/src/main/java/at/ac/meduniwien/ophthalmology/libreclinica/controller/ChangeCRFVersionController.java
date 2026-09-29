@@ -53,6 +53,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanel;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -91,6 +92,9 @@ public class ChangeCRFVersionController {
     
     ResourceBundle  resword,resformat, respage;
 
+    /** Built from {@link #dataSource} on first use; tests put a stub here. */
+    private StudyTreeScope studyTreeScope;
+
 
     public ChangeCRFVersionController() {
     }
@@ -115,7 +119,7 @@ public class ChangeCRFVersionController {
 	 {
 
     	//to be removed for aquamarine
-    	  if(!mayProceed(request)){
+    	  if(!mayProceed(request) || !eventCrfInCurrentStudy(request, eventCRFId)){
               try {
                   response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
               } catch (Exception e) {
@@ -229,9 +233,9 @@ public class ChangeCRFVersionController {
 
     	//add here error handling for post with no data and redirect from OC error page
     	//to be removed for aquamarine
-    	  if(!mayProceed(request)){
-        		  if( redirect( request, response, "/MainMenu?message=authentication_failed") == null)
-        			  return null;
+    	  if(!mayProceed(request) || !eventCrfInCurrentStudy(request, eventCRFId)){
+        		  redirect( request, response, "/MainMenu?message=authentication_failed");
+        		  return null;
           }
     	  resetPanel(request); 
     	  request.setAttribute("eventCRFId", eventCRFId);
@@ -487,7 +491,13 @@ public class ChangeCRFVersionController {
     	
     }
     
-    @RequestMapping("/managestudy/changeCRFVersion")
+    /**
+     * Moves an event CRF to another version of its CRF. POST only (the
+     * confirmation page submits a form); study director or coordinator of the
+     * study the event CRF belongs to; the new version must be a version of
+     * the same CRF.
+     */
+    @RequestMapping(value = "/managestudy/changeCRFVersion", method = RequestMethod.POST)
     // @RequestMapping("/managestudy/changeCRFVersionAction")
     public ModelMap changeCRFVersionAction(HttpServletRequest request,HttpServletResponse response,
     		@RequestParam("crfId") int crfId,
@@ -504,9 +514,10 @@ public class ChangeCRFVersionController {
     {
 
     	//to be removed for aquamarine
-    	  if(!mayProceed(request)){
-    		  if( redirect( request, response, "/MainMenu?message=authentication_failed") == null)
-    			  return null;
+    	  if(!mayProceed(request) || !eventCrfInCurrentStudy(request, eventCRFId)
+    	          || !isVersionOfSameCrf(eventCRFId, newCRFVersionId)){
+    		  redirect( request, response, "/MainMenu?message=authentication_failed");
+    		  return null;
           }
     	  
       
@@ -563,7 +574,9 @@ public class ChangeCRFVersionController {
         }
         catch (Exception e){
           
-        	pageMessages.add(resword.getString("error_message_cannot_update_crf_version"));
+        	// The key lives in the page-messages bundle, not in resword.
+        	pageMessages.add(ResourceBundleProvider.getPageMessagesBundle(request.getLocale())
+        			.getString("error_message_cannot_update_crf_version"));
         	
         }
         
@@ -589,17 +602,50 @@ public class ChangeCRFVersionController {
     private boolean mayProceed(HttpServletRequest request) {
 
         StudyUserRoleBean currentRole = (StudyUserRoleBean)request.getSession().getAttribute("userRole");
-        Role r = currentRole.getRole();
+        Role r = currentRole == null ? null : currentRole.getRole();
 
-        if (r.equals(Role.STUDYDIRECTOR) || r.equals(Role.COORDINATOR)) {
+        if (r != null && getCurrentUser(request) != null
+                && (r.equals(Role.STUDYDIRECTOR) || r.equals(Role.COORDINATOR))) {
             return true;
         }
         ArrayList<String> pageMessages = initPageMessages( request);
-        
-        pageMessages.add((respage.getString("no_have_correct_privilege_current_study") + 
-        		respage.getString("change_study_contact_sysadmin")));
+        // respage is never initialised on this controller; read the bundle here.
+        ResourceBundle pages = ResourceBundleProvider.getPageMessagesBundle(request.getLocale());
+        pageMessages.add((pages.getString("no_have_correct_privilege_current_study") + 
+        		pages.getString("change_study_contact_sysadmin")));
         
         return false;
+    }
+
+    /** The event CRF's subject must be in the session's study or, for a parent study, one of its sites. */
+    private boolean eventCrfInCurrentStudy(HttpServletRequest request, int eventCrfId) {
+        StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
+        if (studyTreeScope().containsEventCrf(currentStudy, eventCrfId)) {
+            return true;
+        }
+        UserAccountBean user = getCurrentUser(request);
+        logger.warn("CRF version change refused: event CRF {} is outside the current study {} (user {})",
+                eventCrfId, currentStudy == null ? null : currentStudy.getId(), user == null ? null : user.getId());
+        return false;
+    }
+
+    /** A CRF version change must stay within the CRF: the new version belongs to the event CRF's CRF. */
+    private boolean isVersionOfSameCrf(int eventCrfId, int newCrfVersionId) {
+        Integer currentCrf = studyTreeScope().crfIdOfEventCrf(eventCrfId);
+        Integer targetCrf = studyTreeScope().crfIdOfVersion(newCrfVersionId);
+        if (currentCrf != null && currentCrf.equals(targetCrf)) {
+            return true;
+        }
+        logger.warn("CRF version change refused: version {} is not a version of the CRF of event CRF {}",
+                newCrfVersionId, eventCrfId);
+        return false;
+    }
+
+    private StudyTreeScope studyTreeScope() {
+        if (studyTreeScope == null) {
+            studyTreeScope = new StudyTreeScope(dataSource);
+        }
+        return studyTreeScope;
     }
     private UserAccountBean getCurrentUser (HttpServletRequest request){
         UserAccountBean ub = (UserAccountBean)request.getSession().getAttribute("userBean");
