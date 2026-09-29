@@ -100,7 +100,11 @@ IMAGE_TAG_GIVEN=${IMAGE_TAG_GIVEN:-0}
 : "${LIBRECLINICA_RETINAL_REMOTE_PUSH_URL:=http://cn5.cir.meduniwien.ac.at:8000}"
 : "${LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN:=choose-a-long-shared-secret}"
 : "${LIBRECLINICA_RETINAL_PREPROCESS_URL:=http://retinal-inference:8000}"
-: "${LIBRECLINICA_RETINAL_PREPROCESS_TOKEN:=cb2e7d0edd4d54cd8af46bbef78755a7}"
+# The preprocess token is NOT defaulted here any more: the old default was a
+# value committed in this public repository. Unless the operator passes one,
+# the setup mints a per-host secret below and pairs it between the env file
+# (compose) and datainfo.properties (the app).
+: "${LIBRECLINICA_RETINAL_PREPROCESS_TOKEN:=}"
 
 # Public base URL (datainfo `sysURL`) behind the nginx TLS reverse proxy — used
 # in system emails + absolute links. The seeded config ships the dev default
@@ -797,11 +801,56 @@ if [[ -f "$DATAINFO_FILE" ]]; then
       -e "s|^core.retinalInference.remotePushUrl=.*|core.retinalInference.remotePushUrl=${LIBRECLINICA_RETINAL_REMOTE_PUSH_URL}|" \
       -e "s|^core.retinalInference.remotePushToken=.*|core.retinalInference.remotePushToken=${LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN}|" \
       -e "s|^core.retinalInference.preprocessUrl=.*|core.retinalInference.preprocessUrl=${LIBRECLINICA_RETINAL_PREPROCESS_URL}|" \
-      -e "s|^core.retinalInference.preprocessToken=.*|core.retinalInference.preprocessToken=${LIBRECLINICA_RETINAL_PREPROCESS_TOKEN}|" \
       "$DATAINFO_FILE"
     log "Configured datainfo.properties retinal pipeline (remote=${LIBRECLINICA_RETINAL_REMOTE_PUSH_URL}, preprocess=${LIBRECLINICA_RETINAL_PREPROCESS_URL})"
   else
     log "datainfo.properties retinal pipeline already configured (remotePushUrl off the dev default) — leaving as-is"
+  fi
+
+  # Retinal preprocess token: one per-host secret shared by the sidecar
+  # (RETINAL_INFERENCE_PREPROCESS_TOKEN in the env file, read by compose) and
+  # the app (core.retinalInference.preprocessToken). Up to beta.14 both fell
+  # back to a value committed in the public repository. Order of preference:
+  # LIBRECLINICA_RETINAL_PREPROCESS_TOKEN from the environment,
+  # a non-default value already in the env file, a non-default value already
+  # in datainfo.properties, else a freshly minted secret.
+  PUBLIC_PREPROCESS_DEFAULT=cb2e7d0edd4d54cd8af46bbef78755a7
+  env_preprocess="$(sed -n 's/^RETINAL_INFERENCE_PREPROCESS_TOKEN=//p' "$ENV_FILE" | tail -1)"
+  cfg_preprocess="$(sed -n 's/^core\.retinalInference\.preprocessToken=//p' "$DATAINFO_FILE" | tail -1)"
+  preprocess_token="$LIBRECLINICA_RETINAL_PREPROCESS_TOKEN"
+  if [[ -z "$preprocess_token" && -n "$env_preprocess" && "$env_preprocess" != "$PUBLIC_PREPROCESS_DEFAULT" ]]; then
+    preprocess_token="$env_preprocess"
+  fi
+  if [[ -z "$preprocess_token" && -n "$cfg_preprocess" && "$cfg_preprocess" != "$PUBLIC_PREPROCESS_DEFAULT" ]]; then
+    preprocess_token="$cfg_preprocess"
+  fi
+  if [[ -z "$preprocess_token" ]]; then
+    preprocess_token="$(gen_secret)"
+    log "Minted a per-host retinal preprocess token (replaces the public default)"
+  fi
+  if grep -q '^RETINAL_INFERENCE_PREPROCESS_TOKEN=' "$ENV_FILE"; then
+    sed -i "s|^RETINAL_INFERENCE_PREPROCESS_TOKEN=.*|RETINAL_INFERENCE_PREPROCESS_TOKEN=${preprocess_token}|" "$ENV_FILE"
+  else
+    printf '\n# Retinal preprocess token (sidecar side); must equal\n# core.retinalInference.preprocessToken in datainfo.properties.\nRETINAL_INFERENCE_PREPROCESS_TOKEN=%s\n' "$preprocess_token" >> "$ENV_FILE"
+  fi
+  if grep -q '^core\.retinalInference\.preprocessToken=' "$DATAINFO_FILE"; then
+    sed -i "s|^core\.retinalInference\.preprocessToken=.*|core.retinalInference.preprocessToken=${preprocess_token}|" "$DATAINFO_FILE"
+  else
+    printf '\ncore.retinalInference.preprocessToken=%s\n' "$preprocess_token" >> "$DATAINFO_FILE"
+  fi
+  [[ "$env_preprocess" == "$preprocess_token" && "$cfg_preprocess" == "$preprocess_token" ]] \
+    || log "Paired the retinal preprocess token between ${ENV_FILE} and datainfo.properties (takes effect on restart)"
+
+  # The GPU push token must match the GPU host, so it cannot be minted here.
+  if grep -q '^core\.retinalInference\.remotePushToken=choose-a-long-shared-secret$' "$DATAINFO_FILE"; then
+    warn "core.retinalInference.remotePushToken is still the placeholder from the public repository."
+    warn "  Set a long random value there and the same value on the GPU host (see deploy/README.md)."
+  fi
+
+  # DEBUG logging writes more than an operator needs, and older releases wrote
+  # secrets at DEBUG. Production should run at info.
+  if grep -qiE '^logLevel=(debug|trace)$' "$DATAINFO_FILE"; then
+    warn "datainfo.properties has $(grep -iE '^logLevel=' "$DATAINFO_FILE"); set logLevel=info for production."
   fi
 
   # Public base URL (sysURL) — system emails + absolute links. The seeded
