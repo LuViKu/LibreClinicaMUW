@@ -55,7 +55,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.HttpSessionRequiredException;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -93,6 +95,9 @@ public class StudyModuleController {
     private UserAccountDAO userDao;
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     public static final String REG_MESSAGE = "regMessages";
+
+    /** Where a refused request goes (same target as the page's own refusal). */
+    static final String DENIED = "redirect:/MainMenu?message=authentication_failed";
     public static ResourceBundle respage;
     @Autowired
     CoreResources coreResources;
@@ -101,8 +106,11 @@ public class StudyModuleController {
 
     }
 
-    @RequestMapping(value = "/{study}/deactivate", method = RequestMethod.GET)
+    @RequestMapping(value = "/{study}/deactivate", method = RequestMethod.POST)
     public String deactivateParticipate(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
+        if (!mayChangeStudy(request, studyOid)) {
+            return DENIED;
+        }
         studyDao = new StudyDAO(dataSource);
         StudyBean study = studyDao.findByOid(studyOid);
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
@@ -121,8 +129,11 @@ public class StudyModuleController {
         return "redirect:/pages/studymodule";
     }
 
-    @RequestMapping(value = "/{study}/deactivaterandomization", method = RequestMethod.GET)
+    @RequestMapping(value = "/{study}/deactivaterandomization", method = RequestMethod.POST)
     public String deactivateRandomization(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
+        if (!mayChangeStudy(request, studyOid)) {
+            return DENIED;
+        }
         studyDao = new StudyDAO(dataSource);
         StudyBean study = studyDao.findByOid(studyOid);
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
@@ -141,8 +152,11 @@ public class StudyModuleController {
         return "redirect:/pages/studymodule";
     }
 
-    @RequestMapping(value = "/{study}/reactivate", method = RequestMethod.GET)
+    @RequestMapping(value = "/{study}/reactivate", method = RequestMethod.POST)
     public String reactivateParticipate(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
+        if (!mayChangeStudy(request, studyOid)) {
+            return DENIED;
+        }
         studyDao = new StudyDAO(dataSource);
         StudyBean study = studyDao.findByOid(studyOid);
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
@@ -161,8 +175,11 @@ public class StudyModuleController {
         return "redirect:/pages/studymodule";
     }
 
-    @RequestMapping(value = "/{study}/reactivaterandomization", method = RequestMethod.GET)
+    @RequestMapping(value = "/{study}/reactivaterandomization", method = RequestMethod.POST)
     public String reactivateRandomization(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
+        if (!mayChangeStudy(request, studyOid)) {
+            return DENIED;
+        }
         studyDao = new StudyDAO(dataSource);
         StudyBean study = studyDao.findByOid(studyOid);
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
@@ -184,6 +201,9 @@ public class StudyModuleController {
 
     @RequestMapping(value = "/{study}/register", method = RequestMethod.POST)
     public String registerParticipate(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
+        if (!mayChangeStudy(request, studyOid)) {
+            return DENIED;
+        }
         studyDao = new StudyDAO(dataSource);
         StudyBean study = studyDao.findByOid(studyOid);
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
@@ -433,6 +453,10 @@ public class StudyModuleController {
     public String processSubmit(@ModelAttribute("studyModuleStatus") StudyModuleStatus studyModuleStatus, BindingResult result, SessionStatus status,
             HttpServletRequest request) {
         StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
+        if (!mayProceed(request) || currentStudy == null || currentStudy.getId() <= 0
+                || studyModuleStatus.getStudyId() != currentStudy.getId()) {
+            return DENIED;
+        }
         if (request.getParameter("saveStudyStatus") == null) {
             studyModuleStatusDao.saveOrUpdate(studyModuleStatus);
             status.setComplete();
@@ -451,6 +475,17 @@ public class StudyModuleController {
             }
         }
         return "redirect:studymodule";
+    }
+
+    /**
+     * The build-study form posts the module states and the study status and
+     * nothing else; the row id and study id of the session-held status object
+     * are not the client's to set.
+     */
+    @InitBinder("studyModuleStatus")
+    public void restrictStudyModuleStatusBinding(WebDataBinder binder) {
+        binder.setAllowedFields("study", "crf", "eventDefinition", "subjectGroup", "rule", "site", "users",
+                "studyStatus");
     }
 
     @ExceptionHandler(HttpSessionRequiredException.class)
@@ -531,6 +566,9 @@ public class StudyModuleController {
 
     private boolean mayProceed(HttpServletRequest request) {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) request.getSession().getAttribute("userRole");
+        if (currentRole == null || currentRole.getRole() == null) {
+            return false;
+        }
         Role r = currentRole.getRole();
 
         if (r.equals(Role.ADMIN) || r.equals(Role.STUDYDIRECTOR) || r.equals(Role.COORDINATOR)) {
@@ -538,6 +576,17 @@ public class StudyModuleController {
         }
 
         return false;
+    }
+
+    /**
+     * The module switches change study parameters: the build-study roles only,
+     * and only for the study the session is working in (the page always names
+     * the current study's OID).
+     */
+    private boolean mayChangeStudy(HttpServletRequest request, String studyOid) {
+        StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
+        return mayProceed(request) && currentStudy != null && studyOid != null
+                && studyOid.equals(currentStudy.getOid());
     }
 
     private String getHostPathFromSysUrl(String sysURL, String contextPath) {
