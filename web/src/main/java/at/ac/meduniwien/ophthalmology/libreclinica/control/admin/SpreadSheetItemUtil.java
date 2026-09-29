@@ -238,9 +238,6 @@ public class SpreadSheetItemUtil {
 	public int getResponseTypeId() {
 		return responseTypeId;
 	}
-	/**
-	 * @param responSe_type the responSe_type to set
-	 */
 	public void setResponseTypeId(int response_type_id) {
 		this.responseTypeId = response_type_id;
 	}

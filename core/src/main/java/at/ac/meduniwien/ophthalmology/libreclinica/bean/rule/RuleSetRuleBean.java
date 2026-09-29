@@ -22,9 +22,6 @@ import java.util.List;
 
 public class RuleSetRuleBean extends AuditableEntityBean {
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 7561559207727031015L;
 	protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     RuleSetBean ruleSetBean;
@@ -86,7 +83,6 @@ public class RuleSetRuleBean extends AuditableEntityBean {
     /**
      * Run the rule and pass in the result. Will return all actions 
      * that match the result. 
-     * @param actionEvaluatesTo
      * @return
      */
     public List<RuleActionBean> getActions(String ruleEvaluatedTo) {

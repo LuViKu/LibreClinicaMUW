@@ -61,7 +61,6 @@ public class ClinicalDataUtil {
      * nullValueStr starts and ends with ","</p>
      * 
      * @param itValue
-     * @param nulls
      * @return
      */
     public static String getNullsInValue(String itValue, String nullValueStr) {

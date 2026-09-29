@@ -46,9 +46,6 @@ import org.slf4j.LoggerFactory;
  */
 @SuppressWarnings("all")
 public class UpdateSubStudyServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -2416194262084852024L;
 	private Logger logger = LoggerFactory.getLogger(getClass().getName());
     public static final String INPUT_START_DATE = "startDate";
@@ -118,8 +115,6 @@ public class UpdateSubStudyServlet extends SecureController {
     /**
      * Validates the first section of study and save it into study bean * *
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy() throws Exception {
@@ -252,7 +247,6 @@ public class UpdateSubStudyServlet extends SecureController {
     /**
      * Constructs study bean from reques * *
      *
-     * @param request
      * @return
      */
     private StudyBean createStudyBean() {

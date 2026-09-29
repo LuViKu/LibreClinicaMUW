@@ -31,9 +31,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class RequestStudyServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6545051529086620572L;
 
 	@Override
@@ -70,11 +67,6 @@ public class RequestStudyServlet extends SecureController {
         }
     }
 
-    /**
-     *
-     * @param request
-     * @param response
-     */
     private void confirm() throws Exception {
         Validator v = new Validator(request);
         v.addValidation("studyId", Validator.IS_AN_INTEGER);
@@ -108,8 +100,6 @@ public class RequestStudyServlet extends SecureController {
     /**
      * Gets user basic info and set email to the administrator
      *
-     * @param request
-     * @param response
      */
     private void submit() throws Exception {
         StudyUserRoleBean newRole = (StudyUserRoleBean) session.getAttribute("newRole");

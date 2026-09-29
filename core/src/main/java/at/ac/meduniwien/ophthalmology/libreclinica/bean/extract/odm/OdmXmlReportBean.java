@@ -67,8 +67,6 @@ public abstract class OdmXmlReportBean {
     /**
      * Append the beginning line of ODM root element
      * 
-     * @param odmXml
-     * @param odmbean
      */
     public void addRootStartLine() {
         String ov = odmbean.getODMVersion();

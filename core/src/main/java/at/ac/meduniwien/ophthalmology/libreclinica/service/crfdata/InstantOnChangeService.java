@@ -91,8 +91,6 @@ public class InstantOnChangeService {
 
     /**
      * Both origin and destination are in the same repeating group.
-     * @param allItems
-     * @param groupedOrigins
      */
     public void addToRepOrigins(Map<String,Map<Integer,InstantOnChangeFrontStrGroup>> repOrigins, InstantOnChangePairContainer instantPair) {
         String oigOid = instantPair.getOriginItemGroupOid();

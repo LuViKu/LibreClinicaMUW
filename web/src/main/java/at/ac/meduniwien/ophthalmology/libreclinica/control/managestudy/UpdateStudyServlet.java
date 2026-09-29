@@ -41,17 +41,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class UpdateStudyServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6165286395419877159L;
 	public static final String INPUT_START_DATE = "startDate";
     public static final String INPUT_END_DATE = "endDate";
     public static final String INPUT_VER_DATE = "protocolDateVerification";
 
-    /**
-     * 
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
@@ -134,8 +128,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Validates the first section of study and save it into study bean
      * 
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy1() throws Exception {
@@ -298,8 +290,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Validates the forth section of study and save it into study bean
      * 
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy4() throws Exception {
@@ -337,8 +327,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Validates the forth section of study and save it into study bean
      * 
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy5() throws Exception {
@@ -541,7 +529,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Constructs study bean from request-first section
      * 
-     * @param request
      * @return
      */
     private StudyBean createStudyBean() {
@@ -566,7 +553,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Updates the study bean with inputs from second section
      * 
-     * @param request
      * @return true if study type is Interventional, otherwise false
      */
     private boolean updateStudy2() {
@@ -674,7 +660,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Sets map in request for different JSP pages
      * 
-     * @param request
      * @param isInterventional
      */
     private void setMaps(boolean isInterventional, ArrayList<InterventionBean> interventionArray) {

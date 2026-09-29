@@ -228,18 +228,10 @@ public class OpenClinicaResource {
         StudyEventRepeatKey = studyEventRepeatKey;
     }
 
-    /**
-     * @param formDefOID
-     *            the formDefOID to set
-     */
     public void setFormOID(String formOID) {
         FormOID = formOID;
     }
 
-    /**
-     * @param formDefID
-     *            the formDefID to set
-     */
     public void setFormID(Integer formID) {
         FormID = formID;
     }

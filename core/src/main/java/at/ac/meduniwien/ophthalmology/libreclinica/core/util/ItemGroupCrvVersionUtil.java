@@ -96,9 +96,6 @@ public class ItemGroupCrvVersionUtil {
 	public String getCrfVersionName() {
 		return crfVersionName;
 	}
-	/**
-	 * @param crfVersion the crfVersion to set
-	 */
 	public void setCrfVersionName(String crfVersionName) {
 		this.crfVersionName = crfVersionName;
 	}

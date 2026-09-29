@@ -24,9 +24,6 @@ import java.util.ArrayList;
  */
 @SuppressWarnings("all")
 public class ItemBean extends AuditableEntityBean implements Comparable<ItemBean> {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -5325159216765727239L;
 
 	private String description = "";
@@ -317,10 +314,6 @@ public class ItemBean extends AuditableEntityBean implements Comparable<ItemBean
         itemDataElements.add(el);
     }
 
-    /**
-     * @param itemMetas
-     *            The itemMetas to set.
-     */
     public void setItemDataElements(ArrayList<ItemDataBean> itemDataElements) {
         this.itemDataElements = itemDataElements;
     }

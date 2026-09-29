@@ -933,8 +933,6 @@ public class DiscrepancyNoteUtil {
     /**
      * Generate a summary of statistics for a collection of discrepancy notes.
      *
-     * @param allDiscBeans
-     *            A List of DiscrepancyNoteBeans.
      * @return A Map mapping the name of each type of note (e.g., "Annotation")
      *         to another Map containing that type's statistics.
      */

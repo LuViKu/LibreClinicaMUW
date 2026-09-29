@@ -69,9 +69,6 @@ public class ExtractController {
 
     /**
      * process the page from whence you came, i.e. extract a dataset
-     * @param id, the id of the extract properties bean, gained from Core Resources
-     * @param datasetId, the id of the dataset, found through DatasetDAO
-     * @param request, http request
      * @return model map, but more importantly, creates a quartz job which runs right away and generates all output there
      */
     @RequestMapping(method = RequestMethod.GET)

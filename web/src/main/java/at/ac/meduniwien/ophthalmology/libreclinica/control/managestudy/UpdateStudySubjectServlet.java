@@ -44,9 +44,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class UpdateStudySubjectServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -8773308388221272583L;
 
 	/**
@@ -212,7 +209,6 @@ public class UpdateStudySubjectServlet extends SecureController {
     /**
      * Processes 'confirm' request, validate the study subject object
      *
-     * @param sub
      * @throws Exception
      */
     private void confirm(StudyGroupDAO sgdao) throws Exception {

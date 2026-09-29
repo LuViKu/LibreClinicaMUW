@@ -39,9 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 public class RequestAccountServlet extends SecureController {
     // private UserAccountBean ubForm = new UserAccountBean();
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 3325716744930832723L;
 
 	@Override
@@ -82,11 +79,6 @@ public class RequestAccountServlet extends SecureController {
 
     }
 
-    /**
-     *
-     * @param request
-     * @param response
-     */
     private void confirmAccount() throws Exception {
         Validator v = new Validator(request);
         v.addValidation("name", Validator.NO_BLANKS);
@@ -137,8 +129,6 @@ public class RequestAccountServlet extends SecureController {
     /**
      * Gets user basic info and set email to the administrator
      *
-     * @param request
-     * @param response
      */
     private void submitAccount() throws Exception {
         String otherStudy = request.getParameter("otherStudy");
@@ -172,7 +162,6 @@ public class RequestAccountServlet extends SecureController {
     /**
      * Constructs userbean from request
      *
-     * @param request
      * @return
      */
     private UserAccountBean getUserBean() {

@@ -156,7 +156,6 @@ public interface RuleSetServiceInterface {
 
     /**
      * Iterate over rulesets and remove those which are currently hidden.
-     * @param allItems
      */
     public abstract List<RuleSetBean> filterRuleSetsByHiddenItems(List<RuleSetBean> ruleSets, EventCRFBean eventCrf, CRFVersionBean crfVersion, List<ItemBean> itemBeansWithSCDShown);
 
@@ -165,7 +164,6 @@ public interface RuleSetServiceInterface {
      * could be : ALL , "" , Number case 1 : if "" then iterate over itemDatas if they exist add. case 2 : if Number just add the number
      *
      * @param ruleSets
-     * @param grouped
      * @return
      */
     public abstract List<RuleSetBean> filterRuleSetsByGroupOrdinal(List<RuleSetBean> ruleSets);

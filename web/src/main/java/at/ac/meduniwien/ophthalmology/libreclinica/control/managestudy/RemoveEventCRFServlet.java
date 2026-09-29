@@ -51,14 +51,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 // null-safety review is the deferred follow-up.
 @SuppressWarnings("all")
 public class RemoveEventCRFServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -9018141066583773642L;
 
-	/**
-     * 
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         checkStudyLocked(Page.LIST_STUDY_SUBJECTS, respage.getString("current_study_locked"));
@@ -212,8 +206,6 @@ public class RemoveEventCRFServlet extends SecureController {
     /**
      * Send email to director and administrator
      * 
-     * @param request
-     * @param response
      */
     private void sendEmail(String emailBody) throws Exception {
 

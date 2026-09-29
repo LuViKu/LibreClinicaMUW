@@ -52,9 +52,6 @@ import org.hibernate.annotations.Parameter;
 @SuppressWarnings("all")
 public class RuleSetRuleBean extends AbstractAuditableMutableDomainObject implements Serializable {
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -6577903287786861464L;
 	RuleSetBean ruleSetBean;
     RuleBean ruleBean;
@@ -184,7 +181,6 @@ public class RuleSetRuleBean extends AbstractAuditableMutableDomainObject implem
     /**
      * Run the rule and pass in the result. Will return all actions that match the result.
      *
-     * @param actionEvaluatesTo
      * @return
      */
     @Transient
@@ -202,7 +198,6 @@ public class RuleSetRuleBean extends AbstractAuditableMutableDomainObject implem
     /**
      * Run the rule and pass in the result. Will return all actions that match the result.
      *
-     * @param actionEvaluatesTo
      * @return
      */
     @Transient

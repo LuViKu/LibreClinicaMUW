@@ -41,9 +41,6 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
  */
 @SuppressWarnings("all")
 public class ViewNotesServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6196337101804576598L;
 	public static final String PRINT = "print";
     public static final String RESOLUTION_STATUS = "resolutionStatus";
@@ -252,7 +249,6 @@ public class ViewNotesServlet extends SecureController {
     }
 
     /**
-     * @param resolveViewNotesService
      * @return
      */
     private Map<String, Map<String, String>> generateDiscrepancyNotesSummary(DiscrepancyNotesSummary summary) {

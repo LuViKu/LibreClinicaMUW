@@ -41,14 +41,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class LockEventDefinitionServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -8131833006641776062L;
 
-	/**
-     *
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
@@ -170,8 +164,6 @@ public class LockEventDefinitionServlet extends SecureController {
     /**
      * Send email to director and administrator
      *
-     * @param request
-     * @param response
      */
     private void sendEmail(String emailBody) throws Exception {
 

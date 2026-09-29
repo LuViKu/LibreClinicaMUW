@@ -181,9 +181,6 @@ public class GenerateExtractFileService {
      * createSPSSFile, added by tbh, 01/2009
      *
      * @param db
-     * @param eb
-     * @param currentstudyid
-     * @param parentstudy
      * @return
      */
 	public HashMap<String, Integer> createSPSSFile(DatasetBean db, ExtractBean eb2, StudyBean currentStudy, StudyBean parentStudy, long sysTimeBegin,

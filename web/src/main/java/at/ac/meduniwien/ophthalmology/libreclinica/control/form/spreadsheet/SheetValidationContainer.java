@@ -50,7 +50,6 @@ public class SheetValidationContainer {
      * Return false if itemSectionNames is null or empty.
      * @param itemNameA
      * @param itemNameB
-     * @param items
      * @return
      */
     public boolean inSameSection(String itemNameA, String itemNameB) {

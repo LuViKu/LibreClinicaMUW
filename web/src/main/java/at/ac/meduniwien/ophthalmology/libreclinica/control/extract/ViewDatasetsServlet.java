@@ -46,9 +46,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 @SuppressWarnings("all")
 public class ViewDatasetsServlet extends SecureController {
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -781606214750305705L;
 	Locale locale;
 
@@ -193,7 +190,6 @@ public class ViewDatasetsServlet extends SecureController {
      * Initialize data of a DatasetBean and set session attributes for
      * displaying selected data of this DatasetBean
      *
-     * @param db
      * @return
      *
      */

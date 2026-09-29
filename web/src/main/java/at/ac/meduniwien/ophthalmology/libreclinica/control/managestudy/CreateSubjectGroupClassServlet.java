@@ -35,9 +35,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class CreateSubjectGroupClassServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 8536912009639036567L;
 
 	@Override
@@ -90,8 +87,6 @@ public class CreateSubjectGroupClassServlet extends SecureController {
     /**
      * Validates the first section of study inputs and save it into study bean
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmGroup() throws Exception {

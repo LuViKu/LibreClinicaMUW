@@ -396,7 +396,6 @@ public class ScoreUtil {
      * 
      * @param exp
      *            ArrayList<ScoreToken> should be postfix of an expression.
-     * @param errors
      * @return
      */
     // public static String evalSimple(ArrayList<ScoreToken> exp, StringBuffer
@@ -463,7 +462,6 @@ public class ScoreUtil {
      * Return true if one character matches one of those characters '+', '-',
      * '*', '/'
      * 
-     * @param ch
      * @return
      */
     public static boolean isOperator(char c) {

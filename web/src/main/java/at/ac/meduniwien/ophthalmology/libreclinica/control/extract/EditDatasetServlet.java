@@ -39,9 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 @SuppressWarnings("all")
 public class EditDatasetServlet extends SecureController {
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -6853606383296360409L;
 
 	public static String getLink(int dsId) {
@@ -162,7 +159,6 @@ public class EditDatasetServlet extends SecureController {
     /**
      * Initialize data of a DatasetBean and set session attributes for displaying selected data of this DatasetBean
      *
-     * @param db
      * @return
      *
      */

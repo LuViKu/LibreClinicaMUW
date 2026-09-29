@@ -46,14 +46,8 @@ import java.util.Date;
  */
 @SuppressWarnings("all")
 public class RestoreEventCRFServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -2651073493567393033L;
 
-	/**
-     * 
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
@@ -186,8 +180,6 @@ public class RestoreEventCRFServlet extends SecureController {
     /**
      * Send email to director and administrator
      * 
-     * @param request
-     * @param response
      */
     private void sendEmail(String emailBody) throws Exception {
 

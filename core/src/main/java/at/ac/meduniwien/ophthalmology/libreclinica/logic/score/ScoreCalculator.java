@@ -171,7 +171,6 @@ public class ScoreCalculator {
      * Notice: both parameter 'itemdata' and parameter 'errs' might be updated
      * in this method.
      * 
-     * @param displayItems
      * @param items
      * @param itemdata
      * @param errs
@@ -235,11 +234,8 @@ public class ScoreCalculator {
      * old value will be erased and "<erased>" will be saved in database. <br>
      * The parameter 'itemdata' might be overwritten.
      * 
-     * @param itemGroupSizes
      * @param items
      * @param itemdata
-     * @param oldItemdata
-     * @param updatedData
      * @param sectionId
      * @return ArrayList<String> which records left_item_text of items who
      *         failed to be updated into database.

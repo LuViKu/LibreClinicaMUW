@@ -30,9 +30,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
  */
 @SuppressWarnings("all")
 public class StudyBean extends AuditableEntityBean {
-    /**
-     * 
-     */
     private static final long serialVersionUID = -5132550603753118474L;
     private int parentStudyId = 0;
     // YW << The original reason to add this is being able to list on
@@ -290,10 +287,6 @@ public class StudyBean extends AuditableEntityBean {
         return collaborators;
     }
 
-    /**
-     * @param collaborators
-     *            The collaborators to set.
-     */
     public void setSchemaName(String schemaName) {
         this.schemaName = schemaName;
     }

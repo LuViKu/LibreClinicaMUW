@@ -53,7 +53,6 @@ public class ClassCastHelper {
 	 * Returns the value of the named attribute as the type of the assignment variable. 
      * 
 	 * @param <T> the expected result type
-	 * @param the object to cast
      *
      * @return	the object casted to type of the assignment variable
      * @see HttpServletRequest#getAttribute(String)
@@ -67,7 +66,6 @@ public class ClassCastHelper {
 	 * Returns the value of the named attribute as the given result type. 
      * 
 	 * @param <T> the expected result type
-	 * @param the object to cast
      *
 	 * @param resultType the expected result type
      *
@@ -105,7 +103,6 @@ public class ClassCastHelper {
      * or <code>null</code> if no attribute of the given name exists. 
      * 
 	 * @param <T> the expected result type
-	 * @param the object to cast
      *
 	 * @param resultType the expected result type
      *
@@ -129,7 +126,6 @@ public class ClassCastHelper {
      * or <code>null</code> if no attribute of the given name exists. 
      * 
 	 * @param <T> the expected result type
-	 * @param the object to cast
      *
 	 * @param resultType the expected result type
      *
@@ -153,7 +149,6 @@ public class ClassCastHelper {
      * or <code>null</code> if no attribute of the given name exists. 
      * 
 	 * @param <T> the expected result type
-	 * @param the object to cast
      *
 	 * @param resultType the expected result type
      *
@@ -170,7 +165,6 @@ public class ClassCastHelper {
      * 
 	 * @param <T> the expected key type
 	 * @param <V> the expected value type
-	 * @param the object to cast
      *
 	 * @param keyType the expected type of the map key
 	 * @param valueType the expected type of the map value
@@ -187,7 +181,6 @@ public class ClassCastHelper {
      * or <code>null</code> if no attribute of the given name exists. 
      * 
 	 * @param <T> the expected result type
-	 * @param the object to cast
      *
 	 * @param resultType the expected result type
      *

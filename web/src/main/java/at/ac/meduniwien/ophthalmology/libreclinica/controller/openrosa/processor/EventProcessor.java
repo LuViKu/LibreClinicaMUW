@@ -277,8 +277,6 @@ public class EventProcessor implements Processor, Ordered {
     /**
      * Update Status in Event CRF Table
      *
-     * @param ecBean
-     * @param studyBean
      * @param studySubjectBean
      * @param isAnonymous
      * @return

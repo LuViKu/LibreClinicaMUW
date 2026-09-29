@@ -97,9 +97,6 @@ public class FormBeanUtil {
      *            DisplayItemBean
      * @param dataSource
      *            A DataSource for the DAO classes.
-     * @param crfVersionId
-     *            The CRF version Id for fetching associated
-     *            ItemFormMetadataBeans.
      * @param sectionId
      *            The section ID associated with the Items.
      * @param nullValuesList
@@ -1338,8 +1335,6 @@ public class FormBeanUtil {
      * Create a DisplaySectionBean with a list of ItemGroupBeans. NOTE:
      * unGrouped Items are not included
      * 
-     * @param study
-     *            The StudyBean
      * @param sectionId
      *            The Section ID associated with the Items, which end up
      *            providing the content of the tables.

@@ -46,7 +46,6 @@ public class SasNameValidator extends NameValidator {
     /**
      * Get unique SAS name using 36 radix
      * 
-     * @param String
      * 
      * @return String
      */
