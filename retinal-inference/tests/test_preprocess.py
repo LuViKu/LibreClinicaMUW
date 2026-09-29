@@ -333,3 +333,119 @@ def test_preprocess_out_of_range_scan_index_returns_400(client, monkeypatch) -> 
     r = client.post("/preprocess", files=files, data=data, headers=headers)
     assert r.status_code == 400
     assert "out of range" in r.json()["detail"]
+
+
+# ---------- e2e_uuid / laterality validation ----------------------------------
+#
+# e2e_uuid names the companion directory under the B-scan store and both fields
+# reach the log. The app only ever sends its own lower-case UUID and OD/OS.
+
+_APP_UUID = "3f2c9a4e-1b7d-4c2e-9a51-0e8f6d4b2a17"
+_TOKEN_HEADERS = {"X-MUW-Inference-Token": "secret-test-token"}
+
+
+def _files():
+    return {"file": ("input.e2e", b"E2E-FAKE-BINARY", "application/octet-stream")}
+
+
+@pytest.mark.parametrize("app_uuid", [_APP_UUID, "00000000-0000-4000-8000-00000000000a"])
+def test_preprocess_uses_the_apps_uuid_for_the_companion_dir(
+    client, monkeypatch, tmp_path, app_uuid
+) -> None:
+    store = tmp_path / "bscan-store"
+    monkeypatch.setattr(_config.settings, "bscan_store", store, raising=False)
+
+    r = client.post(
+        "/preprocess",
+        files=_files(),
+        data={"laterality": "OD", "e2e_uuid": f" {app_uuid} "},
+        headers=_TOKEN_HEADERS,
+    )
+    assert r.status_code == 200, r.text
+    # Exactly the app's UUID (leading zeros kept), so the app finds the files.
+    assert r.headers["X-MUW-E2E-Uuid"] == app_uuid
+    assert (store / app_uuid / "bscan.dcm").is_file()
+    assert (store / app_uuid / "geometry.json").is_file()
+
+
+@pytest.mark.parametrize(
+    "bad_uuid",
+    [
+        "../escaped",
+        "../../escaped",
+        "sub/dir",
+        "/tmp/absolute",
+        "3F2C9A4E-1B7D-4C2E-9A51-0E8F6D4B2A17",  # the app never sends upper case
+        "3f2c9a4e1b7d4c2e9a510e8f6d4b2a17",  # no hyphens
+        _APP_UUID + "\nforged log line",
+        "not-a-uuid",
+    ],
+)
+def test_preprocess_refuses_an_e2e_uuid_that_is_not_a_uuid(
+    client, monkeypatch, tmp_path, bad_uuid
+) -> None:
+    store = tmp_path / "store-root" / "bscans"
+    monkeypatch.setattr(_config.settings, "bscan_store", store, raising=False)
+
+    r = client.post(
+        "/preprocess",
+        files=_files(),
+        data={"laterality": "OD", "e2e_uuid": bad_uuid},
+        headers=_TOKEN_HEADERS,
+    )
+    assert r.status_code == 400, r.text
+    assert "e2e_uuid" in r.json()["detail"]
+    # Refused before any work: no conversion ran, nothing was written anywhere.
+    assert client.captured["prepare"] == []
+    assert not (tmp_path / "store-root" / "escaped").exists()
+    assert not (tmp_path / "escaped").exists()
+    assert not store.exists() or not any(store.rglob("bscan.dcm"))
+
+
+def test_preprocess_does_not_follow_a_symlinked_entry_out_of_the_store(
+    client, monkeypatch, tmp_path
+) -> None:
+    store = tmp_path / "bscan-store"
+    store.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (store / _APP_UUID).symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(_config.settings, "bscan_store", store, raising=False)
+
+    r = client.post(
+        "/preprocess",
+        files=_files(),
+        data={"laterality": "OD", "e2e_uuid": _APP_UUID},
+        headers=_TOKEN_HEADERS,
+    )
+    # The conversion result still comes back; only persistence is skipped.
+    assert r.status_code == 200, r.text
+    assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize("bad_laterality", ["OU", "XX", "OD\r\nforged log line", "left"])
+def test_preprocess_refuses_an_unknown_laterality(client, bad_laterality) -> None:
+    r = client.post(
+        "/preprocess",
+        files=_files(),
+        data={"laterality": bad_laterality},
+        headers=_TOKEN_HEADERS,
+    )
+    assert r.status_code == 400, r.text
+    assert "laterality" in r.json()["detail"]
+    assert client.captured["prepare"] == []
+
+
+@pytest.mark.parametrize("laterality", ["OD", "OS", "od", " OS "])
+def test_preprocess_accepts_od_and_os(client, laterality) -> None:
+    r = client.post(
+        "/preprocess", files=_files(), data={"laterality": laterality}, headers=_TOKEN_HEADERS
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_preprocess_laterality_and_uuid_stay_optional(client) -> None:
+    r = client.post("/preprocess", files=_files(), headers=_TOKEN_HEADERS)
+    assert r.status_code == 200, r.text
+    # Without an app UUID the digest-derived one is used, as before.
+    assert len(r.headers["X-MUW-E2E-Uuid"]) == 36
