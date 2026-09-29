@@ -603,10 +603,11 @@ public class RuleSetService implements RuleSetServiceInterface {
         ArrayList<RuleSetBean> shownRuleSets = new ArrayList<>();
         for (RuleSetBean ruleSetBean : ruleSets) {
             logger.debug(
-                "Entering the filterRuleSetsBy HiddenItems? Thread::" + Thread.currentThread() +
-                "eventCrf?" + eventCrf +
-                "crfVersion??" + crfVersion +
-                "ruleSets?" + ruleSets
+                "Entering filterRuleSetsByHiddenItems on thread {} - eventCrf {}, crfVersion {}, {} rule set(s)",
+                Thread.currentThread(),
+                eventCrf == null ? null : eventCrf.getId(),
+                crfVersion == null ? null : crfVersion.getId(),
+                ruleSets.size()
             );
             ItemBean target = ruleSetBean.getItem();
             ItemFormMetadataBean metadataBean = this.getItemFormMetadataDao().findByItemIdAndCRFVersionId(target.getId(), crfVersion.getId());
