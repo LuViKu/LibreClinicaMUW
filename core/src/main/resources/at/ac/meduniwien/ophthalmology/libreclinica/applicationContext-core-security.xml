@@ -89,15 +89,25 @@
         </property>
     </bean>
 
-    <bean id="ldapAuthenticationProvider" class="org.springframework.security.ldap.authentication.LdapAuthenticationProvider">
+    <!-- LDAP takes part in authentication only with ldap.enabled=true. The
+         switch declines (and fails any direct call) while disabled, so a
+         failed local login no longer goes on to an LDAP bind; enabled, it
+         hands every call to the LdapAuthenticationProvider unchanged. Both
+         the authentication manager and securityManager reference this id. -->
+    <bean id="ldapAuthenticationProvider" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LdapAuthenticationSwitch">
+        <constructor-arg value="${ldap.enabled:false}"/>
         <constructor-arg>
-            <bean class="org.springframework.security.ldap.authentication.BindAuthenticator">
-                <constructor-arg ref="contextSource"/>
-                <property name="userSearch" ref="openClinicaLdapUserSearch"/>
+            <bean class="org.springframework.security.ldap.authentication.LdapAuthenticationProvider">
+                <constructor-arg>
+                    <bean class="org.springframework.security.ldap.authentication.BindAuthenticator">
+                        <constructor-arg ref="contextSource"/>
+                        <property name="userSearch" ref="openClinicaLdapUserSearch"/>
+                    </bean>
+                </constructor-arg>
+                <constructor-arg>
+                    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaLdapAuthoritiesPopulator"/>
+                </constructor-arg>
             </bean>
-        </constructor-arg>
-        <constructor-arg>
-            <bean class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaLdapAuthoritiesPopulator"/>
         </constructor-arg>
     </bean>
 
