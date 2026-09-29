@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
 import java.util.ResourceBundle;
 
@@ -96,11 +95,9 @@ public class SystemController {
         map.put("User Home", System.getProperty("user.home"));
         map.put("User Directory", System.getProperty("user.dir"));
         map.put("User Name", System.getProperty("user.name"));
-
-        Map<String, String> env = System.getenv();
-        for (String envName : env.keySet()) {
-            System.out.format("%s=%s%n", envName, env.get(envName));
-        }
+        // The heritage code printed every environment variable to stdout
+        // here (Tomcat's log): credentials passed as environment variables
+        // ended up in it on every call. Removed 2026-09.
 
         try {
             UserAccountDAO udao = new UserAccountDAO(dataSource);
@@ -336,33 +333,13 @@ public class SystemController {
             extractMap.put("extract." + n, extractmap);
         }
 
-        HashMap<String, String> extractDatamart = new HashMap<>();
-        HashMap<String, String> datamartRole = new HashMap<>();
-        String username = CoreResources.getExtractField("db1.username");
-        String password = CoreResources.getExtractField("db1.password");
-        String url = CoreResources.getExtractField("db1.url");
-
-        extractDatamart.put("db1.username", username);
-        extractDatamart.put("db1.url", url);
-        extractDatamart.put("db1.dataBase", CoreResources.getExtractField("db1.dataBase"));
-
         HashMap<String, String> extractNumber = new HashMap<>();
         extractNumber.put("extract.number", CoreResources.getExtractField("extract.number"));
 
         extractMap.put("extract.number", extractNumber);
-        // extractMap.put("DataMart", extractDatamart);
-
-        HashMap<String, String> datamartMap = new HashMap<>();
-
-        try (Connection conn = DriverManager.getConnection(url, username, password)) {
-            datamartRole = getDbRoleProperties(conn, datamartRole, username);
-            datamartMap.put("connection", "Open");
-        } catch (Exception e) {
-            datamartMap.put("connection", "Close");
-        }
-        // map.put("Datamart Facts", datamartMap);
+        // The heritage code also opened a connection to the "db1" datamart on
+        // every call and collected its details, and returned none of it.
         map.put("extract.properties", extractMap);
-        // map.put("Role Properties", datamartRole);
 
         return new ResponseEntity<HashMap<String, Object>>(map, org.springframework.http.HttpStatus.OK);
 
