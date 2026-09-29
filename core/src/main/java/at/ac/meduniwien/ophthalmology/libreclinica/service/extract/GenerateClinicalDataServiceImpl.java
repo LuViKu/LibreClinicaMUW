@@ -11,7 +11,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.extract;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -222,6 +221,15 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 		// return null;
 	}
 
+	/**
+	 * Puts the subject's merged audit entries (study subject, group
+	 * assignments, subject) in time order. Collections.sort used their
+	 * natural order, which is by OID string.
+	 */
+	static void sortAuditLogsChronologically(List<AuditLogBean> auditLogs) {
+		auditLogs.sort(AuditLogBean.CHRONOLOGICAL);
+	}
+
 	private ExportSubjectDataBean setExportSubjectDataBean(
 			StudySubject studySubj, Study study,List<StudyEvent> studyEvents,String formVersionOID) {
 
@@ -255,7 +263,7 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 
         exportSubjectDataBean.getAuditLogs().getAuditLogs().addAll(subjectGroupMapLogs.getAuditLogs());
         exportSubjectDataBean.getAuditLogs().getAuditLogs().addAll(subjectLogs.getAuditLogs());
-        Collections.sort(exportSubjectDataBean.getAuditLogs().getAuditLogs());
+        sortAuditLogsChronologically(exportSubjectDataBean.getAuditLogs().getAuditLogs());
 		if(isCollectDns())
 			exportSubjectDataBean.setDiscrepancyNotes(fetchDiscrepancyNotes(studySubj));
 		
