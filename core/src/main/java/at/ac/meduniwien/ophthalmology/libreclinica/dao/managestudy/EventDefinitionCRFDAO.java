@@ -261,7 +261,7 @@ public class EventDefinitionCRFDAO extends AuditableEntityDAO<EventDefinitionCRF
     public ArrayList<EventDefinitionCRFBean> findAllSubmissionUriAndStudyId(String submissionUri, int studyId) {
         this.setTypesExpected();
         HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(Integer.valueOf(1), new String(submissionUri));
+        variables.put(Integer.valueOf(1), submissionUri);
         variables.put(Integer.valueOf(2), Integer.valueOf(studyId));
         variables.put(Integer.valueOf(3), Integer.valueOf(studyId));
 
@@ -692,7 +692,7 @@ public class EventDefinitionCRFDAO extends AuditableEntityDAO<EventDefinitionCRF
         Boolean answer = false;
         Boolean siteR = false;
         Boolean studyR = false;
-        Boolean isExisted = false;
+        boolean isExisted = false;
         for(HashMap<String, Object> hm : alist) {
             Integer dbStudyId = (Integer) hm.get("study_id");
             Integer parentId = (Integer) hm.get("parent_id");
@@ -983,18 +983,18 @@ public class EventDefinitionCRFDAO extends AuditableEntityDAO<EventDefinitionCRF
         return result;
     }
 
-    private class EventDefinitionCRFComparator implements Comparator<EventDefinitionCRFBean> {
+    private static class EventDefinitionCRFComparator implements Comparator<EventDefinitionCRFBean> {
 
         @Override
         public int compare(EventDefinitionCRFBean o1, EventDefinitionCRFBean o2) {
-            Integer ord1 = o1.getOrdinal();
-            Integer ord2 = o2.getOrdinal();
+            int ord1 = o1.getOrdinal();
+            int ord2 = o2.getOrdinal();
             /*
              * There are DB entries with same ordinal, that cause one of the
              * beans to not be added to the set. To avoid that this method will
              * return -1 when comparing them.
              */
-            int comparison = ord1.compareTo(ord2);
+            int comparison = Integer.compare(ord1, ord2);
             return comparison == 0 ? -1 : comparison;
         }
 

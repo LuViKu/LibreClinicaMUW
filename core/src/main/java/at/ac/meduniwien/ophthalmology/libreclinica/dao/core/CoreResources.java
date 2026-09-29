@@ -102,8 +102,9 @@ public class CoreResources implements ResourceLoaderAware {
         if (!file.exists())
             return null;
 
-        InputStream inputStream = new FileInputStream(propFileName);
-        prop.load(inputStream);
+        try (InputStream inputStream = new FileInputStream(propFileName)) {
+            prop.load(inputStream);
+        }
 
         return prop;
     }

@@ -455,7 +455,7 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
 
         partialSql = sort.execute("");
         sql = sql + partialSql;
-        if (partialSql.equals("")) {
+        if (partialSql.isEmpty()) {
             sql = sql + "  ORDER BY SS.label LIMIT " + (rowEnd - rowStart) + " OFFSET " + rowStart;
         } else {
             sql = sql + " LIMIT " + (rowEnd - rowStart) + " OFFSET " + rowStart;
@@ -664,7 +664,7 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // variables.put(Integer.valueOf(ind), new java.util.Date());
         variables.put(ind++, sb.getUpdater().getId());
         variables.put(ind++, sb.getSecondaryLabel());
-        if (sb.getTime_zone() == null || sb.getTime_zone().equals("")) {
+        if (sb.getTime_zone() == null || sb.getTime_zone().isEmpty()) {
             nullVars.put(ind, TypeNames.STRING);
             variables.put(ind, "");
             ind++;

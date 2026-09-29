@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -748,7 +749,7 @@ public class OdmExtractDAO extends DatasetDAO {
     //The method underneath tries to reuse the code based on getODMMetadata
     public void getODMMetadataForForm(MetaDataVersionBean metadata,String formVersionOID,String odmVersion){
     	  FormDefBean formDef = new FormDefBean();
-    	  String cvIds = new String("");
+    	  String cvIds = "";
     	  CRFVersionDAO crfVersionDAO = new CRFVersionDAO(this.ds);
   	 	CRFVersionBean crfVersionBean = crfVersionDAO.findByOid(formVersionOID);
   	 	cvIds =crfVersionBean.getId()+"";
@@ -1229,14 +1230,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 cl.setName(rsLabel);
                 cl.setPreSASFormatName(rsLabel);
                 cl.setDataType(datatype);
-                Iterator<String> iter = codes.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> code : codes.entrySet()) {
                     CodeListItemBean cli = new CodeListItemBean();
-                    cli.setCodedValue(de);
+                    cli.setCodedValue(code.getKey());
                     TranslatedTextBean tt = cli.getDecode();
-                    // cli.getDecode().setText(codes.get(de));
-                    tt.setText(codes.get(de));
+                    tt.setText(code.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     cli.setDecode(tt);
                     cl.getCodeListItems().add(cli);
@@ -1251,14 +1249,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 msl.setName(rsLabel);
                 msl.setDataType(datatype);
                 msl.setActualDataType(datatype);
-                Iterator<String> iter = multi.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> option : multi.entrySet()) {
                     MultiSelectListItemBean msli = new MultiSelectListItemBean();
-                    msli.setCodedOptionValue(de);
+                    msli.setCodedOptionValue(option.getKey());
                     TranslatedTextBean tt = new TranslatedTextBean();
-                    String t = multi.get(de);
-                    tt.setText(t);
+                    tt.setText(option.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     msli.setDecode(tt);
                     msl.getMultiSelectListItems().add(msli);
@@ -1858,14 +1853,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 cl.setName(rsLabel);
                 cl.setPreSASFormatName(rsLabel);
                 cl.setDataType(datatype);
-                Iterator<String> iter = codes.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> code : codes.entrySet()) {
                     CodeListItemBean cli = new CodeListItemBean();
-                    cli.setCodedValue(de);
+                    cli.setCodedValue(code.getKey());
                     TranslatedTextBean tt = cli.getDecode();
-                    // cli.getDecode().setText(codes.get(de));
-                    tt.setText(codes.get(de));
+                    tt.setText(code.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     cli.setDecode(tt);
                     cl.getCodeListItems().add(cli);
@@ -1880,14 +1872,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 msl.setName(rsLabel);
                 msl.setDataType(datatype);
                 msl.setActualDataType(datatype);
-                Iterator<String> iter = multi.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> option : multi.entrySet()) {
                     MultiSelectListItemBean msli = new MultiSelectListItemBean();
-                    msli.setCodedOptionValue(de);
+                    msli.setCodedOptionValue(option.getKey());
                     TranslatedTextBean tt = new TranslatedTextBean();
-                    String t = multi.get(de);
-                    tt.setText(t);
+                    tt.setText(option.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     msli.setDecode(tt);
                     msl.getMultiSelectListItems().add(msli);
@@ -2544,7 +2533,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = studySubjectLabel + "-" + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }
@@ -2601,7 +2590,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = oidKey + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }
@@ -2658,7 +2647,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = ecId + "-" + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }
@@ -2718,7 +2707,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = idataId + "-" + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }

@@ -775,9 +775,9 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
                 result.put(studyEventId, new TreeSet<EventCRFBean>(new Comparator<EventCRFBean>() {
                     @Override
                     public int compare(EventCRFBean o1, EventCRFBean o2) {
-                        Integer id1 = o1.getId();
-                        Integer id2 = o2.getId();
-                        return id1.compareTo(id2);
+                        int id1 = o1.getId();
+                        int id2 = o2.getId();
+                        return Integer.compare(id1, id2);
                     }
                 }));
             }

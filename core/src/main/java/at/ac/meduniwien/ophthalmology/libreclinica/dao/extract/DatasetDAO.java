@@ -523,7 +523,6 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
     /**
      * Initialize itemMap, itemIds, itemDefCrf and groupIds for a DatasetBean
      *
-     * @param db
      * @return
      * @author ywang (Feb., 2008)
      */
@@ -545,7 +544,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
             Integer defId = (Integer) row.get("sed_id");
             String defName = (String) row.get("sed_name");
             String crfName = (String) row.get("crf_name");
-            Integer itemId = ib.getId();
+            int itemId = ib.getId();
             String key = defId + "_" + itemId;
             if (!db.getItemMap().containsKey(key)) {
                 ib.setSelected(true);
@@ -577,7 +576,6 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
     /**
      * Update all columns of the dataset table except owner_id
      *
-     * @param eb
      * @return
      *
      * @author ywang (Feb., 2008)

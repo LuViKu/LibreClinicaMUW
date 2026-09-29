@@ -26,8 +26,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ShowAction
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.hibernate.stat.Statistics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 // 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
@@ -45,7 +43,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 
     private CoreResources coreResources;
-    protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
+    // logger is inherited from AbstractDomainDao, declared there with the very
+    // same LoggerFactory.getLogger(getClass().getName()) expression; the local
+    // copy only shadowed it.
     
     
     @Override
