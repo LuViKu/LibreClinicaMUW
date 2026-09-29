@@ -10,6 +10,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.rule;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.io.SecureFilePaths;
 import org.apache.commons.fileupload2.core.DiskFileItem;
 import org.apache.commons.fileupload2.core.DiskFileItemFactory;
 import org.apache.commons.fileupload2.core.FileUploadByteCountLimitException;
@@ -105,16 +106,29 @@ public class FileUploadHelper {
         }
     }
 
-    private File processUploadedFile(DiskFileItem item, String dirToSaveUploadedFileIn) {
+    /**
+     * Writes one uploaded part into the upload directory.
+     *
+     * <p>The multipart name is the client's, so only its last segment is taken
+     * as a file name, and the file that segment produces has to sit inside the
+     * directory. A name failing either test aborts the upload rather than
+     * yielding a file: the caller collects the return value straight into the
+     * list it hands back, which has no room for a placeholder, and the
+     * extension check in that same loop already fails the whole upload on a
+     * name it rejects.
+     */
+    private File processUploadedFile(DiskFileItem item, String dirToSaveUploadedFileIn) throws IOException {
         dirToSaveUploadedFileIn = dirToSaveUploadedFileIn == null ? System.getProperty("java.io.tmpdir") : dirToSaveUploadedFileIn;
-        String fileName = item.getName();
-        // Some browsers IE 6,7 getName returns the whole path
-        int startIndex = fileName.lastIndexOf('\\');
-        if (startIndex != -1) {
-            fileName = fileName.substring(startIndex + 1, fileName.length());
+        File directory = new File(dirToSaveUploadedFileIn);
+        String fileName = SecureFilePaths.safeUploadName(item.getName());
+        if (fileName == null) {
+            throw new OpenClinicaSystemException("uploaded file has no usable file name");
         }
 
-        File uploadedFile = new File(dirToSaveUploadedFileIn + File.separator + fileName);
+        File uploadedFile = new File(directory, fileName);
+        if (!SecureFilePaths.isInside(uploadedFile, directory)) {
+            throw new OpenClinicaSystemException("uploaded file name does not stay inside the upload directory");
+        }
         if (fileRenamePolicy != null) {
         	try {
         		uploadedFile = fileRenamePolicy.rename(uploadedFile, item.getInputStream());
