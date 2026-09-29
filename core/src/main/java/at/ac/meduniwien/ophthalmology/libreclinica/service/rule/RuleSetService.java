@@ -289,7 +289,7 @@ public class RuleSetService implements RuleSetServiceInterface {
             ExecutionMode executionMode, StudyBean currentStudy, UserAccountBean ub) {
 
         List<RuleSetBean> ruleSets = new ArrayList<>();
-        RuleSetBean ruleSet = getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(ruleSetRuleId, crfVersionId, currentStudy);
+        RuleSetBean ruleSet = getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(ruleSetRuleId, crfVersionId);
         if (ruleSet != null) {
             ruleSets.add(ruleSet);
         }
@@ -482,7 +482,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSetBean;
     }
 
-    private RuleSetBean getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(String ruleSetRuleId, String crfVersionId, StudyBean currentStudy) {
+    private RuleSetBean getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(String ruleSetRuleId, String crfVersionId) {
         RuleSetBean ruleSetBean = null;
         if (ruleSetRuleId != null && crfVersionId != null && ruleSetRuleId.length() > 0 && crfVersionId.length() > 0) {
             RuleSetRuleBean ruleSetRule = getRuleSetRuleDao().findById(Integer.valueOf(ruleSetRuleId));

@@ -107,9 +107,9 @@ public class StudySubjectServiceImpl implements StudySubjectService {
             DisplayStudyEventBean de = new DisplayStudyEventBean();
             de.setStudyEvent(event);
             de.setDisplayEventCRFs((ArrayList<DisplayEventCRFBean>) getDisplayEventCRFs(eventCRFs, userAccount, currentRole, event.getSubjectEventStatus(),
-                    study, nonEmptyEventCrf, crfVersionById, crfById, event.getStudyEventDefinitionId(), eventDefinitionCRFs));
+                    nonEmptyEventCrf, crfVersionById, crfById, eventDefinitionCRFs));
             ArrayList<DisplayEventDefinitionCRFBean> al =
-                getUncompletedCRFs(eventDefinitionCRFs, eventCRFs, event.getSubjectEventStatus(), nonEmptyEventCrf, crfVersionById, crfById);
+                getUncompletedCRFs(eventDefinitionCRFs, eventCRFs, event.getSubjectEventStatus(), nonEmptyEventCrf, crfVersionById);
             populateUncompletedCRFsWithCRFAndVersions(al, crfVersionById, crfById);
             de.setUncompletedCRFs(al);
 
@@ -127,8 +127,8 @@ public class StudySubjectServiceImpl implements StudySubjectService {
     }
 
     private List<DisplayEventCRFBean> getDisplayEventCRFs(List<EventCRFBean> eventCRFs, UserAccountBean ub, StudyUserRoleBean currentRole, SubjectEventStatus status,
-            StudyBean study, Set<Integer> nonEmptyEventCrf, Map<Integer, CRFVersionBean> crfVersionById, Map<Integer, CRFBean> crfById,
-            Integer studyEventDefinitionId, List<EventDefinitionCRFBean> eventDefinitionCRFs) {
+            Set<Integer> nonEmptyEventCrf, Map<Integer, CRFVersionBean> crfVersionById, Map<Integer, CRFBean> crfById,
+            List<EventDefinitionCRFBean> eventDefinitionCRFs) {
         ArrayList<DisplayEventCRFBean> answer = new ArrayList<DisplayEventCRFBean>();
 
         for (int i = 0; i < eventCRFs.size(); i++) {
@@ -191,7 +191,7 @@ public class StudySubjectServiceImpl implements StudySubjectService {
     }
 
     private ArrayList<DisplayEventDefinitionCRFBean> getUncompletedCRFs(List<EventDefinitionCRFBean> eventDefinitionCRFs, List<EventCRFBean> eventCRFs, SubjectEventStatus status,
-            Set<Integer> nonEmptyEventCrf, Map<Integer, CRFVersionBean> crfVersionById, Map<Integer, CRFBean> crfById) {
+            Set<Integer> nonEmptyEventCrf, Map<Integer, CRFVersionBean> crfVersionById) {
         int i;
         HashMap<Integer, Boolean> completed = new HashMap<Integer, Boolean>();
         HashMap<Integer, EventCRFBean> startedButIncompleted = new HashMap<Integer, EventCRFBean>();

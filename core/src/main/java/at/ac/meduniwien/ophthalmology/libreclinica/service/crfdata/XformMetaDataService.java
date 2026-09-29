@@ -266,13 +266,13 @@ public class XformMetaDataService {
                 XformItem xformItem = container.findItemByGroupAndRef(xformGroup, widget.getRef());
                 String readonly = html.getHead().getModel().getBindByNodeSet(widget.getRef()).getReadOnly();
                 if (!xformItem.getItemName().equals("OC.STUDY_SUBJECT_ID") && !xformItem.getItemName().equals("OC.STUDY_SUBJECT_ID_CONFIRM") && (readonly == null || !readonly.trim().equals("true()"))) {
-                    Item item = createItem(html, widget, xformGroup, xformItem, crf, ub, usedItemOids, errors);
+                    Item item = createItem(html, xformItem, crf, ub, usedItemOids, errors);
                     if (item != null) {
                         ResponseType responseType = getResponseType(html, xformItem);
                         ResponseSet responseSet = responseSetService.getResponseSet(html, submittedXformText, xformItem, version, responseType, item, errors);
                         createItemFormMetadata(html, xformItem, item, responseSet, section, version, itemOrdinal);
                         createVersioningMap(version, item);
-                        createItemGroupMetadata(html, item, version, itemGroup, isRepeating, itemOrdinal);
+                        createItemGroupMetadata(item, version, itemGroup, isRepeating, itemOrdinal);
                         itemOrdinal++;
                     }
                 }
@@ -281,7 +281,7 @@ public class XformMetaDataService {
 
     }
 
-    private void createItemGroupMetadata(Html html, Item item, CrfVersion version, ItemGroup itemGroup, boolean isRepeating, Integer itemOrdinal) {
+    private void createItemGroupMetadata(Item item, CrfVersion version, ItemGroup itemGroup, boolean isRepeating, Integer itemOrdinal) {
         ItemGroupMetadata itemGroupMetadata = new ItemGroupMetadata();
         itemGroupMetadata.setItemGroup(itemGroup);
         itemGroupMetadata.setHeader("");
@@ -346,7 +346,7 @@ public class XformMetaDataService {
         itemFormMetadataDao.saveOrUpdate(itemFormMetadata);
     }
 
-    private Item createItem(Html html, UserControl widget, XformGroup xformGroup, XformItem xformItem, CrfBean crf, UserAccountBean ub,
+    private Item createItem(Html html, XformItem xformItem, CrfBean crf, UserAccountBean ub,
             ArrayList<String> usedItemOids, Errors errors) throws Exception {
         ItemDataType newDataType = getItemDataType(html, xformItem);
 
