@@ -66,16 +66,16 @@ public class FindSubjectsFilter implements CriteriaCommand {
 
                 }
             } else if (property.startsWith("sgc_")) {
-                int study_group_class_id = Integer.parseInt(property.substring(4));
-
-                int group_id = Integer.parseInt(value.toString());
-                criteria +=
-                    "AND " + group_id + " = (" + " select distinct sgm.study_group_id"
-                        + " FROM SUBJECT_GROUP_MAP sgm, STUDY_GROUP sg, STUDY_GROUP_CLASS sgc, STUDY s" + " WHERE " + " sgm.study_group_class_id = "
-                        + study_group_class_id + " AND sgm.study_subject_id = SS.study_subject_id" + " AND sgm.study_group_id = sg.study_group_id"
-                        + " AND (s.parent_study_id = sgc.study_id OR SS.study_id = sgc.study_id)" + " AND sgm.study_group_class_id = sgc.study_group_class_id"
-                        + " ) ";
-
+                Integer study_group_class_id = asIntOrNull(property.substring(4));
+                Integer group_id = asIntOrNull(value.toString());
+                if (study_group_class_id != null && group_id != null) {
+                    criteria +=
+                        "AND " + group_id + " = (" + " select distinct sgm.study_group_id"
+                            + " FROM SUBJECT_GROUP_MAP sgm, STUDY_GROUP sg, STUDY_GROUP_CLASS sgc, STUDY s" + " WHERE " + " sgm.study_group_class_id = "
+                            + study_group_class_id + " AND sgm.study_subject_id = SS.study_subject_id" + " AND sgm.study_group_id = sg.study_group_id"
+                            + " AND (s.parent_study_id = sgc.study_id OR SS.study_id = sgc.study_id)" + " AND sgm.study_group_class_id = sgc.study_group_class_id"
+                            + " ) ";
+                }
             }
 
             else {
@@ -84,6 +84,27 @@ public class FindSubjectsFilter implements CriteriaCommand {
             }
         }
         return criteria;
+    }
+
+    /**
+     * The candidate as an int, or {@code null} when it is not one.
+     *
+     * <p>Both the filter property and the filter value reach this class
+     * straight from the listing request, so a hand-crafted request can put a
+     * non-number where a numeric column id or status id is expected. The term
+     * is then dropped — the same thing this filter already does with a value
+     * it does not recognise — instead of aborting the whole listing with an
+     * uncaught NumberFormatException.
+     */
+    private static Integer asIntOrNull(String candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(candidate);
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 
     private static class Filter {

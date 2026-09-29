@@ -2301,16 +2301,14 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 3 || typeId == 6) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(Status.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(Status.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // Same free-text audit value as the form-data branch below:
+                    // parse when it is a status id, copy it through when it is
+                    // not, instead of aborting the whole export. This also
+                    // repairs a transcription slip — the "0" branch for the NEW
+                    // value used to call setOldValue, so an entity moved to
+                    // "invalid" was exported with no NewValue at all.
+                    auditLog.setNewValue(statusNameOrRaw(newValue));
+                    auditLog.setOldValue(statusNameOrRaw(oldValue));
                 } else {
                     auditLog.setNewValue(newValue);
                     auditLog.setOldValue(oldValue);
@@ -2353,16 +2351,10 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 17 || typeId == 18 || typeId == 19 || typeId == 20 || typeId == 21 || typeId == 22 || typeId == 23 || typeId == 31) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setOldValue(SubjectEventStatus.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(SubjectEventStatus.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(SubjectEventStatus.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(SubjectEventStatus.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // See statusNameOrRaw: free-text audit value, and the same
+                    // transcription slip in the "0" branch for the NEW value.
+                    auditLog.setNewValue(subjectEventStatusNameOrRaw(newValue));
+                    auditLog.setOldValue(subjectEventStatusNameOrRaw(oldValue));
                 } else {
                     auditLog.setNewValue(newValue);
                     auditLog.setOldValue(oldValue);
@@ -2395,10 +2387,28 @@ public class OdmExtractDAO extends DatasetDAO {
         }
     }
 
+    /**
+     * The display name of a subject-event status id, or the value itself when
+     * it is not one.
+     *
+     * <p>The subject-event flavour of {@link #statusNameOrRaw(String)}, for the
+     * audit event types that store a subject_event_status id. Same contract,
+     * same reason: old_value/new_value are free text in the schema and an
+     * exporter must not die on the content of a row it is only copying.
+     */
+    static String subjectEventStatusNameOrRaw(String value) {
+        if (value == null) return null;
+        if ("0".equals(value)) return SubjectEventStatus.INVALID.getName();
+        try {
+            return SubjectEventStatus.getFromMap(Integer.parseInt(value.trim())).getName();
+        } catch (NumberFormatException notAStatusId) {
+            return value;
+        }
+    }
+
     protected void setOCFormDataAuditLogs(StudyBean study, OdmClinicalDataBean data, String studySubjectOids, String ecIds,
             HashMap<Integer, String> formOidPoses) {
         this.setOCFormDataAuditsTypesExpected();
-        String dbName = CoreResources.getDBName();
         logger.debug("Begin to execute GetOCFormDataAuditsSql");
         logger.debug("getOCFormDataAuditsSql= " + this.getOCFormDataAuditsSql(studySubjectOids, ecIds));
         ArrayList<HashMap<String, Object>> rows = select(this.getOCFormDataAuditsSql(studySubjectOids, ecIds));
@@ -2477,16 +2487,14 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 12) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(Status.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(Status.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // Same free-text audit value as the form-data branch below:
+                    // parse when it is a status id, copy it through when it is
+                    // not, instead of aborting the whole export. This also
+                    // repairs a transcription slip — the "0" branch for the NEW
+                    // value used to call setOldValue, so an entity moved to
+                    // "invalid" was exported with no NewValue at all.
+                    auditLog.setNewValue(statusNameOrRaw(newValue));
+                    auditLog.setOldValue(statusNameOrRaw(oldValue));
                 } else {
                     auditLog.setNewValue(newValue);
                     auditLog.setOldValue(oldValue);

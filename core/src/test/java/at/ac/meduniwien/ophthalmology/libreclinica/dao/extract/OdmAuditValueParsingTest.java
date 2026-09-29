@@ -15,6 +15,7 @@ import java.util.Locale;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
 /**
@@ -73,5 +74,35 @@ public class OdmAuditValueParsingTest {
     @Test
     public void aPaddedStatusIdIsStillTranslated() {
         assertEquals(OdmExtractDAO.statusNameOrRaw("1"), OdmExtractDAO.statusNameOrRaw(" 1 "));
+    }
+
+    /*
+     * The subject-event flavour. The event-status audit branch carried the
+     * same unguarded Integer.parseInt, and the same slip in the "0" branch:
+     * the NEW value was written to setOldValue, so an event moved to
+     * "invalid" reached the export with no NewValue at all.
+     */
+
+    @Test
+    public void aSubjectEventStatusIdBecomesItsName() {
+        assertEquals(SubjectEventStatus.SCHEDULED.getName(), OdmExtractDAO.subjectEventStatusNameOrRaw("1"));
+    }
+
+    @Test
+    public void zeroIsTheInvalidSubjectEventStatus() {
+        assertEquals(SubjectEventStatus.INVALID.getName(), OdmExtractDAO.subjectEventStatusNameOrRaw("0"));
+    }
+
+    @Test
+    public void aNonNumericSubjectEventAuditValueTravelsThroughUnchanged() {
+        String ts = "2026-06-21T15:48:36.647138129Z";
+        assertEquals(ts, OdmExtractDAO.subjectEventStatusNameOrRaw(ts));
+        assertEquals("signed", OdmExtractDAO.subjectEventStatusNameOrRaw("signed"));
+        assertEquals("", OdmExtractDAO.subjectEventStatusNameOrRaw(""));
+    }
+
+    @Test
+    public void aNullSubjectEventAuditValueStaysNull() {
+        assertEquals(null, OdmExtractDAO.subjectEventStatusNameOrRaw(null));
     }
 }
