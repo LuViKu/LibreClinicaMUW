@@ -98,10 +98,6 @@ public class RequestPasswordServlet extends SecureController {
             logger.info("after processing form,no errors");
             // whether this user's email is in the DB
             if (ubDB.getEmail() != null && ubDB.getEmail().equalsIgnoreCase(ubForm.getEmail())) {
-                logger.info("ubDB.getPasswdChallengeQuestion()" + ubDB.getPasswdChallengeQuestion());
-                logger.info("ubForm.getPasswdChallengeQuestion()" + ubForm.getPasswdChallengeQuestion());
-                logger.info("ubDB.getPasswdChallengeAnswer()" + ubDB.getPasswdChallengeAnswer());
-                logger.info("ubForm.getPasswdChallengeAnswer()" + ubForm.getPasswdChallengeAnswer());
 
                 // if this user's password challenge can be verified
                 if (ubDB.getPasswdChallengeQuestion().equals(ubForm.getPasswdChallengeQuestion()) &&

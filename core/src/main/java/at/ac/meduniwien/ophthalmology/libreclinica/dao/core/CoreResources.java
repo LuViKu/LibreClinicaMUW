@@ -379,7 +379,9 @@ public class CoreResources implements ResourceLoaderAware {
         if (DATAINFO.getProperty("userAccountNotification") != null) {
             DATAINFO.setProperty("user_account_notification", DATAINFO.getProperty("userAccountNotification"));
         }
-        logger.debug("DataInfo..." + DATAINFO);
+        // The key count only: the properties hold the database, mail and
+        // Remidio passwords and every device token.
+        logger.debug("DataInfo loaded: {} keys", DATAINFO.size());
 
         String designerURL = DATAINFO.getProperty("designerURL");
         if (designerURL == null || designerURL.isEmpty()) {
