@@ -8,7 +8,7 @@ name: Security scan
 # changes.
 on:
   push:
-    branches: [lc-develop, master]
+    branches: [lc-develop, main]
   schedule:
     # Daily 04:00 UTC - picks up newly-published CVEs against pinned deps.
     - cron: '0 4 * * *'
