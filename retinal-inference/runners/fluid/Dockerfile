@@ -37,6 +37,7 @@ RUN pip install --no-cache-dir /tmp/wheels/dlfwdata-*.whl \
 RUN pip install --no-cache-dir "fastapi<0.104" "uvicorn[standard]<0.22" "pydicom<3"
 
 COPY app.py /workdir/app.py
+COPY runner_guard.py /workdir/runner_guard.py
 # 2026-06-22 — projection.py intentionally NOT bundled in the cluster
 # image. The cluster runner emits the raw segmentation only
 # (fluidseg.npz); presentation artifacts (projection PNGs, per-slice

@@ -57,10 +57,16 @@ def _post_json(url: str, payload: dict[str, Any], timeout: float) -> dict[str, A
     monkeypatch this function to avoid real network calls.
     """
     data = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    # Runners started with RUNNER_AUTH_TOKEN require the sidecar's shared
+    # token; runners without it ignore the header.
+    token = _config.settings.auth_token
+    if token:
+        headers["X-MUW-Inference-Token"] = token
     req = urllib.request.Request(  # noqa: S310 — internal compose-network URL
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:

@@ -35,6 +35,8 @@ steps: IOWA layer segmentation → sese_ga model → RPEL → area.
 | `RUNNER_GA_WEIGHTS` | `/weights/filly_checkpoints` |
 | `RUNNER_GA_THRESHOLD` | `0.5` |
 | `RUNNER_GA_USE_SINGULARITY` | `1` |
+| `RUNNER_ALLOWED_ROOTS` | `/var/lib/retinal-inference/tmp:/var/lib/libreclinica/segmentation-output` (`/infer` paths must lie below one of these) |
+| `RUNNER_AUTH_TOKEN` | unset (when set, `/infer` requires the sidecar's `RETINAL_INFERENCE_AUTH_TOKEN` in `X-MUW-Inference-Token`) |
 
 ## Enable it
 Set `RETINAL_INFERENCE_RUNNER_GA_URL` on the sidecar (compose: start with

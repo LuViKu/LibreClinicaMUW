@@ -37,6 +37,7 @@ RUN pip install --no-cache-dir \
     "fastapi==0.115.6" "uvicorn[standard]==0.32.1"
 
 COPY app.py ./
+COPY runner_guard.py ./
 COPY projection.py ./
 ENV RUNNER_ONL_CODE=/opt/sese_onl RUNNER_ONL_WEIGHTS=/weights
 EXPOSE 8000
