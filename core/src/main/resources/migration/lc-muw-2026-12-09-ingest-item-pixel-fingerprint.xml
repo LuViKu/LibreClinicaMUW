@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-036 — the platform recognises the same picture under another label.
+
+      sha256 catches a file sent twice. It does not catch a capture exported a
+      second time with a different patient id typed at the device: the export
+      rewrites the patient tags, so the bytes differ while the picture is the
+      same. pixel_sha256 is a digest of the picture alone — the JPEG scan, the
+      PNG image data, a DICOM file's decoded pixels, an OCT volume's image
+      chunks (see ImageFingerprint and dicom_scp.tags.pixel_sha256).
+
+      Nullable: rows that predate this are filled in by the hourly backfill
+      (IngestFingerprintBackfill), and a file whose picture cannot be read
+      keeps NULL. Not unique: two rows with the same picture are exactly the
+      case the column exists to find, and the ingress decides what to do with
+      the second one. The index is partial for the same reason sha256's is.
+    -->
+    <changeSet id="2026-12-09-ingest-item-pixel-sha256" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="pixel_sha256"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.pixel_sha256 — SHA-256 of the picture a file shows, independent of its metadata.</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="pixel_sha256" type="VARCHAR(64)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="pixel_sha256"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-12-09-ingest-item-pixel-sha256-index" author="muw-ophthalmology" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'ix_ingest_item_pixel_sha256';
+            </sqlCheck>
+        </preConditions>
+        <comment>Every ingress asks "is this picture already here?" before it writes a row.</comment>
+        <sql>
+            CREATE INDEX ix_ingest_item_pixel_sha256
+                ON ingest_item (pixel_sha256)
+             WHERE pixel_sha256 IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS ix_ingest_item_pixel_sha256;</sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+      141 — a file held back at ingest because the same picture is already
+      known under another label (or was dismissed). The file lands in the
+      inbox unfiled, whatever visit the uploader named, and this row says which
+      earlier file it matches. Visible: an operator reading a subject's trail
+      must see that a capture was claimed for two labels.
+    -->
+    <changeSet id="2026-12-09-audit-type-ingest-duplicate-held" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 141;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="141"/>
+            <column name="name" value="ingest_duplicate_held"/>
+            <column name="display_name" value="Ingested file held back: same image already known under another label"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 141</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

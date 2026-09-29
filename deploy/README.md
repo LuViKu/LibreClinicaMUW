@@ -452,10 +452,14 @@ minutes, switched on or not; each PC appears under its computer name unless
 `ExportWatcher.ps1 -Once` runs a single headless sweep and exits, for a
 scheduled task instead of the tray, or for testing the chain (it also runs
 on PowerShell 7 on Linux, which is how it was verified from a Mac against the
-dev stack). The exports stay on the PC, moved aside but never deleted; a
-Clarus `.dcm` carries the patient's name in its header until the platform
-pseudonymises its copy on ingest — retention there is a local decision, as
-for the Optomed Client's `Studies\` folder.
+dev stack). The exports stay on the PC in `_uploaded\` until the retention
+setting removes them: *Delete uploaded exports* in the Settings dialog, with
+the number of days to keep them after the upload. It is off by default, so
+nothing is deleted unless someone switches it on. A Clarus `.dcm` carries the
+patient's name in its header until the platform pseudonymises its copy on
+ingest, which is the case for switching it on; the device keeps the original
+capture. `_skipped\` (the Clarus Raw Data objects) and `_failed\` are never
+touched.
 
 ### Uploaders and storage on the System Status page (DR-033)
 
@@ -504,9 +508,14 @@ attachments, dataset exports) and Tomcat's logs are bound from
 Until 2026-09-24 they were anonymous Docker volumes, and because the unit
 restarts with `compose down` + `up`, every restart started the app on empty
 ones and left the old ones behind. The first setup run with this change copies
-the running container's current contents into the two directories; after the
-restart that follows, remove what earlier restarts left behind with
-`sudo docker volume prune` (unnamed, unused volumes only).
+the running container's current contents into the two directories. If the
+stack is not running at that moment, there is no container to copy from: the
+script warns, and the files are in the stopped container's volume, now unused
+(the beta.12 release notes, *Upgrading the app VM*, step 4, show how to find
+them). After the restart that follows, remove what earlier restarts left
+behind with `sudo docker volume prune` (unnamed, unused volumes only). Migration
+dry runs before 2026-09-28 also left a restored copy of the database in such
+a volume each time; `deploy/dry-run-migration.sh` now removes its volumes.
 
 ### Remidio FOP — pulling captures from the Remidio cloud (DR-031)
 

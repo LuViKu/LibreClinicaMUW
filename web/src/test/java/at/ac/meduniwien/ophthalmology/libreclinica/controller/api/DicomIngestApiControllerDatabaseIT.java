@@ -93,15 +93,21 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
 
     /** Minimal sidecar payload; {@code accession} may be null. */
     private static String payload(String sopUid, String accession) {
+        return payload(sopUid, accession, "M-001", null);
+    }
+
+    /** As above, with the label the camera typed and the picture digest the sidecar computed. */
+    private static String payload(String sopUid, String accession, String patientId, String pixelSha256) {
         return "{"
                 + "\"sopInstanceUid\":\"" + sopUid + "\","
                 + "\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.1\","
                 + "\"studyInstanceUid\":\"1.2.3.4.5\","
                 + "\"seriesInstanceUid\":\"1.2.3.4.5.6\","
                 + "\"modality\":\"OP\","
-                + "\"patientId\":\"M-001\","
-                + "\"patientName\":\"M-001^\","
+                + "\"patientId\":\"" + patientId + "\","
+                + "\"patientName\":\"" + patientId + "^\","
                 + (accession == null ? "" : "\"accessionNumber\":\"" + accession + "\",")
+                + (pixelSha256 == null ? "" : "\"pixelSha256\":\"" + pixelSha256 + "\",")
                 + "\"studyDate\":\"2021-01-04\","
                 + "\"laterality\":\"OD\","
                 + "\"sourceAeTitle\":\"OPTOMEDLUMO\","
@@ -273,6 +279,95 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 .andExpect(jsonPath("$.imageIngestId").value(firstId));
 
         assertEquals(1, countRows(uid), "a re-sent C-STORE must not duplicate the row");
+    }
+
+    /* ---------------- DR-036: the same picture again ---------------- */
+
+    /**
+     * The camera re-sent a capture as a new SOP instance (a second export of
+     * the same image) under the same label: answered like a re-sent object,
+     * and no second row.
+     */
+    @Test
+    void ingest_samePictureUnderTheSameLabel_isADuplicate() throws Exception {
+        String fp = "a".repeat(64);
+        String first = UID_PREFIX + "pix-1";
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(first, "LC3", "M-001", fp)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("BOUND"));
+        long firstId = readRow(first).id();
+        assertEquals(fp, pixelSha256Of(first), "the digest is kept with the row");
+
+        String second = UID_PREFIX + "pix-2";
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(second, null, "M-001", fp)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duplicate").value(true))
+                .andExpect(jsonPath("$.imageIngestId").value(firstId));
+        assertEquals(0, countRows(second), "the same picture under the same label is not filed twice");
+    }
+
+    /**
+     * The same picture claimed for another subject: the worklist accession
+     * says one visit, the picture says another patient. Nobody decides that
+     * at ingest — the file lands unfiled, and the trail names the twin.
+     */
+    @Test
+    void ingest_samePictureUnderAnotherLabel_isHeldBackUnfiled() throws Exception {
+        String fp = "b".repeat(64);
+        String first = UID_PREFIX + "twin-1";
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(first, null, "M-002", fp)))
+                .andExpect(status().isCreated());
+        long firstId = readRow(first).id();
+
+        String second = UID_PREFIX + "twin-2";
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(second, "LC3", "M-001", fp)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("UNBOUND"))
+                .andExpect(jsonPath("$.heldBack").value(true))
+                .andExpect(jsonPath("$.sameImageAs").value(firstId));
+
+        Row row = readRow(second);
+        assertEquals("UNBOUND", row.status(), "the accession is not followed when the picture is contested");
+        assertNull(row.se());
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT new_value, user_id FROM audit_log_event "
+                             + " WHERE audit_log_event_type_id = ? AND audit_table = 'ingest_item' AND entity_id = ?")) {
+            ps.setInt(1, AuditTypeIds.INGEST_DUPLICATE_HELD);
+            ps.setLong(2, row.id());
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next(), "the hold is recorded against the new row");
+                String value = rs.getString("new_value");
+                assertTrue(value.startsWith("held;same_image_as=" + firstId + ";"), value);
+                assertTrue(value.contains(";twin_label=M-002;claimed_label=M-001;"), value);
+                rs.getInt("user_id");
+                assertTrue(rs.wasNull(), "no operator is behind a C-STORE");
+            }
+        }
+    }
+
+    private String pixelSha256Of(String sopUid) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT pixel_sha256 FROM ingest_item WHERE sop_instance_uid = ?")) {
+            ps.setString(1, sopUid);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                return rs.getString(1);
+            }
+        }
     }
 
     /** Camera-provided strings must never reach the log (CodeQL log-injection sink). */

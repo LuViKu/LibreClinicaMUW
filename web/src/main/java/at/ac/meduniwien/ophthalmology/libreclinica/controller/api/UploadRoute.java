@@ -71,6 +71,10 @@ final class UploadRoute {
                 body.put("device", c.device());
                 body.put("imagingModalityId", c.imagingModalityId());
                 body.put("deidentified", c.deidentified());
+                // DR-036 — the same picture is already here under another label,
+                // so the file landed in the inbox unfiled.
+                body.put("heldBack", c.sameImageAs() != null);
+                body.put("sameImageAs", c.sameImageAs());
                 yield ResponseEntity.status(201).body(body);
             }
             case IngestUploadService.Duplicate d -> {

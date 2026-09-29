@@ -5,7 +5,7 @@
 	<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 	<artifactId>LibreClinica</artifactId>
 	<packaging>pom</packaging>
-	<version>1.5.0-beta.12-muw</version>
+	<version>1.5.0-beta.13-muw</version>
 	<name>LibreClinica MUW Ophthalmology</name>
 	<description>Electronic Data Capture (EDC) for clinical trials — institutional build of LibreClinica for the Department of Ophthalmology and Optometry, Medical University of Vienna.</description>
 	<organization>
@@ -50,7 +50,7 @@
 		<spring.version>6.2.6</spring.version>
 		<spring.security.version>6.4.4</spring.security.version>
 		<db.test>localhost</db.test>
-		<jackson.version>2.18.8</jackson.version>
+		<jackson.version>2.18.10</jackson.version>
 		<saxon.version>8.7</saxon.version>
 		<!-- Phase B.5 (2026-05-29): Hibernate 5.6.15 → 6.4.10. groupId moves
 		     to org.hibernate.orm; the -jakarta artifact-id suffix goes away

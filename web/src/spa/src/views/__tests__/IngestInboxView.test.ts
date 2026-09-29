@@ -71,6 +71,7 @@ function row(over: Partial<Record<string, unknown>> = {}) {
     previewUrl: '/pages/api/v1/ingest/1/preview',
     hasPreview: true,
     suggestion: null,
+    twin: null,
     ...over,
   }
 }
@@ -212,6 +213,56 @@ describe('IngestInboxView', () => {
     await flushPromises()
     expect(bindIngestItem).toHaveBeenCalledWith(1, expect.objectContaining({ studySubjectId: 5 }))
     expect(bulkBindIngestItems).not.toHaveBeenCalled()
+  })
+
+  /**
+   * DR-036 — an earlier file shows the same picture. The card says so, and
+   * filing the newer one anyway is asked about before the dialog opens.
+   */
+  describe('a file whose picture is already here', () => {
+    const twin = { ingestItemId: 9, status: 'BOUND', label: 'HAE-001', receivedAt: '2026-09-01T08:00:00Z' }
+
+    it('is marked on the card with where the other file is', async () => {
+      listIngestInbox.mockResolvedValue({ items: [row({ id: 3, twin })], limit: 100, status: 'UNBOUND' })
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid="twin-3"]').text()).toContain('HAE-001')
+      expect(w.get('[data-testid="twin-3"]').text()).toContain('#9')
+    })
+
+    it('asks before filing it, and stays put when declined', async () => {
+      confirmMock.mockResolvedValue(false)
+      listIngestInbox.mockResolvedValue({ items: [row({ id: 3, twin })], limit: 100, status: 'UNBOUND' })
+      const w = mountView()
+      await flushPromises()
+      const fileButton = w.findAll('button').find((b) => b.text() === de.ingestInbox.bind)
+      expect(fileButton).toBeDefined()
+      await fileButton!.trigger('click')
+      await flushPromises()
+      expect(confirmMock).toHaveBeenCalled()
+      expect(w.findComponent({ name: 'AssignIngestDialog' }).exists()).toBe(false)
+    })
+
+    it('opens the dialog once the operator has acknowledged the twin', async () => {
+      listIngestInbox.mockResolvedValue({ items: [row({ id: 3, twin })], limit: 100, status: 'UNBOUND' })
+      const w = mountView()
+      await flushPromises()
+      const fileButton = w.findAll('button').find((b) => b.text() === de.ingestInbox.bind)
+      await fileButton!.trigger('click')
+      await flushPromises()
+      expect(confirmMock).toHaveBeenCalled()
+      expect(w.findComponent({ name: 'AssignIngestDialog' }).exists()).toBe(true)
+    })
+
+    it('needs no acknowledgement when there is no twin', async () => {
+      const w = mountView()
+      await flushPromises()
+      const fileButton = w.findAll('button').find((b) => b.text() === de.ingestInbox.bind)
+      await fileButton!.trigger('click')
+      await flushPromises()
+      expect(confirmMock).not.toHaveBeenCalled()
+      expect(w.findComponent({ name: 'AssignIngestDialog' }).exists()).toBe(true)
+    })
   })
 
   describe('selecting several files', () => {

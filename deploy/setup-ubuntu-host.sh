@@ -380,11 +380,36 @@ install -d -m 0755 -o libreclinica -g libreclinica "$TOMCAT_LOGS_DIR"
 # with the bind (mount type "bind"), or the directory has content, nothing
 # is copied. Older anonymous volumes left by earlier restarts are not
 # touched; `docker volume prune` removes them once this is deployed.
+#
+# Every outcome is said out loud. The first version returned in silence when
+# there was no container to copy from, which is what happens when the stack
+# was stopped before the upgrade: `compose down` removes the container and
+# leaves its volume behind unused. The production upgrade to beta.12 went
+# that way, and nothing in the output showed the copy had not happened.
 move_off_anonymous_volume() {
-  local container_path="$1" host_dir="$2" mount_type
-  docker inspect "$APP_CONTAINER" >/dev/null 2>&1 || return 0
-  mount_type="$(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"${container_path}\"}}{{.Type}}{{end}}{{end}}" "$APP_CONTAINER" 2>/dev/null || true)"
-  [[ "$mount_type" == "volume" ]] || return 0
+  local container_path="$1" host_dir="$2" mount
+  if ! docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
+    # A fresh host has nothing to move and no checkout yet. An existing one
+    # with an empty directory may have had files on the removed container's
+    # volume, now unused.
+    if [[ -d "$INSTALL_PREFIX/.git" && -z "$(ls -A "$host_dir" 2>/dev/null)" ]]; then
+      warn "No app container ($APP_CONTAINER) is running, so nothing was copied into ${host_dir}."
+      warn "  If the app kept files under ${container_path}, they are in an unused Docker volume:"
+      warn "  list them with 'docker volume ls -qf dangling=true' before any prune, and copy what"
+      warn "  is needed into ${host_dir} (release notes 1.5.0-beta.12-muw, 'Upgrading the app VM', step 4)."
+    fi
+    return 0
+  fi
+  mount="$(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"${container_path}\"}}{{.Type}} {{.Source}}{{end}}{{end}}" "$APP_CONTAINER" 2>/dev/null || true)"
+  case "$mount" in
+    "bind ${host_dir}")
+      log "${container_path} is already bound to ${host_dir}"
+      return 0 ;;
+    volume*) ;;
+    *)
+      warn "${container_path} in ${APP_CONTAINER} is mounted as '${mount:-nothing}', not as expected; nothing copied"
+      return 0 ;;
+  esac
   if [[ -n "$(ls -A "$host_dir" 2>/dev/null)" ]]; then
     warn "${host_dir} is not empty; not copying ${container_path} over it"
     return 0

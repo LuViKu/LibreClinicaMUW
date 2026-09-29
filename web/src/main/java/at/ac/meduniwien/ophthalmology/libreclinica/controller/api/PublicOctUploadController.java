@@ -34,6 +34,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
@@ -365,6 +366,36 @@ public class PublicOctUploadController {
             return ResponseEntity.status(409).body(dup);
         }
 
+        // DR-036 — the same volume under the same label (a HEYEX re-export,
+        // a second copy of the file) is refused like the byte-identical case.
+        // Under another label the scan is parked unfiled with a trail, and no
+        // job starts for it until somebody has looked. See IngestTwins.
+        String pixelSha256 = null;
+        try {
+            pixelSha256 = ImageFingerprint.ofE2eVolume(savedPath, scanIndex);
+        } catch (IOException | RuntimeException e) {
+            LOG.warn("Public OCT upload — could not fingerprint the volume: {}", e.getClass().getSimpleName());
+        }
+        IngestTwins.Twin twin = IngestTwins.find(dataSource, pixelSha256);
+        IngestTwins.Verdict twinVerdict = IngestTwins.verdict(twin, pid);
+        if (twinVerdict == IngestTwins.Verdict.DUPLICATE) {
+            try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
+            LOG.info("Public OCT upload — same picture as ingest_item {} under the same label",
+                    twin.ingestItemId());
+            Map<String, Object> dup = new LinkedHashMap<>();
+            dup.put("message", "Diese .e2e-Datei wurde bereits hochgeladen.");
+            dup.put("existingJobId", findJobOfIngestItem(twin.ingestItemId()));
+            dup.put("existingIngestItemId", twin.ingestItemId());
+            dup.put("duplicate", true);
+            return ResponseEntity.status(409).body(dup);
+        }
+        boolean heldBack = twinVerdict == IngestTwins.Verdict.HELD;
+        if (heldBack) {
+            // Parked whatever binding mode the form used: the platform does
+            // not pick between two labels for one scan.
+            park = true;
+        }
+
         // 2026-06-19 — initial-status discriminator mirrors the legacy
         // RetinalInferenceApiController upload flow: when the remote
         // GPU sidecar is configured, land at {@code remote_pending} so
@@ -447,8 +478,8 @@ public class PublicOctUploadController {
         List<Map<String, Object>> jobInfos = new ArrayList<>();
         try (Connection c = dataSource.getConnection()) {
             ingestItemId = insertIngestItem(c, absolutePath, originalFilename, e2eSha256, fileSize(savedPath),
-                    lat, scanIndex, pid, auditStudySubjectId, scanDate, eventCrfId, studyEventId, park,
-                    modalityId);
+                    pixelSha256, lat, scanIndex, pid, auditStudySubjectId, scanDate, eventCrfId, studyEventId,
+                    park, modalityId);
             if (!park) {
                 for (String task : tasks) {
                     long jId = insertJob(c, eventCrfId, studyEventId, task, absolutePath, lat, status,
@@ -510,6 +541,10 @@ public class PublicOctUploadController {
             }
         }
 
+        if (heldBack) {
+            IngestTwins.writeHeldAudit(dataSource, ingestItemId, twin, pid, null, "portal-oct");
+        }
+
         // ---- disambiguation marker (Wave 1B) ------------------------------
         // Emit a SECOND audit row when the SPA flagged the upload as a
         // disambiguated pick (resolve returned state='ambiguous' AND staff
@@ -563,6 +598,10 @@ public class PublicOctUploadController {
         body.put("ingestItemId", ingestItemId);
         body.put("status", jobIds.isEmpty() ? noJobStatus : status);
         body.put("jobs", jobInfos);
+        if (heldBack) {
+            body.put("heldBack", true);
+            body.put("sameImageAs", twin.ingestItemId());
+        }
         return ResponseEntity.status(201).body(body);
     }
 
@@ -1165,7 +1204,8 @@ public class PublicOctUploadController {
      * the form has no logged-in user; the audit row carries the trail.
      */
     private long insertIngestItem(Connection c, String e2ePath, String originalFilename,
-                                  String sha256, long byteSize, String laterality, int scanIndex,
+                                  String sha256, long byteSize, String pixelSha256,
+                                  String laterality, int scanIndex,
                                   String patientId, Integer candidateStudySubjectId,
                                   LocalDate acquisitionDate, Integer eventCrfId,
                                   Integer studyEventId, boolean park,
@@ -1175,6 +1215,7 @@ public class PublicOctUploadController {
                 .originalFilename(originalFilename)
                 .contentType("application/octet-stream")
                 .digest(sha256, byteSize)
+                .pixelSha256(pixelSha256)
                 .scanIndex(scanIndex)
                 .laterality(laterality)
                 // Whatever the uploader gave us. The .e2e does carry a real
@@ -1234,6 +1275,23 @@ public class PublicOctUploadController {
 
     /** What is already in the queue for a scan, and the job on it if any. */
     private record Duplicate(long ingestItemId, Long jobId) {}
+
+    /** The first job of a row, for the "already uploaded" pointer; null when it has none. */
+    private Long findJobOfIngestItem(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT MIN(job_id) FROM retinal_inference_job WHERE ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                long jid = rs.getLong(1);
+                return rs.wasNull() ? null : jid;
+            }
+        } catch (SQLException e) {
+            LOG.warn("job lookup failed for ingest_item {}: {}", ingestItemId, e.getMessage());
+            return null;
+        }
+    }
 
     /**
      * P3.3 — the scan's identity is its ingest_item, so that is what dedup

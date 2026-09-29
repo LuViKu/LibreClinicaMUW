@@ -59,13 +59,23 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingSer
  * step an operator performs for a page upload without a visit. The API also
  * carries a name, a date of birth and a sex; they are read and dropped.
  *
- * <p><b>Idempotence.</b> The window is re-listed every poll. An exam already
- * in {@code remidio_exam} is skipped; an image already on an
- * {@code ingest_item} (by {@code remidio_image_id}) is skipped; the partial
- * unique index on {@code sha256} refuses the same bytes under a second id. An
- * exam is marked seen only after every one of its images was handled, so a
- * failure mid-exam (an expired download link, a full disk) is retried on the
- * next poll rather than lost.
+ * <p><b>Idempotence.</b> The window is re-listed every poll. An exam is
+ * looked at again only when the listing shows more downloadable images than
+ * {@code remidio_exam.image_count} recorded the last time every one of its
+ * images was handled. Inside an exam, an image already on an
+ * {@code ingest_item} (by {@code remidio_image_id}) is skipped before any
+ * download, and the partial unique index on {@code sha256} refuses the same
+ * bytes under a second id. The count is written only after every image was
+ * handled, so a failure mid-exam (an expired download link, a full disk) is
+ * retried on the next poll rather than lost.
+ *
+ * <p><b>Why a count and not just the exam id.</b> An exam is listed before it
+ * has images. The patient sync creates one per scheduled visit, days before
+ * the photographer shoots into it, and the phone uploads a sitting image by
+ * image. Recording an exam as done by its id alone closed it at whatever it
+ * held on first sight — for a synced exam, nothing — and every capture made
+ * into it afterwards was skipped without a log line (found 2026-09-28). A
+ * row the old rule left at zero reopens by itself under this one.
  */
 final class RemidioPullService {
 
@@ -93,11 +103,11 @@ final class RemidioPullService {
     static final int CHUNK_DAYS = 30;
 
     /** What one pass did, for the log and the status page. */
-    record Summary(LocalDate from, LocalDate to, int exams, int newExams, int images, int bound,
-                   int unbound, int duplicates, int skipped, int failed) {
+    record Summary(LocalDate from, LocalDate to, int exams, int newExams, int reopened, int images,
+                   int bound, int unbound, int duplicates, int skipped, int failed) {
 
         static Summary empty(LocalDate from, LocalDate to) {
-            return new Summary(from, to, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new Summary(from, to, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
 
         /** The two summaries as one, spanning both windows. */
@@ -105,12 +115,14 @@ final class RemidioPullService {
             return new Summary(
                     from == null || (o.from != null && o.from.isBefore(from)) ? o.from : from,
                     to == null || (o.to != null && o.to.isAfter(to)) ? o.to : to,
-                    exams + o.exams, newExams + o.newExams, images + o.images, bound + o.bound,
+                    exams + o.exams, newExams + o.newExams, reopened + o.reopened, images + o.images,
+                    bound + o.bound,
                     unbound + o.unbound, duplicates + o.duplicates, skipped + o.skipped, failed + o.failed);
         }
 
         String line() {
-            return from + ".." + to + ": exams=" + exams + " new=" + newExams + " images=" + images
+            return from + ".." + to + ": exams=" + exams + " new=" + newExams + " reopened=" + reopened
+                    + " images=" + images
                     + " bound=" + bound + " unbound=" + unbound + " duplicates=" + duplicates
                     + " skipped=" + skipped + " failed=" + failed;
         }
@@ -195,26 +207,55 @@ final class RemidioPullService {
      */
     Summary pull(LocalDate from, LocalDate to) throws RemidioException {
         List<Exam> exams = client.examsBetween(from, to);
-        int newExams = 0, images = 0, bound = 0, unbound = 0, duplicates = 0, skipped = 0, failed = 0;
+        int newExams = 0, reopened = 0, images = 0, bound = 0, unbound = 0, duplicates = 0, skipped = 0,
+                failed = 0;
         for (Exam exam : exams) {
-            if (examSeen(exam.id())) continue;
-            newExams++;
+            List<Image> listed = exam.standardImages();
+            int available = downloadable(listed);
+            Integer handled = handledImageCount(exam.id());
+            if (!needsPass(handled, available)) continue;
+            if (handled == null) newExams++; else reopened++;
             boolean complete = true;
-            int filed = 0;
-            for (Image image : exam.standardImages()) {
+            for (Image image : listed) {
                 images++;
                 Outcome o = file(exam, image);
                 switch (o) {
-                    case BOUND -> { bound++; filed++; }
-                    case UNBOUND -> { unbound++; filed++; }
+                    case BOUND -> bound++;
+                    case UNBOUND -> unbound++;
                     case DUPLICATE -> duplicates++;
                     case SKIPPED -> skipped++;
                     case FAILED -> { failed++; complete = false; }
                 }
             }
-            if (complete) markSeen(exam, filed);
+            if (complete) markHandled(exam, available);
         }
-        return new Summary(from, to, exams.size(), newExams, images, bound, unbound, duplicates, skipped, failed);
+        return new Summary(from, to, exams.size(), newExams, reopened, images, bound, unbound, duplicates,
+                skipped, failed);
+    }
+
+    /**
+     * Whether an exam needs a pass: it was never handled, or the listing now
+     * offers more images than it did then. Never "has it been seen" alone —
+     * an exam is listed before the phone has uploaded into it.
+     *
+     * @param handledImages what {@code remidio_exam.image_count} recorded, or
+     *                      null when the exam was never handled
+     */
+    static boolean needsPass(Integer handledImages, int availableImages) {
+        return handledImages == null || availableImages > handledImages;
+    }
+
+    /**
+     * The images a pass can act on: those with an id and a download link. An
+     * entry without a link yet does not count, so the exam reopens once the
+     * link appears instead of having been closed with it.
+     */
+    static int downloadable(List<Image> images) {
+        int n = 0;
+        for (Image i : images) {
+            if (i.id() != null && i.path() != null) n++;
+        }
+        return n;
     }
 
     /* ------------------------------------------------------------------ */
@@ -294,6 +335,24 @@ final class RemidioPullService {
             }
         }
 
+        // DR-036 — the same picture already here: under the same label the
+        // cloud listed a capture twice, or somebody uploaded the export by
+        // hand, so it is not filed again; under another label it lands
+        // unfiled with a trail, whatever visit it would have gone to.
+        String pixelSha256 = IngestUploadService.fingerprintOf(path);
+        IngestTwins.Twin twin = IngestTwins.find(dataSource, pixelSha256);
+        String claimedLabel = target != null
+                ? IngestTwins.subjectLabel(dataSource, target.studySubjectId()) : mrn;
+        IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
+        if (verdict == IngestTwins.Verdict.DUPLICATE) {
+            deleteQuietly(path);
+            LOG.info("remidio: image {} of exam {} shows the same picture as ingest_item {} — not filed again",
+                    image.id(), exam.id(), twin.ingestItemId());
+            return Outcome.DUPLICATE;
+        }
+        boolean held = verdict == IngestTwins.Verdict.HELD;
+        if (held) target = null;
+
         long id;
         try (Connection c = dataSource.getConnection()) {
             var item = IngestItemRepository
@@ -303,6 +362,7 @@ final class RemidioPullService {
                     .originalFilename(filenameFor(exam, image, laterality, sniffed.extension()))
                     .contentType(sniffed.contentType())
                     .digest(stored.sha256(), stored.byteSize())
+                    .pixelSha256(pixelSha256)
                     .patientId(mrn)
                     .laterality(laterality)
                     .acquisitionDate(date)
@@ -324,6 +384,9 @@ final class RemidioPullService {
             return Outcome.FAILED;
         }
 
+        if (held) {
+            IngestTwins.writeHeldAudit(dataSource, id, twin, claimedLabel, null, SOURCE_KIND);
+        }
         if (target != null) {
             ImageIngestBinding.writeSystemBindAudit(dataSource, id, policy, target.studyEventId());
             ImageIngestBinding.tickPerformed(dataSource, id, target, SOURCE_KIND, DEVICE, laterality, null);
@@ -379,20 +442,25 @@ final class RemidioPullService {
     /* memory                                                              */
     /* ------------------------------------------------------------------ */
 
-    private boolean examSeen(String examId) {
+    /**
+     * How many downloadable images the exam offered when the pull last handled
+     * every one of them, or null when it never did.
+     */
+    private Integer handledImageCount(String examId) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT 1 FROM remidio_exam WHERE remidio_exam_id = ?")) {
+                     "SELECT image_count FROM remidio_exam WHERE remidio_exam_id = ?")) {
             ps.setString(1, examId);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
+                return rs.next() ? rs.getInt(1) : null;
             }
         } catch (SQLException e) {
-            // Treat a failed lookup as "seen": the alternative is to download
-            // and file an exam we may already have, which the image-id and
-            // sha256 guards would then refuse one by one.
+            // Treat a failed lookup as "handled, nothing new": the alternative
+            // is to download and file an exam we may already have, which the
+            // image-id and sha256 guards would then refuse one by one. The
+            // next poll asks again.
             LOG.warn("remidio: could not check exam {}: {}", examId, e.getMessage());
-            return true;
+            return Integer.MAX_VALUE;
         }
     }
 
@@ -468,7 +536,11 @@ final class RemidioPullService {
         }
     }
 
-    private void markSeen(Exam exam, int imageCount) {
+    /**
+     * Records the exam as handled at {@code imageCount} downloadable images —
+     * the number a later listing has to exceed to reopen it.
+     */
+    private void markHandled(Exam exam, int imageCount) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO remidio_exam (remidio_exam_id, site_custom_id, exam_date, image_count) "
@@ -486,7 +558,7 @@ final class RemidioPullService {
         } catch (SQLException e) {
             // The next poll re-lists the exam; every image is guarded by its
             // id, so the cost is one extra round of lookups, not duplicates.
-            LOG.warn("remidio: could not record exam {} as seen: {}", exam.id(), e.getMessage());
+            LOG.warn("remidio: could not record exam {} as handled: {}", exam.id(), e.getMessage());
         }
     }
 

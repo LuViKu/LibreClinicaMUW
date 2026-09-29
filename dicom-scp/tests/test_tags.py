@@ -1,4 +1,5 @@
-from pydicom.dataset import Dataset
+from pydicom.dataset import Dataset, FileMetaDataset
+from pydicom.uid import ExplicitVRLittleEndian
 
 from dicom_scp import tags
 
@@ -44,3 +45,34 @@ def test_extract_absent_tags_are_none():
     assert p["studyDate"] is None
     assert p["laterality"] is None
     assert p["sourceAeTitle"] is None
+
+
+def _image(pixels: bytes, **kw) -> Dataset:
+    """A 2x2 8-bit greyscale object with the given pixels and whatever tags."""
+    ds = _ds(Rows=2, Columns=2, SamplesPerPixel=1, PhotometricInterpretation="MONOCHROME2",
+             BitsAllocated=8, BitsStored=8, HighBit=7, PixelRepresentation=0,
+             PixelData=pixels, **kw)
+    fm = FileMetaDataset()
+    fm.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds.file_meta = fm
+    return ds
+
+
+def test_pixel_sha256_ignores_the_tags_and_follows_the_pixels():
+    same = tags.pixel_sha256(_image(bytes([1, 2, 3, 4]), PatientID="HAE-001", PatientName="Muster^Max"))
+    relabelled = tags.pixel_sha256(_image(bytes([1, 2, 3, 4]), PatientID="HAE-002", StudyDate="20260918"))
+    other = tags.pixel_sha256(_image(bytes([1, 2, 3, 5]), PatientID="HAE-001"))
+    assert same is not None and len(same) == 64
+    assert same == relabelled
+    assert same != other
+
+
+def test_pixel_sha256_is_none_without_pixels():
+    assert tags.pixel_sha256(_ds(PatientID="HAE-001")) is None
+
+
+def test_the_digest_travels_in_both_payloads():
+    ds = _image(bytes([9, 9, 9, 9]), SOPInstanceUID="1.2.3")
+    assert tags.extract(ds, "AE")["pixelSha256"] == tags.pixel_sha256(ds)
+    assert tags.describe(ds)["pixelSha256"] == tags.pixel_sha256(ds)
+    assert tags.extract(_ds(SOPInstanceUID="1.2.3"), "")["pixelSha256"] is None
