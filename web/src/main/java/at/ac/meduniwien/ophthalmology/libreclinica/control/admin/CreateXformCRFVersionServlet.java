@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import javax.xml.parsers.DocumentBuilderFactory;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Utils;
@@ -184,7 +184,7 @@ public class CreateXformCRFVersionServlet extends SecureController {
         Document doc = null;
         try {
             InputStream stream = new ByteArrayInputStream(xform.getBytes(StandardCharsets.UTF_8));
-            doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(stream);
+            doc = SecureXmlFactories.newDocumentBuilderFactory().newDocumentBuilder().parse(stream);
 
             NodeList instances = doc.getElementsByTagName("instance");
 
