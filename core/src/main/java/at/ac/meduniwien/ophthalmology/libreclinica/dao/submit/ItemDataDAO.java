@@ -436,6 +436,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         return temp;
     }
 
+    @Override
     public ItemDataBean getEntityFromHashMap(HashMap<String, Object> hm) {
         ItemDataBean eb = new ItemDataBean();
         this.setEntityAuditInformation(eb, hm);
@@ -519,6 +520,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
     	throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
         ItemDataBean eb = new ItemDataBean();
         this.setTypesExpected();
@@ -555,6 +557,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemDataBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -562,6 +565,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemDataBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

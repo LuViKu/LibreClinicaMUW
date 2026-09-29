@@ -35,6 +35,7 @@ public final class SpreadsheetPreview implements Preview {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
     @SuppressWarnings("rawtypes")
+	@Override
 	public Map<String, Map> createCrfMetaObject(HSSFWorkbook workbook) {
         if (workbook == null)
             return new HashMap<String, Map>();
@@ -70,6 +71,7 @@ public final class SpreadsheetPreview implements Preview {
      *            should specify "items" or "sections" or the associated static
      *            variable, i.e. SpreadsheetPreview.ITEMS
      */
+    @Override
     public Map<Integer, Map<String, String>> createItemsOrSectionMap(HSSFWorkbook workbook, String itemsOrSection) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<Integer, Map<String, String>>();
@@ -134,6 +136,7 @@ public final class SpreadsheetPreview implements Preview {
         return allRows;
     }
 
+    @Override
     public Map<Integer, Map<String, String>> createGroupsMap(HSSFWorkbook workbook) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<Integer, Map<String, String>>();
@@ -208,6 +211,7 @@ public final class SpreadsheetPreview implements Preview {
      * keys. Returns an empty HashMap if the spreadsheet does not contain any
      * sheets named "Sections."
      */
+    @Override
     public Map<String, String> createCrfMap(HSSFWorkbook workbook) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<String, String>();

@@ -51,6 +51,7 @@ public class SubjectService implements SubjectServiceInterface {
         this.dataSource = sessionManager.getDataSource();
     }
 
+    @Override
     public List<StudySubjectBean> getStudySubject(StudyBean study) {
         return getStudySubjectDao().findAllByStudy(study);
 
@@ -61,6 +62,7 @@ public class SubjectService implements SubjectServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.subject.SubjectServiceInterface#createSubject(at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
      */
+    @Override
     public String createSubject(SubjectBean subjectBean, StudyBean studyBean, Date enrollmentDate, String secondaryId) {
         if (subjectBean.getUniqueIdentifier() != null && subjectBean.getUniqueIdentifier().trim().length()> 0 && 
         		getSubjectDao().findByUniqueIdentifier(subjectBean.getUniqueIdentifier()).getId() != 0) {

@@ -83,6 +83,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         this.setTypeExpected(13, TypeNames.INT);// study_id
     }
 
+    @Override
     public RuleBean update(RuleBean ruleBean) {
         ruleBean.setActive(false);
 
@@ -125,6 +126,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleBean;
     }
 
+    @Override
     public RuleBean getEntityFromHashMap(HashMap<String, Object> hm) {
         RuleBean ruleBean = new RuleBean();
         this.setEntityAuditInformation(ruleBean, hm);
@@ -139,6 +141,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleBean;
     }
 
+    @Override
     public ArrayList<RuleBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -150,6 +153,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleSetBeans;
     }
 
+    @Override
     public RuleBean findByPK(int ID) {
         RuleBean ruleBean = new RuleBean();
         this.setTypesExpected();
@@ -225,6 +229,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -235,6 +240,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -245,6 +251,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

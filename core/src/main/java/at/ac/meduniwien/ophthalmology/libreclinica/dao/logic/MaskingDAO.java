@@ -68,6 +68,7 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
 
     }
 
+    @Override
     public MaskingBean getEntityFromHashMap(HashMap<String, Object> hm) {
         MaskingBean mb = new MaskingBean();
         this.setEntityAuditInformation(mb, hm);
@@ -76,6 +77,7 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
         return mb;
     }
 
+    @Override
     public ArrayList<MaskingBean>findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> aList = this.select(digester.getQuery("findAll"));
@@ -100,6 +102,7 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<MaskingBean>findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -107,6 +110,7 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public EntityBean findByPK(int ID) {
     	throw new RuntimeException("Not implemented");
     }
@@ -114,6 +118,7 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<MaskingBean>findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -121,6 +126,7 @@ public class MaskingDAO extends AuditableEntityDAO<MaskingBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<MaskingBean>findAllByPermission(Object objCurrentUser, int intActionType) {
       throw new RuntimeException("Not implemented");
     }

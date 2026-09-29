@@ -21,6 +21,7 @@ public final class Decode extends AbstractFunction {
     /**
      * @see Function#execute(HashMap)
      */
+    @Override
     public void execute() {
         logger.info("Execute the function Decode... ");
 

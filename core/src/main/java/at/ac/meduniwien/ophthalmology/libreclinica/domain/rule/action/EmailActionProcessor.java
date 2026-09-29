@@ -54,6 +54,7 @@ public class EmailActionProcessor implements ActionProcessor {
         this.ruleActionRunLogDao = ruleActionRunLogDao;
     }
 
+    @Override
     public RuleActionBean execute(RuleRunnerMode ruleRunnerMode, ExecutionMode executionMode, RuleActionBean ruleAction, ItemDataBean itemDataBean,
             String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
         switch (executionMode) {

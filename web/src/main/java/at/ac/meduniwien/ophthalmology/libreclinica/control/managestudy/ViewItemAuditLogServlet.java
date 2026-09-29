@@ -27,6 +27,7 @@ public class ViewItemAuditLogServlet extends SecureController {
 	 */
 	private static final long serialVersionUID = 4681699989521984006L;
 
+	@Override
 	public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
             return;
@@ -40,6 +41,7 @@ public class ViewItemAuditLogServlet extends SecureController {
         throw new InsufficientPermissionException(Page.LIST_STUDY_SUBJECTS, resexception.getString("not_study_director"), "1");
     }
 
+    @Override
     public void processRequest () throws Exception{
         AuditDAO adao = new AuditDAO(sm.getDataSource());
         FormProcessor fp = new FormProcessor(request);

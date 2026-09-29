@@ -116,6 +116,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#saveRuleSet(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean)
      */
 
+    @Override
     public RuleSetBean saveRuleSet(RuleSetBean ruleSetBean) {
         RuleSetBean persistentRuleSetBean = getRuleSetDao().saveOrUpdate(ruleSetBean);
         return persistentRuleSetBean;
@@ -130,6 +131,7 @@ public class RuleSetService implements RuleSetServiceInterface {
 	}
 
     @Transactional
+    @Override
     public void saveImportFromDesigner(RulesPostImportContainer rulesContainer) {
     	HashMap<String,RuleBean> ruleBeans = new HashMap<>();
         for (AuditableBeanWrapper<RuleBean> ruleBeanWrapper : rulesContainer.getValidRuleDefs()) {
@@ -155,6 +157,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#saveImport(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RulesPostImportContainer)
      */
 
+    @Override
     public void saveImport(RulesPostImportContainer rulesContainer) {
         for (AuditableBeanWrapper<RuleBean> ruleBeanWrapper : rulesContainer.getValidRuleDefs()) {
             getRuleDao().saveOrUpdate(ruleBeanWrapper.getAuditableBean());
@@ -174,6 +177,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         }
     }
 
+    @Override
     public void saveImport(RuleSetRuleBean ruleSetRule) {
         getRuleDao().saveOrUpdate(ruleSetRule.getRuleBean());
         getRuleSetDao().saveOrUpdate(ruleSetRule.getRuleSetBean());
@@ -184,6 +188,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#updateRuleSet(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean, at.ac.meduniwien.ophthalmology.libreclinica.domain.Status)
      */
+    @Override
     public RuleSetBean updateRuleSet(RuleSetBean ruleSetBean, UserAccountBean user, Status status) {
         ruleSetBean.setStatus(status);
         ruleSetBean.setUpdater(user);
@@ -218,6 +223,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#loadRuleSetRuleWithPersistentRules(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean)
      */
+    @Override
     public void loadRuleSetRuleWithPersistentRules(RuleSetBean ruleSetBean) {
         for (RuleSetRuleBean ruleSetRule : ruleSetBean.getRuleSetRules()) {
             if (ruleSetRule.getId() == null) {
@@ -239,6 +245,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#replaceRuleSet(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean)
      */
+    @Override
     public RuleSetBean replaceRuleSet(RuleSetBean ruleSetBean) {
         RuleSetBean detachedRuleSetBean = ruleSetBean;
 
@@ -255,6 +262,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#runRulesInBulk(java.lang.String, java.lang.Boolean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean)
      */
+    @Override
     public HashMap<RuleBulkExecuteContainer, HashMap<RuleBulkExecuteContainerTwo, Set<String>>> runRulesInBulk(String crfId, ExecutionMode executionMode,
             StudyBean currentStudy, UserAccountBean ub) {
         CRFBean crf = new CRFBean();
@@ -276,6 +284,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#runRulesInBulk(java.lang.String, java.lang.String, java.lang.Boolean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean)
      */
+    @Override
     public HashMap<RuleBulkExecuteContainer, HashMap<RuleBulkExecuteContainerTwo, Set<String>>> runRulesInBulk(String ruleSetRuleId, String crfVersionId,
             ExecutionMode executionMode, StudyBean currentStudy, UserAccountBean ub) {
 
@@ -300,6 +309,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#runRulesInBulk(java.util.List, java.lang.Boolean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean)
      */
+    @Override
     public List<RuleSetBasedViewContainer> runRulesInBulk(List<RuleSetBean> ruleSets, Boolean dryRun, StudyBean currentStudy, UserAccountBean ub , boolean jobTrigger) {
         ruleSets = filterByStatusEqualsAvailable(ruleSets);
         ruleSets = filterRuleSetsByStudyEventOrdinal(ruleSets, null);
@@ -326,6 +336,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#runRulesInDataEntry(java.util.List, java.lang.Boolean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean, java.util.HashMap)
      */
+    @Override
     public MessageContainer runRulesInDataEntry(List<RuleSetBean> ruleSets, Boolean dryRun, StudyBean currentStudy, UserAccountBean ub,
             HashMap<String, String> variableAndValue, Phase phase,EventCRFBean ecb, HttpServletRequest request) {
         DataEntryRuleRunner ruleRunner = new DataEntryRuleRunner(dataSource, requestURLMinusServletPath, contextPath, mailSender,ecb);
@@ -339,6 +350,7 @@ public class RuleSetService implements RuleSetServiceInterface {
     }
 
 
+    @Override
     public HashMap<String, ArrayList<String>> runRulesInImportData(List<ImportDataRuleRunnerContainer> containers,
             StudyBean study, UserAccountBean ub, ExecutionMode executionMode) {
         ImportDataRuleRunner ruleRunner = new ImportDataRuleRunner(dataSource, requestURLMinusServletPath, contextPath, mailSender);
@@ -356,6 +368,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean, at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean)
      */
 
+    @Override
     public List<RuleSetBean> getRuleSetsByCrfStudyAndStudyEventDefinition(StudyBean study, StudyEventDefinitionBean sed, CRFVersionBean crfVersion) {
         CRFBean crf = getCrfDao().findByVersionId(crfVersion.getId());
         logger.debug("crfVersionID : " + crfVersion.getId() + " studyId : " + study.getId() + " studyEventDefinition : " + sed.getId());
@@ -371,14 +384,17 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSets;
     }
 
+    @Override
     public int getCountWithFilter(ViewRuleAssignmentFilter viewRuleAssignmentFilter) {
         return getRuleSetRuleDao().getCountWithFilter(viewRuleAssignmentFilter);
     }
 
+    @Override
     public int getCountByStudy(StudyBean study) {
         return getRuleSetRuleDao().getCountByStudy(study);
     }
 
+    @Override
     public List<RuleSetRuleBean> getWithFilterAndSort(ViewRuleAssignmentFilter viewRuleAssignmentFilter,
                                                       ViewRuleAssignmentSort viewRuleAssignmentSort,
                                                       int rowStart,
@@ -393,6 +409,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetsByStudy(at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
      */
+    @Override
     public List<RuleSetBean> getRuleSetsByStudy(StudyBean study) {
         logger.debug(" Study Id {} ", study.getId());
         List<RuleSetBean> ruleSets = getRuleSetDao().findAllByStudy(study);
@@ -407,6 +424,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetById(at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, java.lang.String)
      */
+    @Override
     public RuleSetBean getRuleSetById(StudyBean study, String id) {
         logger.debug(" Study Id {} ", study.getId());
         RuleSetBean ruleSetBean = getRuleSetDao().findById(Integer.valueOf(id));
@@ -422,6 +440,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetById(at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, java.lang.String,
      * at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean)
      */
+    @Override
     public List<RuleSetRuleBean> getRuleSetById(StudyBean study, String id, RuleBean ruleBean) {
         logger.debug(" Study Id {} ", study.getId());
         RuleSetBean ruleSetBean = getRuleSetDao().findById(Integer.valueOf(id));
@@ -433,6 +452,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetsByCrfAndStudy(at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
      */
+    @Override
     public List<RuleSetBean> getRuleSetsByCrfAndStudy(CRFBean crfBean, StudyBean study) {
         List<RuleSetBean> ruleSets = getRuleSetDao().findByCrf(crfBean, study);
         for (RuleSetBean ruleSetBean : ruleSets) {
@@ -441,6 +461,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSets;
     }
 
+    @Override
     public RuleSetBean getObjects(RuleSetBean ruleSetBean) {
         ruleSetBean.setStudy(getStudyDao().findByPK(ruleSetBean.getStudyId()));
         if (ruleSetBean.getStudyEventDefinitionId() != null && ruleSetBean.getStudyEventDefinitionId() != 0) {
@@ -490,6 +511,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#filterByStatusEqualsAvailableOnlyRuleSetRules(java.util.List)
      */
+    @Override
     public List<RuleSetBean> filterByStatusEqualsAvailableOnlyRuleSetRules(List<RuleSetBean> ruleSets) {
         for (RuleSetBean ruleSet : ruleSets) {
             for (Iterator<RuleSetRuleBean> i = ruleSet.getRuleSetRules().iterator(); i.hasNext();) {
@@ -506,6 +528,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#filterByStatusEqualsAvailable(java.util.List)
      */
 
+    @Override
     public List<RuleSetBean> filterByStatusEqualsAvailable(List<RuleSetBean> ruleSets) {
         for (Iterator<RuleSetBean> j = ruleSets.iterator(); j.hasNext();) {
             RuleSetBean ruleSet = j.next();
@@ -526,6 +549,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#filterByRules(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean, java.lang.Integer)
      */
+    @Override
     public RuleSetBean filterByRules(RuleSetBean ruleSet, Integer ruleBeanId) {
         for (Iterator<RuleSetRuleBean> i = ruleSet.getRuleSetRules().iterator(); i.hasNext();) {
             if (!i.next().getRuleBean().getId().equals(ruleBeanId)) {
@@ -541,6 +565,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean)
      */
 
+    @Override
     public List<RuleSetBean> filterRuleSetsByStudyEventOrdinal(List<RuleSetBean> ruleSets, StudyEventBean studyEvent, CRFVersionBean crfVersion,
             StudyEventDefinitionBean studyEventDefinition) {
         ArrayList<RuleSetBean> validRuleSets = new ArrayList<>();
@@ -573,6 +598,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         return validRuleSets;
     }
 
+    @Override
     public List<RuleSetBean> filterRuleSetsByHiddenItems(List<RuleSetBean> ruleSets, EventCRFBean eventCrf, CRFVersionBean crfVersion,List<ItemBean> itemBeansWithSCDShown) {
         ArrayList<RuleSetBean> shownRuleSets = new ArrayList<>();
         for (RuleSetBean ruleSetBean : ruleSets) {
@@ -634,6 +660,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSets;
     }
     
+    @Override
     public List<RuleSetBean> filterRuleSetsByStudyEventOrdinal(List<RuleSetBean> ruleSets, String crfVersionId) {
         ArrayList<RuleSetBean> validRuleSets = new ArrayList<>();
         for (RuleSetBean ruleSetBean : ruleSets) {
@@ -754,6 +781,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#solidifyGroupOrdinalsUsingFormProperties(java.util.List, java.util.HashMap)
      */
+    @Override
     public List<RuleSetBean> solidifyGroupOrdinalsUsingFormProperties(List<RuleSetBean> ruleSets, HashMap<String, Integer> grouped) {
         for (RuleSetBean ruleSet : ruleSets) {
             ArrayList<ExpressionBean> expressionsWithCorrectGroupOrdinal = new ArrayList<>();
@@ -794,6 +822,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#filterRuleSetsBySectionAndGroupOrdinal(java.util.List, java.util.HashMap)
      */
+    @Override
     public List<RuleSetBean> filterRuleSetsBySectionAndGroupOrdinal(List<RuleSetBean> ruleSets, HashMap<String, Integer> grouped) {
         List<RuleSetBean> ruleSetsInThisSection = new ArrayList<>();
         for (RuleSetBean ruleSet : ruleSets) {
@@ -824,6 +853,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#filterRuleSetsByGroupOrdinal(java.util.List)
      */
+    @Override
     public List<RuleSetBean> filterRuleSetsByGroupOrdinal(List<RuleSetBean> ruleSets) {
 
         for (RuleSetBean ruleSetBean : ruleSets) {
@@ -868,6 +898,7 @@ public class RuleSetService implements RuleSetServiceInterface {
      * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getGroupOrdinalPlusItemOids(java.util.List)
      */
+    @Override
     public List<String> getGroupOrdinalPlusItemOids(List<RuleSetBean> ruleSets) {
         List<String> groupOrdinalPlusItemOid = new ArrayList<>();
         for (RuleSetBean ruleSetBean : ruleSets) {
@@ -883,12 +914,14 @@ public class RuleSetService implements RuleSetServiceInterface {
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#replaceCrfOidInTargetExpression(at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean,
      * java.lang.String)
      */
+    @Override
     public RuleSetBean replaceCrfOidInTargetExpression(RuleSetBean ruleSetBean, String replacementCrfOid) {
         String expression = getExpressionService().replaceCRFOidInExpression(ruleSetBean.getTarget().getValue(), replacementCrfOid);
         ruleSetBean.getTarget().setValue(expression);
         return ruleSetBean;
     }
 
+    @Override
     public boolean shouldRunRulesForRuleSets(List<RuleSetBean> ruleSets, Phase phase) {
         for(RuleSetBean ruleSetBean: ruleSets) {
             List<RuleSetRuleBean> ruleSetRuleBeans = ruleSetBean.getRuleSetRules();
@@ -907,6 +940,7 @@ public class RuleSetService implements RuleSetServiceInterface {
     /**
      * @return the contextPath
      */
+    @Override
     public String getContextPath() {
         return contextPath;
     }
@@ -914,6 +948,7 @@ public class RuleSetService implements RuleSetServiceInterface {
     /**
      * @param contextPath the contextPath to set
      */
+    @Override
     public void setContextPath(String contextPath) {
         this.contextPath = contextPath;
     }
@@ -921,34 +956,42 @@ public class RuleSetService implements RuleSetServiceInterface {
     /**
      * @param requestURLMinusServletPath the requestURLMinusServletPath to set
      */
+    @Override
     public void setRequestURLMinusServletPath(String requestURLMinusServletPath) {
         this.requestURLMinusServletPath = requestURLMinusServletPath;
     }
 
+    @Override
     public String getRequestURLMinusServletPath() {
         return requestURLMinusServletPath;
     }
 
+    @Override
     public RuleSetDao getRuleSetDao() {
         return ruleSetDao;
     }
 
+    @Override
     public void setRuleSetDao(RuleSetDao ruleSetDao) {
         this.ruleSetDao = ruleSetDao;
     }
 
+    @Override
     public void setRuleSetRuleDao(RuleSetRuleDao ruleSetRuleDao) {
         this.ruleSetRuleDao = ruleSetRuleDao;
     }
 
+    @Override
     public RuleSetRuleDao getRuleSetRuleDao() {
         return ruleSetRuleDao;
     }
 
+    @Override
     public RuleDao getRuleDao() {
         return ruleDao;
     }
 
+    @Override
     public void setRuleDao(RuleDao ruleDao) {
         this.ruleDao = ruleDao;
     }
@@ -1008,18 +1051,22 @@ public class RuleSetService implements RuleSetServiceInterface {
         this.dynamicsItemFormMetadataDao = dynamicsItemFormMetadataDao;
     }
 
+    @Override
     public RuleSetAuditDao getRuleSetAuditDao() {
         return ruleSetAuditDao;
     }
 
+    @Override
     public void setRuleSetAuditDao(RuleSetAuditDao ruleSetAuditDao) {
         this.ruleSetAuditDao = ruleSetAuditDao;
     }
 
+    @Override
     public JavaMailSenderImpl getMailSender() {
         return mailSender;
     }
 
+    @Override
     public void setMailSender(JavaMailSenderImpl mailSender) {
         this.mailSender = mailSender;
     }

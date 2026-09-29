@@ -37,6 +37,7 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
         digesterName = SQLFactory.getInstance().DAO_ITEM_GROUP_METADATA;
     }
 
+    @Override
     public void setTypesExpected() {
         // item_group_metadata_id serial NOT NULL,
         // item_group_id numeric NOT NULL,
@@ -94,6 +95,7 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemGroupMetadataBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
@@ -101,10 +103,12 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemGroupMetadataBean> findAll() throws OpenClinicaException {
     	throw new RuntimeException("Not implemented");
     }
 
+	@Override
 	public ItemGroupMetadataBean findByPK(int id) throws OpenClinicaException {
 		String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(id);
@@ -179,6 +183,7 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemGroupMetadataBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase)
             throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
@@ -187,6 +192,7 @@ public class ItemGroupMetadataDAO extends EntityDAO<ItemGroupMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemGroupMetadataBean> findAllByPermission(Object objCurrentUser, int intActionType) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }

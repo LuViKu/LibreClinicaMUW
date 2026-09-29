@@ -42,6 +42,7 @@ public class AuditUserLoginDao extends AbstractDomainDao<AuditUserLoginBean> {
         return AuditUserLoginBean.class;
     }
 
+    @Override
     public ArrayList<AuditUserLoginBean> findAll() {
         String hql = "from " + getDomainClassName() + " aul order by aul.loginAttemptDate desc";
         Query<AuditUserLoginBean> q = getCurrentSession().createQuery(hql, AuditUserLoginBean.class);

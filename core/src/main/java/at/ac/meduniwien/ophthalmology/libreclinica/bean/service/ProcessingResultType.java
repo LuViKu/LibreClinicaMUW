@@ -53,6 +53,7 @@ public enum ProcessingResultType implements CodedEnum {
         return enumObjects.get(Integer.valueOf(code));
     }
     
+    @Override
     public Integer getCode() {
         return code;
     }

@@ -20,6 +20,7 @@ public class Avg extends AbstractFunction {
     }
 
     // public void execute(HashMap<String,String> map) {
+    @Override
     public void execute() {
         logger.info("Execute the function Avg... ");
 

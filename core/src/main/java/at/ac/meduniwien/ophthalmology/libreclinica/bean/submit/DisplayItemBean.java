@@ -246,6 +246,7 @@ public class DisplayItemBean implements Comparable<DisplayItemBean> {
      *         this DisplayItemBean's A positive number if o is a
      *         DisplayItemBean with a lesser ordinal than this DisplayItemBean's
      */
+    @Override
     public int compareTo(DisplayItemBean o) {
         return getMetadata().getOrdinal() - o.getMetadata().getOrdinal();
     }

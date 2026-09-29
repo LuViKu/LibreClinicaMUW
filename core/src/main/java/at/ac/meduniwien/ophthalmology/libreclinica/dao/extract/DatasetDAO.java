@@ -141,6 +141,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         this.setTypeExpected(17, TypeNames.STRING);// crf_name
     }
 
+    @Override
     public DatasetBean update(DatasetBean db) {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();
@@ -169,6 +170,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         return db;
     }
 
+    @Override
     public DatasetBean create(DatasetBean db) {
         /*
          * INSERT INTO DATASET (STUDY_ID, STATUS_ID, NAME, DESCRIPTION,
@@ -248,6 +250,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         return db;
     }
 
+    @Override
     public DatasetBean getEntityFromHashMap(HashMap<String, Object> hm) {
         DatasetBean eb = new DatasetBean();
         this.setEntityAuditInformation(eb, hm);
@@ -312,6 +315,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         return groupIds;
     }
 
+    @Override
     public ArrayList<DatasetBean> findAll() {
     	return executeFindAllQuery("findAll");
     }
@@ -343,10 +347,12 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<DatasetBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public DatasetBean findByPK(int ID) {
         String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -489,6 +495,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<DatasetBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -496,6 +503,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<DatasetBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

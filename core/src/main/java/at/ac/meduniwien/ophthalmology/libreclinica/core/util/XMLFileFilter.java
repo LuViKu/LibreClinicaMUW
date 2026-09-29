@@ -29,6 +29,7 @@ import java.io.FilenameFilter;
 @SuppressWarnings("all")
 public class XMLFileFilter implements FilenameFilter {
 
+	@Override
 	public boolean accept(File arg0, String name) {
 		return (name.endsWith(".xml"));
 

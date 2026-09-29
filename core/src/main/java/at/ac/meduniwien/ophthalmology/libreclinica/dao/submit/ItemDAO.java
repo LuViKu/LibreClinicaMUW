@@ -137,6 +137,7 @@ public class ItemDAO extends AuditableEntityDAO<ItemBean> {
         return oid;
     }
 
+    @Override
     public ItemBean getEntityFromHashMap(HashMap<String, Object> hm) {
         ItemBean eb = new ItemBean();
         // below inserted to find out a class cast exception, tbh
@@ -378,6 +379,7 @@ public class ItemDAO extends AuditableEntityDAO<ItemBean> {
         return al;
     }
 
+    @Override
     public ItemBean findByPK(int id) {
         ItemBean eb = new ItemBean();
         this.setTypesExpected();
@@ -427,12 +429,14 @@ public class ItemDAO extends AuditableEntityDAO<ItemBean> {
 
     /**
      */
+    @Override
     public ArrayList<ItemBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
     /**
      */
+    @Override
     public ArrayList<ItemBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

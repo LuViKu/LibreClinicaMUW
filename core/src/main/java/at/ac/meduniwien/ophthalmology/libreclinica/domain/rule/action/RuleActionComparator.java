@@ -30,6 +30,7 @@ public class RuleActionComparator implements Comparator<RuleActionBean> {
         order.put(ActionType.RANDOMIZE, "8");
     }
 
+    @Override
     public int compare(RuleActionBean o1, RuleActionBean o2) {
         return order.get(o1.getActionType()).compareTo(order.get(o2.getActionType()));
     }

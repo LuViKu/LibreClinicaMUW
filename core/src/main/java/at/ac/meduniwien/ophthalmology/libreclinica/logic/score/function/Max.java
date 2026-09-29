@@ -24,6 +24,7 @@ public class Max extends AbstractFunction {
      * @see Function#execute
      */
 
+    @Override
     public void execute() {
         logger.info("Execute the function Max... ");
 

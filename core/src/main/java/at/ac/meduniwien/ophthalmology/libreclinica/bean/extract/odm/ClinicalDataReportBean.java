@@ -552,6 +552,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
 	private void sortImportItemGroupDataBeanList(ArrayList<ImportItemGroupDataBean> igs) {
 
 	    Collections.sort(igs, new Comparator<ImportItemGroupDataBean>() {
+	        @Override
 	        public int compare(ImportItemGroupDataBean o1, ImportItemGroupDataBean o2) {
 
 	            String x1 = o1.getItemGroupOID();
@@ -573,6 +574,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
 
 	    Collections.sort(items, new Comparator<ImportItemDataBean>() {
 
+	        @Override
 	        public int compare(ImportItemDataBean o1, ImportItemDataBean o2) {
 
 	              String  i1 = o1.getItemOID();

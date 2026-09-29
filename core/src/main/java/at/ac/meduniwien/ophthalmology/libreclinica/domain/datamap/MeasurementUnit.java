@@ -67,6 +67,7 @@ public class MeasurementUnit  extends AbstractMutableDomainObject {
 
 	@Id
 	@Column(name = "id", unique = true, nullable = false)
+	@Override
 	public Integer getId() {
 		return this.id;
 	}
@@ -77,10 +78,12 @@ public class MeasurementUnit  extends AbstractMutableDomainObject {
 
 	@Version
 	@Column(name = "version")
+	@Override
 	public Integer getVersion() {
 		return this.version;
 	}
 
+	@Override
 	public void setVersion(Integer version) {
 		this.version = version;
 	}

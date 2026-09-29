@@ -136,6 +136,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
         // should be set in the super(), tbh 05/2007
     }
 
+    @Override
     public void setCrfId(int id) {
         this.crfId = id;
     }
@@ -144,6 +145,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
         return this.crfId;
     }
 
+    @Override
     public NewCRFBean toNewCRF(javax.sql.DataSource ds, ResourceBundle resPageMsg) throws IOException, CRFReadingException {
 
         String dbName = SQLInitServlet.getDBName();

@@ -153,6 +153,7 @@ public class UploadFileServlet extends SecureController {
     		return DatatypeConverter.printHexBinary(md.digest());
     	}
 
+        @Override
         public File rename(File f, InputStream content) {
             // here, File f has been validated as a valid File.
             String pathAndName = f.getPath();

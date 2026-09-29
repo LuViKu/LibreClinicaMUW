@@ -663,6 +663,7 @@ public class ItemFormMetadataBean extends EntityBean implements Comparable<ItemF
         this.responseLayout = responseLayout;
     }
 
+    @Override
     public int compareTo(ItemFormMetadataBean o) {
         int ordinal = o.getOrdinal();
         return Integer.valueOf(this.getOrdinal()).compareTo(ordinal);

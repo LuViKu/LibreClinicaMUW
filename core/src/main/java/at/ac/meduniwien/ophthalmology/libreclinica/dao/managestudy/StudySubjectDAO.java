@@ -329,6 +329,7 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
      * @return The study subject with id set to the insert id if the operation was successful, or 0 otherwise.
      * @throws OpenClinicaException open clinica exception
      */
+    @Override
     public StudySubjectBean create(StudySubjectBean sb) throws OpenClinicaException {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();

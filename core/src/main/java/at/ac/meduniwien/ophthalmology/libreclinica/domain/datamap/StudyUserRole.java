@@ -49,10 +49,12 @@ public class StudyUserRole implements CompositeIdDomainObject {
             @AttributeOverride(name = "dateUpdated", column = @Column(name = "date_updated", length = 4)),
             @AttributeOverride(name = "updateId", column = @Column(name = "update_id")),
             @AttributeOverride(name = "userName", column = @Column(name = "user_name", length = 40)) })
+    @Override
     public StudyUserRoleId getId() {
         return this.id;
     }
 
+    @Override
     public void setId(Object id) {
         this.id = (StudyUserRoleId) id;
     }

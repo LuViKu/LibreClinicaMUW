@@ -19,6 +19,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
 public class ElementOIDBean implements Comparable<ElementOIDBean> {
     private String oid;
 
+    @Override
     public int compareTo(ElementOIDBean o) {
         return this.oid.compareTo(o.getOid());
     }

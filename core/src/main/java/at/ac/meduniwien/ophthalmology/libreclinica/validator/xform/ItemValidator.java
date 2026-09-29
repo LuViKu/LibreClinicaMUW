@@ -28,10 +28,12 @@ public class ItemValidator implements Validator {
         this.newDataType = newDataType;
     }
 
+    @Override
     public boolean supports(Class<?> clazz) {
         return Item.class.equals(clazz);
     }
 
+    @Override
     public void validate(Object target, Errors errors) {
         Item item = (Item) target;
 

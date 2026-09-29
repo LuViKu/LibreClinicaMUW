@@ -895,6 +895,7 @@ public class FormBeanUtil {
         // then number their ordinals accordingly
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayItemGroupBean, DisplayItemGroupBean displayItemGroupBean1) {
                 return displayItemGroupBean.getGroupMetaBean().compareTo(displayItemGroupBean1.getGroupMetaBean());
             }
@@ -923,6 +924,7 @@ public class FormBeanUtil {
         // DisplayItemGroupBeans
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
                 Integer compInt = disFormGroupBean1.getOrdinal();
                 Integer compInt2 = disFormGroupBean.getOrdinal();
@@ -1002,6 +1004,7 @@ public class FormBeanUtil {
         // then number their ordinals accordingly
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayItemGroupBean, DisplayItemGroupBean displayItemGroupBean1) {
                 return displayItemGroupBean.getGroupMetaBean().compareTo(displayItemGroupBean1.getGroupMetaBean());
             }
@@ -1030,6 +1033,7 @@ public class FormBeanUtil {
         // DisplayItemGroupBeans
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
                 Integer compInt = disFormGroupBean1.getOrdinal();
                 Integer compInt2 = disFormGroupBean.getOrdinal();
@@ -1321,6 +1325,7 @@ public class FormBeanUtil {
         // FormGroupBeans
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
                 return disFormGroupBean.getGroupMetaBean().getOrdinal().compareTo(disFormGroupBean1.getGroupMetaBean().getOrdinal());
             }
@@ -1418,6 +1423,7 @@ public class FormBeanUtil {
         // then number their ordinals accordingly
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayItemGroupBean, DisplayItemGroupBean displayItemGroupBean1) {
                 return displayItemGroupBean.getGroupMetaBean().compareTo(displayItemGroupBean1.getGroupMetaBean());
             }

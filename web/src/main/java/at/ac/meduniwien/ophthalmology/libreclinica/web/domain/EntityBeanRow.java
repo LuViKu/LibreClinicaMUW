@@ -118,6 +118,7 @@ public abstract class EntityBeanRow<T, R> implements Comparable<EntityBeanRow<T,
      *
      * @see java.lang.Comparable#compareTo(java.lang.Object)
      */
+    @Override
     public int compareTo(EntityBeanRow<T, R> row) {
         if (ascendingSort) {
             return compareColumn(row, sortingColumn);

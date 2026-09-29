@@ -37,6 +37,7 @@ public class ItemGroupDao extends AbstractDomainDao<ItemGroup> {
         return ItemGroup.class;
     }
 
+    @Override
     public ItemGroup findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";

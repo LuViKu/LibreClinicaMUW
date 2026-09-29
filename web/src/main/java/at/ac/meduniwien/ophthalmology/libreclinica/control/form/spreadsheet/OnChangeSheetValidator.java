@@ -38,6 +38,7 @@ public class OnChangeSheetValidator implements SpreadSheetValidator{
     /**
      * Validate cells List.
      */
+    @Override
     public void validate() {
         for(OnChangeSheetValidationCell cell: this.cells) {
             validateWithOrder(cell);
@@ -200,6 +201,7 @@ public class OnChangeSheetValidator implements SpreadSheetValidator{
         }
     }
 
+    @Override
     public SheetErrors getSheetErrors() {
         return sheetErrors;
     }

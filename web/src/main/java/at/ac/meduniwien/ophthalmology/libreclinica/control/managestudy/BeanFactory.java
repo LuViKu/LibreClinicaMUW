@@ -231,6 +231,7 @@ public class BeanFactory {
         // sort the list
         Collections.sort(list, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayFormGroupBean, DisplayItemGroupBean displayFormGroupBean1) {
                 return displayFormGroupBean.getGroupMetaBean().getOrdinal().compareTo(displayFormGroupBean1.getGroupMetaBean().getOrdinal());
             }
@@ -386,6 +387,7 @@ public class BeanFactory {
         // API.
         Collections.sort(children, new Comparator<DisplayItemBean>() {
 
+            @Override
             public int compare(DisplayItemBean displayItemBean, DisplayItemBean displayItemBean1) {
                 return Integer.valueOf(displayItemBean.getMetadata().getColumnNumber()).compareTo(displayItemBean1.getMetadata().getColumnNumber());
             }

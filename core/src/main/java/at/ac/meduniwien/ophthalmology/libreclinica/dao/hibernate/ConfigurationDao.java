@@ -24,6 +24,7 @@ public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
         return ConfigurationBean.class;
     }
 
+    @Override
     public ArrayList<ConfigurationBean> findAll() {
         String query = "from " + getDomainClassName();
         Query<ConfigurationBean> q = getCurrentSession().createQuery(query, ConfigurationBean.class);

@@ -70,6 +70,7 @@ public class EventProcessor implements Processor, Ordered {
     
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
+    @Override
     public void process(SubmissionContainer container) throws Exception {
         logger.info("Executing Event Processor.");
         Errors errors = container.getErrors();

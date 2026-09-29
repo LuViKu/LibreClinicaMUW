@@ -341,6 +341,7 @@ public class ItemBean extends AuditableEntityBean implements Comparable<ItemBean
         this.selected = selected;
     }
 
+    @Override
     public int compareTo(ItemBean o) {
         if (!getItemMetas().isEmpty() && !o.getItemMetas().isEmpty()) {
             ItemFormMetadataBean m1 = getItemMetas().get(0);

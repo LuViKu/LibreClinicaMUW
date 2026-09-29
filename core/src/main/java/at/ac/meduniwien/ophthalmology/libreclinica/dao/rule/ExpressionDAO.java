@@ -71,6 +71,7 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
         this.setTypeExpected(9, TypeNames.INT);// version
     }
 
+    @Override
     public ExpressionBean update(ExpressionBean expressionBean) {
         expressionBean.setActive(false);
 
@@ -90,6 +91,7 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
         return expressionBean;
     }
 
+    @Override
     public ExpressionBean create(ExpressionBean expressionBean) {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();
@@ -107,6 +109,7 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
         return expressionBean;
     }
 
+    @Override
     public ExpressionBean getEntityFromHashMap(HashMap<String, Object> hm) {
         ExpressionBean expressionBean = new ExpressionBean();
         this.setEntityAuditInformation(expressionBean, hm);
@@ -125,10 +128,12 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ExpressionBean> findAll() {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public ExpressionBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -141,6 +146,7 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ExpressionBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -151,6 +157,7 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ExpressionBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -161,6 +168,7 @@ public class ExpressionDAO extends AuditableEntityDAO<ExpressionBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ExpressionBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

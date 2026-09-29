@@ -41,6 +41,7 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
         return (CrfVersion) q.getSingleResultOrNull();
     }
 
+    @Override
     public CrfVersion findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";

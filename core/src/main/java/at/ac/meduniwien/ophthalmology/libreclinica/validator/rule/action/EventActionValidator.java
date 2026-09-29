@@ -54,10 +54,12 @@ public class EventActionValidator implements Validator {
     /**
      * This Validator validates just Person instances
      */
+    @Override
     public boolean supports(Class<?> clazz) {
         return EventActionBean.class.equals(clazz);
     }
 
+    @Override
     public void validate(Object obj, Errors e) {
         EventActionBean eventActionBean = (EventActionBean) obj;
 

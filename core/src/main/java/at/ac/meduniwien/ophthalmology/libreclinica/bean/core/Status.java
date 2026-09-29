@@ -131,6 +131,7 @@ public class Status extends Term implements Comparable<Status> {
      *
      * @see java.lang.Comparable#compareTo(java.lang.Object)
      */
+    @Override
     public int compareTo(Status o) {
         return name.compareTo(o.getName());
     }

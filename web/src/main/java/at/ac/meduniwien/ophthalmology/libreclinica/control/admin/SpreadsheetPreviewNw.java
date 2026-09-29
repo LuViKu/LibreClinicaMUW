@@ -58,6 +58,7 @@ public final class SpreadsheetPreviewNw implements Preview {
      * group_repeat_array=, group_row_start_number=2.0, group_sub_header=, group_label=MyGroupLabel, group_repeat_max=3.0}}
      */
 	@SuppressWarnings("rawtypes")
+	@Override
 	public Map<String, Map> createCrfMetaObject(HSSFWorkbook workbook) {
         if (workbook == null)
             return new HashMap<>();
@@ -90,6 +91,7 @@ public final class SpreadsheetPreviewNw implements Preview {
      * @param itemsOrSection
      *            should specify "items" or "sections" or the associated static variable, i.e. SpreadsheetPreview.ITEMS
      */
+    @Override
     public Map<Integer, Map<String, String>> createItemsOrSectionMap(HSSFWorkbook workbook, String itemsOrSection) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<Integer, Map<String, String>>();
@@ -194,6 +196,7 @@ public final class SpreadsheetPreviewNw implements Preview {
         return false;
     }
 
+    @Override
     public Map<Integer, Map<String, String>> createGroupsMap(HSSFWorkbook workbook) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<Integer, Map<String, String>>();
@@ -280,6 +283,7 @@ public final class SpreadsheetPreviewNw implements Preview {
      * @author Bruce Perry @returns A HashMap containing CRF section names as keys. Returns an empty HashMap if the spreadsheet does not contain any sheets
      * named "Sections."
      */
+    @Override
     public Map<String, String> createCrfMap(HSSFWorkbook workbook) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<String, String>();

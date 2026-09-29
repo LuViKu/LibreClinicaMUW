@@ -28,34 +28,42 @@ public class Input implements UserControl {
     @XmlElement(name = "hint")
     private Hint hint = null;
 
+    @Override
     public String getRef() {
         return ref;
     }
 
+    @Override
     public void setRef(String ref) {
         this.ref = ref;
     }
 
+    @Override
     public String getAppearance() {
         return appearance;
     }
 
+    @Override
     public void setAppearance(String appearance) {
         this.appearance = appearance;
     }
 
+    @Override
     public Label getLabel() {
         return label;
     }
 
+    @Override
     public void setLabel(Label label) {
         this.label = label;
     }
 
+    @Override
     public Hint getHint() {
         return hint;
     }
 
+    @Override
     public void setHint(Hint hint) {
         this.hint = hint;
     }

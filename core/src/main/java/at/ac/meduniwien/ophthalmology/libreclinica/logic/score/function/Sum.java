@@ -26,6 +26,7 @@ public class Sum extends AbstractFunction {
      *
      * @see Function#execute
      */
+    @Override
     public void execute() {
         logger.info("Execute the function Sum execute() ... ");
 

@@ -124,6 +124,7 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 	
 	private void createMimeMessagePreparator(final ParticipantDTO pDTO, final String email){
         MimeMessagePreparator preparator = new MimeMessagePreparator() {
+            @Override
             public void prepare(MimeMessage mimeMessage) throws Exception {
                 MimeMessageHelper message = new MimeMessageHelper(mimeMessage);
                 message.setFrom(EmailEngine.getAdminEmail());

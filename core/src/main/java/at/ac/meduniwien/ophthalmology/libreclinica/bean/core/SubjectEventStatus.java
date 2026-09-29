@@ -135,6 +135,7 @@ public class SubjectEventStatus extends Term implements Comparable<SubjectEventS
         return new ArrayList<>(list);
     }
 
+    @Override
     public int compareTo(SubjectEventStatus o) {
         return name.compareTo(o.getName());
     }

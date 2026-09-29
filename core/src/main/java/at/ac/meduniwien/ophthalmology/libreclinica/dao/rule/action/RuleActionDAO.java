@@ -144,6 +144,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleAction;
     }
 
+    @Override
     public RuleActionBean getEntityFromHashMap(HashMap<String, Object> hm) {
 
         int actionTypeId = ((Integer) hm.get("action_type")).intValue();
@@ -172,6 +173,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleAction;
     }
 
+    @Override
     public ArrayList<RuleActionBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -183,6 +185,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleSetBeans;
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
         RuleActionBean action = new RuleActionBean();
         this.setTypesExpected();
@@ -223,6 +226,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleActionBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -233,6 +237,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleActionBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -243,6 +248,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleActionBean> findAllByPermission(Object objCurrentUser, int intActionType) {
        throw new RuntimeException("Not implemented");
     }

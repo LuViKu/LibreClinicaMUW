@@ -84,6 +84,7 @@ public class StudyParameterValueId  extends AbstractMutableDomainObject {
 		this.parameter = parameter;
 	}
 
+	@Override
 	public boolean equals(Object other) {
 		if ((this == other))
 			return true;
@@ -107,6 +108,7 @@ public class StudyParameterValueId  extends AbstractMutableDomainObject {
 						.getParameter().equals(castOther.getParameter())));
 	}
 
+	@Override
 	public int hashCode() {
 		int result = 17;
 

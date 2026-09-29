@@ -52,10 +52,12 @@ public class Tag extends DataMapDomainObject {
     @Id
     @Column(name = "id", unique = true, nullable = false)
     @GeneratedValue(generator = "id-generator")
+    @Override
     public Integer getId() {
         return id;
     }
 
+    @Override
     public void setId(Integer id) {
         this.id = id;
     }

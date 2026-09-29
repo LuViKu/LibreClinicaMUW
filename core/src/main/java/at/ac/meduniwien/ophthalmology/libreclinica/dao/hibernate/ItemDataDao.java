@@ -29,6 +29,7 @@ import org.hibernate.query.Query;
 
 public class ItemDataDao extends AbstractDomainDao<ItemData> {
 
+    @Override
     Class<ItemData> domainClass() {
         return ItemData.class;
     }

@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.logic.core.BusinessRule;
  */
 @SuppressWarnings("all")
 public class MaskSubjectDOBRule implements BusinessRule {
+    @Override
     public boolean isPropertyTrue(String s) {
         if (s.equals(this.getClass().getName())) {
             return true;
@@ -27,6 +28,7 @@ public class MaskSubjectDOBRule implements BusinessRule {
         }
     }
 
+    @Override
     public EntityBean doAction(EntityBean sb) {
         // cast to a subject bean
         SubjectBean ssb = (SubjectBean) sb;

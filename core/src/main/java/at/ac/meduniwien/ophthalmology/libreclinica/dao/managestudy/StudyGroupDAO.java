@@ -74,6 +74,7 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
      * getEntityFromHashMap, the method that gets the object from the database
      * query.
      */
+    @Override
     public StudyGroupBean getEntityFromHashMap(HashMap<String, Object> hm) {
         StudyGroupBean eb = new StudyGroupBean();
         eb.setId(((Integer) hm.get("study_group_id")).intValue());
@@ -90,6 +91,7 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
         return eb;
     }
 
+    @Override
     public ArrayList<StudyGroupBean> findAll() {
     	String queryName = "";
         return executeFindAllQuery(queryName);
@@ -110,10 +112,12 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyGroupBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public StudyGroupBean findByPK(int id) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(id);
@@ -191,6 +195,7 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
     /**
      * Updates a StudyGroup
      */
+    @Override
     public StudyGroupBean update(StudyGroupBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
 
@@ -211,6 +216,7 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyGroupBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -218,6 +224,7 @@ public class StudyGroupDAO extends AuditableEntityDAO<StudyGroupBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyGroupBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

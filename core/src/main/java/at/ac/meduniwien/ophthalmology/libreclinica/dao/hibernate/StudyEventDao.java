@@ -37,6 +37,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 
 	private ApplicationEventPublisher eventPublisher;
 
+	@Override
 	public Class<StudyEvent> domainClass(){
 		return StudyEvent.class;
 	}

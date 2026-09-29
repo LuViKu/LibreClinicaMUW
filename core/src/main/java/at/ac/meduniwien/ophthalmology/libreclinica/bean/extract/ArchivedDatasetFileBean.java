@@ -48,10 +48,12 @@ public class ArchivedDatasetFileBean extends EntityBean {
     private Date dateCreated;
     private int ownerId;
 
+    @Override
     public int getId() {
         return id;
     }
 
+    @Override
     public void setId(int id) {
         this.id = id;
     }

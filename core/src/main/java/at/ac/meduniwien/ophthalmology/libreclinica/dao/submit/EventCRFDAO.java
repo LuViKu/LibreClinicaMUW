@@ -105,6 +105,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         this.setTypeExpected(23, TypeNames.INT); // sdv_update_id
     }
 
+    @Override
     public EventCRFBean update(EventCRFBean ecb) {
         ecb.setActive(false);
 
@@ -202,6 +203,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         executeUpdate(digester.getQuery("markIncompleteIDE"), variables);
     }
 
+    @Override
     public EventCRFBean create(EventCRFBean ecb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();
@@ -234,6 +236,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return ecb;
     }
 
+    @Override
     public EventCRFBean getEntityFromHashMap(HashMap<String, Object> hm) {
         EventCRFBean eb = new EventCRFBean();
         this.setEntityAuditInformation(eb, hm);
@@ -261,6 +264,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return eb;
     }
 
+    @Override
     public ArrayList<EventCRFBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -269,10 +273,12 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<EventCRFBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public EventCRFBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -282,6 +288,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<EventCRFBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -289,6 +296,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<EventCRFBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }
@@ -765,6 +773,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
             Integer studyEventId = bean.getStudyEventId();
             if (!result.containsKey(studyEventId)) {
                 result.put(studyEventId, new TreeSet<EventCRFBean>(new Comparator<EventCRFBean>() {
+                    @Override
                     public int compare(EventCRFBean o1, EventCRFBean o2) {
                         Integer id1 = o1.getId();
                         Integer id2 = o2.getId();

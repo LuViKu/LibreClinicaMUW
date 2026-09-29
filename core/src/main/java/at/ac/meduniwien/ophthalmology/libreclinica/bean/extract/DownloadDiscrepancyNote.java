@@ -67,6 +67,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
     public DownloadDiscrepancyNote() {
     }
 
+    @Override
     public void downLoad(EntityBean bean,
                          String format,
                          OutputStream stream) {
@@ -107,6 +108,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @Override
     public void downLoad(List<EntityBean> listOfBeans, String format,
                          OutputStream stream) {
 
@@ -155,6 +157,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @Override
     public int getContentLength(EntityBean bean, String format) {
         return serializeToString(bean, false, 0).getBytes().length;
     }

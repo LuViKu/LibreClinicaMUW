@@ -45,6 +45,7 @@ public class SheetValidator implements SpreadSheetValidator{
         sheetErrors = new SheetErrors(resPageMsg);
     }
 
+    @Override
     public void validate() {
         for(SheetValidationCell cell: this.cells) {
             validate(cell);
@@ -69,6 +70,7 @@ public class SheetValidator implements SpreadSheetValidator{
     public void setCells(List<SheetValidationCell> cells) {
         this.cells = cells;
     }
+    @Override
     public SheetErrors getSheetErrors() {
         return sheetErrors;
     }

@@ -37,6 +37,7 @@ public class ItemDao extends AbstractDomainDao<Item> {
         return Item.class;
     }
 
+    @Override
     public Item findByOcOID(String OCOID) {
         String query = "from " + getDomainClassName() + " item  where item.ocOid = :ocoid ";
         org.hibernate.query.Query<Item> q = getCurrentSession().createQuery(query, Item.class);

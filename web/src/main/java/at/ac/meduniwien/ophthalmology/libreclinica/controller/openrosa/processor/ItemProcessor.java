@@ -102,10 +102,12 @@ public class ItemProcessor implements Processor, Ordered {
     
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
+    @Override
     public int getOrder() {
         return 4;
     }
 
+    @Override
     public void process(SubmissionContainer container) throws Exception {
         logger.info("Executing Item Processor.");
         ArrayList<HashMap<String,String>> listOfUploadFilePaths =container.getListOfUploadFilePaths();        

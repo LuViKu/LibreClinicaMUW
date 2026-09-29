@@ -198,6 +198,7 @@ public class DisplayItemWithGroupBean implements Comparable<DisplayItemWithGroup
         this.singleItem = singleItem;
     }
 
+    @Override
     public int compareTo(DisplayItemWithGroupBean o) {
         return getOrdinal() - o.getOrdinal();
     }

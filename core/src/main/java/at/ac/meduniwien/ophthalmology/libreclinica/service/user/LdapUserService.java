@@ -84,6 +84,7 @@ public class LdapUserService {
 
     private final AttributesMapper<LdapUser> ldapUserAttributesMapper = new AttributesMapper<LdapUser>() {
 
+        @Override
         public LdapUser mapFromAttributes(Attributes attributes) throws NamingException {
             LdapUser u = new LdapUser();
             u.setDistinguishedName(attToString(attributes, keyDistinguishedName));

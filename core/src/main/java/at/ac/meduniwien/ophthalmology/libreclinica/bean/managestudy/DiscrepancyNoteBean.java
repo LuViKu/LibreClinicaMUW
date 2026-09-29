@@ -555,6 +555,7 @@ public class DiscrepancyNoteBean extends AuditableEntityBean implements Comparab
         this.studySub = studySub;
     }
 
+    @Override
     public int compareTo(DiscrepancyNoteBean o) {
         return Integer.valueOf(this.getId()).compareTo(o.getId());
     }

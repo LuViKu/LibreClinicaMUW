@@ -113,6 +113,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
         this.studyId = studyId;
     }
 
+    @Override
     public void setCrfId(int id) {
         this.crfId = id;
     }
@@ -121,6 +122,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
         return this.crfId;
     }
 
+	@Override
 	public NewCRFBean toNewCRF(javax.sql.DataSource ds, ResourceBundle resPageMsg) throws IOException, CRFReadingException {
 
         String dbName = SQLInitServlet.getDBName();

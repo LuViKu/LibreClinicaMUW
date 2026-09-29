@@ -538,6 +538,7 @@ public class EventDefinitionCRFBean extends AuditableEntityBean implements Compa
      *
      * @see java.lang.Comparable#compareTo(java.lang.Object)
      */
+    @Override
     public int compareTo(EventDefinitionCRFBean o) {
         return Integer.valueOf(this.ordinal).compareTo(o.ordinal);
     }

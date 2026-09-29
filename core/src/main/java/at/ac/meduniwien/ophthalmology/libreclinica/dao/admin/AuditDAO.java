@@ -65,6 +65,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
         digesterName = SQLFactory.getInstance().DAO_AUDIT;
     }
 
+    @Override
     public void setTypesExpected() {
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT); // audit_id
@@ -101,6 +102,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
      * getEntityFromHashMap, the method that gets the object from the database
      * query.
      */
+    @Override
     public AuditBean getEntityFromHashMap(HashMap<String, Object> hm) {
         AuditBean eb = new AuditBean();
         // AUDIT_ID AUDIT_DATE AUDIT_TABLE USER_ID ENTITY_ID
@@ -155,6 +157,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAOInterface#findByPK(int)
      */
+    @Override
     public AuditBean findByPK(int id) {
     	String queryName = "findByPK";
         return executeFindByPKQuery(queryName);
@@ -165,6 +168,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAOInterface#findAll()
      */
+    @Override
     public ArrayList<AuditBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -416,6 +420,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<AuditBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -426,6 +431,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<AuditBean> findAllByPermission(Object objCurrentUser, int intActionType) {
        throw new RuntimeException("Not implemented");
     }
@@ -434,6 +440,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     // NOTE: This method not fully implemented
     // //////////////////////////////////////////////////////////////////////////////////////////////////
     // /v
+    @Override
     public ArrayList<AuditBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -446,6 +453,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public AuditBean update(AuditBean eb) {
         throw new RuntimeException("Not implemented");
     }
@@ -459,6 +467,7 @@ public class AuditDAO extends EntityDAO<AuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public AuditBean create(AuditBean eb) {
         throw new RuntimeException("Not implemented");
     }

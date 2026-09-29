@@ -176,6 +176,7 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
      * getEntityFromHashMap, the method that gets the object from the database
      * query.
      */
+    @Override
     public StudyEventBean getEntityFromHashMap(HashMap<String, Object> hm) {
         return getEntityFromHashMap(hm, false);
     }
@@ -213,6 +214,7 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
 
     // public HashMap getListOfStudyEvents()
 
+    @Override
     public ArrayList<StudyEventBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -315,6 +317,7 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyEventBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -331,6 +334,7 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         return executeFindAllQuery(queryName, variables);
     }
 
+    @Override
     public StudyEventBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -484,6 +488,7 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyEventBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -491,6 +496,7 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyEventBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }
