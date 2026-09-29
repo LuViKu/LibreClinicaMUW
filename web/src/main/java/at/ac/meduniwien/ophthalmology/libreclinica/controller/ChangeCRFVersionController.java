@@ -175,7 +175,7 @@ public class ChangeCRFVersionController {
         	EventDefinitionCRFDAO edfdao = new EventDefinitionCRFDAO(dataSource);
         	EventDefinitionCRFBean edf = (EventDefinitionCRFBean) edfdao.findByPK(eventDefinitionCRFId);
         	
-        	if (!edf.getSelectedVersionIds().equals("")){
+        	if (!edf.getSelectedVersionIds().isEmpty()){
 	        	String[] version_ids = edf.getSelectedVersionIds().split(",");
 	        	HashMap<String,String> tmp = new HashMap<String,String>(version_ids.length);
 	        	for ( String vs : version_ids){
@@ -480,7 +480,7 @@ public class ChangeCRFVersionController {
     			}
     			cycle_count++;
     			//do not add row if all items empty -> from data of repeat group to none-rep
-    			if ( !(row[0].equals("") && row[4].equals(""))){
+    			if ( !(row[0].isEmpty() && row[4].isEmpty())){
     				rows.add(row);
     			}
     		}

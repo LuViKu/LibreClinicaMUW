@@ -655,7 +655,7 @@ public class CoreResources implements ResourceLoaderAware {
         int i = 1;
         int maxExtractOption = getMaxExtractCounterValue();
         while (i <= maxExtractOption) {
-            if (!getExtractField("extract." + i + ".file").equals("")) {
+            if (!getExtractField("extract." + i + ".file").isEmpty()) {
                 ExtractPropertyBean epbean = new ExtractPropertyBean();
                 epbean.setId(i);
                 // we will implement a find by id function in the front end

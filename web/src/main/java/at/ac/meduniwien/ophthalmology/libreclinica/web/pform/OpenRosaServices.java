@@ -318,7 +318,7 @@ public class OpenRosaServices {
             CRFVersionDAO versionDAO = new CRFVersionDAO(dataSource);
             CRFVersionBean crfVersion = versionDAO.findByOid(formId);
 
-            if (crfVersion.getXform() != null && !crfVersion.getXform().equals("")){
+            if (crfVersion.getXform() != null && !crfVersion.getXform().isEmpty()){
                 xform = updateRepeatGroupsWithOrdinal(crfVersion.getXform());
             } else {
 

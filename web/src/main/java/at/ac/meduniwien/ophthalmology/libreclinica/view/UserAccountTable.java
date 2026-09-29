@@ -129,7 +129,7 @@ public class UserAccountTable extends Table {
 
     private String getStudyName(StudyUserRoleBean sur) {
         String studyName;
-        if (sur.getStudyName().equals("")) {
+        if (sur.getStudyName().isEmpty()) {
             studyName = "Study " + sur.getStudyId();
         } else {
             studyName = sur.getStudyName();

@@ -187,7 +187,7 @@ public class ParticipantPortalRegistrar {
         try {
             Authorization[] response = rest.getForObject(pManageUrlFull, Authorization[].class);
             if (response.length > 0 && response[0].getStudy() != null && response[0].getStudy().getHost() != null
-                    && !response[0].getStudy().getHost().equals("")) {
+                    && !response[0].getStudy().getHost().isEmpty()) {
                 URL url = URI.create(pManageUrl).toURL();
                 String port = "";
                 if (url.getPort() > 0)

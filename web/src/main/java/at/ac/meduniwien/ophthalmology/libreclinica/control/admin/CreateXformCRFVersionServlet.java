@@ -133,7 +133,7 @@ public class CreateXformCRFVersionServlet extends SecureController {
             logger.debug("Didn't find any errors.  CRF data saved.");
 
             // Save any media files uploaded with xform
-	        CrfBean crf = (submittedCrfName == null || submittedCrfName.equals("")) ? crfDao.findByCrfId(version.getCrfId()) : crfDao.findByName(submittedCrfName);
+	        CrfBean crf = (submittedCrfName == null || submittedCrfName.isEmpty()) ? crfDao.findByCrfId(version.getCrfId()) : crfDao.findByName(submittedCrfName);
 	        CrfVersion newVersion = crfVersionDao.findByNameCrfId(submittedCrfVersionName, crf.getCrfId());
 	        saveAttachedMedia(items, crf, newVersion);
         }
@@ -145,7 +145,7 @@ public class CreateXformCRFVersionServlet extends SecureController {
 			String submittedCrfVersionDescription, String submittedRevisionNotes, String submittedXformText) {
 
     	// Verify CRF Name is populated
-        if (version.getCrfId() == 0 && (submittedCrfName == null || submittedCrfName.equals(""))) {
+        if (version.getCrfId() == 0 && (submittedCrfName == null || submittedCrfName.isEmpty())) {
             DataBinder crfDataBinder = new DataBinder(new CrfBean());
             Errors crfErrors = crfDataBinder.getBindingResult();
             crfErrors.rejectValue("name","crf_val_crf_name_blank",resword.getString("CRF_name"));
@@ -156,22 +156,22 @@ public class CreateXformCRFVersionServlet extends SecureController {
         Errors crfVersionErrors = crfVersionDataBinder.getBindingResult();
 
     	// Verify CRF Version Name is populated
-        if (submittedCrfVersionName == null || submittedCrfVersionName.equals("")) {
+        if (submittedCrfVersionName == null || submittedCrfVersionName.isEmpty()) {
         	crfVersionErrors.rejectValue("name","crf_ver_val_name_blank",resword.getString("version_name"));
         }
 
     	// Verify CRF Version Description is populated
-        if (submittedCrfVersionDescription == null || submittedCrfVersionDescription.equals("")) {
+        if (submittedCrfVersionDescription == null || submittedCrfVersionDescription.isEmpty()) {
         	crfVersionErrors.rejectValue("description","crf_ver_val_desc_blank",resword.getString("crf_version_description"));
         }
 
     	// Verify CRF Version Revision Notes is populated
-        if (submittedRevisionNotes == null || submittedRevisionNotes.equals("")) {
+        if (submittedRevisionNotes == null || submittedRevisionNotes.isEmpty()) {
         	crfVersionErrors.rejectValue("revisionNotes","crf_ver_val_rev_notes_blank",resword.getString("revision_notes"));
         }
 
     	// Verify Xform text is populated
-        if (submittedXformText == null || submittedXformText.equals("")) {
+        if (submittedXformText == null || submittedXformText.isEmpty()) {
         	crfVersionErrors.rejectValue("xform","crf_ver_val_xform_blank",resword.getString("xform"));
         }
         errors.addAllErrors(crfVersionErrors);

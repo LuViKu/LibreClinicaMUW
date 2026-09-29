@@ -1119,7 +1119,7 @@ public class SystemController {
 
         HashMap<String, Object> mapParticipate = new HashMap<>();
         mapParticipate.put("enabled", ocParticipateStatus.equals("enabled") ? "True" : "False");
-        mapParticipate.put("status", ocuiParticipateStatus.equals("") ? "INACTIVE" : ocuiParticipateStatus);
+        mapParticipate.put("status", ocuiParticipateStatus.isEmpty() ? "INACTIVE" : ocuiParticipateStatus);
         mapParticipate.put("metadata", mapMetadata);
 
         HashMap<String, Object> mapModule = new HashMap<>();
@@ -1157,7 +1157,7 @@ public class SystemController {
         }
 
         HashMap<String, Object> mapRuleDesigner = new HashMap<>();
-        mapRuleDesigner.put("enabled", !designerUrl.equals("") ? "True" : "False");
+        mapRuleDesigner.put("enabled", !designerUrl.isEmpty() ? "True" : "False");
         mapRuleDesigner.put("status", result);
         mapRuleDesigner.put("metadata", mapMetadata);
 
@@ -1179,7 +1179,7 @@ public class SystemController {
         mapMetadata.put("mail.protocol", mailProtocol);
 
         HashMap<String, Object> mapMessaging = new HashMap<>();
-        mapMessaging.put("enabled", (!mailProtocol.equals("") && !mailPort.equals("") && !mailHost.equals("")) ? "True" : "False");
+        mapMessaging.put("enabled", (!mailProtocol.isEmpty() && !mailPort.isEmpty() && !mailHost.isEmpty()) ? "True" : "False");
         mapMessaging.put("status", result);
         mapMessaging.put("metadata", mapMetadata);
 
@@ -1262,7 +1262,7 @@ public class SystemController {
         }
 
         HashMap<String, Object> mapWebService = new HashMap<>();
-        mapWebService.put("enabled", !webserviceUrl.equals("") ? "True" : "False");
+        mapWebService.put("enabled", !webserviceUrl.isEmpty() ? "True" : "False");
         mapWebService.put("status", result);
         mapWebService.put("metadata", mapMetadata);
 

@@ -314,7 +314,7 @@ public class CreateJobExportServlet extends SecureController {
         }
         // @pgawade 20-April-2011 Limit the job description to 250 characters
         String jobDesc = fp.getString(JOB_DESC);
-        if (null != jobDesc && !jobDesc.equals("")) {
+        if (null != jobDesc && !jobDesc.isEmpty()) {
             if (jobDesc.length() > 250) {
                 Validator.addError(errors, JOB_DESC, "A job description cannot be more than 250 characters.");
             }

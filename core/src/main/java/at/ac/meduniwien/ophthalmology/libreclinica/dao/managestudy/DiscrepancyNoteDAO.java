@@ -1542,7 +1542,7 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
         String entityType = note.getEntityType();
         String entityIDColumn = getEntityIDColumn(entityType);
 
-        if (!entityIDColumn.equals("")) {
+        if (!entityIDColumn.isEmpty()) {
             note.setEntityId(selectInt(hm, entityIDColumn));
         }
         note.setColumn(selectString(hm, "column_name"));

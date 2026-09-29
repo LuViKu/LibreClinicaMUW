@@ -156,7 +156,7 @@ public class RuleSetBean extends AbstractAuditableMutableDomainObject implements
     @Transient
     public String getCrfWithVersionNameWithOid() {
         String oid = getCrfVersion() != null ? getCrfVersion().getOid() : getCrf() != null ? getCrf().getOid() : "";
-        return getCrfWithVersionName() + (!oid.equals("") ? " (" + oid + ")" : "");
+        return getCrfWithVersionName() + (!oid.isEmpty() ? " (" + oid + ")" : "");
     }
 
     @Transient

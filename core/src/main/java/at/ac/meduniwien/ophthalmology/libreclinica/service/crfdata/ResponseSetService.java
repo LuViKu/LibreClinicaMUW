@@ -175,7 +175,7 @@ public class ResponseSetService {
             else
                 label = itemLabelName.getTextContent();
             label = label.replaceAll(",", "\\\\,");
-            if (optionsText.equals(""))
+            if (optionsText.isEmpty())
                 optionsText = label;
             else
                 optionsText += "," + label;
@@ -253,7 +253,7 @@ public class ResponseSetService {
             Element item = (Element) nodeList.item(i);
             Element itemValue = (Element) item.getElementsByTagName(itemSetValue).item(0);
             String value = itemValue.getTextContent();
-            if (optionsValues.equals(""))
+            if (optionsValues.isEmpty())
                 optionsValues = value;
             else
                 optionsValues += "," + value;
@@ -278,9 +278,9 @@ public class ResponseSetService {
     }
 
     private String lookupLabel(Html html, Label label) {
-        if (label != null && label.getLabel() != null && !label.getLabel().equals(""))
+        if (label != null && label.getLabel() != null && !label.getLabel().isEmpty())
             return label.getLabel();
-        else if (label != null && label.getRef() != null && !label.getRef().equals("")) {
+        else if (label != null && label.getRef() != null && !label.getRef().isEmpty()) {
             String ref = label.getRef();
             String itextKey = ref.substring(ref.indexOf("'") + 1, ref.lastIndexOf("'"));
             return XformUtils.getDefaultTranslation(html, itextKey);

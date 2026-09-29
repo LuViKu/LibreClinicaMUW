@@ -189,14 +189,14 @@ public class EditFormController {
     private String getRedirectUrl(String studySubjectOid, String studyOid) {
         String portalURL = CoreResources.getField("portalURL");
         String url = "";
-        if (portalURL != null && !portalURL.equals("")) {
+        if (portalURL != null && !portalURL.isEmpty()) {
             ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
             Authorization pManageAuthorization = registrar.getAuthorization(studyOid);
             try {
                 URL pManageUrl = URI.create(portalURL).toURL();
 
                 if (pManageAuthorization != null && pManageAuthorization.getStudy() != null && pManageAuthorization.getStudy().getHost() != null
-                        && !pManageAuthorization.getStudy().getHost().equals("")) {
+                        && !pManageAuthorization.getStudy().getHost().isEmpty()) {
                     url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
                             + ((pManageUrl.getPort() > 0) ? ":" + String.valueOf(pManageUrl.getPort()) : "");
                 }
@@ -206,14 +206,14 @@ public class EditFormController {
                 return "";
             }
         }
-        if (!url.equals(""))
+        if (!url.isEmpty())
             url = url + "/#/event/" + studySubjectOid + "/dashboard";
         return url;
     }
 
     private String getPopulatedInstance(CrfVersion crfVersion, EventCrf eventCrf) throws Exception {
         boolean isXform = false;
-        if (crfVersion.getXform() != null && !crfVersion.getXform().equals(""))
+        if (crfVersion.getXform() != null && !crfVersion.getXform().isEmpty())
             isXform = true;
 
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
@@ -257,12 +257,12 @@ public class EditFormController {
                     ItemData itemData = itemDataDao.findByItemEventCrfOrdinal(item.getItemId(), eventCrf.getEventCrfId(), i + 1);
 
                     Element question = null;
-                    if (crfVersion.getXform() != null && !crfVersion.getXform().equals(""))
+                    if (crfVersion.getXform() != null && !crfVersion.getXform().isEmpty())
                         question = doc.createElement(item.getName());
                     else
                         question = doc.createElement(item.getOcOid());
 
-                    if (itemData != null && itemData.getValue() != null && !itemData.getValue().equals("")) {
+                    if (itemData != null && itemData.getValue() != null && !itemData.getValue().isEmpty()) {
                         ResponseType responseType = responseTypeDao.findByItemFormMetaDataId(itemMetadata.getItemFormMetadataId());
                         String itemValue = itemData.getValue();
                         if (responseType.getResponseTypeId() == 3 || responseType.getResponseTypeId() == 7) {

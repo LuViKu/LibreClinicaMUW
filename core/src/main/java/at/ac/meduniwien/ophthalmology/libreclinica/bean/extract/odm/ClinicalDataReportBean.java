@@ -310,7 +310,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
             ArrayList<AuditLogBean> audits = auditLogs.getAuditLogs();
             if (audits != null && audits.size() > 0) {
                 for (AuditLogBean audit : audits) {
-               		if (entity=="item" && audit.getOldValue().equals("") && audit.getNewValue().equals("")){
+               		if (entity=="item" && audit.getOldValue().isEmpty() && audit.getNewValue().isEmpty()){
                		count++;
                		}
                 }
@@ -322,7 +322,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
                 xml.append(currentIndent + "<OpenClinica:AuditLogs EntityID=\"" + auditLogs.getEntityID() + "\">");
                 xml.append(nls);
                 for (AuditLogBean audit : audits) {
-               		if (!(entity=="item" && audit.getOldValue().equals("") && audit.getNewValue().equals(""))){
+               		if (!(entity=="item" && audit.getOldValue().isEmpty() && audit.getNewValue().isEmpty())){
                 	this.addOneAuditLog(audit, currentIndent + indent);
                		}
                 }

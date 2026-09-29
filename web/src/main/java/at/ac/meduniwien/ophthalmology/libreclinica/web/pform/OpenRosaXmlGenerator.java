@@ -455,11 +455,11 @@ public class OpenRosaXmlGenerator {
             ArrayList<ItemBean> items = (ArrayList<ItemBean>) idao.findAllItemsByGroupIdOrdered(itemGroupBean.getId(), crfVersion.getId());
             for (ItemBean item : items) {
                 ItemFormMetadataBean itemMetaData = getItemFormMetadata(item, crfVersion);
-                if (itemMetaData.getHeader() != null && !itemMetaData.getHeader().equals("")) {
+                if (itemMetaData.getHeader() != null && !itemMetaData.getHeader().isEmpty()) {
                     Element header = doc.createElement(item.getOid() + ".HEADER");
                     groupElement.appendChild(header);
                 }
-                if (itemMetaData.getHeader() != null && !itemMetaData.getSubHeader().equals("")) {
+                if (itemMetaData.getHeader() != null && !itemMetaData.getSubHeader().isEmpty()) {
                     Element subHeader = doc.createElement(item.getOid() + ".SUBHEADER");
                     groupElement.appendChild(subHeader);
                 }
@@ -675,7 +675,7 @@ public class OpenRosaXmlGenerator {
         Widget sectionWidget = factory.getSectionWidget(section, crfVersion, sectionExpression);
         bindList.add(sectionWidget.getBinding());
 
-        if (section.getTitle() != null && !section.getTitle().equals("")) {
+        if (section.getTitle() != null && !section.getTitle().isEmpty()) {
             Label sectionLabel = new Label();
             sectionLabel.setLabel(section.getTitle());
             singleSection.setLabel(sectionLabel);

@@ -442,12 +442,12 @@ public abstract class DataEntryServlet extends CoreSecureController {
             newUploadedFiles = new HashMap<String, String>();
         }
         request.setAttribute("newUploadedFiles", newUploadedFiles);
-        if (!fp.getString("exitTo").equals("")) {
+        if (!fp.getString("exitTo").isEmpty()) {
             request.setAttribute("exitTo", fp.getString("exitTo"));
         }
         //some EVENT CRF CHECK
         logMe("Entering some EVENT CRF CHECK"+System.currentTimeMillis());
-        if (!fp.getString(GO_EXIT).equals("")) {
+        if (!fp.getString(GO_EXIT).isEmpty()) {
             session.removeAttribute(GROUP_HAS_DATA);
             session.removeAttribute("to_create_crf");
             session.removeAttribute("mayProcessUploading");
@@ -478,7 +478,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
             		&& !(winLocation == null || winLocation.trim().isEmpty())) {
                 response.sendRedirect(response.encodeRedirectURL(winLocation));
             } else {
-                if (!fp.getString("exitTo").equals("")) {
+                if (!fp.getString("exitTo").isEmpty()) {
                     response.sendRedirect(response.encodeRedirectURL(fp.getString("exitTo")));
                 } else
                     response.sendRedirect(response.encodeRedirectURL("ListStudySubjects"));
@@ -1547,7 +1547,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                             boolean undelete = false;
                             for (DisplayItemBean displayItem : items) {
                                 String currItemVal = displayItem.getData().getValue();
-                                if (currItemVal != null && !currItemVal.equals("")){
+                                if (currItemVal != null && !currItemVal.isEmpty()){
                                     undelete = true;
                                     break;
                                 }
@@ -1939,7 +1939,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     } else {
                         boolean forwardingSucceeded = false;
 
-                        if (!fp.getString(GO_PREVIOUS).equals("")) {
+                        if (!fp.getString(GO_PREVIOUS).isEmpty()) {
                             if (previousSec.isActive()) {
                                 forwardingSucceeded = true;
                                 request.setAttribute(INPUT_EVENT_CRF, ecb);
@@ -1955,7 +1955,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                               //  forwardPage(getServletPage(request), request, response);
                                 getServletContext().getRequestDispatcher(getServletPage(request)).forward(request, response);
                             }
-                        } else if (!fp.getString(GO_NEXT).equals("")) {
+                        } else if (!fp.getString(GO_NEXT).isEmpty()) {
                             if (nextSec.isActive()) {
                                 forwardingSucceeded = true;
                                 request.setAttribute(INPUT_EVENT_CRF, ecb);
@@ -3171,7 +3171,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         idb.setItemId(dib.getItem().getId());
         idb.setEventCRFId(ecb.getId());
 
-        if (idb.getValue().equals("")) {
+        if (idb.getValue().isEmpty()) {
             idb.setStatus(getBlankItemStatus());
         } else {
             idb.setStatus(getNonBlankItemStatus(request));
@@ -4160,7 +4160,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 return false;
             for (ItemDataBean itemdata : itemdatas) {
                 LOGGER.debug(itemdata.getItemId() + "  :  " + itemdata.getValue());
-                if ((itemdata.getValue()==null || itemdata.getValue().equals("") || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 ) {
+                if ((itemdata.getValue()==null || itemdata.getValue().isEmpty() || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 ) {
                     return false;
                 }
             }
@@ -4176,7 +4176,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 return false;
             }
             for (ItemDataBean itemdata : itemdatas) {
-                if ((itemdata.getValue()==null || itemdata.getValue().equals("") || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 && dynamicsItemFormMetadataBeans.size() > 0) {
+                if ((itemdata.getValue()==null || itemdata.getValue().isEmpty() || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 && dynamicsItemFormMetadataBeans.size() > 0) {
                         return false;
                 }
             }

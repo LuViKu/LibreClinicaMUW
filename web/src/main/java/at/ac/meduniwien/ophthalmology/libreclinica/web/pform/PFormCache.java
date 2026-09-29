@@ -81,7 +81,7 @@ public class PFormCache {
             if (isOffline) url = enketo.getOfflineFormURL(crfVersionOID);
             else url = enketo.getFormURL(crfVersionOID);
             
-            if (url.equals("")) {
+            if (url.isEmpty()) {
                 throw new Exception("Unable to get enketo form url.");
             }
             studyURLs.put(crfVersionOID,url);

@@ -454,7 +454,7 @@ public class UpdateSubStudyServlet extends SecureController {
                         changed = changed || (isDouble != edcBean.isDoubleEntry());
                         changed = changed || (hasPassword != edcBean.isElectronicSignature());
                         changed = changed || (isHide != edcBean.isHideCrf());
-                        changed = changed || (!submissionUrl.equals(""));                        
+                        changed = changed || (!submissionUrl.isEmpty());                        
                         changed = changed || (selectedVersionIdListSize > 0 && selectedVersionIdListSize != edcBean.getVersions().size());
                         changed = changed || (sdvId > 0 && sdvId != edcBean.getSourceDataVerification().getCode());
 
@@ -604,7 +604,7 @@ public class UpdateSubStudyServlet extends SecureController {
                 sessionBean = edcsInSession.get(i);
                 logger.debug("iter:           {} --db: {}", eventDef.getId(), eventDef.getSubmissionUrl());
                 logger.debug("edcsInSession:  {}--session: {}", sessionBean.getId(), sessionBean.getSubmissionUrl());
-            	if(sessionBean.getSubmissionUrl() == null || sessionBean.getSubmissionUrl().trim().equals("")) {
+            	if(sessionBean.getSubmissionUrl() == null || sessionBean.getSubmissionUrl().trim().isEmpty()) {
             	    break;
             	} else {
                     if ((eventDef.getSubmissionUrl().trim().equalsIgnoreCase(sessionBean.getSubmissionUrl().trim()) && (eventDef.getId() != sessionBean.getId()))

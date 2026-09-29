@@ -76,7 +76,7 @@ public class ViewNotesServlet extends SecureController {
         }
 
         FormProcessor fp = new FormProcessor(request);
-        if(fp.getString("showMoreLink").equals("")){
+        if(fp.getString("showMoreLink").isEmpty()){
             showMoreLink = true;
         }else {
             showMoreLink = Boolean.parseBoolean(fp.getString("showMoreLink"));

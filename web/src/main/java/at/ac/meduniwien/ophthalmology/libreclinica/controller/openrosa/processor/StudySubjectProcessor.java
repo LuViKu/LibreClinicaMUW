@@ -152,7 +152,7 @@ public class StudySubjectProcessor implements Processor, Ordered {
         studySubject.setDateCreated(currentDate);
         studySubject.setSecondaryLabel("");
         studySubject.setLabel(label);
-        if (secondaryLabel != null && !secondaryLabel.equals("")) studySubject.setSecondaryLabel(secondaryLabel);
+        if (secondaryLabel != null && !secondaryLabel.isEmpty()) studySubject.setSecondaryLabel(secondaryLabel);
         String studySubjectOid = studySubjectDao.getValidOid(studySubject,new ArrayList<String>());
         studySubject.setOcOid(studySubjectOid);
         studySubject = studySubjectDao.saveOrUpdate(studySubject);
@@ -187,7 +187,7 @@ public class StudySubjectProcessor implements Processor, Ordered {
                     Node itemNode = itemNodeList.item(m);
                     if (itemNode instanceof Element && itemNode.getNodeName().equals("OC.STUDY_SUBJECT_ID")) { //{
                         String nodeValue = itemNode.getTextContent();
-                        if (nodeValue != null && !nodeValue.equals("")) studySubjectId = nodeValue;
+                        if (nodeValue != null && !nodeValue.isEmpty()) studySubjectId = nodeValue;
                     }
                 } // Item loop
             } // Group loop

@@ -39,7 +39,7 @@ public class ParticipantFormServlet extends SecureController {
             EnketoCredentials credentials = getCredentials();
             EnketoAPI enketo = new EnketoAPI(credentials);
             formURL = enketo.getFormPreviewURL(crf_oid);
-            if (!formURL.equals("")){
+            if (!formURL.isEmpty()){
                 response.sendRedirect(formURL);
             } else {
                 if (credentials.getServerUrl() == null) {

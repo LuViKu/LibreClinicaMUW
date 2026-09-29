@@ -192,14 +192,14 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         variables.put(17, uab.getLockCounter());
         variables.put(18, uab.getRunWebservices());
 
-        if (uab.getAccessCode() == null || uab.getAccessCode().equals("") || uab.getAccessCode().equals("null")) {
+        if (uab.getAccessCode() == null || uab.getAccessCode().isEmpty() || uab.getAccessCode().equals("null")) {
             nullVars.put(19, TypeNames.STRING);
             variables.put(19, null);
         } else {
             variables.put(19, uab.getAccessCode());
         }
 
-        if (uab.getTime_zone() == null || uab.getTime_zone().equals("")) {
+        if (uab.getTime_zone() == null || uab.getTime_zone().isEmpty()) {
             nullVars.put(20, TypeNames.STRING);
             variables.put(20, null);
         } else {
@@ -207,7 +207,7 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         }
         variables.put(21, uab.isEnableApiKey());
 
-        if (uab.getApiKey() == null || uab.getApiKey().equals("")) {
+        if (uab.getApiKey() == null || uab.getApiKey().isEmpty()) {
             nullVars.put(22, TypeNames.STRING);
             variables.put(22, null);
         } else {

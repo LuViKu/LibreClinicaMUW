@@ -326,7 +326,7 @@ public class TestRuleServlet extends SecureController {
                 ItemBean item = getExpressionService().getItemBeanFromExpression(entry.getKey());
                 List<ItemFormMetadataBean> itemFormMetadataBeans = getItemFormMetadataDAO().findAllByItemId(item.getId());
                 ItemFormMetadataBean itemFormMetadataBean = itemFormMetadataBeans.size() > 0 ? itemFormMetadataBeans.get(0) : null;
-                if (!entry.getValue().equals("") && NullValue.getByName(entry.getValue()) == NullValue.INVALID) {
+                if (!entry.getValue().isEmpty() && NullValue.getByName(entry.getValue()) == NullValue.INVALID) {
                     if (itemFormMetadataBean != null) {
                         if (itemFormMetadataBean.getResponseSet().getResponseType() == ResponseType.SELECTMULTI
                             || itemFormMetadataBean.getResponseSet().getResponseType() == ResponseType.CHECKBOX) {

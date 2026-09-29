@@ -299,7 +299,7 @@ public class ExtractBean {
         answer.nextRow();
 
         String siteName = getSiteName();
-        if (!siteName.equals("")) {
+        if (!siteName.isEmpty()) {
             answer.nextCell("Site Name");
             answer.nextCell(siteName);
             answer.nextRow();

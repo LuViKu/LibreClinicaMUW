@@ -114,7 +114,7 @@ public class WidgetFactory {
 		case TYPE_MULTI_SELECT:
 		case TYPE_CHECKBOX:
 		case TYPE_TEXTAREA:
-			if (itemMetaData.getHeader() != null && !itemMetaData.getHeader().equals(""))
+			if (itemMetaData.getHeader() != null && !itemMetaData.getHeader().isEmpty())
 				return new HeaderWidget(version, item, itemMetaData, itemGroup, null,expression);
 			else {
 				log.debug("No header found for widget: " + widgetType + ". Skipping.");
@@ -129,14 +129,14 @@ public class WidgetFactory {
 	public Widget getSectionTextWidget(String versionOid, String field, SectionBean section) {
 		switch (field) {
 		case SECTION_TEXT_TYPE_SUBTITLE:
-			if (section.getSubtitle() != null && !section.getSubtitle().equals(""))
+			if (section.getSubtitle() != null && !section.getSubtitle().isEmpty())
 				return new SectionTextWidget(versionOid, section.getSubtitle(), section.getId(), SECTION_TEXT_TYPE_SUBTITLE);
 			else {
 				log.debug("No Subtitle found for Section. Skipping.");
 				return null;
 			}
 		case SECTION_TEXT_TYPE_INSTRUCTIONS:
-			if (section.getInstructions() != null && !section.getSubtitle().equals(""))
+			if (section.getInstructions() != null && !section.getSubtitle().isEmpty())
 				return new SectionTextWidget(versionOid, section.getInstructions(), section.getId(), SECTION_TEXT_TYPE_INSTRUCTIONS);
 			else {
 				log.debug("No Instructions found for Section. Skipping.");
@@ -158,7 +158,7 @@ public class WidgetFactory {
 		case TYPE_MULTI_SELECT:
 		case TYPE_CHECKBOX:
 		case TYPE_TEXTAREA:
-			if (itemMetaData.getSubHeader() != null && !itemMetaData.getSubHeader().equals(""))
+			if (itemMetaData.getSubHeader() != null && !itemMetaData.getSubHeader().isEmpty())
 				return new SubHeaderWidget(version, item, itemMetaData, itemGroup, null,expression);
 			else {
 				log.debug("No SubHeader found for widget: " + widgetType + ". Skipping.");

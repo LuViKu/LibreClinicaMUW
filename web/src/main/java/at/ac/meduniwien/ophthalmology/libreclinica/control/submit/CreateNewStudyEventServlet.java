@@ -244,7 +244,7 @@ public class CreateNewStudyEventServlet extends SecureController {
 
             v.addValidation(INPUT_STARTDATE_PREFIX, Validator.IS_DATE_TIME);
             v.alwaysExecuteLastValidation(INPUT_STARTDATE_PREFIX);
-            if (!strEnd.equals("")) {
+            if (!strEnd.isEmpty()) {
                 v.addValidation(INPUT_ENDDATE_PREFIX, Validator.IS_DATE_TIME);
                 v.alwaysExecuteLastValidation(INPUT_ENDDATE_PREFIX);
             }
@@ -275,7 +275,7 @@ public class CreateNewStudyEventServlet extends SecureController {
                     }
                     v.addValidation(INPUT_STARTDATE_PREFIX_SCHEDULED[i], Validator.IS_DATE_TIME);
                     v.alwaysExecuteLastValidation(INPUT_STARTDATE_PREFIX_SCHEDULED[i]);
-                    if (!strEndScheduled[i].equals("")) {
+                    if (!strEndScheduled[i].isEmpty()) {
                         v.addValidation(INPUT_ENDDATE_PREFIX_SCHEDULED[i], Validator.IS_DATE_TIME);
                         v.alwaysExecuteLastValidation(INPUT_ENDDATE_PREFIX_SCHEDULED[i]);
                     }
@@ -386,7 +386,7 @@ public class CreateNewStudyEventServlet extends SecureController {
                         }
                     }
                     scheduledSeds.put(scheduledDefinitionIds[i], i);
-                    if (!strEndScheduled[i].equals("")) {
+                    if (!strEndScheduled[i].isEmpty()) {
                         endScheduled[i] = fp.getDateTime(INPUT_ENDDATE_PREFIX_SCHEDULED[i]);
                         String prevEndPrefix = i > 0 ? INPUT_ENDDATE_PREFIX_SCHEDULED[i - 1] : INPUT_ENDDATE_PREFIX;
                         if (!fp.getString(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Date").equals(fp.getString(prevEndPrefix + "Date"))) {

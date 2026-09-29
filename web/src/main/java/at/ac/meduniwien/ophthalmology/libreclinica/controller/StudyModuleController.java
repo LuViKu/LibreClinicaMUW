@@ -216,7 +216,7 @@ public class StudyModuleController {
 
         // Check if desired hostName is available. If so, send OCUI registration request
         String hostName = request.getParameter("hostName");
-        if (hostName == null || hostName.equals("")) {
+        if (hostName == null || hostName.isEmpty()) {
             addRegMessage(request, respage.getString("participate_hostname_invalid"));
             return "redirect:/pages/studymodule";
         }
@@ -238,7 +238,7 @@ public class StudyModuleController {
 
         // If status == "", that indicates the request to OCUI failed. Post an error message and don't update study
         // parameter.
-        if (status.equals("")) {
+        if (status.isEmpty()) {
             addRegMessage(request, respage.getString("participate_not_available"));
         } else {
             // Update OC Study configuration
@@ -367,7 +367,7 @@ public class StudyModuleController {
         // Load Participate registration information
         String portalURL = CoreResources.getField("portalURL");
         map.addAttribute("portalURL", portalURL);
-        if (portalURL != null && !portalURL.equals("")) {
+        if (portalURL != null && !portalURL.isEmpty()) {
             String participateOCStatus = currentStudy.getStudyParameterConfig().getParticipantPortal();
             ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
             Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());
@@ -383,7 +383,7 @@ public class StudyModuleController {
                 map.addAttribute("participateStatus", participateStatus);
 
                 if (pManageAuthorization != null && pManageAuthorization.getStudy() != null && pManageAuthorization.getStudy().getHost() != null
-                        && !pManageAuthorization.getStudy().getHost().equals("")) {
+                        && !pManageAuthorization.getStudy().getHost().isEmpty()) {
                     url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
                             + ((pManageUrl.getPort() > 0) ? ":" + String.valueOf(pManageUrl.getPort()) : "");
 
@@ -398,7 +398,7 @@ public class StudyModuleController {
         // Load Randomization  information
         String moduleManager = CoreResources.getField("moduleManager");
         map.addAttribute("moduleManager", moduleManager);
-        if (moduleManager != null && !moduleManager.equals("")) {
+        if (moduleManager != null && !moduleManager.isEmpty()) {
 
             String randomizationOCStatus = currentStudy.getStudyParameterConfig().getRandomization();
 

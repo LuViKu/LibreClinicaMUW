@@ -390,7 +390,7 @@ public class XformMetaDataService {
                     if (control.getRef().equals(xformItem.getItemPath())) {
                         if (control.getLabel() != null && control.getLabel().getLabel() != null)
                             return control.getLabel().getLabel();
-                        else if (control.getLabel() != null && control.getLabel().getRef() != null && !control.getLabel().getRef().equals("")) {
+                        else if (control.getLabel() != null && control.getLabel().getRef() != null && !control.getLabel().getRef().isEmpty()) {
                             String ref = control.getLabel().getRef();
                             String itextKey = ref.substring(ref.indexOf("'") + 1, ref.lastIndexOf("'"));
                             return XformUtils.getDefaultTranslation(html, itextKey);
@@ -404,7 +404,7 @@ public class XformMetaDataService {
                     if (control.getRef().equals(xformItem.getItemPath())) {
                         if (control.getLabel() != null && control.getLabel().getLabel() != null)
                             return control.getLabel().getLabel();
-                        else if (control.getLabel() != null && control.getLabel().getRef() != null && !control.getLabel().getRef().equals("")) {
+                        else if (control.getLabel() != null && control.getLabel().getRef() != null && !control.getLabel().getRef().isEmpty()) {
                             String ref = control.getLabel().getRef();
                             String itextKey = ref.substring(ref.indexOf("'") + 1, ref.lastIndexOf("'"));
                             return XformUtils.getDefaultTranslation(html, itextKey);
@@ -421,7 +421,7 @@ public class XformMetaDataService {
         String dataType = "";
 
         for (Bind bind : html.getHead().getModel().getBind()) {
-            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getType() != null && !bind.getType().equals("")) {
+            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getType() != null && !bind.getType().isEmpty()) {
                 dataType = bind.getType();
 
                 if (dataType.equals("string"))
@@ -445,7 +445,7 @@ public class XformMetaDataService {
         boolean required = false;
 
         for (Bind bind : html.getHead().getModel().getBind()) {
-            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getRequired() != null && !bind.getRequired().equals("")) {
+            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getRequired() != null && !bind.getRequired().isEmpty()) {
                 if (bind.getRequired().equals("true()")) required = true;
                 else if (bind.getRequired().equals("false()")) required = false;
             }
@@ -457,7 +457,7 @@ public class XformMetaDataService {
         String responseType = "";
 
         for (Bind bind : html.getHead().getModel().getBind()) {
-            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getType() != null && !bind.getType().equals("")) {
+            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getType() != null && !bind.getType().isEmpty()) {
                 responseType = bind.getType();
 
                 if (responseType.equals("string"))

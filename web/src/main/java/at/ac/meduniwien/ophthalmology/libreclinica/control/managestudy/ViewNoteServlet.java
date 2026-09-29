@@ -96,7 +96,7 @@ public class ViewNoteServlet extends SecureController {
         DiscrepancyNoteBean note = (DiscrepancyNoteBean) dndao.findByPK(noteId);
         String entityType = note.getEntityType();
 
-        if (note.getEntityId() > 0 && !entityType.equals("")) {
+        if (note.getEntityId() > 0 && !entityType.isEmpty()) {
 
             if (!(entityType == null || entityType.trim().isEmpty())) {
                 if ("itemData".equalsIgnoreCase(entityType)) {

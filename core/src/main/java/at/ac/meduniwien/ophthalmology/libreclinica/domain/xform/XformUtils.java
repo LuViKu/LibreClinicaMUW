@@ -39,7 +39,7 @@ public class XformUtils {
             if (text.getId().equals(ref)) {
                 List<Value> values = text.getValue();
                 for (Value value : values) {
-                    if (value.getForm() == null && value.getValue() != null && !value.getValue().equals(""))
+                    if (value.getForm() == null && value.getValue() != null && !value.getValue().isEmpty())
                         return value.getValue();
                 }
             }

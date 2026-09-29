@@ -605,7 +605,7 @@ public class DefineStudyEventServlet extends SecureController {
                 }
                 logger.debug("iter:           {}--db:    {}", eventDef.getId(), eventDef.getSubmissionUrl());
                 logger.debug("edcsInSession:  {}--session: {}", sessionBean.getId(), sessionBean.getSubmissionUrl());
-            	if (sessionBean.getSubmissionUrl() == null || sessionBean.getSubmissionUrl().equals("")) {
+            	if (sessionBean.getSubmissionUrl() == null || sessionBean.getSubmissionUrl().isEmpty()) {
             		break;
             	} else {
                     if (eventDef.getSubmissionUrl().trim().equalsIgnoreCase(sessionBean.getSubmissionUrl().trim()) && (eventDef.getId() != sessionBean.getId()) ||

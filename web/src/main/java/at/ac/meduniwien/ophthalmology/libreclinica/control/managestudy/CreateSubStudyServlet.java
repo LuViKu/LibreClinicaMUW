@@ -613,7 +613,7 @@ public class CreateSubStudyServlet extends SecureController {
                             edcBean.setHideCrf(isHide);
                             edcBean.setSubmissionUrl(submissionUrl);
                         }
-                        if (!submissionUrl.equals("")) {
+                        if (!submissionUrl.isEmpty()) {
                             changed = true;
                             edcBean.setSubmissionUrl(submissionUrl);
                         }
@@ -844,7 +844,7 @@ public class CreateSubStudyServlet extends SecureController {
             		System.out.println("iter:           "+eventDef.getId()+            "--db:    "+eventDef.getSubmissionUrl()); 
             		System.out.println("edcsInSession:  "+sessionBean.getId()  + "--session:"+sessionBean.getSubmissionUrl()); 
             		System.out.println();
-            	if(sessionBean.getSubmissionUrl().trim().equals("") || sessionBean.getSubmissionUrl().trim() ==null){
+            	if(sessionBean.getSubmissionUrl().trim().isEmpty() || sessionBean.getSubmissionUrl().trim() ==null){
             		break;
             	}else{
                 if (eventDef.getSubmissionUrl().trim().equalsIgnoreCase(sessionBean.getSubmissionUrl().trim()) && (eventDef.getId() != sessionBean.getId())){

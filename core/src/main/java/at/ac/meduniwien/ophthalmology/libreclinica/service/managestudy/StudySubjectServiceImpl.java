@@ -278,7 +278,7 @@ public class StudySubjectServiceImpl implements StudySubjectService {
                 crfVersionIds.put(String.valueOf(crfVersion.getId()), crfVersion);
             }
 
-            if (!dedcrf.getEdc().getSelectedVersionIds().equals("")) {
+            if (!dedcrf.getEdc().getSelectedVersionIds().isEmpty()) {
                 String[] kk = dedcrf.getEdc().getSelectedVersionIds().split(",");
                 for (String string : kk) {
                     if (crfVersionIds.get(string) != null) {

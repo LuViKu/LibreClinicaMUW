@@ -148,7 +148,7 @@ public class MarkEventCRFCompleteServlet extends SecureController {
             throw new InconsistentStateException(errorPage, respage.getString("not_mark_CRF_complete4"));
         }
 
-        if (ecb.getInterviewerName().trim().equals("")) {
+        if (ecb.getInterviewerName().trim().isEmpty()) {
             throw new InconsistentStateException(errorPage, respage.getString("not_mark_CRF_complete5"));
         }
 

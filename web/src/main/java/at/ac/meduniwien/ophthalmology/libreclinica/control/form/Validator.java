@@ -793,7 +793,7 @@ public class Validator {
                 String earlierDateFieldName = v.getString(0);
 
                 String earlierDateValue = getFieldValue(earlierDateFieldName);
-                if (earlierDateValue == null || earlierDateValue.equals("")) {
+                if (earlierDateValue == null || earlierDateValue.isEmpty()) {
                     errorMessage = resexception.getString("input_provided_not_precede_earlier");
                 } else {
                     errorMessage = resexception.getString("input_provided_not_precede") + earlierDateValue + ".";
@@ -1184,7 +1184,7 @@ break;
             return true;
         }
 
-        if (fieldValue.trim().equals("")) {
+        if (fieldValue.trim().isEmpty()) {
             return true;
         }
 
@@ -1218,7 +1218,7 @@ break;
             return false;
         }
         // Excepts the blank Mantis Issue: 7703.
-        if (fieldValue.equals("")) {
+        if (fieldValue.isEmpty()) {
             return true;
         }
         try {
@@ -1462,7 +1462,7 @@ break;
             return false;
         }
         // Excepts the blank Mantis Issue: 7703.
-        if (fieldValue.equals("")) {
+        if (fieldValue.isEmpty()) {
             return true;
         }
 
@@ -1712,7 +1712,7 @@ break;
             fieldValues = new String[1];
             String fieldValue = getFieldValue(fieldName);
             fieldValues[0] = fieldValue == null ? "" : fieldValue;
-            if (fieldValues[0].equals("")) {
+            if (fieldValues[0].isEmpty()) {
                 return true;
             }
         }

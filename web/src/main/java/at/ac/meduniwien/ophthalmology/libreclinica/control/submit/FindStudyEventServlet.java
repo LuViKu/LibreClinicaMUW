@@ -73,7 +73,7 @@ public class FindStudyEventServlet extends SecureController {
         int id = fp.getInt(INPUT_ID);
 
         // User is going to Step 1
-        if (browseBy.equals("")) {
+        if (browseBy.isEmpty()) {
             forwardPage(Page.FIND_STUDY_EVENTS_STEP1);
         } else if (invalidBrowseBy(browseBy)) {
             addPageMessage(respage.getString("must_browse_study_events_by_subject_or_event_definition"));
@@ -168,7 +168,7 @@ public class FindStudyEventServlet extends SecureController {
     }
 
     private boolean invalidBrowseBy(String browseBy) {
-        if (browseBy.equals("")) {
+        if (browseBy.isEmpty()) {
             return true;
         }
         if (!browseBy.equals(ARG_BROWSEBY_SUBJECT) && !browseBy.equals(ARG_BROWSEBY_DEFINITION)) {

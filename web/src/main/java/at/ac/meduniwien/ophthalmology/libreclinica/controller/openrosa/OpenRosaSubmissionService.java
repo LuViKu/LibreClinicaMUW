@@ -51,7 +51,7 @@ public class OpenRosaSubmissionService {
     }
 
     private String parseSubmission(String body, CrfVersion crfVersion) {
-        if (crfVersion.getXform() != null && !crfVersion.getXform().equals("")) {
+        if (crfVersion.getXform() != null && !crfVersion.getXform().isEmpty()) {
             body = body.substring(body.indexOf("<" + crfVersion.getXformName()));
             int length = body.indexOf(" ");
             body = body.replace(body.substring(body.lastIndexOf("<meta>"), body.lastIndexOf("</meta>") + 7), "");

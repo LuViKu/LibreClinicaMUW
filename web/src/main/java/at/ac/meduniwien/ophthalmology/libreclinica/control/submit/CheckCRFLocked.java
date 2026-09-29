@@ -41,7 +41,7 @@ public class CheckCRFLocked extends SecureController {
     protected void processRequest() throws Exception {
         int userId;
         String ecId = request.getParameter("ecId");
-        if (ecId != null && !ecId.equals("")) {
+        if (ecId != null && !ecId.isEmpty()) {
             int crfId = Integer.parseInt(ecId);
             if (getCrfLocker().isLocked(crfId)) {
                 userId = getCrfLocker().getLockOwner(crfId);

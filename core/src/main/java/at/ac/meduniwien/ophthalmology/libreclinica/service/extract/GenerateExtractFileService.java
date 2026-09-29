@@ -409,7 +409,7 @@ public class GenerateExtractFileService {
                 //A. Hamid. 4910
                 is.close();
                 if(CoreResources.getField("dataset_file_delete").equalsIgnoreCase("true")
-                        || CoreResources.getField("dataset_file_delete").equals("")){
+                        || CoreResources.getField("dataset_file_delete").isEmpty()){
                     newFile.delete();
                 }
 

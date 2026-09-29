@@ -189,7 +189,7 @@ public class ExpressionService {
         }
         String value = null;
         try {
-            int index = getItemGroupOidOrdinalFromExpression(expression).equals("") ? 0 : Integer
+            int index = getItemGroupOidOrdinalFromExpression(expression).isEmpty() ? 0 : Integer
                     .parseInt(getItemGroupOidOrdinalFromExpression(expression)) - 1;
             ItemDataBean itemDataBean = itemData.get(index);
             value = itemData.get(index).getValue();
@@ -217,7 +217,7 @@ public class ExpressionService {
 
     public HashMap<String, String> getSSDate(String ssZoneId, String serverZoneId) {
         HashMap<String, String> map = new HashMap<>();
-        if (ssZoneId == null || ssZoneId.equals("")) {
+        if (ssZoneId == null || ssZoneId.isEmpty()) {
             ssZoneId = TimeZone.getDefault().getID();
         }
 
@@ -252,7 +252,7 @@ public class ExpressionService {
             String studyEventDefinitionOid = getStudyEventDefinitionOidFromExpression(expression);
             String crfOrCrfVersionOid = getCrfOidFromExpression(expression);
             String studyEventDefinitionOrdinal = getStudyEventDefinitionOidOrdinalFromExpression(expression);
-            studyEventDefinitionOrdinal = studyEventDefinitionOrdinal.equals("") ? "1" : studyEventDefinitionOrdinal;
+            studyEventDefinitionOrdinal = studyEventDefinitionOrdinal.isEmpty() ? "1" : studyEventDefinitionOrdinal;
             String studySubjectId = String.valueOf(studyEvent.getStudySubjectId());
             logger.debug("studySubjectId: " + studySubjectId);
             logger.debug(
@@ -282,7 +282,7 @@ public class ExpressionService {
 
             expression = fixGroupOrdinal(expression, ruleSetExpression, itemData, expressionWrapper.getEventCrf());
 
-            int index = getItemGroupOidOrdinalFromExpression(expression).equals("") ? 0 : Integer
+            int index = getItemGroupOidOrdinalFromExpression(expression).isEmpty() ? 0 : Integer
                     .parseInt(getItemGroupOidOrdinalFromExpression(expression)) - 1;
 
             ItemDataBean itemDataBean = itemData.get(index);
@@ -304,7 +304,7 @@ public class ExpressionService {
             );
         }
         String studyEventId = getStudyEventDefinitionOidOrdinalFromExpression(expression);
-        int index = getItemGroupOidOrdinalFromExpression(expression).equals("") ? 0 : Integer
+        int index = getItemGroupOidOrdinalFromExpression(expression).isEmpty() ? 0 : Integer
                 .parseInt(getItemGroupOidOrdinalFromExpression(expression)) - 1;
         List<ItemDataBean> itemData = getItemDataDao().findByStudyEventAndOids(Integer.valueOf(studyEventId),
                 getItemOidFromExpression(expression), getItemGroupOidFromExpression(expression));
@@ -491,8 +491,8 @@ public class ExpressionService {
         String returnedRuleExpression = ruleExpression;
 
         if (getItemGroupOid(ruleExpression).equals(getItemGroupOid(targetExpression))) {
-            if (getGroupOrdninalCurated(ruleExpression).equals("") &&
-                !getGroupOrdninalCurated(targetExpression).equals("")) {
+            if (getGroupOrdninalCurated(ruleExpression).isEmpty() &&
+                !getGroupOrdninalCurated(targetExpression).isEmpty()) {
 
                 returnedRuleExpression = replaceGroupOidOrdinalInExpression(
                     ruleExpression,
@@ -515,7 +515,7 @@ public class ExpressionService {
                 itemId,
                 theEventCrfBean.getCRFVersionId()
             );
-            if (isGroupRepeating(itemGroupMetadataBean) && getGroupOrdninalCurated(ruleExpression).equals("")) {
+            if (isGroupRepeating(itemGroupMetadataBean) && getGroupOrdninalCurated(ruleExpression).isEmpty()) {
                 returnedRuleExpression = replaceGroupOidOrdinalInExpression(
                     ruleExpression,
                     Integer.valueOf(getGroupOrdninalCurated(targetExpression))
@@ -631,7 +631,7 @@ public class ExpressionService {
                     .isItemGroupRepeatingBasedOnCrfVersion(ruleGroupOid, ruleCrfVersion.getId());
             if (!isTargetGroupRepeating && isRuleGroupRepeating) {
                 String ordinal = getItemGroupOidOrdinalFromExpression(fullExpression);
-                if (ordinal.equals("") || ordinal.equals("ALL")) {
+                if (ordinal.isEmpty() || ordinal.equals("ALL")) {
                     result = false;
                 }
             }
@@ -847,7 +847,7 @@ public class ExpressionService {
         String ordinal;
         if (originalOrdinal.equals(ALL_IN_BRACKETS)) {
             throw new OpenClinicaSystemException("ALL not supported in the following instance");
-        } else if (originalOrdinal.equals("")) {
+        } else if (originalOrdinal.isEmpty()) {
             ordinal = "1";
         } else {
             ordinal = originalOrdinal;

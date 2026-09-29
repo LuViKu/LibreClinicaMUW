@@ -295,7 +295,7 @@ public class AddNewSubjectServlet extends SecureController {
             // Id
             SubjectBean subjectWithSameId = new SubjectBean();
             boolean showExistingRecord = false;
-            if (!uniqueIdentifier.equals("")) {
+            if (!uniqueIdentifier.isEmpty()) {
                 boolean subjectWithSameIdInCurrentStudyTree = false;
                 // checks whether there is a subject with same id inside current
                 // study/site

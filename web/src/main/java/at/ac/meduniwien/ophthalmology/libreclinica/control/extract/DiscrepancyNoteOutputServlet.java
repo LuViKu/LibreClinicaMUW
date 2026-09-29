@@ -315,7 +315,7 @@ public class DiscrepancyNoteOutputServlet extends SecureController {
 
             String entityType = dnb.getEntityType();
 
-            if (dnb.getEntityId() > 0 && !entityType.equals("")) {
+            if (dnb.getEntityId() > 0 && !entityType.isEmpty()) {
                 AuditableEntityBean aeb = dndao.findEntity(dnb);
                 dnb.setEntityName(aeb.getName());
                 if (entityType.equalsIgnoreCase("subject")) {

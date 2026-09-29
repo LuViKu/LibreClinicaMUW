@@ -99,7 +99,7 @@ public class RuleController {
             RuleSetBean ruleSetBean = new RuleSetBean();
             ruleSetBean.setOriginalTarget(targetBean);
             if (scheduleType != null) {
-                if (!scheduleType.getTime().equals("")) {
+                if (!scheduleType.getTime().isEmpty()) {
                     ruleSetBean.setRunTime(scheduleType.getTime());
                 }
             }
