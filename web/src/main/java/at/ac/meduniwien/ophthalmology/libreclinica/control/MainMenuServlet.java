@@ -85,14 +85,25 @@ public class MainMenuServlet extends SecureController {
     @Override
     public void processRequest() throws Exception {
 
+        // The `ub == null` half of the guard below sat *after*
+        // ub.incNumVisitsToMainMenu(), so the broken-database case it was
+        // written for ended in NullPointerException instead of the plain menu
+        // page. Only that half moves up; the `getId() == 0` half stays where
+        // it was so a zero-id user still gets the visit count and the request
+        // attributes it has always got.
+        if (ub == null) {// in case database connection is
+            // broken
+            forwardPage(Page.MENU, false);
+            return;
+        }
+
     	FormProcessor fp = new FormProcessor(request);
         ub.incNumVisitsToMainMenu();
         session.setAttribute(USER_BEAN_NAME, ub);
         request.setAttribute("iconInfoShown", true);
         request.setAttribute("closeInfoShowIcons", false);
 
-        if (ub == null || ub.getId() == 0) {// in case database connection is
-            // broken
+        if (ub.getId() == 0) {
             forwardPage(Page.MENU, false);
             return;
         }

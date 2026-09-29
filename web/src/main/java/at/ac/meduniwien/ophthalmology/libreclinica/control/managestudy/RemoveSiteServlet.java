@@ -72,6 +72,16 @@ public class RemoveSiteServlet extends SecureController {
     public void processRequest() throws Exception {
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
         String idString = request.getParameter("id");
+        // The `idString == null` guard below the DAO calls sat *after* idString
+        // had already been dereferenced (`idString.trim()`), so a request without
+        // ?id= raised NullPointerException and never reached the page message the
+        // guard was written to produce. Test before the first dereference.
+        if (idString == null || idString.trim().isEmpty()) {
+            addPageMessage(respage.getString("please_choose_a_site_to_remove"));
+            forwardPage(Page.SITE_LIST_SERVLET);
+            return;
+        }
+
         logger.info("site id:" + idString);
 
         int siteId = Integer.valueOf(idString.trim()).intValue();
@@ -92,155 +102,150 @@ public class RemoveSiteServlet extends SecureController {
         ArrayList<StudySubjectBean> subjects = ssdao.findAllByStudy(study);
 
         String action = request.getParameter("action");
-        if (idString == null || idString.trim().isEmpty()) {
-            addPageMessage(respage.getString("please_choose_a_site_to_remove"));
-            forwardPage(Page.SITE_LIST_SERVLET);
+        if ("confirm".equalsIgnoreCase(action)) {
+            request.setAttribute("siteToRemove", study);
+
+            request.setAttribute("userRolesToRemove", userRoles);
+
+            request.setAttribute("subjectsToRemove", subjects);
+
+            forwardPage(Page.REMOVE_SITE);
         } else {
-            if ("confirm".equalsIgnoreCase(action)) {
-                request.setAttribute("siteToRemove", study);
+            logger.info("submit to remove the site");
+            // change all statuses to unavailable
+            StudyDAO studao = new StudyDAO(sm.getDataSource());
+            study.setOldStatus(study.getStatus());
+            study.setStatus(Status.DELETED);
+            study.setUpdater(ub);
+            study.setUpdatedDate(new Date());
+            studao.update(study);
 
-                request.setAttribute("userRolesToRemove", userRoles);
-
-                request.setAttribute("subjectsToRemove", subjects);
-
-                forwardPage(Page.REMOVE_SITE);
-            } else {
-                logger.info("submit to remove the site");
-                // change all statuses to unavailable
-                StudyDAO studao = new StudyDAO(sm.getDataSource());
-                study.setOldStatus(study.getStatus());
-                study.setStatus(Status.DELETED);
-                study.setUpdater(ub);
-                study.setUpdatedDate(new Date());
-                studao.update(study);
-
-                // remove all users and roles
-                for (int i = 0; i < userRoles.size(); i++) {
-                    StudyUserRoleBean role = (StudyUserRoleBean) userRoles.get(i);
-                    if (!role.getStatus().equals(Status.DELETED)) {
-                        role.setStatus(Status.AUTO_DELETED);
-                        role.setUpdater(ub);
-                        role.setUpdatedDate(new Date());
-                        // YW << So study_user_role table status_id field can be
-                        // updated
-                        udao.updateStudyUserRole(role, role.getUserName());
-                    }
-                    // YW 06-18-2007 >>
-                }
-
-                // YW << bug fix that current active study has been deleted
-                if (study.getId() == currentStudy.getId()) {
-                    currentStudy.setStatus(Status.DELETED);
-                    // currentRole.setRole(Role.INVALID);
-                    currentRole.setStatus(Status.DELETED);
+            // remove all users and roles
+            for (int i = 0; i < userRoles.size(); i++) {
+                StudyUserRoleBean role = (StudyUserRoleBean) userRoles.get(i);
+                if (!role.getStatus().equals(Status.DELETED)) {
+                    role.setStatus(Status.AUTO_DELETED);
+                    role.setUpdater(ub);
+                    role.setUpdatedDate(new Date());
+                    // YW << So study_user_role table status_id field can be
+                    // updated
+                    udao.updateStudyUserRole(role, role.getUserName());
                 }
                 // YW 06-18-2007 >>
+            }
 
-                // remove all study_group
-                StudyGroupDAO sgdao = new StudyGroupDAO(sm.getDataSource());
-                SubjectGroupMapDAO sgmdao = new SubjectGroupMapDAO(sm.getDataSource());
-                ArrayList<StudyGroupBean> groups = sgdao.findAllByStudy(study);
-                for (int i = 0; i < groups.size(); i++) {
-                    StudyGroupBean group = (StudyGroupBean) groups.get(i);
-                    if (!group.getStatus().equals(Status.DELETED)) {
-                        group.setStatus(Status.AUTO_DELETED);
-                        group.setUpdater(ub);
-                        group.setUpdatedDate(new Date());
-                        sgdao.update(group);
-                        // all subject_group_map
-                        ArrayList<SubjectGroupMapBean> subjectGroupMaps = sgmdao.findAllByStudyGroupId(group.getId());
-                        for (int j = 0; j < subjectGroupMaps.size(); j++) {
-                            SubjectGroupMapBean sgMap = (SubjectGroupMapBean) subjectGroupMaps.get(j);
-                            if (!sgMap.getStatus().equals(Status.DELETED)) {
-                                sgMap.setStatus(Status.AUTO_DELETED);
-                                sgMap.setUpdater(ub);
-                                sgMap.setUpdatedDate(new Date());
-                                sgmdao.update(sgMap);
-                            }
+            // YW << bug fix that current active study has been deleted
+            if (study.getId() == currentStudy.getId()) {
+                currentStudy.setStatus(Status.DELETED);
+                // currentRole.setRole(Role.INVALID);
+                currentRole.setStatus(Status.DELETED);
+            }
+            // YW 06-18-2007 >>
+
+            // remove all study_group
+            StudyGroupDAO sgdao = new StudyGroupDAO(sm.getDataSource());
+            SubjectGroupMapDAO sgmdao = new SubjectGroupMapDAO(sm.getDataSource());
+            ArrayList<StudyGroupBean> groups = sgdao.findAllByStudy(study);
+            for (int i = 0; i < groups.size(); i++) {
+                StudyGroupBean group = (StudyGroupBean) groups.get(i);
+                if (!group.getStatus().equals(Status.DELETED)) {
+                    group.setStatus(Status.AUTO_DELETED);
+                    group.setUpdater(ub);
+                    group.setUpdatedDate(new Date());
+                    sgdao.update(group);
+                    // all subject_group_map
+                    ArrayList<SubjectGroupMapBean> subjectGroupMaps = sgmdao.findAllByStudyGroupId(group.getId());
+                    for (int j = 0; j < subjectGroupMaps.size(); j++) {
+                        SubjectGroupMapBean sgMap = (SubjectGroupMapBean) subjectGroupMaps.get(j);
+                        if (!sgMap.getStatus().equals(Status.DELETED)) {
+                            sgMap.setStatus(Status.AUTO_DELETED);
+                            sgMap.setUpdater(ub);
+                            sgMap.setUpdatedDate(new Date());
+                            sgmdao.update(sgMap);
                         }
                     }
                 }
+            }
 
-                // remove all events
-                StudyEventDAO sedao = new StudyEventDAO(sm.getDataSource());
-                for (int i = 0; i < subjects.size(); i++) {
-                    StudySubjectBean subject = (StudySubjectBean) subjects.get(i);
+            // remove all events
+            StudyEventDAO sedao = new StudyEventDAO(sm.getDataSource());
+            for (int i = 0; i < subjects.size(); i++) {
+                StudySubjectBean subject = (StudySubjectBean) subjects.get(i);
 
-                    if (!subject.getStatus().equals(Status.DELETED)) {
-                        subject.setStatus(Status.AUTO_DELETED);
-                        subject.setUpdater(ub);
-                        subject.setUpdatedDate(new Date());
-                        ssdao.update(subject);
+                if (!subject.getStatus().equals(Status.DELETED)) {
+                    subject.setStatus(Status.AUTO_DELETED);
+                    subject.setUpdater(ub);
+                    subject.setUpdatedDate(new Date());
+                    ssdao.update(subject);
 
-                        ArrayList<StudyEventBean> events = sedao.findAllByStudySubject(subject);
-                        EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
+                    ArrayList<StudyEventBean> events = sedao.findAllByStudySubject(subject);
+                    EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
 
-                        for (int j = 0; j < events.size(); j++) {
-                            StudyEventBean event = (StudyEventBean) events.get(j);
-                            if (!event.getStatus().equals(Status.DELETED)) {
-                                event.setStatus(Status.AUTO_DELETED);
-                                event.setUpdater(ub);
-                                event.setUpdatedDate(new Date());
-                                sedao.update(event);
+                    for (int j = 0; j < events.size(); j++) {
+                        StudyEventBean event = (StudyEventBean) events.get(j);
+                        if (!event.getStatus().equals(Status.DELETED)) {
+                            event.setStatus(Status.AUTO_DELETED);
+                            event.setUpdater(ub);
+                            event.setUpdatedDate(new Date());
+                            sedao.update(event);
 
-                                ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(event);
+                            ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(event);
 
-                                ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
-                                for (int k = 0; k < eventCRFs.size(); k++) {
-                                    EventCRFBean eventCRF = (EventCRFBean) eventCRFs.get(k);
-                                    if (!eventCRF.getStatus().equals(Status.DELETED)) {
-                                        eventCRF.setOldStatus(eventCRF.getStatus());
-                                        eventCRF.setStatus(Status.AUTO_DELETED);
-                                        eventCRF.setUpdater(ub);
-                                        eventCRF.setUpdatedDate(new Date());
-                                        ecdao.update(eventCRF);
+                            ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
+                            for (int k = 0; k < eventCRFs.size(); k++) {
+                                EventCRFBean eventCRF = (EventCRFBean) eventCRFs.get(k);
+                                if (!eventCRF.getStatus().equals(Status.DELETED)) {
+                                    eventCRF.setOldStatus(eventCRF.getStatus());
+                                    eventCRF.setStatus(Status.AUTO_DELETED);
+                                    eventCRF.setUpdater(ub);
+                                    eventCRF.setUpdatedDate(new Date());
+                                    ecdao.update(eventCRF);
 
-                                        ArrayList<ItemDataBean> itemDatas = iddao.findAllByEventCRFId(eventCRF.getId());
-                                        for (int a = 0; a < itemDatas.size(); a++) {
-                                            ItemDataBean item = (ItemDataBean) itemDatas.get(a);
-                                            if (!item.getStatus().equals(Status.DELETED)) {
-                                                item.setOldStatus(item.getStatus());
-                                                item.setStatus(Status.AUTO_DELETED);
-                                                item.setUpdater(ub);
-                                                item.setUpdatedDate(new Date());
-                                                iddao.update(item);
-                                            }
+                                    ArrayList<ItemDataBean> itemDatas = iddao.findAllByEventCRFId(eventCRF.getId());
+                                    for (int a = 0; a < itemDatas.size(); a++) {
+                                        ItemDataBean item = (ItemDataBean) itemDatas.get(a);
+                                        if (!item.getStatus().equals(Status.DELETED)) {
+                                            item.setOldStatus(item.getStatus());
+                                            item.setStatus(Status.AUTO_DELETED);
+                                            item.setUpdater(ub);
+                                            item.setUpdatedDate(new Date());
+                                            iddao.update(item);
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }// for subjects
-
-                DatasetDAO datadao = new DatasetDAO(sm.getDataSource());
-                ArrayList<DatasetBean> dataset = datadao.findAllByStudyId(study.getId());
-                for (int i = 0; i < dataset.size(); i++) {
-                    DatasetBean data = (DatasetBean) dataset.get(i);
-                    if (!data.getStatus().equals(Status.DELETED)) {
-                        data.setStatus(Status.AUTO_DELETED);
-                        data.setUpdater(ub);
-                        data.setUpdatedDate(new Date());
-                        datadao.update(data);
-                    }
                 }
+            }// for subjects
 
-                addPageMessage(respage.getString("this_site_has_been_removed_succesfully"));
-
-                String fromListSite = (String) session.getAttribute("fromListSite");
-                if (fromListSite != null && fromListSite.equals("yes") && currentRole.getRole().equals(Role.STUDYDIRECTOR)) {
-                    session.removeAttribute("fromListSite");
-                    forwardPage(Page.SITE_LIST_SERVLET);
-                } else {
-                    session.removeAttribute("fromListSite");
-                    if (currentRole.getRole().equals(Role.ADMIN)) {
-                        forwardPage(Page.STUDY_LIST_SERVLET);
-                    } else {
-                        forwardPage(Page.SITE_LIST_SERVLET);
-                    }
+            DatasetDAO datadao = new DatasetDAO(sm.getDataSource());
+            ArrayList<DatasetBean> dataset = datadao.findAllByStudyId(study.getId());
+            for (int i = 0; i < dataset.size(); i++) {
+                DatasetBean data = (DatasetBean) dataset.get(i);
+                if (!data.getStatus().equals(Status.DELETED)) {
+                    data.setStatus(Status.AUTO_DELETED);
+                    data.setUpdater(ub);
+                    data.setUpdatedDate(new Date());
+                    datadao.update(data);
                 }
-
             }
+
+            addPageMessage(respage.getString("this_site_has_been_removed_succesfully"));
+
+            String fromListSite = (String) session.getAttribute("fromListSite");
+            if (fromListSite != null && fromListSite.equals("yes") && currentRole.getRole().equals(Role.STUDYDIRECTOR)) {
+                session.removeAttribute("fromListSite");
+                forwardPage(Page.SITE_LIST_SERVLET);
+            } else {
+                session.removeAttribute("fromListSite");
+                if (currentRole.getRole().equals(Role.ADMIN)) {
+                    forwardPage(Page.STUDY_LIST_SERVLET);
+                } else {
+                    forwardPage(Page.SITE_LIST_SERVLET);
+                }
+            }
+
         }
 
     }
