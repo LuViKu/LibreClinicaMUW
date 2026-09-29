@@ -238,7 +238,7 @@ public class PublicImageUploadController {
         try {
             Path dir = Paths.get(storeDir(), "uploads");
             Files.createDirectories(dir);
-            saved = dir.resolve(UUID.randomUUID() + extFor(contentType, file.getOriginalFilename()));
+            saved = dir.resolve(UUID.randomUUID() + extFor(contentType));
             try (InputStream in = file.getInputStream()) {
                 Files.copy(in, saved, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -375,18 +375,16 @@ public class PublicImageUploadController {
         return DEFAULT_STORE_PATH;
     }
 
-    private static String extFor(String contentType, String originalName) {
+    /**
+     * The stored file's extension, from the content type the request was
+     * already limited to ({@link #ALLOWED_CONTENT_TYPES}). Never from the
+     * uploaded file name: that is the client's text, and a path built from it
+     * is one filter away from a traversal (CodeQL java/path-injection on the
+     * beta.13 release gate).
+     */
+    private static String extFor(String contentType) {
         if (contentType.contains("png")) return ".png";
         if (contentType.contains("jpeg") || contentType.contains("jpg")) return ".jpg";
-        if (originalName != null) {
-            int dot = originalName.lastIndexOf('.');
-            if (dot > 0 && dot < originalName.length() - 1) {
-                String ext = originalName.substring(dot).toLowerCase();
-                if (ext.length() <= 5 && ext.chars().allMatch(ch -> ch == '.' || Character.isLetterOrDigit(ch))) {
-                    return ext;
-                }
-            }
-        }
         return ".img";
     }
 
