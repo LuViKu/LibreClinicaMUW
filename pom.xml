@@ -381,21 +381,33 @@
             <!-- Phase B.4: commons-fileupload 1.x targets javax.servlet.
                  commons-fileupload2-jakarta-servlet6 is the jakarta-namespaced
                  successor. API surface differs (org.apache.commons.fileupload2.*);
-                 callers are updated in the same PR. -->
+                 callers are updated in the same PR.
+                 2026-09-29: 2.0.0-M2 -> 2.0.0-M4 for CVE-2025-48976 (a request
+                 with very many part headers could exhaust heap). M4 caps a
+                 part's headers at 512 bytes, which refuses filenames beyond
+                 roughly 350 bytes; Tomcat's own default cap is the same, so
+                 nothing that worked before stops working. M5 is deliberately
+                 skipped: it renames the size setters.
+                 The M4 upgrade REQUIRES commons-io >= 2.19.0 below: M4 calls
+                 BoundedInputStream.Builder.setOnMaxCount, which 2.16.1 does not
+                 have. Compiling against the older pair succeeds and every
+                 multipart parse then fails at runtime with NoSuchMethodError. -->
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-fileupload2-core</artifactId>
-                <version>2.0.0-M2</version>
+                <version>2.0.0-M4</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-fileupload2-jakarta-servlet6</artifactId>
-                <version>2.0.0-M2</version>
+                <version>2.0.0-M4</version>
             </dependency>
+            <!-- 2.16.1 -> 2.19.0: required by commons-fileupload2 2.0.0-M4, see
+                 above. Smallest release that carries setOnMaxCount. -->
             <dependency>
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
-                <version>2.16.1</version>
+                <version>2.19.0</version>
             </dependency>
 			<dependency>
 				<groupId>commons-beanutils</groupId>
