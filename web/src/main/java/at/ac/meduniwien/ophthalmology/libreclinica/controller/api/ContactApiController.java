@@ -88,6 +88,18 @@ public class ContactApiController {
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
+    /**
+     * RFC 5321's limit for a forward path. Checked before {@link #EMAIL_PATTERN}:
+     * the pattern backtracks quadratically on a long value without a dot, and
+     * this endpoint answers without login (code-scanning triage 2026-09-29).
+     */
+    static final int MAX_EMAIL_LEN = 254;
+
+    /** Length first, then the pattern — see {@link #MAX_EMAIL_LEN}. */
+    static boolean isEmailAddress(String email) {
+        return email != null && email.length() <= MAX_EMAIL_LEN && EMAIL_PATTERN.matcher(email).matches();
+    }
+
     private final OpenClinicaMailSender mailSender;
 
     @Autowired
@@ -113,7 +125,7 @@ public class ContactApiController {
         String email = body == null ? null : trimToNull(body.email());
         if (email == null) {
             errors.add(new FieldError("email", "Email is required."));
-        } else if (!EMAIL_PATTERN.matcher(email).matches()) {
+        } else if (!isEmailAddress(email)) {
             errors.add(new FieldError("email", "Enter a valid email address."));
         }
 

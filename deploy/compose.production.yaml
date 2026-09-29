@@ -152,7 +152,10 @@ services:
       # must match core.retinalInference.preprocessToken in datainfo.properties
       # (the setup script stamps both from LIBRECLINICA_RETINAL_PREPROCESS_TOKEN).
       RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED: "true"
-      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_PREPROCESS_TOKEN:-cb2e7d0edd4d54cd8af46bbef78755a7}
+      # Per-host secret written to /etc/libreclinica/env by setup-ubuntu-host.sh;
+      # no fallback, so a missing token stops the stack instead of running on a
+      # value published in the repository.
+      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_PREPROCESS_TOKEN:?run deploy/setup-ubuntu-host.sh to mint RETINAL_INFERENCE_PREPROCESS_TOKEN}
       # Persist the per-source-scan companion files (bscan.dcm + fundus.png +
       # geometry.json) under the shared retinal-artifacts bind so the app's
       # viewer (core.retinalInference.artifactStorePath) can stream them back.

@@ -290,6 +290,8 @@ services:
     profiles: ["optima"]
     # No Postgres dep — runners only expose /infer over HTTP.
     environment:
+      # Required by the runner's /infer when set; empty keeps it open (dev).
+      RUNNER_AUTH_TOKEN: ${RETINAL_INFERENCE_AUTH_TOKEN:-}
       RUNNER_FLUID_CPU: "1"
     volumes:
       # MUST mount at the same absolute path the sidecar uses — it passes
@@ -311,6 +313,9 @@ services:
     image: libreclinica-muw-retinal-runner-onl:latest
     container_name: libreclinica-muw-retinal-runner-onl-1
     profiles: ["optima"]
+    environment:
+      # Required by the runner's /infer when set; empty keeps it open (dev).
+      RUNNER_AUTH_TOKEN: ${RETINAL_INFERENCE_AUTH_TOKEN:-}
     # No Postgres dep — runners only expose /infer over HTTP.
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
@@ -330,6 +335,9 @@ services:
     image: libreclinica-muw-retinal-runner-pr:latest
     container_name: libreclinica-muw-retinal-runner-pr-1
     profiles: ["optima"]
+    environment:
+      # Required by the runner's /infer when set; empty keeps it open (dev).
+      RUNNER_AUTH_TOKEN: ${RETINAL_INFERENCE_AUTH_TOKEN:-}
     # No Postgres dep — runners only expose /infer over HTTP.
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
@@ -351,6 +359,9 @@ services:
     image: libreclinica-muw-retinal-runner-ga:latest
     container_name: libreclinica-muw-retinal-runner-ga-1
     profiles: ["ga"]
+    environment:
+      # Required by the runner's /infer when set; empty keeps it open (dev).
+      RUNNER_AUTH_TOKEN: ${RETINAL_INFERENCE_AUTH_TOKEN:-}
     # gpus: all          # uncomment on an NVIDIA host (compose GPU passthrough)
     # No Postgres dep — runners only expose /infer over HTTP.
     volumes:

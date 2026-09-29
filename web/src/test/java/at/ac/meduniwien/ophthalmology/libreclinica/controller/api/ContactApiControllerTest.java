@@ -134,6 +134,44 @@ class ContactApiControllerTest extends AbstractApiControllerTest {
         verify(sender, never()).sendEmail(any(), any(), any(), any(), anyBoolean());
     }
 
+    /** The endpoint answers without login; an overlong address is refused as invalid. */
+    @Test
+    void anOverlongEmailIsRefused() throws Exception {
+        OpenClinicaMailSender sender = Mockito.mock(OpenClinicaMailSender.class);
+
+        mockMvcWith("admin@example.org", sender)
+                .perform(post("/api/v1/contact")
+                        .contentType("application/json")
+                        .content("{\"name\":\"a\",\"email\":\"a@" + "x".repeat(300) + ".org\","
+                                + "\"subject\":\"x\",\"message\":\"y\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field=='email')].message")
+                        .value(Matchers.hasItem(Matchers.containsString("valid"))));
+
+        verify(sender, never()).sendEmail(any(), any(), any(), any(), anyBoolean());
+    }
+
+    /**
+     * The pattern backtracks quadratically on a long dot-less value: 200 000
+     * characters run for minutes without the length check, microseconds with it.
+     */
+    @Test
+    void theEmailCheckDoesNotBacktrackOnAHugeValue() {
+        String hostile = "a@" + "x".repeat(200_000);
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(5), () -> {
+            org.junit.jupiter.api.Assertions.assertFalse(ContactApiController.isEmailAddress(hostile));
+            org.junit.jupiter.api.Assertions.assertFalse(RulesApiController.isEmailAddress(hostile));
+        });
+        org.junit.jupiter.api.Assertions.assertTrue(ContactApiController.isEmailAddress("anne@example.org"));
+    }
+
+    @Test
+    void theRulesEmailCheckRefusesOverlongValues() {
+        org.junit.jupiter.api.Assertions.assertTrue(RulesApiController.isEmailAddress("anne@example.org"));
+        org.junit.jupiter.api.Assertions.assertFalse(RulesApiController.isEmailAddress("a@" + "x".repeat(300) + ".org"));
+        org.junit.jupiter.api.Assertions.assertFalse(RulesApiController.isEmailAddress(null));
+    }
+
     @Test
     void submitReturns400WhenMessageExceedsCap() throws Exception {
         OpenClinicaMailSender sender = Mockito.mock(OpenClinicaMailSender.class);

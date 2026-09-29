@@ -125,4 +125,24 @@ regexes = [
   # specific-format rules active, so a real key pasted into that constant
   # would still fail the scan.
   '''SECRET_ID\s*=''',
+
+  # --- 2026-09-29 ---
+  #
+  # The API key fixture in
+  # web/src/test/java/.../web/filter/ApiSecurityFilterDatabaseIT.java,
+  # added with the beta.14 API-gate fix (6edb69d8c). The test inserts this
+  # value into a user_account row and asserts that the filter accepts it and
+  # refuses an unknown key, so the constant has to look like a real key: 32
+  # hex characters, which clears the generic-api-key entropy threshold.
+  # It is the canonical dummy run of the hex alphabet and authenticates
+  # nothing outside the test's own throwaway PostgreSQL container.
+  #
+  # Matched as a literal rather than by path or by variable name, so any
+  # other value appearing in that same file -- or this value being replaced
+  # by a real key -- still fails the scan.
+  #
+  # Found by a full-history scan: gitleaks-action scans only the push range
+  # on a push event, so the push runs on lc-develop were green while this
+  # would have turned the 04:00 UTC cron red.
+  '''0123456789abcdef0123456789abcdef''',
 ]
