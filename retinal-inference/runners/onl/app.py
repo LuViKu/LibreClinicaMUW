@@ -24,12 +24,14 @@ import glob
 import os
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pydicom
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
+from runner_guard import check_token, confined
 
 MODEL_VERSION = os.environ.get("RUNNER_ONL_MODEL_VERSION", "sese-onl-1.2")
 ONL_CODE = os.environ.get("RUNNER_ONL_CODE", "/opt/sese_onl")  # dir with the script
@@ -67,9 +69,11 @@ def _axial_mm(dcm_path: str) -> float:
 
 
 @app.post("/infer")
-def infer(req: InferRequest) -> dict:
-    dcm = Path(req.bscan_dcm_path)
-    out = Path(req.output_dir)
+def infer(req: InferRequest, x_muw_inference_token: Optional[str] = Header(default=None)) -> dict:
+    check_token(x_muw_inference_token)
+    # Only paths the sidecar could have sent: absolute, below the shared roots.
+    dcm = confined(req.bscan_dcm_path, "bscan_dcm_path")
+    out = confined(req.output_dir, "output_dir")
     out.mkdir(parents=True, exist_ok=True)
     if not dcm.is_file():
         raise HTTPException(status_code=400, detail=f"bscan.dcm not found: {dcm}")
