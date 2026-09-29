@@ -51,7 +51,11 @@ public class PformValidator implements Validator {
     }
 
     public void subValidator(Integer itemDataTypeId, String value, Errors e) {
-        if (value != null && value != "") {
+        // value != "" compared references. A value parsed out of a submission
+        // is not the interned literal, so the test was true for an empty value
+        // too and empty values fell into the switch below instead of being
+        // skipped -- a blank INTEGER or REAL field was then rejected as invalid.
+        if (value != null && !value.isEmpty()) {
 
             switch (itemDataTypeId) {
             case 5: { // ItemDataType.STRING
