@@ -8,14 +8,14 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.core;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import java.sql.PreparedStatement;
 import java.util.HashMap;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Level;
@@ -28,10 +28,10 @@ import ch.qos.logback.core.read.ListAppender;
  * hashes, API keys, challenge answers and clinical data. At DEBUG — the level
  * the shipped datainfo.properties sets — the factory used to log each value.
  */
-class PreparedStatementFactoryLoggingTest {
+public class PreparedStatementFactoryLoggingTest {
 
     @Test
-    void boundValuesNeverReachTheLogEvenAtDebug() throws Exception {
+    public void boundValuesNeverReachTheLogEvenAtDebug() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(PreparedStatementFactory.class.getName());
         Level before = logger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -44,10 +44,10 @@ class PreparedStatementFactoryLoggingTest {
             variables.put(2, Integer.valueOf(42));
             new PreparedStatementFactory(variables).generate(mock(PreparedStatement.class));
 
-            assertFalse(appender.list.isEmpty(), "the type/position debug line is still written");
+            assertFalse("the type/position debug line is still written", appender.list.isEmpty());
             for (ILoggingEvent e : appender.list) {
-                assertFalse(e.getFormattedMessage().contains("SECRET-password-hash-6c1f"), e.getFormattedMessage());
-                assertFalse(e.getFormattedMessage().contains("value["), e.getFormattedMessage());
+                assertFalse(e.getFormattedMessage(), e.getFormattedMessage().contains("SECRET-password-hash-6c1f"));
+                assertFalse(e.getFormattedMessage(), e.getFormattedMessage().contains("value["));
             }
             assertTrue(appender.list.stream().anyMatch(e -> e.getFormattedMessage().contains("java.lang.String")));
         } finally {
