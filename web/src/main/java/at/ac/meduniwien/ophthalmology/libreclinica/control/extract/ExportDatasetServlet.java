@@ -208,7 +208,6 @@ public class ExportDatasetServlet extends SecureController {
                     fId = fileID.intValue();
                 }
                 request.setAttribute("generate", generalFileDir + ODMXMLFileName);
-                logger.debug("+++ set the following: " + generalFileDir + ODMXMLFileName);
             } else if ("txt".equalsIgnoreCase(action)) {
                 // generateReport =
                 // dsdao.generateDataset(db,

@@ -280,7 +280,6 @@ public class CreateXformCRFVersionServlet extends SecureController {
             String dir = Utils.getCrfMediaFilePath(crf, version);
             if (!new File(dir).exists()) {
                 new File(dir).mkdirs();
-                logger.debug("Made the directory " + dir);
             }
             // Save any media files
             File mediaDirectory = new File(dir);
