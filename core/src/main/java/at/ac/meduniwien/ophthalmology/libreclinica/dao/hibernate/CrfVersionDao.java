@@ -51,9 +51,11 @@ public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
 
     @SuppressWarnings("rawtypes")
     public CrfVersion findByNameCrfId(String name, Integer crfId) {
-        String query = "select distinct cv.* from crf_version cv,crf c " + "where c.crf_id = " + crfId + " and cv.name = '" + name
-                + "' and cv.crf_id = c.crf_id";
+        String query = "select distinct cv.* from crf_version cv,crf c "
+                + "where c.crf_id = :crfId and cv.name = :name and cv.crf_id = c.crf_id";
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(CrfVersion.class);
+        q.setParameter("crfId", crfId, Integer.class);
+        q.setParameter("name", name, String.class);
         return ((CrfVersion) q.getSingleResultOrNull());
     }
     
