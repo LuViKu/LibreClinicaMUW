@@ -147,17 +147,17 @@ public class CreateNewStudyEventServlet extends SecureController {
             HashMap<String, Object> presetValues = new HashMap<>();
             presetValues.put(INPUT_STARTDATE_PREFIX + "Hour", Integer.valueOf(-1));
             presetValues.put(INPUT_STARTDATE_PREFIX + "Minute", Integer.valueOf(-1));
-            presetValues.put(INPUT_STARTDATE_PREFIX + "Half", new String(""));
+            presetValues.put(INPUT_STARTDATE_PREFIX + "Half", "");
             presetValues.put(INPUT_ENDDATE_PREFIX + "Hour", Integer.valueOf(-1));
             presetValues.put(INPUT_ENDDATE_PREFIX + "Minute", Integer.valueOf(-1));
-            presetValues.put(INPUT_ENDDATE_PREFIX + "Half", new String(""));
+            presetValues.put(INPUT_ENDDATE_PREFIX + "Half", "");
             for (int i = 0; i < ADDITIONAL_SCHEDULED_NUM; ++i) {
                 presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Hour", Integer.valueOf(-1));
                 presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Minute", Integer.valueOf(-1));
-                presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Half", new String(""));
+                presetValues.put(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Half", "");
                 presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Hour", Integer.valueOf(-1));
                 presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Minute", Integer.valueOf(-1));
-                presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Half", new String(""));
+                presetValues.put(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Half", "");
             }
 
             // SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");

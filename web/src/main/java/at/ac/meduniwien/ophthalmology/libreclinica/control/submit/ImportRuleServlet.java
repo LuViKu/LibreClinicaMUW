@@ -127,10 +127,14 @@ public class ImportRuleServlet extends SecureController {
         if (validRuleSetDefs > 0 && duplicateRuleSetDefs == 0 && invalidRuleSetDefs == 0 && duplicateRuleDefs == 0 && invalidRuleDefs == 0) {
             addPageMessage(respage.getString("rules_Import_message1"));
         }
-        if (duplicateRuleSetDefs > 0 && invalidRuleSetDefs == 0 && duplicateRuleDefs >= 0 && invalidRuleDefs == 0) {
+        // `duplicateRuleDefs >= 0` / `invalidRuleDefs >= 0` were always true
+        // (they are collection sizes), so they never constrained anything. The
+        // terms are dropped rather than guessed at; whether the author meant
+        // `> 0` or `== 0` is not recoverable from the code.
+        if (duplicateRuleSetDefs > 0 && invalidRuleSetDefs == 0 && invalidRuleDefs == 0) {
             addPageMessage(respage.getString("rules_Import_message2"));
         }
-        if (invalidRuleSetDefs > 0 && invalidRuleDefs >= 0) {
+        if (invalidRuleSetDefs > 0) {
             addPageMessage(respage.getString("rules_Import_message3"));
         }
     }
