@@ -502,7 +502,7 @@ public class GenerateExtractFileService {
             File newFile = null;
             if (oldFile.exists()) {
                 newFile = oldFile;
-                if(oldFiles!=null || !oldFiles.isEmpty() )
+                if(oldFiles!=null && !oldFiles.isEmpty() )
                 oldFiles.remove(oldFile);
             } else {
                 newFile = new File(complete, name);
@@ -726,7 +726,7 @@ public class GenerateExtractFileService {
             // now, we write the file to the zip file
             FileInputStream is = new FileInputStream(newFile);
             ZipOutputStream z = new ZipOutputStream(new FileOutputStream(new File(complete, name + ".zip")));
-            if(oldFiles!=null || !oldFiles.isEmpty())
+            if(oldFiles!=null && !oldFiles.isEmpty())
             {
 
                 if(oldFiles.contains(new File(complete, name + ".zip")))

@@ -326,7 +326,7 @@ public class OdmFileCreation {
             File newFile = null;
             if (oldFile.exists()) {
                 newFile = oldFile;
-                if(oldFiles!=null || !oldFiles.isEmpty() )
+                if(oldFiles!=null && !oldFiles.isEmpty() )
                 oldFiles.remove(oldFile);
             } else {
                 newFile = new File(complete, name);

@@ -51,6 +51,20 @@ public class SurfaceCsvReaderTest {
     }
 
     @Test
+    public void rejects_non_numeric_token_naming_row_and_column() {
+        try {
+            SurfaceCsvReader.read(fixture("surface_badtoken.csv"));
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException ex) {
+            String msg = ex.getMessage();
+            assertTrue("expected row and column in message but got: " + msg,
+                    msg.contains("row 1") && msg.contains("column 1"));
+        } catch (Exception other) {
+            fail("expected IllegalArgumentException but got " + other);
+        }
+    }
+
+    @Test
     public void rejects_ragged_row_with_row_number_in_message() {
         try {
             SurfaceCsvReader.read(fixture("surface_ragged.csv"));

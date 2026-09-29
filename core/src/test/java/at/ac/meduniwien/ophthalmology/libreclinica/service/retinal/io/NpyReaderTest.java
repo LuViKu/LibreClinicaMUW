@@ -12,7 +12,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -49,6 +52,41 @@ public class NpyReaderTest {
         } catch (IOException ex) {
             assertTrue("expected 'fortran' in message: " + ex.getMessage(),
                     ex.getMessage().toLowerCase().contains("fortran"));
+        }
+    }
+
+    /** Build a v1.0 .npy stream around the given header dict, padded per spec. */
+    private static byte[] npyStream(String headerDict) {
+        byte[] dict = headerDict.getBytes(StandardCharsets.US_ASCII);
+        int preamble = 6 + 2 + 2;
+        int pad = (64 - ((preamble + dict.length + 1) % 64)) % 64;
+        int headerLen = dict.length + pad + 1;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(0x93);
+        for (char c : "NUMPY".toCharArray()) {
+            out.write(c);
+        }
+        out.write(1);
+        out.write(0);
+        out.write(headerLen & 0xFF);
+        out.write((headerLen >> 8) & 0xFF);
+        out.write(dict, 0, dict.length);
+        for (int i = 0; i < pad; i++) {
+            out.write(' ');
+        }
+        out.write(0x0A);
+        return out.toByteArray();
+    }
+
+    @Test
+    public void reject_non_numeric_shape_entry() {
+        byte[] bytes = npyStream("{'descr': '|u1', 'fortran_order': False, 'shape': (2, x), }");
+        try {
+            NpyReader.read(new ByteArrayInputStream(bytes));
+            fail("expected IOException for a non-numeric shape entry");
+        } catch (IOException ex) {
+            assertTrue("expected 'shape' in message: " + ex.getMessage(),
+                    ex.getMessage().contains("shape"));
         }
     }
 

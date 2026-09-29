@@ -58,7 +58,7 @@ public class RuleSetListenerService implements ApplicationListener<OnStudyEventU
 		StudyEventBean studyEventBean = new StudyEventBean();
 		studyEventBean.setId(studyEvent.getStudyEventId());
 
-		ArrayList<RuleSetBean> ruleSets = (ArrayList<RuleSetBean>) createRuleSet(studyEventDefId);
+		List<RuleSetBean> ruleSets = createRuleSet(studyEventDefId);
 		for (RuleSetBean ruleSet : ruleSets){
 			ArrayList<RuleSetBean> ruleSetBeans = new ArrayList<>();		
 	            ExpressionBean eBean = new ExpressionBean();

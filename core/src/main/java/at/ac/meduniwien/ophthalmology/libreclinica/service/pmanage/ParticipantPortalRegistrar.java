@@ -115,11 +115,11 @@ public class ParticipantPortalRegistrar {
             if (baseUrl.getPort() > 0)
                 port = ":" + String.valueOf(baseUrl.getPort());
             // Check that hostname makes a valid URL
-            new URL(baseUrl.getProtocol() + "://" + hostName + "." + baseUrl.getHost() + port);
+            URI.create(baseUrl.getProtocol() + "://" + hostName + "." + baseUrl.getHost() + port).toURL();
             // Check that hostname only contains alphanumeric characters and/or hyphens
             if (hostName.matches("^[A-Za-z0-9-]+$"))
                 return true;
-        } catch (MalformedURLException mue) {
+        } catch (MalformedURLException | IllegalArgumentException mue) {
             logger.error("Error validating customer selected Participate subdomain.");
             logger.error(mue.getMessage());
             logger.error(ExceptionUtils.getStackTrace(mue));

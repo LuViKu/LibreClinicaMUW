@@ -289,7 +289,7 @@ public class RuleSetService implements RuleSetServiceInterface {
             ExecutionMode executionMode, StudyBean currentStudy, UserAccountBean ub) {
 
         List<RuleSetBean> ruleSets = new ArrayList<>();
-        RuleSetBean ruleSet = getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(ruleSetRuleId, crfVersionId, currentStudy);
+        RuleSetBean ruleSet = getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(ruleSetRuleId, crfVersionId);
         if (ruleSet != null) {
             ruleSets.add(ruleSet);
         }
@@ -482,7 +482,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         return ruleSetBean;
     }
 
-    private RuleSetBean getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(String ruleSetRuleId, String crfVersionId, StudyBean currentStudy) {
+    private RuleSetBean getRuleSetBeanByRuleSetRuleAndSubstituteCrfVersion(String ruleSetRuleId, String crfVersionId) {
         RuleSetBean ruleSetBean = null;
         if (ruleSetRuleId != null && crfVersionId != null && ruleSetRuleId.length() > 0 && crfVersionId.length() > 0) {
             RuleSetRuleBean ruleSetRule = getRuleSetRuleDao().findById(Integer.valueOf(ruleSetRuleId));
@@ -572,7 +572,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         for (RuleSetBean ruleSetBean : ruleSets) {
             if (!getExpressionService().isExpressionPartial(ruleSetBean.getTarget().getValue())) {
                 String studyEventDefinitionOrdinal = getExpressionService().getStudyEventDefinitionOrdninalCurated(ruleSetBean.getTarget().getValue());
-                if (studyEventDefinitionOrdinal.equals("")) {
+                if (studyEventDefinitionOrdinal.isEmpty()) {
                     ruleSetBean.addExpression(replaceSEDOrdinal(ruleSetBean.getTarget(), studyEvent));
                     validRuleSets.add(ruleSetBean);
                 }
@@ -603,10 +603,11 @@ public class RuleSetService implements RuleSetServiceInterface {
         ArrayList<RuleSetBean> shownRuleSets = new ArrayList<>();
         for (RuleSetBean ruleSetBean : ruleSets) {
             logger.debug(
-                "Entering the filterRuleSetsBy HiddenItems? Thread::" + Thread.currentThread() +
-                "eventCrf?" + eventCrf +
-                "crfVersion??" + crfVersion +
-                "ruleSets?" + ruleSets
+                "Entering filterRuleSetsByHiddenItems on thread {} - eventCrf {}, crfVersion {}, {} rule set(s)",
+                Thread.currentThread(),
+                eventCrf == null ? null : eventCrf.getId(),
+                crfVersion == null ? null : crfVersion.getId(),
+                ruleSets.size()
             );
             ItemBean target = ruleSetBean.getItem();
             ItemFormMetadataBean metadataBean = this.getItemFormMetadataDao().findByItemIdAndCRFVersionId(target.getId(), crfVersion.getId());
@@ -683,7 +684,7 @@ public class RuleSetService implements RuleSetServiceInterface {
                     "studyEventDefinitionOrdinal {} , studyEventDefinitionOid {} , crfOrCrfVersionOid {} , studyEvents {}",
                     studyEventDefinitionOrdinal, studyEventDefinitionOid, crfOrCrfVersionOid, studyEvents.size()
                 );
-                if (studyEventDefinitionOrdinal.equals("") && studyEvents.size() > 0) {
+                if (studyEventDefinitionOrdinal.isEmpty() && studyEvents.size() > 0) {
                     for (StudyEventBean studyEvent : studyEvents) {
                         ruleSetBean.addExpression(replaceSEDOrdinal(ruleSetBean.getTarget(), studyEvent));
                     }
@@ -791,14 +792,14 @@ public class RuleSetService implements RuleSetServiceInterface {
                 String itemOID = getExpressionService().getItemOid(expression.getValue());
                 String groupOrdinal = getExpressionService().getGroupOrdninalCurated(expression.getValue());
 
-                if (grouped.containsKey(groupOIDConcatItemOID) && groupOrdinal.equals("")) {
+                if (grouped.containsKey(groupOIDConcatItemOID) && groupOrdinal.isEmpty()) {
                     for (int i = 0; i < grouped.get(groupOIDConcatItemOID); i++) {
                         ExpressionBean expBean = new ExpressionBean();
                         expBean.setValue(getExpressionService().replaceGroupOidOrdinalInExpression(expression.getValue(), i + 1));
                         expBean.setContext(expression.getContext());
                         expressionsWithCorrectGroupOrdinal.add(expBean);
                     }
-                } else if (grouped.containsKey(groupOIDConcatItemOID) && !groupOrdinal.equals("")) {
+                } else if (grouped.containsKey(groupOIDConcatItemOID) && !groupOrdinal.isEmpty()) {
                     ExpressionBean expBean = new ExpressionBean();
                     expBean.setValue(expression.getValue());
                     expBean.setContext(expression.getContext());
@@ -871,7 +872,7 @@ public class RuleSetService implements RuleSetServiceInterface {
                     );
 
                     // case 1 : group ordinal = ""
-                    if (groupOrdinal.equals("") && itemDatas.size() > 0) {
+                    if (groupOrdinal.isEmpty() && itemDatas.size() > 0) {
                         for (int k = 0; k < itemDatas.size(); k++) {
                             ExpressionBean expBean = new ExpressionBean();
                             expBean.setValue(getExpressionService().replaceGroupOidOrdinalInExpression(expression.getValue(), k + 1));
@@ -880,7 +881,7 @@ public class RuleSetService implements RuleSetServiceInterface {
                         }
                     }
                     // case 2 : group ordinal = x and itemDatas should be size >= x
-                    if (!groupOrdinal.equals("") && itemDatas.size() >= Integer.parseInt(groupOrdinal)) {
+                    if (!groupOrdinal.isEmpty() && itemDatas.size() >= Integer.parseInt(groupOrdinal)) {
                         ExpressionBean expBean = new ExpressionBean();
                         expBean.setValue(getExpressionService().replaceGroupOidOrdinalInExpression(expression.getValue(), null));
                         expBean.setContext(expression.getContext());
@@ -1120,7 +1121,7 @@ public class RuleSetService implements RuleSetServiceInterface {
     	for (RuleSetBean ruleSet : ruleSets) {
     	    String studyEventDefinitionOrdinal = getExpressionService()
                     .getStudyEventDefinitionOrdninalCurated(ruleSet.getOriginalTarget().getValue() + ".A.B");
-            if (studyEventDefinitionOrdinal.equals("") ||
+            if (studyEventDefinitionOrdinal.isEmpty() ||
                 studyEventDefinitionOrdinal.equals(String.valueOf(studyEventOrdinal))) {
 
                 ruleSetBeans.add(ruleSet);
@@ -1180,7 +1181,7 @@ public class RuleSetService implements RuleSetServiceInterface {
         }
 
 		String ssZoneId = studySubject.getTime_zone().trim();
-		if (!ssZoneId.equals("")) {
+		if (!ssZoneId.isEmpty()) {
 			ssZone = TimeZone.getTimeZone(ssZoneId);
 		} else {
 			ssZone = serverZone;

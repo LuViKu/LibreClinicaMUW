@@ -169,7 +169,7 @@ public class SubjectService implements SubjectServiceInterface {
     }
 
     /**
-     * @param datasource
+     * @param dataSource
      *            the datasource to set
      */
     public void setDatasource(DataSource dataSource) {

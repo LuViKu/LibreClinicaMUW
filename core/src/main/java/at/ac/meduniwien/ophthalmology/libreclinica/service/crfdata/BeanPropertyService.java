@@ -122,7 +122,7 @@ public class BeanPropertyService{
 	            // This will execute the contents of <ValueExpression>SS.ENROLLMENT_DATE + 2</ValueExpression>
 	        	LOGGER.debug("Values:expression??::"+propertyBean.getValueExpression().getValue());
 	        	Object result = oep.parseAndEvaluateExpression(propertyBean.getValueExpression().getValue());
-	            executeAction(result,propertyBean,eow,(EventActionBean)ruleActionBean,userId,isTransaction);
+	            executeAction(result,eow,(EventActionBean)ruleActionBean,userId,isTransaction);
 	        }
     	}
     }
@@ -135,7 +135,7 @@ public class BeanPropertyService{
      * @param eventAction
      */
     
-    private void executeAction(Object result,PropertyBean propertyBean,ExpressionBeanObjectWrapper eow,EventActionBean eventAction,Integer userId,boolean isTransaction){
+    private void executeAction(Object result,ExpressionBeanObjectWrapper eow,EventActionBean eventAction,Integer userId,boolean isTransaction){
     	String oid = eventAction.getOc_oid_reference();
     	String eventOID = null;
         DateFormat df = new SimpleDateFormat("yyyy-MM-dd");

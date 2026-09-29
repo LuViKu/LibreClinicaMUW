@@ -216,7 +216,7 @@ public class ResponseSetService {
                     }
 
                     if (itemSet != null)
-                        optionsValues = getOptionsValuesFromItemSet(submittedXformText, itemSet, html);
+                        optionsValues = getOptionsValuesFromItemSet(submittedXformText, itemSet);
                     else {
                         for (Item option : items) {
                             String value = option.getValue();
@@ -233,7 +233,7 @@ public class ResponseSetService {
         return optionsValues;
     }
 
-    private String getOptionsValuesFromItemSet(String submittedXformText, ItemSet itemSet, Html html) throws Exception {
+    private String getOptionsValuesFromItemSet(String submittedXformText, ItemSet itemSet) throws Exception {
         String optionsValues = "";
 
         // Based of ItemSet definition, look up name of element containing each item value.

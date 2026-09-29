@@ -72,7 +72,7 @@ public final class SurfaceCsvReader {
                 }
                 double[] vals = new double[rowAscans];
                 for (int i = 0; i < rowAscans; i++) {
-                    vals[i] = parseToken(toks[i]);
+                    vals[i] = parseToken(toks[i], rowIdx, i);
                 }
                 rows.add(vals);
                 rowIdx++;
@@ -95,11 +95,19 @@ public final class SurfaceCsvReader {
         }
     }
 
-    private static double parseToken(String raw) {
+    private static double parseToken(String raw, int rowIdx, int col) {
         String t = raw.trim();
         if (t.isEmpty() || t.equals("U") || t.equals("u") || t.equalsIgnoreCase("nan")) {
             return Double.NaN;
         }
-        return Double.parseDouble(t);
+        try {
+            return Double.parseDouble(t);
+        } catch (NumberFormatException nfe) {
+            // Same exception family (and therefore the same caller handling) as the
+            // ragged-row check above, but the row and column are named so a bad
+            // export is diagnosable from the log alone.
+            throw new IllegalArgumentException(
+                    "row " + rowIdx + " column " + col + " is not a number: '" + t + "'", nfe);
+        }
     }
 }
