@@ -1250,7 +1250,12 @@ public class ExpressionService {
 
             // Query for ItemGroup with OID specified in the expression
             ItemGroupBean itemGroup = getItemGroupDao().findByOid(theOid[0]);
-            boolean isItemGroupBePartOfCrfOrNull = ruleSet.getCrfId() == null || itemGroup.getCrfId().equals(ruleSet.getCrfId());
+            // findByOid returns null for an OID that is not in the database, and the
+            // guard below already expects that -- so the CRF test has to tolerate it
+            // instead of dereferencing first (a rules import naming an unknown item
+            // group OID used to fail with an NPE rather than reporting the OID).
+            boolean isItemGroupBePartOfCrfOrNull = ruleSet.getCrfId() == null
+                    || (itemGroup != null && itemGroup.getCrfId().equals(ruleSet.getCrfId()));
 
             if (itemGroup != null && itemGroup.isActive() && isItemGroupBePartOfCrfOrNull) {
 
