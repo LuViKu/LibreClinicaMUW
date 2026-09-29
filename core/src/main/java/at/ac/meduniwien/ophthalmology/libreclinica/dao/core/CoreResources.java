@@ -18,6 +18,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -841,7 +842,10 @@ public class CoreResources implements ResourceLoaderAware {
 
         File file = new File(basePath, normalisedFilePath);
         try {
-            if (file.getCanonicalPath().startsWith(new File(basePath).getCanonicalPath())) {
+            // Compare path elements, not strings: a string prefix check lets
+            // "<base>X/..." (a sibling directory sharing the prefix) through.
+            Path base = new File(basePath).getCanonicalFile().toPath();
+            if (file.getCanonicalFile().toPath().startsWith(base)) {
                 return file;
             } else {
                 return null;
