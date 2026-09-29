@@ -51,7 +51,7 @@ public class PformValidator implements Validator {
 	}
 
 	public void subValidator(Integer itemDataTypeId, String value, Errors e) {
-		if (value != null && value != "") {
+		if (value != null && !value.isEmpty()) {
 
 			switch (itemDataTypeId) {
 			case 5: { // ItemDataType.STRING

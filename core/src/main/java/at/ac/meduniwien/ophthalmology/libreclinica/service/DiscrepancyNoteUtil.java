@@ -623,7 +623,7 @@ public class DiscrepancyNoteUtil {
 
         for (DiscrepancyNoteBean discBean : allDiscNotes) {
             childDiscBeans = discrepancyNoteDAO.findAllByStudyAndParent(currentStudy, discBean.getId());
-            if (!childDiscBeans.isEmpty()) {
+            if (childDiscBeans != null && !childDiscBeans.isEmpty()) {
                 lastChild = childDiscBeans.get(childDiscBeans.size() - 1);
                 resolutionStatusId = lastChild.getResolutionStatusId();
                 if (discBean.getResolutionStatusId() != resolutionStatusId) {
