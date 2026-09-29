@@ -36,7 +36,7 @@ public class PformValidator implements Validator {
 		ItemItemDataContainer container = (ItemItemDataContainer) target;
 		String origValue = container.getItemDataBean().getValue();
 		Integer responseTypeId = container.getResponseTypeId();
-		Integer itemDataTypeId = container.getItemBean().getItemDataTypeId();
+		int itemDataTypeId = container.getItemBean().getItemDataTypeId();
 		logger.info("*** Data type id:  ***" + itemDataTypeId);
 
 		if (responseTypeId == 3 || responseTypeId == 7) {

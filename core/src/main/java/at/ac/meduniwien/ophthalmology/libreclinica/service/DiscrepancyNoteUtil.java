@@ -1042,7 +1042,7 @@ public class DiscrepancyNoteUtil {
     }
 
     public String countNotes(List<DiscrepancyNoteBean> discList, int statusId, int typeId){
-        Integer count = 0;
+        int count = 0;
         for(int i = 0; i < discList.size(); i++){
             DiscrepancyNoteBean discBean = discList.get(i);
             if(typeId == 0 && statusId != 0) {
@@ -1060,7 +1060,7 @@ public class DiscrepancyNoteUtil {
                 }
             }
         }
-        return count.toString();
+        return Integer.toString(count);
     }
 
     /**

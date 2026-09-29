@@ -231,7 +231,7 @@ public class XformMetaDataService {
 
     private void createGroups(XformContainer container, Html html, String submittedXformText, CrfBean crf, CrfVersion version, Section section,
             UserAccountBean ub, Errors errors) throws Exception {
-        Integer itemOrdinal = 1;
+        int itemOrdinal = 1;
         ArrayList<String> usedGroupOids = new ArrayList<String>();
         ArrayList<String> usedItemOids = new ArrayList<String>();
         List<Group> htmlGroups = html.getBody().getGroup();

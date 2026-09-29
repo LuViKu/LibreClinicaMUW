@@ -908,7 +908,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
     }
 
     private void updateItemGroupInASection(DisplayItemGroupBean itemGroup, List<Integer> itemIds, List<Integer> showItemIds) {
-        ArrayList<DisplayItemBean> dibs = (ArrayList<DisplayItemBean>) itemGroup.getItems();
+        List<DisplayItemBean> dibs = itemGroup.getItems();
         for (DisplayItemBean dib : dibs) {
             ItemFormMetadataBean meta = dib.getMetadata();
             if (showItemIds != null && showItemIds.contains(dib.getItem().getId())) {
@@ -1013,7 +1013,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         this.expressionService = expressionService;
     }
     
-    class ItemOrItemGroupHolder {
+    static class ItemOrItemGroupHolder {
 
         ItemBean itemBean;
         ItemGroupBean itemGroupBean;

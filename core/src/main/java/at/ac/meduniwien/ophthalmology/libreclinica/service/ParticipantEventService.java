@@ -100,7 +100,7 @@ public class ParticipantEventService {
        }
 
     public List<EventDefinitionCRFBean> getEventDefCrfsForStudyEvent(StudySubjectBean studySubject, StudyEventBean studyEvent) {
-        Integer studyId = studySubject.getStudyId();
+        int studyId = studySubject.getStudyId();
         StudyBean studyBean = (StudyBean) getStudyDAO().findByPK(studyId);
         ArrayList<EventDefinitionCRFBean> eventDefCrfs = null;
         ArrayList<EventDefinitionCRFBean> parentEventDefCrfs = new ArrayList<EventDefinitionCRFBean>();
