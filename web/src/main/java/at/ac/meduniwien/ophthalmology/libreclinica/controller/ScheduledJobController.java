@@ -213,7 +213,7 @@ public class ScheduledJobController {
             @RequestParam("theJobGroupName") String theJobGroupName,
             @RequestParam("theTriggerName") String triggerName,
             @RequestParam("theTriggerGroupName") String triggerGroupName,
-            @RequestParam(value = "redirection", required = false) String redirection, ModelMap model) throws SchedulerException {
+            @RequestParam(value = "redirection", required = false) String redirection) throws SchedulerException {
 
         if (!mayProceed(request)) {
             redirectToMainMenu(request, response);

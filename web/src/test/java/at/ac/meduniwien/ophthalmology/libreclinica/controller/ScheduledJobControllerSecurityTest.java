@@ -26,7 +26,6 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.ui.ModelMap;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -69,7 +68,7 @@ class ScheduledJobControllerSecurityTest {
     void anOrdinaryUserCannotCancelAJob() throws Exception {
         MockHttpServletResponse resp = new MockHttpServletResponse();
         controller.cancelScheduledJob(post(UserType.USER), resp, "job", "group", "trigger", "tgroup",
-                "listCurrentScheduledJobs", new ModelMap());
+                "listCurrentScheduledJobs");
 
         verifyNoInteractions(scheduler);
         assertTrue(resp.getRedirectedUrl().contains("/MainMenu"));
@@ -88,7 +87,7 @@ class ScheduledJobControllerSecurityTest {
     void anAdministratorCancelsAndReturnsToTheJobList() throws Exception {
         MockHttpServletResponse resp = new MockHttpServletResponse();
         controller.cancelScheduledJob(post(UserType.SYSADMIN), resp, "job", "group", "trigger", "tgroup",
-                "../WEB-INF/jsp/login/login.jsp", new ModelMap());
+                "../WEB-INF/jsp/login/login.jsp");
 
         verify(scheduler).getTrigger(new TriggerKey("trigger", "tgroup"));
         assertEquals("/pages/listCurrentScheduledJobs", resp.getForwardedUrl());

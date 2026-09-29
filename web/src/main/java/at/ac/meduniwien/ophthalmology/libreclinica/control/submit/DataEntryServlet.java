@@ -3154,7 +3154,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
             // A hidden, empty, non-SCD item is not written. Double data entry
             // included: see DDE_SHOWS_WHAT_INITIAL_ENTRY_SHOWED.
             if (!dib.getMetadata().isShowItem() &&
-                    idb.getValue().equals("") &&
+                    idb.getValue().isEmpty() &&
                     !getItemMetadataService().isShown(dib.getItem().getId(), ecb, dib.getData()) &&
                     !(dib.getScdData().getScdItemMetadataBean().getScdItemFormMetadataId()>0)) {
                 LOGGER.debug("*** not shown - not writing for idb id " + dib.getData().getId() + " and item id " + dib.getItem().getId());
