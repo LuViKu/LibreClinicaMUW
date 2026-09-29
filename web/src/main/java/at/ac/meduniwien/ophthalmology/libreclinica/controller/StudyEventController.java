@@ -160,7 +160,7 @@ public class StudyEventController {
 					if (eventDefCrf.getParicipantForm()) {
 						eventCrf.setStatusId(Status.UNAVAILABLE.getCode());
 						eventCrfDao.saveOrUpdate(eventCrf);					
-					} else if (eventCrf.getStatusId() != Status.UNAVAILABLE.getCode()) completeStudyEvent = false;
+					} else if (!Status.UNAVAILABLE.getCode().equals(eventCrf.getStatusId())) completeStudyEvent = false;
 				}
 			}
 			if (!foundEventCrfMatch && !eventDefCrf.getParicipantForm()) completeStudyEvent = false;
