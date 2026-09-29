@@ -78,7 +78,17 @@ public class InitUpdateEventDefinitionServlet extends SecureController {
 
         // To Do: the following code doesn't apply to admin for now
         String idString = request.getParameter("id");
-        int defId = Integer.valueOf(idString.trim()).intValue();
+        // Without a usable ?id= there is no definition whose population we
+        // could check, and processRequest() below already answers that case
+        // with "please choose a definition to edit". Returning here keeps that
+        // outcome instead of throwing NullPointerException (id absent) or
+        // NumberFormatException (id non-numeric) out of mayProceed().
+        int defId;
+        try {
+            defId = Integer.parseInt(idString.trim());
+        } catch (NullPointerException | NumberFormatException e) {
+            return;
+        }
         logger.info("defId" + defId);
         ArrayList<StudyEventBean> events = sdao.findAllByDefinition(defId);
         if (events != null && events.size() > 0) {
@@ -101,12 +111,22 @@ public class InitUpdateEventDefinitionServlet extends SecureController {
         StudyEventDefinitionDAO sdao = new StudyEventDefinitionDAO(sm.getDataSource());
         String idString = request.getParameter("id");
         logger.info("definition id: " + idString);
-        if (idString == null || idString.trim().isEmpty()) {
+        // A non-numeric id is as unusable as a missing one, so it takes the
+        // same branch instead of raising a NumberFormatException.
+        int defId = 0;
+        boolean defIdUsable = false;
+        if (idString != null && !idString.trim().isEmpty()) {
+            try {
+                defId = Integer.parseInt(idString.trim());
+                defIdUsable = true;
+            } catch (NumberFormatException nfe) {
+                defIdUsable = false;
+            }
+        }
+        if (!defIdUsable) {
             addPageMessage(respage.getString("please_choose_a_definition_to_edit"));
             forwardPage(Page.LIST_DEFINITION_SERVLET);
         } else {
-            // definition id
-            int defId = Integer.valueOf(idString.trim()).intValue();
             StudyEventDefinitionBean sed = (StudyEventDefinitionBean) sdao.findByPK(defId);
             StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();

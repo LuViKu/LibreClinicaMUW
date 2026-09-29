@@ -335,8 +335,16 @@ public class CreateFiltersTwoServlet extends SecureController {
             String title = (String) en.nextElement();
             if (title.startsWith("ID")) {
                 String newId = title.replaceAll("ID", "");
-                Integer ifmId = Integer.valueOf(newId);
-                retMe.add(ifmId);
+                try {
+                    retMe.add(Integer.valueOf(newId));
+                } catch (NumberFormatException nfe) {
+                    // Parameter *names* are attacker-chosen, and every name
+                    // that merely starts with "ID" lands here (e.g.
+                    // "IDENTIFIER" reduces to "ENTIFIER"). A name that is not
+                    // a number cannot denote an item id, so it is skipped —
+                    // the same result as it not having been sent at all.
+                    logger.debug("ignoring request parameter with non-numeric ID suffix: " + title);
+                }
             }
         }
         return retMe;
