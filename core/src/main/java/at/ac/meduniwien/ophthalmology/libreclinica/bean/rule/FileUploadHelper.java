@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -107,6 +108,26 @@ public class FileUploadHelper {
     }
 
     /**
+     * The directory used when a caller names none, created so that only this
+     * process's user can read it.
+     *
+     * <p>The fallback used to be {@code java.io.tmpdir} itself, which is shared
+     * and world-readable on a normal POSIX host, so an upload that arrived
+     * without a target directory left its contents readable by every local
+     * account. The CRF data import reaches this path: it calls returnFiles
+     * without a directory, and what it uploads is clinical data.
+     *
+     * <p>{@link Files#createTempDirectory} applies owner-only permissions where
+     * the platform has them, so the file below inherits a directory nobody else
+     * can traverse. One directory is made per call and the caller owns what it
+     * gets back, as before.
+     */
+    // package-private so FileUploadHelperTempDirectoryTest can assert the permissions
+    File privateUploadDirectory() throws IOException {
+        return Files.createTempDirectory("libreclinica-upload-").toFile();
+    }
+
+    /**
      * Writes one uploaded part into the upload directory.
      *
      * <p>The multipart name is the client's, so only its last segment is taken
@@ -118,8 +139,9 @@ public class FileUploadHelper {
      * name it rejects.
      */
     private File processUploadedFile(DiskFileItem item, String dirToSaveUploadedFileIn) throws IOException {
-        dirToSaveUploadedFileIn = dirToSaveUploadedFileIn == null ? System.getProperty("java.io.tmpdir") : dirToSaveUploadedFileIn;
-        File directory = new File(dirToSaveUploadedFileIn);
+        File directory = dirToSaveUploadedFileIn == null
+                ? privateUploadDirectory()
+                : new File(dirToSaveUploadedFileIn);
         String fileName = SecureFilePaths.safeUploadName(item.getName());
         if (fileName == null) {
             throw new OpenClinicaSystemException("uploaded file has no usable file name");
