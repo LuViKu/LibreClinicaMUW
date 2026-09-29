@@ -17,13 +17,19 @@ import java.util.List;
 import java.util.Locale;
 
 import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfFlagDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfFlagWorkflowDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.IdtViewDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataFlagDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataFlagWorkflowDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlag;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlagWorkflow;
@@ -82,7 +88,7 @@ public class IdtViewController {
 
     @RequestMapping(value = "/sdv/{filternumber}/{studyoid}/paginated", params = { "page", "per_page" }, method = RequestMethod.GET)
     public ResponseEntity<List<IdtView>> getPaginatedIdtViewData(@PathVariable("filternumber") String filterNumber, @PathVariable("studyoid") String studyOid,
-            @RequestParam("page") int page, @RequestParam("per_page") int per_page) throws Exception {
+            @RequestParam("page") int page, @RequestParam("per_page") int per_page, HttpServletRequest request) throws Exception {
         ResourceBundleProvider.updateLocale(Locale.US);
         List<IdtView> idtDTO = null;
         if (page == 0) {
@@ -94,9 +100,28 @@ public class IdtViewController {
 
         logger.debug("I'm in getPaginatedIdtViewData");
 
-        StudyBean parentStudy = getParentStudy(studyOid);
-        Integer pStudyId = parentStudy.getId();
-        Integer studyId = getStudy(studyOid).getId();
+        HttpSession session = request.getSession(false);
+        UserAccountBean user = session == null ? null : (UserAccountBean) session.getAttribute("userBean");
+        if (user == null || user.getId() == 0) {
+            return new ResponseEntity<List<IdtView>>(HttpStatus.UNAUTHORIZED);
+        }
+        StudyBean study = getStudy(studyOid);
+        if (study == null || study.getId() == 0) {
+            return new ResponseEntity<List<IdtView>>(HttpStatus.NOT_FOUND);
+        }
+        // The listing returns item data of every subject in the study (or
+        // site); the caller needs a live role there. Until 2026-09 any API
+        // key could read any study's.
+        List<StudyUserRoleBean> roles = user.isSysAdmin() ? List.of() : new UserAccountDAO(dataSource).findAllRolesByUserName(user.getName());
+        if (!mayViewStudy(user, study, roles)) {
+            logger.warn("SDV item-data listing refused: user {} has no live role on study {}", user.getId(), study.getId());
+            return new ResponseEntity<List<IdtView>>(HttpStatus.FORBIDDEN);
+        }
+        StudyBean parentStudy = getParentStudy(study);
+        // int, not Integer: the heritage boxed ids compared by reference, so a
+        // parent study above id 127 was queried as if it were a site.
+        int pStudyId = parentStudy.getId();
+        int studyId = study.getId();
 
         ArrayList<String> studySubjects = new ArrayList<>();
         // studySubjects.add("Sub B 101");
@@ -113,18 +138,44 @@ public class IdtViewController {
         int tagId = 1;
         int filter = Integer.valueOf(filterNumber);
 
-        if (studyId == pStudyId) {
-            // parent Study
-            if (filter == 1) {
-                idtDTO = getIdtViewDao().findFilter1(studyId, pStudyId, per_page, page, studySubjects, studyEventDefinitions, crfs, tagId, "OR");
-            }
-        } else {
-            // Site
-            if (filter == 1) {
-                idtDTO = getIdtViewDao().findFilter1(studyId, pStudyId, per_page, page, studySubjects, studyEventDefinitions, crfs, tagId, "AND");
-            }
+        if (filter == 1) {
+            idtDTO = getIdtViewDao().findFilter1(studyId, pStudyId, per_page, page, studySubjects, studyEventDefinitions, crfs, tagId,
+                    studyScopeOperator(studyId, pStudyId));
         }
         return new ResponseEntity<List<IdtView>>(idtDTO, HttpStatus.OK);
+    }
+
+    /**
+     * How the listing's query combines the study and parent-study conditions:
+     * a parent study lists its own rows and its sites' ("OR"), a site only its
+     * own ("AND").
+     */
+    static String studyScopeOperator(int studyId, int parentStudyId) {
+        return studyId == parentStudyId ? "OR" : "AND";
+    }
+
+    /**
+     * Whether {@code user} may list {@code study}'s item data: a system
+     * administrator, or a user with an AVAILABLE role on the study itself or,
+     * for a site, on its parent study. A role on a site alone does not open
+     * the parent study.
+     */
+    static boolean mayViewStudy(UserAccountBean user, StudyBean study, List<StudyUserRoleBean> roles) {
+        if (user == null || user.getId() == 0 || study == null || study.getId() == 0) {
+            return false;
+        }
+        if (user.isSysAdmin()) {
+            return true;
+        }
+        for (StudyUserRoleBean role : roles) {
+            if (role == null || role.getStatus() == null || role.getStatus().getId() != Status.AVAILABLE.getId()) {
+                continue;
+            }
+            if (role.getStudyId() == study.getId() || study.getParentStudyId() > 0 && role.getStudyId() == study.getParentStudyId()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @RequestMapping(value = "/", method = RequestMethod.POST)
@@ -233,15 +284,12 @@ public class IdtViewController {
         return studyBean;
     }
 
-    private StudyBean getParentStudy(String studyOid) {
-        StudyBean study = getStudy(studyOid);
+    private StudyBean getParentStudy(StudyBean study) {
         if (study.getParentStudyId() == 0) {
             return study;
         } else {
-            StudyBean parentStudy = (StudyBean) sdao.findByPK(study.getParentStudyId());
-            return parentStudy;
+            return (StudyBean) new StudyDAO(dataSource).findByPK(study.getParentStudyId());
         }
-
     }
 
     public IdtViewDao getIdtViewDao() {
