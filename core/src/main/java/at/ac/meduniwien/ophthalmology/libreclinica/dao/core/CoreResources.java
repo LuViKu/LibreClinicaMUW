@@ -27,7 +27,6 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExtractPropertyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.PdfProcessingFunction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.SasProcessingFunction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.SqlProcessingFunction;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
@@ -723,17 +722,22 @@ public class CoreResources implements ResourceLoaderAware {
                     epbean.setPostProcessing(function);
                     // System.out.println("found db password: " + function.getDatabasePassword());
                 } else if ("pdf".equals(whichFunction)) {
-                    epbean.setPostProcessing(new PdfProcessingFunction());
+                    // The Apache FOP post-processor was removed: see the note on
+                    // the "pdf" post-processor in extract.properties. Say so
+                    // plainly rather than failing the extract or, worse, running
+                    // it and quietly producing no PDF.
+                    logger.warn("extract.{}.post asks for PDF post-processing, which this release no longer provides."
+                            + " The extract itself still runs; no PDF is produced. Remove the setting to silence this.", i);
+                    epbean.setPostProcessing(null);
                 } else if ("sas".equals(whichFunction)) {
                     epbean.setPostProcessing(new SasProcessingFunction());
                 } else if (!whichFunction.isEmpty()) {
                     String postProcessorName = getExtractField(whichFunction + ".postProcessor");
                     if (postProcessorName.equals("pdf")) {
-                        epbean.setPostProcessing(new PdfProcessingFunction());
-                        epbean.setPostProcDeleteOld(getExtractFieldBoolean(whichFunction + ".deleteOld"));
-                        epbean.setPostProcZip(getExtractFieldBoolean(whichFunction + ".zip"));
-                        epbean.setPostProcLocation(getExtractField(whichFunction + ".location"));
-                        epbean.setPostProcExportName(getExtractField(whichFunction + ".exportname"));
+                        // Removed with Apache FOP; see the branch above.
+                        logger.warn("extract.{}.post names {}, whose postProcessor is \"pdf\". PDF post-processing was"
+                                + " removed from this release. The extract itself still runs; no PDF is produced.", i, whichFunction);
+                        epbean.setPostProcessing(null);
                     }
                     // since the database is the last option TODO: think about custom post processing options
                     else {

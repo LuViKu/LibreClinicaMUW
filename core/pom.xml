@@ -74,16 +74,6 @@
 			<groupId>org.springframework</groupId>
 			<artifactId>spring-web</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.apache.xmlgraphics</groupId>
-			<artifactId>fop</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>xml-apis</groupId>
-                    <artifactId>xml-apis-ext</artifactId>
-                </exclusion>
-            </exclusions>
-		</dependency>
 		<!-- xalan:serializer pin removed 2026-05-29 (Phase B.4 smoke-bundle
 		     branch): Castor was deleted in PR #28 so the marshaller path
 		     that needed org.apache.xml.serializer.* no longer exists, and
@@ -303,10 +293,22 @@
 			<artifactId>pdfbox2-layout</artifactId>
 			<version>1.0.1</version>
 		</dependency>
+		<!-- 2026-09-29: 30.0-jre -> 33.4.8-jre for CVE-2023-2976 (files and
+		     directories created by Files.createTempDir and
+		     FileBackedOutputStream were readable by other local users), fixed
+		     in 32.0.0, and CVE-2020-8908 on the same class of defect. Neither
+		     API is called here.
+		     The whole of this project's guava use is @VisibleForTesting, at
+		     eight sites, and one Joiner/Splitter expression in TwoFactorService
+		     that groups the shared secret into blocks of four. Guava could
+		     therefore be dropped outright instead of bumped, which would also
+		     retire failureaccess, checkerframework-qual, error_prone_annotations
+		     and j2objc-annotations from the WAR; that is left as a separate
+		     change so this security batch stays version-only. -->
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
-			<version>30.0-jre</version>
+			<version>33.4.8-jre</version>
 		</dependency>
 		<!-- Phase E.5 #5: mockito-all (legacy 1.x umbrella artifact) replaced
 		     with mockito-core; version managed by spring-boot-dependencies BOM
@@ -382,8 +384,6 @@
                   		<ignoredUsedUndeclaredDependency>org.apache.pdfbox:pdfbox</ignoredUsedUndeclaredDependency>
                		</ignoredUsedUndeclaredDependencies>
 					<ignoredUnusedDeclaredDependencies>
-						<!-- Needed by LibreClinica-web when HttpComponentsClientHttpRequestFactory is used-->
-						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LOGBACK when conditional statements are used (e.g. in logback.xml) -->
 						<ignoredUnusedDeclaredDependency>org.codehaus.janino</ignoredUnusedDeclaredDependency>
 						<!-- log4jdbc4 is a runtime JDBC interceptor loaded via Class.forName by the

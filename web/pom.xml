@@ -543,8 +543,6 @@
 						<ignoredUnusedDeclaredDependency>oro:oro</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LibreClinica-web REST services JSON encoding -->
 						<ignoredUnusedDeclaredDependency>xom:xom</ignoredUnusedDeclaredDependency>
-						<!-- Needed by LibreClinica-web when HttpComponentsClientHttpRequestFactory is used-->
-						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LibreClinica-web when docs module resources are used to pack the pdf manuals -->
 						<ignoredUnusedDeclaredDependency> at.ac.meduniwien.ophthalmology.libreclinica:LibreClinica-docs</ignoredUnusedDeclaredDependency>
 						<!-- Phase C.1: Spring Boot web starter — brings the embedded
