@@ -382,6 +382,23 @@ public class Validator {
 
     public static final ValidatorRegularExpression EMAIL = new ValidatorRegularExpression("username@institution.domain", ".+@.+\\..*");
 
+    /**
+     * Longest e-mail address accepted (RFC 5321 path limit minus the angle
+     * brackets). The {@link #EMAIL} pattern backtracks polynomially on long
+     * input, and it runs on unauthenticated forms (Contact, RequestPassword,
+     * RequestAccount), so the length is checked before the pattern.
+     */
+    public static final int MAX_EMAIL_LENGTH = 254;
+
+    /**
+     * Longest value any regular-expression validation is run against. The
+     * widest column a regex-validated field is stored in is
+     * {@code item_data.value} (4000 characters; data entry caps text at
+     * 3999), so no legitimate value is longer. Longer input fails the
+     * validation without being handed to the regex engine.
+     */
+    public static final int MAX_REGEX_INPUT_LENGTH = 4000;
+
     // public static final ValidatorRegularExpression PHONE_NUMBER = new
     // ValidatorRegularExpression(
     // "123-456-7890", "[0-9]{3}[\\-\\.][0-9]{3}[\\-\\.][0-9]{4}");
@@ -661,11 +678,14 @@ public class Validator {
                 Validation v = (Validation) fieldValidations.get(i);
                 logger.debug("fieldName=" + fieldName);
                 validate(fieldName, v);
+                // The value itself is not logged: fields include passwords
+                // and CRF item data.
                 if (errors.containsKey(fieldName)) {
-                    logger.debug("found an error for " + fieldName + " v-type: " + v.getType() + " " + v.getErrorMessage() + ": " + getFieldValue(fieldName));
+                    logger.debug("found an error for " + fieldName + " v-type: " + v.getType() + " " + v.getErrorMessage() + ": "
+                        + describeLength(getFieldValue(fieldName)));
                 } else {
                     logger.debug("did NOT find an error for " + fieldName + " v-type: " + v.getType() + " " + v.getErrorMessage() + ": "
-                        + getFieldValue(fieldName));
+                        + describeLength(getFieldValue(fieldName)));
                 }
             }
         }
@@ -1147,6 +1167,10 @@ break;
     /*
      * Instead of rewriting the whole Validation do this.
      */
+    private static String describeLength(String value) {
+        return value == null ? "no value" : value.length() + " characters";
+    }
+
     protected String getFieldValue(String fieldName) {
         return request.getParameter(fieldName) == null ? request.getAttribute(fieldName) == null ? null : request.getAttribute(fieldName).toString() : request
                 .getParameter(fieldName);
@@ -1404,6 +1428,10 @@ break;
     }
 
     protected boolean isEmail(String fieldName) {
+        String fieldValue = getFieldValue(fieldName);
+        if (fieldValue == null || fieldValue.length() > MAX_EMAIL_LENGTH) {
+            return false;
+        }
         return matchesRegex(fieldName, EMAIL);
     }
 
@@ -1557,7 +1585,7 @@ break;
     protected boolean matchesRegex(String fieldName, ValidatorRegularExpression re) {
         String fieldValue = getFieldValue(fieldName);
 
-        if (fieldValue == null) {
+        if (fieldValue == null || fieldValue.length() > MAX_REGEX_INPUT_LENGTH) {
             return false;
         }
 
@@ -1824,7 +1852,7 @@ break;
             }
             return false;
         }
-        logger.debug("value matches initial: found " + oldValue + " versus " + fieldValue);
+        logger.debug("value matches initial: comparing " + describeLength(oldValue) + " against " + describeLength(fieldValue));
         return fieldValue.equals(oldValue);
     }
 

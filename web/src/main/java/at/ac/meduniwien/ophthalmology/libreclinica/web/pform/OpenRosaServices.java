@@ -43,6 +43,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.ResponseBuilder;
 import jakarta.ws.rs.core.StreamingOutput;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
@@ -568,7 +569,7 @@ public class OpenRosaServices {
 
     	NamedNodeMap attribs = fetchXformAttributes(xform);
     	InputStream is = new ByteArrayInputStream(xform.getBytes());
-    	DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    	DocumentBuilderFactory factory = SecureXmlFactories.newDocumentBuilderFactory();
     	factory.setNamespaceAware(false);
     	Document doc = factory.newDocumentBuilder().parse(is);
 
@@ -620,7 +621,7 @@ public class OpenRosaServices {
 
 	private NamedNodeMap fetchXformAttributes(String xform) throws Exception {
     	InputStream is = new ByteArrayInputStream(xform.getBytes());
-    	DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    	DocumentBuilderFactory factory = SecureXmlFactories.newDocumentBuilderFactory();
     	factory.setNamespaceAware(true);
     	Document doc = factory.newDocumentBuilder().parse(is);
         Element html = doc.getDocumentElement();

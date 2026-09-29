@@ -46,9 +46,11 @@ public class ItemDao extends AbstractDomainDao<Item> {
 
     @SuppressWarnings("rawtypes")
     public Item findByNameCrfId(String name, Integer crfId) {
-        String query = "select distinct i.* from item i, item_form_metadata ifm,crf_version cv " + "where i.name= '" + name + "' and i.item_id= ifm.item_id "
-                + "and ifm.crf_version_id=cv.crf_version_id " + "and cv.crf_id=" + crfId;
+        String query = "select distinct i.* from item i, item_form_metadata ifm,crf_version cv " + "where i.name = :name and i.item_id= ifm.item_id "
+                + "and ifm.crf_version_id=cv.crf_version_id " + "and cv.crf_id = :crfId";
         NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(Item.class);
+        q.setParameter("name", name, String.class);
+        q.setParameter("crfId", crfId, Integer.class);
         return ((Item) q.getSingleResultOrNull());
     }
     

@@ -10,18 +10,11 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.control.extract;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ArchivedDatasetFileBean;
@@ -46,11 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.ArchivedDatasetFileRow;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.job.XalanTriggerService;
-import org.quartz.SchedulerException;
-import org.quartz.SimpleTrigger;
-import org.quartz.impl.StdScheduler;
-import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 
 /**
  * Take a dataset and show it in different formats,<BR/> Detect whether or not
@@ -76,9 +64,6 @@ public class ExportDatasetServlet extends SecureController {
         return "ExportDataset?datasetId=" + dsId;
     }
 
-    private StdScheduler scheduler;
-
-    private static String SCHEDULER = "schedulerFactoryBean";
     private static final String DATASET_DIR = SQLInitServlet.getField("filePath") + "datasets" + File.separator;
     
     // may not use the above, security issue
@@ -224,36 +209,6 @@ public class ExportDatasetServlet extends SecureController {
                 }
                 request.setAttribute("generate", generalFileDir + ODMXMLFileName);
                 logger.debug("+++ set the following: " + generalFileDir + ODMXMLFileName);
-                // >> tbh #xslt working group
-                // put an extra flag here, where we generate the XML, and then find the XSL, run a job and
-                // send a link with the SQL file? put the generated SQL file with the dataset?
-                if (fp.getString("xalan") != null) {
-                    XalanTriggerService xts = new XalanTriggerService();
-
-                    String propertiesPath = SQLInitServlet.getField("filePath");
-
-                    // the trick there, we need to open up the zipped file and get at the XML
-                    openZipFile(generalFileDir + ODMXMLFileName + ".zip");
-                    // need to find out how to copy this xml file from /bin to the generalFileDir
-                    SimpleTrigger simpleTrigger = xts.generateXalanTrigger(propertiesPath + File.separator + "ODMReportStylesheet.xsl",
-                            ODMXMLFileName,
-                            generalFileDir + "output.sql", db.getId());
-                    scheduler = getScheduler();
-
-                    JobDetailFactoryBean jobDetailBean = new JobDetailFactoryBean();
-                    jobDetailBean.setGroup(XalanTriggerService.TRIGGER_GROUP_NAME);
-                    jobDetailBean.setName(simpleTrigger.getKey().getName());
-                    jobDetailBean.setJobClass(at.ac.meduniwien.ophthalmology.libreclinica.web.job.XalanStatefulJob.class);
-                    jobDetailBean.setJobDataMap(simpleTrigger.getJobDataMap());
-                    jobDetailBean.setDurability(true); // need durability?
-
-                    try {
-                        Date dateStart = scheduler.scheduleJob(jobDetailBean.getObject(), simpleTrigger);
-                        logger.info("== found job date: " + dateStart.toString());
-                    } catch (SchedulerException se) {
-                        logger.error("job cannot be fetched: ", se);
-                    }
-                }
             } else if ("txt".equalsIgnoreCase(action)) {
                 // generateReport =
                 // dsdao.generateDataset(db,
@@ -465,37 +420,6 @@ public class ExportDatasetServlet extends SecureController {
         return adfb;
     }
 
-    private void openZipFile(String fileName) {
-        try {
-            ZipFile zipFile = new ZipFile(fileName);
-
-            Enumeration<? extends ZipEntry> entries = zipFile.entries();
-
-            while(entries.hasMoreElements()) {
-              ZipEntry entry = (ZipEntry)entries.nextElement();
-
-              if(entry.isDirectory()) {
-                // Assume directories are stored parents first then children.
-                logger.debug("Extracting directory: " + entry.getName());
-                // This is not robust, just for demonstration purposes.
-                (new File(entry.getName())).mkdir();
-                // no dirs necessary?
-                continue;
-              }
-
-              logger.debug("Extracting file: " + entry.getName());
-              // System.out.println("Writing to dir " + targetDir);
-              copyInputStream(zipFile.getInputStream(entry),
-                 new java.io.BufferedOutputStream(new java.io.FileOutputStream(entry.getName())));
-            }
-
-            zipFile.close();
-          } catch (java.io.IOException ioe) {
-            logger.error("Unhandled exception:", ioe);
-            return;
-          }
-    }
-
     public void loadList(DatasetBean db, ArchivedDatasetFileDAO asdfdao, int datasetId, FormProcessor fp, ExtractBean eb) {
         logger.info("action is blank");
         request.setAttribute("dataset", db);
@@ -569,23 +493,5 @@ public class ExportDatasetServlet extends SecureController {
 
         logger.warn("just set file list to request, sending to page");
 
-    }
-
-    private StdScheduler getScheduler() {
-        scheduler = this.scheduler != null ? scheduler : (StdScheduler) SpringServletAccess.getApplicationContext(context).getBean(SCHEDULER);
-        return scheduler;
-    }
-
-    private static final void copyInputStream(InputStream in, OutputStream out)
-    throws IOException
-    {
-      byte[] buffer = new byte[1024];
-      int len = 0;
-
-      while((len = in.read(buffer)) > 0)
-        out.write(buffer, 0, len);
-
-      in.close();
-      out.close();
     }
 }

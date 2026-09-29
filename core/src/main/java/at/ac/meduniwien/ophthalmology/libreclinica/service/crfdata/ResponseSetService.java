@@ -13,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
@@ -157,7 +158,7 @@ public class ResponseSetService {
 
         // Use the XPath built into the ItemSet definition to mine the XML Xform for the list of items
         // contained in this ItemSet.
-        DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory builderFactory = SecureXmlFactories.newDocumentBuilderFactory();
         DocumentBuilder builder = builderFactory.newDocumentBuilder();
         XPath xPath = XPathFactory.newInstance().newXPath();
         Document xml = builder.parse(new ByteArrayInputStream(submittedXformText.getBytes(StandardCharsets.UTF_8)));
@@ -240,7 +241,7 @@ public class ResponseSetService {
 
         // Use the XPath built into the ItemSet definition to mine the XML Xform for the list of items
         // contained in this ItemSet.
-        DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory builderFactory = SecureXmlFactories.newDocumentBuilderFactory();
         DocumentBuilder builder = builderFactory.newDocumentBuilder();
         XPath xPath = XPathFactory.newInstance().newXPath();
         Document xml = builder.parse(new ByteArrayInputStream(submittedXformText.getBytes(StandardCharsets.UTF_8)));

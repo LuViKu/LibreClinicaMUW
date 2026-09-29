@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import javax.xml.parsers.DocumentBuilderFactory;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Utils;
@@ -39,6 +39,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.XformMetaDataService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.io.SecureFilePaths;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 // Phase B.4 cliff: commons-fileupload 1.x → commons-fileupload2-jakarta-servlet6.
@@ -184,7 +185,7 @@ public class CreateXformCRFVersionServlet extends SecureController {
         Document doc = null;
         try {
             InputStream stream = new ByteArrayInputStream(xform.getBytes(StandardCharsets.UTF_8));
-            doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(stream);
+            doc = SecureXmlFactories.newDocumentBuilderFactory().newDocumentBuilder().parse(stream);
 
             NodeList instances = doc.getElementsByTagName("instance");
 
@@ -256,6 +257,17 @@ public class CreateXformCRFVersionServlet extends SecureController {
         return "";
     }
 
+    /**
+     * Writes the media parts of an XForm upload into the CRF version's media
+     * directory.
+     *
+     * <p>Each part's name is the client's, so only its last segment is used as
+     * a file name and the result has to stay in the media directory. A part
+     * whose name survives neither test is skipped with a warning rather than
+     * failing the upload: the caller has already saved the CRF version by this
+     * point and goes straight on to forward the page, so aborting here would
+     * leave the version stored without the media the rest of the parts carry.
+     */
     private void saveAttachedMedia(List<DiskFileItem> items, CrfBean crf, CrfVersion version) {
         boolean hasFiles = false;
         for (DiskFileItem item : items) {
@@ -271,18 +283,22 @@ public class CreateXformCRFVersionServlet extends SecureController {
                 logger.debug("Made the directory " + dir);
             }
             // Save any media files
+            File mediaDirectory = new File(dir);
             for (DiskFileItem item : items) {
                 if (!item.isFormField()) {
 
-                    String fileName = item.getName();
-                    // Some browsers IE 6,7 getName returns the whole path
-                    int startIndex = fileName.lastIndexOf('\\');
-                    if (startIndex != -1) {
-                        fileName = fileName.substring(startIndex + 1, fileName.length());
+                    String fileName = SecureFilePaths.safeUploadName(item.getName());
+                    if (fileName == null) {
+                        logger.warn("Skipped an attached media part: it carries no usable file name.");
+                        continue;
                     }
 
-                    File uploadedFile = new File(dir + File.separator + fileName);
+                    File uploadedFile = new File(mediaDirectory, fileName);
                     try {
+                        if (!SecureFilePaths.isInside(uploadedFile, mediaDirectory)) {
+                            logger.warn("Skipped an attached media part: its name leaves the media directory.");
+                            continue;
+                        }
                         // fileupload2: FileItem.write takes a Path, not a File.
                         item.write(uploadedFile.toPath());
                     } catch (Exception e) {

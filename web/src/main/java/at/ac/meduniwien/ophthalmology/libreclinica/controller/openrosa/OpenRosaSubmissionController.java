@@ -32,6 +32,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Study;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameterValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.io.SecureFilePaths;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.PFormCache;
 // Phase B.4 cliff: commons-fileupload 1.x → commons-fileupload2-jakarta-servlet6.
@@ -212,6 +213,30 @@ public class OpenRosaSubmissionController {
         return basePath;
     }
 
+    /**
+     * Stores one attachment of an OpenRosa submission under the study's
+     * attached-file directory.
+     *
+     * <p>When that directory cannot be used the submission fails rather than
+     * the attachment going somewhere else. The method used to fall back to the
+     * temp directory, but built the file as {@code <temp>/<study oid>/<name>}
+     * under a directory it never created, so the write threw and the fallback
+     * never actually stored anything. Making it store the file instead would
+     * put an attachment outside the file store while the submission is
+     * recorded as accepted, which is worse than refusing it.
+     *
+     * <p>The directory is settled first, and {@code targetDirectory} is then
+     * both where the file goes and the directory it is checked against. The
+     * two used to come apart: the study directory was checked against the
+     * attached-file base, the temp-directory fallback afterwards replaced that
+     * base, and the second check then compared the file against a base it had
+     * never been built from. The attachment's name is reduced to its last
+     * segment, so a name carrying separators cannot steer the file out of the
+     * directory to begin with.
+     *
+     * @return the stored file, or {@code null} when the name is unusable; the
+     *         caller records the path only for an attachment it gets back
+     */
     private File processUploadedFile(DiskFileItem item, String studyOid) {
 
         String basePath = getAttachedFilePath();
@@ -219,36 +244,27 @@ public class OpenRosaSubmissionController {
         String studyAttachedFileRelDir = studyOid + File.separator;
         String normalisedFilePath = Paths.get(studyAttachedFileRelDir).normalize().toString();
 
-        File dir = new File(basePath, normalisedFilePath);
+        File attachedFileBase = new File(basePath);
+        File targetDirectory = new File(attachedFileBase, normalisedFilePath);
         try {
-            if (dir.getCanonicalPath().startsWith(new File(basePath).getCanonicalPath())) {
-                if (!dir.exists()) {
-                    dir.mkdirs();
-                }
+            if (!SecureFilePaths.isInside(targetDirectory, attachedFileBase)) {
+                throw new OpenClinicaSystemException(
+                        "the study's attached-file directory is not inside the attached-file directory");
+            }
+            if (!targetDirectory.exists() && !targetDirectory.mkdirs() && !targetDirectory.exists()) {
+                throw new OpenClinicaSystemException(
+                        "cannot create the study's attached-file directory for the submitted attachment");
             }
         } catch (IOException e) {
             logger.debug(e.getMessage(), e);
             throw new OpenClinicaSystemException("Unable to read file or dictionary", e);
         }
 
-        String fileName = item.getName();
-        // Some browsers IE 6,7 getName returns the whole path
-        int startIndex = fileName.lastIndexOf('\\');
-        if (startIndex != -1) {
-            fileName = fileName.substring(startIndex + 1);
-        }
-
-        if (!dir.exists()) {
-            basePath = System.getProperty("java.io.tmpdir");
-        }
-
-        String studyAttachedUploadedFileRelDir = studyAttachedFileRelDir + fileName;
-        String normalisedUploadedFilePath = Paths.get(studyAttachedUploadedFileRelDir).normalize().toString();
-
-        File uploadedFile = new File(basePath, normalisedUploadedFilePath);
+        String fileName = SecureFilePaths.safeUploadName(item.getName());
+        File uploadedFile = fileName == null ? null : new File(targetDirectory, fileName);
 
         try {
-            if (uploadedFile.getCanonicalPath().startsWith(new File(basePath).getCanonicalPath())) {
+            if (uploadedFile != null && SecureFilePaths.isInside(uploadedFile, targetDirectory)) {
                 uploadedFile = new UploadFileServlet().new OCFileRename().rename(uploadedFile, item.getInputStream());
             } else {
                 uploadedFile = null;

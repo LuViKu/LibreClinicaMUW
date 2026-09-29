@@ -206,7 +206,9 @@ public class CreateFiltersTwoServlet extends SecureController {
             // also, throw the user back to the process or throw
             // them forward into the createServletThree process
             FormProcessor fp = new FormProcessor(request);
-            String logical = fp.getString("logical");
+            // The form offers "and" / "or" only; the connector is spliced into
+            // the filter SQL, so nothing else is passed on.
+            String logical = "or".equalsIgnoreCase(fp.getString("logical").trim()) ? "or" : "and";
             ArrayList<?> questions = (ArrayList<?>) session.getAttribute("questions");
             ArrayList<FilterObjectBean> filterobjects = new ArrayList<FilterObjectBean>();
             // (ArrayList)session.getAttribute("filterobjects");

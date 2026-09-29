@@ -20,6 +20,7 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.TreeSet;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -109,7 +110,7 @@ public class ItemProcessor implements Processor, Ordered {
         logger.info("Executing Item Processor.");
         ArrayList<HashMap<String,String>> listOfUploadFilePaths =container.getListOfUploadFilePaths();        
 
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory dbf = SecureXmlFactories.newDocumentBuilderFactory();
         DocumentBuilder db = dbf.newDocumentBuilder();
         InputSource is = new InputSource();
         is.setCharacterStream(new StringReader(container.getRequestBody()));
