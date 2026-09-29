@@ -9,7 +9,7 @@ name: Build
 # `gh workflow run build.yml --ref <branch>` or push to release/hotfix.
 on:
   push:
-    branches: [lc-develop, master, "release/**", "hotfix/**"]
+    branches: [lc-develop, main, "release/**", "hotfix/**"]
   workflow_dispatch:
 
 concurrency:

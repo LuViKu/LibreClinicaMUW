@@ -7,7 +7,7 @@ name: CodeQL
 # + per-merge runs catch regressions with much less spend.
 on:
   push:
-    branches: [lc-develop, master]
+    branches: [lc-develop, main]
   schedule:
     # Weekly Monday 06:00 UTC
     - cron: '0 6 * * 1'

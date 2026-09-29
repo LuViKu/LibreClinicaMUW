@@ -13,12 +13,18 @@
     server log → audit row chain stays unbroken.
   -->
   <property name="reqIdField" value="[%X{reqId:-}]"/>
+  <!-- The message with every CR and LF turned into a space, so a value that
+       reached a log call from a request cannot start a forged log line in the
+       plain-text appenders (CodeQL java/log-injection; code-scanning triage
+       2026-09-29). JSON_FILE escapes line breaks by design. Stack traces
+       (%ex) keep their line breaks. -->
+  <property name="safeMsg" value="%replace(%msg){'[\r\n]', ' '}"/>
   <property name="consolePattern"
-            value="%date{MM/dd HH:mm:ss.SSS} [%thread] ${reqIdField} %-5level %logger{35}:%L - %msg %n %ex{full}"/>
+            value="%date{MM/dd HH:mm:ss.SSS} [%thread] ${reqIdField} %-5level %logger{35}:%L - ${safeMsg} %n %ex{full}"/>
   <property name="filePatternBase"
             value="%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] ${reqIdField}"/>
   <property name="syslogSuffixPattern"
-            value="[%mdc{WEBAPP}] ${reqIdField} %mdc{USERNAME} %logger %msg"/>
+            value="[%mdc{WEBAPP}] ${reqIdField} %mdc{USERNAME} %logger ${safeMsg}"/>
 
   <!-- APPENDERS -->
   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -96,7 +102,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}]  %-5level %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}]  %-5level %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
     </encoder>
   </appender> -->
   
@@ -109,7 +115,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>${filePatternBase}  LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase}  LPR %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
     </encoder>
   </appender>
   
@@ -125,7 +131,7 @@
       <totalSizeCap>1GB</totalSizeCap>
     </rollingPolicy>
     <encoder>
-      <pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
     </encoder>
   </appender>
   
@@ -138,7 +144,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
     </encoder>
   </appender>
     	
@@ -153,7 +159,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} LPR %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file USER facility -->
@@ -166,7 +172,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} USER %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} USER %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file MAIL facility -->
@@ -180,7 +186,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} MAIL %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} MAIL %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file AUTH facility -->
@@ -193,7 +199,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} AUTH %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} AUTH %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file UUCP facility -->
@@ -206,7 +212,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} UUCP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} UUCP %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file CRON facility -->
@@ -219,7 +225,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} CRON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} CRON %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file AUTHPRIV facility -->
@@ -232,7 +238,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} AUTHPRIV %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} AUTHPRIV %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file DAEMON facility -->
@@ -246,7 +252,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} DAEMON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} DAEMON %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file NEWS facility -->
@@ -258,7 +264,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file FTP facility - to get logs excluded from other defined facilities -->
@@ -271,7 +277,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - ${safeMsg} %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Syslog LPR facility -->
