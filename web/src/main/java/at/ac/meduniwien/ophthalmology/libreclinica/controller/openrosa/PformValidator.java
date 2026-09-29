@@ -57,7 +57,7 @@ public class PformValidator implements Validator {
             case 5: { // ItemDataType.STRING
                     if (value.length()>3999){                   
                     e.reject("value.invalid.STRING");
-                    logger.info(value +"  ***   value.invalid.STRING    ** TEXT VALUE IS OVER 3999 Characters*");
+                    logRejected("value.invalid.STRING (over 3999 characters)", itemDataTypeId, value);
                     }
                 break;
             }
@@ -66,7 +66,7 @@ public class PformValidator implements Validator {
                     Integer.valueOf(value);
                 } catch (NumberFormatException nfe) {
                     e.reject("value.invalid.Integer");
-                    logger.info(value +"  ***value.invalid.INTEGER***");
+                    logRejected("value.invalid.INTEGER", itemDataTypeId, value);
                 }
                 break;
             }
@@ -75,14 +75,14 @@ public class PformValidator implements Validator {
                     Float.valueOf(value);
                 } catch (NumberFormatException nfe) {
                     e.reject("value.invalid.float");
-                    logger.info(value +"   ***value.invalid.REAL***");
+                    logRejected("value.invalid.REAL", itemDataTypeId, value);
                 }
                 break;
             }
             case 9: { // ItemDataType.DATE
                 if (!ExpressionTreeHelper.isDateyyyyMMddDashes(value)) {
                     e.reject("value.invalid.date");
-                    logger.info(value +"   ***value.invalid.DATE***");
+                    logRejected("value.invalid.DATE", itemDataTypeId, value);
                 }
                 break;
             }
@@ -90,7 +90,7 @@ public class PformValidator implements Validator {
                 if (!ExpressionTreeHelper.isDateyyyyMMddDashes(value) && !ExpressionTreeHelper.isDateyyyyMMDashes(value)
                         && !ExpressionTreeHelper.isDateyyyyDashes(value)) {
                     e.reject("value.invalid.pdate");
-                    logger.info(value +"  ***value.invalid.PDATE***");
+                    logRejected("value.invalid.PDATE", itemDataTypeId, value);
                 }
                 break;
             }
@@ -104,6 +104,15 @@ public class PformValidator implements Validator {
             }
 
         }
+    }
+
+    /**
+     * The rejected value is participant-entered CRF data, so only its data
+     * type and length are logged.
+     */
+    private void logRejected(String reason, Integer itemDataTypeId, String value) {
+        logger.info("Rejected OpenRosa item value: {} (item data type id {}, {} characters)",
+                reason, itemDataTypeId, value.length());
     }
 
 }
