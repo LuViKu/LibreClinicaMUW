@@ -382,6 +382,23 @@ public class Validator {
 
     public static final ValidatorRegularExpression EMAIL = new ValidatorRegularExpression("username@institution.domain", ".+@.+\\..*");
 
+    /**
+     * Longest e-mail address accepted (RFC 5321 path limit minus the angle
+     * brackets). The {@link #EMAIL} pattern backtracks polynomially on long
+     * input, and it runs on unauthenticated forms (Contact, RequestPassword,
+     * RequestAccount), so the length is checked before the pattern.
+     */
+    public static final int MAX_EMAIL_LENGTH = 254;
+
+    /**
+     * Longest value any regular-expression validation is run against. The
+     * widest column a regex-validated field is stored in is
+     * {@code item_data.value} (4000 characters; data entry caps text at
+     * 3999), so no legitimate value is longer. Longer input fails the
+     * validation without being handed to the regex engine.
+     */
+    public static final int MAX_REGEX_INPUT_LENGTH = 4000;
+
     // public static final ValidatorRegularExpression PHONE_NUMBER = new
     // ValidatorRegularExpression(
     // "123-456-7890", "[0-9]{3}[\\-\\.][0-9]{3}[\\-\\.][0-9]{4}");
@@ -1404,6 +1421,10 @@ break;
     }
 
     protected boolean isEmail(String fieldName) {
+        String fieldValue = getFieldValue(fieldName);
+        if (fieldValue == null || fieldValue.length() > MAX_EMAIL_LENGTH) {
+            return false;
+        }
         return matchesRegex(fieldName, EMAIL);
     }
 
@@ -1557,7 +1578,7 @@ break;
     protected boolean matchesRegex(String fieldName, ValidatorRegularExpression re) {
         String fieldValue = getFieldValue(fieldName);
 
-        if (fieldValue == null) {
+        if (fieldValue == null || fieldValue.length() > MAX_REGEX_INPUT_LENGTH) {
             return false;
         }
 
