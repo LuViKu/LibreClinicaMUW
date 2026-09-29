@@ -321,7 +321,9 @@ public class OdmController {
                 String.valueOf(nextEvent.getSampleOrdinal()), crfVersion.getOid());
 
         String url = enketoURL + "?" + FORM_CONTEXT + "=" + contextHash;
-        logger.debug("Enketo URL for " + crfVersion.getName() + "= " + url);
+        // The query string carries the ecid, the handle an OpenRosa submission
+        // presents to address a subject's event CRF. Log the form, not the handle.
+        logger.debug("Enketo URL for {} = {}", crfVersion.getName(), enketoURL);
         return url;
 
     }
@@ -333,7 +335,8 @@ public class OdmController {
         String editURL = CoreResources.getField("sysURL.base") + "pages/api/v1/editform/" + studyOID + "/url";
 
         String url = editURL + "?" + FORM_CONTEXT + "=" + contextHash;
-        logger.debug("Edit URL for " + crfVersion.getName() + "= " + url);
+        // As above: the ecid does not belong in the log.
+        logger.debug("Edit URL for {} = {}", crfVersion.getName(), editURL);
         return url;
 
     }
