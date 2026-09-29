@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     # only need the response body + headers; no bind mount required).
     bscan_store: Path | None = None
 
+    # Root of the app's retinal artifact store as mounted in this container
+    # (core.retinalInference.artifactStorePath on the Java side; compose binds
+    # it at the same path in the app and the sidecar). POST /derive only acts
+    # on job directories below it.
+    artifact_store_path: Path = Path("/var/lib/libreclinica/retinal-artifacts")
+
     # --- /preprocess endpoint (DR-022, app-VM side) --------------------------
     # The cluster ApptainerAdapter is DICOM-only, and the PHI-bearing .e2e must
     # not leave the app VM. A preprocess-only sidecar runs on the app VM with
