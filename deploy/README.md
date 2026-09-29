@@ -149,6 +149,16 @@ above for the host-hardening scope split.
    Postgres password; on re-run it preserves the existing secrets and touches
    the image-tag pin only when `--image-tag` (or the matching env var) was
    given.
+   It also keeps one per-host **retinal preprocess token** paired between
+   `RETINAL_INFERENCE_PREPROCESS_TOKEN` in the env file (read by the
+   sidecar) and `core.retinalInference.preprocessToken` in
+   `datainfo.properties` (read by the app). Up to beta.14 both fell back to
+   a value committed in this public repository; the script now keeps a
+   value the operator set, and otherwise mints a new one. The production
+   compose file refuses to start without it. The GPU push token
+   (`core.retinalInference.remotePushToken`) must match the GPU host, so the
+   script only warns while it is still the `choose-a-long-shared-secret`
+   placeholder; it also warns when `logLevel` is `debug` or `trace`.
 8. **systemd unit** — `libreclinica.service`. Uses
    `compose.yaml` + `deploy/compose.production.yaml`. Both `libreclinica`
    and `retinal-inference` images are pulled from ghcr.io on every start
