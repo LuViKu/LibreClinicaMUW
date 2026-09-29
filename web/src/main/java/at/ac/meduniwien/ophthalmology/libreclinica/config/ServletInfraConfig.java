@@ -18,6 +18,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.OCServletContextListe
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.OCServletFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.CrossSiteRequestFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.RequestIdFilter;
@@ -39,6 +40,8 @@ import org.springframework.beans.factory.annotation.Value;
  * bean wiring.
  * <p>
  * <strong>Filters (preserve legacy chain order):</strong>
+ * {@code requestIdFilter} → {@code legacyServletTelemetryFilter} →
+ * {@code crossSiteRequestFilter} ({@link CrossSiteRequestFilter}) →
  * {@code encodingFilter} → {@code localeFilter} → {@code springSecurityFilterChain}
  * (auto-registered by Boot's {@code SecurityFilterAutoConfiguration} once
  * {@link SecurityConfig} provides the {@code SecurityFilterChain} bean) →
@@ -150,6 +153,27 @@ public class ServletInfraConfig {
                         catalog, servletsEnabled, bannerEnabled, sunsetDate));
         reg.addUrlPatterns("/pages/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+        reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * CSRF defence (token-free): refuses POST/PUT/PATCH/DELETE that a browser
+     * sends from another site, judged by Fetch Metadata or, failing that, the
+     * Origin header. See {@link CrossSiteRequestFilter} and the comment on
+     * {@code csrf().disable()} in {@link SecurityConfig}.
+     *
+     * <p>Ordered after the request-id and telemetry filters (so a refusal is
+     * logged with its {@code reqId}) and ahead of everything that could act on
+     * the request, including the security chain. It reads headers only, so it
+     * does not need the character-encoding filter to have run.
+     */
+    @Bean
+    public FilterRegistrationBean<CrossSiteRequestFilter> crossSiteRequestFilter() {
+        FilterRegistrationBean<CrossSiteRequestFilter> reg =
+                new FilterRegistrationBean<>(new CrossSiteRequestFilter());
+        reg.addUrlPatterns("/*");
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         reg.setAsyncSupported(true);
         return reg;
     }
