@@ -687,11 +687,6 @@
 				<version>2.0.3</version>
 			</dependency>
 			<dependency>
-				<groupId>org.apache.xmlgraphics</groupId>
-				<artifactId>fop</artifactId>
-				<version>1.0</version>
-			</dependency>
-			<dependency>
 				<groupId>xml-apis</groupId>
 				<artifactId>xml-apis</artifactId>
 				<!-- make sure the version matches the one used by the batik libs (e.g. org.apache.xmlgraphics:batik-dom) -->

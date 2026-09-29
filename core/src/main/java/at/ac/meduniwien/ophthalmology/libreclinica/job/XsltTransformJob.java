@@ -325,10 +325,6 @@ public class XsltTransformJob extends QuartzJobBean {
                     // removed..added it only for the sake of custom processing
                     // but it will produce erroneous results in case of custom
                     // post processing as well.
-                    if (function.getClass().equals(at.ac.meduniwien.ophthalmology.libreclinica.bean.service.PdfProcessingFunction.class)) {
-                        archivedFile = function.getArchivedFileName();
-                    }
-
                     ArchivedDatasetFileBean fbFinal =
                         generateFileRecord(archivedFile, outputPath, datasetBean, done, new File(outputPath + File.separator + archivedFile).length(),
                                 ExportFormatBean.PDFFILE, userAccountId);
