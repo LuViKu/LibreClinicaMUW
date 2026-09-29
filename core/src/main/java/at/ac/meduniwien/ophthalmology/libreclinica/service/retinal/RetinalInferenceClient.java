@@ -92,11 +92,7 @@ public class RetinalInferenceClient {
             body.put("e2e_path", e2ePath);
             body.put("laterality", laterality);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, screenHeaders(sidecarToken()));
             @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = rest.postForEntity(url, request, Map.class);
             if (response == null || response.getBody() == null) {
@@ -115,6 +111,39 @@ public class RetinalInferenceClient {
         } catch (Exception e) {
             LOG.warn("Sidecar /screen failed for job {} (task={}) at {}: {}",
                     jobId, task, url, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Headers of the {@code /screen} call. The sidecar checks
+     * {@code X-MUW-Inference-Token} whenever it has a token configured, as it
+     * does in production, so the call carries it when one is set here.
+     */
+    static HttpHeaders screenHeaders(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        if (token != null && !token.isBlank()) {
+            headers.set("X-MUW-Inference-Token", token.trim());
+        }
+        return headers;
+    }
+
+    /**
+     * The token the local sidecar expects: {@code core.retinalInference.preprocessToken}
+     * (the setup script pairs it with the sidecar's RETINAL_INFERENCE_PREPROCESS_TOKEN),
+     * else {@code remotePushToken}, as {@link RemoteRetinalInferenceClient} resolves it.
+     */
+    private static String sidecarToken() {
+        String t = field("core.retinalInference.preprocessToken");
+        return t == null || t.isBlank() ? field("core.retinalInference.remotePushToken") : t;
+    }
+
+    private static String field(String key) {
+        try {
+            return CoreResources.getField(key);
+        } catch (Exception unavailable) {
             return null;
         }
     }
