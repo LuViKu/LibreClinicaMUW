@@ -33,6 +33,8 @@ docker run --rm -p 8001:8000 \
 | `RUNNER_FLUID_CPU` | `1` | drop to `0` only on a CUDA host |
 | `RUNNER_FLUID_WORKDIR` | `/workdir` | cwd for fluidseg so baked weights resolve |
 | `RUNNER_FLUID_MODEL_VERSION` | `retinsight-fluid-1.3.0` | reported to `/health` |
+| `RUNNER_ALLOWED_ROOTS` | `/var/lib/retinal-inference/tmp:/var/lib/libreclinica/segmentation-output` | `/infer` accepts `bscan_dcm_path` / `output_dir` only below these (`:`-separated) |
+| `RUNNER_AUTH_TOKEN` | (unset) | when set, `/infer` requires it in `X-MUW-Inference-Token` — use the sidecar's `RETINAL_INFERENCE_AUTH_TOKEN`, which the sidecar sends |
 
 ## To confirm on first real run
 - That fluidseg 1.3.0 finds its baked weights with **no `--weights`** (matches

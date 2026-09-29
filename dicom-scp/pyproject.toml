@@ -11,8 +11,8 @@ dependencies = [
     "pynetdicom==3.0.4",
     "pydicom==3.0.2",
     "numpy==2.1.3",
-    "pillow==11.0.0",
-    "requests==2.32.3",
+    "pillow==12.3.0",
+    "requests==2.34.2",
     "pydantic-settings==2.5.2",
 ]
 

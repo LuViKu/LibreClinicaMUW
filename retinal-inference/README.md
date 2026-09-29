@@ -63,7 +63,8 @@ All env vars use the `RETINAL_INFERENCE_` prefix.
 | `RETINAL_INFERENCE_INFERENCE_ADAPTER` | `placeholder` | `placeholder` or `mirage`. |
 | `RETINAL_INFERENCE_DB_URL` | (required) | Postgres URL. |
 | `RETINAL_INFERENCE_SHARED_STORAGE_PATH` | `/var/lib/libreclinica/segmentation-output` | Where masks land. |
-| `RETINAL_INFERENCE_E2E_UPLOADS_PATH` | `/var/lib/libreclinica/e2e-uploads` | Where the Java side drops uploaded E2Es. |
+| `RETINAL_INFERENCE_E2E_UPLOADS_PATH` | `/var/lib/libreclinica/e2e-uploads` | Where the Java side drops uploaded E2Es. `/screen` only reads files below it. |
+| `RETINAL_INFERENCE_ARTIFACT_STORE_PATH` | `/var/lib/libreclinica/retinal-artifacts` | The app's retinal artifact store as mounted here (`core.retinalInference.artifactStorePath`). `/derive` only acts on job directories below it. |
 | `RETINAL_INFERENCE_WORKER_POLL_INTERVAL_S` | `2.0` | Worker poll interval. |
 | `RETINAL_INFERENCE_FAST_SCREEN_TIMEOUT_S` | `8.0` | Soft sync-screen budget. |
 | `RETINAL_INFERENCE_FAST_SCREEN_SLEEP_S` | `2.0` | Placeholder fast-screen sleep (set to `0` in tests). |

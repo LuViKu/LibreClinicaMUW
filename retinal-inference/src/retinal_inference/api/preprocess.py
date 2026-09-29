@@ -30,7 +30,9 @@ import hashlib
 import json
 import logging
 import os
+import re
 import tempfile
+import uuid as _uuid
 from pathlib import Path
 
 import pydicom
@@ -46,6 +48,7 @@ from fastapi import (
 )
 
 from retinal_inference import config as _config
+from retinal_inference.security import resolve_under, token_matches
 
 # DR-024 — the .e2e -> bscan.dcm conversion lives in a separate package
 # (``muw-e2e-converter``) installed only in the LOCAL app-VM
@@ -75,6 +78,11 @@ _EXPOSED_HEADERS = (
     "X-MUW-Bscan-Dim-Z, X-MUW-Bscan-Dim-Y, X-MUW-Bscan-Dim-X, X-MUW-E2E-Uuid, "
     "X-MUW-Acquisition-Date"
 )
+
+# The app sends the UUID it generated for the stored upload (java.util.UUID,
+# lower-case 8-4-4-4-12). It names a directory under the B-scan store, so
+# nothing else is accepted.
+_E2E_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 def _check_endpoint_enabled() -> None:
@@ -106,11 +114,46 @@ def _check_auth(token_header: str | None) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Sidecar /preprocess not configured (RETINAL_INFERENCE_AUTH_TOKEN unset)",
         )
-    if token_header != expected:
+    if not token_matches(token_header, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-MUW-Inference-Token",
         )
+
+
+def _validated_laterality(raw: str | None) -> str | None:
+    """``OD`` / ``OS`` for a supplied laterality, None when none was sent.
+
+    The field is informational here, but it reaches the log, so an unexpected
+    value is refused rather than written out.
+    """
+    if raw is None or not raw.strip():
+        return None
+    value = raw.strip().upper()
+    if value == "OD":
+        return "OD"
+    if value == "OS":
+        return "OS"
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="laterality must be OD or OS",
+    )
+
+
+def _validated_e2e_uuid(raw: str | None) -> str | None:
+    """The caller's e2e UUID, or None when it sent none (the digest is used then)."""
+    if raw is None or not raw.strip():
+        return None
+    candidate = raw.strip()
+    if not _E2E_UUID_RE.fullmatch(candidate):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="e2e_uuid must be a lower-case UUID (8-4-4-4-12 hex digits)",
+        )
+    # Rebuilt from its numeric value: the string that names the directory and
+    # reaches the log is produced here, not copied from the request. For the
+    # lower-case 8-4-4-4-12 form accepted above the two are identical.
+    return str(_uuid.UUID(int=int(candidate.replace("-", ""), 16)))
 
 
 def _derive_uuid(body: bytes) -> str:
@@ -200,6 +243,8 @@ async def preprocess(
 ) -> Response:
     _check_endpoint_enabled()
     _check_auth(x_muw_inference_token)
+    lat = _validated_laterality(laterality)
+    requested_uuid = _validated_e2e_uuid(e2e_uuid)
 
     if scan_index < 0:
         raise HTTPException(
@@ -235,11 +280,7 @@ async def preprocess(
         if total == 0:
             raise HTTPException(status_code=400, detail="file part is empty")
 
-        uuid = (
-            e2e_uuid.strip()
-            if e2e_uuid and e2e_uuid.strip()
-            else _format_uuid_from_digest(hasher.hexdigest())
-        )
+        uuid = requested_uuid or _format_uuid_from_digest(hasher.hexdigest())
         try:
             out_dir = prepare_bscan_dcm(e2e_path, tempdir, scan_index=scan_index)
         except FileNotFoundError as e:
@@ -269,11 +310,20 @@ async def preprocess(
         # For scan_index > 0 we use a per-volume subdir so different volumes
         # from the same .e2e don't overwrite each other's bscan.dcm / fundus.
         store = _bscan_store_dir()
+        target_dir: Path | None = None
         if store is not None and bv is not None:
-            if scan_index > 0:
-                target_dir = store / uuid / f"scan-{scan_index}"
-            else:
-                target_dir = store / uuid
+            # Belt and braces on top of the UUID check: the directory must
+            # still resolve inside the store (a symlinked entry must not lead
+            # the writes elsewhere).
+            sub = os.path.join(uuid, f"scan-{scan_index}") if scan_index > 0 else uuid
+            target_dir = resolve_under(store, sub)
+            if target_dir is None:
+                LOG.warning(
+                    "Companion directory for e2e %s resolves outside the B-scan store; "
+                    "skipping persistence",
+                    uuid,
+                )
+        if target_dir is not None:
             try:
                 _persist_bscan_dcm(target_dir / "bscan.dcm", dcm_bytes)
                 fundus_png, fundus_dims = extract_fundus_png(e2e_path, scan_index=scan_index)
@@ -319,7 +369,7 @@ async def preprocess(
     LOG.info(
         "POST /preprocess -> bscan.dcm (%d bytes, laterality=%s, e2e_uuid=%s)",
         len(dcm_bytes),
-        laterality,
+        lat,
         uuid,
     )
 

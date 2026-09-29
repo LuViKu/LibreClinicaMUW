@@ -47,6 +47,8 @@ docker run --rm -p 8003:8000 \
 | `RUNNER_PR_SAMPLES` | `10` | Bayesian MC samples |
 | `RUNNER_PR_CODE` | `/opt/sese_pr` | vendor code location in the image |
 | `RUNNER_PR_MODEL_VERSION` | `sese-pr-1.3` | reported to `/health` |
+| `RUNNER_ALLOWED_ROOTS` | `/var/lib/retinal-inference/tmp:/var/lib/libreclinica/segmentation-output` | `/infer` accepts `bscan_dcm_path` / `output_dir` only below these (`:`-separated) |
+| `RUNNER_AUTH_TOKEN` | (unset) | when set, `/infer` requires it in `X-MUW-Inference-Token` — use the sidecar's `RETINAL_INFERENCE_AUTH_TOKEN`, which the sidecar sends |
 
 ## To confirm on first real run
 - torch version / pickle loading (see caveat) + the CPU `.cuda()` patch.

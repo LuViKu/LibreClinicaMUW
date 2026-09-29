@@ -31,6 +31,8 @@ absolute path the sidecar uses — it passes absolute paths in `/infer`.
 | `RUNNER_ONL_WEIGHTS` | `/weights` | path the script's `model_path` arg expects (single `.pth` vs the 5-fold dir) |
 | `RUNNER_ONL_CODE` | `/opt/sese_onl` | where the vendor code is copied in the image |
 | `RUNNER_ONL_MODEL_VERSION` | `sese-onl-1.2` | reported to `/health` + persisted as model_version |
+| `RUNNER_ALLOWED_ROOTS` | `/var/lib/retinal-inference/tmp:/var/lib/libreclinica/segmentation-output` | `/infer` accepts `bscan_dcm_path` / `output_dir` only below these (`:`-separated) |
+| `RUNNER_AUTH_TOKEN` | (unset) | when set, `/infer` requires it in `X-MUW-Inference-Token` — use the sidecar's `RETINAL_INFERENCE_AUTH_TOKEN`, which the sidecar sends |
 
 ## To confirm on first real run
 - The `model_path` layout (single `.pth` vs 5-fold dir) and the torch version.

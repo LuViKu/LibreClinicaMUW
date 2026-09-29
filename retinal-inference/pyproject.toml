@@ -24,7 +24,7 @@ dependencies = [
     # FastAPI multipart parsing for POST /run (DR-022). UploadFile+Form rely on
     # python-multipart at request time even though it's not a direct fastapi
     # dependency.
-    "python-multipart==0.0.20",
+    "python-multipart==0.0.32",
 ]
 
 [project.optional-dependencies]

@@ -25,18 +25,20 @@ the call is a no-op (returns ``{"skipped": true}``). Pass
 ``force=true`` to re-emit.
 
 Auth: same shared-secret pattern as ``/preprocess`` — the
-``RETINAL_INFERENCE_AUTH_TOKEN`` header gate.
+``RETINAL_INFERENCE_AUTH_TOKEN`` header gate, closed when no token is
+configured. ``job_dir`` must name a directory below
+``RETINAL_INFERENCE_ARTIFACT_STORE_PATH``; error details never repeat it.
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
 from retinal_inference import config as _config
+from retinal_inference.security import resolve_under, token_matches
 
 LOG = logging.getLogger(__name__)
 
@@ -60,12 +62,15 @@ class DeriveResponse(BaseModel):
 def _check_auth(token_header: str | None) -> None:
     expected = _config.settings.auth_token
     if not expected:
-        # Auth-token unset — the deployment is dev-mode (e.g. local
-        # compose without the shared secret). Allow the call through
-        # to keep dev ergonomics tight. Production deployments MUST
-        # set RETINAL_INFERENCE_AUTH_TOKEN.
-        return
-    if token_header != expected:
+        # Closed, like /run and /preprocess: a deployment without the shared
+        # secret does not serve /derive at all. (The app sends the same
+        # token it uses for /preprocess, so every deployment that preprocesses
+        # has one.)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sidecar /derive not configured (RETINAL_INFERENCE_AUTH_TOKEN unset)",
+        )
+    if not token_matches(token_header, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid X-Auth-Token",
@@ -79,11 +84,14 @@ def derive(
 ) -> DeriveResponse:
     """Derive presentation artifacts from a job dir's raw segmentation."""
     _check_auth(x_auth_token)
-    job_dir = Path(body.job_dir)
-    if not job_dir.is_dir():
+    # The app hands over <artifact-store>/<job-uuid>. Anything that does not
+    # resolve below the store is refused with one message, whether or not it
+    # exists, so the endpoint cannot be used to probe the filesystem.
+    job_dir = resolve_under(_config.settings.artifact_store_path, body.job_dir)
+    if job_dir is None or not job_dir.is_dir():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"job_dir {body.job_dir} is not a directory",
+            detail="job_dir is not a job directory in the artifact store",
         )
 
     if body.task != "fluid":
@@ -97,7 +105,7 @@ def derive(
     if not npz.is_file():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"job_dir {body.job_dir} has no fluidseg.npz",
+            detail="job_dir has no fluidseg.npz",
         )
 
     composite = job_dir / "projection_fluid.png"
@@ -115,7 +123,7 @@ def derive(
         if "segmentation" not in data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"{npz} missing 'segmentation' key — found {list(data.keys())}",
+                detail="fluidseg.npz has no 'segmentation' array",
             )
         seg = data["segmentation"]
 
@@ -128,7 +136,7 @@ def derive(
         LOG.exception("derive: render_fluid_projection failed for %s", job_dir)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"render_fluid_projection failed: {exc}",
+            detail=f"render_fluid_projection failed ({type(exc).__name__})",
         ) from exc
     after = {p.name for p in job_dir.iterdir() if p.is_file()}
     new_files = sorted(after - before)
