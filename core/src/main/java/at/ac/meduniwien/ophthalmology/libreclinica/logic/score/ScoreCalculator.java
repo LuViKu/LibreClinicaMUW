@@ -73,8 +73,6 @@ public class ScoreCalculator {
 
     private final UserAccountBean ub;
 
-    private final ArrayList<String> errors = new ArrayList<String>();
-
     private static int DEFAULT_DECIMAL = 4;
 
     public ScoreCalculator(SessionManager sm, EventCRFBean ecb, UserAccountBean ub) {
@@ -251,12 +249,10 @@ public class ScoreCalculator {
         ArrayList<String> updateFailedItems = new ArrayList<String>();
         if (itemdata == null) {
             logger.error("In ScoreCalculator redoCalculations(), itemdata is empty!");
-            errors.add("In ScoreCalculator redoCalculations(), 'itemdata' map is empty!");
             return updateFailedItems;
         }
         if (changedItems == null) {
             logger.error("In ScoreCalculator redoCalculations(), 'changeItems' set is empty!");
-            errors.add("In ScoreCalculator redoCalculations(), 'changeItems' set is empty!");
             return updateFailedItems;
         }
         ItemFormMetadataDAO ifmdao = new ItemFormMetadataDAO(sm.getDataSource());
@@ -321,7 +317,7 @@ public class ScoreCalculator {
                                 }
                                 if (err.length() > 0) {
                                     String key = i + 1 > 1 ? ifmb.getLeftItemText() + "_" + (i + 1) : ifmb.getLeftItemText();
-                                    errors.add("Item " + key + " contains calculation errors: " + err.toString());
+                                    reportCalculationErrors(key, err);
                                 }
                             }
                         }
@@ -371,7 +367,7 @@ public class ScoreCalculator {
 
                             }
                             if (err.length() > 0) {
-                                errors.add("Item " + ifmb.getLeftItemText() + " contains calculation errors: " + err.toString());
+                                reportCalculationErrors(ifmb.getLeftItemText(), err);
                             }
                         }
                     }
@@ -382,6 +378,16 @@ public class ScoreCalculator {
         }
 
         return updateFailedItems;
+    }
+
+    /**
+     * A calculated item on another section could not be (re)calculated. The
+     * messages name items and the formula ("A is empty", "Result is empty in
+     * ..."), never item values. They used to be collected in a list nothing
+     * read.
+     */
+    private void reportCalculationErrors(String item, StringBuffer err) {
+        logger.warn("Calculated item {} in event CRF {} contains calculation errors: {}", item, ecb.getId(), err);
     }
 
     protected boolean writeToDB(ItemBean ib, ItemFormMetadataBean ifm, ItemDataBean idb, String exp, String value, StringBuffer err) {
