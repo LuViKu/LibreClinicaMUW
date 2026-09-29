@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Per-application Tomcat context settings, shipped inside the WAR.
+
+  SameSite=Lax on every cookie Tomcat issues for this application, the
+  JSESSIONID session cookie included. A Lax cookie is left off cross-site
+  sub-requests (images, iframes, fetch) and cross-site POSTs, so a page on
+  another site cannot submit a form into a logged-in session. Top-level GET
+  navigation still carries it, so links from e-mail, the intranet, or the SSO
+  proxy's post-login redirect keep working. Part of the token-free CSRF
+  defence, together with CrossSiteRequestFilter (see SecurityConfig).
+
+  Why here and not in the image's conf/context.xml: Tomcat reads
+  META-INF/context.xml of a WAR deployed from webapps/ (the Host's deployXML
+  defaults to true without a SecurityManager, and no
+  conf/Catalina/localhost/LibreClinica.xml overrides it), after the global
+  conf/context.xml, so the RemoteIpValve the Dockerfile adds there still
+  applies. Keeping it in the WAR means every Tomcat that runs this WAR gets
+  the attribute, not only the one built by our Dockerfile.
+-->
+<Context>
+    <CookieProcessor className="org.apache.tomcat.util.http.Rfc6265CookieProcessor"
+                     sameSiteCookies="lax"/>
+</Context>

@@ -123,6 +123,19 @@ public class SecurityConfig {
         http
             .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
             .exceptionHandling(eh -> eh.authenticationEntryPoint(splitEntryPoint))
+            // Token CSRF stays off: several hundred heritage JSP forms post
+            // without a token. The CSRF defence is token-free instead, and
+            // applies to the whole application, not only this chain:
+            //   1. CrossSiteRequestFilter (ServletInfraConfig, ahead of this
+            //      chain) refuses POST/PUT/PATCH/DELETE that a browser sends
+            //      from another site — Sec-Fetch-Site must be same-origin or
+            //      none; without Fetch Metadata an Origin header must match
+            //      the request's own origin. Clients sending neither header
+            //      (device uploaders, DICOM receiver, API-key callers) pass.
+            //   2. The session cookie is SameSite=Lax (Tomcat CookieProcessor
+            //      in web/src/main/webapp/META-INF/context.xml).
+            //   3. Handlers that change data accept POST only, so a Lax cookie
+            //      riding a cross-site GET navigation cannot trigger them.
             .csrf(csrf -> csrf.disable())
             .anonymous(anon -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
@@ -154,10 +167,9 @@ public class SecurityConfig {
                         "/pages/api/v1/contact",
                         // Public OCT upload portal — see oct-upload-portal plan.
                         // Trust-the-reverse-proxy exposure: must NOT be exposed
-                        // to public internet. CSRF is already disabled globally
-                        // for this filter chain (.csrf(csrf -> csrf.disable())
-                        // above), so no separate ignoringRequestMatchers entry
-                        // is needed.
+                        // to public internet. Token CSRF is disabled for this
+                        // chain (see above); the page posts same-origin, so
+                        // CrossSiteRequestFilter lets it through.
                         "/pages/api/v1/public/oct-upload/**",
                         // 2026-06-24 user-feedback round — public BCVA-entry
                         // portal (mirrors OCT-upload posture). Same
