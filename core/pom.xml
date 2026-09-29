@@ -382,8 +382,6 @@
                   		<ignoredUsedUndeclaredDependency>org.apache.pdfbox:pdfbox</ignoredUsedUndeclaredDependency>
                		</ignoredUsedUndeclaredDependencies>
 					<ignoredUnusedDeclaredDependencies>
-						<!-- Needed by LibreClinica-web when HttpComponentsClientHttpRequestFactory is used-->
-						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LOGBACK when conditional statements are used (e.g. in logback.xml) -->
 						<ignoredUnusedDeclaredDependency>org.codehaus.janino</ignoredUnusedDeclaredDependency>
 						<!-- log4jdbc4 is a runtime JDBC interceptor loaded via Class.forName by the
