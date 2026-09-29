@@ -161,7 +161,7 @@ public class EventService implements EventServiceInterface {
     }
 
     /**
-     * @param datasource
+     * @param dataSource
      *            the datasource to set
      */
     public void setDatasource(DataSource dataSource) {
