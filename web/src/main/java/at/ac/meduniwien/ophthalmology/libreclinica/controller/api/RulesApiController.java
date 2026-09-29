@@ -417,6 +417,14 @@ public class RulesApiController {
             Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     /**
+     * {@link #EMAIL_PATTERN} backtracks quadratically on a long value without
+     * a dot, so values over RFC 5321's 254 characters are refused first.
+     */
+    static boolean isEmailAddress(String value) {
+        return value != null && value.length() <= 254 && EMAIL_PATTERN.matcher(value).matches();
+    }
+
+    /**
      * Surface the existing {@code rule_set.run_schedule} +
      * {@code rule_set.run_time} columns to the SPA so operators can
      * enrol / un-enrol a rule_set in the Quartz nightly batch without
@@ -870,7 +878,7 @@ public class RulesApiController {
                 if (newTo.isEmpty()) {
                     errors.add(Map.of("field", "to", "message",
                             "to must not be blank on EMAIL actions"));
-                } else if (!EMAIL_PATTERN.matcher(newTo).matches()) {
+                } else if (!isEmailAddress(newTo)) {
                     errors.add(Map.of("field", "to", "message",
                             "to must be a valid email address"));
                 }
@@ -1449,7 +1457,7 @@ public class RulesApiController {
                         "errors", List.of(Map.of("field", "to",
                                 "message", "to is required for EMAIL actions"))));
             }
-            if (!EMAIL_PATTERN.matcher(to).matches()) {
+            if (!isEmailAddress(to)) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "Validation failed",
                         "errors", List.of(Map.of("field", "to",
