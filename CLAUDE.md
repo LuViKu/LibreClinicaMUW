@@ -13,14 +13,14 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 | Layer | Now | Target (post-modernization) |
 |-------|-----|----|
 | Java | **25** (build + runtime, per Dockerfile; 21→25 bump 2026-07) | (achieved — exceeds the original Java 21 target) |
-| Framework | Spring Boot 3.5 + Java config (Spring 6.1.18 + Security 6.3.6; residual security XML) | (achieved — Phase C) |
+| Framework | Spring Boot 3.5.16 + Java config (Spring 6.2.19 + Security 6.5.11; residual security XML) | (achieved — Phase C) |
 | Web | JSP + SiteMesh + Spring MVC + ~295 legacy servlets; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
 | Persistence | Hibernate 6.4 (jakarta) + Liquibase 3.6.3 + PostgreSQL 14 | Liquibase 4 (Phase D-Libs, deferred — heritage `modifyColumn` blocker) + PostgreSQL 14+ |
 | Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.5.0-beta.5-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.15-muw` | continues with `-muw` suffix |
 
 ## Build & run
 
@@ -45,7 +45,17 @@ docker run --rm \
 
 `.m2-cache/` is git-ignored and persists Maven downloads (first build ~10 min, subsequent ~2 min).
 
-Unit tests run by default (`mvn test`) — 33 pass across 8 pure-unit test classes in `core/` and `web/`. To skip: `mvn -DskipTests=true …` for fast iteration.
+**On Windows, do not build over the bind mount.** Docker Desktop's filesystem boundary makes the command above take ~20 min at ~10% CPU — the WAR step alone copies ~1,800 webapp files and ~200 jars across it. Copy the tree into container-local storage first and the same build takes ~2 min:
+
+```sh
+# wrapper: tar the source in, build there
+mkdir -p /build && tar -C /src -cf - --exclude=.git --exclude=target --exclude=node_modules . | tar -C /build -xf -
+cd /build && mvn "$@"
+```
+
+mounting the worktree read-only at `/src` and `.m2-cache` at `/root/.m2`.
+
+Unit tests run by default (`mvn test`). As of 1.5.0-beta.15-muw: **core 344, web 957**. To skip: `mvn -DskipTests=true …` for fast iteration.
 
 Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
@@ -66,9 +76,26 @@ docker stop lc-test-pg && docker network rm lc-test-net
 
 Schema bootstrap works via `SpringLiquibase` in `applicationContext-core-db.xml`. **Expected result: 63 tests pass, 0 errors, 0 failures, 0 skipped.** (Phase 0.2 + 0.3, 2026-05-28.) See [MIGRATION.md § Phase 0](MIGRATION.md).
 
+The **`web` module's database ITs are separate and much larger** (~1400 tests in `web/src/test/**/*DatabaseIT.java`). They use Testcontainers, which starts its own `postgres:14-alpine` per IT class, so they need no external database — only a Docker socket. Two steps, because step 1 must install the other modules first:
+
+```sh
+mvn -B -ntp -q -DskipTests=true -DskipSpa=true -pl odm,core,docs -am install
+mvn -B -ntp -DskipSpa=true -P integration-tests -pl web test
+```
+
+`-DskipSpa=true` is required even for `mvn test`: `frontend-maven-plugin` binds to `generate-resources`, which runs before `test`.
+
+**Run the gate on Linux.** Several tests fail natively on Windows for path reasons only and pass in a container — `PublicUploadControllerDatabaseIT` (its in-test DICOM stub builds JSON by string concatenation and embeds a raw path, so `E:\...` emits invalid JSON escapes), `DatasetExportCharacterisationDatabaseIT` (writes to a literal `/tmp/...`) and core's `DicomDescribeClientTest` (asserts a POSIX path string). To run them in a Linux container, add the host Docker socket:
+
+```sh
+-v "//var/run/docker.sock:/var/run/docker.sock" --add-host host.docker.internal:host-gateway -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal -e TESTCONTAINERS_RYUK_DISABLED=true
+```
+
 ## CI
 
-`.github/workflows/build.yml` runs `mvn package` (JDK 8 + 11 matrix) on every push to `lc-develop`, `master`, `feature/**`, `release/**`, `hotfix/**`, plus a compose smoke test. Surefire reports uploaded on failure.
+`.github/workflows/build.yml` runs `mvn package` (single JDK 25 entry, matching the Dockerfile) on every push to `lc-develop`, `main`, `release/**`, `hotfix/**`, plus the three Python sidecar suites, a Testcontainers integration-test job and a compose smoke test. Surefire reports uploaded on failure.
+
+`codeql.yml` and `security.yml` run on pushes to `lc-develop` and `main` and on a schedule. Two things about them are worth knowing: **code-scanning alerts reflect `main`**, so a fix only closes its alert after the release reaches `main` and is rescanned; and **gitleaks scans only the push range on a push event but the full history on a schedule**, so a finding in an old commit shows up on the nightly run and never on a push. `fix/**` and `gate/**` branches do not build automatically — dispatch with `gh workflow run <file> --ref <branch>`.
 
 Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spring, Jackson, Hibernate, Apache Commons, Logback).
 
@@ -92,11 +119,14 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 
 ## Things to know
 
-- **Test suite is thin** — 21 unit tests, default-skipped. Don't assume code is well-tested. Phase 0 work in progress to flip the default + add critical-path integration tests.
+- **Test coverage is uneven, not thin** — 1301 unit tests run by default, plus a Testcontainers database suite of ~1400 in `web/src/test/**/*DatabaseIT.java`. The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
+- **`@SuppressWarnings("all")` sits on 1,244 of 2,004 main-source Java files**, so javac reports almost nothing across the heritage tree. Any audit that concludes "no warnings" is unreliable until it is removed — including the Phase B.5 Hibernate-6 manifest, whose zero-warning finding was measured with it still in place (CodeQL sees 49 deprecated Hibernate calls in that same DAO directory).
 - **Database migrations are versioned** — every change adds a new Liquibase changeset under `core/src/main/resources/migration/`, never edit existing changesets. Institutional changes go in `migration/lc-muw-<yyyy-mm-dd>-<topic>.xml`.
 - **Released, independent fork** — since 2026-06-26 the project no longer syncs from upstream LibreClinica (no cherry-picks; don't suggest pulling upstream changes). See [DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica) for the original fork rationale; the cherry-pick workflow it describes is now historical.
 - **Clinical-data system** — don't ship unverified changes. Bump dependency versions one batch at a time, verify with `mvn compile` (or `mvn test` post Phase 0).
 - **`docs/manuals/`** is for end-user documentation; **`docs/development/`** is for developers; **`MIGRATION.md`** is the modernization spine.
+- **The retinal preprocess token is per-host.** `setup-ubuntu-host.sh` mints it and writes it to both `/etc/libreclinica/env` (`RETINAL_INFERENCE_PREPROCESS_TOKEN`, read by the sidecar) and `core.retinalInference.preprocessToken` (read by the app); `deploy/compose.production.yaml` has no fallback and refuses to start without it. Run the setup script before a restart, not after.
+- **logback is pinned at 1.5.34 and must not go to 1.5.37+.** That release removed the Janino `<if condition=…>` attributes that every `logLocation` branch in `core/src/main/resources/logback.xml` depends on; moving past it needs that configuration migrated to `<condition>` elements first.
 - **Retinal-inference can run remotely on a GPU host** — see [DR-022](docs/development/modernization/decision-record.md#dr-022--remote-stateless-gpu-sidecar-for-retinal-inference) + the [runbook](docs/development/modernization/retinal-inference-remote-deployment.md). Single-host dev compose keeps working when `core.retinalInference.remotePushUrl` is blank.
 
 ## When making suggestions
