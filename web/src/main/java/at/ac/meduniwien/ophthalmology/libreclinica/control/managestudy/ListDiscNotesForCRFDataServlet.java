@@ -127,7 +127,6 @@ public class ListDiscNotesForCRFDataServlet extends SecureController {
             return;
         }
 
-        StudyDAO studyDAO = new StudyDAO(sm.getDataSource());
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(sm.getDataSource());
         StudyEventDAO studyEventDAO = new StudyEventDAO(sm.getDataSource());
         StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(sm.getDataSource());

@@ -85,7 +85,6 @@ public class ListSubjectDataServlet extends SecureController {
     protected void processRequest() throws Exception {
         ResourceBundle resformat = ResourceBundleProvider.getFormatBundle(locale);
         String dateFormatPattern = resformat.getString("date_format_string");
-        SimpleDateFormat dateFormat = new SimpleDateFormat(dateFormatPattern);
 
         SubjectDAO subjectDao = new SubjectDAO(sm.getDataSource());
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(sm.getDataSource());

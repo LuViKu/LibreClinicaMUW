@@ -145,7 +145,6 @@ public class FindSubjectsDataServlet extends SecureController {
         Collection<StudySubjectBean> items = studySubjectDAO.getWithFilterAndSort(
                 studyBean, filter, sort, rowStart, rowEnd);
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
         List<Map<String, Object>> rows = new ArrayList<>(items.size());
         for (StudySubjectBean studySubject : items) {
             Map<String, Object> row = new HashMap<>();

@@ -66,11 +66,11 @@ public class UpdateRuleSetRuleServlet extends SecureController {
         String pageMessage = "";
         if (ruleSetRuleId != null) {
             RuleSetRuleBean ruleSetRule = getRuleSetRuleDao().findById(Integer.valueOf(ruleSetRuleId));
-            if (ruleSetRuleId != null && action.equals("remove")) {
+            if (action.equals("remove")) {
                 status = Status.DELETED;
                 updateRuleSetRule(ruleSetRule, status);
                 pageMessage = "view_rules_remove_confirmation";
-            } else if (ruleSetRuleId != null && action.equals("restore")) {
+            } else if (action.equals("restore")) {
                 status = Status.AVAILABLE;
                 ruleSetRule.getRuleSetBean().setStatus(Status.AVAILABLE);
                 updateRuleSetRule(ruleSetRule, status);
