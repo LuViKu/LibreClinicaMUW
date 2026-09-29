@@ -676,7 +676,6 @@ public class NamdClinicalApiController {
                 + " ORDER BY event_date ASC, study_event_id ASC";
 
         List<Map<String, Object>> out = new ArrayList<>();
-        List<int[]> events = new ArrayList<>(); // [eventId, dateMillis-ish ordinal]
         Map<Integer, String> eventDateByEventId = new LinkedHashMap<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -686,7 +685,6 @@ public class NamdClinicalApiController {
                     int sev = rs.getInt("study_event_id");
                     java.sql.Date ed = rs.getDate("event_date");
                     eventDateByEventId.put(sev, ed == null ? null : ed.toString());
-                    events.add(new int[]{sev});
                 }
             }
         } catch (SQLException sqlEx) {
