@@ -175,15 +175,14 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
-        variables.put(Integer.valueOf(1), new String(ruleBean.getOid()));
+        variables.put(Integer.valueOf(1), ruleBean.getOid());
 
         String sql = digester.getQuery("findByOid");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
-        if (alist != null && alist.size() > 0) {
-            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
-        }
         if (alist.isEmpty()) {
             ruleBeanInDb = null;
+        } else {
+            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
         }
         return ruleBeanInDb;
     }
@@ -193,15 +192,14 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
-        variables.put(Integer.valueOf(1), new String(oid));
+        variables.put(Integer.valueOf(1), oid);
 
         String sql = digester.getQuery("findByOid");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
-        if (alist != null && alist.size() > 0) {
-            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
-        }
         if (alist.isEmpty()) {
             ruleBeanInDb = null;
+        } else {
+            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
         }
         return ruleBeanInDb;
     }

@@ -1407,7 +1407,11 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
 
                 // itemgroupname
                 String vitemgroupname = getAsString(rs, "name", "");
-                if ("ungrouped".equalsIgnoreCase(vitemgroupname) && vitemdataordinal <= 0) {
+                // item_data.ordinal is nullable in the schema, so getAsInt can
+                // hand back null here. An ungrouped item has exactly one repeat,
+                // so a missing ordinal means the same thing as a non-positive
+                // one: normalise it to 1 instead of throwing NPE on unboxing.
+                if ("ungrouped".equalsIgnoreCase(vitemgroupname) && (vitemdataordinal == null || vitemdataordinal <= 0)) {
                     vitemdataordinal = 1;
                 }
 

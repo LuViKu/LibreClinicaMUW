@@ -151,6 +151,15 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         ActionType actionType = ActionType.getByCode(actionTypeId);
         RuleActionBean ruleAction;
 
+        // rule_action.action_type carries the full domain ActionType range
+        // (1..8), but this heritage JDBC mapper can only build the two bean
+        // types below. Unknown and unmapped codes used to fall through with
+        // ruleAction == null and blow up two lines later with a bare NPE;
+        // fail with the offending code instead.
+        if (actionType == null) {
+            throw new IllegalStateException("rule_action row carries unknown action_type code " + actionTypeId);
+        }
+
         switch (actionType) {
         case FILE_DISCREPANCY_NOTE:
             ruleAction = new DiscrepancyNoteActionBean();
@@ -162,7 +171,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
             ((EmailActionBean) ruleAction).setTo(((String) hm.get("email_to")));
             break;
         default:
-        	 ruleAction = null;
+            throw new IllegalStateException("RuleActionDAO cannot map rule action type " + actionType + " (code " + actionTypeId + ")");
         }
 
         this.setEntityAuditInformation(ruleAction, hm);

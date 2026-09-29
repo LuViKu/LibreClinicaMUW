@@ -938,12 +938,15 @@ public class CoreResources implements ResourceLoaderAware {
     public static String[] getExtractFields(String key) {
         String value = EXTRACTINFO.getProperty(key);
 
-        // System.out.println("key? " + key + " value = " + value);
-
-        if (value != null) {
-            value = value.trim();
+        // A missing extract.properties key used to NPE here and abort startup
+        // with a bare NullPointerException. Return no fields instead; the
+        // caller in findExtractProperties() then reports the real problem
+        // (file/exportname lists that do not correspond 1 on 1) as an
+        // OpenClinicaSystemException naming the property number.
+        if (value == null) {
+            return new String[0];
         }
-        return value.split(",");
+        return value.trim().split(",");
     }
 
     // JN: by using static when u click same export link from 2 different datasets the first one stays in tact and

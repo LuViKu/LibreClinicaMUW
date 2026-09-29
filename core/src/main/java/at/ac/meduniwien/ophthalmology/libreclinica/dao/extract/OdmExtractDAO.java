@@ -1126,7 +1126,7 @@ public class OdmExtractDAO extends DatasetDAO {
                 // but parseCode can still produce an empty map (e.g. blank text
                 // pair). Log WARN so operators notice option-code mappings
                 // silently lost in ODM export.
-                if (codes == null || codes.isEmpty()) {
+                if (codes.isEmpty()) {
                     logger.warn("ODM export: empty code list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1137,7 +1137,7 @@ public class OdmExtractDAO extends DatasetDAO {
             if (hasMultiSelect) {
                 multi = MetadataUnit.parseCode(rsText, rsValue);
                 // 2026-06-28 — heritage-debt audit (PR #262): see comment above.
-                if (multi == null || multi.isEmpty()) {
+                if (multi.isEmpty()) {
                     logger.warn("ODM export: empty multi-select list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1757,7 +1757,7 @@ public class OdmExtractDAO extends DatasetDAO {
                 // 2026-06-28 — heritage-debt audit (PR #262): log WARN so empty
                 // option-code mappings stop being silently swallowed in OC 1.3
                 // ODM export (mirrors the OC 1.2 branch above).
-                if (codes == null || codes.isEmpty()) {
+                if (codes.isEmpty()) {
                     logger.warn("ODM 1.3 export: empty code list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1768,7 +1768,7 @@ public class OdmExtractDAO extends DatasetDAO {
             if (hasMultiSelect) {
                 multi = MetadataUnit.parseCode(rsText, rsValue);
                 // 2026-06-28 — heritage-debt audit (PR #262): see comment above.
-                if (multi == null || multi.isEmpty()) {
+                if (multi.isEmpty()) {
                     logger.warn("ODM 1.3 export: empty multi-select list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -2201,7 +2201,7 @@ public class OdmExtractDAO extends DatasetDAO {
                                 it.setReasonForNull(itValue.trim());
                             }
                         } else {
-                            if (datatypeid == 9) {
+                            if (datatypeid != null && datatypeid == 9) {
                                 try {
                                     itValue = new SimpleDateFormat("yyyy-MM-dd").format(new SimpleDateFormat(oc_df_string).parse(itValue));
                                 } catch (Exception fe) {

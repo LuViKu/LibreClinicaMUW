@@ -252,11 +252,10 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
 
         String sql = digester.getQuery("findByExpression");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
-        if (alist != null && alist.size() > 0) {
-            ruleSetBeanInDb = (RuleSetBean) this.getEntityFromHashMap(alist.get(0));
-        }
         if (alist.isEmpty()) {
             ruleSetBeanInDb = null;
+        } else {
+            ruleSetBeanInDb = (RuleSetBean) this.getEntityFromHashMap(alist.get(0));
         }
         return ruleSetBeanInDb;
     }
