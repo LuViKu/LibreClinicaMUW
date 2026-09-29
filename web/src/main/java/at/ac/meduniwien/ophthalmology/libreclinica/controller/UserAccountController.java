@@ -145,9 +145,15 @@ public class UserAccountController {
 
 		// UserAccountBean ownerUserAccount = getUserAccountByApiKey(apiKey);
 		UserAccountBean ownerUserAccount = (UserAccountBean) request.getSession().getAttribute("userBean");
-		if (!ownerUserAccount.isActive() && (!ownerUserAccount.isTechAdmin() || !ownerUserAccount.isSysAdmin())) {
-			logger.info("The Owner User Account is not Valid Account or Does not have Admin user type");
-			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(), org.springframework.http.HttpStatus.BAD_REQUEST);
+		// Only an active system or technical administrator may create accounts
+		// here. The heritage check read `!active && (...)`, which let every
+		// ACTIVE account through, so any logged-in user could create a
+		// sysadmin and receive its password (code-scanning triage 2026-09-29).
+		if (!mayCreateAccounts(ownerUserAccount)) {
+			logger.warn("createuseraccount refused: the calling account is not an active administrator");
+			return new ResponseEntity<HashMap<String, Object>>(new HashMap<>(),
+					ownerUserAccount == null ? org.springframework.http.HttpStatus.UNAUTHORIZED
+							: org.springframework.http.HttpStatus.FORBIDDEN);
 		}
 
 		// generate password
@@ -413,4 +419,9 @@ public class UserAccountController {
 		return roleMap;
 	}
 
+
+	/** True only for an active system or technical administrator. */
+	static boolean mayCreateAccounts(UserAccountBean owner) {
+		return owner != null && owner.isActive() && (owner.isSysAdmin() || owner.isTechAdmin());
+	}
 }
