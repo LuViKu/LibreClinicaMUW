@@ -52,6 +52,7 @@
         var bool = confirm(
                 "<fmt:message key="uncheck_sdv" bundle="${resmessages}"/>");
         if(bool){
+            formObj.method='POST';
             formObj.action='${pageContext.request.contextPath}/pages/unSdvStudySubject';
             formObj.theStudySubjectId.value=theStudySubjectId;
             formObj.submit();
@@ -59,11 +60,10 @@
     }
 </script>
 <div id="subjectSDV">
-    <form name='scheduledJobsForm' action="${pageContext.request.contextPath}/pages/cancelScheduledJob" method="GET">
+    <form name='scheduledJobsForm' action="${pageContext.request.contextPath}/pages/cancelScheduledJob" method="POST">
         <%-- These hidden inputs are populated by the per-row Cancel
              button via JS in the include fragment, then submitted to
-             /pages/cancelScheduledJob (unchanged from the legacy
-             jmesa-rendered form). --%>
+             /pages/cancelScheduledJob, which accepts POST only. --%>
         <input type="hidden" name="theJobName" value="0">
         <input type="hidden" name="theJobGroupName" value="0">
         <input type="hidden" name="theTriggerGroupName" value="0">
