@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletConfig;
@@ -304,8 +305,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         LOGGER.trace(message);
     }
 
-    @SuppressWarnings("unlikely-arg-type")
-	@Override
+    @Override
     protected  void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         //JN:The following were the the global variables, moved as local.
         locale = LocaleResolver.getLocale(request);
@@ -529,9 +529,9 @@ public abstract class DataEntryServlet extends CoreSecureController {
         CRFVersionBean crfVersionBean = (CRFVersionBean) cvdao.findByPK(ecb.getCRFVersionId());
 
         Phase phase2 = Phase.INITIAL_DATA_ENTRY;
-       if (getServletPage(request).startsWith(Page.DOUBLE_DATA_ENTRY_SERVLET.getFileName())) {
+        if (isServletPage(getServletPage(request), Page.DOUBLE_DATA_ENTRY_SERVLET)) {
             phase2 = Phase.DOUBLE_DATA_ENTRY;
-        } else if (getServletPage(request).startsWith(Page.ADMIN_EDIT_SERVLET.getFileName())) {
+        } else if (isServletPage(getServletPage(request), Page.ADMIN_EDIT_SERVLET)) {
             phase2 = Phase.ADMIN_EDITING;
         }
         logMe("Entering ruleSets::: CreateAndInitializeRuleSet:::"+Thread.currentThread());
@@ -659,11 +659,8 @@ public abstract class DataEntryServlet extends CoreSecureController {
             session.setAttribute(AddNewSubjectServlet.FORM_DISCREPANCY_NOTES_NAME, discNotes);
 
             if(section.getSection().hasSCDItem()) {
-                /*
-                 *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
-                 */
-                section = SCDItemDisplayInfo.generateSCDDisplayInfo(section,this.getServletPage(request).equals(Page.INITIAL_DATA_ENTRY)
-                        || this.getServletPage(request).equals(Page.ADMIN_EDIT_SERVLET) && !this.isAdminForcedReasonForChange(request));
+                section = SCDItemDisplayInfo.generateSCDDisplayInfo(section,
+                        scdDisplayFollowsForm(getServletPage(request), () -> isAdminForcedReasonForChange(request)));
             }
 
             int keyId = ecb.getId();
@@ -1254,8 +1251,8 @@ public abstract class DataEntryServlet extends CoreSecureController {
             }
 
             if(section.getSection().hasSCDItem()) {
-                section = SCDItemDisplayInfo.generateSCDDisplayInfo(section,this.getServletPage(request).equals(Page.INITIAL_DATA_ENTRY)
-                        || this.getServletPage(request).equals(Page.ADMIN_EDIT_SERVLET) && !this.isAdminForcedReasonForChange(request) );
+                section = SCDItemDisplayInfo.generateSCDDisplayInfo(section,
+                        scdDisplayFollowsForm(getServletPage(request), () -> isAdminForcedReasonForChange(request)));
             }
 
             // logger.debug("about to validate: " + v.getKeySet());
@@ -2866,8 +2863,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * author: tbh 04/2010
      *
      */
-    @SuppressWarnings("unlikely-arg-type")
-	private ItemGroupMetadataBean runDynamicsCheck(ItemGroupMetadataBean metadataBean, HttpServletRequest request) {
+    private ItemGroupMetadataBean runDynamicsCheck(ItemGroupMetadataBean metadataBean, HttpServletRequest request) {
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
         try {
             if (!metadataBean.isShowGroup()) {
@@ -2877,9 +2873,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 //        metadataBean.getItemGroupId() +
                 //        ": " + ecb.getId() + ": " + showGroup);
 
-                if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
-                    showGroup = getItemMetadataService().hasGroupPassedDDE(metadataBean.getId(), ecb.getId());
-                }
+                // Double data entry included: see DDE_SHOWS_WHAT_INITIAL_ENTRY_SHOWED.
                 metadataBean.setShowGroup(showGroup);
                 // what about the items which should be shown?
                 // if (getServletPage().equals(Page.ADMIN_EDIT_SERVLET) && metadataBean.isShowGroup()) {
@@ -3150,32 +3144,21 @@ public abstract class DataEntryServlet extends CoreSecureController {
      *            The DAO to use to access the database.
      * @return <code>true</code> if the query succeeded, <code>false</code> otherwise.
      */
-    @SuppressWarnings("unlikely-arg-type")
-	protected boolean writeToDB(DisplayItemBean dib, ItemDataDAO iddao, int ordinal, HttpServletRequest request) {
+    protected boolean writeToDB(DisplayItemBean dib, ItemDataDAO iddao, int ordinal, HttpServletRequest request) {
         ItemDataBean idb = dib.getData();
         EventCRFBean ecb = getAsType(request.getAttribute(INPUT_EVENT_CRF), EventCRFBean.class);
         if (dib.getEditFlag()!=null && "remove".equalsIgnoreCase(dib.getEditFlag())
                 && getItemMetadataService().isShown(idb.getItemId(), ecb, idb)) {
             getItemMetadataService().hideItem(dib.getMetadata(), ecb, idb);
         }else {
-            /*
-             *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
-             */
-            if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
-                    if (!dib.getMetadata().isShowItem() && !(dib.getScdData().getScdItemMetadataBean().getScdItemFormMetadataId()>0) &&
-                                    idb.getValue().equals("") &&
-                                    !getItemMetadataService().hasPassedDDE(dib.getMetadata(), ecb, idb)) {//(dib.getItem().getId(), ecb, idb)) {// && !getItemMetadataService().isShown(dib.getItem().getId(), ecb, dib.getData())) {
-                            LOGGER.debug("*** not shown - not writing for idb id " + dib.getData().getId() + " and item id " + dib.getItem().getId());
-                            return true;
-                    }
-            } else {
-                    if (!dib.getMetadata().isShowItem() &&
-                            idb.getValue().equals("") &&
-                            !getItemMetadataService().isShown(dib.getItem().getId(), ecb, dib.getData()) &&
-                            !(dib.getScdData().getScdItemMetadataBean().getScdItemFormMetadataId()>0)) {
-                    LOGGER.debug("*** not shown - not writing for idb id " + dib.getData().getId() + " and item id " + dib.getItem().getId());
-                    return true;
-                }
+            // A hidden, empty, non-SCD item is not written. Double data entry
+            // included: see DDE_SHOWS_WHAT_INITIAL_ENTRY_SHOWED.
+            if (!dib.getMetadata().isShowItem() &&
+                    idb.getValue().equals("") &&
+                    !getItemMetadataService().isShown(dib.getItem().getId(), ecb, dib.getData()) &&
+                    !(dib.getScdData().getScdItemMetadataBean().getScdItemFormMetadataId()>0)) {
+                LOGGER.debug("*** not shown - not writing for idb id " + dib.getData().getId() + " and item id " + dib.getItem().getId());
+                return true;
             }
         }
         return writeToDB(idb,dib,iddao,ordinal, request);
@@ -3541,8 +3524,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @return An array of DisplayItemBean objects, one per parent item in the section. Note that there is no guarantee on the ordering of the objects.
      * @throws Exception
      */
-    @SuppressWarnings("unlikely-arg-type")
-	private ArrayList<DisplayItemBean> getParentDisplayItems(boolean hasGroup, SectionBean sb, EventDefinitionCRFBean edcb, ItemDAO idao, ItemFormMetadataDAO ifmdao,
+    private ArrayList<DisplayItemBean> getParentDisplayItems(boolean hasGroup, SectionBean sb, EventDefinitionCRFBean edcb, ItemDAO idao, ItemFormMetadataDAO ifmdao,
             ItemDataDAO iddao, boolean hasUngroupedItems, HttpServletRequest request) throws Exception {
         ArrayList<DisplayItemBean> answer = new ArrayList<>();
         EventCRFBean ecb = getAsType(request.getAttribute(INPUT_EVENT_CRF), EventCRFBean.class);
@@ -3608,14 +3590,8 @@ public abstract class DataEntryServlet extends CoreSecureController {
             if (dib != null) {
                 // boolean showItem = false;
                 logMe("Entering thread before getting ItemMetadataService:::"+Thread.currentThread());
+               // Double data entry included: see DDE_SHOWS_WHAT_INITIAL_ENTRY_SHOWED.
                boolean showItem = getItemMetadataService().isShown(ifmb.getItemId(), ecb, dib.getData());
-               /*
-                *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
-                */
-                if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
-                    showItem = getItemMetadataService().hasPassedDDE(ifmb, ecb, dib.getData());
-                }
-                // is the above needed for children items too?
                 boolean passedDDE = getItemMetadataService().hasPassedDDE(ifmb, ecb, dib.getData());
                 if (showItem) { // we are only showing, not hiding
                     LOGGER.debug("set show item " + ifmb.getItemId() + " idb " + dib.getData().getId() + " show item " + showItem + " passed dde " + passedDDE);
@@ -3649,8 +3625,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @return An array of DisplayItemBean objects corresponding to the items which are children of parent, and are sorted by column number (ascending), then
      *         ordinal (ascending).
      */
-    @SuppressWarnings("unlikely-arg-type")
-	private ArrayList<DisplayItemBean> getChildrenDisplayItems(DisplayItemBean parent, EventDefinitionCRFBean edcb, HttpServletRequest request) {
+    private ArrayList<DisplayItemBean> getChildrenDisplayItems(DisplayItemBean parent, EventDefinitionCRFBean edcb, HttpServletRequest request) {
         ArrayList<DisplayItemBean> answer = new ArrayList<>();
         EventCRFBean ecb = getAsType(request.getAttribute(INPUT_EVENT_CRF), EventCRFBean.class);
         int parentId = parent.getItem().getId();
@@ -3666,26 +3641,11 @@ public abstract class DataEntryServlet extends CoreSecureController {
             DisplayItemBean dib = new DisplayItemBean();
             dib.setEventDefinitionCRF(edcb);
             dib.setItem(child);
-            // tbh
-            /*
-             *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
-             */
-            if (!getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
-                dib.setData(data);
-            }
-            // <<tbh 07/2009, bug #3883
-            // ItemDataBean dbData = iddao.findByItemIdAndEventCRFIdAndOrdinal(itemId, eventCRFId, ordinal)
+            // The stored row is attached in every servlet, double data entry
+            // included: see DDE_SHOWS_WHAT_INITIAL_ENTRY_SHOWED.
+            dib.setData(data);
             dib.setDbData(data);
             boolean showItem = getItemMetadataService().isShown(metadata.getItemId(), ecb, data);
-            /*
-             *  does not seem to be enough since DataEntryServlet#getServletPage adds URL parameters (for at least some implementations)
-             */
-            if (getServletPage(request).equals(Page.DOUBLE_DATA_ENTRY_SERVLET)) {
-                showItem = getItemMetadataService().hasPassedDDE(metadata, ecb, data);
-            } //else {
-            //                showItem = getItemMetadataService().isShown(metadata.getItemId(), ecb, dib.getDbData());
-            //            }
-            // boolean passedDDE = getItemMetadataService().hasPassedDDE(data);
             if (showItem) {
                 LOGGER.debug("set show item: " + metadata.getItemId() + " data " + data.getId());
                 // metadata.setShowItem(showItem);
@@ -3733,6 +3693,63 @@ public abstract class DataEntryServlet extends CoreSecureController {
      * @return The Page object which represents this servlet.
      */
     protected abstract String getServletPage(HttpServletRequest request);
+
+    /**
+     * Whether {@code servletPage}, a value of {@link #getServletPage}, names
+     * {@code page}. The subclasses append the event CRF, section and tab as a
+     * query string, and the shared {@link Page} constant's own file name can
+     * carry one too (ResolveDiscrepancyServlet appends "fromViewNotes=1"), so
+     * only the paths are compared.
+     *
+     * <p>Until 2026-09 the servlet compared the String with
+     * {@code .equals(Page.X)}, which is never true (the return type became a
+     * String in 2012).
+     */
+    static boolean isServletPage(String servletPage, Page page) {
+        if (servletPage == null || page == null || page.getFileName() == null) {
+            return false;
+        }
+        return pathOf(servletPage).equals(pathOf(page.getFileName()));
+    }
+
+    private static String pathOf(String url) {
+        int query = url.indexOf('?');
+        return query < 0 ? url : url.substring(0, query);
+    }
+
+    /**
+     * The {@code noValueComparison} flag of
+     * {@link SCDItemDisplayInfo#generateSCDDisplayInfo}: whether a conditional
+     * (SCD) item's display follows the form rather than being pinned visible
+     * once a value is saved. True in initial data entry, and in
+     * administrative editing when no reason for change is forced; the
+     * reason-for-change setting is only consulted in administrative editing.
+     */
+    static boolean scdDisplayFollowsForm(String servletPage, BooleanSupplier adminForcedReasonForChange) {
+        return isServletPage(servletPage, Page.INITIAL_DATA_ENTRY_SERVLET)
+            || isServletPage(servletPage, Page.ADMIN_EDIT_SERVLET) && !adminForcedReasonForChange.getAsBoolean();
+    }
+
+    /*
+     * DDE_SHOWS_WHAT_INITIAL_ENTRY_SHOWED
+     *
+     * Legacy double data entry shows and writes the items and groups that
+     * initial data entry's rules showed (dynamics "isShown"), and attaches the
+     * stored row to child items like to every other item. Up to 2012 it
+     * instead used the rows' "passed DDE" flag and left child items without
+     * their stored row; the checks that selected that ("getServletPage(request)
+     * .equals(Page.DOUBLE_DATA_ENTRY_SERVLET)") stopped matching in 2012 and
+     * were removed in 2026-09 rather than revived:
+     *  - a child item without its stored row is saved with INSERT, a second
+     *    item_data row for the same item, and is checked against an empty
+     *    initial value;
+     *  - hiding a rule-shown item until a double-data-entry rule run shows it
+     *    again means it is not keyed twice when that rule does not run in
+     *    double data entry, or when the second entry disagrees with the first
+     *    on the controlling item.
+     * Initial values stay hidden from the second operator as before:
+     * shouldLoadDBValues() does not load a PENDING row into the form.
+     */
 
     protected abstract boolean shouldLoadDBValues(DisplayItemBean dib);
 
