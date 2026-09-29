@@ -784,8 +784,12 @@
 				<groupId>org.postgresql</groupId>
 				<artifactId>postgresql</artifactId>
 				<!-- CVE-2025-49146, CVE-2026-42198: 42.7.5 (Boot 3.5.0 default)
-				     upgraded to 42.7.11. Boot manages 42.7.5; override required. -->
-				<version>42.7.11</version>
+				     upgraded to 42.7.11. Boot manages 42.7.5; override required.
+				     2026-09-29: 42.7.11 → 42.7.12 for CVE-2026-54291 (SCRAM
+				     channel-binding downgrade). 42.7.12 is the security-only
+				     release; 42.7.13 adds behaviour changes (flushCacheOnDdl,
+				     batch-rewrite limits) and is not needed for the fix. -->
+				<version>42.7.12</version>
 				<scope>runtime</scope>
 			</dependency>
 			<!-- Oracle JDBC driver -->
