@@ -13,6 +13,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -49,7 +50,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudySubject
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnSubjectMap;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrf;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrf;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemData;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroupMetadata;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Study;
@@ -59,7 +59,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRole;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.SubjectGroupMap;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMap;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -356,7 +355,7 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 	
 	private ArrayList<ExportFormDataBean> getFormDataForClinicalStudy(
 		StudySubject ss,	StudyEvent se,String formVersionOID) {
-		List<ExportFormDataBean> formDataBean = new ArrayList<ExportFormDataBean>();
+		ArrayList<ExportFormDataBean> formDataBean = new ArrayList<ExportFormDataBean>();
 		boolean formCheck = true;
 		if(formVersionOID!=null)formCheck = false;
 		boolean hiddenCrfCheckPassed=true;
@@ -413,7 +412,7 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 			}
 		}
 
-		return (ArrayList<ExportFormDataBean>) formDataBean;
+		return formDataBean;
 	}
 
 	
@@ -533,7 +532,7 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 						groupOIDOrdnl = groupOID + GROUPOID_ORDINAL_DELIM
 								+ itemData.getOrdinal();
 						
-						if (itemData.getItem().getOcOid() == itemOID) {
+						if (Objects.equals(itemOID, itemData.getItem().getOcOid())) {
 
 							if (oidMap.containsKey(groupOIDOrdnl)) {
 
