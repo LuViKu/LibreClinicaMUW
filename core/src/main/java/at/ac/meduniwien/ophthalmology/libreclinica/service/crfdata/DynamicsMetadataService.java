@@ -298,9 +298,9 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 ItemFormMetadataBean itemFormMetadataBean =
                     getItemFormMetadataDAO().findByItemIdAndCRFVersionId(itemOrItemGroup.getItemBean().getId(), eventCrfBean.getCRFVersionId());
                 DynamicsItemFormMetadataBean dynamicsMetadataBean = getDynamicsItemFormMetadataBean(itemFormMetadataBean, eventCrfBean, oidBasedItemData);
-                if (dynamicsMetadataBean == null && oidBasedItemData.getValue().equals("")) {
+                if (dynamicsMetadataBean == null && oidBasedItemData.getValue().isEmpty()) {
                     showItem(itemFormMetadataBean, eventCrfBean, oidBasedItemData);
-                } else if (dynamicsMetadataBean != null && dynamicsMetadataBean.isShowItem() && oidBasedItemData.getValue().equals("")) {
+                } else if (dynamicsMetadataBean != null && dynamicsMetadataBean.isShowItem() && oidBasedItemData.getValue().isEmpty()) {
                     dynamicsMetadataBean.setShowItem(false);
                     getDynamicsItemFormMetadataDao().saveOrUpdate(dynamicsMetadataBean);
                 }
@@ -441,7 +441,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 String itemGroupBOrdinal = getExpressionService().getGroupOrdninalCurated(expression);
                 ItemDataBean itemData =
                     getItemDataDAO().findByItemIdAndEventCRFIdAndOrdinal(itemBean.getId(), eventCrfBean.getId(),
-                            itemGroupBOrdinal.equals("") ? 1 : Integer.parseInt(itemGroupBOrdinal));
+                            itemGroupBOrdinal.isEmpty() ? 1 : Integer.parseInt(itemGroupBOrdinal));
                 if (itemData.getId() == 0) {
                     logger.info("Cannot get Value for ExpressionValue {}", expression);
                 } else {
@@ -565,7 +565,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }
             // If A is not repeating group & B is a repeating group with no index selected
-            if (!isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.equals("")) {
+            if (!isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.isEmpty()) {
                 List<ItemDataBean> oidBasedItemDatas =
                     oneToMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB, ub);
                 for (ItemDataBean oidBasedItemData : oidBasedItemDatas) {
@@ -575,7 +575,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 }
             }
             // If A is not repeating group & B is a repeating group with index selected
-            if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.equals("")) {
+            if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty()) {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupBOrdinal));
@@ -592,7 +592,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }
             // If A is repeating group with index & B is a repeating group with index selected
-            if (isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.equals("") && !itemGroupBOrdinal.equals("END")) {
+            if (isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty() && !itemGroupBOrdinal.equals("END")) {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupBOrdinal));
@@ -601,7 +601,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }
             // If A is repeating group with index & B is a repeating group with no index selected
-            if (isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.equals("")) {
+            if (isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.isEmpty()) {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupAOrdinal));
@@ -654,27 +654,27 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
 
                 }
                 // If A is not repeating group & B is a repeating group with no index selected
-                if (!isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.equals("")) {
+                if (!isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.isEmpty()) {
                     List<ItemDataBean> oidBasedItemDatas =
                         oneToMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB, ub);
                     itemDataBeans.addAll(oidBasedItemDatas);
                 }
                 // If A is not repeating group & B is a repeating group with index selected
-                if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.equals("")) {
+                if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty()) {
                     ItemDataBean oidBasedItemData =
                         oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB,
                                 eventCrfBeanB, ub, Integer.parseInt(itemGroupBOrdinal));
                     itemDataBeans.add(oidBasedItemData);
                 }
                 // If A is repeating group with index & B is a repeating group with index selected
-                if (isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.equals("")) {
+                if (isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty()) {
                     ItemDataBean oidBasedItemData =
                         oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB,
                                 eventCrfBeanB, ub, Integer.parseInt(itemGroupBOrdinal));
                     itemDataBeans.add(oidBasedItemData);
                 }
                 // If A is repeating group with index & B is a repeating group with no index selected
-                if (isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.equals("")) {
+                if (isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.isEmpty()) {
                     ItemDataBean oidBasedItemData =
                         oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB,
                                 eventCrfBeanB, ub, Integer.parseInt(itemGroupAOrdinal));
@@ -685,9 +685,9 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                     ItemFormMetadataBean itemFormMetadataBean =
                         getItemFormMetadataDAO().findByItemIdAndCRFVersionId(itemOrItemGroup.getItemBean().getId(), eventCrfBeanA.getCRFVersionId());
                     DynamicsItemFormMetadataBean dynamicsMetadataBean = getDynamicsItemFormMetadataBean(itemFormMetadataBean, eventCrfBeanA, oidBasedItemData);
-                    if (dynamicsMetadataBean == null && oidBasedItemData.getValue().equals("")) {
+                    if (dynamicsMetadataBean == null && oidBasedItemData.getValue().isEmpty()) {
                         hideNewItem(itemFormMetadataBean, eventCrfBeanA, oidBasedItemData);
-                    } else if (dynamicsMetadataBean != null && dynamicsMetadataBean.isShowItem() && oidBasedItemData.getValue().equals("")) {
+                    } else if (dynamicsMetadataBean != null && dynamicsMetadataBean.isShowItem() && oidBasedItemData.getValue().isEmpty()) {
                         // tbh #5287: add an additional check here to see if it should be hidden
                         dynamicsMetadataBean.setShowItem(false);
                         getDynamicsItemFormMetadataDao().saveOrUpdate(dynamicsMetadataBean);
@@ -756,27 +756,27 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
 
                 }
                 // If A is not repeating group & B is a repeating group with no index selected
-                if (!isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.equals("")) {
+                if (!isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.isEmpty()) {
                     List<ItemDataBean> oidBasedItemDatas =
                         oneToMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB, ub);
                     itemDataBeans.addAll(oidBasedItemDatas);
                 }
                 // If A is not repeating group & B is a repeating group with index selected
-                if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.equals("")) {
+                if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty()) {
                     ItemDataBean oidBasedItemData =
                         oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB,
                                 eventCrfBeanB, ub, Integer.parseInt(itemGroupBOrdinal));
                     itemDataBeans.add(oidBasedItemData);
                 }
                 // If A is repeating group with index & B is a repeating group with index selected
-                if (isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.equals("")) {
+                if (isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty()) {
                     ItemDataBean oidBasedItemData =
                         oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB,
                                 eventCrfBeanB, ub, Integer.parseInt(itemGroupBOrdinal));
                     itemDataBeans.add(oidBasedItemData);
                 }
                 // If A is repeating group with index & B is a repeating group with no index selected
-                if (isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.equals("")) {
+                if (isGroupARepeating && isGroupBRepeating && itemGroupBOrdinal.isEmpty()) {
                     ItemDataBean oidBasedItemData =
                         oneToIndexedMany(itemDataBeanA, eventCrfBeanA, itemGroupMetadataBeanA, itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB,
                                 eventCrfBeanB, ub, Integer.parseInt(itemGroupAOrdinal));
