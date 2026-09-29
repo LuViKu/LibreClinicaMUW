@@ -1,6 +1,6 @@
 # LibreClinica MUW · 1.5.0-beta.13-muw release notes
 
-_Successor to **1.5.0-beta.12-muw**. A release for the running pilots: Remidio captures made into a visit's pre-created exam reach the inbox again, the platform recognises the same picture arriving under another patient label, an acquisition PC may delete what it has uploaded, and the deploy scripts clean up after themselves._
+_Successor to **1.5.0-beta.12-muw**. A release for the running pilots: Remidio captures made into a visit's pre-created exam reach the inbox again, the platform recognises the same picture arriving under another patient label, an acquisition PC may delete what it has uploaded, the deploy scripts clean up after themselves, and a high-severity Jackson advisory is patched._
 
 For older releases see [release-notes-1.5.0-beta.12-muw.md](release-notes-1.5.0-beta.12-muw.md) and its predecessors.
 
@@ -44,6 +44,10 @@ Two defects found during the beta.12 upgrade.
 
 - **The migration dry run left a copy of the production database behind** every time, as an unused Docker volume. It now removes the volumes with its containers. Copies from earlier dry runs are still on the VM; [step 5](#upgrading-the-app-vm) lists them.
 - **The one-time copy off the anonymous volumes skipped in silence** when the app was not running. It now reports every outcome: it confirms a bind that is already in place, and warns when it cannot copy.
+
+### Jackson is patched against four advisories
+
+`jackson-databind`, which parses every JSON request the app receives, moves from 2.18.8 to 2.18.10, together with `jackson-core` and `jackson-annotations`. This fixes CVE-2026-68497 (high) and CVE-2026-19032, CVE-2026-77310 and CVE-2026-83557 (medium), which the dependency scan reported on 2026-09-29. The four Jackson helper modules Spring Boot supplies stay at 2.19.0, as before.
 
 ---
 
@@ -91,6 +95,7 @@ Do this outside clinic hours: the restart takes the app down for a few minutes. 
 ## Still open at this release
 
 - **A capture into a visit's exam dated in the future arrives on that date.** The patient sync dates an exam on the visit's scheduled day, and the pull lists only up to today. A patient photographed before the scheduled day appears when the day comes, not before.
+- **fast-uri 3.1.2 (CVE-2026-84292, high)** is in the SPA's lockfile. It is build tooling: the OCT viewer's imaging library declares webpack as a peer, and Vite does not bundle it into the app. It is left for the next dependency round.
 - **The public rate limit never applies in the deployed app**, and `/resolve` takes any number of labels per request (DR-033). Switching it on changes what the Export Watcher and the Optomed Bridge see under load, so it needs its own decision.
 - **Older audit rows keep some gaps**, as described in the beta.12 notes.
 - The Clarus Raw Data objects in `_skipped\`, two of the three files per capture and most of the space, are never deleted by the watcher; whether they may be is a separate decision.
