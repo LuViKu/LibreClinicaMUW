@@ -97,7 +97,17 @@ public class UpdateStudyServlet extends SecureController {
                 forwardPage(Page.STUDY_LIST_SERVLET);
 
             } else if ("next".equalsIgnoreCase(action)) {
-                Integer pageNumber = Integer.valueOf(request.getParameter("pageNum"));
+                // Integer.valueOf() never returns null, so the else-branch
+                // below (re-show wizard page 1) was unreachable and a missing
+                // or non-numeric pageNum escaped as a NumberFormatException.
+                // Parsing into null on failure restores the branch the author
+                // wrote for exactly that case.
+                Integer pageNumber;
+                try {
+                    pageNumber = Integer.valueOf(request.getParameter("pageNum"));
+                } catch (NumberFormatException nfe) {
+                    pageNumber = null;
+                }
                 if (pageNumber != null) {
                     if (pageNumber.intValue() == 6) {
                         confirmStudy6();

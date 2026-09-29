@@ -340,7 +340,7 @@ public class VerifyImportedCRFDataServlet extends SecureController {
                     if (container.getShouldRunRules())
                         containers.add(container);
                 }
-                if (containers != null && !containers.isEmpty())
+                if (!containers.isEmpty())
                     ruleSetService.runRulesInImportData(containers, studyBean, userBean, ExecutionMode.DRY_RUN);
             }
         }

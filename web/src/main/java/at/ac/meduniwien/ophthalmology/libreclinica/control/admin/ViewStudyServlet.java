@@ -82,13 +82,21 @@ public class ViewStudyServlet extends SecureController {
 
             StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());
             String participantStatusInOC = spvdao.findByHandleAndStudy(study.getId(), "participantPortal").getValue();
-            if(participantStatusInOC=="") participantStatusInOC="disabled";
+            // `participantStatusInOC == ""` compared references, so it was
+            // never true and the normalisation never ran. Comparing on content
+            // (and covering null, which would otherwise blow up on the
+            // equalsIgnoreCase below) makes it run. The visible outcome is
+            // unchanged: a blank value is not "enabled" either way, so the
+            // participant portal still ends up "disabled".
+            if (participantStatusInOC == null || participantStatusInOC.isEmpty()) {
+                participantStatusInOC = "disabled";
+            }
             // Randomization is removed from LibreClinica
             study.getStudyParameterConfig().setRandomization("disabled");
 
              ParticipantPortalRegistrar  participantPortalRegistrar = new ParticipantPortalRegistrar();
              String pStatus = participantPortalRegistrar.getCachedRegistrationStatus(study.getOid(), session);
-             if (participantPortalRegistrar!=null && pStatus.equalsIgnoreCase("ACTIVE") && participantStatusInOC.equalsIgnoreCase("enabled")){
+             if (pStatus.equalsIgnoreCase("ACTIVE") && participantStatusInOC.equalsIgnoreCase("enabled")){
                  study.getStudyParameterConfig().setParticipantPortal("enabled");
              }else{
                  study.getStudyParameterConfig().setParticipantPortal("disabled");

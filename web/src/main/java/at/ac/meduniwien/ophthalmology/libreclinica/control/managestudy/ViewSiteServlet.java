@@ -55,7 +55,20 @@ public class ViewSiteServlet extends SecureController {
         if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)) {
             return;
         }
-        int siteId = request.getParameter("id") == null ? 0 : Integer.valueOf(request.getParameter("id"));
+        // A non-numeric ?id= is treated exactly like a missing one (siteId 0):
+        // it can never equal currentStudy.getId(), so we fall through to the
+        // "insufficient permission" branch below instead of escaping this
+        // method with a NumberFormatException (which the container renders as
+        // a 500 page, bypassing mayProceed()'s contract).
+        int siteId = 0;
+        try {
+            String idParam = request.getParameter("id");
+            if (idParam != null) {
+                siteId = Integer.parseInt(idParam);
+            }
+        } catch (NumberFormatException nfe) {
+            siteId = 0;
+        }
         if (currentStudy.getId() == siteId) {
             return;
         }
@@ -75,11 +88,23 @@ public class ViewSiteServlet extends SecureController {
             idString = request.getAttribute("siteId").toString();
         }
         logger.info("site id:" + idString);
-        if (idString == null || idString.trim().isEmpty()) {
+        // A non-numeric id is as unusable as a missing one, so it takes the
+        // same branch: page message + back to the site list, rather than a
+        // NumberFormatException escaping into the container's 500 page.
+        int siteId = 0;
+        boolean siteIdUsable = false;
+        if (idString != null && !idString.trim().isEmpty()) {
+            try {
+                siteId = Integer.parseInt(idString.trim());
+                siteIdUsable = true;
+            } catch (NumberFormatException nfe) {
+                siteIdUsable = false;
+            }
+        }
+        if (!siteIdUsable) {
             addPageMessage(respage.getString("please_choose_a_site_to_edit"));
             forwardPage(Page.SITE_LIST_SERVLET);
         } else {
-            int siteId = Integer.valueOf(idString.trim()).intValue();
             StudyBean study = (StudyBean) sdao.findByPK(siteId);
 
             checkRoleByUserAndStudy(ub, study.getParentStudyId(), study.getId());

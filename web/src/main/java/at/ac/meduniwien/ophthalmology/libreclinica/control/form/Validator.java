@@ -1468,7 +1468,7 @@ break;
 
         // Check whether field value is convertable to java integer
         try {
-            int i = Integer.parseInt(fieldValue);
+            Integer.parseInt(fieldValue);
         } catch (NumberFormatException nfe) {
             return false;
         }

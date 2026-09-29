@@ -94,8 +94,19 @@ public class RunRuleSetServlet extends SecureController {
     private RuleSetBean getRuleSetBean(String ruleSetId, String ruleId) {
         RuleSetBean ruleSetBean = null;
         if (ruleId != null && ruleSetId != null && ruleId.length() > 0 && ruleSetId.length() > 0) {
+            Integer parsedRuleId;
+            try {
+                parsedRuleId = Integer.valueOf(ruleId);
+            } catch (NumberFormatException nfe) {
+                // A non-numeric ?ruleId= cannot name a rule. Returning null
+                // lands processRequest() on its existing "RuleSet not found"
+                // page rather than letting the exception become a 500 — and it
+                // keeps runRulesInBulk() from executing against an unfiltered
+                // rule set, which in the dryRun=no path writes data.
+                return null;
+            }
             ruleSetBean = getRuleSetService().getRuleSetById(currentStudy, ruleSetId);
-            ruleSetBean = ruleSetService.filterByRules(ruleSetBean, Integer.valueOf(ruleId));
+            ruleSetBean = ruleSetService.filterByRules(ruleSetBean, parsedRuleId);
         } else if (ruleSetId != null && ruleSetId.length() > 0) {
             // getRuleSetService().getRuleSetById(currentStudy, ruleSetId);
             // ruleSetBean = getRuleSetService().getRuleSetById(currentStudy, ruleSetId, null);

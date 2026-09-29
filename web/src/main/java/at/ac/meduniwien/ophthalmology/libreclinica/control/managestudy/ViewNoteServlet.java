@@ -96,9 +96,13 @@ public class ViewNoteServlet extends SecureController {
         DiscrepancyNoteBean note = (DiscrepancyNoteBean) dndao.findByPK(noteId);
         String entityType = note.getEntityType();
 
-        if (note.getEntityId() > 0 && !entityType.isEmpty()) {
+        // The inner test shows the author expected entityType to be nullable,
+        // but the outer one dereferenced it first, so a note with a null
+        // entity_type raised NullPointerException instead of falling through
+        // to the "no entity to show" path below.
+        if (note.getEntityId() > 0 && entityType != null && !entityType.isEmpty()) {
 
-            if (!(entityType == null || entityType.trim().isEmpty())) {
+            if (!entityType.trim().isEmpty()) {
                 if ("itemData".equalsIgnoreCase(entityType)) {
                     ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
                     ItemDataBean itemData = (ItemDataBean) iddao.findByPK(note.getEntityId());

@@ -212,7 +212,16 @@ public abstract class CoreSecureController extends HttpServlet {
             addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"), request);
             // + "<a href=\"UpdateProfile\">" +
             // respage.getString("user_profile") + " </a>");
-            int pwdChangeRequired = Integer.valueOf(SQLInitServlet.getField("change_passwd_required")).intValue();
+            int pwdChangeRequired;
+            try {
+                pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
+            } catch (NumberFormatException nfe) {
+                // CoreResources defaults this property to "1" when it is
+                // absent; a value that is present but not a number is the same
+                // kind of misconfiguration, so fall back to the same
+                // fail-safe default rather than 500-ing on first login.
+                pwdChangeRequired = 1;
+            }
             if (pwdChangeRequired == 1) {
                 request.setAttribute("mustChangePass", "yes");
                 forwardPage(Page.RESET_PASSWORD, request, response);
@@ -814,7 +823,7 @@ public abstract class CoreSecureController extends HttpServlet {
             //retrieve the host name
             Properties javaMailProperties = mailSender.getJavaMailProperties();
             if(null != javaMailProperties){
-                if (javaMailProperties.get("mail.smtp.localhost") == null || ((String)javaMailProperties.get("mail.smtp.localhost")).equalsIgnoreCase("") ){
+                if (javaMailProperties.get("mail.smtp.localhost") == null || ((String)javaMailProperties.get("mail.smtp.localhost")).isEmpty() ){
                     javaMailProperties.put("mail.smtp.localhost", "localhost");
                 }
             }

@@ -59,14 +59,11 @@ public class ViewNotesServlet extends SecureController {
     @Override
     protected void processRequest() throws Exception {
         String module = request.getParameter("module");
-        String moduleStr = "manage";
         if (module != null && module.trim().length() > 0) {
             if ("submit".equals(module)) {
                 request.setAttribute("module", "submit");
-                moduleStr = "submit";
             } else if ("admin".equals(module)) {
                 request.setAttribute("module", "admin");
-                moduleStr = "admin";
             } else {
                 request.setAttribute("module", "manage");
             }

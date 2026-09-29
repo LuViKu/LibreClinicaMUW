@@ -338,8 +338,16 @@ public class ViewSectionDataEntryPreview extends DataEntryServlet {
         // if the borders property is null, return 0; otherwise return the value stored
         // in the HashMap
         if (tempBorder != null) {
-            return Integer.valueOf(tempBorder);
-
+            try {
+                return Integer.parseInt(tempBorder.trim());
+            } catch (NumberFormatException nfe) {
+                // The BORDERS cell comes from the uploaded CRF spreadsheet and
+                // can hold anything a CRF author typed. Treat a non-numeric
+                // cell like a blank one (0), which the two branches around
+                // this one already do, instead of failing the preview with a
+                // 500.
+                return 0;
+            }
         } else {
             return 0;
         }

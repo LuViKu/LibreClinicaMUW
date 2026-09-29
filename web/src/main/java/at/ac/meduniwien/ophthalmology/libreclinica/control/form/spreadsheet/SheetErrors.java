@@ -103,18 +103,26 @@ public final class SheetErrors {
         errors.add(s);
     }
 
+    // Both methods used to dereference the argument and only then test it for
+    // null, so the fresh collection the ternary promises was unreachable: a
+    // null argument threw NullPointerException. Substituting the fresh
+    // collection first keeps the non-null behaviour identical and makes the
+    // null case return what the ternary says it returns — the collected
+    // errors in a new collection.
     public Map<String,String> putHtmlErrorsToSheet(Map<String, String> htmlErrorsFromSheet) {
-        htmlErrorsFromSheet.putAll(htmlErrors);
-        return htmlErrorsFromSheet == null ? new HashMap<String,String>() : htmlErrorsFromSheet;
+        Map<String,String> target = htmlErrorsFromSheet == null ? new HashMap<String,String>() : htmlErrorsFromSheet;
+        target.putAll(htmlErrors);
+        return target;
     }
 
     public List<String> addErrorsToSheet(List<String> errorsFromSheet) {
+        List<String> target = errorsFromSheet == null ? new ArrayList<String>() : errorsFromSheet;
         if(errors.size()>0) {
             for(StringBuffer s : errors) {
-                errorsFromSheet.add(s.toString());
+                target.add(s.toString());
             }
         }
-        return errorsFromSheet == null ? new ArrayList<String>() : errorsFromSheet;
+        return target;
     }
 
 

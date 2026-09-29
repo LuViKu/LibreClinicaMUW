@@ -40,7 +40,7 @@ public class OCServletFilter implements jakarta.servlet.Filter {
 
         Principal principal = req.getUserPrincipal();
 
-        if ((ub != null) && (null != ub.getName()) && (!ub.getName().equals(""))) {
+        if ((ub != null) && (null != ub.getName()) && (!ub.getName().isEmpty())) {
             username = ub.getName();
             successfulRegistration = registerUsernameWithLogContext(username);
         } else if (principal != null) {

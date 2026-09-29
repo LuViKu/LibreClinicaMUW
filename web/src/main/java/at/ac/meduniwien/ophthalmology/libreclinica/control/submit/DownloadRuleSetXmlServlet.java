@@ -85,16 +85,37 @@ public class DownloadRuleSetXmlServlet extends SecureController {
         List<RuleSetRuleBean> ruleSetRules = new ArrayList<RuleSetRuleBean>();
         RulesPostImportContainer rpic = new RulesPostImportContainer();
 
-        if (ruleSetRuleIds !="") {
+        // `ruleSetRuleIds != ""` was a reference comparison: it is true for
+        // every value the request can produce, including null, so a request
+        // without ?ruleSetRuleIds= reached split() and threw
+        // NullPointerException. Compare on content, and treat a null/blank
+        // parameter as "no ids selected" — the empty container this method
+        // already returns for that case.
+        if (ruleSetRuleIds == null || ruleSetRuleIds.trim().isEmpty()) {
+            return rpic;
+        }
+
         String[] splitExpression = ruleSetRuleIds.split(",");
 
+        List<Integer> parsedIds = new ArrayList<>(splitExpression.length);
         for (String string : splitExpression) {
-            RuleSetRuleBean rsr = getRuleSetService().getRuleSetRuleDao().findById(Integer.valueOf(string));
+            try {
+                parsedIds.add(Integer.valueOf(string.trim()));
+            } catch (NumberFormatException nfe) {
+                // All-or-nothing: a malformed id means we cannot tell which
+                // rules were asked for, and a silently partial XML export is
+                // worse than an empty one. Same outcome as "no ids selected".
+                logger.warn("ruleSetRuleIds contains a non-numeric id; returning an empty rules export");
+                return rpic;
+            }
+        }
+
+        for (Integer id : parsedIds) {
+            RuleSetRuleBean rsr = getRuleSetService().getRuleSetRuleDao().findById(id);
             ruleSetRules.add(rsr);
         }
         rpic.populate(ruleSetRules);
-        
-        } 
+
         return rpic;
     }
 

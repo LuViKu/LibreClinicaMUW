@@ -1282,7 +1282,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
 
                         LOGGER.debug("-- found group label " + ifmb.getGroupLabel());
-                        if (!ifmb.getGroupLabel().equalsIgnoreCase("Ungrouped") && !ifmb.getGroupLabel().equalsIgnoreCase(""))
+                        if (!ifmb.getGroupLabel().equalsIgnoreCase("Ungrouped") && !ifmb.getGroupLabel().isEmpty())
 
                         {
                             // << tbh 11/2009 sometimes the group label is blank instead of ungrouped???
