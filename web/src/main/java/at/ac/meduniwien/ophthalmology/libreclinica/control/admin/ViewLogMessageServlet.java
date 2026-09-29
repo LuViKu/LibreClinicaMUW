@@ -18,7 +18,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.job.ImportSpringJob;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * view Import File Server, by Tom Hickerson, 2010
@@ -61,14 +64,14 @@ public class ViewLogMessageServlet extends SecureController {
         try {
             File destDirectory = new File(ImportSpringJob.IMPORT_DIR_2);
             FormProcessor fp = new FormProcessor(request);
-            String regex = "\\s+"; // all whitespace, one or more times
-            String replacement = "_"; // replace with underscores
             String fileName = fp.getString("n");
             String triggerName = fp.getString("tn");
             String groupName = fp.getString("gn");
             logger.debug("found trigger name " + triggerName + " group name " + groupName);
-            File logDestDirectory =
-                new File(destDirectory + File.separator + fileName.replaceAll(regex, replacement) + ".log.txt" + File.separator + "log.txt");
+            File logDestDirectory = resolveLogFile(destDirectory, fileName);
+            if (logDestDirectory == null) {
+                throw new FileNotFoundException("import log name is not inside the import directory");
+            }
             // StringBuffer sbu = new StringBuffer();
             // BufferedReader r = new BufferedReader(new FileReader(logDestDirectory));
             // char[] buffer = new char[1024];
@@ -92,6 +95,32 @@ public class ViewLogMessageServlet extends SecureController {
             // throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
             forwardPage(Page.MENU);
         }
+    }
+
+    /**
+     * The import job writes each run's log to
+     * {@code <import dir>/<yyyy>/<MM>/<dd>/<HHmmssSSS>/<file name>.log.txt/log.txt}
+     * and links to it with {@code n=<yyyy>/<MM>/<dd>/<HHmmssSSS>/<file name>},
+     * so the name legitimately contains separators. It must not climb out of
+     * the import directory: {@code ..} segments are refused and the resolved
+     * path has to stay below the directory.
+     *
+     * @return the log file, or {@code null} when the name is unusable
+     */
+    static File resolveLogFile(File importDirectory, String name) throws IOException {
+        if (name == null || name.isEmpty() || name.indexOf('\0') >= 0) {
+            return null;
+        }
+        String cleaned = name.replaceAll("\\s+", "_");
+        for (String segment : cleaned.split("[/\\\\]")) {
+            if ("..".equals(segment)) {
+                return null;
+            }
+        }
+        File logFile = new File(importDirectory + File.separator + cleaned + ".log.txt" + File.separator + "log.txt");
+        Path base = importDirectory.getCanonicalFile().toPath();
+        Path resolved = logFile.getCanonicalFile().toPath();
+        return resolved.startsWith(base) ? logFile : null;
     }
 
     public static String readFromFile(File filename) throws java.io.FileNotFoundException, java.io.IOException {
