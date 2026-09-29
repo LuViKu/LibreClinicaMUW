@@ -476,10 +476,11 @@ public class ScoreCalculator {
                 MathContext mc = new MathContext(p, RoundingMode.HALF_UP);
                 value = (new BigDecimal(d, mc)).setScale(0, RoundingMode.HALF_UP).toPlainString();
             } catch (ParseException e) {
-                logger.error("Number was expected in " + rob.getValue() + " : " + value);
+                // The value is the participant's own item data: name the formula only.
+                logger.error("Number was expected in {}", rob.getValue());
                 String exp = rob.getValue();
                 exp = exp.replace("##", ",");
-                errorMessage.append("Number was expected in" + " " + exp + " : " + value + "; ");
+                errorMessage.append("Number was expected in" + " " + exp + "; ");
                 // errors.append(resexception.getString("number_expected_in")
                 // + " " + exp + ": " + value + "; ");
                 value = "";
@@ -496,8 +497,9 @@ public class ScoreCalculator {
             } catch (Exception ee) {
                 String exp = rob.getValue();
                 exp = exp.replace("##", ",");
-                logger.error("Number was expected in " + exp + " : " + value);
-                errorMessage.append("Number was expected in" + " " + exp + " : " + value + "; ");
+                // The value is the participant's own item data: name the formula only.
+                logger.error("Number was expected in {}", exp);
+                errorMessage.append("Number was expected in" + " " + exp + "; ");
                 // errors.append(resexception.getString("number_expected_in")
                 // + " " + exp + ": " + value + "; ");
                 value = "";

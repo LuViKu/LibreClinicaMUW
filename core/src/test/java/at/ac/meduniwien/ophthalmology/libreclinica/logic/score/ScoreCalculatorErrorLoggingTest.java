@@ -29,6 +29,7 @@ import org.junit.Test;
 import org.mockito.MockedConstruction;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ItemDataType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
@@ -126,6 +127,61 @@ public class ScoreCalculatorErrorLoggingTest {
             assertTrue(message, message.contains("Score total"));
             assertTrue(message, message.contains("44"));
             assertTrue(message, message.contains("A is empty"));
+            for (ILoggingEvent e : appender.list) {
+                assertFalse(e.getFormattedMessage(), e.getFormattedMessage().contains(SECRET_VALUE));
+            }
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(before);
+        }
+    }
+
+    /**
+     * The other way a calculation fails: an item feeding the formula holds
+     * something that is not a number. That value is the participant's own item
+     * data, so neither the log nor the message the calculator hands back may
+     * carry it.
+     *
+     * <p>This is the path the test above does not reach. It covers a formula
+     * that cannot be evaluated at all ("A is empty"), whose messages never
+     * contained a value; getMathContextValue's "Number was expected" message
+     * did, and reached the log through the buffer the WARN line prints.
+     */
+    @Test
+    public void aValueThatIsNotANumberReachesNeitherTheLogNorTheMessage() {
+        Logger logger = (Logger) LoggerFactory.getLogger(ScoreCalculator.class.getName());
+        Level before = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setLevel(Level.DEBUG);
+
+        try {
+            SessionManager sm = mock(SessionManager.class);
+            when(sm.getDataSource()).thenReturn(mock(DataSource.class));
+            EventCRFBean ecb = new EventCRFBean();
+            ecb.setId(44);
+
+            ItemFormMetadataBean ifm = new ItemFormMetadataBean();
+            ifm.setWidthDecimal("5(0)");
+            ResponseSetBean rs = new ResponseSetBean();
+            ResponseOptionBean formula = new ResponseOptionBean();
+            formula.setValue("A+B");
+            rs.addOption(formula);
+            ifm.setResponseSet(rs);
+
+            StringBuffer errors = new StringBuffer();
+            String result = new ScoreCalculator(sm, ecb, new UserAccountBean())
+                    .getMathContextValue(SECRET_VALUE, ifm, ItemDataType.INTEGER, errors);
+
+            // the value does not parse, so nothing is calculated
+            assertEquals("", result);
+            // the message says which formula failed ...
+            assertTrue(errors.toString(), errors.toString().contains("Number was expected"));
+            assertTrue(errors.toString(), errors.toString().contains("A+B"));
+            // ... and carries no item value, so the WARN line that prints this
+            // buffer cannot leak one either
+            assertFalse(errors.toString(), errors.toString().contains(SECRET_VALUE));
             for (ILoggingEvent e : appender.list) {
                 assertFalse(e.getFormattedMessage(), e.getFormattedMessage().contains(SECRET_VALUE));
             }
