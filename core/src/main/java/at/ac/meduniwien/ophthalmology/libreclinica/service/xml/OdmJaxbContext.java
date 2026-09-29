@@ -22,7 +22,6 @@ import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Marshaller;
 import jakarta.xml.bind.Unmarshaller;
 import javax.xml.namespace.QName;
-import javax.xml.transform.stream.StreamSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.ODMContainer;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RulesPostImportContainer;
@@ -30,6 +29,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Html;
 
 /**
  * Single Spring-managed wiring point for the project's JAXB contexts.
+ *
+ * <p>Every unmarshal goes through {@link SecureXmlFactories#saxSource}: the
+ * inputs are uploads (rules, ODM clinical data, XForms) and a DOCTYPE is
+ * refused, whichever JAXP parser the classpath provides.
  *
  * <p>Phase B.3 ([DR-006] Castor → Jakarta JAXB) introduced this class.
  * Per [DR-006 amendment 2026-05-28], the API stays on {@code jakarta.xml.bind}
@@ -78,7 +81,7 @@ public class OdmJaxbContext {
             Unmarshaller unmarshaller = contextFor(RulesPostImportContainer.class)
                     .createUnmarshaller();
             JAXBElement<RulesPostImportContainer> element = unmarshaller.unmarshal(
-                    new StreamSource(in), RulesPostImportContainer.class);
+                    SecureXmlFactories.saxSource(in), RulesPostImportContainer.class);
             return element.getValue();
         } catch (JAXBException e) {
             throw new IllegalStateException(
@@ -156,7 +159,7 @@ public class OdmJaxbContext {
         try {
             Unmarshaller unmarshaller = contextFor(ODMContainer.class).createUnmarshaller();
             JAXBElement<ODMContainer> element = unmarshaller.unmarshal(
-                    new StreamSource(in), ODMContainer.class);
+                    SecureXmlFactories.saxSource(in), ODMContainer.class);
             return element.getValue();
         } catch (JAXBException e) {
             throw new IllegalStateException(
@@ -176,7 +179,7 @@ public class OdmJaxbContext {
         try {
             Unmarshaller unmarshaller = contextFor(Html.class).createUnmarshaller();
             ByteArrayInputStream in = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
-            return (Html) unmarshaller.unmarshal(new StreamSource(in));
+            return (Html) unmarshaller.unmarshal(SecureXmlFactories.saxSource(in));
         } catch (JAXBException e) {
             throw new IllegalStateException("Failed to unmarshal XForm Html", e);
         }
@@ -215,7 +218,7 @@ public class OdmJaxbContext {
         try {
             Unmarshaller unmarshaller = contextFor(rootClass).createUnmarshaller();
             ByteArrayInputStream in = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
-            return rootClass.cast(unmarshaller.unmarshal(new StreamSource(in)));
+            return rootClass.cast(unmarshaller.unmarshal(SecureXmlFactories.saxSource(in)));
         } catch (JAXBException e) {
             throw new IllegalStateException("Failed to unmarshal " + rootClass.getName(), e);
         }

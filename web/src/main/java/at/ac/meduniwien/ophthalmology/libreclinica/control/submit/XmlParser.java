@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
@@ -52,7 +53,7 @@ public class XmlParser extends DefaultHandler {
     private void parseDocument(File f) {
 
         // get a factory
-        SAXParserFactory spf = SAXParserFactory.newInstance();
+        SAXParserFactory spf = SecureXmlFactories.newSAXParserFactory();
         try {
 
             // get a new instance of parser

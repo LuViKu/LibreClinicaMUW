@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -161,7 +162,7 @@ public class StudySubjectProcessor implements Processor, Ordered {
     private String getEmbeddedStudySubjectOid(SubmissionContainer container) throws Exception {
         String studySubjectId = null;
 
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory dbf = SecureXmlFactories.newDocumentBuilderFactory();
         DocumentBuilder db = dbf.newDocumentBuilder();
         InputSource is = new InputSource();
         is.setCharacterStream(new StringReader(container.getRequestBody()));
