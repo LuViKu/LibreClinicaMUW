@@ -166,7 +166,9 @@ public class ImportCRFDataServlet extends SecureController {
 
                 // schemaValidator.validateAgainstSchema(f, xsdFile);
                 // utf-8 compliance, tbh 06/2009
-                odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
+                try (FileInputStream odmStream = new FileInputStream(f)) {
+                    odmContainer = odmJaxbContext.unmarshalClinicalData(odmStream);
+                }
 
                 logger.debug("Found crf data container for study oid: " + odmContainer.getCrfDataPostImportContainer().getStudyOID());
                 logger.debug("found length of subject list: " + odmContainer.getCrfDataPostImportContainer().getSubjectData().size());
@@ -209,7 +211,9 @@ public class ImportCRFDataServlet extends SecureController {
                     schemaValidator.validateAgainstSchema(f, xsdFile2);
                     // for backwards compatibility, we also try to validate vs
                     // 1.2.1 ODM 06/2008
-                    odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
+                    try (FileInputStream odmStream = new FileInputStream(f)) {
+                        odmContainer = odmJaxbContext.unmarshalClinicalData(odmStream);
+                    }
                 } catch (Exception me2) {
                     // not sure if we want to report me2
                     MessageFormat mf = new MessageFormat("");
