@@ -41,6 +41,7 @@ from retinal_inference.inference.artifact_collector import (
     rewrite_payload_paths,
 )
 from retinal_inference.models.run import RunEnvelope
+from retinal_inference.security import token_matches
 from retinal_inference.tasks import SUPPORTED_TASKS, TaskName
 
 LOG = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ def _check_auth(token_header: str | None) -> None:
                 "Sidecar /run not configured (RETINAL_INFERENCE_AUTH_TOKEN unset)"
             ),
         )
-    if token_header != expected:
+    if not token_matches(token_header, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-MUW-Inference-Token",

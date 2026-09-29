@@ -21,6 +21,7 @@ fragment.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import threading
@@ -56,6 +57,18 @@ def confine(raw: str | None, roots: list[Path]) -> Path | None:
         if candidate == real_root or real_root in candidate.parents:
             return candidate
     return None
+
+
+def token_ok(presented: str | None, expected: str | None) -> bool:
+    """True when ``presented`` is the configured shared secret.
+
+    Constant-time (``hmac.compare_digest``), so the response time does not
+    reveal how much of a guess was right; compared as UTF-8 bytes because a
+    header value may carry non-ASCII characters. An unset secret never matches.
+    """
+    if not expected or presented is None:
+        return False
+    return hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
 
 
 def describe_file(path: Path, pseudonym: str | None, drop_private: bool) -> dict:
@@ -95,7 +108,7 @@ class DescribeHandler(BaseHTTPRequestHandler):
         if self.path not in ("/describe", "/fingerprint"):
             self._json(404, {"message": "not found"})
             return
-        if not settings.ingest_token or self.headers.get(TOKEN_HEADER) != settings.ingest_token:
+        if not token_ok(self.headers.get(TOKEN_HEADER), settings.ingest_token):
             self._json(401, {"message": "missing or wrong token"})
             return
         try:

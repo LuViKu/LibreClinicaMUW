@@ -37,6 +37,7 @@ from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
 from retinal_inference import config as _config
+from retinal_inference.security import token_matches
 
 LOG = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ def _check_auth(token_header: str | None) -> None:
         # to keep dev ergonomics tight. Production deployments MUST
         # set RETINAL_INFERENCE_AUTH_TOKEN.
         return
-    if token_header != expected:
+    if not token_matches(token_header, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid X-Auth-Token",
