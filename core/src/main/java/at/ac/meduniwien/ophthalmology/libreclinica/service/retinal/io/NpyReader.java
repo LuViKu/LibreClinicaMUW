@@ -177,7 +177,15 @@ public final class NpyReader {
             if (t.isEmpty()) {
                 continue;
             }
-            dims.add(Integer.parseInt(t));
+            try {
+                dims.add(Integer.parseInt(t));
+            } catch (NumberFormatException nfe) {
+                // Every other malformed-header case here is an IOException and the
+                // callers (NpzReader, the retinal pipeline) are written to that
+                // contract -- a non-numeric shape entry must not escape as an
+                // unchecked exception.
+                throw new IOException("malformed 'shape' tuple in npy header: " + header, nfe);
+            }
         }
         int[] out = new int[dims.size()];
         for (int j = 0; j < out.length; j++) {
