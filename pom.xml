@@ -74,8 +74,15 @@
 		<!-- Phase C.14 cliff (2026-05-30): bumped 1.4.14 → 1.5.13 to match
 		     Spring Boot 3.5's managed version. Boot's LoggingApplicationListener
 		     loads ch.qos.logback.core.util.StatusPrinter2 (added in 1.5+)
-		     before checking the LoggingSystem=none escape hatch. -->
-		<logback.version>1.5.13</logback.version>
+		     before checking the LoggingSystem=none escape hatch.
+		     2026-09-29: 1.5.13 → 1.5.34 (CVE-2025-11226, CVE-2026-1225,
+		     CVE-2026-9828, CVE-2026-10532); 1.5.34 is also what Spring Boot
+		     3.5.16 manages. Do NOT go to 1.5.37+ / 1.6.x before
+		     core/src/main/resources/logback.xml is migrated off the
+		     Janino-based <if condition='…'> attributes: 1.5.37 removed
+		     them (full fix for CVE-2026-13006) and the config would
+		     silently lose its logLocation branches. -->
+		<logback.version>1.5.34</logback.version>
 		<slf4j.version>2.0.16</slf4j.version>
 		<!-- Selenium 4.x (test scope) drives the smoke-tests profile.
 		     4.20+ supports Java 21 + the Selenium-managed driver download. -->
