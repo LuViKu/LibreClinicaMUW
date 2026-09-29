@@ -208,3 +208,51 @@ def test_confine_accepts_only_regular_files_under_a_root(tmp_path):
     assert describe.confine(str(tmp_path / "b.dcm"), [root]) is None
     assert describe.confine(None, [root]) is None
     assert describe.confine(123, [root]) is None  # type: ignore[arg-type]
+
+
+def test_the_token_is_compared_in_constant_time(served, monkeypatch):
+    # A plain != stops at the first differing byte, so response time leaks how
+    # much of a guess was right; the handler must go through compare_digest.
+    import hmac
+
+    calls = []
+    real = hmac.compare_digest
+
+    def spy(a, b):
+        calls.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(hmac, "compare_digest", spy)
+    root, port = served
+    path = root / "a.dcm"
+    _write_export(path)
+    assert _post(port, {"path": str(path)}, token="wrong")[0] == 401
+    assert calls, "the token was not checked with hmac.compare_digest"
+    calls.clear()
+    assert _post(port, {"path": str(path)})[0] == 200
+    assert (TOKEN.encode(), TOKEN.encode()) in calls
+
+
+def test_a_non_ascii_token_is_refused_not_crashed(served):
+    root, port = served
+    path = root / "a.dcm"
+    _write_export(path)
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    raw = json.dumps({"path": str(path)}).encode("utf-8")
+    conn.putrequest("POST", "/describe")
+    conn.putheader("Content-Type", "application/json")
+    conn.putheader("Content-Length", str(len(raw)))
+    conn.putheader(describe.TOKEN_HEADER, "s\xe9cret".encode("latin-1"))
+    conn.endheaders(raw)
+    resp = conn.getresponse()
+    assert resp.status == 401
+    conn.close()
+
+
+def test_token_ok_edge_cases():
+    assert describe.token_ok(TOKEN, TOKEN)
+    assert not describe.token_ok(None, TOKEN)
+    assert not describe.token_ok("", TOKEN)
+    assert not describe.token_ok(TOKEN, "")
+    assert not describe.token_ok("", "")
+    assert not describe.token_ok("s\xe9cret", TOKEN)

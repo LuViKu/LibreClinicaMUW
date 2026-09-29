@@ -46,6 +46,7 @@ from fastapi import (
 )
 
 from retinal_inference import config as _config
+from retinal_inference.security import token_matches
 
 # DR-024 — the .e2e -> bscan.dcm conversion lives in a separate package
 # (``muw-e2e-converter``) installed only in the LOCAL app-VM
@@ -106,7 +107,7 @@ def _check_auth(token_header: str | None) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Sidecar /preprocess not configured (RETINAL_INFERENCE_AUTH_TOKEN unset)",
         )
-    if token_header != expected:
+    if not token_matches(token_header, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-MUW-Inference-Token",
