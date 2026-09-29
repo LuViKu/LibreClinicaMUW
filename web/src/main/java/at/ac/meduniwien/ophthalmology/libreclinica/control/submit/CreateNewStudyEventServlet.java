@@ -18,8 +18,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.Set;
-import java.util.TreeSet;
 
 import javax.sql.DataSource;
 
@@ -357,8 +355,6 @@ public class CreateNewStudyEventServlet extends SecureController {
             }
 
             String prevStartPrefix = INPUT_STARTDATE_PREFIX;
-            Set<Integer> pickedSeds = new TreeSet<Integer>();
-            pickedSeds.add(studyEventDefinitionId);
             HashMap<Integer, Integer> scheduledSeds = new HashMap<Integer, Integer>();
             scheduledSeds.put(studyEventDefinitionId, -1);
             for (int i = 0; i < ADDITIONAL_SCHEDULED_NUM; ++i) {

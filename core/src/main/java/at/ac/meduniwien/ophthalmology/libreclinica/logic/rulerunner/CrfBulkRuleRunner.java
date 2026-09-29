@@ -40,8 +40,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -196,14 +198,14 @@ public class CrfBulkRuleRunner extends RuleRunner {
 
         HashMap<RuleBulkExecuteContainer, HashMap<RuleBulkExecuteContainerTwo, Set<String>>> crfViewSpecificOrderedObjects =
             new HashMap<RuleBulkExecuteContainer, HashMap<RuleBulkExecuteContainerTwo, Set<String>>>();
-        HashMap<String, ArrayList<RuleActionContainer>> toBeExecuted = new HashMap<String, ArrayList<RuleActionContainer>>();
+        HashMap<String, ArrayList<EvaluatedAction>> toBeExecuted = new HashMap<String, ArrayList<EvaluatedAction>>();
         for (RuleSetBean ruleSet : ruleSets) {
             String key = getExpressionService().getItemOid(ruleSet.getOriginalTarget().getValue());
-            List<RuleActionContainer> allActionContainerListBasedOnRuleExecutionResult = null;
+            List<EvaluatedAction> allActionContainerListBasedOnRuleExecutionResult = null;
             if (toBeExecuted.containsKey(key)) {
                 allActionContainerListBasedOnRuleExecutionResult = toBeExecuted.get(key);
             } else {
-                toBeExecuted.put(key, new ArrayList<RuleActionContainer>());
+                toBeExecuted.put(key, new ArrayList<EvaluatedAction>());
                 allActionContainerListBasedOnRuleExecutionResult = toBeExecuted.get(key);
             }
             ItemDataBean itemData = null;
@@ -235,7 +237,7 @@ public class CrfBulkRuleRunner extends RuleRunner {
                             }
                         }
                         for (RuleActionBean ruleActionBean : actionListBasedOnRuleExecutionResult) {
-                            RuleActionContainer ruleActionContainer = new RuleActionContainer(ruleActionBean, expressionBean, itemData, ruleSet);
+                            EvaluatedAction ruleActionContainer = new EvaluatedAction(ruleActionBean, expressionBean, itemData, ruleSet, rule, result);
                             allActionContainerListBasedOnRuleExecutionResult.add(ruleActionContainer);
                         }
                         logger.info("RuleSet with target  : {} , Ran Rule : {}  The Result was : {} , Based on that {} action will be executed in {} mode. ",
@@ -247,11 +249,15 @@ public class CrfBulkRuleRunner extends RuleRunner {
             }
         }
 
-        for (Map.Entry<String, ArrayList<RuleActionContainer>> entry : toBeExecuted.entrySet()) {
+        // What a dry run would do, per rule set target, rule and result, the
+        // way runRulesBulkOLD grouped it. The heritage loop declared this map
+        // but never filled it, so the RunRule dry-run page was always empty
+        // while its Submit executed every action.
+        Map<PreviewKey, List<RuleActionBean>> preview = new LinkedHashMap<PreviewKey, List<RuleActionBean>>();
+        for (Map.Entry<String, ArrayList<EvaluatedAction>> entry : toBeExecuted.entrySet()) {
             // Sort the list of actions
             Collections.sort(entry.getValue(), new RuleActionContainerComparator());
-            HashMap<Key, List<RuleActionBean>> hms = new HashMap<Key, List<RuleActionBean>>();
-            for (RuleActionContainer ruleActionContainer : entry.getValue()) {
+            for (EvaluatedAction ruleActionContainer : entry.getValue()) {
 
                 //ruleSet.setTarget(ruleAction.getRuleSetExpression());
                 ruleActionContainer.getRuleAction().setCuratedMessage(
@@ -259,94 +265,85 @@ public class CrfBulkRuleRunner extends RuleRunner {
                 ActionProcessor ap =
                     ActionProcessorFacade.getActionProcessor(ruleActionContainer.getRuleAction().getActionType(), ds, getMailSender(), dynamicsMetadataService,
                             ruleActionContainer.getRuleSetBean(), getRuleActionRunLogDao(), ruleActionContainer.getRuleAction().getRuleSetRule());
-                ap.execute(RuleRunnerMode.RULSET_BULK, executionMode, ruleActionContainer.getRuleAction(), ruleActionContainer.getItemDataBean(),
+                RuleActionBean shown = ap.execute(RuleRunnerMode.RULSET_BULK, executionMode, ruleActionContainer.getRuleAction(), ruleActionContainer.getItemDataBean(),
                         DiscrepancyNoteBean.ITEM_DATA, currentStudy, ub, prepareEmailContents(ruleActionContainer.getRuleSetBean(), ruleActionContainer
                                 .getRuleAction().getRuleSetRule(), currentStudy, ruleActionContainer.getRuleAction()));
+                // Only the dry run has a preview page; after a save the servlet
+                // goes to the rule list and the map is not read.
+                if (executionMode == ExecutionMode.DRY_RUN && shown != null) {
+                    preview.computeIfAbsent(ruleActionContainer.previewKey(), k -> new ArrayList<RuleActionBean>())
+                            .add(ruleActionContainer.getRuleAction());
+                }
             }
-            for (Map.Entry<Key, List<RuleActionBean>> theEntry : hms.entrySet()) {
-                Key key = theEntry.getKey();
-                List<RuleActionBean> value = theEntry.getValue();
+        }
+        // Built after every action ran: the lookups below point each rule set
+        // at the target the action was evaluated for, and put back the target
+        // the execution loop saw.
+        for (Map.Entry<PreviewKey, List<RuleActionBean>> theEntry : preview.entrySet()) {
+            PreviewKey key = theEntry.getKey();
+            ExpressionBean runTarget = key.ruleSet.getTarget();
+            key.ruleSet.setTarget(key.target);
+            try {
                 crfViewSpecificOrderedObjects =
-                    populateForCrfBasedRulesView(crfViewSpecificOrderedObjects, key.getRuleSet(), key.getRule(), key.getResult(), currentStudy, value);
+                    populateForCrfBasedRulesView(crfViewSpecificOrderedObjects, key.ruleSet, key.rule, key.result, currentStudy, theEntry.getValue());
+            } finally {
+                key.ruleSet.setTarget(runTarget);
             }
         }
         //logCrfViewSpecificOrderedObjects(crfViewSpecificOrderedObjects);
         return crfViewSpecificOrderedObjects;
     }
 
-}
+    /** An action to run, with the rule and the result that selected it. */
+    private static final class EvaluatedAction extends RuleActionContainer {
+        private final RuleBean rule;
+        private final String result;
 
-class Key {
+        EvaluatedAction(RuleActionBean ruleAction, ExpressionBean target, ItemDataBean itemData, RuleSetBean ruleSet, RuleBean rule, String result) {
+            super(ruleAction, target, itemData, ruleSet);
+            this.rule = rule;
+            this.result = result;
+        }
 
-    RuleSetBean ruleSet;
-    String result;
-    RuleBean rule;
-
-    public Key(RuleSetBean ruleSet, String result, RuleBean rule) {
-        super();
-        this.ruleSet = ruleSet;
-        this.result = result;
-        this.rule = rule;
+        PreviewKey previewKey() {
+            return new PreviewKey(getRuleSetBean(), getExpressionBean(), rule, result);
+        }
     }
 
-    public RuleSetBean getRuleSet() {
-        return ruleSet;
-    }
+    /**
+     * One rule evaluation: a rule set at one of its targets, a rule and its
+     * result. The beans are compared by identity: RuleSetBean's hashCode
+     * follows its mutable target.
+     */
+    private static final class PreviewKey {
+        final RuleSetBean ruleSet;
+        final ExpressionBean target;
+        final RuleBean rule;
+        final String result;
 
-    public void setRuleSet(RuleSetBean ruleSet) {
-        this.ruleSet = ruleSet;
-    }
+        PreviewKey(RuleSetBean ruleSet, ExpressionBean target, RuleBean rule, String result) {
+            this.ruleSet = ruleSet;
+            this.target = target;
+            this.rule = rule;
+            this.result = result;
+        }
 
-    public String getResult() {
-        return result;
-    }
-
-    public void setResult(String result) {
-        this.result = result;
-    }
-
-    public RuleBean getRule() {
-        return rule;
-    }
-
-    public void setRule(RuleBean rule) {
-        this.rule = rule;
-    }
-
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((this.result == null) ? 0 : this.result.hashCode());
-        result = prime * result + ((rule == null) ? 0 : rule.hashCode());
-        result = prime * result + ((ruleSet == null) ? 0 : ruleSet.hashCode());
-        return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        Key other = (Key) obj;
-        if (result == null) {
-            if (other.result != null)
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof PreviewKey)) {
                 return false;
-        } else if (!result.equals(other.result))
-            return false;
-        if (rule == null) {
-            if (other.rule != null)
-                return false;
-        } else if (!rule.equals(other.rule))
-            return false;
-        if (ruleSet == null) {
-            if (other.ruleSet != null)
-                return false;
-        } else if (!ruleSet.equals(other.ruleSet))
-            return false;
-        return true;
+            }
+            PreviewKey other = (PreviewKey) obj;
+            return ruleSet == other.ruleSet && target == other.target && rule == other.rule && Objects.equals(result, other.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(System.identityHashCode(ruleSet), System.identityHashCode(target), System.identityHashCode(rule), result);
+        }
     }
+
 }

@@ -769,14 +769,6 @@ public class OdmExtractDAO extends DatasetDAO {
     	 	
     	 	metadata.setCvIds(cvIds);
  
-    	    HashMap<Integer, Integer> maxLengths = new HashMap<Integer, Integer>();
-            this.setItemDataMaxLengthTypesExpected();
-            rows.clear();
-            logger.debug("Begin to execute GetItemDataMaxLengths");
-            rows = select(this.getItemDataMaxLengths(cvIds));
-            for(HashMap<String, Object> row : rows) {
-                maxLengths.put((Integer) row.get("item_id"), (Integer) row.get("max_length"));
-            }
             ItemDefBean itDef = new ItemDefBean();
             formDef =   fetchFormDetails(crfVersionBean,formDef);
             this.setItemGroupAndItemMetaWithUnitTypesExpected();
@@ -918,8 +910,6 @@ public class OdmExtractDAO extends DatasetDAO {
         ArrayList<HashMap<String, Object>> rows = this.select(this.getStudyEventAndFormMetaSql(parentStudyId, studyId, false));
         String sedprev = "";
         MetaDataVersionProtocolBean protocol = metadata.getProtocol();
-        HashMap<Integer, String> nullMap = new HashMap<Integer, String>();
-        HashMap<String, String> nullValueCVs = new HashMap<String, String>();
         for(HashMap<String, Object> row : rows) {
             Integer sedOrder = (Integer) row.get("definition_order");
             Integer cvId = (Integer) row.get("crf_version_id");
@@ -930,7 +920,6 @@ public class OdmExtractDAO extends DatasetDAO {
             String cvOID = (String) row.get("cv_oid");
             String cvName = (String) row.get("cv_name");
             Boolean cvRequired = (Boolean) row.get("cv_required");
-            String nullValue = (String) row.get("null_values");
             String crfName = (String) row.get("crf_name");
 
             StudyEventDefBean sedef = new StudyEventDefBean();
@@ -966,10 +955,6 @@ public class OdmExtractDAO extends DatasetDAO {
                 metadata.getFormDefs().add(formdef);
                 cvIdPoses.put(cvId, metadata.getFormDefs().size() - 1);
                 cvIds += cvId + ",";
-                if (nullValue != null && nullValue.length() > 0) {
-                    nullMap.put(cvId, nullValue);
-                    nullValueCVs.put(sedOID + "-" + cvOID, nullValue);
-                }
             }
         }
         // 2026-09-18 — guard the trailing-comma strip. When the dataset's

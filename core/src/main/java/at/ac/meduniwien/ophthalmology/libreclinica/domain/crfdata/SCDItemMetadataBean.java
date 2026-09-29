@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata;
 
+import java.util.Objects;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.AbstractMutableDomainObject;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
@@ -38,14 +40,18 @@ public class SCDItemMetadataBean extends AbstractMutableDomainObject {
     public int hashCode() {
         final int prime = 31;
         int result = super.hashCode();
-        result = prime * result + controlItemFormMetadataId;
+        result = prime * result + Objects.hashCode(controlItemFormMetadataId);
         result = prime * result + (controlItemName == null ? 0 : controlItemName.hashCode());
         result = prime * result + (message == null ? 0 : message.hashCode());
         result = prime * result + (optionValue == null ? 0 : optionValue.hashCode());
-        result = prime * result + scdItemFormMetadataId;
+        result = prime * result + Objects.hashCode(scdItemFormMetadataId);
         result = prime * result + scdItemId;
         return result;
     }
+    /*
+     * The two form-metadata ids are Integers: compared with Objects.equals,
+     * not != (which compared references, so equal ids above 127 differed).
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -55,7 +61,7 @@ public class SCDItemMetadataBean extends AbstractMutableDomainObject {
         if (getClass() != obj.getClass())
             return false;
         SCDItemMetadataBean other = (SCDItemMetadataBean) obj;
-        if (controlItemFormMetadataId != other.controlItemFormMetadataId)
+        if (!Objects.equals(controlItemFormMetadataId, other.controlItemFormMetadataId))
             return false;
         if (controlItemName == null) {
             if (other.controlItemName != null)
@@ -72,7 +78,7 @@ public class SCDItemMetadataBean extends AbstractMutableDomainObject {
                 return false;
         } else if (!optionValue.equals(other.optionValue))
             return false;
-        if (scdItemFormMetadataId != other.scdItemFormMetadataId)
+        if (!Objects.equals(scdItemFormMetadataId, other.scdItemFormMetadataId))
             return false;
         if (scdItemId != other.scdItemId)
             return false;

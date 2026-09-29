@@ -9,6 +9,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans;
 
+import java.util.Comparator;
 import java.util.Date;
 
 
@@ -29,10 +30,32 @@ public class AuditLogBean extends ElementOIDBean {
     private String name="";
     private String valueType="";
 
-    public int compareTo(AuditLogBean o) {
-        return this.getDatetimeStamp().compareTo(o.getDatetimeStamp());
+    /**
+     * Time order: by timestamp, entries of the same instant by their audit
+     * sequence (the number in "AL_&lt;audit id&gt;"), undated entries last.
+     *
+     * <p>The natural order of this bean is still {@link ElementOIDBean}'s, by
+     * OID string. A {@code compareTo(AuditLogBean)} used to sit here; it
+     * overloaded rather than overrode {@code compareTo(ElementOIDBean)}, so
+     * sorting a list of audit entries ordered them by OID ("AL_1000" before
+     * "AL_200"), not by time.
+     */
+    public static final Comparator<AuditLogBean> CHRONOLOGICAL =
+            Comparator.comparing(AuditLogBean::getDatetimeStamp, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparingLong(AuditLogBean::auditSequence);
+
+    private static long auditSequence(AuditLogBean b) {
+        String oid = b.getOid();
+        if (oid != null && oid.startsWith("AL_")) {
+            try {
+                return Long.parseLong(oid.substring(3));
+            } catch (NumberFormatException notAnAuditId) {
+                // falls through
+            }
+        }
+        return Long.MAX_VALUE;
     }
-    
+
     public String getUserId() {
         return userId;
     }

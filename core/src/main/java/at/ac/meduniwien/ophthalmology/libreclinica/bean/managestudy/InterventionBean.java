@@ -67,13 +67,47 @@ public class InterventionBean {
         this.type = type;
     }
 
-    public boolean equals(InterventionBean ib) {
-        return type.equalsIgnoreCase(ib.getType()) && name.equalsIgnoreCase(ib.getName());
+    /**
+     * The same intervention: type and name equal ignoring case.
+     *
+     * <p>Until 2026-09 this was {@code equals(InterventionBean)}, an overload
+     * nothing called, next to a {@code hashCode} that returned the
+     * per-instance counter, so the two could not agree. The study servlets
+     * only add interventions to lists and print them.
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof InterventionBean)) {
+            return false;
+        }
+        InterventionBean other = (InterventionBean) obj;
+        return equalsIgnoreCase(type, other.type) && equalsIgnoreCase(name, other.name);
     }
 
+    /** Consistent with {@link #equals(Object)}: hashes the case-folded type and name. */
     @Override
     public int hashCode() {
-        return id;
+        return 31 * caseFoldedHash(type) + caseFoldedHash(name);
+    }
+
+    private static boolean equalsIgnoreCase(String a, String b) {
+        return a == null ? b == null : a.equalsIgnoreCase(b);
+    }
+
+    /**
+     * A hash that agrees with {@link String#equalsIgnoreCase}: it folds each
+     * code point the way that method compares them (upper case, then lower
+     * case), which toLowerCase() on the whole string does not do for every
+     * character.
+     */
+    private static int caseFoldedHash(String s) {
+        if (s == null) {
+            return 0;
+        }
+        return s.codePoints().map(c -> Character.toLowerCase(Character.toUpperCase(c))).reduce(17, (h, c) -> 31 * h + c);
     }
 
     @Override

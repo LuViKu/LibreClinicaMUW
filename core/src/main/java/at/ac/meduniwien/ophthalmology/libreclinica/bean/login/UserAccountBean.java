@@ -494,11 +494,28 @@ public class UserAccountBean extends AuditableEntityBean {
         }
     }
 
-    public boolean equals(UserAccountBean ub) {
-        if (ub == null) {
-            return false;
+    /**
+     * The same account: equal ids.
+     *
+     * <p>Until 2026-09 this was {@code equals(UserAccountBean)}, an overload
+     * that its one typed caller (the double-data-entry owner check in
+     * DisplayEventCRFBean) used, while collections used the inherited
+     * comparison of class, active flag, id and name, under which two loads of
+     * the same account could differ. Nothing in the code base puts accounts
+     * in collections that compare them; the typed caller keeps its result.
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
         }
-        return id == ub.getId();
+        return obj instanceof UserAccountBean && id == ((UserAccountBean) obj).getId();
+    }
+
+    /** The id, consistent with {@link #equals(Object)}. */
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(id);
     }
 
     /**

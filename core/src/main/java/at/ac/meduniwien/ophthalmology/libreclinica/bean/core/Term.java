@@ -99,10 +99,30 @@ public class Term extends EntityBean {
         this.description = description;
     }
 
-    public boolean equals(Term t) {
-        return id == t.id;
+    /**
+     * Terms are equal when their ids are, whatever the subclass: the
+     * subclasses' {@code get(id)} look themselves up with a plain
+     * {@code new Term(id, "")} probe.
+     *
+     * <p>Until 2026-09 this was {@code equals(Term)}, an overload: the
+     * thousand-odd calls with a Term-typed argument (such as
+     * {@code status.equals(Status.AVAILABLE)}) compared ids, while
+     * collections, {@code Objects.equals} and JSP EL used the inherited
+     * comparison of class, active flag, id and name. Every typed call keeps
+     * its result, except that a null argument is now unequal instead of a
+     * NullPointerException; the constants are singletons, so the untyped
+     * callers only differ for Terms of different classes, or a default-built
+     * Term against the INVALID constant of the same id.
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        return obj instanceof Term && id == ((Term) obj).id;
     }
 
+    /** The id, consistent with {@link #equals(Object)}. */
     @Override
     public int hashCode() {
         return id;
