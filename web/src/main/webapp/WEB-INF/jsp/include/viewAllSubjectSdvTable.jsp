@@ -8,8 +8,8 @@
 <%-- Phase B.4 jmesa PR 9 (cohort 7): per-event-CRF SDV table rendered
      via vanilla-JS fetch + DOM render against /pages/viewAllSubjectSdvData.
      The form's hidden inputs (crfId, redirection) are populated by
-     per-row event handlers, then the form posts to the existing
-     /pages/handleSDVGet / /pages/handleSDVRemove handlers. --%>
+     per-row event handlers, then the form POSTs (the handlers refuse
+     GET) to /pages/handleSDVGet / /pages/handleSDVRemove. --%>
 <div id="viewAllSubjectSdvWrap">
     <table id="viewAllSubjectSdvTable" class="aka_form" style="width:100%; border-collapse: collapse;">
         <thead id="viewAllSubjectSdvHead">
@@ -101,7 +101,7 @@
 
     window.sdvFormSubmitRow = function (crfId) {
         var f = document.forms['sdvForm'];
-        f.method = 'GET';
+        f.method = 'POST';
         f.action = ctx + '/pages/handleSDVGet';
         f.crfId.value = crfId;
         f.submit();
@@ -109,7 +109,7 @@
     window.sdvFormUncheckRow = function (crfId) {
         if (!confirm(uncheckSdvConfirm)) return;
         var f = document.forms['sdvForm'];
-        f.method = 'GET';
+        f.method = 'POST';
         f.action = ctx + '/pages/handleSDVRemove';
         f.crfId.value = crfId;
         f.submit();

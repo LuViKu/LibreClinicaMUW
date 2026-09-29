@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import jakarta.servlet.ServletException;
@@ -53,8 +54,8 @@ import org.slf4j.LoggerFactory;
  * {@code SDVController.viewEventCrfSdvData}).
  *
  * <p>What remains: the form-post handlers' shared helpers (set-SDV
- * mutations, parameter-name parsing, CRF-name lookups, and a
- * forward-from-controller utility).
+ * mutations, parameter-name parsing, CRF-name lookups, and an
+ * allow-listed forward back to a table view).
  */
 @SuppressWarnings("all")
 public class SDVUtil {
@@ -68,6 +69,27 @@ public class SDVUtil {
      * is submitted.
      */
     public static final String CHECKBOX_NAME = "sdvCheck_";
+
+    /** View a handler returns to after an SDV change on the event-CRF table. */
+    public static final String VIEW_SDV_BY_EVENT_CRF = "viewAllSubjectSDVtmp";
+
+    /** View a handler returns to after an SDV change on the per-subject table. */
+    public static final String VIEW_SDV_BY_SUBJECT = "viewSubjectAggregate";
+
+    /** View the cancel-job handler returns to. */
+    public static final String VIEW_SCHEDULED_JOBS = "listCurrentScheduledJobs";
+
+    /**
+     * The pages a handler may return the operator to, keyed by the value the
+     * forms send in their {@code redirection} field. The forward target is
+     * always one of these constant paths — never text taken from the request.
+     */
+    private static final Map<String, String> RETURN_VIEWS = Map.of(
+            VIEW_SDV_BY_EVENT_CRF, "/pages/viewAllSubjectSDVtmp",
+            "viewAllSubjectSDV", "/pages/viewAllSubjectSDV",
+            "viewAllSubjectSDVform", "/pages/viewAllSubjectSDVform",
+            VIEW_SDV_BY_SUBJECT, "/pages/viewSubjectAggregate",
+            VIEW_SCHEDULED_JOBS, "/pages/listCurrentScheduledJobs");
 
     private DataSource dataSource;
 
@@ -195,10 +217,32 @@ public class SDVUtil {
     }
 
     /**
-     * Forward to another URL (used by handlers that need to return
-     * the operator to a fresh table view after a state-change post).
+     * The in-app path for a requested return view: the requested one when it
+     * is a known view, otherwise {@code fallbackView}.
+     *
+     * @param requestedView the form's {@code redirection} value; may be anything
+     * @param fallbackView  one of the {@code VIEW_*} constants
      */
-    public void forwardRequestFromController(HttpServletRequest request, HttpServletResponse response, String path) {
+    public static String returnViewPath(String requestedView, String fallbackView) {
+        String path = requestedView == null ? null : RETURN_VIEWS.get(requestedView);
+        if (path == null) {
+            path = RETURN_VIEWS.get(fallbackView);
+        }
+        if (path == null) {
+            throw new IllegalArgumentException("unknown fallback view");
+        }
+        return path;
+    }
+
+    /**
+     * Forward to a table view after a state change (the handlers render the
+     * refreshed table in the same response). Only the known views are
+     * reachable; anything else in {@code requestedView} lands on
+     * {@code fallbackView}.
+     */
+    public void forwardToView(HttpServletRequest request, HttpServletResponse response,
+                              String requestedView, String fallbackView) {
+        String path = returnViewPath(requestedView, fallbackView);
         try {
             request.getRequestDispatcher(path).forward(request, response);
         } catch (ServletException | IOException e) {
