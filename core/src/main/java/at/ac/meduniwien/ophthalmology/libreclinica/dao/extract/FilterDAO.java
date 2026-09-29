@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.extract;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 
 import javax.sql.DataSource;
 
@@ -198,6 +199,17 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
      * @param filterObjs
      */
     public String genSQLStatement(String oldSQLStatement, String connector, ArrayList<FilterObjectBean> filterObjs) {
+        // The pieces below are spliced into SQL text, so only the connectors
+        // and operators the Create Filter form offers are accepted, and
+        // quotes in the compared value are doubled.
+        if (!FILTER_CONNECTORS.contains(connector)) {
+            throw new IllegalArgumentException("unsupported filter connector");
+        }
+        for (FilterObjectBean fob : filterObjs) {
+            if (!FILTER_OPERANDS.contains(fob.getOperand())) {
+                throw new IllegalArgumentException("unsupported filter operator");
+            }
+        }
         StringBuffer sb = new StringBuffer();
         // sb.append(" and subject_id in "+
         // "(select subject_id from extract_data_table where ");
@@ -218,7 +230,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
             if (fob.getOperand().equals(" like ") || fob.getOperand().equals(" not like ")) {
                 fob.setValue("%" + fob.getValue() + "%");
             }
-            tailEnd = tailEnd + "(item_id = " + fob.getItemId() + " and value " + fob.getOperand() + " '" + fob.getValue() + "'))";
+            tailEnd = tailEnd + "(item_id = " + fob.getItemId() + " and value " + fob.getOperand() + " '" + escapeLiteral(fob.getValue()) + "'))";
         }
         if (oldSQLStatement != null) {
             sb.append(" and ");
@@ -229,6 +241,16 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
         // sb.append(")");
         // and a parens at the very end!
         return sb.toString();
+    }
+
+    /** Connectors offered by the Create Filter form. */
+    static final Set<String> FILTER_CONNECTORS = Set.of("and", "or");
+
+    /** Operators CreateFiltersTwoServlet maps the form's choices to. */
+    static final Set<String> FILTER_OPERANDS = Set.of("=", "!=", ">", "<", ">=", "<=", " like ", " not like ");
+
+    private static String escapeLiteral(String value) {
+        return String.valueOf(value).replace("'", "''");
     }
 
     /**
