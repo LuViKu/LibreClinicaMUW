@@ -28,7 +28,6 @@ public class MatchPasswordServlet extends SecureController {
     @Override
     protected void processRequest() throws Exception {
         String password = request.getParameter("password");
-        logger.info("password [" + password + "]");
         if (password != null && !password.equals("")) {
             SecurityManager securityManager =
                     ((SecurityManager) SpringServletAccess.getApplicationContext(context).getBean("securityManager"));

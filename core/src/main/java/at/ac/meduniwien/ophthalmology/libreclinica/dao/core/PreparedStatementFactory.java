@@ -71,7 +71,9 @@ public class PreparedStatementFactory {
             } else {
                 String objType = objParam.getClass().getName();
 
-                logger.debug("\nfound object name:[" + objType + "] [" + order + "] value[" + objParam + "]");
+                // Type and position only: the bound values include password
+                // hashes, API keys, challenge answers and clinical data.
+                logger.debug("found object name:[" + objType + "] [" + order + "]");
 
                 if ("java.lang.String".equals(objType)) {
                     ps.setString(order.intValue(), objParam.toString());
