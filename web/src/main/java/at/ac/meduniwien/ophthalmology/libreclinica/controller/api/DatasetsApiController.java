@@ -712,7 +712,10 @@ public class DatasetsApiController {
         // The legacy file-creation helpers strip spaces out of the
         // dataset name when composing zip filenames — replicate so the
         // ArchivedDatasetFile rows are consistent with /Extract Data.
-        String sanitizedName = db.getName() == null ? "dataset" : db.getName().replaceAll(" ", "_");
+        // Path separators are replaced too: names saved before the wizard
+        // refused them must not steer the export files out of runDir.
+        String sanitizedName = db.getName() == null ? "dataset"
+                : db.getName().replaceAll(" ", "_").replace('/', '_').replace('\\', '_');
         db.setName(sanitizedName);
 
         int fileId;
@@ -1784,6 +1787,10 @@ public class DatasetsApiController {
             out.add(wizardFieldError("name", "Dataset name is required"));
         } else if (name.length() > 2000) {
             out.add(wizardFieldError("name", "Dataset name must be 2000 characters or fewer"));
+        } else if (name.indexOf('/') >= 0 || name.indexOf('\\') >= 0) {
+            // The name becomes part of the export file names; the legacy
+            // Create Dataset form refuses slashes for the same reason.
+            out.add(wizardFieldError("name", "Dataset name cannot contain '/' or '\\'"));
         } else if (study != null && study.getId() > 0) {
             // Name uniqueness within the study (case-insensitive,
             // ignoring soft-deleted datasets so a deleted name can be
