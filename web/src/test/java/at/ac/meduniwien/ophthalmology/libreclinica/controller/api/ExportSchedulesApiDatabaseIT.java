@@ -67,7 +67,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportJobRunner;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.PlaceholderExportFileMaterializer;
 
 /**
  * Export schedules and queued exports, against a real database and a real
@@ -115,6 +117,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         if (datasetId != null) {
             exec("DELETE FROM export_schedule WHERE dataset_id = " + datasetId);
             exec("DELETE FROM export_job WHERE dataset_id = " + datasetId);
+            exec("DELETE FROM archived_dataset_file WHERE dataset_id = " + datasetId);
             exec("DELETE FROM dataset WHERE dataset_id = " + datasetId);
             datasetId = null;
         }
@@ -450,5 +453,26 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         mockMvc().perform(get(url).session(dataManagerIn(STUDY_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(jobId));
+    }
+
+    /* ---------------- the worker ---------------- */
+
+    /**
+     * A materializer that did not register its file itself (the placeholder,
+     * or any other than the production one) leaves the registration to the
+     * worker, which must name an export format that exists.
+     */
+    @Test
+    void theWorkerRegistersAFileTheMaterializerDidNot() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer()));
+
+        ExportJobDAO.Row job = new ExportJobDAO(DATA_SOURCE).findById(jobId);
+        assertEquals(ExportJobDAO.STATUS_DONE, job.status, job.errorMessage);
+        assertEquals(4, count("SELECT export_format_id FROM archived_dataset_file "
+                + " WHERE archived_dataset_file_id = " + job.archivedDatasetFileId),
+                "an ODM export is registered as the XML format");
     }
 }

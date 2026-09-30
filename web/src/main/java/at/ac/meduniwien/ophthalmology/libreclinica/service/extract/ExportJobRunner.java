@@ -190,20 +190,26 @@ public class ExportJobRunner implements Job {
         }
     }
 
+    /**
+     * The {@code export_format} row a format is registered under. The
+     * constants carry that id as their term id; their
+     * {@code getExportFormatId()} is never set and answers 0, which no
+     * {@code export_format} row has.
+     */
     private static int formatIdFor(String format) {
-        if (format == null) return ExportFormatBean.TXTFILE.getExportFormatId();
+        if (format == null) return ExportFormatBean.TXTFILE.getId();
         switch (format.toLowerCase()) {
             case "csv":
             case "tab":
-            case "txt": return ExportFormatBean.TXTFILE.getExportFormatId();
+            case "txt": return ExportFormatBean.TXTFILE.getId();
             case "excel":
             case "xls":
-            case "xlsx": return ExportFormatBean.EXCELFILE.getExportFormatId();
-            case "pdf": return ExportFormatBean.PDFFILE.getExportFormatId();
+            case "xlsx": return ExportFormatBean.EXCELFILE.getId();
+            case "pdf": return ExportFormatBean.PDFFILE.getId();
             case "odm":
-            case "xml": return ExportFormatBean.XMLFILE.getExportFormatId();
-            case "bundle": return ExportFormatBean.ZIPFILE.getExportFormatId();
-            default: return ExportFormatBean.TXTFILE.getExportFormatId();
+            case "xml": return ExportFormatBean.XMLFILE.getId();
+            case "bundle": return ExportFormatBean.ZIPFILE.getId();
+            default: return ExportFormatBean.TXTFILE.getId();
         }
     }
 }
