@@ -30,6 +30,7 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.export.CsvWriter;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -541,7 +542,7 @@ public class DiscrepancyApiController {
             DiscrepancyNoteBean note = new DiscrepancyNoteBean();
             note.setDescription(body.description().trim());
             note.setDiscrepancyNoteTypeId(typeId);
-            note.setResolutionStatusId(ResolutionStatus.OPEN.getId());
+            note.setResolutionStatusId(initialStatusId(typeId));
             note.setStudyId(currentStudy.getId());
             note.setEntityType("itemData");
             note.setEntityId(target.getId());
@@ -1112,6 +1113,20 @@ public class DiscrepancyApiController {
         UserAccountDAO udao = new UserAccountDAO(dataSource);
         UserAccountBean ua = udao.findByPK(userId);
         return (ua != null && ua.getId() > 0) ? ua.getName() : null;
+    }
+
+    /**
+     * The status a new note of this type is stored with. Legacy
+     * ({@code CreateOneDiscrepancyNoteServlet}) stores an annotation and a
+     * reason for change as Not Applicable: neither asks anybody anything,
+     * so neither is an open discrepancy. Queries and failed validation
+     * checks start New.
+     */
+    static int initialStatusId(int typeId) {
+        return typeId == DiscrepancyNoteType.ANNOTATION.getId()
+                        || typeId == DiscrepancyNoteType.REASON_FOR_CHANGE.getId()
+                ? ResolutionStatus.NOT_APPLICABLE.getId()
+                : ResolutionStatus.OPEN.getId();
     }
 
     private static String statusToSpa(int id) {

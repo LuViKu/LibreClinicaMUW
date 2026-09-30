@@ -331,6 +331,14 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                 NoteTransitionMatrix.canCreateType(3, 0));
     }
 
+    @Test
+    void anAnnotationAndAReasonForChangeStartNotApplicable() {
+        org.junit.jupiter.api.Assertions.assertEquals(5, DiscrepancyApiController.initialStatusId(2));
+        org.junit.jupiter.api.Assertions.assertEquals(5, DiscrepancyApiController.initialStatusId(4));
+        org.junit.jupiter.api.Assertions.assertEquals(1, DiscrepancyApiController.initialStatusId(3));
+        org.junit.jupiter.api.Assertions.assertEquals(1, DiscrepancyApiController.initialStatusId(1));
+    }
+
     /* ---------------------------------------------------------------------- */
     /* Phase E.6 dn — eventCrfOid scoping for repeating-event correctness    */
     /* ---------------------------------------------------------------------- */
