@@ -2165,8 +2165,14 @@
       "submit": "Änderungen speichern",
       "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
       "leaveUnchanged": "— Unverändert lassen —",
-      "parametersLink": "Parameter & Module"
-    }
+      "parametersLink": "Parameter & Module",
+      "downloadMetadata": "Metadaten herunterladen (ODM)",
+      "downloadFailed": "Die Metadaten konnten nicht heruntergeladen werden."
+    },
+    "protocolDescription": "Ausführliche Beschreibung",
+    "collaborators": "Kooperationspartner",
+    "contactEmail": "Kontakt-E-Mail",
+    "contactEmailHint": "Adresse der Projektleitung. Pflicht, solange die Anmelde-Benachrichtigung per E-Mail aktiv ist."
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",

@@ -2165,8 +2165,14 @@
       "submit": "Save changes",
       "saved": "Saved. Changes are reflected throughout the platform.",
       "leaveUnchanged": "— Leave unchanged —",
-      "parametersLink": "Parameters & modules"
-    }
+      "parametersLink": "Parameters & modules",
+      "downloadMetadata": "Download metadata (ODM)",
+      "downloadFailed": "The metadata could not be downloaded."
+    },
+    "protocolDescription": "Detailed description",
+    "collaborators": "Collaborators",
+    "contactEmail": "Contact e-mail",
+    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on."
   },
   "manageUsers": {
     "title": "Manage Users",
