@@ -19,7 +19,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -801,9 +803,17 @@ public class UsersApiController {
      * POST treats them as additive grants (one row per role). When
      * neither {@code role} nor {@code roles} is provided the call
      * fails validation.
+     *
+     * <p>{@code legacyRoles} goes with {@code roles}: which of the legacy
+     * data entry roles ({@code ra}, {@code ra2}) the user holds on the
+     * study stay. They cannot be granted, so the list can only name
+     * roles the user holds; one it leaves out is removed. A PUT on a
+     * study where the user holds one of them must carry the list, so a
+     * client that does not know these roles cannot drop or replace them.
      */
     @Schema(name = "RoleAssignmentRequest")
-    public record RoleAssignmentRequest(String studyOid, String role, List<String> roles) {}
+    public record RoleAssignmentRequest(String studyOid, String role, List<String> roles,
+                                        List<String> legacyRoles) {}
 
     /**
      * List every study/role binding owned by {@code username},
@@ -902,6 +912,29 @@ public class UsersApiController {
                     List.of(new ValidationErrorBody.FieldError(
                             "role", "Role '" + body.role()
                                     + "' cannot be granted at site level — assign at the parent study"))));
+        }
+
+        // ra and ra2 project as Investigator (RoleMapper), so granting
+        // Investigator next to one may be a client sending back the label it
+        // was shown. That change goes through PUT, which has to say what
+        // becomes of the legacy role.
+        if (Role.INVESTIGATOR.equals(legacyRole)) {
+            Set<String> heldLegacy;
+            try {
+                heldLegacy = legacyRolesIn(activeRawRoles(username, study.getId()));
+            } catch (SQLException e) {
+                LOG.warn("Failed to read current grants for (study={}, user={}): {}",
+                        study.getId(), username, e.getMessage());
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Failed to load current role grants"));
+            }
+            if (!heldLegacy.isEmpty()) {
+                return ResponseEntity.status(409).body(Map.of("message",
+                        "User '" + username + "' holds the legacy data entry role "
+                                + String.join(", ", heldLegacy) + " on study " + body.studyOid()
+                                + ". Add Investigator with the role list (PUT), which says whether "
+                                + "the legacy role stays."));
+            }
         }
 
         // Multi-role idempotency: refuse only when an ACTIVE row already
@@ -1007,6 +1040,44 @@ public class UsersApiController {
      * longer sufficient now that the same pair can host multiple
      * role rows.
      */
+    /** The raw {@code role_name} of each of the user's active rows on the study. */
+    private LinkedHashSet<String> activeRawRoles(String username, int studyId) throws SQLException {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT role_name FROM study_user_role "
+                             + "WHERE study_id = ? AND user_name = ? AND status_id = 1")) {
+            ps.setInt(1, studyId);
+            ps.setString(2, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String raw = rs.getString(1);
+                    if (raw != null) out.add(raw);
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * {@code "ra"} or {@code "ra2"} for the two legacy data entry roles,
+     * however the name is cased, and null for any other name.
+     */
+    static String legacyRoleKey(String roleName) {
+        if (roleName == null) return null;
+        String key = roleName.trim().toLowerCase(Locale.ROOT);
+        return key.equals("ra") || key.equals("ra2") ? key : null;
+    }
+
+    private static Set<String> legacyRolesIn(Set<String> rawRoleNames) {
+        Set<String> out = new LinkedHashSet<>();
+        for (String raw : rawRoleNames) {
+            String key = legacyRoleKey(raw);
+            if (key != null) out.add(key);
+        }
+        return out;
+    }
+
     private static boolean hasActiveGrantWithRole(UserAccountDAO userDao,
                                                   String username,
                                                   int studyId,
@@ -1037,8 +1108,15 @@ public class UsersApiController {
      *       roles are inserted. No-op on roles already active.</li>
      *   <li>{@code role}: legacy single-role overwrite — kept for
      *       back-compat with callers that haven't migrated yet.
-     *       Mutates the first active binding row in place.</li>
+     *       Mutates the first active binding row in place. Refused with
+     *       409 when the user holds more than one role on the study or a
+     *       legacy data entry role ({@code ra}, {@code ra2}): the write
+     *       rewrites every row of the pair.</li>
      * </ul>
+     *
+     * <p>{@code legacyRoles} goes with {@code roles}; see
+     * {@link RoleAssignmentRequest}. An empty {@code roles} with no
+     * legacy role kept takes the user off the study.
      *
      * <p>Returns the refreshed role-binding list for (user, study).
      */
@@ -1052,7 +1130,7 @@ public class UsersApiController {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
 
-        boolean bulkMode = body != null && body.roles() != null && !body.roles().isEmpty();
+        boolean bulkMode = body != null && body.roles() != null;
         if (!bulkMode) {
             if (body == null || body.role() == null || body.role().isBlank()) {
                 return ResponseEntity.badRequest().body(new ValidationErrorBody(
@@ -1074,6 +1152,14 @@ public class UsersApiController {
                             "Unknown role '" + spaRole + "' — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
                 }
             }
+            if (body.legacyRoles() != null) {
+                for (String legacy : body.legacyRoles()) {
+                    if (legacyRoleKey(legacy) == null) {
+                        pre.add(fieldError("legacyRoles",
+                                "Unknown legacy role '" + legacy + "' — expected ra or ra2"));
+                    }
+                }
+            }
             if (!pre.isEmpty()) {
                 return ResponseEntity.badRequest().body(new ValidationErrorBody(
                         "Validation failed", pre));
@@ -1091,7 +1177,8 @@ public class UsersApiController {
         }
 
         if (bulkMode) {
-            return updateRolesBulk(username, body.roles(), study, studyOid, me, userDao, studyDao);
+            return updateRolesBulk(username, body.roles(), body.legacyRoles(), study, studyOid, me,
+                    userDao, studyDao);
         }
 
         // Legacy single-role overwrite path.
@@ -1108,6 +1195,32 @@ public class UsersApiController {
                     List.of(new ValidationErrorBody.FieldError(
                             "role", "Role '" + body.role()
                                     + "' cannot be granted at site level — assign at the parent study"))));
+        }
+
+        // updateStudyUserRole keys on (study, user), so this write gives every
+        // row of the pair the new role. That is only a change of role when the
+        // pair has one row, and never on a legacy data entry role, which a
+        // client may be sending back as the Investigator it was shown as.
+        LinkedHashSet<String> current;
+        try {
+            current = activeRawRoles(username, study.getId());
+        } catch (SQLException e) {
+            LOG.warn("Failed to read current grants for (study={}, user={}): {}",
+                    study.getId(), username, e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load current role grants"));
+        }
+        Set<String> heldLegacy = legacyRolesIn(current);
+        if (!heldLegacy.isEmpty()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' holds the legacy data entry role "
+                            + String.join(", ", heldLegacy) + " on study '" + studyOid
+                            + "'. Change it with the role list, which says whether it stays."));
+        }
+        if (current.size() > 1) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' holds several roles on study '" + studyOid
+                            + "'. Set them with the role list."));
         }
 
         StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
@@ -1159,6 +1272,7 @@ public class UsersApiController {
      */
     private ResponseEntity<?> updateRolesBulk(String username,
                                               List<String> requestedSpaRoles,
+                                              List<String> legacyRolesToKeep,
                                               StudyBean study,
                                               String studyOid,
                                               UserAccountBean me,
@@ -1192,11 +1306,6 @@ public class UsersApiController {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
-        if (resolved.isEmpty()) {
-            return ResponseEntity.badRequest().body(new ValidationErrorBody(
-                    "Validation failed",
-                    List.of(fieldError("roles", "At least one role is required"))));
-        }
 
         UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
         if (target == null || target.getId() == 0) {
@@ -1210,24 +1319,40 @@ public class UsersApiController {
         // which returns the LOCALIZED display value, not the literal —
         // so we can't trust StudyUserRoleBean.getRoleName() for diff or
         // WHERE-clause keys. Read the raw column directly.
-        LinkedHashMap<String, Integer> currentByRawRole = new LinkedHashMap<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                     "SELECT role_name FROM study_user_role "
-                             + "WHERE study_id = ? AND user_name = ? AND status_id = 1")) {
-            ps.setInt(1, study.getId());
-            ps.setString(2, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    String raw = rs.getString(1);
-                    if (raw != null) currentByRawRole.putIfAbsent(raw, 1);
-                }
-            }
+        LinkedHashSet<String> current;
+        try {
+            current = activeRawRoles(username, study.getId());
         } catch (SQLException sqlEx) {
             LOG.warn("Failed to snapshot current grants for (study={}, user={}): {}",
                     study.getId(), username, sqlEx.getMessage());
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to load current role grants"));
+        }
+
+        // ra and ra2 cannot be granted from here and project as Investigator,
+        // so a client unaware of them would send Investigator back and leave
+        // them out. They change only when the request says what becomes of
+        // them; a request that does not is refused before anything is written.
+        Set<String> heldLegacy = legacyRolesIn(current);
+        if (!heldLegacy.isEmpty() && legacyRolesToKeep == null) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' holds the legacy data entry role "
+                            + String.join(", ", heldLegacy) + " on study " + studyOid
+                            + ". Say with legacyRoles whether it stays; nothing was changed."));
+        }
+        Set<String> keepLegacy = new LinkedHashSet<>();
+        if (legacyRolesToKeep != null) {
+            for (String legacy : legacyRolesToKeep) keepLegacy.add(legacyRoleKey(legacy));
+        }
+        for (String legacy : keepLegacy) {
+            if (!heldLegacy.contains(legacy)) {
+                errors.add(fieldError("legacyRoles", "User '" + username + "' does not hold the legacy role '"
+                        + legacy + "' on this study, and legacy roles cannot be granted"));
+            }
+        }
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed", errors));
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
@@ -1237,7 +1362,7 @@ public class UsersApiController {
         // Adds: anything in resolved that isn't already active.
         for (Map.Entry<String, Role> e : resolved.entrySet()) {
             String rawRoleName = e.getKey();
-            if (currentByRawRole.containsKey(rawRoleName)) continue;
+            if (current.contains(rawRoleName)) continue;
             StudyUserRoleBean sur = new StudyUserRoleBean();
             sur.setStudyId(study.getId());
             sur.setRoleName(rawRoleName);
@@ -1265,9 +1390,10 @@ public class UsersApiController {
         // discriminator is (study_id, user_name, role_name) and we
         // additionally pin status_id=1 to avoid resurrecting an
         // already-deleted row with the same role-name.
-        for (Map.Entry<String, Integer> e : currentByRawRole.entrySet()) {
-            String rawRoleName = e.getKey();
+        for (String rawRoleName : current) {
             if (resolved.containsKey(rawRoleName)) continue;
+            String legacyKey = legacyRoleKey(rawRoleName);
+            if (legacyKey != null && keepLegacy.contains(legacyKey)) continue;
             try (Connection conn = dataSource.getConnection();
                  PreparedStatement ps = conn.prepareStatement(
                          "UPDATE study_user_role SET status_id = ?, date_updated = NOW(), "
@@ -1377,13 +1503,16 @@ public class UsersApiController {
                 ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
         boolean active = sur.getStatus() != null
                 && sur.getStatus().getId() == Status.AVAILABLE.getId();
+        String legacyRole = Role.RESEARCHASSISTANT.equals(sur.getRole()) ? "ra"
+                : Role.RESEARCHASSISTANT2.equals(sur.getRole()) ? "ra2" : null;
         return new RoleBindingDto(
                 sur.getStudyId(),
                 study == null ? null : study.getOid(),
                 study == null ? null : study.getName(),
                 isSite && study != null ? study.getName() : null,
                 spaRole,
-                active);
+                active,
+                legacyRole);
     }
 
     /* ----------------------------------------------------------------- */
