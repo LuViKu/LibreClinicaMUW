@@ -391,7 +391,7 @@ Independent of D-Sec; one PR per library. Pick up opportunistically.
 
 **Open:** the listing-page wave (Subjects table, CRF datatables, dataset listings) — currently still JSP + DataTables.net post Phase B.4. SPA conversion is per-table, parallel-friendly, no shared cliff.
 
-Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (data entry, dashboards, subject/study lists, discrepancy review), JSP retained for admin/low-frequency screens.
+Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (data entry, dashboards, subject/study lists, discrepancy review), JSP retained for admin/low-frequency screens. **Proposed change (2026-09-30, [DR-018](docs/development/modernization/decision-record.md)):** the JSP layer is retired in full, admin screens included, to reduce legacy code that can carry undetected vulnerabilities. A 2026-09-30 survey maps the 421 JSPs to 97 screens — 31 covered by the SPA, 18 partly, 48 not at all, plus 38 unreachable files; admin is the least covered area.
 
 **Feature-parity baseline:** [`docs/development/modernization/phase-e/`](docs/development/modernization/phase-e/) — live-walkthrough catalogue of every UI feature reachable today as Investigator, Monitor, and Data Manager, with screenshots and servlet-to-class cross-references. The SPA rewrite must preserve every feature listed there unless explicitly retired.
 

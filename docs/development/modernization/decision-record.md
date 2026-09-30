@@ -873,6 +873,47 @@ The second problem is the one that decided the shape. A camera that sits in the 
 
 ---
 
+## DR-018 — The legacy JSP layer is retired in full, admin screens included
+
+**Date:** 2026-09-30
+**Status:** Proposed. Becomes Accepted when the owner signs off the strategy in the Decision below; until then DR-004's scoping clause stands.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Supersedes:** the scoping clause of [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes) — *"only the high-traffic SPA screens are within scope; admin screens remain on JSP."* DR-004's decision on clinical-use timing is untouched.
+**Related:** [DR-008](#dr-008--ui-framework-for-phase-e-vue-3) (Vue 3), [DR-019](#dr-019--phase-e-usability-acceptance-bar) (usability bar), Phase E execution playbook §E.11 (which reserved this number for the retirement strategy); the feature-parity catalogue in `docs/development/modernization/phase-e/` (`investigator-features.md`, `monitor-features.md`, `data-manager-features.md`).
+
+**Context.** DR-004 kept admin screens on JSP as a way of bounding Phase E, so that the UI work could overlap with first clinical use without growing into a full rewrite. Its reasoning is about schedule and validation cost; it does not weigh the security of the code it leaves in place. The playbook later reserved DR-018 for a retirement strategy and listed three options — retire each JSP as its SPA equivalent ships, behind a flag; run both in parallel for a six-month bake-in; or cut over at the end of Phase E — and left it open.
+
+What has changed is evidence about that code, gathered during the 2026-09-29/30 code-scanning remediation:
+
+- **The legacy tree carries a disproportionate share of the findings.** Of the 1,573 code-scanning alerts open after the security release, 485 (30%) sit in the JSP-facing trees: `control/` 367, `web/pform/` 44, `view/` 34, `web/job/` 27, `web/bean/` 10, `web/domain/` 3.
+- **It keeps producing real defects, not only style findings.** Reading the heritage servlets turned up a request parameter that crashed `CreateFiltersTwoServlet` on any name beginning with `ID`; six servlets that dereferenced their `id` parameter above the null guard written to protect it; and CRF data imported through `ImportCRFDataServlet` landing in the shared, world-readable temp directory. None was caught by a test. The code is old enough that nobody reads it, and the test suite covers the SPA-facing controllers far better than the servlets.
+- **All of it is reachable.** `deploy/nginx/ecrf.conf` proxies `/LibreClinica/` straight to the WAR, so every legacy URL works as a bookmark, whether or not the SPA has replaced the screen.
+- **Some of what ships does nothing.** The Jersey 1.x servlets are recorded as deploy-time zombies in both `web.xml` and `LegacyServletRegistry`, yet `com.sun.jersey` is still declared in the root and core poms and ships in the WAR.
+
+A static coverage survey (2026-09-30) mapped the 421 JSPs to 97 screens: **31 covered** by an SPA route, **18 partially covered**, **48 not covered**, plus **38 files already unreachable**. Admin is the least covered area — the `/AdminSystem` and `/TechAdmin` landings, `/AuditDatabase`, `/ViewLogMessage`, scheduled import jobs, job pause and cancel, the cross-study subject registry and `/Enterprise` have no SPA equivalent at all.
+
+**Decision.** The JSP layer is retired in full, admin screens included. The aim is to reduce the amount of legacy code that can carry an undetected vulnerability, so the order of work is chosen to shrink what is *reachable* early, and to delete only once deletion is safe.
+
+1. **Unreachable code goes first.** The 38 JSPs no route reaches are deleted, with the `Page` constants that only they used. `printcrf.jsp` is reachable solely through Jersey, so it goes with the `web/restful/**` tree and `com.sun.jersey` leaves the poms. Nothing a user can reach changes.
+2. **A covered screen is switched off before it is deleted.** When the SPA covers a screen, its legacy route is closed and moved behind the `/legacy/<jsp-path>` alias the playbook (§E.11) specifies, and the SPA route goes live behind its `libreclinica.spa.<feature>.enabled` flag as the playbook also requires. This is the playbook's option (a) with (b)'s safety net, applied per screen rather than at one cutover.
+
+   **One change to the playbook's mechanism:** the playbook leaves the `/legacy/` URL open to every user for the bake-in. Here it is **reachable only by an administrator, and every hit is logged.** An alias any user can reach keeps the whole legacy surface exposed for the full bake-in, which is the thing this decision exists to reduce; restricted and logged, it still lets an administrator reach a screen a gap has left users stranded on, and the log is what point 4 measures.
+3. **Why switch off first.** The coverage map is static: it matches routes, views and API controllers against what each servlet does, and it has not compared the large forms field by field (study create/update across eight pages, the event definition's CRF and SDV matrix, the dataset inclusion flags). A `COVERED` verdict can therefore hide a gap. A closed route turns a missed gap into a support request that can be answered by reopening it; a deleted one turns it into lost clinical capability.
+4. **A screen is deleted only when** its SPA replacement is recorded against the parity catalogue for each role that uses it, its legacy route has been closed for the playbook's **six-month bake-in window**, and the access log shows no use by anyone in that time. The deletion is its own `chore(phase-e.11-retire-<feature>)` commit, as the playbook specifies.
+5. **Admin screens need a catalogue first.** The parity catalogue covers the Investigator, Monitor and Data Manager roles only, because admin was out of scope under DR-004. Before an admin screen can meet point 4 there has to be an administrator feature catalogue in the same form; writing it is the first piece of admin work.
+6. **Every retirement is recorded** in `docs/development/modernization/phase-e-retirement-log.md`: the screen, its replacement, the date it was closed, the date it was deleted, and who signed it off. The playbook requires this log; it does not yet exist.
+
+**Consequences.**
+- The reachable legacy surface shrinks with each screen the SPA covers, long before the last screen is rebuilt.
+- The 48 uncovered and 18 partially covered screens become planned work rather than a permanent residue. Admin is the largest part of it.
+- Validation cost rises: DR-004 scoped admin out partly to keep validation small. Each admin screen now needs an SPA replacement that passes the DR-019 bar.
+- Two things from the survey want fixing before step 2 begins, because both undermine a clean cut-over: the SPA's only link into the legacy UI (`DatasetListView.vue` hard-links `/LibreClinica/CreateDataset`, which the SPA's own wizard already replaces), and `/pages/user`, a live route still serving the upstream demo stub that fills `user.jsp` with sample names.
+- Six live screens are rendered by Spring MVC controllers rather than servlets (the CRF-version change pages, `studymodule.jsp`, `extract.jsp`, `listCurrentScheduledJobs.jsp` and the SDV pages). A retirement pass that traces only `Page` constants will miss them; they are counted as live in the survey.
+
+**Reversible.** Steps 1 and 2 are reversed by restoring the files or reopening the route. Deletion after step 4 is reversed only by restoring from history, which is why it waits for the bake-in and the log.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
