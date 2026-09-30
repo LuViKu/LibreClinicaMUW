@@ -199,7 +199,7 @@ public class EventCrfRemovalApiController {
                 valueIds = ItemDataStatusCascade.autoRemove(c, eventCrf.getId(), user.getId());
                 writeRemovalAudit(c, user, eventCrf, reason);
                 c.commit();
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 c.rollback();
                 throw e;
             } finally {

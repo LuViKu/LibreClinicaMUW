@@ -2488,7 +2488,7 @@ public class SubjectsApiController {
                     restoreChildren(c, ss.getId(), currentUser.getId());
                 }
                 c.commit();
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 c.rollback();
                 throw e;
             } finally {
@@ -2500,71 +2500,24 @@ public class SubjectsApiController {
         }
     }
 
-    /** Neither removed (5) nor auto-removed (7). */
-    private static final String LIVE = "status_id NOT IN (5, 7)";
-
-    /** The status a restored event CRF or value returns to: the recorded one, else available. */
-    private static final String RECORDED_STATUS = "COALESCE(NULLIF(old_status_id, 0), 1)";
-
-    /** Taken by a removal: auto-removed, and the recorded status is not itself a removal. */
-    private static final String TAKEN = "status_id = 7 AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))";
-
     private static void autoRemoveChildren(Connection c, int studySubjectId, int userId) throws SQLException {
-        java.sql.Array visits = c.createArrayOf("integer", ids(c,
+        List<Integer> visits = EventDataStatusCascade.ids(c,
                 "UPDATE study_event SET status_id = 7, date_updated = now(), update_id = ? "
-                        + "WHERE study_subject_id = ? AND " + LIVE + " RETURNING study_event_id",
-                userId, studySubjectId).toArray());
-        String crfsOfVisits = "event_crf_id IN (SELECT event_crf_id FROM event_crf "
-                + "WHERE study_event_id = ANY(?) AND status_id <> 5)";
-        // Rows already auto-removed record that first: afterwards they could
-        // not be told apart from the ones this removal takes.
-        execute(c, "UPDATE event_crf SET old_status_id = 7 WHERE study_event_id = ANY(?) AND status_id = 7",
-                null, visits);
-        execute(c, "UPDATE item_data SET old_status_id = 7 WHERE " + crfsOfVisits + " AND status_id = 7",
-                null, visits);
-        execute(c, "UPDATE event_crf SET old_status_id = status_id, status_id = 7, date_updated = now(), "
-                + "update_id = ? WHERE study_event_id = ANY(?) AND " + LIVE, userId, visits);
-        execute(c, "UPDATE item_data SET old_status_id = status_id, status_id = 7, date_updated = now(), "
-                + "update_id = ? WHERE " + crfsOfVisits + " AND " + LIVE, userId, visits);
+                        + "WHERE study_subject_id = ? AND " + EventDataStatusCascade.LIVE
+                        + " RETURNING study_event_id",
+                userId, studySubjectId);
+        EventDataStatusCascade.autoRemove(c, visits, userId);
     }
 
     private static void restoreChildren(Connection c, int studySubjectId, int userId) throws SQLException {
         // A visit of an event definition removed on its own stays with the definition.
-        java.sql.Array visits = c.createArrayOf("integer", ids(c,
+        List<Integer> visits = EventDataStatusCascade.ids(c,
                 "UPDATE study_event SET status_id = 1, date_updated = now(), update_id = ? "
                         + "WHERE study_subject_id = ? AND status_id = 7 AND study_event_definition_id IN "
-                        + "(SELECT study_event_definition_id FROM study_event_definition WHERE " + LIVE + ") "
-                        + "RETURNING study_event_id",
-                userId, studySubjectId).toArray());
-        java.sql.Array crfs = c.createArrayOf("integer", ids(c,
-                "UPDATE event_crf SET status_id = " + RECORDED_STATUS + ", date_updated = now(), update_id = ? "
-                        + "WHERE study_event_id = ANY(?) AND " + TAKEN + " RETURNING event_crf_id",
-                userId, visits).toArray());
-        execute(c, "UPDATE item_data SET status_id = " + RECORDED_STATUS + ", date_updated = now(), "
-                + "update_id = ? WHERE event_crf_id = ANY(?) AND " + TAKEN, userId, crfs);
-    }
-
-    /** Runs an {@code UPDATE ... RETURNING} bound to the updater and one parameter; returns the ids. */
-    private static List<Integer> ids(Connection c, String sql, int userId, Object param) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            ps.setObject(2, param);
-            List<Integer> out = new ArrayList<>();
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) out.add(rs.getInt(1));
-            }
-            return out;
-        }
-    }
-
-    /** Runs an {@code UPDATE} bound to the updater, when there is one, and to an id array. */
-    private static void execute(Connection c, String sql, Integer userId, java.sql.Array ids) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            int i = 1;
-            if (userId != null) ps.setInt(i++, userId);
-            ps.setArray(i, ids);
-            ps.executeUpdate();
-        }
+                        + "(SELECT study_event_definition_id FROM study_event_definition WHERE "
+                        + EventDataStatusCascade.LIVE + ") RETURNING study_event_id",
+                userId, studySubjectId);
+        EventDataStatusCascade.restore(c, visits, userId);
     }
 
     /**
