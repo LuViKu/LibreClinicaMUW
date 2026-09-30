@@ -821,10 +821,15 @@
 	               </exclusion>
 	           </exclusions>
 	       </dependency>
+			<!-- DR-007: OpenPDF replaces iText 2.1.2 (2008, unmaintained;
+			     later iText releases are AGPL). The 2.0.x line keeps the
+			     com.lowagie.text packages, so the two PDF writers compile
+			     unchanged; 3.0 renames them to org.openpdf. LGPL-2.1 /
+			     MPL-2.0, Java 17+, no mandatory transitive dependencies. -->
 			<dependency>
-				<groupId>com.lowagie</groupId>
-				<artifactId>itext</artifactId>
-				<version>2.1.2</version>
+				<groupId>com.github.librepdf</groupId>
+				<artifactId>openpdf</artifactId>
+				<version>2.0.5</version>
 			</dependency>
 			<!-- XMLUnit 2.x: canonical XML comparison for Phase B.0 Castor
 			     characterisation tests. See DR-006 + phase-b-execution-playbook.md

@@ -84,9 +84,10 @@
 			<groupId>commons-lang</groupId>
 			<artifactId>commons-lang</artifactId>
 		</dependency>
+		<!-- DR-007: DownloadDiscrepancyNote writes the discrepancy-note PDF. -->
 		<dependency>
-			<groupId>com.lowagie</groupId>
-			<artifactId>itext</artifactId>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
 		</dependency>
 		<!-- end servlet tests -->
 		<dependency>

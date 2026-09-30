@@ -37,6 +37,7 @@ import com.lowagie.text.HeaderFooter;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Table;
+import com.lowagie.text.alignment.HorizontalAlignment;
 import com.lowagie.text.pdf.PdfWriter;
 
 /**
@@ -664,7 +665,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
               new Font(Font.HELVETICA, 14, Font.BOLD, new Color(0, 0, 0)));
             Cell cell = new Cell(para);
             cell.setHeader(true);
-            cell.setHorizontalAlignment(Element.ALIGN_LEFT);
+            cell.setHorizontalAlignment(HorizontalAlignment.LEFT);
             cell.setColspan(2);
             table.addCell(cell);
             table.endHeaders();

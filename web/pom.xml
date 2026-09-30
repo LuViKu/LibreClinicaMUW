@@ -24,15 +24,15 @@
 	</properties>
 
 	<dependencies>
-		<!-- Phase E.6 P5: SubjectExportApiController uses iText directly
-		     for the per-subject PDF snapshot. The transitive route from
-		     LibreClinica-core works at compile-time but
+		<!-- Phase E.6 P5: SubjectExportApiController uses the PDF library
+		     directly for the per-subject PDF snapshot. The transitive route
+		     from LibreClinica-core works at compile-time but
 		     maven-dependency-plugin's analyze-only step rejects undeclared
-		     usage — declare it explicitly here. Version is managed in the
-		     parent pom (2.1.2). -->
+		     usage — declare it explicitly here. OpenPDF (DR-007); version
+		     managed in the parent pom. -->
 		<dependency>
-			<groupId>com.lowagie</groupId>
-			<artifactId>itext</artifactId>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
 		</dependency>
 
 		<!-- Phase C.1: Spring Boot web starter. Brings spring-webmvc +
@@ -624,6 +624,13 @@
                              declaring it explicitly would duplicate
                              Boot's version pinning. -->
                         <ignoredUsedUndeclaredDependency>org.assertj:assertj-core</ignoredUsedUndeclaredDependency>
+                        <!-- SubjectExportPdfDatabaseIT reads the exported PDF's
+                             text with PDFBox. PDFBox reaches this module at
+                             compile scope through LibreClinica-core, which
+                             uses it at runtime; declaring it here with test
+                             scope would narrow that scope and drop the jar
+                             from the WAR. -->
+                        <ignoredUsedUndeclaredDependency>org.apache.pdfbox:pdfbox</ignoredUsedUndeclaredDependency>
                         <!-- Phase E.5 B3: OpenApiConfig imports GroupedOpenApi
                              from springdoc-openapi-starter-common and the
                              10 controllers import @Tag from
@@ -664,6 +671,10 @@
                              in core's DataSourceConfig) can apply pending changesets at
                              boot. Same compile-vs-test-scope tension as micrometer. -->
                         <ignoredNonTestScopedDependency>org.liquibase:liquibase-core</ignoredNonTestScopedDependency>
+                        <!-- PDFBox: used here only by SubjectExportPdfDatabaseIT, but
+                             core needs it at runtime in the WAR (see the
+                             used-undeclared entry above). -->
+                        <ignoredNonTestScopedDependency>org.apache.pdfbox:pdfbox</ignoredNonTestScopedDependency>
                     </ignoredNonTestScopedDependencies>
 		        </configuration>
 		      </plugin>
