@@ -39,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
@@ -51,7 +50,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -2021,8 +2019,9 @@ public class SubjectsApiController {
     /**
      * Phase E A3 — inverse of {@link #remove}. Restores a previously
      * soft-deleted subject and its cascade. Status flips back to
-     * {@link Status#AVAILABLE}; child rows in
-     * {@link Status#AUTO_DELETED} flip back to {@link Status#AVAILABLE}.
+     * {@link Status#AVAILABLE}; the child rows the removal auto-removed
+     * come back, event CRFs and values with the status they had
+     * ({@link #cascadeChildren}).
      *
      * <p>409 if subject is not currently in {@code DELETED} — restore
      * is the inverse of remove and not a generic "reset to available".
@@ -2420,11 +2419,8 @@ public class SubjectsApiController {
 
         // Flip the parent, then cascade. The legacy
         // RemoveSubjectServlet walks the chain inline; we do the
-        // same here. Each DAO.update() is its own auto-committed
-        // statement — there's no service-layer transaction wrapping
-        // them, mirroring legacy behaviour (failures partway through
-        // leave the system in a mixed state, which is consistent
-        // with what BUR-* error codes already produce).
+        // same here. The parent's update commits on its own, as in
+        // legacy; the cascade below it is one transaction.
         ss.setStatus(newSubjectStatus);
         ss.setUpdater(currentUser);
         ss.setUpdatedDate(new java.util.Date());
@@ -2457,44 +2453,117 @@ public class SubjectsApiController {
     }
 
     /**
-     * Cascade the StudySubject's status change to its child rows
-     * (study_events → event_crfs → item_data). Mirrors the legacy
-     * {@code RemoveSubjectServlet.processRequest} loop verbatim:
-     * skip rows already in {@code DELETED} (those were removed
-     * outside this cascade and shouldn't be touched).
+     * Cascade the study subject's removal or restore to its visits, event
+     * CRFs and item data, as legacy {@code RemoveStudySubjectServlet} and
+     * {@code RestoreStudySubjectServlet} do: a removal auto-removes each
+     * one not removed on its own, and a restore brings back what a removal
+     * auto-removed.
+     *
+     * <p>Where it differs from those servlets:
+     * <ul>
+     *   <li>An event CRF or value records the status it had
+     *       ({@code old_status_id}) and gets it back, as the legacy site
+     *       removal and restore do. The subject servlets bring it back as
+     *       available, which unlocks a locked CRF and unsigns a signed one.
+     *       A row already auto-removed records that, so the restore leaves
+     *       it removed.</li>
+     *   <li>Only auto-removed rows come back, and a visit only when its
+     *       event definition is not removed. This cascade used to make
+     *       every row that was not removed available.</li>
+     *   <li>Status-only SQL in one transaction: {@code ItemDataDAO.update}
+     *       clears a value's provenance, and {@code StudyEventDAO.update}
+     *       fails on a visit without a start date.</li>
+     * </ul>
      */
     private void cascadeChildren(StudySubjectBean ss, UserAccountBean currentUser,
                                  Status cascadeChildStatus) {
-        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
-        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDAO = new ItemDataDAO(dataSource);
-        java.util.Date now = new java.util.Date();
-
-        java.util.ArrayList<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
-        for (StudyEventBean event : events) {
-            if (event.getStatus() != null && event.getStatus().equals(Status.DELETED)) continue;
-            event.setStatus(cascadeChildStatus);
-            event.setUpdater(currentUser);
-            event.setUpdatedDate(now);
-            studyEventDAO.update(event);
-
-            java.util.ArrayList<EventCRFBean> eventCrfs = eventCRFDAO.findAllByStudyEvent(event);
-            for (EventCRFBean ec : eventCrfs) {
-                if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
-                ec.setStatus(cascadeChildStatus);
-                ec.setUpdater(currentUser);
-                ec.setUpdatedDate(now);
-                eventCRFDAO.update(ec);
-
-                java.util.ArrayList<ItemDataBean> items = itemDataDAO.findAllByEventCRFId(ec.getId());
-                for (ItemDataBean it : items) {
-                    if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
-                    it.setStatus(cascadeChildStatus);
-                    it.setUpdater(currentUser);
-                    it.setUpdatedDate(now);
-                    itemDataDAO.update(it);
+        boolean remove = Status.AUTO_DELETED.equals(cascadeChildStatus);
+        try (Connection c = dataSource.getConnection()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                if (remove) {
+                    autoRemoveChildren(c, ss.getId(), currentUser.getId());
+                } else {
+                    restoreChildren(c, ss.getId(), currentUser.getId());
                 }
+                c.commit();
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
             }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not " + (remove ? "remove" : "restore")
+                    + " the visits and data of study subject " + ss.getId(), e);
+        }
+    }
+
+    /** Neither removed (5) nor auto-removed (7). */
+    private static final String LIVE = "status_id NOT IN (5, 7)";
+
+    /** The status a restored event CRF or value returns to: the recorded one, else available. */
+    private static final String RECORDED_STATUS = "COALESCE(NULLIF(old_status_id, 0), 1)";
+
+    /** Taken by a removal: auto-removed, and the recorded status is not itself a removal. */
+    private static final String TAKEN = "status_id = 7 AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))";
+
+    private static void autoRemoveChildren(Connection c, int studySubjectId, int userId) throws SQLException {
+        java.sql.Array visits = c.createArrayOf("integer", ids(c,
+                "UPDATE study_event SET status_id = 7, date_updated = now(), update_id = ? "
+                        + "WHERE study_subject_id = ? AND " + LIVE + " RETURNING study_event_id",
+                userId, studySubjectId).toArray());
+        String crfsOfVisits = "event_crf_id IN (SELECT event_crf_id FROM event_crf "
+                + "WHERE study_event_id = ANY(?) AND status_id <> 5)";
+        // Rows already auto-removed record that first: afterwards they could
+        // not be told apart from the ones this removal takes.
+        execute(c, "UPDATE event_crf SET old_status_id = 7 WHERE study_event_id = ANY(?) AND status_id = 7",
+                null, visits);
+        execute(c, "UPDATE item_data SET old_status_id = 7 WHERE " + crfsOfVisits + " AND status_id = 7",
+                null, visits);
+        execute(c, "UPDATE event_crf SET old_status_id = status_id, status_id = 7, date_updated = now(), "
+                + "update_id = ? WHERE study_event_id = ANY(?) AND " + LIVE, userId, visits);
+        execute(c, "UPDATE item_data SET old_status_id = status_id, status_id = 7, date_updated = now(), "
+                + "update_id = ? WHERE " + crfsOfVisits + " AND " + LIVE, userId, visits);
+    }
+
+    private static void restoreChildren(Connection c, int studySubjectId, int userId) throws SQLException {
+        // A visit of an event definition removed on its own stays with the definition.
+        java.sql.Array visits = c.createArrayOf("integer", ids(c,
+                "UPDATE study_event SET status_id = 1, date_updated = now(), update_id = ? "
+                        + "WHERE study_subject_id = ? AND status_id = 7 AND study_event_definition_id IN "
+                        + "(SELECT study_event_definition_id FROM study_event_definition WHERE " + LIVE + ") "
+                        + "RETURNING study_event_id",
+                userId, studySubjectId).toArray());
+        java.sql.Array crfs = c.createArrayOf("integer", ids(c,
+                "UPDATE event_crf SET status_id = " + RECORDED_STATUS + ", date_updated = now(), update_id = ? "
+                        + "WHERE study_event_id = ANY(?) AND " + TAKEN + " RETURNING event_crf_id",
+                userId, visits).toArray());
+        execute(c, "UPDATE item_data SET status_id = " + RECORDED_STATUS + ", date_updated = now(), "
+                + "update_id = ? WHERE event_crf_id = ANY(?) AND " + TAKEN, userId, crfs);
+    }
+
+    /** Runs an {@code UPDATE ... RETURNING} bound to the updater and one parameter; returns the ids. */
+    private static List<Integer> ids(Connection c, String sql, int userId, Object param) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ps.setObject(2, param);
+            List<Integer> out = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getInt(1));
+            }
+            return out;
+        }
+    }
+
+    /** Runs an {@code UPDATE} bound to the updater, when there is one, and to an id array. */
+    private static void execute(Connection c, String sql, Integer userId, java.sql.Array ids) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            int i = 1;
+            if (userId != null) ps.setInt(i++, userId);
+            ps.setArray(i, ids);
+            ps.executeUpdate();
         }
     }
 
