@@ -359,7 +359,7 @@ public class StudyInfoPanel {
                 this.setIconInfoShown(false);
 
             } else if (page.equals(Page.INTERVIEWER) || page.equals(Page.TABLE_OF_CONTENTS) || page.equals(Page.TABLE_OF_CONTENTS_SERVLET)
-                || page.equals(Page.INITIAL_DATA_ENTRY) || page.equals(Page.INITIAL_DATA_ENTRY_SERVLET) || page.equals(Page.DOUBLE_DATA_ENTRY)
+                || page.equals(Page.INITIAL_DATA_ENTRY_SERVLET) || page.equals(Page.DOUBLE_DATA_ENTRY)
                 || page.equals(Page.DOUBLE_DATA_ENTRY_SERVLET) || page.equals(Page.ADMIN_EDIT) || page.equals(Page.ADMIN_EDIT_SERVLET)) {
                 /*
                  * pages designed to also follow the above format; check to see

@@ -133,8 +133,7 @@ public class BreadcrumbTrail {
                     trail.add(3, bcb2);
                     closeRestOfTrail(3);
                 }
-            } else if (jspPage.equals(Page.CREATE_DATASET_APPLY_FILTER) || jspPage.equals(Page.APPLY_FILTER)) {
-                // CREATE_DATASET_APPLY_FILTER might be bogus, tbh
+            } else if (jspPage.equals(Page.APPLY_FILTER)) {
                 // BreadcrumbBean bcb = (BreadcrumbBean)trail.remove(2);
                 // bcb.setStatus(Status.AVAILABLE);
                 // trail.add(2, bcb);
@@ -325,12 +324,6 @@ public class BreadcrumbTrail {
                     trail.add(new BreadcrumbBean(resworkflow.getString("mark_event_CRF_omplete"), "MarkEventCRFComplete", Status.UNAVAILABLE));
                 }
                 closeRestOfTrail(ordinal);
-            } else if (jspPage.equals(Page.INITIAL_DATA_ENTRY)) {
-                int ordinal = trail.size() - 2;
-                trail =
-                    advanceTrail(trail, new BreadcrumbBean(resworkflow.getString("data_entry"), "InitialDataEntry" + this.generateURLString(request),
-                            Status.PENDING), ordinal);
-                closeRestOfTrail(ordinal);
             } else if (jspPage.equals(Page.DOUBLE_DATA_ENTRY)) {
                 int ordinal = trail.size() - 2;
                 trail =
@@ -513,19 +506,9 @@ public class BreadcrumbTrail {
                 advanceTrail(trail, new BreadcrumbBean(resworkflow.getString("upload_spreadsheet"), "#", Status.PENDING), 0);
                 closeRestOfTrail(0);
 
-            } else if (jspPage.equals(Page.UPLOAD_CRF_VERSION)) {
-
-                advanceTrail(trail, new BreadcrumbBean(resworkflow.getString("upload_spreadsheet"), "#", Status.PENDING), 1);
-
-                BreadcrumbBean b = (BreadcrumbBean) trail.get(0);
-                b.setStatus(Status.AVAILABLE);
-                closeRestOfTrail(2);
             } else if (jspPage.equals(Page.CREATE_CRF_VERSION_CONFIRM)) {
                 advanceTrail(trail, new BreadcrumbBean(resworkflow.getString("validate_spreadsheet"), "#", Status.PENDING), 3);
                 closeRestOfTrail(3);
-            } else if (jspPage.equals(Page.CREATE_CRF_VERSION_CONFIRMSQL)) {
-                advanceTrail(trail, new BreadcrumbBean(resworkflow.getString("review_new_items"), "#", Status.PENDING), 4);
-                closeRestOfTrail(4);
             } else if (jspPage.equals(Page.CREATE_CRF_VERSION_DONE) || jspPage.equals(Page.CREATE_CRF_VERSION_ERROR)) {
                 advanceTrail(trail, new BreadcrumbBean(resworkflow.getString("review_SQL_generated"), "#", Status.PENDING), 5);
                 closeRestOfTrail(5);
