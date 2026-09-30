@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   CreateUserInput,
   CreateUserResult,
@@ -402,18 +402,6 @@ export const useUsersStore = defineStore('users', () => {
     )
   }
 
-  async function revokeRole(
-    username: string,
-    studyOid: string,
-  ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
-    return roleAssignment(
-      () => apiDelete<RoleBinding>(
-        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
-      ),
-      'revoke',
-    )
-  }
-
   /**
    * Multi-role per (user, study) — atomic bulk replace via
    * {@code PUT /pages/api/v1/users/{username}/roles/{studyOid}} with
@@ -477,7 +465,7 @@ export const useUsersStore = defineStore('users', () => {
 
   async function roleAssignment(
     op: () => Promise<RoleBinding>,
-    label: 'grant' | 'update' | 'revoke',
+    label: 'grant' | 'update',
   ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     try {
       const binding = await op()
@@ -553,7 +541,6 @@ export const useUsersStore = defineStore('users', () => {
     listUserRoles,
     grantRole,
     updateRole,
-    revokeRole,
     setStudyRoles,
     reset,
   }

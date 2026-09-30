@@ -52,7 +52,6 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -812,7 +811,6 @@ public class UsersApiController {
     /* GET    /api/v1/users/{username}/roles                              */
     /* POST   /api/v1/users/{username}/roles                              */
     /* PUT    /api/v1/users/{username}/roles/{studyId}                    */
-    /* DELETE /api/v1/users/{username}/roles/{studyId}                    */
     /*    (Phase E A7.5 — study-user-role assignments)                    */
     /* ----------------------------------------------------------------- */
 
@@ -1473,55 +1471,6 @@ public class UsersApiController {
             bindings.add(toRoleBindingDto(r, studyDao));
         }
         return ResponseEntity.ok(bindings);
-    }
-
-    /**
-     * Revoke an existing binding (status_id → DELETED). Mirrors
-     * {@code DeleteStudyUserRoleServlet:73-81}. Sysadmin-only. The
-     * legacy code is a status flip + {@code updateStudyUserRole}, so
-     * the same pattern works here.
-     */
-    @DeleteMapping("/{username}/roles/{studyOid}")
-    @ApiResponse(responseCode = "200",
-                 content = @Content(schema = @Schema(implementation = RoleBindingDto.class)))
-    public ResponseEntity<?> revokeRole(@PathVariable("username") String username,
-                                        @PathVariable("studyOid") String studyOid,
-                                        HttpSession session) {
-        ResponseEntity<?> guard = preflightLifecycle(session, username);
-        if (guard != null) return guard;
-
-        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
-        UserAccountDAO userDao = new UserAccountDAO(dataSource);
-        StudyDAO studyDao = new StudyDAO(dataSource);
-        StudyBean study = (StudyBean) studyDao.findByOid(studyOid);
-        if (study == null || study.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of("message",
-                    "No study with oid '" + studyOid + "'"));
-        }
-
-        StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
-        if (existing == null || existing.getId() == 0 || !existing.isActive()) {
-            return ResponseEntity.status(404).body(Map.of("message",
-                    "No active role binding for user '" + username + "' on study '" + studyOid + "'"));
-        }
-
-        String oldRoleName = existing.getRole() != null ? existing.getRole().getName() : "";
-
-        existing.setStatus(Status.DELETED);
-        existing.setUpdater(me);
-        userDao.updateStudyUserRole(existing, username);
-
-        LOG.info("Revoke role: username={} studyOid={} by admin={}",
-                username, studyOid, me.getName());
-
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
-                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
-                me, study, null,
-                "User role revoked — user=" + username + " role=" + oldRoleName,
-                "study_user_role", existing.getId(),
-                "role_id", oldRoleName, "");
-
-        return ResponseEntity.ok(toRoleBindingDto(existing, studyDao));
     }
 
     private static List<ValidationErrorBody.FieldError> validateRoleAssignmentShape(
