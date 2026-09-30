@@ -1668,14 +1668,17 @@ public class ExtractBean {
     }
 
     protected String getCRFCompletionDate(int h, int i, int j) {
-        StudyEventBean seb = getEvent(h, i, j);
+        return crfCompletionDate(getEvent(h, i, j), sdf);
+    }
 
-        EventCRFBean eventCRF = null;
-        if (seb.getEventCRFs().size() > 0) {
-            eventCRF = (EventCRFBean) seb.getEventCRFs().get(0);
+    /** The completion date of the event's first CRF, formatted with {@code sdf}. */
+    static String crfCompletionDate(StudyEventBean seb, SimpleDateFormat sdf) {
+        if (seb.getEventCRFs().isEmpty()) {
+            return "";
         }
-
-        return eventCRF.getDateValidateCompleted() == null ? sdf.format(eventCRF.getDateCompleted()) : sdf.format(eventCRF.getDateValidateCompleted());// need
+        EventCRFBean eventCRF = (EventCRFBean) seb.getEventCRFs().get(0);
+        java.util.Date completed = eventCRF.getDateValidateCompleted() != null ? eventCRF.getDateValidateCompleted() : eventCRF.getDateCompleted();
+        return completed == null ? "" : sdf.format(completed);// need
         // to
         // be
         // fixed?
@@ -2635,7 +2638,7 @@ public class ExtractBean {
             itemDescription = pitemDescription;
             itemName = pitemName;
 
-            if(pitemDatatypeId==9) {
+            if(pitemDatatypeId != null && pitemDatatypeId == 9) {
                 SimpleDateFormat sdf = new SimpleDateFormat(ApplicationConstants.getDateFormatInItemData());
                 sdf.setLenient(false);
                 try {

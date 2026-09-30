@@ -240,6 +240,6 @@ public class DisplayEventCRFBean implements Comparable<DisplayEventCRFBean> {
 
     @Override
     public int compareTo(DisplayEventCRFBean o) {
-        return this.eventDefinitionCRF.compareTo(getEventDefinitionCRF());
+        return this.eventDefinitionCRF.compareTo(o.getEventDefinitionCRF());
     }
 }
