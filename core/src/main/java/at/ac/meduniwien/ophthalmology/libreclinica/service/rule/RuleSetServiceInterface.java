@@ -107,7 +107,11 @@ public interface RuleSetServiceInterface {
     public List<RuleSetRuleBean> getWithFilterAndSort(ViewRuleAssignmentFilter viewRuleAssignmentFilter, ViewRuleAssignmentSort viewRuleAssignmentSort,
             int rowStart, int rowEnd);
 
-    // . TODO: why are we including study but not using it in query
+    /**
+     * The rule set with this id if it belongs to {@code study} or, when
+     * {@code study} is a site, to its parent. Otherwise null, as for an id that
+     * does not exist.
+     */
     public abstract RuleSetBean getRuleSetById(StudyBean study, String id);
 
     public abstract List<RuleSetBean> getRuleSetsByCrfAndStudy(CRFBean crfBean, StudyBean study);
