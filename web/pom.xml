@@ -236,9 +236,27 @@
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 		</dependency>
+		<!-- The JAXP implementations the application has always run with; they
+		     are found through META-INF/services, so no code references them. They
+		     used to arrive transitively (xercesImpl via httpunit, xalan via
+		     xom 1.2.5); both of those are gone, so they are declared here to keep
+		     parsing and XSLT behaviour unchanged. -->
 		<dependency>
-			<groupId>httpunit</groupId>
-			<artifactId>httpunit</artifactId>
+			<groupId>xerces</groupId>
+			<artifactId>xercesImpl</artifactId>
+			<scope>runtime</scope>
+			<exclusions>
+				<!-- the JDK's java.xml module provides these APIs -->
+				<exclusion>
+					<groupId>xml-apis</groupId>
+					<artifactId>xml-apis</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>xalan</groupId>
+			<artifactId>xalan</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.jdom</groupId>
@@ -321,9 +339,13 @@
 			<classifier>jdk15</classifier>
 		</dependency>
 		<dependency>
+			<!-- Needed at runtime by json-lib's XMLSerializer (web/restful,
+			     ODM clinical-data JSON view). 1.3.x no longer bundles a copy of
+			     org.w3c.dom.UserDataHandler, which split the JDK's java.xml
+			     package on the classpath. -->
 			<groupId>xom</groupId>
 			<artifactId>xom</artifactId>
-			<version>1.2.5</version>
+			<version>1.3.9</version>
 			<exclusions>
 				<exclusion>
 					<groupId>xml-apis</groupId>
@@ -463,21 +485,9 @@
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>xml-apis</groupId>
-			<artifactId>xml-apis</artifactId>
-		</dependency>
       <dependency>
          <groupId>com.fasterxml.jackson.core</groupId>
          <artifactId>jackson-annotations</artifactId>
-      </dependency>
-      <dependency>
-         <groupId>xerces</groupId>
-         <artifactId>xmlParserAPIs</artifactId>
-      </dependency>
-      <dependency>
-         <groupId>jtidy</groupId>
-         <artifactId>jtidy</artifactId>
       </dependency>
       <dependency>
          <groupId>org.hibernate.orm</groupId>
