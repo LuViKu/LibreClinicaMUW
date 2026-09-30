@@ -22,9 +22,10 @@
 #     container path, so each entry below replaces the base one. Two
 #     services mounting different host directories at the same container
 #     path is how a preview or a sidecar hand-off silently fails.
-#   - db: postgres password sourced from the host env file, data volume
-#     bind-mounted to /var/lib/libreclinica/postgres (matches the backup
-#     timer's expectations).
+#   - db: its own PostgreSQL version pin (14 until the major upgrade runs;
+#     see the db service), postgres password sourced from the host env file,
+#     data volume bind-mounted to /var/lib/libreclinica/postgres (matches the
+#     backup timer's expectations).
 #   - retinal-inference: storage volumes redirected to
 #     /var/lib/libreclinica/*, restart policy added.
 #   - dicom-scp: pinned to a published image, ingest store moved to
@@ -107,6 +108,17 @@ services:
       - /var/lib/libreclinica/tomcat-logs:/usr/local/tomcat/logs
 
   db:
+    # Production's PostgreSQL version, pinned here rather than inherited from
+    # compose.yaml. The dev stack there runs 17, and a major version cannot
+    # open another major's data directory: inheriting it would stop this
+    # database from starting on the next restart. It stays on 14 until
+    # docs/operations/postgresql-17-upgrade.md is executed; that runbook's
+    # final step switches this line to 17 by setting
+    # LIBRECLINICA_POSTGRES_IMAGE_TAG=17-alpine in /etc/libreclinica/env.
+    # The switch lives in the env file because setup-ubuntu-host.sh resets
+    # this checkout with `git reset --hard` on every run, and an edit here
+    # would be undone by the next one, taking the database down with it.
+    image: docker.io/library/postgres:${LIBRECLINICA_POSTGRES_IMAGE_TAG:-14-alpine}
     restart: unless-stopped
     environment:
       # The base compose hard-codes POSTGRES_PASSWORD=clinica which is
