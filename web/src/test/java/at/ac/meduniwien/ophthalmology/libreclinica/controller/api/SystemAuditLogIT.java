@@ -137,19 +137,19 @@ class SystemAuditLogIT extends AbstractApiControllerDatabaseIT {
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller()).build();
         mockMvc.perform(get("/api/v1/audit/system").session(sysAdminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.events").isArray())
                 // The marker is unique so any occurrence as a substring
                 // of any `after` field is conclusive — the
                 // OPERATION_FAILED row's new_value carries the
                 // exception class + message + reqId triple per
                 // FailureAuditTemplate.
-                .andExpect(jsonPath("$[?(@.after =~ /.*" + marker + ".*/)]")
+                .andExpect(jsonPath("$.events[?(@.after =~ /.*" + marker + ".*/)]")
                         .exists())
                 // Which operation failed, next to the title.
-                .andExpect(jsonPath("$[?(@.after =~ /.*" + marker + ".*/)].details")
+                .andExpect(jsonPath("$.events[?(@.after =~ /.*" + marker + ".*/)].details")
                         .value(hasItem("SystemAuditLogIT.case2")))
                 // The error as one line: class, message, request id.
-                .andExpect(jsonPath("$[?(@.after =~ /^java.sql.SQLException: simulated " + marker
+                .andExpect(jsonPath("$.events[?(@.after =~ /^java.sql.SQLException: simulated " + marker
                         + " .+ request test-req-B-sysadmin$/)]").exists());
     }
 
@@ -197,7 +197,7 @@ class SystemAuditLogIT extends AbstractApiControllerDatabaseIT {
     /* ------------------------------------------------------------------ */
 
     private static String at(long auditId, String field) {
-        return "$[?(@.id == '" + auditId + "')]." + field;
+        return "$.events[?(@.id == '" + auditId + "')]." + field;
     }
 
     private static void exec(String sql) throws SQLException {

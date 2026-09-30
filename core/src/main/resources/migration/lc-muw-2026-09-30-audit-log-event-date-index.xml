@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      The audit views page through the whole trail, newest first
+      (ORDER BY audit_date DESC, audit_id DESC), and filter it by a date
+      range; until now they read the newest 500 rows only. audit_log_event
+      had indexes on audit_table, user_id, entity_id, the type, event_crf_id,
+      study_event_id and event_crf_version_id (amethyst/changeLogCreateIndexes),
+      but none on audit_date, so every page sorted every row in scope.
+
+      (audit_date, audit_id) serves the order read backwards, the date range,
+      and the export's keyset step. The other filters use the existing
+      indexes: the subject filter goes through entity_id, event_crf_id and
+      study_event_id, the actor filter through user_id.
+    -->
+    <changeSet id="2026-09-30-audit-log-event-date-index" author="muw-ophthalmology" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'i_audit_log_event_date_id';
+            </sqlCheck>
+        </preConditions>
+        <comment>audit_log_event (audit_date, audit_id) — ordered paging and date ranges over the whole audit trail.</comment>
+        <sql>
+            CREATE INDEX i_audit_log_event_date_id ON audit_log_event (audit_date, audit_id);
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS i_audit_log_event_date_id;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

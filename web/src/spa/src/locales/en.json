@@ -709,7 +709,17 @@
       "allActors": "All actors",
       "variant": "Event type",
       "subject": "Subject",
-      "allSubjects": "All subjects"
+      "allSubjects": "All subjects",
+      "item": "Item",
+      "itemPlaceholder": "Item OID, e.g. I_HEIGHT_CM",
+      "from": "From",
+      "to": "To"
+    },
+    "pager": {
+      "label": "Audit log pages",
+      "previous": "← Newer",
+      "next": "Older →",
+      "position": "Page {page} of {pages}"
     },
     "variant": {
       "all": "All event types",

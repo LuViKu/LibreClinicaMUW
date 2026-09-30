@@ -207,7 +207,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void sqlTemplateIncludesDatasetExportBranch() throws Exception {
-        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPE_TEMPLATE");
         f.setAccessible(true);
         String sql = (String) f.get(null);
         assertTrue(sql.contains("a.audit_table = 'dataset'"),
@@ -223,7 +223,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void sqlTemplatePlacesAutoTickAndIngestRowsByWhatTheyRecord() throws Exception {
-        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPE_TEMPLATE");
         f.setAccessible(true);
         String sql = (String) f.get(null);
         assertTrue(sql.contains("a.audit_log_event_type_id IS DISTINCT FROM 129"),

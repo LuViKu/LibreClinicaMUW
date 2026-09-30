@@ -709,7 +709,17 @@
       "allActors": "Alle Akteur/-innen",
       "variant": "Ereignistyp",
       "subject": "Teilnehmer",
-      "allSubjects": "Alle Teilnehmer"
+      "allSubjects": "Alle Teilnehmer",
+      "item": "Item",
+      "itemPlaceholder": "Item-OID, z. B. I_HEIGHT_CM",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "pager": {
+      "label": "Seiten des Audit-Logs",
+      "previous": "← Neuere",
+      "next": "Ältere →",
+      "position": "Seite {page} von {pages}"
     },
     "variant": {
       "all": "Alle Ereignistypen",

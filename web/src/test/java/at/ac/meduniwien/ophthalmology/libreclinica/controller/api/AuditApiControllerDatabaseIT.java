@@ -122,7 +122,7 @@ class AuditApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 get("/api/v1/audit")
                         .session(adminSession(sourceStudyId, SOURCE_STUDY_OID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(rowAuditId("S_AUDIT_SRC")))));
+                .andExpect(jsonPath("$.events[*].id", hasItem(String.valueOf(rowAuditId("S_AUDIT_SRC")))));
     }
 
     @Test
@@ -138,7 +138,7 @@ class AuditApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 get("/api/v1/audit")
                         .session(adminSession(targetStudyId, TARGET_STUDY_OID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(rowAuditId("S_AUDIT_TGT")))));
+                .andExpect(jsonPath("$.events[*].id", hasItem(String.valueOf(rowAuditId("S_AUDIT_TGT")))));
     }
 
     /* ====================================================================== */
@@ -166,8 +166,8 @@ class AuditApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         try {
             mockMvc().perform(get("/api/v1/audit").session(adminSession(STUDY_ID, STUDY_OID)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(inItsStudy))))
-                    .andExpect(jsonPath("$[*].id", not(hasItem(String.valueOf(numberMatchesOnly)))));
+                    .andExpect(jsonPath("$.events[*].id", hasItem(String.valueOf(inItsStudy))))
+                    .andExpect(jsonPath("$.events[*].id", not(hasItem(String.valueOf(numberMatchesOnly)))));
         } finally {
             deleteAudit(inItsStudy, numberMatchesOnly);
         }
@@ -191,12 +191,12 @@ class AuditApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         try {
             mockMvc().perform(get("/api/v1/audit").session(adminSession(STUDY_ID, STUDY_OID)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(filed))))
-                    .andExpect(jsonPath("$[*].id", hasItem(String.valueOf(filedBefore))))
-                    .andExpect(jsonPath("$[*].id", not(hasItem(String.valueOf(neverFiled)))))
-                    .andExpect(jsonPath("$[*].id", not(hasItem(String.valueOf(elsewhere)))))
+                    .andExpect(jsonPath("$.events[*].id", hasItem(String.valueOf(filed))))
+                    .andExpect(jsonPath("$.events[*].id", hasItem(String.valueOf(filedBefore))))
+                    .andExpect(jsonPath("$.events[*].id", not(hasItem(String.valueOf(neverFiled)))))
+                    .andExpect(jsonPath("$.events[*].id", not(hasItem(String.valueOf(elsewhere)))))
                     // Whose visit it was, as the log names it.
-                    .andExpect(jsonPath("$[?(@.id == '" + filed + "')].subjectId",
+                    .andExpect(jsonPath("$.events[?(@.id == '" + filed + "')].subjectId",
                             hasItem(subjectOfVisit(VISIT))));
         } finally {
             deleteAudit(filed, filedBefore, neverFiled, elsewhere);
