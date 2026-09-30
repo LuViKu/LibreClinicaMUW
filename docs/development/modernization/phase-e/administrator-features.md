@@ -332,7 +332,7 @@ Live: one select with the same five roles. *Missing in the SPA:* `ra`/`ra2`.
 
 ### Actions that were not followed
 
-Remove/restore user, unlock, and remove/restore study role were not followed. Their links perform the action on a plain GET, with a JavaScript `confirm()` as the only guard (§16.2), so they are described from source. Legacy Remove, Restore and Unlock also e-mail the user; the SPA sends no e-mail.
+Remove/restore user, unlock, and remove/restore study role were not followed. They act on a plain GET (§16.2), so they are described from source. Legacy Remove, Restore and Unlock also e-mail the user; the SPA sends no e-mail.
 
 ### PrintoutCertificate
 
@@ -701,14 +701,7 @@ The same `ParticipantPortalRegistrar` call that breaks `/ViewStudy` is also made
 
 ### 16.2 Admin actions that change data on a plain GET
 
-`/DeleteUser?action=3|4`, `/UnLockUser`, `/DeleteStudyUserRole?action=3|4`, `/PauseJob` (pause, resume and `del=y`) and `/SendTestEmail` act as soon as their URL is requested. A JavaScript `confirm()` on the link is the only guard.
-
-Two defences do not stop this:
-
-- `CrossSiteRequestFilter` passes safe methods through ("Safe methods (GET, HEAD, OPTIONS, TRACE) pass untouched").
-- The session cookie is `SameSite=Lax`. That stops cross-site sub-resource requests, but not a top-level navigation.
-
-A link followed from another site therefore performs the action with the administrator's session. This is the kind of undetected weakness DR-018 aims to remove.
+Five legacy admin actions change state when their URL is requested with GET: remove/restore user, unlock user, remove/restore study role, pause/resume/delete job, and send test e-mail. State-changing requests should be POST-only, as the SDV, export and study-module actions already are. The fix is tracked as R0.5 in [the retirement plan](../jsp-retirement-plan-2026-09-30.md); the screens themselves retire with the admin wave.
 
 ### 16.3 Where this catalogue disagrees with earlier coverage claims
 

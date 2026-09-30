@@ -112,12 +112,12 @@ The work runs in five stages, with code scanning in parallel as track S.
 | R0.2 | Clear the security alerts before the next `lc-develop` → `main` merge | S | §10.2 S1–S2 |
 | R0.3 | **Make retirement tracking work** | M | See below |
 | R0.4 | **Build the `/legacy/<path>` alias** | M | See below |
-| R0.5 | Make the remaining GET-mutating admin actions safe | S | `DeleteUser`, `UnLockUser`, `DeleteStudyUserRole`, `PauseJob`, `SendTestEmail`. The first two are confirmed to change state on GET with no confirmation step, and `UnLockUser` also sets a new password. Require POST, as was done for the SDV, export and study-module actions. They are deleted in their wave anyway, but they stay reachable until then |
+| R0.5 | Make the remaining GET-mutating admin actions POST-only | S | Remove/restore user, unlock user, remove/restore study role, pause/resume/delete job and send test e-mail change state on GET. Require POST, as was done for the SDV, export and study-module actions. They are deleted in their wave anyway, but stay reachable until then |
 | R0.6 | **Remove the participant-form chain** (if §3.2.2 = drop) | M | See below |
 | R0.7 | Deal with the broken live pages | S | See below |
 | R0.8 | Dead-code sweep 2: never reachable, so no bake-in | S | See below |
-| R0.9 | Verify an inferred authorization gap | S | `CreateNewStudyEventServlet.java:107-115` loads a study subject by id with a "make this sensitive to permissions" note and no study check in view. Confirm whether a later check scopes it. If not, fix it now or close the servlet early (the SPA schedules events) |
-| R0.10 | Review the unauthenticated path list in `SecurityConfig` | S | `/pages/auth/api/**` is public as a whole, so each controller under it has to check the session itself. An anonymous probe of nine of these paths returned no data (401, 500 or redirect), and `BatchCRFMigrationController` checks the study role before acting. Narrow the list to the paths that need anonymity; R0.6 removes nine groups |
+| R0.9 | Verify the authorization scoping of one legacy servlet | S | The plan survey flagged `CreateNewStudyEventServlet` for review; unverified. If a fix is needed, fix it or close the servlet early (the SPA schedules events) |
+| R0.10 | Review the unauthenticated path list in `SecurityConfig` | S | Narrow the list to the paths that genuinely need anonymous access. R0.6 removes nine groups; R0.8 removes the dead Jersey and SOAP entries |
 | R0.11 | One documentation-drift PR, so the next survey isn't misled | S | See below |
 
 **R0.3 — make retirement tracking work.**
@@ -345,7 +345,7 @@ From the plan survey:
 | S2 | 4 Trivy alerts in `web/src/spa/pnpm-lock.yaml`: `brace-expansion` 1.1.18 (3 CVEs) and `fast-uri` 3.1.7 (1) | Raise the `package.json` override `brace-expansion@1` to 1.1.21, and check whether the 2.x copy (2.1.4) needs 2.1.7. Raise `fast-uri` to 3.1.8. Then the SPA build and vitest |
 | S3 | 4 CodeQL alerts on `main` (`OdmController:336`, `CreateXformCRFVersionServlet:283`, `ExportDatasetServlet:211`, `FileUploadHelper:121`) | Already fixed on `lc-develop` (`6a7683f85` and the 2026-09-29 fixes); they close with the merge |
 | S4 | Trivy is report-only (`security.yml:46`, `exit-code: '0'`) | Switch to `1` once S2 is merged, so a new vulnerable dependency fails the build |
-| S5 | Findings not yet raised as alerts | R0.5 (GET-mutating admin actions), R0.9 (unscoped lookup), R0.10 (public-path review) |
+| S5 | Findings not yet raised as alerts | R0.5 (GET-mutating admin actions), R0.9 (authorization review), R0.10 (public-path review) |
 
 ### 10.3 Quality (1,160 on `lc-develop`)
 
