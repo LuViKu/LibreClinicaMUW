@@ -41,10 +41,10 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy-fs.sarif
-          # Fail on any unfixed-excluded finding. The backlog is clear as of
-          # 2026-09-30, so a new vulnerable dependency now fails the job
-          # instead of only appearing in the Security tab.
-          exit-code: '1'
+          # Reports every finding. Triage (a dismissal with its reason)
+          # happens on the Security tab, so a dismissed finding stays visible
+          # as dismissed instead of disappearing from the scan.
+          exit-code: '0'
 
       - name: Upload Trivy SARIF to GitHub Security tab
         if: always()
@@ -52,6 +52,22 @@ jobs:
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
+
+      - name: Fail on a finding nobody has triaged
+        # The same scan, blocking. The findings accepted on the Security tab
+        # are listed in .github/trivy-accepted.txt, each with its reason and
+        # an expiry; any other HIGH or CRITICAL finding with a fix fails the
+        # job, so a new vulnerable dependency cannot land unnoticed.
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: table
+          exit-code: '1'
+          trivyignores: .github/trivy-accepted.txt
+          skip-setup-trivy: true
 
   owasp-dependency-check:
     name: OWASP dependency-check (Maven deps)
