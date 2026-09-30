@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.managestudy.MailNotificationType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -379,6 +380,15 @@ public class StudiesApiController {
                     "Study is " + target.getStatus().getName().toLowerCase()
                             + " — writes are refused until it is unlocked"));
         }
+        // Legacy parity (UpdateStudyServletNew "contact_email_mandatory"):
+        // the login e-mail notification needs somewhere to write from.
+        if (body.contactEmail() != null && body.contactEmail().trim().isEmpty()
+                && MailNotificationType.ENABLED.name().equalsIgnoreCase(target.getMailNotification())) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed",
+                    List.of(fieldError("contactEmail",
+                            "A contact e-mail is required while login e-mail notification is enabled"))));
+        }
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
 
@@ -446,6 +456,16 @@ public class StudiesApiController {
                 writeStudyFieldAudit(auditDAO, me, target, "protocol_description", oldVal, newVal);
             }
         }
+        boolean contactEmailChanged = false;
+        if (body.contactEmail() != null) {
+            String oldVal = target.getContactEmail();
+            String newVal = body.contactEmail().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setContactEmail(newVal);
+                writeStudyFieldAudit(auditDAO, me, target, "contact_email", oldVal, newVal);
+                contactEmailChanged = true;
+            }
+        }
         if (body.protocolType() != null) {
             String oldVal = target.getProtocolType();
             String newVal = body.protocolType().trim();
@@ -466,6 +486,9 @@ public class StudiesApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         studyDao.update(target);
+        if (contactEmailChanged && target.getParentStudyId() == 0) {
+            copyContactEmailToSites(target, me);
+        }
 
         // Phase E.6 (2026-06-03): the session attribute "study" is a
         // StudyBean captured at login (by SecureController +
@@ -936,6 +959,7 @@ public class StudiesApiController {
         maxLengthOptional(body.collaborators(), "collaborators", 1000, "Collaborators", out);
         maxLengthOptional(body.protocolDescription(), "protocolDescription", 1000,
                 "Protocol description", out);
+        contactEmailOptional(body.contactEmail(), out);
         return out;
     }
 
@@ -968,7 +992,43 @@ public class StudiesApiController {
         maxLengthOptional(body.collaborators(), "collaborators", 1000, "Collaborators", out);
         maxLengthOptional(body.protocolDescription(), "protocolDescription", 1000,
                 "Protocol description", out);
+        contactEmailOptional(body.contactEmail(), out);
         return out;
+    }
+
+    /**
+     * Blank is allowed; otherwise the legacy {@code Validator.IS_A_EMAIL}
+     * rule: {@code x@y.z}, at most 254 characters.
+     */
+    private static void contactEmailOptional(String v, List<ValidationErrorBody.FieldError> out) {
+        if (v == null) return;
+        String s = v.trim();
+        if (s.isEmpty()) return;
+        if (s.length() > 254 || !s.matches(".+@.+\\..*")) {
+            out.add(fieldError("contactEmail", "Contact e-mail must be a valid e-mail address"));
+        }
+    }
+
+    /**
+     * A site carries its parent's contact e-mail: the legacy
+     * {@code UpdateStudyServletNew} copies it to every site on each save,
+     * and {@code CreateSubStudyServlet} at creation. Only the column
+     * changes, so nothing else on the site row is rewritten.
+     */
+    private void copyContactEmailToSites(StudyBean parent, UserAccountBean me) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE study SET contact_email = ?, date_updated = now(), update_id = ? "
+                             + "WHERE parent_study_id = ?")) {
+            if (parent.contactEmailAbsent()) ps.setNull(1, java.sql.Types.VARCHAR);
+            else ps.setString(1, parent.getContactEmail());
+            ps.setInt(2, me.getId());
+            ps.setInt(3, parent.getId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Copying the contact e-mail of study {} to its sites failed: {}",
+                    parent.getOid(), e.getMessage());
+        }
     }
 
     private static void requireNonBlank(String v, String field, int max, String label,
