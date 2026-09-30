@@ -3204,7 +3204,7 @@
   "dataExport": {
     "title": "Data Export",
     "subTrail": "Saved datasets for the active study",
-    "intro": "Trigger export runs against previously-saved datasets and download generated files. Use the legacy /Extract Data wizard to create new datasets — a SPA-native create flow will land in a later sub-phase.",
+    "intro": "Run exports of saved datasets and download the generated files. To define a new dataset, click New dataset.",
     "sectionLabel": "Data export",
     "quickOdmButton": "Quick ODM export",
     "quickOdmRunning": "Generating ODM…",
@@ -3214,8 +3214,7 @@
     "hideFiles": "Hide files",
     "noFilesYet": "No generated files yet — trigger an export to populate this list.",
     "emptyTitle": "No saved datasets for this study yet.",
-    "emptyDescription": "Datasets are created via the legacy Extract Data wizard. Once saved, they appear here so you can re-run and download them from the SPA.",
-    "openLegacyWizard": "Open legacy Extract Data wizard",
+    "emptyDescription": "A dataset defines which visits, CRFs and items an export contains. Saved datasets appear here, where you can run and download them.",
     "column": {
       "name": "Dataset",
       "owner": "Owner",

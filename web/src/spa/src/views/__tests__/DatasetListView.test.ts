@@ -51,6 +51,7 @@ function makeRouter() {
       { path: '/build-study', name: 'build-study', component: { template: '<div />' } },
       { path: '/manage-users', name: 'manage-users', component: { template: '<div />' } },
       { path: '/export', name: 'data-export', component: { template: '<div />' } },
+      { path: '/datasets/new', name: 'dataset-new', component: { template: '<div />' } },
     ],
   })
 }
@@ -102,6 +103,18 @@ describe('DatasetListView', () => {
   it('renders the empty state when the store has no rows', async () => {
     const w = await mountView({ rows: [] })
     expect(w.text()).toContain('No saved datasets')
+  })
+
+  it('the empty state opens the SPA dataset wizard, not the legacy servlet', async () => {
+    const w = await mountView({ rows: [] })
+    expect(w.find('a[href="/LibreClinica/CreateDataset"]').exists()).toBe(false)
+
+    await w.get('[data-testid="dataset-empty-create"]').trigger('click')
+    await flushPromises()
+
+    expect(w.vm.$router.currentRoute.value.name).toBe('dataset-new')
+    // the wizard starts from a clean draft, as the toolbar button does
+    expect(useDatasetsStore().draft).not.toBeNull()
   })
 
   it('renders a row per dataset with name + owner + file count', async () => {

@@ -9,9 +9,8 @@
  *   - Per-row "Export now" (opens a format-picker modal) + "View files"
  *     (expands a sub-row with download links).
  *
- * <p>The MVP does NOT replace the legacy /Extract Data UI — it only
- * surfaces datasets the operator created via that wizard. An empty
- * table links out to the legacy /Extract Data path with a note.
+ * <p>New datasets are defined in the SPA's own wizard
+ * ({@code /datasets/new}); an empty table offers it directly.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -239,9 +238,6 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
   return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
-
-/** Hard link to the legacy /Extract Data wizard. */
-const legacyCreateLink = '/LibreClinica/CreateDataset'
 </script>
 
 <template>
@@ -300,16 +296,15 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
       >
         <p class="text-slate-700">{{ t('dataExport.emptyTitle') }}</p>
         <p class="text-xs text-slate-500 mt-2">{{ t('dataExport.emptyDescription') }}</p>
-        <a
-          :href="legacyCreateLink"
+        <button
+          v-if="canManage"
+          type="button"
           class="inline-flex items-center gap-1.5 mt-4 px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue"
-          target="_self"
+          data-testid="dataset-empty-create"
+          @click="openWizardNew"
         >
-          {{ t('dataExport.openLegacyWizard') }}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-            <path d="M7 17L17 7M7 7h10v10" />
-          </svg>
-        </a>
+          {{ t('datasetList.emptyCta') }}
+        </button>
       </section>
 
       <!-- Table. -->

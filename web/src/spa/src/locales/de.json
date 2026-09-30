@@ -3204,7 +3204,7 @@
   "dataExport": {
     "title": "Datenexport",
     "subTrail": "Gespeicherte Datensätze der aktiven Studie",
-    "intro": "Bereits gespeicherte Datensätze als Export erneut ausführen und generierte Dateien herunterladen. Zum Anlegen neuer Datensätze bitte vorerst den klassischen /Extract Data-Assistenten verwenden — eine SPA-native Anlage folgt in einer späteren Phase.",
+    "intro": "Gespeicherte Datensätze exportieren und die erzeugten Dateien herunterladen. Neue Datensätze legen Sie mit „Neues Dataset“ an.",
     "sectionLabel": "Datenexport",
     "quickOdmButton": "Schnell-ODM-Export",
     "quickOdmRunning": "ODM wird generiert…",
@@ -3214,8 +3214,7 @@
     "hideFiles": "Dateien ausblenden",
     "noFilesYet": "Noch keine generierten Dateien — bitte einen Export ausführen.",
     "emptyTitle": "Für diese Studie sind noch keine Datensätze gespeichert.",
-    "emptyDescription": "Datensätze werden über den klassischen Extract-Data-Assistenten angelegt. Einmal gespeichert, erscheinen sie hier und können in der SPA erneut ausgeführt und heruntergeladen werden.",
-    "openLegacyWizard": "Klassischen Extract-Data-Assistenten öffnen",
+    "emptyDescription": "Ein Datensatz legt fest, welche Visiten, CRFs und Items ein Export enthält. Gespeicherte Datensätze erscheinen hier und können ausgeführt und heruntergeladen werden.",
     "column": {
       "name": "Datensatz",
       "owner": "Besitzer",
