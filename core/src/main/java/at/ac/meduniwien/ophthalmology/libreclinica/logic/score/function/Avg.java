@@ -43,7 +43,7 @@ public class Avg extends AbstractFunction {
             return;
         }
 
-        if (values != null && values.length > 0) {
+        if (values.length > 0) {
             double v = StatUtils.mean(values);
             value = Double.toString(v);
         } else {

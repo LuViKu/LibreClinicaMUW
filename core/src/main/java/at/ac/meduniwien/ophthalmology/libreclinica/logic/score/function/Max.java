@@ -47,7 +47,7 @@ public class Max extends AbstractFunction {
             return;
         }
 
-        if (values != null && values.length > 0) {
+        if (values.length > 0) {
             double v = StatUtils.max(values);
             value = Double.toString(v);
         } else {

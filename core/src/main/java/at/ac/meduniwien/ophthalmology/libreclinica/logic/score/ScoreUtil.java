@@ -149,7 +149,7 @@ public class ScoreUtil {
         if (token.getName().length() > 0) {
             finalexp.add(token);
         }
-        if (finalexp != null && finalexp.size() > 0) {
+        if (finalexp.size() > 0) {
             if (finalexp.size() == 1) {
                 value = finalexp.get(0).getName();
             } else {
