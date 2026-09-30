@@ -175,7 +175,7 @@
   },
   "adminJobs": {
     "title": "Geplante Jobs",
-    "subtitle": "Schreibgeschützte Übersicht aller Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind.",
+    "subtitle": "Alle Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind. Alte geplante Exporte lassen sich löschen; die Trigger der Plattform sind schreibgeschützt.",
     "refresh": "Aktualisieren",
     "refreshedAt": "Aktualisiert um {ts}",
     "loadFailed": "Job-Liste konnte nicht geladen werden.",
@@ -189,7 +189,16 @@
     "prevFire": "Letzter Lauf",
     "nextFire": "Nächster Lauf",
     "description": "Beschreibung",
-    "noJobs": "Keine geplanten Jobs."
+    "noJobs": "Keine geplanten Jobs.",
+    "legacy": {
+      "badge": "Alter Export-Job",
+      "note": "Geplante Exporte aus den klassischen Masken laufen weiter, bis sie hier gelöscht werden. Legen Sie einen solchen Export vor dem Löschen als Zeitplan seines Datensatzes neu an (Datenexport, Zeitpläne); dort entstehen auch neue Export-Zeitpläne.",
+      "dataset": "Datensatz {id}",
+      "unreadable": "gespeicherte Daten nicht lesbar",
+      "delete": "Löschen",
+      "confirmDelete": "Alten Export-Job „{name}“ löschen? Er läuft danach nicht mehr.",
+      "deleteFailed": "Der Job konnte nicht gelöscht werden."
+    }
   },
   "printableCrf": {
     "title": "Druckvorschau",

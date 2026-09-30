@@ -175,7 +175,7 @@
   },
   "adminJobs": {
     "title": "Scheduled jobs",
-    "subtitle": "Read-only listing of every Quartz trigger registered against the application's shared scheduler.",
+    "subtitle": "Every Quartz trigger registered against the application's shared scheduler. Legacy scheduled exports can be deleted; the platform's own triggers are read-only.",
     "refresh": "Refresh",
     "refreshedAt": "Refreshed at {ts}",
     "loadFailed": "Failed to load scheduled jobs.",
@@ -189,7 +189,16 @@
     "prevFire": "Previous fire",
     "nextFire": "Next fire",
     "description": "Description",
-    "noJobs": "No scheduled jobs."
+    "noJobs": "No scheduled jobs.",
+    "legacy": {
+      "badge": "Legacy export",
+      "note": "Scheduled exports made with the legacy screens keep running until they are deleted here. Recreate one as a schedule of its dataset (Data Export, Schedules) before deleting it; new export schedules are set up there.",
+      "dataset": "dataset {id}",
+      "unreadable": "stored data unreadable",
+      "delete": "Delete",
+      "confirmDelete": "Delete the legacy export job \"{name}\"? It will not run again.",
+      "deleteFailed": "The job could not be deleted."
+    }
   },
   "printableCrf": {
     "title": "Print preview",
