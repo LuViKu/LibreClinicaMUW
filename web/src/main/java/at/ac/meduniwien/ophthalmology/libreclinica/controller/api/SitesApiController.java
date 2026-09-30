@@ -12,6 +12,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.Validation
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,16 +21,19 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -62,9 +66,12 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code PUT    /studies/{parentOid}/sites/{siteOid}} — edit
  *       identity / facility fields</li>
  *   <li>{@code POST   /studies/{parentOid}/sites/{siteOid}/disable}
- *       — soft-delete</li>
+ *       — remove the site and auto-remove what lives under it, as
+ *       {@code RemoveSiteServlet} does ({@link StudyLifecycleCascade})</li>
  *   <li>{@code POST   /studies/{parentOid}/sites/{siteOid}/restore}
- *       — restore from soft-delete</li>
+ *       — restore it and what its removal took, as
+ *       {@code RestoreSiteServlet} does; refused while the parent study
+ *       is removed</li>
  * </ul>
  *
  * <p>Authorization: sysadmin OR director/coordinator bound to the
@@ -349,20 +356,96 @@ public class SitesApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "Site is not disabled — nothing to restore"));
         }
+        // RestoreSiteServlet: a site cannot come back under a removed study.
+        if (target == Status.AVAILABLE && parent.getStatus() != null
+                && (parent.getStatus() == Status.DELETED || parent.getStatus() == Status.AUTO_DELETED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "The parent study '" + parentOid + "' is removed. Restore the study first."));
+        }
 
-        Status oldStatus = site.getStatus();
-        site.setStatus(target);
-        site.setUpdater(me);
-        site.setUpdatedDate(new java.util.Date());
-        studyDao.updateStudyStatus(site);
+        final Status oldStatus = site.getStatus();
+        final int siteId = site.getId();
+        final boolean removal = target == Status.DELETED;
+        StudyLifecycleCascade.SiteImpact impact;
+        try {
+            impact = FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    me.getId(),
+                    "study",
+                    siteId,
+                    "site_" + operation,
+                    MDC.get("reqId"),
+                    () -> applyLifecycle(siteId, siteOid, me, removal, oldStatus));
+        } catch (Exception e) {
+            LOG.error("Site {} failed for siteOid={} by user={}", operation, siteOid, me.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Failed to " + (removal ? "remove" : "restore") + " the site; nothing was changed. "
+                            + "See server log."));
+        }
 
-        writeLifecycleAudit(AuditTypeIds.SITE_LIFECYCLE_CHANGED, me, "study",
-                site.getId(), siteOid, oldStatus, target, "site_" + operation);
+        StudyBean refreshed = studyDao.findByPK(siteId);
+        // As the servlets do, update the session's current study when it is this site.
+        StudyBean sessionStudy = (StudyBean) session.getAttribute("study");
+        if (sessionStudy != null && sessionStudy.getId() == siteId && refreshed.getStatus() != null) {
+            sessionStudy.setStatus(refreshed.getStatus());
+        }
 
-        LOG.info("Site {}: parentOid={} siteOid={} by user={}",
-                operation, parentOid, siteOid, me.getName());
+        LOG.info("Site {}: parentOid={} siteOid={} by user={} roles={} subjects={} groupMaps={} events={} "
+                        + "eventCrfs={} items={} datasets={}",
+                operation, parentOid, siteOid, me.getName(), impact.roleBindings(), impact.subjects(),
+                impact.groupMaps(), impact.events(), impact.eventCrfs(), impact.itemData(), impact.datasets());
 
-        return ResponseEntity.ok(toIdentityDto(site, parent));
+        return ResponseEntity.ok(toIdentityDto(refreshed, parent));
+    }
+
+    /**
+     * Runs the cascade and writes its audit row in one transaction, so a
+     * site is never left half removed and never changes without its audit
+     * row.
+     */
+    private StudyLifecycleCascade.SiteImpact applyLifecycle(int siteId, String siteOid, UserAccountBean me,
+                                                            boolean removal, Status oldStatus)
+            throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                StudyLifecycleCascade.SiteImpact impact = removal
+                        ? StudyLifecycleCascade.removeSite(c, siteId, me.getId())
+                        : StudyLifecycleCascade.restoreSite(c, siteId, me.getId());
+                Status newStatus;
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT status_id FROM study WHERE study_id = ?")) {
+                    ps.setInt(1, siteId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        newStatus = rs.next() ? Status.get(rs.getInt(1)) : null;
+                    }
+                }
+                try (PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                                + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                                + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+                    ps.setInt(1, AuditTypeIds.SITE_LIFECYCLE_CHANGED);
+                    ps.setInt(2, me.getId());
+                    ps.setInt(3, siteId);
+                    ps.setString(4, siteOid == null ? "" : siteOid);
+                    ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
+                    ps.setString(6, newStatus == null ? "" : newStatus.getName());
+                    ps.executeUpdate();
+                }
+                c.commit();
+                return impact;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    c.rollback();
+                } catch (SQLException rollbackFailure) {
+                    e.addSuppressed(rollbackFailure);
+                }
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
+            }
+        }
     }
 
     /* ----------------------------------------------------------------- */
@@ -486,40 +569,6 @@ public class SitesApiController {
         } catch (SQLException e) {
             LOG.warn("Audit write failed for site field {}={} (continuing): {}",
                     columnName, trimmed, e.getMessage());
-        }
-    }
-
-    /**
-     * Direct INSERT into {@code audit_log_event} for the site lifecycle
-     * (disable / restore) status flip. The {@code actionPrefix} argument
-     * is no longer persisted — the {@code auditTypeId} encodes the
-     * operation type — but is retained in the signature for symmetry
-     * with the other lifecycle writers across the unified surface.
-     */
-    private void writeLifecycleAudit(int auditTypeId,
-                                     UserAccountBean me,
-                                     String auditTable,
-                                     int entityId,
-                                     String oid,
-                                     Status oldStatus,
-                                     Status newStatus,
-                                     @SuppressWarnings("unused") String actionPrefix) {
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
-                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
-                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
-            ps.setInt(1, auditTypeId);
-            ps.setInt(2, me.getId());
-            ps.setString(3, auditTable);
-            ps.setInt(4, entityId);
-            ps.setString(5, oid == null ? "" : oid);
-            ps.setString(6, oldStatus == null ? "" : oldStatus.getName());
-            ps.setString(7, newStatus == null ? "" : newStatus.getName());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            LOG.warn("Audit write failed for {} {} (continuing): {}",
-                    auditTable, entityId, e.getMessage());
         }
     }
 
