@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -109,10 +110,10 @@ import org.springframework.web.bind.annotation.RestController;
  *       5→{@code not-applicable}.</li>
  * </ul>
  *
- * <p>The {@code lastActivityAt} returned here is approximated as
- * {@code now() - days} until the audit-trail thread is surfaced
- * separately (M10 — Audit log). That keeps the SPA's "last activity"
- * column sortable without requiring a separate query.
+ * <p>{@code lastActivityAt} is the creation time of the thread's newest
+ * entry, the parent's own when nobody has answered, and {@code daysOpen}
+ * counts days the way legacy's {@code view_dn_stats.age} does
+ * ({@link #daysOpen}).
  */
 @RestController
 @RequestMapping("/api/v1/discrepancies")
@@ -297,6 +298,11 @@ public class DiscrepancyApiController {
             if (chunk != null) notes.addAll(chunk);
         }
 
+        List<Integer> parentIds = new ArrayList<>(notes.size());
+        for (DiscrepancyNoteBean n : notes) parentIds.add(n.getId());
+        Map<Integer, Instant> latestChildren = latestChildActivity(parentIds);
+        Instant now = Instant.now();
+
         // Caches to amortise the entity-id walk across repeated lookups.
         Map<Integer, ItemDataBean> itemDataCache = new HashMap<>();
         Map<Integer, EventCRFBean> eventCrfCache = new HashMap<>();
@@ -377,11 +383,10 @@ public class DiscrepancyApiController {
                 }
             }
 
-            int daysOpen = Math.max(n.getDays(), 0);
-            String lastActivityAt = Instant.now()
-                    .minus(daysOpen, ChronoUnit.DAYS)
-                    .truncatedTo(ChronoUnit.SECONDS)
-                    .toString();
+            Instant created = createdAt(n);
+            Instant lastActivity = lastActivity(created, latestChildren.get(n.getId()));
+            int daysOpen = daysOpen(n.getResolutionStatusId(), created, lastActivity, now);
+            String lastActivityAt = isoSeconds(lastActivity);
 
             out.add(new DiscrepancyNoteDto(
                     String.valueOf(n.getId()),
@@ -942,11 +947,9 @@ public class DiscrepancyApiController {
         String assignedTo = (n.getAssignedUser() != null && n.getAssignedUser().getId() > 0)
                 ? n.getAssignedUser().getName() : null;
 
-        int daysOpen = Math.max(n.getDays(), 0);
-        String lastActivityAt = Instant.now()
-                .minus(daysOpen, ChronoUnit.DAYS)
-                .truncatedTo(ChronoUnit.SECONDS)
-                .toString();
+        Instant created = createdAt(n);
+        Instant lastActivity = lastActivity(created, latestChildActivity(List.of(n.getId())).get(n.getId()));
+        int daysOpen = daysOpen(n.getResolutionStatusId(), created, lastActivity, Instant.now());
 
         return new DiscrepancyNoteDto(
                 String.valueOf(n.getId()),
@@ -957,12 +960,80 @@ public class DiscrepancyApiController {
                 nullToEmpty(n.getDescription()),
                 assignedTo,
                 daysOpen,
-                lastActivityAt,
+                isoSeconds(lastActivity),
                 List.of(),
                 itemLabel,
                 itemValue,
                 eventCrfOid,
                 eventName);
+    }
+
+    /**
+     * Days a note has been open, counted as legacy's
+     * {@code view_dn_stats.age} counts them: from its creation to now while
+     * it is New, Updated or Resolution Proposed; from its creation to its
+     * last thread entry once it is Closed; and none when it is Not
+     * Applicable or its creation time is unknown.
+     *
+     * @param lastActivity the thread's newest entry ({@link #lastActivity})
+     */
+    static int daysOpen(int resolutionStatusId, Instant created, Instant lastActivity, Instant now) {
+        if (created == null) return 0;
+        Instant until;
+        if (resolutionStatusId == ResolutionStatus.OPEN.getId()
+                || resolutionStatusId == ResolutionStatus.UPDATED.getId()
+                || resolutionStatusId == ResolutionStatus.RESOLVED.getId()) {
+            until = now;
+        } else if (resolutionStatusId == ResolutionStatus.CLOSED.getId()) {
+            until = lastActivity != null ? lastActivity : created;
+        } else {
+            return 0;
+        }
+        return (int) Math.max(ChronoUnit.DAYS.between(created, until), 0);
+    }
+
+    /**
+     * When the thread last moved: its newest child's creation time, or the
+     * parent's own when nobody has answered.
+     */
+    static Instant lastActivity(Instant created, Instant latestChild) {
+        if (latestChild == null) return created;
+        if (created == null || latestChild.isAfter(created)) return latestChild;
+        return created;
+    }
+
+    private static Instant createdAt(DiscrepancyNoteBean n) {
+        // getTime(), not toInstant(): a java.sql.Date refuses toInstant().
+        return n.getCreatedDate() == null ? null : Instant.ofEpochMilli(n.getCreatedDate().getTime());
+    }
+
+    private static String isoSeconds(Instant instant) {
+        return instant == null ? "" : instant.truncatedTo(ChronoUnit.SECONDS).toString();
+    }
+
+    /**
+     * The creation time of each parent's newest child note, by parent id.
+     * A parent nobody has answered is absent. One query for the whole list.
+     */
+    private Map<Integer, Instant> latestChildActivity(List<Integer> parentIds) {
+        Map<Integer, Instant> out = new HashMap<>();
+        if (parentIds.isEmpty()) return out;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT parent_dn_id, max(date_created) FROM discrepancy_note "
+                             + "WHERE parent_dn_id = ANY (?) GROUP BY parent_dn_id")) {
+            ps.setArray(1, c.createArrayOf("integer", parentIds.toArray()));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.sql.Timestamp latest = rs.getTimestamp(2);
+                    if (latest != null) out.put(rs.getInt(1), latest.toInstant());
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("Could not read the latest thread entries of {} discrepancy notes: {}",
+                    parentIds.size(), e.getMessage());
+        }
+        return out;
     }
 
     /**

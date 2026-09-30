@@ -49,8 +49,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                        string when unresolvable
  * @param description     free-text body
  * @param assignedTo      username of the assignee, or {@code null}
- * @param daysOpen        days since the note was created (computed by
- *                        the SQL query, surfaced via {@code days})
+ * @param daysOpen        days the note has been open: since it was
+ *                        created while it is open, until its last thread
+ *                        entry once closed, 0 when not applicable
+ *                        ({@code DiscrepancyApiController.daysOpen})
  * @param lastActivityAt  ISO-8601 of the most recent thread entry; for
  *                        parent-level notes without a thread this is
  *                        the {@code date_created} timestamp

@@ -423,4 +423,42 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(0,
                 NoteTransitionMatrix.statusIdForSpaName(null));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* Ages                                                                   */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void anOpenNoteIsOpenSinceItsCreation() {
+        java.time.Instant created = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        java.time.Instant answered = java.time.Instant.parse("2026-09-20T10:00:00Z");
+        java.time.Instant now = java.time.Instant.parse("2026-09-30T11:00:00Z");
+        for (int open : new int[] {1, 2, 3}) {
+            org.junit.jupiter.api.Assertions.assertEquals(29,
+                    DiscrepancyApiController.daysOpen(open, created, answered, now));
+        }
+    }
+
+    @Test
+    void aClosedNoteWasOpenUntilItsLastEntry() {
+        java.time.Instant created = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        java.time.Instant closed = java.time.Instant.parse("2026-09-08T12:00:00Z");
+        java.time.Instant now = java.time.Instant.parse("2026-09-30T11:00:00Z");
+        org.junit.jupiter.api.Assertions.assertEquals(7,
+                DiscrepancyApiController.daysOpen(4, created, closed, now));
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                DiscrepancyApiController.daysOpen(5, created, closed, now), "not applicable");
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                DiscrepancyApiController.daysOpen(1, null, null, now), "creation unknown");
+    }
+
+    @Test
+    void theLastActivityIsTheNewestEntry() {
+        java.time.Instant created = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        java.time.Instant answered = java.time.Instant.parse("2026-09-20T10:00:00Z");
+        org.junit.jupiter.api.Assertions.assertEquals(created,
+                DiscrepancyApiController.lastActivity(created, null), "nobody answered");
+        org.junit.jupiter.api.Assertions.assertEquals(answered,
+                DiscrepancyApiController.lastActivity(created, answered));
+    }
 }
