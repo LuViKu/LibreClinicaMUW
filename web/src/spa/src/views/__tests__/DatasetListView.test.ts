@@ -19,6 +19,7 @@ vi.mock('@/api/client', () => ({
   apiGet: vi.fn().mockResolvedValue([]),
   apiPost: vi.fn().mockResolvedValue({}),
   apiPut: vi.fn().mockResolvedValue({}),
+  apiPatch: vi.fn().mockResolvedValue({}),
   apiDelete: vi.fn().mockResolvedValue({}),
   ApiError: class ApiError extends Error {
     isUnauthorized = false
@@ -152,6 +153,17 @@ describe('DatasetListView', () => {
 
     expect(spy).toHaveBeenCalledWith('S_DEFAULT', 11, 'csv')
     expect(winOpen).toHaveBeenCalled()
+  })
+
+  it("the Schedules button opens the dataset's export schedules", async () => {
+    const w = await mountView({ rows: [ROW] })
+    expect(w.find('[data-testid="dataset-schedules"]').exists()).toBe(false)
+
+    await w.get('[data-testid="dataset-schedules-button"]').trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-testid="dataset-schedules"]').exists()).toBe(true)
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/datasets/11/schedules')
   })
 
   it('Quick ODM toolbar button calls the store action', async () => {

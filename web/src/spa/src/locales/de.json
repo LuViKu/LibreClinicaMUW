@@ -3248,6 +3248,42 @@
       "failed": "Fehlgeschlagen",
       "download": "Herunterladen"
     },
+    "schedules": {
+      "button": "Zeitpläne",
+      "title": "Export-Zeitpläne",
+      "add": "Zeitplan hinzufügen",
+      "empty": "Keine Zeitpläne für diesen Datensatz.",
+      "column": {
+        "when": "Wann",
+        "status": "Status",
+        "lastRun": "Letzter Lauf",
+        "contact": "Kontakt"
+      },
+      "status": {
+        "active": "Aktiv",
+        "paused": "Pausiert"
+      },
+      "nextRun": "nächster Lauf {date}",
+      "edit": "Bearbeiten",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "delete": "Löschen",
+      "confirmDelete": "Diesen Zeitplan löschen? Bereits exportierte Dateien bleiben erhalten.",
+      "createTitle": "Neuer Export-Zeitplan",
+      "editTitle": "Export-Zeitplan bearbeiten",
+      "subTitle": "Wiederkehrender Export von „{dataset}“.",
+      "cronLabel": "Wann (Quartz-Cron-Ausdruck)",
+      "cronHelp": "Sechs Felder: Sekunde, Minute, Stunde, Tag im Monat, Monat, Wochentag. In das offen gelassene Tagesfeld gehört ein ?.",
+      "cronRequired": "Bitte angeben, wann der Export laufen soll.",
+      "preset": {
+        "daily": "Täglich 02:00",
+        "weekly": "Montags 02:00",
+        "monthly": "Am 1. des Monats 02:00"
+      },
+      "emailLabel": "Kontakt-E-Mail (optional)",
+      "emailHelp": "Erhält eine Nachricht, wenn ein Lauf fertig ist oder fehlschlägt.",
+      "enabledLabel": "Nach diesem Zeitplan ausführen"
+    },
     "modal": {
       "title": "Datensatz exportieren",
       "subTitle": "Format für \"{dataset}\" auswählen.",

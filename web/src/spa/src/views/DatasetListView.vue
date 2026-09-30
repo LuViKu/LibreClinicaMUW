@@ -11,11 +11,16 @@
  *
  * <p>New datasets are defined in the SPA's own wizard
  * ({@code /datasets/new}); an empty table offers it directly.
+ *
+ * <p>R1-export: "Schedules" opens a dataset's recurring exports
+ * ({@link DatasetSchedules}) in a sub-row, the SPA's replacement for the
+ * legacy scheduled-export screens.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import DatasetSchedules from '@/components/DatasetSchedules.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
 import { useConfirm } from '@/composables/useConfirm'
@@ -119,6 +124,15 @@ function toggleExpanded(datasetId: number) {
     }
   }
   expanded.value = next
+}
+
+const schedulesOpen = ref<Set<number>>(new Set())
+
+function toggleSchedules(datasetId: number) {
+  const next = new Set(schedulesOpen.value)
+  if (next.has(datasetId)) next.delete(datasetId)
+  else next.add(datasetId)
+  schedulesOpen.value = next
 }
 
 interface ExportModalState {
@@ -343,6 +357,16 @@ function formatBytes(n: number): string {
                     <button
                       v-if="canManage"
                       type="button"
+                      class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+                      data-testid="dataset-schedules-button"
+                      :aria-expanded="schedulesOpen.has(row.id)"
+                      @click="toggleSchedules(row.id)"
+                    >
+                      {{ t('dataExport.schedules.button') }}
+                    </button>
+                    <button
+                      v-if="canManage"
+                      type="button"
                       class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       data-testid="dataset-edit-button"
                       :title="row.hasRun ? t('datasetList.editDisabledHasRun') : ''"
@@ -418,6 +442,12 @@ function formatBytes(n: number): string {
                       </span>
                     </template>
                   </div>
+                </td>
+              </tr>
+              <!-- R1-export — the dataset's export schedules. -->
+              <tr v-if="schedulesOpen.has(row.id)">
+                <td colspan="6" class="px-4 py-3 bg-slate-50">
+                  <DatasetSchedules :dataset-id="row.id" :dataset-name="row.name" :formats="EXPORT_FORMATS" />
                 </td>
               </tr>
               <!-- Per-row expand sub-row. -->

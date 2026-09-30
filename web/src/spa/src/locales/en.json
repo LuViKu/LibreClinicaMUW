@@ -3248,6 +3248,42 @@
       "failed": "Failed",
       "download": "Download"
     },
+    "schedules": {
+      "button": "Schedules",
+      "title": "Export schedules",
+      "add": "Add schedule",
+      "empty": "No schedules for this dataset.",
+      "column": {
+        "when": "When",
+        "status": "Status",
+        "lastRun": "Last run",
+        "contact": "Contact"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused"
+      },
+      "nextRun": "next {date}",
+      "edit": "Edit",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete",
+      "confirmDelete": "Delete this schedule? Files it has already exported are kept.",
+      "createTitle": "New export schedule",
+      "editTitle": "Edit export schedule",
+      "subTitle": "Recurring export of \"{dataset}\".",
+      "cronLabel": "When (Quartz cron expression)",
+      "cronHelp": "Six fields: second, minute, hour, day of month, month, day of week. Put ? in whichever day field you leave open.",
+      "cronRequired": "Enter when the export should run.",
+      "preset": {
+        "daily": "Daily 02:00",
+        "weekly": "Mondays 02:00",
+        "monthly": "1st of the month 02:00"
+      },
+      "emailLabel": "Contact e-mail (optional)",
+      "emailHelp": "Receives a mail when a run finishes or fails.",
+      "enabledLabel": "Run on this schedule"
+    },
     "modal": {
       "title": "Export dataset",
       "subTitle": "Choose the output format for \"{dataset}\".",

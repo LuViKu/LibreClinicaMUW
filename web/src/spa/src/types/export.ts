@@ -93,6 +93,46 @@ export interface ExportJobDto {
   downloadUrl: string | null
 }
 
+/**
+ * R1-export — a recurring export of a dataset, as
+ * {@code GET /datasets/{id}/schedules} lists it and every schedule endpoint
+ * answers. {@code cronExpression} is Quartz syntax (six fields, seconds
+ * first). {@code enabled=false} is a pause: listed, not running, and
+ * {@code nextRunAt} null.
+ */
+export interface ExportScheduleDto {
+  id: number
+  datasetId: number
+  format: string
+  cronExpression: string
+  active: boolean
+  enabled: boolean
+  /** Contact address mailed when a run finishes or fails, or null. */
+  notifyEmail: string | null
+  createdAt: string | null
+  nextRunAt: string | null
+  lastRunAt: string | null
+  lastRunJobId: number | null
+}
+
+/** Body of {@code POST /datasets/{id}/schedules}. */
+export interface CreateScheduleRequest {
+  format: ExportFormat
+  cronExpression: string
+  notifyEmail?: string
+}
+
+/**
+ * Body of {@code PATCH /schedules/{id}}. A field left out keeps its value;
+ * a blank {@code notifyEmail} removes the address.
+ */
+export interface UpdateScheduleRequest {
+  format?: ExportFormat
+  cronExpression?: string
+  enabled?: boolean
+  notifyEmail?: string
+}
+
 /** Wire shape of {@code POST /datasets/{id}/export}. */
 export interface ExportTriggerRequest {
   format: ExportFormat
