@@ -226,6 +226,11 @@ public class RetinalInferenceApiController {
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "uploading scans to a CRF");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
 
         // ---- request-shape gates ------------------------------------------------
         if (file == null || file.isEmpty()) {

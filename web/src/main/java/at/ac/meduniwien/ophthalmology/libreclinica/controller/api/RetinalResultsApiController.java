@@ -778,6 +778,11 @@ public class RetinalResultsApiController {
                                            HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        // Filing a scan under a visit is reconciliation, gated like the
+        // ingest inbox's bind.
+        if (!IngestBindAuthorization.roleMayReconcile(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("binding scans to visits");
+        }
 
         if (body == null || body.eventCrfId() <= 0) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -899,6 +904,9 @@ public class RetinalResultsApiController {
                                                 HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        if (!IngestBindAuthorization.roleMayReconcile(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("binding scans to visits");
+        }
 
         if (body == null || body.jobIds() == null || body.jobIds().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -1175,6 +1183,10 @@ public class RetinalResultsApiController {
                                       HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        // A finished job writes its metrics into the visit's CRF.
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "running retinal analyses");
+        if (roleRefusal != null) return roleRefusal;
 
         FailedJob job;
         try (Connection c = dataSource.getConnection()) {
@@ -1339,6 +1351,10 @@ public class RetinalResultsApiController {
                                      HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        // A finished job writes its metrics into the visit's CRF.
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "running retinal analyses");
+        if (roleRefusal != null) return roleRefusal;
 
         String newTask = body == null ? null : body.get("task");
         if (newTask != null) newTask = newTask.trim().toLowerCase(java.util.Locale.ROOT);

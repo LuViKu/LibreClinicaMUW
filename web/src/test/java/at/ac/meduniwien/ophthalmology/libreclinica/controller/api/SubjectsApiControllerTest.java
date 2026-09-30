@@ -64,6 +64,16 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(SiteVisibilityFilter.class)));
     }
 
+    /**
+     * A session whose role may enter data (Investigator). The role check
+     * runs before the request is validated, so a validation test needs one.
+     */
+    private org.springframework.mock.web.MockHttpSession dataEntrySession() {
+        return (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithRole(
+                2, "physician", 1, "S_DEFAULTS1", "Default Study",
+                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1);
+    }
+
     /* ---------------------------------------------------------------------- */
     /* GET /api/v1/subjects — session guards                                  */
     /* ---------------------------------------------------------------------- */
@@ -122,8 +132,7 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/subjects")
                 .contentType("application/json")
                 .content("{\"gender\":\"Z\",\"enrolledOn\":\"2099-01-01\"}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[?(@.field == 'gender')]").exists())
                 .andExpect(jsonPath("$.errors[?(@.field == 'enrolledOn')]").exists())
@@ -183,8 +192,7 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/subjects")
                 .contentType("application/json")
                 .content("{}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors").isArray());
     }

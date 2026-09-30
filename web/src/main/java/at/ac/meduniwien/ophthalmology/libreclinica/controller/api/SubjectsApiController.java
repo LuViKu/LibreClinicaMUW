@@ -828,12 +828,10 @@ public class SubjectsApiController {
      * pure-JSON response shape suitable for the SPA's
      * {@code AddSubjectView}.
      *
-     * <p><strong>Authorization:</strong> chain-level
-     * {@code .anyRequest().hasRole("USER")} gates the endpoint. The
-     * legacy servlet additionally checks for Investigator / CRC /
-     * Coordinator on the bound study before allowing the action — that
-     * compliance slice is deferred until per-role authorization lands
-     * uniformly across the SPA endpoints (out of M4 scope).
+     * <p><strong>Authorization:</strong> the caller's role on the active
+     * study must permit entering data
+     * ({@link ClinicalWriteAuthorization#roleMayEnterData}), as the legacy
+     * servlet's {@code maySubmitData} gate requires; a Monitor gets 403.
      *
      * <p><strong>Validation:</strong> all rules are enforced server-side
      * and the controller returns ALL failing rules in a single 400
@@ -862,6 +860,7 @@ public class SubjectsApiController {
      *         400 if no study is bound;
      *         401 if no userBean (defence-in-depth — SecurityConfig
      *         should have blocked already);
+     *         403 if the caller's role may not enter data;
      *         500 if persistence fails after validation passes.
      */
     @PostMapping
@@ -878,6 +877,11 @@ public class SubjectsApiController {
         }
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "adding subjects");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         if (body == null) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
@@ -1574,7 +1578,8 @@ public class SubjectsApiController {
      * @return 200 + updated {@link SubjectDetailDto} on success;
      *         400 if attestation is false or body fields are missing;
      *         401 if password doesn't match;
-     *         403 if the subject isn't in the user's current study;
+     *         403 if the caller's role may not sign, or the subject
+     *         isn't in the user's current study;
      *         404 if the subject doesn't exist anywhere;
      *         409 if the subject is already signed;
      *         412 + failed checks if preflight has any non-subject-not-signed
@@ -1597,6 +1602,11 @@ public class SubjectsApiController {
         }
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        // Signing is an attest action: the rule that governs signing a
+        // visit, which is the legacy SignStudySubjectServlet's role set.
+        if (!EventEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("signing subjects");
         }
 
         // Never log the password / attestation fields.

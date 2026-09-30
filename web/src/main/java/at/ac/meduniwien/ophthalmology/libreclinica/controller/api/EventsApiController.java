@@ -390,7 +390,8 @@ public class EventsApiController {
      * same one the legacy servlet uses, so audit triggers + study-event
      * status cascades stay consistent.
      *
-     * <p>Guards: 401 anonymous / 400 no active study / 404 unknown
+     * <p>Guards: 401 anonymous / 400 no active study / 403 a role that
+     * may not enter data ({@link ClinicalWriteAuthorization}) / 404 unknown
      * event id or event_definition_crf id / 403 wrong-study visibility
      * / 409 already-started slot (an event_crf for this CRF already
      * exists on the event).
@@ -416,6 +417,11 @@ public class EventsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "starting data entry");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
 
         StudyEventDAO seDao = new StudyEventDAO(dataSource);
@@ -695,6 +701,11 @@ public class EventsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "scheduling study events");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         if (body == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Empty request body"));

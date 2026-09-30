@@ -80,11 +80,11 @@ import org.springframework.web.bind.annotation.RestController;
  *       {@code EventCRFDAO.setSDVStatus}.</li>
  * </ul>
  *
- * <p><strong>Authorization:</strong> chain-level
- * {@code .anyRequest().hasRole("USER")} gates both endpoints. The
- * write endpoint additionally requires a session-bound active study
- * and verifies that every event-CRF id in the request belongs to that
- * study (returns 403 on any cross-study id).
+ * <p><strong>Authorization:</strong> verifying needs an SDV role
+ * ({@link ClinicalWriteAuthorization#roleMayVerifySdv}), un-verifying
+ * {@link SdvUnverifyAuthorization}. Both need a session-bound active
+ * study, and report an event CRF outside the caller's visible studies
+ * as rejected.
  *
  * <p>Status mapping for the read endpoint:
  * <ul>
@@ -258,6 +258,12 @@ public class SdvApiController {
             return ResponseEntity.badRequest().body(Map.of("message", "'eventCrfOids' is required"));
         }
         boolean targetState = body.verified() == null ? true : body.verified();
+        int roleId = ClinicalWriteAuthorization.roleIdOf(session);
+        if (targetState ? !ClinicalWriteAuthorization.roleMayVerifySdv(roleId)
+                        : !SdvUnverifyAuthorization.roleMayUnverify(roleId)) {
+            return ClinicalWriteAuthorization.forbidden(targetState
+                    ? "source data verification" : "un-verifying CRFs");
+        }
 
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);

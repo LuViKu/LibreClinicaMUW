@@ -455,7 +455,8 @@ public class EventCrfsApiController {
      * refresh its header.
      *
      * <p>Reject if the CRF is locked (status SIGNED or LOCKED) — once
-     * signed, edits go through a different unlock flow.
+     * signed, edits go through a different unlock flow. Reject a role
+     * that may not enter data ({@link ClinicalWriteAuthorization}).
      *
      * <p>Audit-log: one {@link AuditEventBean} row per changed item,
      * recording (auditTable="item_data", entityId, columnName="value",
@@ -475,6 +476,11 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         if (body == null
                 || ((body.values() == null || body.values().isEmpty())
@@ -788,7 +794,8 @@ public class EventCrfsApiController {
      * {@code stores/crfEntry.ts:computeItemErrors} prevents the click
      * when required items are missing, so this endpoint trusts the
      * client to have run that gate and only enforces the locked-CRF
-     * gate server-side.
+     * gate, and the role ({@link ClinicalWriteAuthorization}),
+     * server-side.
      *
      * <p>Reject if the CRF is locked (idempotent on already-complete
      * CRFs: returns 200 with the existing state).
@@ -805,6 +812,11 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session."
             ));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "completing CRFs");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
 
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
@@ -2266,6 +2278,11 @@ public class EventCrfsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "adding repeating-group rows");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
         if (ecb == null || ecb.getId() == 0) {
@@ -2346,6 +2363,11 @@ public class EventCrfsApiController {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "deleting repeating-group rows");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
@@ -2508,6 +2530,11 @@ public class EventCrfsApiController {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "uploading CRF files");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
@@ -2709,6 +2736,11 @@ public class EventCrfsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "deleting CRF files");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
 
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
@@ -2852,6 +2884,11 @@ public class EventCrfsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session."));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         if (body == null || body.values() == null) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -3144,6 +3181,11 @@ public class EventCrfsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         // Reuse the existing visibility check from this controller's
         // getEventCrf — if the user can't see the row, the populate
