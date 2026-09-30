@@ -123,7 +123,6 @@ public enum Page {
 
     CONFIGURATION ("/WEB-INF/jsp/admin/configuration.jsp", "Configuration"),
    CONFIGURATION_PASSWORD_REQUIREMENTS("/WEB-INF/jsp/admin/configurationPasswordRequirements.jsp", "Configuration"),
-   SYSTEM_STATUSe("/WEB-INF/jsp/admin/systemStatus.jsp", "System Status"),
 
     /**
      * Page for creating a study.
@@ -349,7 +348,6 @@ public enum Page {
     /**
      * Page for creating crf confirm.
      */
-    CREATE_CRF_CONFIRM ("/WEB-INF/jsp/admin/createCRFConfirm.jsp", "Create a new CRF Confirm"),
 
     /**
      * Page for creating crf version.
@@ -418,7 +416,6 @@ public enum Page {
      * Page for view all datasets, tbh
      */
     VIEW_DATASETS ("/WEB-INF/jsp/extract/viewDatasets.jsp", "View Datasets"),
-    VIEW_EMPTY_DATASETS ("/WEB-INF/jsp/extract/viewEmptyDatasets.jsp", "View Datasets"),
     VIEW_DATASET_DETAILS ("/WEB-INF/jsp/extract/viewDatasetDetails.jsp", "View Dataset Details"),
 
     EXPORT_DATASETS ("/WEB-INF/jsp/extract/exportDatasets.jsp", "Export Dataset"),
@@ -462,7 +459,6 @@ public enum Page {
     CREATE_FILTER_SCREEN_3_2 ("/WEB-INF/jsp/extract/createFilterScreen3_2.jsp", "Create Filter Screen Three Point Two"),
     CREATE_FILTER_SCREEN_4 ("/WEB-INF/jsp/extract/createFilterScreen4.jsp", "Create Filter Screen Four"),
     CREATE_FILTER_SCREEN_5 ("/WEB-INF/jsp/extract/createFilterScreen5.jsp", "Create Filter Screen Five"),
-    CREATE_FILTER_CONFIRM ("/WEB-INF/jsp/extract/createFilterConfirm.jsp", "Create Filter Confirm"),
     VIEW_FILTER_DETAILS ("/WEB-INF/jsp/extract/viewFilterDetails.jsp", "View Filter Details"),
     EDIT_FILTER ("/WEB-INF/jsp/extract/editFilter.jsp", "Edit Filter"),
     EDIT_DATASET ("/WEB-INF/jsp/extract/editDataset.jsp", "Edit Dataset"),
@@ -493,7 +489,6 @@ public enum Page {
     VIEW_SINGLE_JOB ("/WEB-INF/jsp/" + "admin/viewSingleJob.jsp", "View Jobs"),
     // job creation and viewing pages, all under admin
     TECH_ADMIN_SYSTEM ("/WEB-INF/jsp/" + "techadmin/index.jsp", "Technical Administrator Menu"),
-    VIEW_SCHEDULER ("/WEB-INF/jsp/" + "admin/viewScheduler.jsp", "View System Scheduler"),
     ADMIN_SYSTEM_SERVLET ("/AdminSystem", "Administer System Servlet"),
     MANAGE_STUDY_SERVLET ("/ManageStudy", "Manage Study Servlet"),
 
@@ -542,7 +537,6 @@ public enum Page {
     RESTORE_USER_ROLE_IN_STUDY ("/WEB-INF/jsp/" + "managestudy/restoreStudyUserRole.jsp", "restore a user role in a study"),
     LIST_USER_IN_STUDY_SERVLET ("/ListStudyUser", "list users in a study"),
 
-    LIST_SUBJECT ("/WEB-INF/jsp/" + "managestudy/listSubject.jsp", "list subjects in a study"),
     LIST_SUBJECT_SERVLET ("/ListSubject", "list subjects in a study"),
     VIEW_SUBJECT ("/WEB-INF/jsp/" + "admin/viewSubject.jsp", "View Subject"),
 
