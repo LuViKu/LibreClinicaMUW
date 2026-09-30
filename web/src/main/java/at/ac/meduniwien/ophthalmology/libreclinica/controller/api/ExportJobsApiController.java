@@ -87,7 +87,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       user filter.</li>
  *   <li>{@code POST   /api/v1/datasets/{id}/schedules} — create a
  *       recurring schedule. Cron validated by
- *       {@link org.quartz.CronExpression}.</li>
+ *       {@link org.quartz.CronExpression}; an optional
+ *       {@code notifyEmail} is mailed when each run finishes
+ *       ({@link at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportCompletionNotifier}).</li>
  *   <li>{@code GET    /api/v1/datasets/{id}/schedules} — list active
  *       (paused ones included).</li>
  *   <li>{@code PATCH  /api/v1/schedules/{id}} — change format, cron or
@@ -127,6 +129,15 @@ public class ExportJobsApiController {
     /** Accepted format strings — kept in lock-step with the SPA dropdown + DatasetsApiController.ExportFormatKey. */
     private static final Set<String> SUPPORTED_FORMATS =
             Set.of("odm", "csv", "tsv", "tab", "excel", "xls", "xlsx", "sas", "spss", "bundle");
+
+    /**
+     * One plain address, as the column holds one: no display name, no list.
+     * The legacy scheduled-export form checked its contact field the same
+     * way.
+     */
+    private static final java.util.regex.Pattern EMAIL =
+            java.util.regex.Pattern.compile("^[^\\s@,;<>\"]+@[^\\s@,;<>\"]+\\.[^\\s@,;<>\"]+$");
+    private static final int EMAIL_MAX = 255;
 
     private static final int DEFAULT_PAGE_SIZE = 25;
     private static final int MAX_PAGE_SIZE = 100;
@@ -378,6 +389,10 @@ public class ExportJobsApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "Invalid cron expression: '" + cron + "'"));
         }
+        String notifyEmail = blankToNull(body.notifyEmail());
+        if (notifyEmail != null && !isEmailAddress(notifyEmail)) {
+            return invalidEmail();
+        }
         DatasetBean ds = loadDataset(datasetId);
         if (ds == null) {
             return ResponseEntity.status(404).body(Map.of("message",
@@ -389,7 +404,7 @@ public class ExportJobsApiController {
 
         Instant nextRun = registrar.computeNextFireTime(cron);
         ExportScheduleDAO scheduleDao = new ExportScheduleDAO(dataSource);
-        long id = scheduleDao.create(datasetId, format, cron, me.getId(), nextRun);
+        long id = scheduleDao.create(datasetId, format, cron, me.getId(), nextRun, notifyEmail);
         if (id <= 0) {
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist schedule"));
@@ -439,9 +454,11 @@ public class ExportJobsApiController {
     }
 
     /**
-     * Change a schedule: its format, its cron, or whether it runs. A field
-     * left out of the body keeps its value, so {@code {"enabled":false}}
-     * pauses a schedule and {@code {"enabled":true}} resumes it.
+     * Change a schedule: its format, its cron, whether it runs, or the
+     * address mailed when a run finishes. A field left out of the body keeps
+     * its value, so {@code {"enabled":false}} pauses a schedule and
+     * {@code {"enabled":true}} resumes it; a blank {@code notifyEmail}
+     * removes the address.
      *
      * <p>The change reaches Quartz before the response, as create and
      * delete do: an enabled schedule is registered again with its new cron
@@ -482,6 +499,11 @@ public class ExportJobsApiController {
                         "Invalid cron expression: '" + cron + "'"));
             }
         }
+        // null keeps the address, a blank one removes it
+        String notifyEmail = blankToNull(body.notifyEmail());
+        if (notifyEmail != null && !isEmailAddress(notifyEmail)) {
+            return invalidEmail();
+        }
 
         ExportScheduleDAO dao = new ExportScheduleDAO(dataSource);
         ExportScheduleDAO.Row existing = dao.findById(scheduleId);
@@ -492,9 +514,10 @@ public class ExportJobsApiController {
         if (format == null) format = existing.format;
         if (cron == null) cron = existing.cronExpression;
         boolean enabled = body.enabled() == null ? existing.enabled : body.enabled();
+        if (body.notifyEmail() == null) notifyEmail = existing.notifyEmail;
 
         Instant nextRun = enabled ? registrar.computeNextFireTime(cron) : null;
-        if (!dao.update(scheduleId, format, cron, enabled, nextRun)) {
+        if (!dao.update(scheduleId, format, cron, enabled, nextRun, notifyEmail)) {
             ExportScheduleDAO.Row now = dao.findById(scheduleId);
             if (now == null || !now.active) {
                 return ResponseEntity.status(404).body(Map.of("message",
@@ -572,6 +595,19 @@ public class ExportJobsApiController {
         return ds != null && inActiveStudy(ds, session);
     }
 
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    private static boolean isEmailAddress(String s) {
+        return s.length() <= EMAIL_MAX && EMAIL.matcher(s).matches();
+    }
+
+    private static ResponseEntity<?> invalidEmail() {
+        return ResponseEntity.badRequest().body(Map.of("message",
+                "'notifyEmail' must be a single e-mail address"));
+    }
+
     private static ResponseEntity<?> notInActiveStudy(int datasetId) {
         return ResponseEntity.status(404).body(Map.of("message",
                 "Dataset " + datasetId + " does not belong to the active study"));
@@ -630,6 +666,7 @@ public class ExportJobsApiController {
                 r.cronExpression,
                 r.active,
                 r.enabled,
+                r.notifyEmail,
                 toIso(r.createdAt),
                 toIso(r.nextRunAt),
                 toIso(r.lastRunAt),
@@ -653,10 +690,12 @@ public class ExportJobsApiController {
 
     public record EnqueueExportRequest(String format) {}
 
-    public record CreateScheduleRequest(String format, String cronExpression) {}
+    /** {@code notifyEmail} is optional: the address mailed when a run finishes. */
+    public record CreateScheduleRequest(String format, String cronExpression, String notifyEmail) {}
 
     /** Body of {@code PATCH /schedules/{id}}: a null field keeps its value. */
-    public record UpdateScheduleRequest(String format, String cronExpression, Boolean enabled) {}
+    public record UpdateScheduleRequest(String format, String cronExpression, Boolean enabled,
+                                        String notifyEmail) {}
 
     /** Wire shape of {@code GET /exports?...}. */
     public record ExportJobListResponse(

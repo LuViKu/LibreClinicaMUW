@@ -46,6 +46,13 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(ExportScheduleRegistrar.class)));
     }
 
+    /** A registrar that accepts any cron, so validation reaches the fields after it. */
+    private MockMvc mockMvcAcceptingAnyCron() {
+        ExportScheduleRegistrar registrar = Mockito.mock(ExportScheduleRegistrar.class);
+        Mockito.when(registrar.isValidCron(Mockito.anyString())).thenReturn(true);
+        return mockMvcFor(new ExportJobsApiController(mockDataSource(), registrar));
+    }
+
     /** Signed in to the study with a role that may not export (Data Entry Person). */
     private MockHttpSession dataEntrySession() {
         return (MockHttpSession) authenticatedSessionWithRole(7, "entry", 1, "S_DEFAULTS1",
@@ -157,6 +164,18 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                         .value(containsString("Invalid cron expression")));
     }
 
+    @Test
+    void createScheduleReturns400OnAnInvalidContactAddress() throws Exception {
+        mockMvcAcceptingAnyCron().perform(post("/api/v1/datasets/1/schedules")
+                .contentType("application/json")
+                .content("{\"format\":\"odm\",\"cronExpression\":\"0 0 3 ? * MON\","
+                        + "\"notifyEmail\":\"dm-team@example.org, boss@example.org\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("notifyEmail")));
+    }
+
     /* ---------------------------------------------------------------- */
     /* GET /api/v1/datasets/{id}/schedules                              */
     /* ---------------------------------------------------------------- */
@@ -220,6 +239,17 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("Unsupported format 'pdf'")));
+    }
+
+    @Test
+    void updateScheduleReturns400OnAnInvalidContactAddress() throws Exception {
+        mockMvcAcceptingAnyCron().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"notifyEmail\":\"not an address\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("notifyEmail")));
     }
 
     /* ---------------------------------------------------------------- */

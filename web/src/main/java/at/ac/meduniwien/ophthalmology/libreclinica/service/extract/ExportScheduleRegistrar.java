@@ -312,8 +312,10 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
                         scheduleId, row.active ? "paused" : "inactive");
                 return -1L;
             }
-            // Enqueue as if the creator had hit POST /export.
-            long jobId = new ExportJobDAO(dataSource).insertQueued(row.datasetId, row.format, row.createdBy);
+            // Enqueue as if the creator had hit POST /export, tagged with the
+            // schedule so the worker can mail its contact address.
+            long jobId = new ExportJobDAO(dataSource)
+                    .insertQueued(row.datasetId, row.format, row.createdBy, row.id);
 
             Instant next = nextFireTime(row.cronExpression);
             scheduleDao.stampRun(scheduleId, jobId, Instant.now(), next);

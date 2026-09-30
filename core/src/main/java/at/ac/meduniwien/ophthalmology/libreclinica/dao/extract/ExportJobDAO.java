@@ -68,14 +68,25 @@ public class ExportJobDAO {
      * 500 response).
      */
     public long insertQueued(int datasetId, String format, int submittedByUserId) {
+        return insertQueued(datasetId, format, submittedByUserId, null);
+    }
+
+    /**
+     * As {@link #insertQueued(int, String, int)}, for a run of an
+     * {@code export_schedule}: {@code scheduleId} lets the worker find the
+     * schedule's contact address when the run finishes.
+     */
+    public long insertQueued(int datasetId, String format, int submittedByUserId, Long scheduleId) {
         String sql = "INSERT INTO export_job "
-                + "(dataset_id, format, status, submitted_by) "
-                + "VALUES (?, ?, '" + STATUS_QUEUED + "', ?)";
+                + "(dataset_id, format, status, submitted_by, schedule_id) "
+                + "VALUES (?, ?, '" + STATUS_QUEUED + "', ?, ?)";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, datasetId);
             ps.setString(2, format);
             ps.setInt(3, submittedByUserId);
+            if (scheduleId == null) ps.setNull(4, Types.BIGINT);
+            else ps.setLong(4, scheduleId);
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) return rs.getLong(1);
@@ -100,7 +111,7 @@ public class ExportJobDAO {
      * {@code runExport} and gets recorded as {@code failed}.
      */
     public Row claimNextQueued() {
-        String select = "SELECT id, dataset_id, format, submitted_by "
+        String select = "SELECT id, dataset_id, format, submitted_by, schedule_id "
                 + "FROM export_job WHERE status = '" + STATUS_QUEUED + "' "
                 + "ORDER BY submitted_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED";
         String update = "UPDATE export_job SET status = '" + STATUS_RUNNING + "', "
@@ -118,6 +129,8 @@ public class ExportJobDAO {
                         picked.datasetId = rs.getInt(2);
                         picked.format = rs.getString(3);
                         picked.submittedBy = rs.getInt(4);
+                        long scheduleId = rs.getLong(5);
+                        picked.scheduleId = rs.wasNull() ? null : scheduleId;
                         picked.status = STATUS_RUNNING;
                     }
                 }
@@ -174,7 +187,7 @@ public class ExportJobDAO {
     public Row findById(long jobId) {
         String sql = "SELECT id, dataset_id, format, status, submitted_by, "
                 + "submitted_at, started_at, finished_at, "
-                + "archived_dataset_file_id, error_message "
+                + "archived_dataset_file_id, error_message, schedule_id "
                 + "FROM export_job WHERE id = ?";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -201,7 +214,7 @@ public class ExportJobDAO {
                                   int page, int pageSize) {
         StringBuilder sql = new StringBuilder("SELECT id, dataset_id, format, status, submitted_by, ")
                 .append("submitted_at, started_at, finished_at, ")
-                .append("archived_dataset_file_id, error_message ")
+                .append("archived_dataset_file_id, error_message, schedule_id ")
                 .append("FROM export_job WHERE 1=1 ");
         List<Object> params = new ArrayList<>(4);
         if (requestedByUserId != null) {
@@ -280,7 +293,7 @@ public class ExportJobDAO {
     public List<Row> findRecentByStudy(int studyId) {
         String sql = "SELECT ej.id, ej.dataset_id, ej.format, ej.status, ej.submitted_by, "
                 + "ej.submitted_at, ej.started_at, ej.finished_at, "
-                + "ej.archived_dataset_file_id, ej.error_message "
+                + "ej.archived_dataset_file_id, ej.error_message, ej.schedule_id "
                 + "FROM export_job ej "
                 + "JOIN dataset d ON d.dataset_id = ej.dataset_id "
                 + "WHERE d.study_id = ? "
@@ -315,6 +328,8 @@ public class ExportJobDAO {
         int adfId = rs.getInt("archived_dataset_file_id");
         r.archivedDatasetFileId = rs.wasNull() ? null : adfId;
         r.errorMessage = rs.getString("error_message");
+        long scheduleId = rs.getLong("schedule_id");
+        r.scheduleId = rs.wasNull() ? null : scheduleId;
         return r;
     }
 
@@ -341,9 +356,7 @@ public class ExportJobDAO {
         public Instant finishedAt;
         public Integer archivedDatasetFileId;
         public String errorMessage;
+        /** The export_schedule this run came from; null for a run started by hand. */
+        public Long scheduleId;
     }
-
-    /** Suppress the unused-import warning Eclipse-format flags for Types. */
-    @SuppressWarnings("unused")
-    private static final int UNUSED_TYPES_REF = Types.INTEGER;
 }

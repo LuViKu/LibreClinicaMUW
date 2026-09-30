@@ -42,7 +42,7 @@ public class ExportScheduleDAO {
     private static final Logger LOG = LoggerFactory.getLogger(ExportScheduleDAO.class);
 
     private static final String COLUMNS = "id, dataset_id, format, cron_expression, active, enabled, "
-            + "created_by, created_at, next_run_at, last_run_at, last_run_job_id ";
+            + "notify_email, created_by, created_at, next_run_at, last_run_at, last_run_job_id ";
 
     private final DataSource dataSource;
 
@@ -52,9 +52,18 @@ public class ExportScheduleDAO {
 
     public long create(int datasetId, String format, String cronExpression,
                        int createdByUserId, Instant nextRunAt) {
+        return create(datasetId, format, cronExpression, createdByUserId, nextRunAt, null);
+    }
+
+    /**
+     * @param notifyEmail the contact address mailed when a run finishes,
+     *                    or null for none
+     */
+    public long create(int datasetId, String format, String cronExpression,
+                       int createdByUserId, Instant nextRunAt, String notifyEmail) {
         String sql = "INSERT INTO export_schedule "
-                + "(dataset_id, format, cron_expression, active, created_by, next_run_at) "
-                + "VALUES (?, ?, ?, TRUE, ?, ?)";
+                + "(dataset_id, format, cron_expression, active, created_by, next_run_at, notify_email) "
+                + "VALUES (?, ?, ?, TRUE, ?, ?, ?)";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, datasetId);
@@ -63,6 +72,7 @@ public class ExportScheduleDAO {
             ps.setInt(4, createdByUserId);
             if (nextRunAt == null) ps.setNull(5, java.sql.Types.TIMESTAMP);
             else ps.setTimestamp(5, Timestamp.from(nextRunAt));
+            ps.setString(6, notifyEmail);
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) return rs.getLong(1);
@@ -75,14 +85,15 @@ public class ExportScheduleDAO {
     }
 
     /**
-     * Change what a schedule exports and when. A deleted schedule is not
-     * updated: returns {@code false} when no active row has this id.
-     * {@code nextRunAt} is null for a paused schedule.
+     * Change what a schedule exports, when, and whom it tells. A deleted
+     * schedule is not updated: returns {@code false} when no active row has
+     * this id. {@code nextRunAt} is null for a paused schedule,
+     * {@code notifyEmail} null for no mail.
      */
     public boolean update(long scheduleId, String format, String cronExpression,
-                          boolean enabled, Instant nextRunAt) {
+                          boolean enabled, Instant nextRunAt, String notifyEmail) {
         String sql = "UPDATE export_schedule SET format = ?, cron_expression = ?, enabled = ?, "
-                + "next_run_at = ? WHERE id = ? AND active = TRUE";
+                + "next_run_at = ?, notify_email = ? WHERE id = ? AND active = TRUE";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, format);
@@ -90,7 +101,8 @@ public class ExportScheduleDAO {
             ps.setBoolean(3, enabled);
             if (nextRunAt == null) ps.setNull(4, java.sql.Types.TIMESTAMP);
             else ps.setTimestamp(4, Timestamp.from(nextRunAt));
-            ps.setLong(5, scheduleId);
+            ps.setString(5, notifyEmail);
+            ps.setLong(6, scheduleId);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             LOG.error("update failed for schedule_id={} cron={}: {}",
@@ -193,6 +205,7 @@ public class ExportScheduleDAO {
         r.cronExpression = rs.getString("cron_expression");
         r.active = rs.getBoolean("active");
         r.enabled = rs.getBoolean("enabled");
+        r.notifyEmail = rs.getString("notify_email");
         r.createdBy = rs.getInt("created_by");
         r.createdAt = toInstant(rs.getTimestamp("created_at"));
         r.nextRunAt = toInstant(rs.getTimestamp("next_run_at"));
@@ -214,6 +227,8 @@ public class ExportScheduleDAO {
         public boolean active;
         /** False while the schedule is paused. */
         public boolean enabled;
+        /** Contact address mailed when a run finishes; null for none. */
+        public String notifyEmail;
         public int createdBy;
         public Instant createdAt;
         public Instant nextRunAt;

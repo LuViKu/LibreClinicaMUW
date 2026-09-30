@@ -62,11 +62,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.OpenClinicaMailSender;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportCompletionNotifier;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportFileMaterializer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportJobRunner;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.PlaceholderExportFileMaterializer;
@@ -438,6 +441,71 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         patchSchedule(id, "{\"enabled\":true}", STUDY_ID).andExpect(status().isNotFound());
         assertNull(triggerOf(id));
         assertFalse(new ExportScheduleDAO(DATA_SOURCE).findById(id).active);
+    }
+
+    /* ---------------- completion mail ---------------- */
+
+    /** Captures what would be mailed. */
+    private static final class Outbox extends OpenClinicaMailSender {
+        final List<String[]> sent = new ArrayList<>();
+
+        @Override
+        public void sendEmail(String to, String subject, String body, Boolean htmlEmail) {
+            sent.add(new String[] {to, subject, body});
+        }
+    }
+
+    @Test
+    void aScheduledRunMailsTheScheduleContactWhetherItSucceedsOrFails() throws Exception {
+        DatasetBean ds = persistDataset();
+        String json = mockMvc().perform(post("/api/v1/datasets/" + ds.getId() + "/schedules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"odm\",\"cronExpression\":\"" + CRON + "\","
+                                + "\"notifyEmail\":\"dm-team@example.org\"}")
+                        .session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.notifyEmail").value("dm-team@example.org"))
+                .andReturn().getResponse().getContentAsString();
+        long id = JSON.readTree(json).get("id").asLong();
+        Outbox outbox = new Outbox();
+        ExportCompletionNotifier notifier = new ExportCompletionNotifier(outbox, DATA_SOURCE);
+        ExportJobDAO jobs = new ExportJobDAO(DATA_SOURCE);
+
+        // a scheduled run that succeeds
+        long done = tick(jobDataOf(id), ds.getId());
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer(), notifier));
+        assertEquals(ExportJobDAO.STATUS_DONE, jobs.findById(done).status, jobs.findById(done).errorMessage);
+        assertEquals(1, outbox.sent.size());
+        assertEquals("dm-team@example.org", outbox.sent.get(0)[0]);
+        assertTrue(outbox.sent.get(0)[1].contains("finished") && outbox.sent.get(0)[1].contains(ds.getName()),
+                outbox.sent.get(0)[1]);
+
+        // a scheduled run that fails: mailed, without the error text
+        long failed = tick(jobDataOf(id), ds.getId());
+        ExportFileMaterializer failing = (dataset, format, userId) -> {
+            throw new IllegalStateException("value 'M-001 hba1c 7.9' is not a number");
+        };
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, failing, notifier));
+        assertEquals(ExportJobDAO.STATUS_FAILED, jobs.findById(failed).status);
+        assertEquals(2, outbox.sent.size());
+        assertTrue(outbox.sent.get(1)[1].contains("failed"), outbox.sent.get(1)[1]);
+        assertFalse(outbox.sent.get(1)[2].contains("M-001"), "an error message can quote data; it stays in the platform");
+
+        // an export someone started by hand is not mailed
+        mockMvc().perform(post("/api/v1/datasets/" + ds.getId() + "/exports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"odm\"}").session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isAccepted());
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer(), notifier));
+        assertEquals(2, outbox.sent.size());
+
+        // nor is a run of a schedule whose address was removed
+        patchSchedule(id, "{\"notifyEmail\":\"\"}", STUDY_ID)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notifyEmail").value(Matchers.nullValue()));
+        tick(jobDataOf(id), ds.getId());
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer(), notifier));
+        assertEquals(2, outbox.sent.size());
     }
 
     @Test

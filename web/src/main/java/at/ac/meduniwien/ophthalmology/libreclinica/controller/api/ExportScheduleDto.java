@@ -22,6 +22,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * delete that flips {@code active=false}, so callers re-fetch the list
  * to refresh the UI. {@code enabled=false} is a pause: the schedule is
  * listed but does not run, and {@code nextRunAt} is null.
+ * {@code notifyEmail} is the contact address mailed when a run finishes,
+ * or null.
  */
 public record ExportScheduleDto(
         long id,
@@ -30,6 +32,7 @@ public record ExportScheduleDto(
         String cronExpression,
         boolean active,
         boolean enabled,
+        String notifyEmail,
         String createdAt,
         String nextRunAt,
         String lastRunAt,

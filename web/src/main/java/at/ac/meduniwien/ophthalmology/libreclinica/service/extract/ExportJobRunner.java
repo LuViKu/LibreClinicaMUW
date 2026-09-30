@@ -90,19 +90,43 @@ public class ExportJobRunner implements Job {
         DataSource dataSource = appCtx.getBean("dataSource", DataSource.class);
         ExportFileMaterializer materializer = resolveMaterializer(appCtx);
 
-        runOnce(dataSource, materializer);
+        runOnce(dataSource, materializer, resolveNotifier(appCtx));
     }
 
     /**
-     * Package-visible for the unit test — drains exactly one queued
-     * row. Returns {@code true} if a job was processed, {@code false}
-     * if the queue was empty.
+     * Drains exactly one queued row, sending no completion mail. Returns
+     * {@code true} if a job was processed, {@code false} if the queue was
+     * empty.
      */
     public static boolean runOnce(DataSource dataSource, ExportFileMaterializer materializer) {
+        return runOnce(dataSource, materializer, null);
+    }
+
+    /**
+     * Drains exactly one queued row. When the row came from an
+     * {@code export_schedule}, {@code notifier} mails the schedule's
+     * contact address once the run is done or failed; a null notifier
+     * sends nothing. Returns {@code true} if a job was processed,
+     * {@code false} if the queue was empty.
+     */
+    public static boolean runOnce(DataSource dataSource, ExportFileMaterializer materializer,
+                                  ExportCompletionNotifier notifier) {
         ExportJobDAO jobDao = new ExportJobDAO(dataSource);
         ExportJobDAO.Row claimed = jobDao.claimNextQueued();
         if (claimed == null) return false;
+        try {
+            process(dataSource, materializer, jobDao, claimed);
+        } finally {
+            // After the outcome is recorded: the mail reports it, it cannot change it.
+            if (notifier != null && claimed.scheduleId != null) {
+                notifier.notifyFinished(claimed.id);
+            }
+        }
+        return true;
+    }
 
+    private static void process(DataSource dataSource, ExportFileMaterializer materializer,
+                                ExportJobDAO jobDao, ExportJobDAO.Row claimed) {
         LOG.info("ExportJobRunner: picked up job_id={} dataset_id={} format={}",
                 claimed.id, claimed.datasetId, claimed.format);
 
@@ -112,7 +136,7 @@ public class ExportJobRunner implements Job {
             if (ds == null || ds.getId() == 0) {
                 jobDao.markFailed(claimed.id,
                         "Dataset " + claimed.datasetId + " no longer exists");
-                return true;
+                return;
             }
 
             long t0 = System.currentTimeMillis();
@@ -125,16 +149,14 @@ public class ExportJobRunner implements Job {
             if (archivedFileId <= 0) {
                 jobDao.markFailed(claimed.id,
                         "Archived-dataset-file insert returned no id");
-                return true;
+                return;
             }
             jobDao.markDone(claimed.id, archivedFileId);
             LOG.info("ExportJobRunner: completed job_id={} archived_dataset_file_id={} in {} ms",
                     claimed.id, archivedFileId, elapsedMs);
-            return true;
         } catch (Throwable t) { // NOSONAR — Quartz can swallow Errors; record everything.
             LOG.error("ExportJobRunner: job_id=" + claimed.id + " failed", t);
             jobDao.markFailed(claimed.id, t.getClass().getSimpleName() + ": " + t.getMessage());
-            return true;
         }
     }
 
@@ -187,6 +209,16 @@ public class ExportJobRunner implements Job {
                     + "Phase 1's GenerateExtractFileService wiring will provide the real one.",
                     e.getMessage());
             return new PlaceholderExportFileMaterializer();
+        }
+    }
+
+    private static ExportCompletionNotifier resolveNotifier(ApplicationContext appCtx) {
+        try {
+            return appCtx.getBean(ExportCompletionNotifier.class);
+        } catch (Exception e) {
+            LOG.warn("No ExportCompletionNotifier bean; scheduled exports send no completion mail ({})",
+                    e.getMessage());
+            return null;
         }
     }
 
