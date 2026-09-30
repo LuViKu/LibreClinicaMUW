@@ -29,8 +29,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import org.springframework.mock.web.MockHttpSession;
 
 /**
- * Sessions and small lookups for the clinical-write ITs
- * ({@link ClinicalWriteRoleMatrixDatabaseIT}).
+ * Sessions and small lookups shared by the clinical-write ITs
+ * ({@link ClinicalWriteRoleMatrixDatabaseIT}, {@link SdvIntegrityDatabaseIT}).
  *
  * <p>A session is bound the way {@code POST /me/activeStudy} binds it: the
  * demo account, Default Study, and the account's active role on that study.

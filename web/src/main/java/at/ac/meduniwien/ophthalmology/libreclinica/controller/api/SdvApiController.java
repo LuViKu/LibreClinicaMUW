@@ -75,9 +75,10 @@ import org.springframework.web.bind.annotation.RestController;
  *       about the legacy field set.</li>
  *   <li>{@code POST /pages/api/v1/sdv/verify} — bulk-flips the
  *       {@code sdv_status} column on a list of event-CRFs to
- *       {@code true} (or {@code false} when {@code verified=false} is
- *       sent). Records the verifier id + timestamp via
- *       {@code EventCRFDAO.setSDVStatus}.</li>
+ *       {@code true}. Records the verifier id via
+ *       {@code EventCRFDAO.setSDVStatus}. {@code verified=false} is an
+ *       un-verify and is handled by {@link #unverify}: it needs a
+ *       {@code reason} and an un-verifying role, like any other.</li>
  * </ul>
  *
  * <p><strong>Authorization:</strong> verifying needs an SDV role
@@ -257,12 +258,13 @@ public class SdvApiController {
         if (body == null || body.eventCrfOids() == null || body.eventCrfOids().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "'eventCrfOids' is required"));
         }
-        boolean targetState = body.verified() == null ? true : body.verified();
-        int roleId = ClinicalWriteAuthorization.roleIdOf(session);
-        if (targetState ? !ClinicalWriteAuthorization.roleMayVerifySdv(roleId)
-                        : !SdvUnverifyAuthorization.roleMayUnverify(roleId)) {
-            return ClinicalWriteAuthorization.forbidden(targetState
-                    ? "source data verification" : "un-verifying CRFs");
+        // verified=false withdraws verification. That is an un-verify on
+        // every path: it needs the reason and the role /unverify needs.
+        if (Boolean.FALSE.equals(body.verified())) {
+            return unverify(new UnverifyRequest(body.eventCrfOids(), body.reason()), session);
+        }
+        if (!ClinicalWriteAuthorization.roleMayVerifySdv(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("source data verification");
         }
 
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
@@ -306,7 +308,7 @@ public class SdvApiController {
             }
 
             try {
-                eventCrfDao.setSDVStatus(targetState, ub.getId(), id);
+                eventCrfDao.setSDVStatus(true, ub.getId(), id);
                 verified.add(oid);
             } catch (Exception e) {
                 LOG.warn("Failed to flip sdv_status on event_crf id={}", id, e);
@@ -320,8 +322,8 @@ public class SdvApiController {
         response.put("verifiedCount", verified.size());
         response.put("verifiedAt", Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
         response.put("verifiedBy", ub.getName());
-        LOG.info("Bulk SDV verify=({}) by user={}: {} verified, {} rejected",
-                targetState, ub.getName(), verified.size(), rejected.size());
+        LOG.info("Bulk SDV verify by user={}: {} verified, {} rejected",
+                ub.getName(), verified.size(), rejected.size());
         return ResponseEntity.ok(response);
     }
 
@@ -428,12 +430,14 @@ public class SdvApiController {
                 // through the unified writeAuditEvent helper (Phase
                 // audit-unification, 2026-06-12) so the row lands in
                 // audit_log_event (visible to the SPA Audit Log view).
+                // The reason goes in reason_for_change: the action
+                // message is not stored.
                 EventCrfsApiController.writeAuditEvent(auditDAO,
                         AuditTypeIds.EVENT_CRF_SDV_UNVERIFIED,
                         ub, currentStudy, ss,
-                        "event_crf_sdv_unverify: " + body.reason().trim(),
+                        "event_crf_sdv_unverify",
                         "event_crf", id,
-                        "sdv_status", "true", "false");
+                        "sdv_status", "true", "false", body.reason().trim());
             } catch (Exception e) {
                 LOG.warn("Failed to flip sdv_status to false on event_crf id={}", id, e);
                 rejected.add(oid);
@@ -502,7 +506,9 @@ public class SdvApiController {
     /** Body of POST /pages/api/v1/sdv/verify — bulk-flip event_crf.sdv_status. */
     public record VerifyRequest(
             List<String> eventCrfOids,
-            /** Defaults to {@code true} when null. */
-            Boolean verified
+            /** Defaults to {@code true} when null; {@code false} un-verifies. */
+            Boolean verified,
+            /** Required when {@code verified} is {@code false}, as on /unverify. */
+            String reason
     ) {}
 }
