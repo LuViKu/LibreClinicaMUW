@@ -4,6 +4,7 @@ import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@
 import type {
   Crf,
   CreateCrfInput,
+  CrfDetail,
   CrfVersion,
   UpdateCrfInput,
   EventCrfAssignment,
@@ -55,6 +56,22 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return { ok: true, crf }
     } catch (e) {
       return mapMutationError(e, 'create')
+    }
+  }
+
+  /**
+   * The CRF view: versions, item table with the integrity check, and the
+   * studies using the CRF. Not cached; the view loads it on open.
+   */
+  async function fetchCrfDetail(
+    crfOid: string,
+  ): Promise<{ ok: true; detail: CrfDetail } | { ok: false; message: string }> {
+    try {
+      const detail = await apiGet<CrfDetail>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}`)
+      return { ok: true, detail }
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      return { ok: false, message: humanError(e, 'load') }
     }
   }
 
@@ -484,6 +501,7 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     isLoading,
     error,
     loadCrfs,
+    fetchCrfDetail,
     createCrf,
     updateCrf,
     disableCrf,

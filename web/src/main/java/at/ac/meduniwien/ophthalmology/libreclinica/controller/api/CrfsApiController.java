@@ -93,6 +93,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       inlined versions</li>
  *   <li>{@code POST   /api/v1/crfs} — create a new CRF shell (no
  *       versions yet)</li>
+ *   <li>{@code GET    /api/v1/crfs/{crfOid}} — one CRF with its versions,
+ *       items and the studies using it</li>
  *   <li>{@code PUT    /api/v1/crfs/{crfOid}} — change name and description</li>
  *   <li>{@code POST   /api/v1/crfs/{crfOid}/disable} — soft-delete, with
  *       the rows below it</li>
@@ -507,6 +509,92 @@ public class CrfsApiController {
         return ResponseEntity.ok(toDto(crfDao.findByOid(crfOid), versionDao));
     }
 
+    /* ----------------------------------------------------------------- */
+    /* GET /api/v1/crfs/{crfOid}                                         */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * One CRF as the legacy {@code ViewCRFServlet} showed it: metadata,
+     * versions, the item table with the integrity check (see
+     * {@link CrfItemTable}), and the studies whose event definitions use it.
+     * Same gate as the legacy view: sysadmin, or Data Manager / CRC in some
+     * study.
+     */
+    @GetMapping("/{crfOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfDetailDto.class)))
+    public ResponseEntity<?> detail(@PathVariable("crfOid") String crfOid,
+                                    HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+
+        List<CrfItemTable.Row> rows = new ArrayList<>();
+        List<CrfDetailDto.StudyUse> studies = new ArrayList<>();
+        try (Connection c = dataSource.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT DISTINCT i.name, i.oc_oid, i.description, i.item_data_type_id,"
+                            + "       cv.crf_version_id, cv.name AS version_name, cv.status_id AS version_status,"
+                            + "       ig.name AS group_label"
+                            + "  FROM crf_version cv"
+                            + "  JOIN item_form_metadata ifm ON ifm.crf_version_id = cv.crf_version_id"
+                            + "  JOIN item i ON i.item_id = ifm.item_id"
+                            + "  LEFT JOIN item_group_metadata igm"
+                            + "         ON igm.item_id = i.item_id AND igm.crf_version_id = cv.crf_version_id"
+                            + "  LEFT JOIN item_group ig ON ig.item_group_id = igm.item_group_id"
+                            + " WHERE cv.crf_id = ?"
+                            + " ORDER BY i.name, cv.crf_version_id")) {
+                ps.setInt(1, crf.getId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        rows.add(new CrfItemTable.Row(
+                                rs.getString("name"), rs.getString("oc_oid"), rs.getString("description"),
+                                rs.getInt("item_data_type_id"), rs.getString("version_name"),
+                                rs.getInt("version_status"), rs.getString("group_label")));
+                    }
+                }
+            }
+            // Legacy StudyDAO.getStudyIdsByCRF: every study with an
+            // event-definition CRF for this CRF, whatever the row's status.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT s.oc_oid, s.name, s.unique_identifier, s.status_id, p.oc_oid AS parent_oid,"
+                            + "       p.name AS parent_name"
+                            + "  FROM study s LEFT JOIN study p ON p.study_id = s.parent_study_id"
+                            + " WHERE s.study_id IN (SELECT study_id FROM event_definition_crf WHERE crf_id = ?)"
+                            + " ORDER BY COALESCE(p.name, s.name), s.parent_study_id NULLS FIRST, s.name")) {
+                ps.setInt(1, crf.getId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        studies.add(new CrfDetailDto.StudyUse(
+                                rs.getString("oc_oid"), nullToEmpty(rs.getString("name")),
+                                nullToEmpty(rs.getString("unique_identifier")),
+                                Status.get(rs.getInt("status_id")).getName(),
+                                rs.getString("parent_oid"), rs.getString("parent_name")));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("CRF detail load failed for oid={}", crfOid, e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Loading CRF '" + crfOid + "' failed."));
+        }
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CrfDto base = toDto(crf, versionDao);
+        return ResponseEntity.ok(new CrfDetailDto(
+                base.oid(), base.name(), base.description(), base.status(),
+                StudyAdminAuthorization.userMayEditCrf(me, crf.getOwnerId(), dataSource),
+                base.versions(),
+                CrfItemTable.build(rows),
+                studies));
+    }
 
     /* ----------------------------------------------------------------- */
     /* GET /api/v1/crfs/{crfOid}/versions                                */

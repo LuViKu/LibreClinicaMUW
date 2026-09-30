@@ -63,6 +63,7 @@ function makeRouter() {
     routes: [
       { path: '/', name: 'home', component: { template: '<div />' } },
       { path: '/crf-library', name: 'crf-library', component: { template: '<div />' } },
+      { path: '/crf-library/:crfOid', name: 'crf-detail', component: { template: '<div />' } },
       { path: '/crf-authoring-canvas/:crfOid', name: 'crfAuthoringCanvas', component: { template: '<div />' } },
     ],
   })
@@ -203,6 +204,11 @@ describe('CrfLibraryView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain("Only the CRF's owner")
     expect(wrapper.find('[data-testid="crf-library-edit-form-F_DEMO"]').exists()).toBe(true)
+  })
+
+  it('links each CRF to its view', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-testid="crf-library-detail-F_DEMO"]').attributes('href')).toBe('/crf-library/F_DEMO')
   })
 
   it('offers no CRF actions to a role that may not manage CRFs', async () => {

@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,8 +33,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * (legacy {@code RemoveCRFServlet} / {@code RestoreCRFServlet} /
  * {@code RemoveCRFVersionServlet} / {@code RestoreCRFVersionServlet}, see
  * {@link CrfLifecycleCascade}); locking or removing a version moves the
- * defaults that point at it; and editing a CRF's name and description. Each
- * test builds its own CRF.
+ * defaults that point at it; editing a CRF's name and description; and the
+ * CRF view with its item table and the studies using it. Each test builds its
+ * own CRF.
  */
 class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
@@ -380,5 +382,68 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
                         .content("{\"name\":\"x\"}"))
                 .andExpect(status().isConflict());
         assertThat(fx.status("crf", removed)).isEqualTo(5);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* CRF view                                                           */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void theCrfViewListsItemsWithTheIntegrityCheckAndTheStudiesUsingIt() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int v2 = fx.version(crf, "v2", "F_" + t + "_V2", 1);
+        int s1 = fx.section(v1, "S1", 1);
+        int s2 = fx.section(v2, "S2", 1);
+        int g1 = fx.group(crf, t + "_G1");
+        int g2 = fx.group(crf, t + "_G2");
+        int a = fx.item(t + "_A", 6);
+        int b = fx.item(t + "_B", 5);
+        int c = fx.item(t + "_C", 9);
+        fx.place(a, v1, s1, 1);
+        fx.place(a, v2, s2, 1);
+        fx.place(b, v1, s1, 2);
+        fx.place(b, v2, s2, 2);
+        fx.place(c, v2, s2, 3);
+        fx.groupItem(g1, v1, a, 1);
+        fx.groupItem(g1, v2, a, 1);
+        fx.groupItem(g1, v1, b, 2);
+        fx.groupItem(g2, v2, b, 2);
+        fx.eventDefinitionCrf(CrfLibraryFixtures.SED_ID, CrfLibraryFixtures.STUDY_ID, crf, v1, null);
+        int site = fx.site("S_" + t, "Site " + t);
+        fx.eventDefinitionCrf(CrfLibraryFixtures.SED_ID, site, crf, v1, null);
+
+        mvc().perform(get("/api/v1/crfs/F_" + t).session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.oid").value("F_" + t))
+                .andExpect(jsonPath("$.mayEdit").value(true))
+                .andExpect(jsonPath("$.versions.length()").value(2))
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].name").value(t + "_A"))
+                .andExpect(jsonPath("$.items[0].dataType").value("INT"))
+                .andExpect(jsonPath("$.items[0].versions.length()").value(2))
+                .andExpect(jsonPath("$.items[0].integrity").value("ok"))
+                .andExpect(jsonPath("$.items[1].name").value(t + "_B"))
+                .andExpect(jsonPath("$.items[1].integrity").value("problem"))
+                .andExpect(jsonPath("$.items[1].placements[0].groupLabel").value(t + "_G1"))
+                .andExpect(jsonPath("$.items[1].placements[0].versionName").value("v1"))
+                .andExpect(jsonPath("$.items[1].placements[1].groupLabel").value(t + "_G2"))
+                .andExpect(jsonPath("$.items[1].placements[1].versionName").value("v2"))
+                .andExpect(jsonPath("$.items[2].name").value(t + "_C"))
+                .andExpect(jsonPath("$.items[2].dataType").value("DATE"))
+                .andExpect(jsonPath("$.items[2].versions[0]").value("v2"))
+                .andExpect(jsonPath("$.studies.length()").value(2))
+                .andExpect(jsonPath("$.studies[0].oid").value(CrfLibraryFixtures.STUDY_OID))
+                .andExpect(jsonPath("$.studies[1].oid").value("S_" + t))
+                .andExpect(jsonPath("$.studies[1].parentOid").value(CrfLibraryFixtures.STUDY_OID));
+
+        mvc().perform(get("/api/v1/crfs/F_" + t).session(otherDm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mayEdit").value(false));
+        mvc().perform(get("/api/v1/crfs/F_" + t).session(investigator()))
+                .andExpect(status().isForbidden());
+        mvc().perform(get("/api/v1/crfs/F_NO_SUCH_" + t).session(dm()))
+                .andExpect(status().isNotFound());
     }
 }

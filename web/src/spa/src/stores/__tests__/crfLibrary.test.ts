@@ -111,6 +111,28 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
     })
   })
 
+  describe('fetchCrfDetail', () => {
+    it('GETs the CRF view', async () => {
+      const store = useCrfLibraryStore()
+      const detail = { ...DEMOS, mayEdit: false, items: [], studies: [] }
+      vi.mocked(apiGet).mockResolvedValue(detail)
+
+      const result = await store.fetchCrfDetail('F_DEMOS')
+
+      expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS')
+      expect(result).toEqual({ ok: true, detail })
+    })
+
+    it('returns a refusal as a message and rethrows a lost session', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(403, 'Forbidden', { message: 'not yours' }))
+      expect(await store.fetchCrfDetail('F_DEMOS')).toEqual({ ok: false, message: 'not yours' })
+
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(401, 'Unauthorized', null))
+      await expect(store.fetchCrfDetail('F_DEMOS')).rejects.toBeInstanceOf(ApiError)
+    })
+  })
+
   describe('updateCrf', () => {
     it('PUTs name and description and replaces the row', async () => {
       const store = useCrfLibraryStore()

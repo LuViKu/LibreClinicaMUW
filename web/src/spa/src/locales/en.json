@@ -1327,6 +1327,32 @@
     "editHeading": "Edit CRF \"{name}\"",
     "editOidStays": "The OID {oid} stays the same. Only the CRF's owner, as Data Manager, or a system administrator may change the name.",
     "submitEdit": "Save",
+    "detail": {
+      "back": "CRF library",
+      "itemsHeading": "Items ({count})",
+      "integrityHint": "Integrity check: an item has to stay in the same item group in every version of the CRF. A problem involves a version that takes data; a warning only versions that no longer do.",
+      "integritySummary": "{count} item(s) change their item group between versions",
+      "integrity": {
+        "ok": "OK",
+        "warning": "Warning",
+        "problem": "Problem"
+      },
+      "placement": "Group \"{group}\" in version \"{version}\"",
+      "noItems": "No items in any version yet.",
+      "studiesHeading": "Studies using this CRF",
+      "noStudies": "No study's event definitions use this CRF.",
+      "siteOf": "site of {study}",
+      "col": {
+        "version": "Version",
+        "name": "Name",
+        "description": "Description",
+        "dataType": "Data type",
+        "integrity": "Integrity check",
+        "study": "Study",
+        "protocolId": "Protocol ID",
+        "status": "Status"
+      }
+    },
     "statusAutoRemoved": "Removed with the CRF",
     "empty": "No CRFs in the library yet.",
     "lock": "Lock",

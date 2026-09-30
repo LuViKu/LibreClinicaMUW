@@ -1327,6 +1327,32 @@
     "editHeading": "CRF »{name}« bearbeiten",
     "editOidStays": "Die OID {oid} bleibt gleich. Den Namen dürfen nur der/die Eigentümer/in als Data Manager oder ein/e Systemadministrator/in ändern.",
     "submitEdit": "Speichern",
+    "detail": {
+      "back": "CRF-Bibliothek",
+      "itemsHeading": "Items ({count})",
+      "integrityHint": "Integritätsprüfung: Ein Item muss in jeder Version des CRF in derselben Item-Gruppe bleiben. Ein Problem betrifft eine Version, die Daten aufnimmt; eine Warnung nur Versionen, die das nicht mehr tun.",
+      "integritySummary": "{count} Item(s) wechseln die Item-Gruppe zwischen Versionen",
+      "integrity": {
+        "ok": "OK",
+        "warning": "Warnung",
+        "problem": "Problem"
+      },
+      "placement": "Gruppe »{group}« in Version »{version}«",
+      "noItems": "Noch keine Items in einer Version.",
+      "studiesHeading": "Studien, die dieses CRF verwenden",
+      "noStudies": "Keine Visiten-Definition einer Studie verwendet dieses CRF.",
+      "siteOf": "Standort von {study}",
+      "col": {
+        "version": "Version",
+        "name": "Name",
+        "description": "Beschreibung",
+        "dataType": "Datentyp",
+        "integrity": "Integritätsprüfung",
+        "study": "Studie",
+        "protocolId": "Protokoll-ID",
+        "status": "Status"
+      }
+    },
     "statusAutoRemoved": "Mit dem CRF entfernt",
     "empty": "Noch keine CRFs in der Bibliothek.",
     "lock": "Sperren",

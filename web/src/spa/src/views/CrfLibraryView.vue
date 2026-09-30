@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import BuildStudyRail from '@/components/BuildStudyRail.vue'
@@ -409,7 +409,13 @@ const visibleRows = computed(() =>
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2">
-                <h2 class="font-medium text-slate-900">{{ crf.name }}</h2>
+                <h2 class="font-medium text-slate-900">
+                  <RouterLink
+                    :to="{ name: 'crf-detail', params: { crfOid: crf.oid } }"
+                    class="hover:underline"
+                    :data-testid="`crf-library-detail-${crf.oid}`"
+                  >{{ crf.name }}</RouterLink>
+                </h2>
                 <span class="text-[10px] text-slate-400 font-mono">{{ crf.oid }}</span>
                 <StatusPill
                   v-if="crf.status === 'removed'"
