@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.contract;
 
+import java.io.Serializable;
 import java.util.Date;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
@@ -123,6 +124,27 @@ public class AuditLoginContractIT extends HibernateOcDbTestCase {
         AuditUserLoginBean persisted2 = dao.saveOrUpdate(nullDetails);
         assertNull("null details persists as null, not an empty string",
                 dao.findById(persisted2.getId()).getDetails());
+    }
+
+    /**
+     * AccountController records a participant viewing an access code with
+     * {@link AuditUserLoginDao#save}, the one write path that is not
+     * {@code saveOrUpdate}. Its callers read the generated id back, from
+     * the return value and from the instance.
+     */
+    public void testSaveReturnsTheGeneratedIdAndInsertsTheRow() {
+        AuditUserLoginDao dao =
+                (AuditUserLoginDao) getContext().getBean("auditUserLoginDao");
+
+        AuditUserLoginBean row = newAuditRow(LoginStatus.ACCESS_CODE_VIEWED, "muw-save");
+        row.setDetails("P-0001");
+        Serializable id = dao.save(row);
+
+        assertNotNull("save must return the generated id", id);
+        assertEquals("the returned id is the instance's own", row.getId(), id);
+        AuditUserLoginBean reloaded = dao.findById((Integer) id);
+        assertNotNull("the row must be in audit_user_login", reloaded);
+        assertEquals("P-0001", reloaded.getDetails());
     }
 
     // -------------------------------------------------------------------

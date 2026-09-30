@@ -12,18 +12,13 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import java.sql.Timestamp;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.OpenClinicaVersionBean;
+import org.hibernate.query.MutationQuery;
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * @author pgawade
  */
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
 public class OpenClinicaVersionDAO extends AbstractDomainDao<OpenClinicaVersionBean> {
 
     private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass().getName());
@@ -57,7 +52,7 @@ public class OpenClinicaVersionDAO extends AbstractDomainDao<OpenClinicaVersionB
     @Transactional
     public int deleteDefault() {
         String query = "delete from " + getDomainClassName() + " ocVersion";
-        Query<?> q = getCurrentSession().createQuery(query);
+        MutationQuery q = getCurrentSession().createMutationQuery(query);
         return q.executeUpdate();
     }
 

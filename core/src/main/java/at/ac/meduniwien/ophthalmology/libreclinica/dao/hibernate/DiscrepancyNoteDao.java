@@ -15,18 +15,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNot
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
 public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
 
     @Override
@@ -34,12 +22,11 @@ public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
         return DiscrepancyNote.class;
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
     public List<DiscrepancyNote> findParentNotesByItemData(Integer itemDataId) {
-        String query = "select dn.* from discrepancy_note dn, dn_item_data_map didm where didm.item_data_id=" + itemDataId + " AND dn.parent_dn_id isnull " + 
+        String query = "select dn.* from discrepancy_note dn, dn_item_data_map didm where didm.item_data_id=" + itemDataId + " AND dn.parent_dn_id isnull " +
             "AND dn.discrepancy_note_id=didm.discrepancy_note_id";
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(DiscrepancyNote.class);
-        return (List<DiscrepancyNote>) q.getResultList();
+        NativeQuery<DiscrepancyNote> q = getCurrentSession().createNativeQuery(query, DiscrepancyNote.class);
+        return q.getResultList();
     }
 
     public DiscrepancyNote findByDiscrepancyNoteId(int discrepancyNoteId) {
