@@ -233,10 +233,6 @@
 			<artifactId>commons-lang</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-fileupload2-jakarta-servlet6</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 		</dependency>
@@ -260,7 +256,6 @@
 			<scope>runtime</scope>
 		</dependency>
 		<!-- Phase B.4 cliff: explicit decls satisfying analyze-only.
-		     commons-fileupload2-core supplies DiskFileItem(Factory);
 		     jsr311-api still required by transitive Jersey 1.x (will be dropped
 		     when Jersey 3 lands in a later cliff). -->
 		<!-- Phase B.5: BatchCRFMigrationController uses
@@ -268,10 +263,6 @@
 		<dependency>
 			<groupId>jakarta.persistence</groupId>
 			<artifactId>jakarta.persistence-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-fileupload2-core</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>javax.ws.rs</groupId>

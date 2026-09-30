@@ -40,7 +40,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validator;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.MeasurementUnitDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
@@ -106,7 +105,6 @@ public class CreateCRFVersionServlet extends SecureController {
         String module = fp.getString(MODULE);
         // keep the module in the session
         session.setAttribute(MODULE, module);
-        request.setAttribute("xformEnabled", CoreResources.getField("xform.enabled"));
         String action = request.getParameter("action");
         CRFVersionBean version = (CRFVersionBean) session.getAttribute("version");
 

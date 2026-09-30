@@ -20,7 +20,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateCRFVersio
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobExportServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobImportServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateUserAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateXformCRFVersionServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteCRFVersionServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteEventCRFServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteStudyUserRoleServlet;
@@ -358,9 +357,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg35 = ctx.addServlet("CreateUserAccountServlet", CreateUserAccountServlet.class);
             reg35.addMapping("/CreateUserAccount");
-
-            ServletRegistration.Dynamic reg36 = ctx.addServlet("CreateXformCRFVersionServlet", CreateXformCRFVersionServlet.class);
-            reg36.addMapping("/CreateXformCRFVersion");
 
             ServletRegistration.Dynamic reg37 = ctx.addServlet("DefineStudyEventServlet", DefineStudyEventServlet.class);
             reg37.addMapping("/DefineStudyEvent");
