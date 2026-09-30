@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.ServletListenerRegistrationBean;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -22,10 +23,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.CrossSiteRequestFi
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.RequestIdFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyAliasServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletDeprecationCatalog;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletTelemetryFilter;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Phase C.14 cliff (2026-05-30): replaces the {@code <listener>}s and
@@ -132,30 +135,53 @@ public class ServletInfraConfig {
     }
 
     /**
-     * Legacy-retirement tracking (DR-018, plan R0.3): logs every request
+     * Legacy-retirement gate (DR-018, plan R0.3/R0.4): logs every request
      * for a legacy screen as a {@code legacy-hit} line on the
-     * {@code legacy-access} logger; see {@link LegacyServletTelemetryFilter}.
+     * {@code legacy-access} logger, and closes the screens listed in
+     * {@code libreclinica.legacy.closedPaths} (410 Gone; a system
+     * administrator gets a 307 to the {@code /legacy/} alias instead). See
+     * {@link LegacyServletTelemetryFilter} for the behaviour and the
+     * configuration.
      *
      * <p>Mapped on {@code /*} because the legacy servlets sit at the
      * context root ({@code /ListUserAccounts}), not under {@code /pages};
      * the filter recognises them from the servlet path, so every other
-     * request costs a hash probe. {@code REQUEST} dispatches only, so a
-     * server-side forward between legacy pages is not logged twice.
+     * request costs a hash probe. {@code REQUEST} dispatches only: the
+     * alias reaches a closed screen by an internal forward, which must not
+     * be closed again.
      *
      * <p>Ordered just after {@link #requestIdFilter()} so the
      * {@code reqId} MDC value is already populated when this filter
-     * logs the hit, and ahead of the security chain so that
-     * unauthenticated requests are logged too.
+     * logs the hit, and ahead of the security chain so that an
+     * unauthenticated request for a closed screen gets the 410.
      */
     @Bean
     public FilterRegistrationBean<LegacyServletTelemetryFilter> legacyServletTelemetryFilter(
-            LegacyServletDeprecationCatalog catalog) {
+            LegacyServletDeprecationCatalog catalog,
+            @Value("${libreclinica.legacy.closedPaths:}") String closedPaths) {
         FilterRegistrationBean<LegacyServletTelemetryFilter> reg =
-                new FilterRegistrationBean<>(new LegacyServletTelemetryFilter(catalog));
+                new FilterRegistrationBean<>(new LegacyServletTelemetryFilter(
+                        catalog, LegacyServletTelemetryFilter.parseClosedPaths(closedPaths)));
         reg.addUrlPatterns("/*");
         reg.setDispatcherTypes(DispatcherType.REQUEST);
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * DR-018 point 2: {@code /legacy/<path>} renders a legacy screen,
+     * closed or not, for a system administrator and answers 404 to
+     * everyone else; see {@link LegacyAliasServlet}. A servlet, so it
+     * runs behind Spring Security, whose {@code anyRequest().hasRole("USER")}
+     * already sends an unauthenticated request to the login page.
+     */
+    @Bean
+    public ServletRegistrationBean<LegacyAliasServlet> legacyAliasServlet(
+            LegacyServletDeprecationCatalog catalog) {
+        ServletRegistrationBean<LegacyAliasServlet> reg =
+                new ServletRegistrationBean<>(new LegacyAliasServlet(catalog), LegacyAliasServlet.URL_PATTERN);
+        reg.setName("legacyAliasServlet");
         return reg;
     }
 

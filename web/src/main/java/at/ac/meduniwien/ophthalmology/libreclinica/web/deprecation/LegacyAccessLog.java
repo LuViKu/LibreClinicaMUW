@@ -20,8 +20,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
 /**
- * The {@code legacy-access} log, and the session lookup for the user it
- * names.
+ * The {@code legacy-access} log, and the session lookup that the retirement
+ * filter and the {@code /legacy/} alias share.
  *
  * <p>One line per request for a legacy screen:
  *
@@ -51,8 +51,16 @@ final class LegacyAccessLog {
 
     /** What was done with a request for a legacy screen. */
     enum Action {
-        /** Passed on to the screen. */
-        PASS;
+        /** Not closed: passed on to the screen. */
+        PASS,
+        /** Closed: answered {@code 410 Gone}. */
+        GONE,
+        /** Closed, and the user is a system administrator: {@code 307} to the alias. */
+        REDIRECT,
+        /** Through the alias, by a system administrator: forwarded to the screen. */
+        FORWARD,
+        /** Through the alias, by anyone else: answered {@code 404}. */
+        REFUSE;
 
         String label() {
             return name().toLowerCase(Locale.ROOT);
@@ -85,6 +93,10 @@ final class LegacyAccessLog {
         }
         Object user = session.getAttribute(SESSION_USER);
         return user instanceof UserAccountBean account && account.getId() > 0 ? account : null;
+    }
+
+    static boolean isSysAdmin(UserAccountBean user) {
+        return user != null && user.isSysAdmin();
     }
 
     /** The request method, from a fixed set: the client's own string never reaches the log. */

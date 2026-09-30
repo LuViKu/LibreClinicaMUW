@@ -449,6 +449,18 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- 2026-09-30: LegacyRetirementEndToEndTest runs the legacy-retirement
+		     filter and the /legacy/ alias in a real servlet container, because
+		     what it checks (URL patterns, servlet paths under a context path,
+		     forward dispatches) is container behaviour a mock request does not
+		     have. Test scope only: the WAR still ships without an embedded
+		     container. Version from the Spring Boot BOM, the Tomcat 10.1 line
+		     the Dockerfile deploys on. -->
+		<dependency>
+			<groupId>org.apache.tomcat.embed</groupId>
+			<artifactId>tomcat-embed-core</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<!-- Phase E.5 #1 (CI hardening): explicit declarations for deps
 		     that AbstractApiControllerDatabaseIT references directly.
 		     The maven-dependency-plugin's analyze goal otherwise flags

@@ -22,8 +22,9 @@ import org.springframework.stereotype.Component;
  * registered by {@code config.LegacyServletRegistry}, and each Spring MVC
  * route under {@code /pages} that renders a JSP. For each one it records the
  * SPA route that replaces it, if there is one, and a bucket for grouping the
- * access log. Used by {@link LegacyServletTelemetryFilter}, which logs every
- * request for one of these screens.
+ * access log. Used by {@link LegacyServletTelemetryFilter} (logging and
+ * closure) and {@link LegacyAliasServlet} (the administrators' {@code /legacy/}
+ * alias).
  *
  * <h2>Keys</h2>
  *
@@ -300,7 +301,7 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/PauseJob", NONE, Bucket.JOB_ADMIN);
 
         // --- Registered servlets with no SPA route recorded, added 2026-09-30
-        // so that every legacy servlet is logged. A route
+        // so that every legacy servlet is logged and can be closed. A route
         // is added once the feature catalogues record the replacement. ---
         put(m, "/InitialDataEntry", NONE, Bucket.DATA_ENTRY);
         put(m, "/SubmitData", NONE, Bucket.DATA_ENTRY);

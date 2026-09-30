@@ -9,8 +9,11 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -34,11 +37,12 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * The legacy-retirement tracking filter, driven with requests as Tomcat
- * presents them under the real context path: {@code /LibreClinica} in the
- * request URI, the servlet path and path info without it.
+ * The legacy-retirement gate, driven with requests as Tomcat presents them
+ * under the real context path: {@code /LibreClinica} in the request URI, the
+ * servlet path and path info without it.
  */
 class LegacyServletTelemetryFilterTest {
 
@@ -80,19 +84,29 @@ class LegacyServletTelemetryFilterTest {
         return req;
     }
 
-    private static MockHttpSession dataManager() {
+    private static MockHttpSession sessionOf(int id, String name, UserType type) {
         UserAccountBean user = new UserAccountBean();
-        user.setId(7);
-        user.setName("manual_dm");
-        user.addUserType(UserType.USER);
+        user.setId(id);
+        user.setName(name);
+        user.addUserType(type);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userBean", user);
         return session;
     }
 
-    private LegacyServletTelemetryFilter filter() {
-        return new LegacyServletTelemetryFilter(catalog);
+    private static MockHttpSession admin() {
+        return sessionOf(1, "root", UserType.SYSADMIN);
     }
+
+    private static MockHttpSession dataManager() {
+        return sessionOf(7, "manual_dm", UserType.USER);
+    }
+
+    private LegacyServletTelemetryFilter filter(String... closed) {
+        return new LegacyServletTelemetryFilter(catalog, List.of(closed));
+    }
+
+    // --- telemetry -------------------------------------------------------
 
     @Test
     void logsALegacyServletRequestUnderTheContextPath() throws Exception {
@@ -102,7 +116,7 @@ class LegacyServletTelemetryFilterTest {
 
         filter().doFilter(req, new MockHttpServletResponse(), chain);
 
-        assertSame(req, chain.getRequest(), "the request is passed on");
+        assertSame(req, chain.getRequest(), "an open screen is passed on");
         assertEquals(List.of("legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users"
                 + " method=GET user=manual_dm alias=false action=pass"), hits());
     }
@@ -129,11 +143,12 @@ class LegacyServletTelemetryFilterTest {
 
     @Test
     void leavesOtherRequestsAloneAndUnlogged() throws Exception {
-        LegacyServletTelemetryFilter filter = filter();
+        LegacyServletTelemetryFilter filter = filter("/ListUserAccounts");
         for (MockHttpServletRequest req : List.of(
                 request("GET", "/pages", "/api/v1/subjects"),
                 request("GET", "/app/subjects", null),
-                request("GET", "/images/bt_View.gif", null))) {
+                request("GET", "/images/bt_View.gif", null),
+                request("GET", "/legacy", "/ListUserAccounts"))) {
             MockFilterChain chain = new MockFilterChain();
             MockHttpServletResponse resp = new MockHttpServletResponse();
 
@@ -166,20 +181,129 @@ class LegacyServletTelemetryFilterTest {
         assertTrue(hits().get(0).contains(" method=OTHER "), hits().get(0));
     }
 
+    // --- closure ---------------------------------------------------------
+
     @Test
-    void placeholderSessionUserIsLoggedAsAnonymous() throws Exception {
+    void closedScreenAnswersGoneToAnonymousWithTheSpaRoute() throws Exception {
+        MockHttpServletRequest req = request("GET", "/ListUserAccounts", null);
+        req.addHeader("Accept", "application/json");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter("/ListUserAccounts").doFilter(req, resp, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        assertEquals(HttpServletResponse.SC_GONE, resp.getStatus());
+        assertEquals("no-store", resp.getHeader("Cache-Control"));
+        assertTrue(resp.getContentType().startsWith("application/json"), resp.getContentType());
+        String body = resp.getContentAsString();
+        assertTrue(body.contains("\"legacyPath\":\"/ListUserAccounts\""), body);
+        assertTrue(body.contains("\"spaRoute\":\"/app/manage-users\""), body);
+        assertTrue(hits().get(0).endsWith("user=anonymous alias=false action=gone"), hits().get(0));
+    }
+
+    @Test
+    void closedScreenAnswersGoneToANonAdministratorAsHtml() throws Exception {
+        MockHttpServletRequest req = request("GET", "/ListUserAccounts", null);
+        req.addHeader("Accept", "text/html,application/xhtml+xml");
+        req.setSession(dataManager());
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter("/ListUserAccounts").doFilter(req, resp, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        assertEquals(HttpServletResponse.SC_GONE, resp.getStatus());
+        assertTrue(resp.getContentType().startsWith("text/html"), resp.getContentType());
+        assertTrue(resp.getContentAsString().contains("href=\"/LibreClinica/app/manage-users\""),
+                resp.getContentAsString());
+        assertTrue(hits().get(0).endsWith("user=manual_dm alias=false action=gone"), hits().get(0));
+    }
+
+    @Test
+    void closedScreenSendsAnAdministratorToTheAliasKeepingMethodBodyAndQuery() throws Exception {
+        MockHttpServletRequest req = request("POST", "/ListUserAccounts", null);
+        req.setQueryString("module=admin&listUserAccounts_mr_=15");
+        req.setSession(admin());
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter("/ListUserAccounts").doFilter(req, resp, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        // 307, not 302: the browser repeats the POST with its body.
+        assertEquals(HttpServletResponse.SC_TEMPORARY_REDIRECT, resp.getStatus());
+        assertEquals("/LibreClinica/legacy/ListUserAccounts?module=admin&listUserAccounts_mr_=15",
+                resp.getHeader("Location"));
+        assertTrue(hits().get(0).endsWith("method=POST user=root alias=false action=redirect"), hits().get(0));
+    }
+
+    @Test
+    void closedPagesRouteClosesTheScreensSubPaths() throws Exception {
+        LegacyServletTelemetryFilter filter = filter("/pages/studymodule");
+
+        MockHttpServletResponse anonymous = new MockHttpServletResponse();
+        filter.doFilter(request("POST", "/pages", "/studymodule/S_DEFAULTS1/deactivate"),
+                anonymous, Mockito.mock(FilterChain.class));
+        assertEquals(HttpServletResponse.SC_GONE, anonymous.getStatus());
+
+        MockHttpServletRequest byAdmin = request("POST", "/pages", "/studymodule/S_DEFAULTS1/deactivate");
+        byAdmin.setSession(admin());
+        MockHttpServletResponse redirected = new MockHttpServletResponse();
+        filter.doFilter(byAdmin, redirected, Mockito.mock(FilterChain.class));
+        assertEquals(HttpServletResponse.SC_TEMPORARY_REDIRECT, redirected.getStatus());
+        assertEquals("/LibreClinica/legacy/pages/studymodule/S_DEFAULTS1/deactivate",
+                redirected.getHeader("Location"));
+    }
+
+    @Test
+    void closingOneScreenLeavesTheOthersOpen() throws Exception {
+        FilterChain chain = Mockito.mock(FilterChain.class);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        filter("/ListUserAccounts").doFilter(request("GET", "/ViewUserAccount", null), resp, chain);
+
+        verify(chain, times(1)).doFilter(any(), any());
+        assertEquals(200, resp.getStatus());
+    }
+
+    @Test
+    void placeholderSessionUserCountsAsAnonymous() throws Exception {
         // SetUpUserInterceptor stores an id-0 bean named "unknown" for anonymous requests.
         MockHttpServletRequest req = request("GET", "/ListUserAccounts", null);
         MockHttpSession session = new MockHttpSession();
         UserAccountBean unknown = new UserAccountBean();
         unknown.setName("unknown");
+        unknown.addUserType(UserType.SYSADMIN);
         session.setAttribute("userBean", unknown);
         req.setSession(session);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
 
-        filter().doFilter(req, new MockHttpServletResponse(), new MockFilterChain());
+        filter("/ListUserAccounts").doFilter(req, resp, Mockito.mock(FilterChain.class));
 
-        assertEquals(1, hits().size(), hits().toString());
+        assertEquals(HttpServletResponse.SC_GONE, resp.getStatus());
         assertTrue(hits().get(0).contains("user=anonymous"), hits().get(0));
+    }
+
+    // --- configuration ---------------------------------------------------
+
+    @Test
+    void closedPathsAreParsedFromCommasAndWhitespace() {
+        assertEquals(List.of("/ListUserAccounts", "/pages/studymodule", "/Configure"),
+                LegacyServletTelemetryFilter.parseClosedPaths(" /ListUserAccounts,/pages/studymodule\n  /Configure, "));
+        assertEquals(List.of(), LegacyServletTelemetryFilter.parseClosedPaths(""));
+        assertEquals(List.of(), LegacyServletTelemetryFilter.parseClosedPaths(null));
+    }
+
+    @Test
+    void anUnknownClosedPathIsReportedAndIgnored() {
+        LegacyServletTelemetryFilter filter = filter("/ListUserAccounts", "/NoSuchScreen", "/pages/ListUserAccounts");
+
+        assertEquals(java.util.Set.of("/ListUserAccounts"), filter.closedPaths());
+        List<ILoggingEvent> errors = logged.list.stream().filter(e -> e.getLevel() == Level.ERROR).toList();
+        assertEquals(2, errors.size());
+        assertTrue(errors.get(0).getFormattedMessage().contains("'/NoSuchScreen'"),
+                errors.get(0).getFormattedMessage());
     }
 
     @Test
@@ -188,9 +312,38 @@ class LegacyServletTelemetryFilterTest {
         jakarta.servlet.ServletResponse resp = Mockito.mock(jakarta.servlet.ServletResponse.class);
         FilterChain chain = Mockito.mock(FilterChain.class);
 
-        filter().doFilter(req, resp, chain);
+        filter("/ListUserAccounts").doFilter(req, resp, chain);
 
         verify(chain, times(1)).doFilter(req, resp);
-        assertEquals(List.of(), hits());
+    }
+
+    // --- the 410 page ----------------------------------------------------
+
+    @Test
+    void goneHtmlLinksAParameterisedRouteToTheSpaStartPage() {
+        String html = LegacyServletTelemetryFilter.goneHtml(CONTEXT,
+                catalog.entry("/ViewStudySubject").orElseThrow());
+        assertTrue(html.contains("href=\"/LibreClinica/app/\""), html);
+    }
+
+    @Test
+    void goneHtmlWithoutAnSpaRouteSaysSo() {
+        String html = LegacyServletTelemetryFilter.goneHtml(CONTEXT, catalog.entry("/Configure").orElseThrow());
+        assertTrue(html.contains("noch keinen Ersatz"), html);
+        assertTrue(html.contains("href=\"/LibreClinica/app/\""), html);
+    }
+
+    @Test
+    void jsonIsChosenOnlyWhenAskedFor() {
+        MockHttpServletRequest browser = request("GET", "/ListUserAccounts", null);
+        browser.addHeader("Accept", "text/html,*/*;q=0.8");
+        MockHttpServletRequest xhr = request("GET", "/ListUserAccounts", null);
+        xhr.addHeader("Accept", "application/json, text/javascript, */*; q=0.01");
+        MockHttpServletRequest none = request("GET", "/ListUserAccounts", null);
+
+        assertTrue(!LegacyServletTelemetryFilter.prefersJson(browser));
+        assertTrue(LegacyServletTelemetryFilter.prefersJson(xhr));
+        assertTrue(!LegacyServletTelemetryFilter.prefersJson(none));
+        assertNull(none.getHeader("Accept"));
     }
 }
