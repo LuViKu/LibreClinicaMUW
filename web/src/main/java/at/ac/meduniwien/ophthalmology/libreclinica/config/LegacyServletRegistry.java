@@ -214,7 +214,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleAssign
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetAuditServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.techadmin.TechAdminServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.view.form.FormServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -432,9 +431,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg61 = ctx.addServlet("FindSubjectsDataServlet", FindSubjectsDataServlet.class);
             reg61.addMapping("/FindSubjectsData");
-
-            ServletRegistration.Dynamic reg62 = ctx.addServlet("FormServlet", FormServlet.class);
-            reg62.addMapping("/form");
 
             ServletRegistration.Dynamic reg63 = ctx.addServlet("ImportCRFDataServlet", ImportCRFDataServlet.class);
             reg63.addMapping("/ImportCRFData");
