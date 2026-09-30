@@ -1371,6 +1371,8 @@
     },
     "downloadXls": "Download .xls",
     "downloadXlsFailed": "Download failed: {message}",
+    "preview": "Preview",
+    "previewFailed": "The version could not be loaded for the preview: {message}",
     "migrate": {
       "action": "Reassign defaults",
       "dialogHeading": "Reassign event-def defaults from \"{from}\" to \"{to}\"",

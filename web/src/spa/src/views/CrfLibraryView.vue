@@ -9,10 +9,13 @@ import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
+import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
+
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
+import { useCrfPreviewStore } from '@/stores/crfPreview'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
-import type { Crf } from '@/types/crfLibrary'
+import type { Crf, CrfVersion } from '@/types/crfLibrary'
 
 /**
  * Phase E A8.3 — CRF library view.
@@ -310,6 +313,28 @@ async function onDownloadXls(crf: Crf, versionOid: string) {
   URL.revokeObjectURL(url)
 }
 
+/* ------------------------ Read-only preview ----------------------- */
+// A published version rendered by the canvas's preview (the same widgets the
+// CRF entry form uses), from the version's stored contents. Nothing is forked
+// into the builder and nothing is saved; values typed into it stay in memory.
+const previewStore = useCrfPreviewStore()
+const previewLoadingOid = ref<string | null>(null)
+
+async function onPreviewVersion(crf: Crf, v: CrfVersion) {
+  actionError.value = null
+  previewLoadingOid.value = v.oid
+  try {
+    const result = await lib.loadVersionPreview(crf.oid, v.oid)
+    if (!result.ok) {
+      actionError.value = t('crfLibrary.previewFailed', { message: result.message })
+      return
+    }
+    previewStore.load(result.draft, { crfName: `${crf.name} · ${v.name}` })
+  } finally {
+    previewLoadingOid.value = null
+  }
+}
+
 const visibleRows = computed(() =>
   includeRemoved.value ? lib.crfs : lib.crfs.filter((c) => c.status !== 'removed'),
 )
@@ -558,6 +583,12 @@ const visibleRows = computed(() =>
                 <span v-if="v.description" class="text-slate-500 truncate">{{ v.description }}</span>
                 <span class="ml-auto" />
                 <button
+                  class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100 disabled:opacity-50"
+                  :disabled="previewLoadingOid === v.oid"
+                  :data-testid="`crf-library-preview-${v.oid}`"
+                  @click="onPreviewVersion(crf, v)"
+                >{{ t('crfLibrary.preview') }}</button>
+                <button
                   class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                   @click="onDownloadXls(crf, v.oid)"
                 >{{ t('crfLibrary.downloadXls') }}</button>
@@ -690,5 +721,12 @@ const visibleRows = computed(() =>
         </div>
       </div>
     </div>
+
+    <!-- Read-only preview of a published version; mounted only while open. -->
+    <PreviewCrfEntryView
+      v-if="previewStore.isOpen"
+      as-overlay
+      @close="previewStore.close()"
+    />
   </div>
 </template>

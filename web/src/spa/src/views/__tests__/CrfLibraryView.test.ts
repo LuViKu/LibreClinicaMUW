@@ -206,6 +206,54 @@ describe('CrfLibraryView', () => {
     expect(wrapper.find('[data-testid="crf-library-edit-form-F_DEMO"]').exists()).toBe(true)
   })
 
+  it('previews a published version read-only, without forking it into the builder', async () => {
+    const wrapper = await mountView()
+    vi.mocked(apiGet).mockImplementation(async (url: string) => {
+      if (url.endsWith('/contents')) {
+        return {
+          versionName: '',
+          versionDescription: '',
+          revisionNotes: '',
+          sections: [{
+            label: 'S_VITALS',
+            title: 'Vitals',
+            instructions: '',
+            ordinal: 1,
+            items: [{ name: 'HEIGHT', oid: 'I_HEIGHT', descriptionLabel: 'Body height', dataType: 'INT' }],
+          }],
+          groups: [],
+        }
+      }
+      return []
+    })
+
+    await wrapper.find('[data-testid="crf-library-preview-F_DEMO_V1"]').trigger('click')
+    await flushPromises()
+
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMO/versions/F_DEMO_V1/contents')
+    const preview = wrapper.find('[data-testid="crf-preview-root"]')
+    expect(preview.exists()).toBe(true)
+    expect(preview.text()).toContain('Preview · Demographics · v1.0')
+    expect(preview.text()).toContain('Body height')
+    expect(preview.text()).toContain('no data is persisted')
+    expect(apiPost).not.toHaveBeenCalled()
+
+    await wrapper.find('[data-testid="crf-preview-close"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="crf-preview-root"]').exists()).toBe(false)
+  })
+
+  it('says so when a version cannot be loaded for the preview', async () => {
+    const wrapper = await mountView()
+    vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(500, 'Server Error', { message: 'Version contents load failed' }))
+
+    await wrapper.find('[data-testid="crf-library-preview-F_DEMO_V1"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="crf-library-action-error"]').text()).toContain('Version contents load failed')
+    expect(wrapper.find('[data-testid="crf-preview-root"]').exists()).toBe(false)
+  })
+
   it('links each CRF to its view', async () => {
     const wrapper = await mountView()
     expect(wrapper.find('[data-testid="crf-library-detail-F_DEMO"]').attributes('href')).toBe('/crf-library/F_DEMO')

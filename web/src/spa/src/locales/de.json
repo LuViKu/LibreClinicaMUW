@@ -1371,6 +1371,8 @@
     },
     "downloadXls": ".xls herunterladen",
     "downloadXlsFailed": "Download fehlgeschlagen: {message}",
+    "preview": "Vorschau",
+    "previewFailed": "Die Version konnte für die Vorschau nicht geladen werden: {message}",
     "migrate": {
       "action": "Standardversion neu zuweisen",
       "dialogHeading": "Event-Def-Standardversion von »{from}« auf »{to}« umstellen",

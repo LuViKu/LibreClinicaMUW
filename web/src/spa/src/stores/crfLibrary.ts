@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import { forkContentsToDraft, type AuthoringDraft, type ForkContentsWire } from '@/stores/crfAuthoring'
 import type {
   Crf,
   CreateCrfInput,
@@ -72,6 +73,27 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     } catch (e) {
       if (e instanceof ApiError && e.isUnauthorized) throw e
       return { ok: false, message: humanError(e, 'load') }
+    }
+  }
+
+  /**
+   * A published version as a draft for the read-only preview: its contents
+   * (`GET .../versions/{v}/contents`, the fork endpoint) converted the way the
+   * authoring canvas converts them, so the preview renders the version as the
+   * canvas's preview would. Nothing is forked, and nothing is saved.
+   */
+  async function loadVersionPreview(
+    crfOid: string,
+    versionOid: string,
+  ): Promise<{ ok: true; draft: AuthoringDraft } | { ok: false; message: string }> {
+    try {
+      const wire = await apiGet<ForkContentsWire>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/contents`,
+      )
+      return { ok: true, draft: forkContentsToDraft(wire) }
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      return { ok: false, message: humanError(e, 'preview') }
     }
   }
 
@@ -502,6 +524,7 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     error,
     loadCrfs,
     fetchCrfDetail,
+    loadVersionPreview,
     createCrf,
     updateCrf,
     disableCrf,

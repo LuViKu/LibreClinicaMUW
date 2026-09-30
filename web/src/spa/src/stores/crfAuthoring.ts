@@ -712,7 +712,7 @@ export function reseedUidCounter(d: AuthoringDraft): void {
 /** Recovered row bounds for a reconstructed table, keyed by group label. */
 type ForkGroupBounds = Map<string, { minRows: number; maxRows: number }>
 
-function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
+export function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
   const bounds: ForkGroupBounds = new Map()
   for (const g of wire.groups ?? []) {
     const label = (g?.label ?? '').trim()

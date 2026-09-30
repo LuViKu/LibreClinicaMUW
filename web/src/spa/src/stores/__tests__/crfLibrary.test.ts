@@ -133,6 +133,41 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
     })
   })
 
+  describe('loadVersionPreview', () => {
+    it('turns the version contents into a draft for the preview', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiGet).mockResolvedValue({
+        versionName: '',
+        versionDescription: 'Initial',
+        revisionNotes: '',
+        sections: [{
+          label: 'S_VITALS',
+          title: 'Vitals',
+          instructions: '',
+          ordinal: 1,
+          items: [{ name: 'HEIGHT', oid: 'I_HEIGHT', descriptionLabel: 'Body height', dataType: 'INT' }],
+        }],
+        groups: [],
+      })
+
+      const result = await store.loadVersionPreview('F_DEMOS', 'F_DEMOS_V1')
+
+      expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/contents')
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.draft.sections).toHaveLength(1)
+        expect(result.draft.sections[0]!.items[0]!.oid).toBe('I_HEIGHT')
+      }
+    })
+
+    it('returns the server message when the contents cannot be read', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiGet).mockRejectedValue(new ApiError(404, 'Not Found', { message: "No version with oid 'X'" }))
+
+      expect(await store.loadVersionPreview('F_DEMOS', 'X')).toEqual({ ok: false, message: "No version with oid 'X'" })
+    })
+  })
+
   describe('updateCrf', () => {
     it('PUTs name and description and replaces the row', async () => {
       const store = useCrfLibraryStore()
