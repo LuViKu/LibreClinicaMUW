@@ -89,7 +89,7 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final String ATTEMPTS = "user.lock.allowedFailedConsecutiveLoginAttempts";
 
     /** {@code AuditTypeIds.SYSTEM_SETTING_CHANGED}, as its seed changeset defines it. */
-    private static final int SYSTEM_SETTING_CHANGED = 142;
+    private static final int SYSTEM_SETTING_CHANGED = 145;
 
     /** The account whose failed logins the lockout tests make. */
     private static final int PROBE_ID = 10201;

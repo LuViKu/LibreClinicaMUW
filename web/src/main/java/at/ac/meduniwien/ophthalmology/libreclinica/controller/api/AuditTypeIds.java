@@ -475,5 +475,5 @@ public final class AuditTypeIds {
      * entity_name = the key, old and new value as stored. Seeded by
      * {@code lc-muw-2026-09-30-audit-type-system-setting.xml}.
      */
-    public static final int SYSTEM_SETTING_CHANGED           = 142;
+    public static final int SYSTEM_SETTING_CHANGED           = 145;
 }

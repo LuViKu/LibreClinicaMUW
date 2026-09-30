@@ -323,7 +323,7 @@ public class AdminApiController {
 
     /**
      * One {@code audit_log_event} row per setting whose stored value changed:
-     * type 142 against {@code configuration}, the key as entity name, the old
+     * type 145 against {@code configuration}, the key as entity name, the old
      * and new value as stored. The password and lockout rules decide who can
      * log in; until 2026-09-30 a change to them left only a log line. A failed
      * insert is logged, not raised: the settings are already saved.

@@ -712,8 +712,8 @@ public class AuditApiController {
             // Extract-job execution (106-107). Backfill catch-all (108,
             // hidden) routes to admin for the sysadmin view.
                  106, 107, 108,
-            // Password-policy and lockout settings (142, 2026-09-30).
-                 142 -> "admin";
+            // Password-policy and lockout settings (145, 2026-09-30).
+                 145 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
