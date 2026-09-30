@@ -11,11 +11,15 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TimeZone;
 
 import javax.sql.DataSource;
@@ -28,6 +32,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDa
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DatabaseChangeLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequirementsDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalClusterHealth;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalClusterHealth.NodeSpec;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalClusterHealth.NodeStatus;
@@ -53,14 +58,17 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *
  * <ul>
  *   <li>{@code /pages/SystemStatus} → {@code GET /api/v1/admin/system-status}</li>
- *   <li>{@code /pages/ConfigurePasswordRequirements} →
- *       {@code GET / PUT /api/v1/admin/password-policy}</li>
+ *   <li>{@code /pages/ConfigurePasswordRequirements} and the account
+ *       lockout of {@code /pages/Configure} →
+ *       {@code GET / PUT /api/v1/admin/password-policy} (lockout since
+ *       2026-09-30, R1.2; every setting the PUT changes is audited)</li>
  *   <li>{@code GET /api/v1/admin/retinal-cluster} — per-node health of
  *       the remote inference cluster + the cron monitor's last alerts
  *       (2026-09-22; no legacy JSP counterpart)</li>
- *   <li>{@code /pages/Configure} → {@code GET /api/v1/admin/config}
- *       (read-only — at MUW these are deployment-time env vars per the
- *       single-site production scope; see project memory)</li>
+ *   <li>{@code GET /api/v1/admin/config} — read-only mirror of the
+ *       runtime configuration (at MUW these are deployment-time env vars per
+ *       the single-site production scope). It was once paired with
+ *       {@code /pages/Configure}, which is the lockout screen above.</li>
  * </ul>
  *
  * <p><strong>Scope note.</strong> The legacy {@code ViewSchedulerServlet}
@@ -160,8 +168,34 @@ public class AdminApiController {
     }
 
     /* ====================================================================== */
-    /* Password policy                                                        */
+    /* Password policy and account lockout                                    */
     /* ====================================================================== */
+
+    /**
+     * The account lockout, edited by the legacy {@code /Configure} page until
+     * 2026-09-30. {@code OpenClinicaUsernamePasswordAuthenticationFilter}
+     * reads both from the database at every failed login, so a change applies
+     * from the next one, without a restart.
+     */
+    static final String LOCKOUT_SWITCH_KEY = "user.lock.switch";
+    static final String LOCKOUT_ATTEMPTS_KEY = "user.lock.allowedFailedConsecutiveLoginAttempts";
+
+    /** The legacy form's rule for the attempt count: a whole number from 1 to 25. */
+    static final int LOCKOUT_ATTEMPTS_MIN = 1;
+    static final int LOCKOUT_ATTEMPTS_MAX = 25;
+
+    /** Every configuration key the password-policy page writes; a change to any is audited. */
+    private static final List<String> SECURITY_SETTING_KEYS = List.of(
+            PasswordRequirementsDao.PWD_CHARS_CASE_LOWER,
+            PasswordRequirementsDao.PWD_CHARS_CASE_UPPER,
+            PasswordRequirementsDao.PWD_CHARS_DIGITS,
+            PasswordRequirementsDao.PWD_CHARS_SPECIALS,
+            PasswordRequirementsDao.PWD_CHARS_MIN,
+            PasswordRequirementsDao.PWD_CHARS_MAX,
+            PasswordRequirementsDao.PWD_EXPIRATION_DAYS,
+            PasswordRequirementsDao.PWD_CHANGE_REQUIRED,
+            LOCKOUT_SWITCH_KEY,
+            LOCKOUT_ATTEMPTS_KEY);
 
     @GetMapping(value = "/password-policy", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getPasswordPolicy(HttpSession session) {
@@ -184,6 +218,9 @@ public class AdminApiController {
         // surface "Allowed special characters: !@#$%&*()" in copy
         // without rebaking the same constant in TypeScript.
         body.put("specialsAlphabet", PasswordRequirementsDao.SPECIALS);
+        String lockoutSwitch = configValue(LOCKOUT_SWITCH_KEY);
+        body.put("lockoutEnabled", lockoutSwitch != null && Boolean.parseBoolean(lockoutSwitch.trim()));
+        body.put("lockoutFailedAttempts", parseIntOrNull(configValue(LOCKOUT_ATTEMPTS_KEY)));
         return ResponseEntity.ok(body);
     }
 
@@ -195,7 +232,9 @@ public class AdminApiController {
             Integer minLength,
             Integer maxLength,
             Integer expirationDays,
-            Boolean changeRequiredOnFirstLogin) {}
+            Boolean changeRequiredOnFirstLogin,
+            Boolean lockoutEnabled,
+            Integer lockoutFailedAttempts) {}
 
     @PutMapping(value = "/password-policy",
                 consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -220,11 +259,15 @@ public class AdminApiController {
         }
         // PWD_EXPIRATION_DAYS = 0 means "never expires". Allow that.
         validateRange(errors, "expirationDays", body.expirationDays(), 0, 3650);
+        validateRange(errors, "lockoutFailedAttempts", body.lockoutFailedAttempts(),
+                LOCKOUT_ATTEMPTS_MIN, LOCKOUT_ATTEMPTS_MAX);
 
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed.", errors));
         }
+
+        Map<String, Setting> before = readSecuritySettings();
 
         PasswordRequirementsDao dao = newPasswordDao();
         if (body.requireLower()    != null) dao.setHasLower(body.requireLower());
@@ -244,13 +287,106 @@ public class AdminApiController {
             // place so the SPA never has to care.
             dao.setChangeRequired(body.changeRequiredOnFirstLogin() ? 1 : 0);
         }
+        if (body.lockoutEnabled() != null) {
+            // TRUE / FALSE, as the legacy form and the 2009 seed store it.
+            writeConfig(LOCKOUT_SWITCH_KEY, body.lockoutEnabled() ? "TRUE" : "FALSE");
+        }
+        if (body.lockoutFailedAttempts() != null) {
+            writeConfig(LOCKOUT_ATTEMPTS_KEY, Integer.toString(body.lockoutFailedAttempts()));
+        }
 
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
-        LOG.info("Password policy updated by sysadmin id={} name={}",
-                ub == null ? null : ub.getId(),
-                ub == null ? null : ub.getName());
+        List<String> changed = auditChanges(ub.getId(), before, readSecuritySettings());
+        LOG.info("Password policy updated by sysadmin id={} name={}, changed: {}",
+                ub.getId(), ub.getName(), changed);
 
         return getPasswordPolicy(session);
+    }
+
+    /** A stored setting: its row id and value, copied out of the entity. */
+    private record Setting(Integer id, String value) {}
+
+    /**
+     * Every key this page writes, read before and after a PUT to see what
+     * changed. The values are copied: within a request the entity manager
+     * returns the same bean for a key each time, and a write changes it in
+     * place.
+     */
+    private Map<String, Setting> readSecuritySettings() {
+        Map<String, Setting> out = new LinkedHashMap<>();
+        for (String key : SECURITY_SETTING_KEYS) {
+            ConfigurationBean bean = configurationDao.findByKey(key);
+            if (bean != null) out.put(key, new Setting(bean.getId(), bean.getValue()));
+        }
+        return out;
+    }
+
+    /**
+     * One {@code audit_log_event} row per setting whose stored value changed:
+     * type 142 against {@code configuration}, the key as entity name, the old
+     * and new value as stored. The password and lockout rules decide who can
+     * log in; until 2026-09-30 a change to them left only a log line. A failed
+     * insert is logged, not raised: the settings are already saved.
+     *
+     * @return the keys that changed
+     */
+    private List<String> auditChanges(int userId, Map<String, Setting> before, Map<String, Setting> after) {
+        List<String> changed = new ArrayList<>();
+        for (String key : SECURITY_SETTING_KEYS) {
+            if (!Objects.equals(valueOf(before.get(key)), valueOf(after.get(key)))) changed.add(key);
+        }
+        if (changed.isEmpty()) return changed;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, user_id, "
+                             + "audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'configuration', ?, ?, ?, ?)")) {
+            for (String key : changed) {
+                Setting was = before.get(key);
+                Setting now = after.get(key);
+                Integer rowId = now != null ? now.id() : was.id();
+                ps.setInt(1, AuditTypeIds.SYSTEM_SETTING_CHANGED);
+                ps.setInt(2, userId);
+                if (rowId == null) ps.setNull(3, Types.INTEGER);
+                else ps.setInt(3, rowId);
+                ps.setString(4, key);
+                ps.setString(5, Objects.toString(valueOf(was), ""));
+                ps.setString(6, Objects.toString(valueOf(now), ""));
+                ps.executeUpdate();
+            }
+        } catch (SQLException e) {
+            LOG.warn("Could not audit the change of {} by user_id={}: {}", changed, userId, e.getMessage());
+        }
+        return changed;
+    }
+
+    private static String valueOf(Setting s) {
+        return s == null ? null : s.value();
+    }
+
+    private String configValue(String key) {
+        ConfigurationBean bean = configurationDao.findByKey(key);
+        return bean == null ? null : bean.getValue();
+    }
+
+    /** Stores one configuration value, adding the row if this database lacks it. */
+    private void writeConfig(String key, String value) {
+        ConfigurationBean bean = configurationDao.findByKey(key);
+        if (bean == null) {
+            bean = new ConfigurationBean();
+            bean.setKey(key);
+        }
+        bean.setValue(value);
+        configurationDao.saveOrUpdate(bean);
+    }
+
+    private static Integer parseIntOrNull(String raw) {
+        if (raw == null) return null;
+        try {
+            return Integer.valueOf(raw.trim());
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 
     /* ====================================================================== */

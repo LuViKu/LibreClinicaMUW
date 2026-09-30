@@ -634,7 +634,8 @@ public class AuditApiController {
      *
      * <ul>
      *   <li>Study, user and dataset rows: the entity name, which holds the
-     *       changed column or the export label (Phase E.6).</li>
+     *       changed column or the export label (Phase E.6); configuration
+     *       rows: the key of the setting that changed (2026-09-30).</li>
      *   <li>Failures: the operation that failed.</li>
      *   <li>Ingest rows: the file's reference. Rows written before the
      *       reference was recorded hold a bare column marker; for those it is
@@ -648,7 +649,7 @@ public class AuditApiController {
             if (!AuditRowLabels.isBareMarker(entityName)) return entityName.trim();
             return r.entityId() > 0 ? context.file(r.entityId()) : null;
         }
-        if ((r.on("study") || r.on("user_account") || r.on("dataset"))
+        if ((r.on("study") || r.on("user_account") || r.on("dataset") || r.on("configuration"))
                 && entityName != null && !entityName.isBlank()) {
             return entityName;
         }
@@ -710,7 +711,9 @@ public class AuditApiController {
                  101, 102, 103, 104, 105,
             // Extract-job execution (106-107). Backfill catch-all (108,
             // hidden) routes to admin for the sysadmin view.
-                 106, 107, 108 -> "admin";
+                 106, 107, 108,
+            // Password-policy and lockout settings (142, 2026-09-30).
+                 142 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,

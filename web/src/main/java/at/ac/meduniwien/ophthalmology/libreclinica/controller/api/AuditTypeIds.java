@@ -465,4 +465,15 @@ public final class AuditTypeIds {
      * {@code lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml}.
      */
     public static final int INGEST_DUPLICATE_HELD            = 141;
+
+    /**
+     * R1.2 (2026-09-30) — a security setting changed on the password-policy
+     * page: one of the password rules, or the account lockout the legacy
+     * {@code /Configure} page edited. Writer:
+     * {@code AdminApiController.putPasswordPolicy}, one row per changed key;
+     * audit_table = {@code configuration}, entity_id = the row's id,
+     * entity_name = the key, old and new value as stored. Seeded by
+     * {@code lc-muw-2026-09-30-audit-type-system-setting.xml}.
+     */
+    public static final int SYSTEM_SETTING_CHANGED           = 142;
 }
