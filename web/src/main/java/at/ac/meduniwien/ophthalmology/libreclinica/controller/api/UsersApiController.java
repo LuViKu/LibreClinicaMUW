@@ -234,10 +234,14 @@ public class UsersApiController {
 
             String spaRole = sur.getRole() != null
                     ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
+            String legacyRole = legacyRoleOf(sur.getRole());
             // Phase E.6: sysadmin/techadmin always project to Administrator
             // — matches MeApiController so the user-list role chip and
             // the role-chip in the top bar agree for these users.
-            if (ua.isSysAdmin() || ua.isTechAdmin()) spaRole = "Administrator";
+            if (ua.isSysAdmin() || ua.isTechAdmin()) {
+                spaRole = "Administrator";
+                legacyRole = null;
+            }
             String siteLabel = isSite && roleStudy != null ? roleStudy.getName() : null;
             String auth = authForUser(ua);
             String lastLogin = ua.getLastVisitDate() == null ? null
@@ -246,18 +250,20 @@ public class UsersApiController {
                             .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
             boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
 
+            // A legacy data entry role is not an Investigator: the filter
+            // matches it by its own name ("ra", "ra2").
             if (roleFilter != null && !roleFilter.isBlank()
-                    && !roleFilter.equalsIgnoreCase(spaRole)) continue;
+                    && !roleFilter.equalsIgnoreCase(legacyRole != null ? legacyRole : spaRole)) continue;
             if (siteOidFilter != null && !siteOidFilter.isBlank()) {
                 if (roleStudy == null || !siteOidFilter.equalsIgnoreCase(roleStudy.getOid())) continue;
             }
             if (activeFilter != null && active != activeFilter) continue;
 
             boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
-            StudyUserDto candidate = toStudyUserDto(ua, spaRole, siteLabel, auth, lastLogin,
+            StudyUserDto candidate = toStudyUserDto(ua, spaRole, legacyRole, siteLabel, auth, lastLogin,
                     active, locked, usernames);
             StudyUserDto current = bestByUser.get(ua.getId());
-            if (current == null || rolePriority(spaRole) > rolePriority(current.role())) {
+            if (current == null || listPriority(candidate) > listPriority(current)) {
                 bestByUser.put(ua.getId(), candidate);
             }
         }
@@ -281,6 +287,22 @@ public class UsersApiController {
             case "Investigator"  -> 1;
             default              -> 0;
         };
+    }
+
+    /**
+     * {@link #rolePriority} for a list row. A legacy data entry role ranks
+     * below every role the SPA grants, although it projects as
+     * Investigator: the row shows it only when it is all the user holds.
+     */
+    private static int listPriority(StudyUserDto row) {
+        return row.legacyRole() != null ? 0 : rolePriority(row.role());
+    }
+
+    /** {@code "ra"} or {@code "ra2"} when the role is a legacy data entry role, else null. */
+    static String legacyRoleOf(Role role) {
+        if (Role.RESEARCHASSISTANT.equals(role)) return "ra";
+        if (Role.RESEARCHASSISTANT2.equals(role)) return "ra2";
+        return null;
     }
 
     /* ----------------------------------------------------------------- */
@@ -471,7 +493,7 @@ public class UsersApiController {
         boolean isSite = initialStudy.getParentStudyId() > 0;
         String siteLabel = isSite ? initialStudy.getName() : null;
         UserAccountBean created = userDao.findByPK(persisted.getId());
-        StudyUserDto dto = toStudyUserDto(created.getId() > 0 ? created : persisted, spaRole, siteLabel,
+        StudyUserDto dto = toStudyUserDto(created.getId() > 0 ? created : persisted, spaRole, null, siteLabel,
                 authForUser(persisted), null, true, false, new Usernames(userDao));
 
         Map<String, Object> response = new HashMap<>();
@@ -1522,8 +1544,7 @@ public class UsersApiController {
                 ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
         boolean active = sur.getStatus() != null
                 && sur.getStatus().getId() == Status.AVAILABLE.getId();
-        String legacyRole = Role.RESEARCHASSISTANT.equals(sur.getRole()) ? "ra"
-                : Role.RESEARCHASSISTANT2.equals(sur.getRole()) ? "ra2" : null;
+        String legacyRole = legacyRoleOf(sur.getRole());
         return new RoleBindingDto(
                 sur.getStudyId(),
                 study == null ? null : study.getOid(),
@@ -2153,7 +2174,8 @@ public class UsersApiController {
                         .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
         boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
         boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
-        return toStudyUserDto(ua, spaRole, siteLabel, authForUser(ua), lastLogin, active, locked,
+        String legacyRole = activeRole != null ? legacyRoleOf(activeRole.getRole()) : null;
+        return toStudyUserDto(ua, spaRole, legacyRole, siteLabel, authForUser(ua), lastLogin, active, locked,
                 new Usernames(new UserAccountDAO(dataSource)));
     }
 
@@ -2165,9 +2187,9 @@ public class UsersApiController {
      * given, that is for a system administrator; otherwise they are null
      * and left off the wire.
      */
-    private static StudyUserDto toStudyUserDto(UserAccountBean ua, String spaRole, String siteLabel,
-                                               String auth, String lastLogin, boolean active,
-                                               boolean locked, Usernames usernames) {
+    private static StudyUserDto toStudyUserDto(UserAccountBean ua, String spaRole, String legacyRole,
+                                               String siteLabel, String auth, String lastLogin,
+                                               boolean active, boolean locked, Usernames usernames) {
         boolean details = usernames != null;
         return new StudyUserDto(
                 String.valueOf(ua.getId()),
@@ -2175,6 +2197,7 @@ public class UsersApiController {
                 displayName(ua),
                 blankToNull(ua.getEmail()),
                 spaRole,
+                legacyRole,
                 siteLabel,
                 auth,
                 lastLogin,

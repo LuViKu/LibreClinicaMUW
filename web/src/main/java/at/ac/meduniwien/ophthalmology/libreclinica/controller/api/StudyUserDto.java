@@ -24,6 +24,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param role         SPA UserRole — translated from legacy
  *                     {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role}
  *                     via {@link RoleMapper}
+ * @param legacyRole   {@code "ra"} or {@code "ra2"} when the row's role is
+ *                     one of the legacy data entry roles, which
+ *                     {@code role} projects as Investigator; omitted
+ *                     otherwise
  * @param siteLabel    StudyBean.name when role is site-scoped; null
  *                     for study-wide roles (Data Manager, etc.)
  * @param auth         {@code sso | local | ldap | pending-invite}
@@ -64,6 +68,7 @@ public record StudyUserDto(
         String displayName,
         String email,
         String role,
+        String legacyRole,
         String siteLabel,
         String auth,
         String lastLoginAt,

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,7 +62,19 @@ class UsersApiControllerLegacyRolesDatabaseIT extends AbstractApiControllerDatab
             user(c, "legacy-ra-remove", "ra", "monitor");
             user(c, "plain-monitor", "monitor");
             user(c, "plain-multi", "monitor", "coordinator");
+            user(c, "list-ra", "ra");
+            // The legacy row first, so the list meets it before the granted one.
+            user(c, "list-ra2-inv", "ra2", "Investigator");
         }
+    }
+
+    @Test
+    void theUserListNamesTheLegacyRoleUnlessTheUserHoldsAGrantedOne() throws Exception {
+        mockMvc().perform(get("/api/v1/users").session(sysadmin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.username == 'list-ra')].legacyRole", contains("ra")))
+                .andExpect(jsonPath("$[?(@.username == 'list-ra2-inv')].role", contains("Investigator")))
+                .andExpect(jsonPath("$[?(@.username == 'list-ra2-inv')].legacyRole", empty()));
     }
 
     @Test
