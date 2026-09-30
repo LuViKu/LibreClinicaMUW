@@ -19,6 +19,12 @@
  * hourly scan, a week's trend, the database). The page's refresh button
  * re-fetches them through `refreshKey`.
  *
+ * R1.2 (2026-09-30) — a test e-mail, the SPA replacement for the legacy
+ * /SendTestEmail: POST /api/v1/admin/test-email mails the administrator's
+ * own address through the application's mail server, to check the mail
+ * configuration after a deployment. The button is disabled while the mail is
+ * sent; the server allows one per half minute and says so.
+ *
  * Sysadmin-only — the backend returns 403 for non-sysadmin sessions
  * and the SPA router meta below requires the Administrator role.
  */
@@ -28,7 +34,7 @@ import { useI18n } from 'vue-i18n'
 import SystemRail from '@/components/SystemRail.vue'
 import StorageUsagePanel from '@/components/system/StorageUsagePanel.vue'
 import UploaderHealthPanel from '@/components/system/UploaderHealthPanel.vue'
-import { apiGet, ApiError } from '@/api/client'
+import { apiGet, apiPost, ApiError } from '@/api/client'
 
 const { t } = useI18n()
 
@@ -79,6 +85,12 @@ interface ClusterStatus {
   monitor?: { path: string; readable: boolean; lines: string[] }
 }
 
+interface TestEmailResult {
+  sent: boolean
+  recipient: string | null
+  message: string | null
+}
+
 const data = ref<SystemStatus | null>(null)
 const cluster = ref<ClusterStatus | null>(null)
 const clusterError = ref<string | null>(null)
@@ -119,6 +131,46 @@ async function load() {
     await Promise.all([loadSystem(), loadCluster()])
   } finally {
     loading.value = false
+  }
+}
+
+const mailSending = ref(false)
+const mailSentTo = ref<string | null>(null)
+const mailError = ref<string | null>(null)
+
+/** Mails the administrator's own address; the server picks it, not the page. */
+async function sendTestEmail() {
+  if (mailSending.value) return
+  mailSending.value = true
+  mailSentTo.value = null
+  mailError.value = null
+  try {
+    const result = await apiPost<TestEmailResult>('/pages/api/v1/admin/test-email', undefined)
+    mailSentTo.value = result.recipient
+  } catch (err) {
+    mailError.value = describeMailError(err)
+  } finally {
+    mailSending.value = false
+  }
+}
+
+function describeMailError(err: unknown): string {
+  if (!(err instanceof ApiError)) return t('adminSystemStatus.mail.failedGeneric')
+  const body = err.body as Partial<TestEmailResult> | null
+  switch (err.status) {
+    case 502:
+      return t('adminSystemStatus.mail.failed', {
+        recipient: body?.recipient ?? '—',
+        message: body?.message ?? err.message,
+      })
+    case 409:
+      return t('adminSystemStatus.mail.noAddress')
+    case 429:
+      return t('adminSystemStatus.mail.tooSoon')
+    case 503:
+      return t('adminSystemStatus.mail.noSender')
+    default:
+      return `${err.status}: ${err.message}`
   }
 }
 
@@ -229,6 +281,24 @@ onMounted(load)
         </dl>
       </section>
     </div>
+
+    <section class="mt-4 rounded-md border border-slate-200 bg-white p-4 text-xs" aria-labelledby="mail-heading">
+      <h2 id="mail-heading" class="text-sm font-medium mb-2">{{ t('adminSystemStatus.mail.heading') }}</h2>
+      <p class="text-slate-500 mb-2">{{ t('adminSystemStatus.mail.hint') }}</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          data-testid="send-test-email"
+          class="px-3 py-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 text-xs muw-focus disabled:opacity-60"
+          :disabled="mailSending"
+          @click="sendTestEmail"
+        >
+          {{ mailSending ? t('adminSystemStatus.mail.sending') : t('adminSystemStatus.mail.send') }}
+        </button>
+        <span v-if="mailSentTo" class="text-emerald-700" role="status" data-testid="test-email-result">{{ t('adminSystemStatus.mail.sent', { recipient: mailSentTo }) }}</span>
+        <span v-else-if="mailError" class="text-rose-700" role="alert" data-testid="test-email-result">{{ mailError }}</span>
+      </div>
+    </section>
 
     <section class="mt-4 rounded-md border border-slate-200 bg-white p-4 text-xs" aria-labelledby="cluster-heading">
       <h2 id="cluster-heading" class="text-sm font-medium mb-2">{{ t('adminSystemStatus.clusterHeading') }}</h2>

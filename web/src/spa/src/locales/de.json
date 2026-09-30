@@ -262,6 +262,18 @@
     "clusterMonitorHint": "Letzte Zeilen des Cron-Monitor-Logs auf der App-VM. Leer ist gut.",
     "clusterMonitorEmpty": "Keine Meldungen aufgezeichnet.",
     "clusterMonitorUnavailable": "Monitor-Log nicht lesbar: {path}",
+    "mail": {
+      "heading": "Ausgehende E-Mail",
+      "hint": "Sendet eine Testnachricht an die E-Mail-Adresse Ihres eigenen Kontos, über den Mailserver der Anwendung. Nach einem Deployment oder einer Änderung der Mail-Einstellungen verwenden.",
+      "send": "Test-E-Mail senden",
+      "sending": "Wird gesendet…",
+      "sent": "Test-E-Mail an {recipient} gesendet. Prüfen Sie, ob sie ankommt.",
+      "failed": "Senden an {recipient} fehlgeschlagen: {message}",
+      "failedGeneric": "Senden der Test-E-Mail fehlgeschlagen.",
+      "noAddress": "Ihr Konto hat keine E-Mail-Adresse. Tragen Sie zuerst eine im Profil ein.",
+      "noSender": "Auf dem Server ist keine Absenderadresse konfiguriert (adminEmail).",
+      "tooSoon": "Vor weniger als einer halben Minute wurde schon eine Test-E-Mail gesendet. Bitte kurz warten."
+    },
     "uploaders": {
       "heading": "Uploader an den Aufnahme-PCs",
       "hint": "Der Export Watcher (Clarus- und Spectralis-PC) und die Optomed Bridge melden sich alle zwei Minuten. Ein Programm, das sich nicht mehr meldet, erscheint als stumm; eines, das beendet oder mit dem PC heruntergefahren wurde, sagt das.",

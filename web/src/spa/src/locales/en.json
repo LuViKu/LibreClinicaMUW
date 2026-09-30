@@ -262,6 +262,18 @@
     "clusterMonitorHint": "Last lines of the app-VM cron monitor log. Empty is good.",
     "clusterMonitorEmpty": "No alerts recorded.",
     "clusterMonitorUnavailable": "Monitor log not readable: {path}",
+    "mail": {
+      "heading": "Outgoing e-mail",
+      "hint": "Sends a test message to the e-mail address of your own account, through the mail server the application uses. Use it after a deployment or a change to the mail settings.",
+      "send": "Send test e-mail",
+      "sending": "Sending…",
+      "sent": "Test e-mail sent to {recipient}. Check that it arrives.",
+      "failed": "Sending to {recipient} failed: {message}",
+      "failedGeneric": "Sending the test e-mail failed.",
+      "noAddress": "Your account has no e-mail address. Add one to your profile first.",
+      "noSender": "No sender address is configured on the server (adminEmail).",
+      "tooSoon": "A test e-mail was sent less than half a minute ago. Please wait a moment."
+    },
     "uploaders": {
       "heading": "Uploaders on the acquisition PCs",
       "hint": "The Export Watcher (Clarus and Spectralis PCs) and the Optomed Bridge report every two minutes. A program that stops reporting shows as silent; one that was closed, or whose PC was shut down, says so.",
