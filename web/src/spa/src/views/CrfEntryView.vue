@@ -262,6 +262,10 @@ function statusLabel(s: CrfEntryStatus): string {
 const submitAttempted = ref(false)
 
 function showError(item: CrfItem): string | null {
+  // The server's refusal (CRF validation, required at completion) wins:
+  // it knows checks the client does not.
+  const fromServer = store.serverItemErrors[item.oid]
+  if (fromServer) return fromServer
   if (!submitAttempted.value) return null
   return store.itemErrors[item.oid] ?? null
 }

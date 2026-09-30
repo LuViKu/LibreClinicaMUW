@@ -60,6 +60,14 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
    */
   const missingReasonItemOids = ref<string[]>([])
 
+  /**
+   * The server's per-item messages from its last refusal: a value failing
+   * its CRF validation on save, or a required item left empty at mark
+   * complete. Keyed like the reasons (item OID, or OID[row]); an edit to
+   * the item clears its message.
+   */
+  const serverItemErrors = ref<Record<string, string>>({})
+
   const schema = computed<CrfSchema | null>(() => entry.value?.schema ?? null)
   const values = computed<CrfValues>(() => entry.value?.values ?? {})
   const status = computed<CrfEntryStatus>(() => entry.value?.status ?? 'not-started')
@@ -245,6 +253,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     pendingReasons.value = {}
     missingReasonItemOids.value = []
     dirtyItemOids.value = new Set()
+    serverItemErrors.value = {}
     // Phase E.6 polish-runtime — clear show-when bookkeeping for a fresh
     // load. The watcher's snapshot reflects "no items hidden" at this
     // point; the first computation against the freshly-loaded values
@@ -276,9 +285,28 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     }
   }
 
+  /** Drop the server's message for one key: the operator is editing it. */
+  function clearServerItemError(key: string): void {
+    if (!(key in serverItemErrors.value)) return
+    const { [key]: _drop, ...rest } = serverItemErrors.value
+    serverItemErrors.value = rest
+  }
+
+  /** Keep the per-item messages of a 400 ValidationErrorBody, if it has any. */
+  function rememberServerItemErrors(body: unknown): void {
+    const errors = (body as { errors?: Array<{ field?: unknown; message?: unknown }> } | null)?.errors
+    if (!Array.isArray(errors)) return
+    const next: Record<string, string> = {}
+    for (const e of errors) {
+      if (typeof e.field === 'string' && typeof e.message === 'string') next[e.field] = e.message
+    }
+    serverItemErrors.value = next
+  }
+
   function setValue(itemOid: string, value: unknown): void {
     if (!entry.value) return
     entry.value.values[itemOid] = value
+    clearServerItemError(itemOid)
     pendingChanges.value = true
     if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
     // Phase E.6 admin-rfc — track dirty oids so the modal knows which
@@ -337,6 +365,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       group.rows.sort((a, b) => a.ordinal - b.ordinal)
     }
     row.values[itemOid] = value
+    clearServerItemError(groupRowReasonKey(itemOid, rowOrdinal))
     let byOrd = dirtyGroupRows.value.get(groupOid)
     if (!byOrd) {
       byOrd = new Map()
@@ -605,6 +634,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       pendingReasons.value = {}
       missingReasonItemOids.value = []
       dirtyItemOids.value = new Set()
+      serverItemErrors.value = {}
       return true
     } catch (e) {
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
@@ -628,6 +658,9 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
             ?? 'Bitte Begründung für die markierten Felder eintragen.'
           return false
         }
+        // A value failing its CRF validation: the per-item messages go
+        // next to the items, the summary into the banner.
+        rememberServerItemErrors(e.body)
         const errBody = e.body as { message?: string } | null
         error.value = errBody?.message ?? `Speichern fehlgeschlagen (HTTP ${e.status}).`
         return false
@@ -701,6 +734,8 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
         error.value =
           'Backend nicht erreichbar — markComplete fehlgeschlagen. Bitte später erneut versuchen.'
       } else if (e instanceof ApiError) {
+        // Required items the server found empty come back per item.
+        if (e.status === 400) rememberServerItemErrors(e.body)
         const body = e.body as { message?: string } | null
         error.value = body?.message ?? `markComplete fehlgeschlagen (HTTP ${e.status}).`
       } else {
@@ -771,6 +806,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     status,
     groups,
     itemErrors,
+    serverItemErrors,
     sectionFilledCounts,
     isComplete,
     // Phase E.6 admin-rfc — RFC capture surface.

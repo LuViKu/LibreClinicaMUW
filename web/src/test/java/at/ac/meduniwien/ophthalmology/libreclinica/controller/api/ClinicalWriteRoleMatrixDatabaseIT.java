@@ -224,7 +224,8 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         () -> delete("/api/v1/eventCrfs/9/items/I_CONSENT_SIGNED/file")),
                 permitted("commit a double-data-entry pass", "manual_investigator", 409,
                         () -> json(post("/api/v1/eventCrfs/9/dde-commit"), "{\"values\":{}}")),
-                permitted("complete a CRF", "manual_crc", 200,
+                // Event CRF 5 lacks its consent items, so the required check refuses it.
+                permitted("complete a CRF", "manual_crc", 400,
                         () -> post("/api/v1/eventCrfs/5/markComplete")),
                 permitted("auto-populate retinal values", "manual_investigator", 200,
                         () -> post("/api/v1/eventCrfs/9:autoPopulateRetinal")),

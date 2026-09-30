@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import javax.sql.DataSource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
@@ -61,6 +62,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.ReasonForChangeWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
@@ -477,7 +481,8 @@ public class EventCrfsApiController {
     @PostMapping("/{id:[0-9]+}/items")
     public ResponseEntity<?> saveItems(@PathVariable("id") int eventCrfId,
                                        @RequestBody SaveItemsRequest body,
-                                       HttpSession session) {
+                                       HttpSession session,
+                                       HttpServletRequest request) {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
@@ -543,6 +548,21 @@ public class EventCrfsApiController {
         if (hiddenItemCount > 0) {
             LOG.info("saveItems: dropped {} hidden item value(s) on event_crf {} (show-when=false)",
                     hiddenItemCount, ecb.getId());
+        }
+
+        // A value that fails its item's CRF validation (func: / regexp:) is
+        // refused, with the CRF author's message, as the legacy form refuses
+        // it; nothing is written. A value already carrying a discrepancy
+        // note stands (CrfItemValidation).
+        List<ValidationErrorBody.FieldError> invalid = crfValidationFailures(
+                request, visibleTopLevelValues, body.groups(), ecb, itemDAO, idDAO);
+        if (!invalid.isEmpty()) {
+            List<String> messages = new ArrayList<>();
+            for (ValidationErrorBody.FieldError e : invalid) messages.add(e.message());
+            LOG.info("saveItems: refused {} value(s) failing their CRF validation on event_crf {}",
+                    invalid.size(), ecb.getId());
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    String.join(" ", messages), invalid));
         }
 
         // Phase E.6 admin-rfc — a CRF that has ever been completed is under
@@ -870,22 +890,114 @@ public class EventCrfsApiController {
     }
 
     /**
+     * The values of a save that fail their item's CRF validation, keyed as
+     * the RFC keys are (item OID, or {@code OID[row]}). Only values the save
+     * changes are checked; a blank one is the required check's business, and
+     * one whose row already carries an active discrepancy note stands, as
+     * {@code DiscrepancyValidator} lets it in legacy.
+     */
+    private List<ValidationErrorBody.FieldError> crfValidationFailures(
+            HttpServletRequest request, Map<String, Object> topLevelValues,
+            List<SaveItemsRequest.GroupRowSavePayload> groups, EventCRFBean ecb,
+            ItemDAO itemDAO, ItemDataDAO idDAO) {
+        Map<Integer, String[]> validations = loadCrfValidations(ecb.getCRFVersionId());
+        if (validations.isEmpty()) {
+            return List.of();
+        }
+        DiscrepancyNoteDAO notes = new DiscrepancyNoteDAO(dataSource);
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
+        if (topLevelValues != null) {
+            for (Map.Entry<String, Object> entry : topLevelValues.entrySet()) {
+                checkCrfValidation(request, entry.getKey(), 0, entry.getValue(), ecb,
+                        itemDAO, idDAO, validations, notes, out);
+            }
+        }
+        if (groups != null) {
+            for (SaveItemsRequest.GroupRowSavePayload row : groups) {
+                if (row == null || row.values() == null) continue;
+                int ordinal = Math.max(1, row.rowOrdinal());
+                for (Map.Entry<String, Object> rowVal : row.values().entrySet()) {
+                    checkCrfValidation(request, rowVal.getKey(), ordinal, rowVal.getValue(), ecb,
+                            itemDAO, idDAO, validations, notes, out);
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * item_id → (validation, author's message, label) of every item of the
+     * version that has a validation. Read uncached: the item-metadata DAO
+     * caches its lookups.
+     */
+    private Map<Integer, String[]> loadCrfValidations(int crfVersionId) {
+        Map<Integer, String[]> out = new HashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ifm.item_id, ifm.regexp, ifm.regexp_error_msg, "
+                             + "       COALESCE(NULLIF(TRIM(ifm.left_item_text), ''), i.name) "
+                             + "  FROM item_form_metadata ifm JOIN item i ON i.item_id = ifm.item_id "
+                             + " WHERE ifm.crf_version_id = ? "
+                             + "   AND COALESCE(TRIM(ifm.regexp), '') <> ''")) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.put(rs.getInt(1), new String[] {rs.getString(2), rs.getString(3), rs.getString(4)});
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Could not read the CRF validations of crf_version " + crfVersionId, e);
+        }
+        return out;
+    }
+
+    /** @param rowOrdinal 0 for a top-level item */
+    private static void checkCrfValidation(HttpServletRequest request, String itemOid, int rowOrdinal,
+                                           Object rawValue, EventCRFBean ecb, ItemDAO itemDAO,
+                                           ItemDataDAO idDAO, Map<Integer, String[]> validations,
+                                           DiscrepancyNoteDAO notes,
+                                           List<ValidationErrorBody.FieldError> out) {
+        String newValue = serialiseValueForStorage(rawValue);
+        if (newValue.trim().isEmpty()) return;
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) return;
+        ItemBean item = candidates.get(0);
+        String[] validation = validations.get(item.getId());
+        if (validation == null) return;
+        ItemDataBean existing = rowOrdinal == 0
+                ? idDAO.findByItemIdAndEventCRFId(item.getId(), ecb.getId())
+                : idDAO.findByItemIdAndEventCRFIdAndOrdinal(item.getId(), ecb.getId(), rowOrdinal);
+        boolean stored = existing != null && existing.getId() > 0;
+        if (stored && newValue.equals(existing.getValue())) return;
+
+        String failure = CrfItemValidation.failure(request,
+                CrfItemValidation.of(validation[0], validation[1]), newValue);
+        if (failure == null) return;
+        if (stored && notes.findNumOfActiveExistingNotesForItemData(existing.getId()) > 0) return;
+
+        String key = rowOrdinal == 0 ? itemOid : groupRowReasonKey(itemOid, rowOrdinal);
+        out.add(new ValidationErrorBody.FieldError(key, validation[2] + ": " + failure));
+    }
+
+    /**
      * Phase E.4 M6 — mark CRF complete. Delegates to
      * {@link EventCRFDAO#markComplete} (the IDE — initial data entry —
      * path). The SPA calls this when the user clicks "Mark complete"
-     * after a clean validation pass; the SPA-side validation in
-     * {@code stores/crfEntry.ts:computeItemErrors} prevents the click
-     * when required items are missing, so this endpoint trusts the
-     * client to have run that gate and only enforces the locked-CRF
-     * gate, and the role ({@link ClinicalWriteAuthorization}),
-     * server-side.
+     * after a clean validation pass ({@code stores/crfEntry.ts:computeItemErrors}).
+     * The server does not rely on that: as legacy data entry does, it
+     * refuses to complete a CRF while a required item that is shown has
+     * no value (400, {@link ValidationErrorBody} listing them;
+     * {@link RequiredItemsCheck}). It also enforces the locked-CRF gate
+     * and the role ({@link ClinicalWriteAuthorization}).
      *
      * <p>Reject if the CRF is locked (idempotent on already-complete
      * CRFs: returns 200 with the existing state).
      */
     @PostMapping("/{id:[0-9]+}/markComplete")
     public ResponseEntity<?> markComplete(@PathVariable("id") int eventCrfId,
-                                          HttpSession session) {
+                                          HttpSession session,
+                                          HttpServletRequest request) {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
@@ -920,6 +1032,26 @@ public class EventCrfsApiController {
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is already locked"));
+        }
+
+        // Legacy data entry does not complete a CRF while a required item
+        // that is shown is empty. A CRF that is complete already stays so.
+        if (ecb.getDateCompleted() == null) {
+            List<RequiredItemsCheck.Missing> missing = RequiredItemsCheck.missing(dataSource, ecb);
+            if (!missing.isEmpty()) {
+                String notBlank = ResourceBundleProvider
+                        .getExceptionsBundle(LocaleResolver.getLocale(request)).getString("field_not_blank");
+                List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
+                List<String> labels = new ArrayList<>();
+                for (RequiredItemsCheck.Missing m : missing) {
+                    errors.add(new ValidationErrorBody.FieldError(m.key(), m.label() + ": " + notBlank));
+                    labels.add(m.label());
+                }
+                LOG.info("CRF markComplete: event_crf {} refused, {} required item(s) empty",
+                        ecb.getId(), missing.size());
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                        "Required items are missing: " + String.join(", ", labels), errors));
+            }
         }
 
         // Phase B2 (2026-06-10) — failure-audit wrap. Any Throwable from
