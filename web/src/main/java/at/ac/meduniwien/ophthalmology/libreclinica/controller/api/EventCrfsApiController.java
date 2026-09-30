@@ -458,6 +458,9 @@ public class EventCrfsApiController {
      * signed, edits go through a different unlock flow. Reject a role
      * that may not enter data ({@link ClinicalWriteAuthorization}).
      *
+     * <p>A save that changes a value of a source-data-verified CRF
+     * withdraws the verification ({@link SdvRevocation}).
+     *
      * <p>Audit-log: one {@link AuditEventBean} row per changed item,
      * recording (auditTable="item_data", entityId, columnName="value",
      * oldValue, newValue). Creation-from-empty also writes one row with
@@ -581,6 +584,9 @@ public class EventCrfsApiController {
         int rejected = 0;
         int rfcCreatedCount = 0;
         int groupRowsSaved = 0;
+        // Whether any stored value actually changed; a changed value ends
+        // an SDV attestation (SdvRevocation).
+        boolean dataChanged = false;
         // 2026-06-30 — nAMD treat-and-extend decision summary capture.
         // The save loop emits one type-1 (item value updated) audit row
         // per changed item, which is fine for the audit-log table but
@@ -642,6 +648,9 @@ public class EventCrfsApiController {
                 ItemDataBean createdRow = idDAO.create(idb);
                 isCreate = true;
                 itemDataIdAfter = createdRow != null ? createdRow.getId() : idb.getId();
+            }
+            if (!oldValue.equals(newValue)) {
+                dataChanged = true;
             }
 
             writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
@@ -737,6 +746,9 @@ public class EventCrfsApiController {
                         idDAO.create(idb);
                         isCreate = true;
                     }
+                    if (!oldValue.equals(newValue)) {
+                        dataChanged = true;
+                    }
                     writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
                             currentUser, currentStudy, ss,
                             isCreate ? "item_data_create" : "item_data_update",
@@ -763,6 +775,12 @@ public class EventCrfsApiController {
                     "namd_treatment_decision_recorded",
                     "event_crf", ecb.getId(),
                     "F_NAMD_VISIT", "", newVal.toString());
+        }
+
+        // A verified CRF whose data changed is no longer verified. Done
+        // before the update below, which writes the bean's SDV fields.
+        if (dataChanged) {
+            SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
         }
 
         // Touch the EventCRF so {date_updated} reflects the save —
@@ -2433,6 +2451,9 @@ public class EventCrfsApiController {
                     itemOid + "[" + ordinal + "]", oldValue, "");
             deleted++;
         }
+        if (deleted > 0) {
+            SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
+        }
 
         return ResponseEntity.ok(Map.of(
                 "groupOid", groupOid,
@@ -2646,6 +2667,8 @@ public class EventCrfsApiController {
                 "item_data", existing.getId(),
                 itemOid + "[" + ordinal + "]", oldValue, absolutePath);
 
+        // Before the update below, which writes the bean's SDV fields.
+        SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
         ecb.setUpdater(currentUser);
         ecb.setUpdatedDate(new Date());
         eventCrfDAO.update(ecb);
@@ -2793,6 +2816,10 @@ public class EventCrfsApiController {
                 "item_data_file_delete", "item_data", idb.getId(),
                 itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
 
+        // Before the update below, which writes the bean's SDV fields.
+        if (!oldValue.isEmpty()) {
+            SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
+        }
         ecb.setUpdater(currentUser);
         ecb.setUpdatedDate(new Date());
         eventCrfDAO.update(ecb);

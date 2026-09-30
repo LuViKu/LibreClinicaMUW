@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeCommitRespo
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeConflictsDto;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeReconcileRequest;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.EventCrfsApiController;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.SdvRevocation;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
@@ -312,6 +313,9 @@ public class DdeService {
         idb.setStatus(Status.AVAILABLE);
         idb.setOldStatus(Status.AVAILABLE);
         idDAO.update(idb);
+        if (!oldValue.equals(newValue)) {
+            SdvRevocation.revokeIfVerified(ecb, dmUser, new EventCRFDAO(dataSource));
+        }
 
         // Close the FAILEDVAL note.
         note.setResolutionStatusId(ResolutionStatus.CLOSED.getId());
