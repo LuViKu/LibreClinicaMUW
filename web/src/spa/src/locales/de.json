@@ -2895,7 +2895,26 @@
     },
     "crf": {
       "restore": "CRF wiederherstellen",
-      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen."
+      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen.",
+      "remove": "Entfernen",
+      "removeDialog": {
+        "title": "CRF entfernen",
+        "subtitle": "{crf} {version} · {event} · {subject}",
+        "intro": "{crf} wird aus den Daten von Proband {subject} zur Visite {event} entfernt.",
+        "values": "Mit ihm entfernte erfasste Werte: {n}",
+        "notes": "Offene Rückfragen zu diesen Werten, die geschlossen werden: {n}",
+        "nothing": "Auf diesem CRF wurden keine Werte erfasst.",
+        "restoreHint": "Es wird nichts gelöscht. Wird das CRF wiederhergestellt, kommen seine Werte zurück; geschlossene Rückfragen bleiben geschlossen.",
+        "loading": "Es wird geprüft, was entfernt wird …",
+        "reasonLabel": "Grund für das Entfernen",
+        "reasonPlaceholder": "z. B. beim falschen Probanden erfasst",
+        "reasonRequired": "Bitte den Grund für das Entfernen angeben.",
+        "confirm": "CRF entfernen",
+        "removing": "Wird entfernt …",
+        "cancel": "Abbrechen",
+        "errorGeneric": "Das CRF konnte nicht entfernt werden.",
+        "errorNetwork": "Der Server ist nicht erreichbar."
+      }
     },
     "table": {
       "crfName": "CRF",

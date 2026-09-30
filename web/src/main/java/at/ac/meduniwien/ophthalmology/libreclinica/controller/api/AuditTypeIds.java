@@ -453,6 +453,12 @@ public final class AuditTypeIds {
     public static final int EVENT_CRF_REOPENED               = 138;
     /** A removed CRF restored. */
     public static final int EVENT_CRF_RESTORED               = 139;
+    /**
+     * A CRF removed, with the reason given for it; 139 is its inverse.
+     * Written by {@code EventCrfRemovalApiController}, seeded by
+     * {@code lc-muw-2026-09-30-audit-type-event-crf-removed.xml}.
+     */
+    public static final int EVENT_CRF_REMOVED                = 155;
     /** The reason given for changing a value after the CRF was completed; carries the reason. */
     public static final int ITEM_DATA_REASON_FOR_CHANGE      = 140;
 

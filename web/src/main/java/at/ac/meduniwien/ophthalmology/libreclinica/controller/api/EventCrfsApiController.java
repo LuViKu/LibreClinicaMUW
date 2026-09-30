@@ -1589,15 +1589,15 @@ public class EventCrfsApiController {
 
         // Cascade AUTO_DELETED item_data rows back to AVAILABLE. Hard
         // DELETED rows stay put (legacy semantics — they're operator
-        // delete, not parent cascade).
-        ItemDataDAO idDao = new ItemDataDAO(dataSource);
-        java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ecb.getId());
-        for (ItemDataBean it : items) {
-            if (it.getStatus() == null || !it.getStatus().equals(Status.AUTO_DELETED)) continue;
-            it.setStatus(Status.AVAILABLE);
-            it.setUpdater(currentUser);
-            it.setUpdatedDate(new Date());
-            idDao.update(it);
+        // delete, not parent cascade). Only the status changes: a value
+        // keeps its provenance, which ItemDataDAO.update would clear.
+        try (Connection c = dataSource.getConnection()) {
+            ItemDataStatusCascade.restore(c, ecb.getId(), currentUser.getId());
+        } catch (SQLException e) {
+            LOG.error("event_crf restore: id={} is available again but its values are not: {}",
+                    ecb.getId(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "The CRF was restored but its values were not; see the server log."));
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);

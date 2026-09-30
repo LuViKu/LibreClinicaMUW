@@ -2895,7 +2895,26 @@
     },
     "crf": {
       "restore": "Restore CRF",
-      "restoreFailed": "Could not restore CRF — please retry."
+      "restoreFailed": "Could not restore CRF — please retry.",
+      "remove": "Remove",
+      "removeDialog": {
+        "title": "Remove CRF",
+        "subtitle": "{crf} {version} · {event} · {subject}",
+        "intro": "{crf} is taken out of the data of subject {subject} for visit {event}.",
+        "values": "Entered values removed with it: {n}",
+        "notes": "Open queries on those values, which are closed: {n}",
+        "nothing": "No values have been entered on it.",
+        "restoreHint": "Nothing is deleted. Restoring the CRF brings its values back; closed queries stay closed.",
+        "loading": "Checking what the removal takes out…",
+        "reasonLabel": "Reason for the removal",
+        "reasonPlaceholder": "e.g. entered on the wrong subject",
+        "reasonRequired": "Give the reason the CRF is removed.",
+        "confirm": "Remove CRF",
+        "removing": "Removing…",
+        "cancel": "Cancel",
+        "errorGeneric": "The CRF could not be removed.",
+        "errorNetwork": "The server could not be reached."
+      }
     },
     "table": {
       "crfName": "CRF",
