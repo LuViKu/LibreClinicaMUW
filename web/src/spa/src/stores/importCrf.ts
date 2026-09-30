@@ -68,6 +68,8 @@ export const useImportCrfStore = defineStore('importCrf', () => {
   const isCommitting = ref(false)
   const error = ref<string | null>(null)
   const tokenExpired = ref(false)
+  /** What the server listed when it refused a commit, e.g. the values an item definition rejects. */
+  const commitIssues = ref<string[]>([])
 
   /**
    * Upload an ODM 1.3 XML file to {@code POST /api/v1/import}.
@@ -181,11 +183,11 @@ export const useImportCrfStore = defineStore('importCrf', () => {
 
   /**
    * Commit the parked preview. Wraps
-   * {@code POST /api/v1/import/commit}. The 14d cluster ships a
-   * backend that returns 501 (persistence extraction pending) — the
-   * SPA branch lights up the {@code expired:false} path with the
-   * backend message so the operator sees the deterministic
-   * "pipeline staged" notice rather than a silent success.
+   * {@code POST /api/v1/import/commit}, which writes the values through
+   * the legacy import pipeline. A refusal (409 data changed since the
+   * preview, 422 the file cannot be imported) takes the
+   * {@code expired:false} path with the server's message; the findings
+   * it lists land on {@code commitIssues}.
    */
   async function commit(
     reasonForChange: string | null,
@@ -199,6 +201,7 @@ export const useImportCrfStore = defineStore('importCrf', () => {
     const token = preview.value.previewToken
     isCommitting.value = true
     error.value = null
+    commitIssues.value = []
     try {
       const body = await apiPost<ImportCrfCommitResult>(
         '/pages/api/v1/import/commit',
@@ -221,9 +224,12 @@ export const useImportCrfStore = defineStore('importCrf', () => {
         return { ok: false, message, expired: true }
       }
       if (e instanceof ApiError) {
-        const b = e.body as { message?: string } | null
+        const b = e.body as { message?: string; errors?: Array<{ message?: string }> } | null
         const message = b?.message ?? `Commit failed (HTTP ${e.status}).`
         error.value = message
+        commitIssues.value = (b?.errors ?? [])
+          .map((i) => i?.message)
+          .filter((m): m is string => typeof m === 'string' && m.length > 0)
         return { ok: false, message, expired: false }
       }
       if (e instanceof ApiNetworkError) {
@@ -254,6 +260,7 @@ export const useImportCrfStore = defineStore('importCrf', () => {
     isCommitting.value = false
     error.value = null
     tokenExpired.value = false
+    commitIssues.value = []
   }
 
   return {
@@ -265,6 +272,7 @@ export const useImportCrfStore = defineStore('importCrf', () => {
     isCommitting,
     error,
     tokenExpired,
+    commitIssues,
     uploadFile,
     fetchMoreRows,
     commit,

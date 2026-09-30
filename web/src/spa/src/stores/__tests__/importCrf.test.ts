@@ -29,8 +29,8 @@ import type {
  *   <li>{@code fetchMoreRows} — happy-path window append + 410 expiry
  *       (clears preview, sets {@code tokenExpired}).</li>
  *   <li>{@code commit} — happy-path result hydrate, RFC pass-through,
- *       410 expiry, 501 staged-persistence message surfaces in
- *       {@code error}.</li>
+ *       410 expiry, a refusal's message in {@code error} and its
+ *       findings in {@code commitIssues}.</li>
  * </ol>
  */
 vi.mock('@/api/client', async () => {
@@ -277,6 +277,7 @@ describe('useImportCrfStore', () => {
       rowsInserted: 380, rowsOverwritten: 25, rowsSkipped: 5,
       discrepancyNotes: 2,
       committedAt: '2026-06-06T10:00:00Z', auditLogStudyId: 11,
+      ruleWarnings: ['RULE_BP : Discrepancy note, '],
     }
     vi.mocked(apiPost).mockResolvedValueOnce(result)
     const store = useImportCrfStore()
@@ -339,10 +340,13 @@ describe('useImportCrfStore', () => {
     }
   })
 
-  it('commit() surfaces 501 staged-persistence as a regular failure', async () => {
+  it('commit() surfaces a 422 refusal with the values the server lists', async () => {
     vi.mocked(apiPost).mockRejectedValueOnce(
-      new ApiError(501, 'not impl', {
-        message: 'persistence extraction is not yet implemented',
+      new ApiError(422, 'refused', {
+        message: 'The item definitions reject some values; nothing was imported.',
+        errors: [
+          { field: 'file', message: 'I_BLOOD_PRESSURE_SYS_null_1_SS_M002: This value is not an integer.' },
+        ],
       }),
     )
     const store = useImportCrfStore()
@@ -351,8 +355,28 @@ describe('useImportCrfStore', () => {
     expect(res.ok).toBe(false)
     if (!res.ok) {
       expect(res.expired).toBe(false)
-      expect(res.message).toContain('persistence')
+      expect(res.message).toContain('nothing was imported')
     }
+    expect(store.error).toContain('nothing was imported')
+    expect(store.commitIssues).toEqual(['I_BLOOD_PRESSURE_SYS_null_1_SS_M002: This value is not an integer.'])
+  })
+
+  it('commit() clears the previous refusal findings', async () => {
+    vi.mocked(apiPost)
+      .mockRejectedValueOnce(new ApiError(409, 'changed', {
+        message: 'The data changed since the preview.',
+        errors: [{ field: 'file', message: 'stale' }],
+      }))
+      .mockResolvedValueOnce({
+        rowsInserted: 1, rowsOverwritten: 0, rowsSkipped: 0, discrepancyNotes: 0,
+        committedAt: '2026-09-30T10:00:00Z', auditLogStudyId: 1, ruleWarnings: [],
+      } satisfies ImportCrfCommitResult)
+    const store = useImportCrfStore()
+    store.preview = { ...PREVIEW }
+    await store.commit('rfc', 'replace')
+    expect(store.commitIssues).toEqual(['stale'])
+    await store.commit('rfc', 'replace')
+    expect(store.commitIssues).toEqual([])
   })
 
   it('commit() propagates 403', async () => {

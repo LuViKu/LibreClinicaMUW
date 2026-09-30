@@ -2503,7 +2503,8 @@
       "tokenExpired": "Preview expired",
       "reupload": "Re-upload the XML",
       "startOver": "Start over",
-      "failedHeading": "Commit failed"
+      "failedHeading": "Commit failed",
+      "ruleWarningsHeading": "The study's rules reported"
     }
   },
   "signSubject": {

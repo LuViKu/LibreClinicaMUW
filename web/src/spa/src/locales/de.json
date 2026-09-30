@@ -2503,7 +2503,8 @@
       "tokenExpired": "Vorschau abgelaufen",
       "reupload": "XML neu hochladen",
       "startOver": "Neu beginnen",
-      "failedHeading": "Commit fehlgeschlagen"
+      "failedHeading": "Commit fehlgeschlagen",
+      "ruleWarningsHeading": "Die Regeln der Studie meldeten"
     }
   },
   "signSubject": {

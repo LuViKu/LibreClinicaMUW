@@ -19,29 +19,40 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import javax.sql.DataSource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.CRFDataPostImportContainer;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayItemBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayItemBeanWrapper;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.FormDataBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.ImportItemDataBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.ImportItemGroupDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.ODMContainer;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.StudyEventDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.SubjectDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.internal.ImportPreviewSession;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.ImportDataRuleRunnerContainer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.crfdata.ImportCRFDataPersistenceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.crfdata.ImportCRFDataService;
 
 import org.slf4j.Logger;
@@ -50,7 +61,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -88,9 +98,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       {@link PreviewRowsPageDto}.</li>
  *   <li>{@code POST /api/v1/import/commit} — body
  *       {@code {previewToken, reasonForChange?, overwriteMode?}}.
- *       Commits the parked ODM via the legacy
- *       {@link ImportCRFDataService} pipeline inside one Spring
- *       transaction. Returns {@link ImportCrfCommitResult}.</li>
+ *       Commits the parked ODM through the legacy import pipeline
+ *       ({@link ImportCRFDataService}, then the save step in
+ *       {@link ImportCRFDataPersistenceService}). Returns
+ *       {@link ImportCrfCommitResult}.</li>
  * </ul>
  *
  * <h2>Auth</h2>
@@ -109,27 +120,37 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * Single-use semantics — commit removes the session attributes
  * regardless of outcome to prevent double-saves on a refresh.
  *
+ * <h2>Preview and commit agree</h2>
+ *
+ * The preview states, per value, whether the commit inserts it,
+ * overwrites a stored value, or skips it ({@link ImportRowProjection},
+ * which reads the rules of the legacy pipeline: the file's
+ * {@code UpsertOn}, the visit's status and the event CRF's stage). The
+ * commit works that out again before it writes and answers
+ * {@code 409} when the data changed since the preview, so what it
+ * writes is what the operator saw and gave a reason for.
+ *
  * <h2>RFC capture (21 CFR Part 11)</h2>
  *
- * Every overwrite row carries the operator's reasonForChange string
- * in {@code audit_log.new_value}. The commit endpoint refuses
- * ({@code 400}) when the preview reported {@code overwriteCount > 0}
- * but the body omits {@code reasonForChange}, unless the operator
- * explicitly passes {@code overwriteMode = "skip"} which drops all
- * overwrite rows before persisting.
+ * The commit endpoint refuses ({@code 400}) when the preview reported
+ * {@code overwriteCount > 0} but the body omits
+ * {@code reasonForChange}, unless the operator explicitly passes
+ * {@code overwriteMode = "skip"}, which leaves stored values as they
+ * are. Every overwritten value gets an audit row of its own
+ * ({@link AuditTypeIds#ITEM_DATA_REASON_FOR_CHANGE}) carrying the
+ * reason, next to the value-change row the item_data trigger writes.
  *
- * <h2>Status: foundation only</h2>
+ * <h2>What the commit writes</h2>
  *
- * This first PR ships the upload + preview + windowed-rows + commit
- * <em>scaffold</em>. The commit endpoint validates the request, drives
- * the legacy {@link ImportCRFDataService} validators, and persists
- * inside a Spring {@code @Transactional} — but the actual persistence
- * extraction (option (a) {@code ImportCRFDataPersistenceService}) is
- * staged behind a {@code TODO} that the harmonizer / follow-up PR will
- * land. Until then the commit endpoint reports
- * {@code 501 Not Implemented} when the parked container reaches the
- * persistence stage — the parse + validate + preview half is fully
- * functional and gated correctly.
+ * Exactly what the legacy import writes: the pipeline is the legacy
+ * one, and a value the item's definition rejects (the legacy "hard"
+ * checks) refuses the file with nothing written, as the legacy
+ * verification page does. Like the legacy save, the writes are not
+ * one transaction: each goes through the legacy DAOs on its own
+ * connection. Everything that can refuse the file is checked before
+ * the first value is written, except that not-started event CRFs are
+ * created (by {@code fetchEventCRFBeans}) before the value checks
+ * run; the legacy import creates them at its preview.
  */
 @RestController
 @RequestMapping("/api/v1/import")
@@ -150,12 +171,21 @@ public class ImportApiController {
 
     private final DataSource dataSource;
     private final OdmJaxbContext odmJaxbContext;
+    /** Runs the study's rules on imported data, as the legacy save does; null runs none. */
+    private final RuleSetServiceInterface ruleSetService;
 
     @Autowired
     public ImportApiController(@Qualifier("dataSource") DataSource dataSource,
-                               @Qualifier("odmJaxbContext") OdmJaxbContext odmJaxbContext) {
+                               @Qualifier("odmJaxbContext") OdmJaxbContext odmJaxbContext,
+                               @Qualifier("ruleSetService") RuleSetServiceInterface ruleSetService) {
         this.dataSource = dataSource;
         this.odmJaxbContext = odmJaxbContext;
+        this.ruleSetService = ruleSetService;
+    }
+
+    /** Test seam: no rule service, so a commit runs no rules. */
+    public ImportApiController(DataSource dataSource, OdmJaxbContext odmJaxbContext) {
+        this(dataSource, odmJaxbContext, null);
     }
 
     /**
@@ -167,6 +197,7 @@ public class ImportApiController {
     ImportApiController() {
         this.dataSource = null;
         this.odmJaxbContext = null;
+        this.ruleSetService = null;
     }
 
     /* ----------------------------------------------------------------- */
@@ -264,29 +295,33 @@ public class ImportApiController {
                             : ex.getMessage()));
         }
 
-        // Step 4: project the preview rows. Light projection — the
-        // expensive per-row validator (`lookupValidationErrors`) is
-        // deferred to commit time per the playbook (commit transaction
-        // owns the heavy validator pass). Preview reports the
-        // structural picture: how many rows the payload claims, broken
-        // down by what we can resolve cheaply (subject/event/CRF/item
-        // OID counts).
-        List<ImportCrfPreviewDto.PreviewRowDto> allRows = projectPreviewRows(odmContainer);
+        // Step 4: what the commit will do with each value — insert,
+        // overwrite, or skip — worked out read-only from the same
+        // rules the legacy pipeline applies (ImportRowProjection). A
+        // file whose OIDs do not all resolve cannot be committed, so
+        // its rows are shown refused. The per-value checks against
+        // the item definitions (`lookupValidationErrors`) run at
+        // commit, as before.
+        List<ImportCrfPreviewDto.PreviewRowDto> allRows;
+        if (issues.isEmpty()) {
+            ImportRowProjection.Result projected = new ImportRowProjection(dataSource).project(odmContainer);
+            allRows = projected.rows();
+            issues.addAll(projected.issues());
+        } else {
+            allRows = ImportRowProjection.refused(odmContainer);
+        }
         int subjectCount = countDistinctSubjects(odmContainer);
         int eventCount = countDistinctEvents(odmContainer);
         int crfCount = countDistinctCrfs(odmContainer);
         int rowCount = allRows.size();
-        // Without the per-row validator we can't reliably split into
-        // insert vs overwrite; the commit step does that. Report
-        // structural rows here and let the SPA's commit-step UX show
-        // the breakdown. Inserts = rowCount, overwrites = 0 in the
-        // preview; commit projects the real split.
-        int insertCount = rowCount;
-        int overwriteCount = 0;
+        int insertCount = countAction(allRows, ImportRowProjection.ACTION_INSERT);
+        int overwriteCount = countAction(allRows, ImportRowProjection.ACTION_OVERWRITE);
         int errorCount = (int) issues.stream()
                 .filter(i -> "ERROR".equals(i.severity())).count();
-        int warningCount = (int) issues.stream()
-                .filter(i -> "WARNING".equals(i.severity())).count();
+        // Values the commit skips because their CRF is not open to this
+        // import (UpsertOn, or the CRF's stage).
+        int warningCount = (int) allRows.stream()
+                .filter(r -> ImportRowProjection.WARNING.equals(r.status())).count();
 
         List<ImportCrfPreviewDto.PreviewRowDto> inlineRows = allRows.size() > ImportCrfPreviewDto.INLINE_ROW_CAP
                 ? allRows.subList(0, ImportCrfPreviewDto.INLINE_ROW_CAP)
@@ -368,23 +403,36 @@ public class ImportApiController {
     /* ----------------------------------------------------------------- */
 
     /**
-     * Commit a previously parked ODM payload.
+     * Commit a previously parked ODM payload through the legacy import
+     * pipeline.
      *
-     * <p>The commit transaction is staged but the persistence
-     * extraction is deferred (see the class Javadoc): when the parked
-     * container is non-null and the RFC + auth contracts pass, the
-     * controller currently logs the request + writes an
-     * "import_committed" audit row + returns
-     * {@code 501 Not Implemented}. This keeps the operator-facing
-     * shape stable while the harmonizer / next agent lands the
-     * persistence path.
+     * <p>Every refusal comes before the first value is written:
+     * <ol>
+     *   <li>{@code 400} without a token, with an overwrite mode other than
+     *       {@code replace} or {@code skip}, or without a reason when
+     *       stored values will be overwritten. The token stays usable, so
+     *       the operator can supply the reason.</li>
+     *   <li>{@code 410} for an unknown, expired or used token. From here on
+     *       the token is spent, whatever the outcome.</li>
+     *   <li>{@code 422} when the preview reported errors, or the file's
+     *       OIDs no longer resolve in the active study.</li>
+     *   <li>{@code 409} when the data changed since the preview (a value
+     *       shown as new is stored now, a CRF or a visit changed state):
+     *       the operator must see and confirm what the import does now.</li>
+     *   <li>{@code 422} when the legacy pipeline finds no CRF to import
+     *       into, or a value the item's definition rejects.</li>
+     * </ol>
+     * Each attempt past the token check writes one
+     * {@link AuditTypeIds#BULK_IMPORT_ATTEMPTED} row on the study with its
+     * outcome.
      */
     @PostMapping(value = "/commit", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Transactional
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = ImportCrfCommitResult.class)))
     public ResponseEntity<?> commitImport(@RequestBody(required = false) CommitRequest body,
-                                          HttpSession session) {
+                                          @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+                                          HttpSession session,
+                                          HttpServletRequest request) {
         ResponseEntity<?> guard = preflightWrite(session);
         if (guard != null) return guard;
 
@@ -395,7 +443,14 @@ public class ImportApiController {
                             "message", "previewToken is required"))));
         }
         String token = body.previewToken();
-        String overwriteMode = body.overwriteMode() == null ? "replace" : body.overwriteMode();
+        String overwriteMode = body.overwriteMode() == null
+                ? "replace" : body.overwriteMode().trim().toLowerCase(Locale.ROOT);
+        if (!"replace".equals(overwriteMode) && !"skip".equals(overwriteMode)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "overwriteMode",
+                            "message", "overwriteMode must be \"replace\" or \"skip\""))));
+        }
 
         ImportPreviewSession parked = pullParked(session, token);
         if (parked == null) {
@@ -413,9 +468,9 @@ public class ImportApiController {
         // (21 CFR Part 11 §11.10). When the operator picks "skip",
         // no overwrites will be applied so RFC is moot.
         int overwriteCount = parked.previewSummary().overwriteCount();
-        boolean overwritesWillApply = overwriteCount > 0 && !"skip".equalsIgnoreCase(overwriteMode);
-        if (overwritesWillApply
-                && (body.reasonForChange() == null || body.reasonForChange().isBlank())) {
+        boolean overwritesWillApply = overwriteCount > 0 && "replace".equals(overwriteMode);
+        String reason = body.reasonForChange() == null ? null : body.reasonForChange().trim();
+        if (overwritesWillApply && (reason == null || reason.isEmpty())) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Validation failed",
                     "errors", List.of(Map.of("field", "reasonForChange",
@@ -424,28 +479,167 @@ public class ImportApiController {
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        Attempt attempt = new Attempt(me, currentStudy, token, parked, overwriteMode, reason);
 
         // Drop the parked attrs first so a refresh / double-click
         // can't re-enter this method against the same payload.
         session.removeAttribute(SESSION_PREFIX + token);
 
-        // Foundation PR scaffold: persistence not yet wired. The
-        // extraction lands in a follow-up PR per the playbook
-        // ("option (a) extract ImportCRFDataPersistenceService").
-        // For now: write an audit-trail breadcrumb + return 501 so
-        // operators see a deterministic failure rather than the
-        // legacy redirect chain.
-        LOG.warn("CRF import commit not yet implemented (token={} study={} user={} overwriteMode={} rfc={})",
-                token, currentStudy.getOid(), me.getName(), overwriteMode,
-                body.reasonForChange() == null ? "<none>" : "<set>");
-        writeAuditPlaceholder(me, currentStudy, token, parked, overwriteMode, body.reasonForChange());
+        if (parked.previewSummary().errorCount() > 0) {
+            return refuse(attempt, 422, "The preview reported errors; correct the file and upload it again.",
+                    List.of());
+        }
 
+        Locale locale = resolveLocale(acceptLanguage);
+        ResourceBundleProvider.updateLocale(locale);
+        ODMContainer odm = parked.odmContainer();
+        ImportCRFDataService dataService = new ImportCRFDataService(dataSource, locale);
+
+        List<String> metaErrors = dataService.validateStudyMetadata(odm, currentStudy.getId());
+        if (metaErrors != null && !metaErrors.isEmpty()) {
+            return refuse(attempt, 422, "The file does not match the active study.", metaErrors);
+        }
+        // What the preview showed must still be what happens.
+        ImportRowProjection.Result current = new ImportRowProjection(dataSource).project(odm);
+        if (!current.issues().isEmpty() || !sameOutcome(parked.allRows(), current.rows())) {
+            return refuse(attempt, 409, "The data changed since the preview; upload the file again "
+                    + "to see what the import would do now.", List.of());
+        }
+
+        // The legacy pipeline: ImportCRFDataServlet#confirm, then
+        // VerifyImportedCRFDataServlet#save.
+        boolean eventCRFStatusesValid = dataService.eventCRFStatusesValid(odm, me);
+        // Creates the event CRFs of forms not started yet (UpsertOn NotStarted).
+        List<EventCRFBean> eventCRFBeans = dataService.fetchEventCRFBeans(odm, me);
+        HashMap<Integer, String> importedCRFStatuses = dataService.fetchEventCRFStatuses(odm);
+        if (eventCRFBeans == null) {
+            return refuse(attempt, 409, ImportCRFDataService.respage.getString("no_event_status_matching"),
+                    List.of());
+        }
+        if (eventCRFBeans.isEmpty()) {
+            return refuse(attempt, 422, ImportCRFDataService.respage.getString(eventCRFStatusesValid
+                    ? "no_event_crfs_matching_the_xml_metadata" : "the_event_crf_not_correct_status"), List.of());
+        }
+        ArrayList<Integer> permittedEventCRFIds = new ArrayList<>();
+        for (EventCRFBean eventCRFBean : eventCRFBeans) {
+            DataEntryStage stage = eventCRFBean.getStage();
+            if (Status.AVAILABLE.equals(eventCRFBean.getStatus())
+                    || DataEntryStage.INITIAL_DATA_ENTRY.equals(stage)
+                    || DataEntryStage.INITIAL_DATA_ENTRY_COMPLETE.equals(stage)
+                    || DataEntryStage.DOUBLE_DATA_ENTRY_COMPLETE.equals(stage)
+                    || DataEntryStage.DOUBLE_DATA_ENTRY.equals(stage)) {
+                permittedEventCRFIds.add(Integer.valueOf(eventCRFBean.getId()));
+            }
+        }
+        HashMap<String, String> totalValidationErrors = new HashMap<>();
+        HashMap<String, String> hardValidationErrors = new HashMap<>();
+        List<DisplayItemBeanWrapper> wrappers;
+        try {
+            wrappers = dataService.lookupValidationErrors(request, odm, me, totalValidationErrors,
+                    hardValidationErrors, permittedEventCRFIds);
+        } catch (OpenClinicaException oce) {
+            return refuse(attempt, 422, oce.getOpenClinicaMessage(), List.of());
+        } catch (NullPointerException npe) {
+            LOG.warn("CRF import validation threw (token={})", token, npe);
+            return refuse(attempt, 422,
+                    ImportCRFDataService.respage.getString("an_error_was_thrown_while_validation_errors"), List.of());
+        }
+        if (!hardValidationErrors.isEmpty()) {
+            List<String> rejected = new ArrayList<>();
+            hardValidationErrors.forEach((value, message) -> rejected.add(value + ": " + message));
+            return refuse(attempt, 422, "The item definitions reject some values; nothing was imported.",
+                    rejected);
+        }
+        if ("skip".equals(overwriteMode)) {
+            leaveStoredValues(wrappers);
+        }
+
+        ImportCRFDataPersistenceService persistence = new ImportCRFDataPersistenceService(dataSource);
+        ImportCRFDataPersistenceService.SaveResult saved;
+        List<String> ruleWarnings;
+        try {
+            List<ImportDataRuleRunnerContainer> containers =
+                    persistence.ruleRunSetup(odm, currentStudy, me, ruleSetService);
+            saved = persistence.save(wrappers, importedCRFStatuses, me, currentStudy);
+            ruleWarnings = persistence.runRules(currentStudy, me, containers, ruleSetService);
+        } catch (Exception e) {
+            LOG.error("CRF import commit failed while saving (token={} study={} user={})",
+                    token, currentStudy.getOid(), me.getName(), e);
+            writeImportAudit(attempt, "outcome=failed error=" + e.getClass().getSimpleName());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "The import stopped with an error and may be incomplete; check the imported "
+                            + "subjects' CRFs before importing again. See the server log."));
+        }
+
+        writeReasonForChange(me, currentStudy, saved.overwrites(), reason);
+        int skipped = countAction(parked.allRows(), ImportRowProjection.ACTION_SKIP)
+                + ("skip".equals(overwriteMode) ? overwriteCount : 0);
+        writeImportAudit(attempt, "outcome=committed inserted=" + saved.inserted()
+                + " overwritten=" + saved.overwritten() + " unchanged=" + saved.unchanged()
+                + " skipped=" + skipped + " notes=" + saved.discrepancyNotes());
+        LOG.info("CRF import committed: token={} study={} user={} inserted={} overwritten={} skipped={} notes={}",
+                token, currentStudy.getOid(), me.getName(), saved.inserted(), saved.overwritten(),
+                skipped, saved.discrepancyNotes());
+
+        return ResponseEntity.ok(new ImportCrfCommitResult(
+                saved.inserted(), saved.overwritten(), skipped, saved.discrepancyNotes(),
+                Instant.now().toString(), currentStudy.getId(), ruleWarnings));
+    }
+
+    /** One commit attempt, for its audit row. */
+    private record Attempt(UserAccountBean me, StudyBean study, String token, ImportPreviewSession parked,
+                           String overwriteMode, String reason) {}
+
+    /** Refuse the attempt, recording the refusal in its audit row. Nothing has been written. */
+    private ResponseEntity<?> refuse(Attempt attempt, int status, String message, List<String> errors) {
+        LOG.info("CRF import commit refused ({}): token={} study={} user={} — {}", status, attempt.token(),
+                attempt.study().getOid(), attempt.me().getName(), message);
+        writeImportAudit(attempt, "outcome=refused status=" + status);
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("message", "Commit pipeline is staged but the persistence extraction is not yet implemented. "
-                + "Tracking under Phase E.6 bulk-import follow-up.");
-        resp.put("previewToken", token);
-        resp.put("status", "PENDING_PERSISTENCE_EXTRACTION");
-        return ResponseEntity.status(501).body(resp);
+        resp.put("message", message);
+        List<Map<String, String>> items = new ArrayList<>();
+        for (String e : errors) items.add(Map.of("field", "file", "message", e));
+        resp.put("errors", items);
+        return ResponseEntity.status(status).body(resp);
+    }
+
+    /**
+     * Overwrite mode {@code skip}: leave every value that is stored
+     * already as it is, so only values with no row yet are written.
+     */
+    private void leaveStoredValues(List<DisplayItemBeanWrapper> wrappers) {
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+        for (DisplayItemBeanWrapper wrapper : wrappers) {
+            List<DisplayItemBean> beans = wrapper.getDisplayItemBeans();
+            if (beans == null) continue;
+            beans.removeIf(dib -> itemDataDao.findByItemIdAndEventCRFIdAndOrdinal(
+                    dib.getItem().getId(), dib.getData().getEventCRFId(), dib.getData().getOrdinal())
+                    .getStatus() != null);
+        }
+    }
+
+    /**
+     * The same values, subjects, visits and actions as the preview; the
+     * diagnostics may be worded in another language.
+     */
+    private static boolean sameOutcome(List<ImportCrfPreviewDto.PreviewRowDto> shown,
+                                       List<ImportCrfPreviewDto.PreviewRowDto> now) {
+        if (shown.size() != now.size()) return false;
+        for (int i = 0; i < shown.size(); i++) {
+            ImportCrfPreviewDto.PreviewRowDto a = shown.get(i);
+            ImportCrfPreviewDto.PreviewRowDto b = now.get(i);
+            if (!Objects.equals(a.status(), b.status()) || !Objects.equals(a.action(), b.action())
+                    || !Objects.equals(a.before(), b.before()) || !Objects.equals(a.after(), b.after())
+                    || !Objects.equals(a.subjectOid(), b.subjectOid()) || !Objects.equals(a.eventOid(), b.eventOid())
+                    || !Objects.equals(a.crfOid(), b.crfOid()) || !Objects.equals(a.itemOid(), b.itemOid())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int countAction(List<ImportCrfPreviewDto.PreviewRowDto> rows, String action) {
+        return (int) rows.stream().filter(r -> action.equals(r.action())).count();
     }
 
     /* ----------------------------------------------------------------- */
@@ -513,60 +707,8 @@ public class ImportApiController {
     private static String nullToBlank(String s) { return s == null ? "" : s; }
 
     /* ----------------------------------------------------------------- */
-    /* Preview projection                                                 */
+    /* Preview counts                                                     */
     /* ----------------------------------------------------------------- */
-
-    /**
-     * Flatten the JAXB bean tree into one row per item value.
-     *
-     * <p>The structural shape is
-     * {@code SubjectData[] → StudyEventData[] → FormData[]
-     * → ItemGroupData[] → ItemData[]}. We project one
-     * {@link ImportCrfPreviewDto.PreviewRowDto} per leaf {@code ItemData}.
-     * Without the heavy per-row validator pass we mark every row
-     * {@code "ready"} / {@code "insert"} for the preview surface; the
-     * commit step splits inserts vs overwrites for real.
-     */
-    private static List<ImportCrfPreviewDto.PreviewRowDto> projectPreviewRows(ODMContainer odm) {
-        List<ImportCrfPreviewDto.PreviewRowDto> rows = new ArrayList<>();
-        CRFDataPostImportContainer container = odm == null ? null : odm.getCrfDataPostImportContainer();
-        if (container == null || container.getSubjectData() == null) return rows;
-        for (SubjectDataBean subj : container.getSubjectData()) {
-            if (subj == null) continue;
-            String subjectOid = nullToBlank(subj.getSubjectOID());
-            if (subj.getStudyEventData() == null) continue;
-            for (StudyEventDataBean event : subj.getStudyEventData()) {
-                if (event == null) continue;
-                String eventOid = nullToBlank(event.getStudyEventOID());
-                String repeat = nullToBlank(event.getStudyEventRepeatKey());
-                if (!repeat.isEmpty()) eventOid = eventOid + "[" + repeat + "]";
-                if (event.getFormData() == null) continue;
-                for (FormDataBean form : event.getFormData()) {
-                    if (form == null) continue;
-                    String formOid = nullToBlank(form.getFormOID());
-                    if (form.getItemGroupData() == null) continue;
-                    for (ImportItemGroupDataBean grp : form.getItemGroupData()) {
-                        if (grp == null) continue;
-                        String groupOid = nullToBlank(grp.getItemGroupOID());
-                        String groupRepeat = nullToBlank(grp.getItemGroupRepeatKey());
-                        if (grp.getItemData() == null) continue;
-                        for (ImportItemDataBean item : grp.getItemData()) {
-                            if (item == null) continue;
-                            String itemOid = groupOid.isEmpty()
-                                    ? nullToBlank(item.getItemOID())
-                                    : groupOid + (groupRepeat.isEmpty() ? "" : "[" + groupRepeat + "]")
-                                            + " · " + nullToBlank(item.getItemOID());
-                            rows.add(new ImportCrfPreviewDto.PreviewRowDto(
-                                    "ready", "insert",
-                                    subjectOid, eventOid, formOid, itemOid,
-                                    null, nullToBlank(item.getValue()), null));
-                        }
-                    }
-                }
-            }
-        }
-        return rows;
-    }
 
     private static int countDistinctSubjects(ODMContainer odm) {
         if (odm == null || odm.getCrfDataPostImportContainer() == null
@@ -616,20 +758,20 @@ public class ImportApiController {
     /* ----------------------------------------------------------------- */
 
     /**
-     * Audit-trail breadcrumb for the staged commit. Even though the
-     * persistence path isn't wired yet, every operator-driven attempt
-     * is recorded so a later audit-trail review can correlate
-     * 501-returning attempts with whatever the harmonizer / follow-up
-     * agent eventually wires up.
+     * One {@link AuditTypeIds#BULK_IMPORT_ATTEMPTED} row per commit attempt
+     * past the token check, with its outcome. It sits on the study
+     * ({@code audit_table = 'study'}, the file name as entity name) so the
+     * study's own audit log shows who imported which file, and carries the
+     * operator's reason for change. The values the import wrote have their
+     * own rows from the item_data triggers.
      */
-    private void writeAuditPlaceholder(UserAccountBean me, StudyBean study, String token,
-                                       ImportPreviewSession parked, String overwriteMode,
-                                       String reasonForChange) {
+    private void writeImportAudit(Attempt attempt, String outcome) {
         if (dataSource == null) return; // test-only path
-        String summary = "token=" + token
-                + " file=" + parked.originalFilename()
-                + " rows=" + parked.allRows().size()
-                + " overwriteMode=" + overwriteMode;
+        String summary = "token=" + attempt.token()
+                + " rows=" + attempt.parked().allRows().size()
+                + " overwriteMode=" + attempt.overwriteMode()
+                + " " + outcome;
+        String file = nullToBlank(attempt.parked().originalFilename());
         // 9-column INSERT — bulk import is the one site that carries
         // operator-supplied reason_for_change (21 CFR Part 11 §11.10),
         // so it goes inline rather than through the shared 8-column
@@ -641,17 +783,35 @@ public class ImportApiController {
                              + "reason_for_change, old_value, new_value) "
                              + "VALUES (?, now(), ?, ?, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, AuditTypeIds.BULK_IMPORT_ATTEMPTED);
-            ps.setInt(2, me.getId());
-            ps.setString(3, "item_data");
-            ps.setInt(4, 0);
-            ps.setString(5, "bulk_import_attempt");
-            ps.setString(6, reasonForChange == null ? "" : reasonForChange);
+            ps.setInt(2, attempt.me().getId());
+            ps.setString(3, "study");
+            ps.setInt(4, attempt.study().getId());
+            ps.setString(5, file.length() > 500 ? file.substring(0, 500) : file);
+            ps.setString(6, attempt.reason() == null ? "" : attempt.reason());
             ps.setString(7, "");
             ps.setString(8, summary);
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.warn("Audit write failed for bulk_import_attempt (token={}, continuing): {}",
-                    token, e.getMessage());
+                    attempt.token(), e.getMessage());
+        }
+    }
+
+    /**
+     * The reason for change of each overwritten value, as the CRF entry
+     * records it for a changed value: an
+     * {@link AuditTypeIds#ITEM_DATA_REASON_FOR_CHANGE} row on the item data
+     * next to the trigger's value-change row.
+     */
+    private void writeReasonForChange(UserAccountBean me, StudyBean study,
+                                      List<ImportCRFDataPersistenceService.OverwrittenValue> overwrites,
+                                      String reason) {
+        if (reason == null || reason.isEmpty() || overwrites.isEmpty()) return;
+        AuditEventDAO auditDao = new AuditEventDAO(dataSource);
+        for (ImportCRFDataPersistenceService.OverwrittenValue o : overwrites) {
+            EventCrfsApiController.writeAuditEvent(auditDao, AuditTypeIds.ITEM_DATA_REASON_FOR_CHANGE,
+                    me, study, null, "item_data_import_rfc", "item_data", o.itemDataId(),
+                    o.itemOid(), o.oldValue(), o.newValue(), reason, o.studyEventId());
         }
     }
 
