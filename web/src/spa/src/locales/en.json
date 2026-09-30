@@ -2041,8 +2041,6 @@
     "edit": "Edit",
     "remove": "Remove",
     "removeConfirm": "Detach CRF \"{crf}\" from event \"{event}\"? Existing data on this CRF stays in the audit trail; new entries against this event will no longer include the CRF. The action is recorded in the audit trail.",
-    "showAdvanced": "Show participant-form options",
-    "hideAdvanced": "Hide participant-form options",
     "auditNote": "All attaches, role changes and detaches are recorded in the audit trail.",
     "sdvLabel": "Source-data verification",
     "required": "Required",
@@ -2050,9 +2048,6 @@
     "electronicSignature": "Electronic signature",
     "hideCrf": "Hidden from data entry",
     "decisionCondition": "Decision condition",
-    "participantForm": "Participant form (Enketo)",
-    "allowAnonymousSubmission": "Allow anonymous submission",
-    "submissionUrl": "Submission URL",
     "sdv": {
       "NOTREQUIRED": "Not required",
       "PARTIALREQUIRED": "Partial",
@@ -2672,7 +2667,6 @@
       "interviewDateEditable": "Interview date editable",
       "secondaryLabelViewable": "Secondary label viewable",
       "adminForcedReasonForChange": "Force reason-for-change after completion",
-      "participantPortal": "Participant portal",
       "randomization": "Randomization"
     },
     "enums": {
