@@ -437,18 +437,6 @@ public class RuleSetService implements RuleSetServiceInterface {
 
     /*
      * (non-Javadoc)
-     * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetById(at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, java.lang.String,
-     * at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean)
-     */
-    @Override
-    public List<RuleSetRuleBean> getRuleSetById(StudyBean study, String id, RuleBean ruleBean) {
-        logger.debug(" Study Id {} ", study.getId());
-        RuleSetBean ruleSetBean = getRuleSetDao().findById(Integer.valueOf(id));
-        return getRuleSetRuleDao().findByRuleSetBeanAndRuleBean(ruleSetBean, ruleBean);
-    }
-
-    /*
-     * (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetsByCrfAndStudy(at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean,
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean)
      */
