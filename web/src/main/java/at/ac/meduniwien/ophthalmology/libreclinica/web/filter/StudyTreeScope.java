@@ -55,6 +55,12 @@ public class StudyTreeScope {
             + " JOIN study s ON s.study_id = sed.study_id"
             + " WHERE sed.study_event_definition_id = ?";
 
+    private static final String EVENT_DEFINITION_CRF_STUDY =
+            "SELECT s.study_id, s.parent_study_id FROM event_definition_crf edc"
+            + " JOIN study_event_definition sed ON sed.study_event_definition_id = edc.study_event_definition_id"
+            + " JOIN study s ON s.study_id = sed.study_id"
+            + " WHERE edc.event_definition_crf_id = ?";
+
     private static final String EVENT_CRF_CRF =
             "SELECT cv.crf_id FROM event_crf ec"
             + " JOIN crf_version cv ON cv.crf_version_id = ec.crf_version_id"
@@ -85,6 +91,15 @@ public class StudyTreeScope {
      */
     public boolean containsEventDefinition(StudyBean currentStudy, int definitionId) {
         return inTree(definitionStudy(currentStudy), lookupStudy(EVENT_DEFINITION_STUDY, definitionId));
+    }
+
+    /**
+     * True when the event definition CRF (a CRF's place in an event definition)
+     * belongs to a definition {@code currentStudy} schedules from, by the rule
+     * of {@link #containsEventDefinition}.
+     */
+    public boolean containsEventDefinitionCrf(StudyBean currentStudy, int eventDefinitionCrfId) {
+        return inTree(definitionStudy(currentStudy), lookupStudy(EVENT_DEFINITION_CRF_STUDY, eventDefinitionCrfId));
     }
 
     /** The CRF an event CRF's current version belongs to, or null when unknown. */

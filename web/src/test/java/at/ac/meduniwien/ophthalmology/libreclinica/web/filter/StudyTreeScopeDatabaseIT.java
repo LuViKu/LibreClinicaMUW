@@ -67,6 +67,21 @@ class StudyTreeScopeDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    /** {event_definition_crf_id, study_id of its definition} of some seeded event definition CRF of a top-level study. */
+    private static int[] anyEventDefinitionCrf() throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT edc.event_definition_crf_id, s.study_id FROM event_definition_crf edc"
+                     + " JOIN study_event_definition sed ON sed.study_event_definition_id = edc.study_event_definition_id"
+                     + " JOIN study s ON s.study_id = sed.study_id"
+                     + " WHERE COALESCE(s.parent_study_id, 0) = 0"
+                     + " ORDER BY edc.event_definition_crf_id LIMIT 1");
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next(), "the demo seed has event definition CRFs");
+            return new int[] {rs.getInt(1), rs.getInt(2)};
+        }
+    }
+
     /** A top-level study that is neither the given study nor its parent, or -1. */
     private static int unrelatedTopLevelStudy(int studyId, int parentId) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
@@ -129,6 +144,19 @@ class StudyTreeScopeDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "a session in one of the study's sites schedules from the parent's definitions");
         assertFalse(scope.containsEventDefinition(other > 0 ? study(other, 0) : study(Integer.MAX_VALUE, 0), def[0]));
         assertFalse(scope.containsEventDefinition(study(def[1], 0), Integer.MAX_VALUE));
+    }
+
+    @Test
+    void eventDefinitionCrfsServeTheStudyOfTheirDefinitionAndItsSites() throws Exception {
+        int[] edc = anyEventDefinitionCrf();
+        int other = unrelatedTopLevelStudy(edc[1], 0);
+        StudyTreeScope scope = new StudyTreeScope(DATA_SOURCE);
+
+        assertTrue(scope.containsEventDefinitionCrf(study(edc[1], 0), edc[0]));
+        assertTrue(scope.containsEventDefinitionCrf(study(Integer.MAX_VALUE, edc[1]), edc[0]),
+                "a session in one of the study's sites uses the parent's definitions");
+        assertFalse(scope.containsEventDefinitionCrf(other > 0 ? study(other, 0) : study(Integer.MAX_VALUE, 0), edc[0]));
+        assertFalse(scope.containsEventDefinitionCrf(study(edc[1], 0), Integer.MAX_VALUE));
     }
 
     @Test
