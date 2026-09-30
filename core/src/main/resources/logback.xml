@@ -106,7 +106,7 @@
   <appender name="LEGACY_ACCESS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <file>${log.dir}-legacy-access.log</file>
     <encoder>
-      <pattern>%date{ISO8601} %mdc{reqId} %msg%n</pattern>
+      <pattern>%date{ISO8601} ${reqIdField} ${safeMsg}%n</pattern>
     </encoder>
     <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
       <fileNamePattern>${log.dir}-legacy-access.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
