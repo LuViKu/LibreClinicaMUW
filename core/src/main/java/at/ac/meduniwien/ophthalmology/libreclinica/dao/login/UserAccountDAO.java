@@ -282,6 +282,16 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
     }
 
     /**
+     * Records a visit now: writes {@code date_lastvisit} and nothing else.
+     * The SPA's login uses it; {@code MainMenuServlet} sets the same column
+     * through {@link #update}, which rewrites the whole row.
+     */
+    public void updateLastVisitDate(Integer userId) {
+        HashMap<Integer, Object> variables = variables(new Timestamp(System.currentTimeMillis()), userId);
+        this.executeUpdate(digester.getQuery("updateLastVisitDate"), variables);
+    }
+
+    /**
      * Phase D.3 (DR-014): look up a user by their federated identity.
      * Used by the SSO pre-auth path
      * ({@code RequestHeaderAuthenticationFilter} →
