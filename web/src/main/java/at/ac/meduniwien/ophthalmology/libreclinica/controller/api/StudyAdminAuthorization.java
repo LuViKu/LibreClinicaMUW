@@ -188,6 +188,42 @@ public final class StudyAdminAuthorization {
         return userMayEditStudy(me, bindings, target);
     }
 
+    /** The roles {@code SubmitDataServlet.mayViewData} lets see a study's data. */
+    private static final List<Role> STUDY_DATA_VIEWERS = List.of(
+            Role.COORDINATOR, Role.STUDYDIRECTOR, Role.INVESTIGATOR,
+            Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2, Role.MONITOR);
+
+    /**
+     * @return {@code true} when {@code me} may read {@code target}'s
+     *         design (its ODM metadata). A system administrator, or a
+     *         user with an active binding on the study, or on its parent
+     *         when the study is a site, in one of the roles that may view
+     *         the study's data. That is the gate of
+     *         {@code DownloadStudyMetadataServlet}, whose session role on a
+     *         site is the higher of the site and parent bindings.
+     */
+    static boolean userMayViewStudyDesign(UserAccountBean me, StudyBean target, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (target == null || dataSource == null) return false;
+        ArrayList<StudyUserRoleBean> bindings;
+        try {
+            bindings = new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName());
+        } catch (RuntimeException e) {
+            // Fail closed, as userMayEditStudy does.
+            return false;
+        }
+        if (bindings == null) return false;
+        for (StudyUserRoleBean b : bindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            boolean onTarget = b.getStudyId() == target.getId()
+                    || (target.getParentStudyId() > 0 && b.getStudyId() == target.getParentStudyId());
+            if (onTarget && STUDY_DATA_VIEWERS.contains(b.getRole())) return true;
+        }
+        return false;
+    }
+
     /**
      * @return {@code true} when {@code me} may transition study
      *         status (LOCK / FROZEN / DELETE / restore). Sysadmin only

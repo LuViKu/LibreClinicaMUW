@@ -43,13 +43,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * replacement of the legacy {@code DownloadStudyMetadataServlet}; the
  * document is generated the same way ({@link StudyMetadataOdm}).
  *
- * <p>Access: a system administrator, or a study director or coordinator
- * bound to the study or to its parent ({@link
- * StudyAdminAuthorization#userMayEditStudy}). The servlet is wider: it
- * also admits investigators, data entry persons and monitors of the
- * session's study. The document carries the study's administrative
- * data (its users), and archiving at study close is a study-management
- * task, so this endpoint keeps to the study-management roles.
+ * <p>Access is the servlet's ({@link
+ * StudyAdminAuthorization#userMayViewStudyDesign}): a system
+ * administrator, or anyone whose active role on the study, or on its
+ * parent when the study is a site, may view the study's data: study
+ * director, coordinator, investigator, data entry person (both kinds)
+ * and monitor. The document is the study's design and its
+ * administrative data; it holds no subject data. Keeping the servlet's
+ * gate means its page can be retired for every role that uses it.
  */
 @RestController
 @RequestMapping("/api/v1/studies")
@@ -84,7 +85,7 @@ public class StudyMetadataApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
-        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
+        if (!StudyAdminAuthorization.userMayViewStudyDesign(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit downloading this study's metadata"));
         }
