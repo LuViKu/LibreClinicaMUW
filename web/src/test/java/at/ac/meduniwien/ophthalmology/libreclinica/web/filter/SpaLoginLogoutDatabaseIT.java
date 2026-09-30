@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.filter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -16,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,7 +50,9 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -63,6 +67,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AbstractApiControllerDatabaseIT;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuthApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.MeApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
@@ -78,7 +83,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
- * The SPA's sign-in against a real database, through the login
+ * The SPA's sign-in and sign-out against a real database, through the login
  * filter and handlers exactly as {@code applicationContext-security.xml}
  * wires them. What the XML takes from elsewhere is supplied here: a
  * local-password provider over the user query of
@@ -88,7 +93,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  *
  * <p>The SPA's login answers 204 or 401 with the reason as JSON and sets
  * up what the SPA used to get from following the redirect to
- * {@code /MainMenu}; a browser form login still gets that redirect.
+ * {@code /MainMenu}; a browser form login still gets that redirect. The
+ * SPA's sign-out writes the logout audit row and ends the session.
  */
 class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
 
@@ -111,6 +117,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int TWO_FACTOR = 30107;
     private static final int LEGACY = 30108;
     private static final int LEGACY_LOCKED = 30109;
+    private static final int LOGOUT = 30110;
 
     private static Properties savedSqlInitParams;
 
@@ -132,6 +139,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         seedUser(TWO_FACTOR, "spa-2fa", "Investigator", "current_date");
         seedUser(LEGACY, "spa-legacy", "Investigator", "current_date");
         seedUser(LEGACY_LOCKED, "spa-legacy-locked", "Investigator", "current_date");
+        seedUser(LOGOUT, "spa-logout", "Investigator", "current_date");
         sql("UPDATE user_account SET status_id = " + Status.LOCKED.getId()
                 + ", account_non_locked = false WHERE user_id = " + LEGACY_LOCKED);
         // Lock after three consecutive failures (off by default).
@@ -430,5 +438,33 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(302, response.getStatus());
         assertEquals("/LibreClinica/pages/login/login?action=errorLocked", response.getRedirectedUrl());
         assertEquals(List.of(LoginStatus.FAILED_LOGIN_LOCKED), audited());
+    }
+
+    // --- the SPA's sign-out --------------------------------------------------
+
+    @Test
+    void theSpaLogoutWritesTheLogoutRowAndEndsTheSession() throws Exception {
+        assertEquals(204, login("spa-logout", PASSWORD, JSON).getStatus());
+        MockHttpSession session = session();
+        SessionRegistry registry = beans.getBean("sessionRegistry", SessionRegistry.class);
+        assertNotNull(registry.getSessionInformation(session.getId()), "the login registered the session");
+        CRFLocker locker = beans.getBean("crfLocker", CRFLocker.class);
+        locker.lock(4711, LOGOUT);
+        audit.clear();
+        // What the security filter chain loads for the request.
+        SecurityContextHolder.setContext((SecurityContext)
+                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY));
+
+        MockMvcBuilders.standaloneSetup(new AuthApiController(registry, locker)).build()
+                .perform(post("/api/v1/auth/logout").session(session))
+                .andExpect(status().isNoContent());
+
+        assertTrue(session.isInvalid(), "the session is invalidated");
+        assertNull(SecurityContextHolder.getContext().getAuthentication(), "the security context is cleared");
+        assertNull(registry.getSessionInformation(session.getId()));
+        assertFalse(locker.isLocked(4711), "the user's CRF locks are released");
+        assertEquals(List.of(LoginStatus.SUCCESSFUL_LOGOUT), audited(), "one logout row");
+        assertEquals("spa-logout", audit.get(0).getUserName());
+        assertEquals(LOGOUT, audit.get(0).getUserAccountId());
     }
 }
