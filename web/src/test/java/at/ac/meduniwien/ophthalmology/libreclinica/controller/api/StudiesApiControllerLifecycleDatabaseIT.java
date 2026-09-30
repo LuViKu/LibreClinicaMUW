@@ -44,9 +44,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * <p>The fixture is one top-level study with two sites and one row of
  * every kind the servlets cascade to, plus rows that were removed on
  * their own before the study: a removed site, subject, definition,
- * event CRF and item, the role of a removed user account and a revoked
- * role. Removal must auto-remove the live rows and leave those alone;
- * restore must bring back exactly what the removal took.
+ * event CRF and item, the study subject of a removed person, the role of
+ * a removed user account and a revoked role. Removal must auto-remove
+ * the live rows and leave those alone; restore must bring back exactly
+ * what the removal took.
  *
  * <p>The tests run in order: preview, the refusals, remove, restore.
  */
@@ -62,6 +63,7 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     private static int subjSigned;
     private static int subjRemoved;
     private static int subjOnRemovedSite;
+    private static int subjOfRemovedPerson;
     private static int groupClass;
     private static int mapLive;
     private static int mapOfRemovedSubject;
@@ -72,14 +74,17 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     private static int evSigned;
     private static int evOfRemovedSubject;
     private static int evOfRemovedDef;
+    private static int evOfRemovedPerson;
     private static int ecLive;
     private static int ecRemoved;
     private static int ecOfSignedSubject;
     private static int ecOfRemovedSubject;
+    private static int ecOfRemovedPerson;
     private static int idLive;
     private static int idRemoved;
     private static int idOfSignedSubject;
     private static int idOfRemovedSubject;
+    private static int idOfRemovedPerson;
     private static int dataset;
 
     @BeforeAll
@@ -105,6 +110,13 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
             subjSigned = insertStudySubject(c, "CASC-2", siteLive, 8);
             subjRemoved = insertStudySubject(c, "CASC-3", study, 5);
             subjOnRemovedSite = insertStudySubject(c, "CASC-4", siteRemoved, 7);
+            // Removing a person (the subject record) auto-removes their study
+            // subjects and everything under them, as RemoveSubjectServlet does.
+            subjOfRemovedPerson = insertStudySubject(c, "CASC-5", study, 7);
+            try (Statement s = c.createStatement()) {
+                s.executeUpdate("UPDATE subject SET status_id = 5 WHERE subject_id = (SELECT subject_id "
+                        + "FROM study_subject WHERE study_subject_id = " + subjOfRemovedPerson + ")");
+            }
 
             groupClass = insertOne(c, "INSERT INTO study_group_class (name, study_id, owner_id, date_created, "
                     + "group_class_type_id, status_id, subject_assignment) "
@@ -125,6 +137,7 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
             evSigned = insertEvent(c, defLive, subjSigned, 1);
             evOfRemovedSubject = insertEvent(c, defLive, subjRemoved, 7);
             evOfRemovedDef = insertEvent(c, defRemoved, subjLive, 7);
+            evOfRemovedPerson = insertEvent(c, defLive, subjOfRemovedPerson, 7);
 
             // One event CRF per (event, version, subject): the second one on evLive needs its own version.
             int secondVersion = insertOne(c, "INSERT INTO crf_version (crf_id, name, description, status_id, "
@@ -134,11 +147,18 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
             ecRemoved = insertEventCrf(c, evLive, subjLive, secondVersion, 5);
             ecOfSignedSubject = insertEventCrf(c, evSigned, subjSigned, 1, 1);
             ecOfRemovedSubject = insertEventCrf(c, evOfRemovedSubject, subjRemoved, 1, 7);
+            ecOfRemovedPerson = insertEventCrf(c, evOfRemovedPerson, subjOfRemovedPerson, 1, 7);
 
             idLive = insertItemData(c, ecLive, 1, 1, "modality_baseline");
             idRemoved = insertItemData(c, ecLive, 2, 5, null);
             idOfSignedSubject = insertItemData(c, ecOfSignedSubject, 1, 1, null);
             idOfRemovedSubject = insertItemData(c, ecOfRemovedSubject, 1, 7, null);
+            idOfRemovedPerson = insertItemData(c, ecOfRemovedPerson, 1, 7, null);
+            // The person's removal wrote the rows back with the status they had loaded.
+            try (Statement s = c.createStatement()) {
+                s.executeUpdate("UPDATE event_crf SET old_status_id = 1 WHERE event_crf_id = " + ecOfRemovedPerson);
+                s.executeUpdate("UPDATE item_data SET old_status_id = 1 WHERE item_data_id = " + idOfRemovedPerson);
+            }
 
             dataset = insertOne(c, "INSERT INTO dataset (study_id, status_id, name, description, sql_statement, "
                     + "num_runs, date_created, owner_id) VALUES (" + study + ", 1, 'casc-it-dataset', '', '', 0, "
@@ -226,6 +246,7 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(7, statusOf("study_subject", "study_subject_id", subjSigned));
         assertEquals(5, statusOf("study_subject", "study_subject_id", subjRemoved));
         assertEquals(7, statusOf("study_subject", "study_subject_id", subjOnRemovedSite));
+        assertEquals(7, statusOf("study_subject", "study_subject_id", subjOfRemovedPerson));
 
         assertEquals(7, statusOf("study_group_class", "study_group_class_id", groupClass));
         assertEquals(7, statusOf("subject_group_map", "subject_group_map_id", mapLive));
@@ -294,6 +315,8 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(1, statusOf("study_subject", "study_subject_id", subjSigned));
         assertEquals(5, statusOf("study_subject", "study_subject_id", subjRemoved));
         assertEquals(7, statusOf("study_subject", "study_subject_id", subjOnRemovedSite));
+        // A removed person's study subject stays with the person.
+        assertEquals(7, statusOf("study_subject", "study_subject_id", subjOfRemovedPerson));
 
         assertEquals(1, statusOf("study_group_class", "study_group_class_id", groupClass));
         assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapLive));
@@ -307,16 +330,19 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(1, statusOf("study_event", "study_event_id", evSigned));
         assertEquals(7, statusOf("study_event", "study_event_id", evOfRemovedSubject));
         assertEquals(7, statusOf("study_event", "study_event_id", evOfRemovedDef));
+        assertEquals(7, statusOf("study_event", "study_event_id", evOfRemovedPerson));
 
         assertEquals(1, statusOf("event_crf", "event_crf_id", ecLive));
         assertEquals(5, statusOf("event_crf", "event_crf_id", ecRemoved));
         assertEquals(1, statusOf("event_crf", "event_crf_id", ecOfSignedSubject));
         assertEquals(7, statusOf("event_crf", "event_crf_id", ecOfRemovedSubject));
+        assertEquals(7, statusOf("event_crf", "event_crf_id", ecOfRemovedPerson));
 
         assertEquals(1, statusOf("item_data", "item_data_id", idLive));
         assertEquals(5, statusOf("item_data", "item_data_id", idRemoved));
         assertEquals(1, statusOf("item_data", "item_data_id", idOfSignedSubject));
         assertEquals(7, statusOf("item_data", "item_data_id", idOfRemovedSubject));
+        assertEquals(7, statusOf("item_data", "item_data_id", idOfRemovedPerson));
         assertEquals("modality_baseline", sourceKindOf(idLive));
 
         assertEquals(1, statusOf("dataset", "dataset_id", dataset));

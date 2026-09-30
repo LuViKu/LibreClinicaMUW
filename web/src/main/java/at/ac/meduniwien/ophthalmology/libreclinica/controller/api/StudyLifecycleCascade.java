@@ -47,8 +47,9 @@ import java.util.List;
  *       subject, definition, event, event CRF or item removed on its own
  *       before the study keeps that state through removal and restore.
  *       The servlets bring back the subjects and role bindings of a
- *       removed site, the events of a removed subject and the study roles
- *       of a removed user account.</li>
+ *       removed site, the events of a removed subject, the study subjects
+ *       of a removed person and the study roles of a removed user
+ *       account.</li>
  * </ul>
  *
  * <p>Every changed row gets {@code date_updated = now()} and
@@ -61,6 +62,14 @@ final class StudyLifecycleCascade {
 
     /** Neither removed (5) nor auto-removed (7). */
     private static final String LIVE = "status_id NOT IN (5, 7)";
+
+    /**
+     * The person behind a study subject is not removed. Removing a person
+     * (the subject record) auto-removes their study subjects and what is
+     * under them; those stay removed with the person.
+     */
+    private static final String PERSON_LIVE =
+            "subject_id IN (SELECT subject_id FROM subject WHERE " + LIVE + ")";
 
     /**
      * The status a restored study or site returns to: the one recorded at
@@ -179,7 +188,7 @@ final class StudyLifecycleCascade {
                         + "AND user_name IN (SELECT user_name FROM user_account WHERE " + LIVE + ")",
                 tree).size();
         int subjects = update(c, userId, "study_subject", "study_subject_id", "status_id = 1",
-                "study_id = ANY(?) AND status_id = 7", tree).size();
+                "study_id = ANY(?) AND status_id = 7 AND " + PERSON_LIVE, tree).size();
         List<Integer> groups = update(c, userId, "study_group_class", "study_group_class_id", "status_id = 1",
                 "study_id = ANY(?) AND status_id = 7", tree);
         update(c, userId, "subject_group_map", "subject_group_map_id", "status_id = 1",
