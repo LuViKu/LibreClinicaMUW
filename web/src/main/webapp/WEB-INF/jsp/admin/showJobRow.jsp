@@ -21,6 +21,7 @@
 	<td class="table_cell"><c:out value="${currRow.bean.datasetName}" /></td>
 	<td class="table_cell"><c:out value="${currRow.bean.studyName}" /></td>
 	<!-- actions -->
+	<%-- Pause, resume and delete post small forms: PauseJob refuses GET. --%>
 	
 	<td class="table_cell">
 	 <table border="0" cellpadding="0" cellspacing="0">
@@ -30,16 +31,16 @@
 		<td>
 		<c:choose>
 			<c:when test="${currRow.bean.active}">
-				<a href="PauseJob?tname=<c:out value="${currRow.bean.fullName}" />&gname=0" onClick='return confirm("<fmt:message key="confirm_pausing_this_job" bundle="${restext}"/>");'><img border="0" title="<fmt:message key="remove" bundle="${resword}"/>" src="images/bt_Remove.gif" alt="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="2"/></a> 
+				<form action="PauseJob" method="post" style="display:inline; margin:0" onSubmit='return confirm("<fmt:message key="confirm_pausing_this_job" bundle="${restext}"/>");'><input type="hidden" name="tname" value="<c:out value="${currRow.bean.fullName}" />"/><input type="hidden" name="gname" value="0"/><input type="image" title="<fmt:message key="remove" bundle="${resword}"/>" src="images/bt_Remove.gif" alt="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="2"/></form>
 			</c:when>
 			<c:otherwise>
-				<a href="PauseJob?tname=<c:out value="${currRow.bean.fullName}" />&gname=0" onClick='return confirm("<fmt:message key="confirm_restoring_this_job" bundle="${restext}"/>");'><img border="0" title="<fmt:message key="restore" bundle="${resword}"/>" src="images/bt_Restore.gif" alt="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="2"/></a>
+				<form action="PauseJob" method="post" style="display:inline; margin:0" onSubmit='return confirm("<fmt:message key="confirm_restoring_this_job" bundle="${restext}"/>");'><input type="hidden" name="tname" value="<c:out value="${currRow.bean.fullName}" />"/><input type="hidden" name="gname" value="0"/><input type="image" title="<fmt:message key="restore" bundle="${resword}"/>" src="images/bt_Restore.gif" alt="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="2"/></form>
 			</c:otherwise>
 		</c:choose>
 		</td>&nbsp;
 		<c:if test="${userBean.sysAdmin}">
 			<td>
-				<a href="PauseJob?tname=<c:out value="${currRow.bean.fullName}" />&del=y&gname=0" onClick='return confirm("<fmt:message key="confirm_deleting_this_job" bundle="${restext}"/>");'><img border="0" title="<fmt:message key="delete" bundle="${resword}"/>" src="images/bt_Delete.gif" alt="<fmt:message key="delete" bundle="${resword}"/>" align="left" hspace="2"/></a>
+				<form action="PauseJob" method="post" style="display:inline; margin:0" onSubmit='return confirm("<fmt:message key="confirm_deleting_this_job" bundle="${restext}"/>");'><input type="hidden" name="tname" value="<c:out value="${currRow.bean.fullName}" />"/><input type="hidden" name="gname" value="0"/><input type="hidden" name="del" value="y"/><input type="image" title="<fmt:message key="delete" bundle="${resword}"/>" src="images/bt_Delete.gif" alt="<fmt:message key="delete" bundle="${resword}"/>" align="left" hspace="2"/></form>
 			</td>
 		</c:if>
 	 </tr>

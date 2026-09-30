@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityAction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -45,6 +47,12 @@ public class DeleteStudyUserRoleServlet extends SecureController {
         }
 
         return;
+    }
+
+    /** Removes or restores a study role: POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     @Override

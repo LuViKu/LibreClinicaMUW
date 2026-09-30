@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityAction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -53,6 +55,12 @@ public class UnLockUserServlet extends SecureController {
         if (!ub.isSysAdmin()) {
             throw new InsufficientPermissionException(Page.MENU, resexception.getString("you_may_not_perform_administrative_functions"), "1");
         }
+    }
+
+    /** Unlocks the account and sets a new password: POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     @Override

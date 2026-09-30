@@ -7,6 +7,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +35,12 @@ public class SendTestEmailServlet extends SecureController {
         }
 
         return;
+    }
+
+    /** Sends a test mail: POST only (the users list calls it from its script). */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     @Override

@@ -642,6 +642,21 @@ public abstract class SecureController extends HttpServlet {
     }
 
     /**
+     * Whether this servlet serves the given GET; by default it does. A servlet
+     * whose request changes state (removes a user, pauses a job, sends a mail)
+     * answers false, so the change takes a POST: a link, a prefetch or an image
+     * elsewhere cannot trigger it, and a cross-site POST is refused by
+     * {@code CrossSiteRequestFilter}. A servlet whose GET only renders a page, a
+     * confirmation for instance, can decide per request.
+     *
+     * @param request the GET, before any session set-up
+     * @return false to answer 405 Method Not Allowed without processing the request
+     */
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return true;
+    }
+
+    /**
      * Handles the HTTP <code>GET</code> method.
      *
      * @param request
@@ -651,6 +666,12 @@ public abstract class SecureController extends HttpServlet {
      */
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
+        if (!acceptsGet(request)) {
+            logger.warn("{} accepts POST only; refused a GET", getClass().getSimpleName());
+            response.setHeader("Allow", "POST");
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            return;
+        }
         try {
             logger.debug("GET Request");
             process(request, response);
