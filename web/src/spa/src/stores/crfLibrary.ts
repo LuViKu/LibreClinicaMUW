@@ -5,6 +5,7 @@ import type {
   Crf,
   CreateCrfInput,
   CrfVersion,
+  UpdateCrfInput,
   EventCrfAssignment,
   EventCrfAssignmentInput,
   MigrateVersionRequest,
@@ -54,6 +55,31 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return { ok: true, crf }
     } catch (e) {
       return mapMutationError(e, 'create')
+    }
+  }
+
+  /**
+   * Changes a CRF's name and description. The server allows the CRF's owner
+   * as Data Manager (or study administrator) and a system administrator, so
+   * a refusal (403) is an answer to show in the form, not a lost session:
+   * only 401 is rethrown. Field errors (blank, too long, name taken) come
+   * back per field.
+   */
+  async function updateCrf(crfOid: string, input: UpdateCrfInput): Promise<CrfMutation> {
+    try {
+      const crf = await apiPut<Crf>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}`, input)
+      const idx = crfs.value.findIndex((c) => c.oid === crfOid)
+      if (idx >= 0) crfs.value[idx] = crf
+      return { ok: true, crf }
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string; errors?: Array<{ field: string; message: string }> } | null
+        const fieldErrors: Record<string, string> = {}
+        if (body?.errors) for (const fe of body.errors) fieldErrors[fe.field] = fe.message
+        return { ok: false, fieldErrors, message: body?.errors ? undefined : body?.message ?? humanError(e, 'update') }
+      }
+      return { ok: false, fieldErrors: {}, message: humanError(e, 'update') }
     }
   }
 
@@ -459,6 +485,7 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     error,
     loadCrfs,
     createCrf,
+    updateCrf,
     disableCrf,
     restoreCrf,
     uploadVersion,

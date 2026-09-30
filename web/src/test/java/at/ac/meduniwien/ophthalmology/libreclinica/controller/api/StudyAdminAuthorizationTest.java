@@ -163,6 +163,32 @@ class StudyAdminAuthorizationTest {
     }
 
     @Test
+    void crfEditIsForItsOwnerHoldingDirectorOrStudyAdmin() {
+        UserAccountBean owner = nonAdmin();
+        assertThat(StudyAdminAuthorization.userMayEditCrf(owner, 7, List.of(bindingFor(Role.STUDYDIRECTOR))))
+                .isTrue();
+        assertThat(StudyAdminAuthorization.userMayEditCrf(owner, 7, List.of(bindingFor(Role.ADMIN))))
+                .isTrue();
+        assertThat(StudyAdminAuthorization.userMayEditCrf(owner, 8, List.of(bindingFor(Role.STUDYDIRECTOR))))
+                .as("not the owner")
+                .isFalse();
+        assertThat(StudyAdminAuthorization.userMayEditCrf(owner, 7, List.of(bindingFor(Role.COORDINATOR))))
+                .as("a coordinator may not, as in UpdateCRFServlet")
+                .isFalse();
+        StudyUserRoleBean removed = bindingFor(Role.STUDYDIRECTOR);
+        removed.setStatus(Status.DELETED);
+        assertThat(StudyAdminAuthorization.userMayEditCrf(owner, 7, List.of(removed))).isFalse();
+    }
+
+    @Test
+    void crfEditIsOpenToASysadminWhoeverOwnsTheCrf() {
+        UserAccountBean sysadmin = new UserAccountBean();
+        sysadmin.setId(1);
+        sysadmin.addUserType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType.SYSADMIN);
+        assertThat(StudyAdminAuthorization.userMayEditCrf(sysadmin, 99, List.of())).isTrue();
+    }
+
+    @Test
     void rejectsWhenBindingStudyIdDoesNotMatch() {
         StudyUserRoleBean wrongStudy = bindingFor(Role.STUDYDIRECTOR);
         wrongStudy.setStudyId(99);

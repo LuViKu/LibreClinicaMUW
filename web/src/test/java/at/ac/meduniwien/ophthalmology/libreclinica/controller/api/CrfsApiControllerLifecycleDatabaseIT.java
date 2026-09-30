@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,7 +32,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * (legacy {@code RemoveCRFServlet} / {@code RestoreCRFServlet} /
  * {@code RemoveCRFVersionServlet} / {@code RestoreCRFVersionServlet}, see
  * {@link CrfLifecycleCascade}); locking or removing a version moves the
- * defaults that point at it. Each test builds its own CRF.
+ * defaults that point at it; and editing a CRF's name and description. Each
+ * test builds its own CRF.
  */
 class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
@@ -41,6 +43,8 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
     private static int dmId;
     private static int crcId;
     private static int invId;
+    private static int otherDmId;
+    private static int adminId;
 
     @BeforeAll
     static void users() throws Exception {
@@ -51,6 +55,9 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         fx.role("crfit-crc", CrfLibraryFixtures.STUDY_ID, "coordinator");
         invId = fx.user("crfit-inv", false);
         fx.role("crfit-inv", CrfLibraryFixtures.STUDY_ID, "Investigator");
+        otherDmId = fx.user("crfit-dm2", false);
+        fx.role("crfit-dm2", CrfLibraryFixtures.STUDY_ID, "director");
+        adminId = fx.user("crfit-admin", true);
     }
 
     private MockMvc mvc() {
@@ -75,6 +82,14 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
 
     private static MockHttpSession investigator() {
         return CrfLibraryFixtures.session(invId, "crfit-inv", false);
+    }
+
+    private static MockHttpSession otherDm() {
+        return CrfLibraryFixtures.session(otherDmId, "crfit-dm2", false);
+    }
+
+    private static MockHttpSession admin() {
+        return CrfLibraryFixtures.session(adminId, "crfit-admin", true);
     }
 
     private static String tag() {
@@ -277,5 +292,93 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         mvc().perform(post("/api/v1/crfs/F_" + t + "_OTHER/versions/F_" + t + "_V1/disable").session(dm()))
                 .andExpect(status().isNotFound());
         assertThat(fx.status("crf_version", v1)).isEqualTo(1);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Edit name and description                                          */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void theOwnerChangesNameAndDescriptionAndEachChangeIsAudited() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm())
+                        .contentType("application/json")
+                        .content("{\"name\":\"  Renamed " + t + "  \",\"description\":\"New text\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.oid").value("F_" + t))
+                .andExpect(jsonPath("$.name").value("Renamed " + t))
+                .andExpect(jsonPath("$.description").value("New text"));
+
+        assertThat(fx.stringValue("SELECT name FROM crf WHERE crf_id = ?", crf)).isEqualTo("Renamed " + t);
+        assertThat(fx.stringValue("SELECT oc_oid FROM crf WHERE crf_id = ?", crf)).isEqualTo("F_" + t);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 142"
+                + " AND entity_id = ? AND entity_name = 'name' AND old_value = ? AND new_value = ?",
+                crf, "CRF " + t, "Renamed " + t)).isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 142"
+                + " AND entity_id = ? AND entity_name = 'description'", crf)).isEqualTo(1);
+    }
+
+    @Test
+    void editValidatesNameAndDescriptionLikeTheLegacyForm() throws Exception {
+        String t = tag();
+        fx.crf("CRF " + t, "F_" + t, dmId);
+        fx.crf("Taken " + t, "F_" + t + "_TAKEN", dmId);
+
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("name"));
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"" + "x".repeat(256) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("255")));
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"ok\",\"description\":\"" + "d".repeat(2049) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("description"));
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"Taken " + t + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("already exists")));
+        assertThat(fx.stringValue("SELECT name FROM crf WHERE oc_oid = ?", "F_" + t)).isEqualTo("CRF " + t);
+    }
+
+    @Test
+    void onlyTheOwnerAsDataManagerOrASysadminMayEdit() throws Exception {
+        String t = tag();
+        fx.crf("CRF " + t, "F_" + t, dmId);
+        String body = "{\"name\":\"By admin " + t + "\"}";
+
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(otherDm()).contentType("application/json").content(body))
+                .andExpect(status().isForbidden());
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(investigator()).contentType("application/json").content(body))
+                .andExpect(status().isForbidden());
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(new MockHttpSession()).contentType("application/json")
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+        assertThat(fx.stringValue("SELECT name FROM crf WHERE oc_oid = ?", "F_" + t)).isEqualTo("CRF " + t);
+
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(admin()).contentType("application/json").content(body))
+                .andExpect(status().isOk());
+        assertThat(fx.stringValue("SELECT name FROM crf WHERE oc_oid = ?", "F_" + t)).isEqualTo("By admin " + t);
+    }
+
+    @Test
+    void aCoordinatorOwnerMayNotEditAndARemovedCrfIsNotEdited() throws Exception {
+        String t = tag();
+        fx.crf("CRF " + t, "F_" + t, crcId);
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(crc()).contentType("application/json")
+                        .content("{\"name\":\"x\"}"))
+                .andExpect(status().isForbidden());
+
+        String r = tag();
+        int removed = fx.crf("CRF " + r, "F_" + r, dmId);
+        fx.execute("UPDATE crf SET status_id = 5 WHERE crf_id = ?", removed);
+        mvc().perform(put("/api/v1/crfs/F_" + r).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"x\"}"))
+                .andExpect(status().isConflict());
+        assertThat(fx.status("crf", removed)).isEqualTo(5);
     }
 }

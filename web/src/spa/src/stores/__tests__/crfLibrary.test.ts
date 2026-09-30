@@ -25,7 +25,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiDelete, apiGet, apiPost } from '@/api/client'
+import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
 
 const V1: CrfVersion = {
   oid: 'F_DEMOS_V1',
@@ -108,6 +108,58 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
         {},
       )
       expect(store.crfs[0]!.versions[0]!.status).toBe('available')
+    })
+  })
+
+  describe('updateCrf', () => {
+    it('PUTs name and description and replaces the row', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiPut).mockResolvedValue({ ...DEMOS, name: 'Demographics II', description: 'baseline' })
+
+      const result = await store.updateCrf('F_DEMOS', { name: 'Demographics II', description: 'baseline' })
+
+      expect(result.ok).toBe(true)
+      expect(apiPut).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS', {
+        name: 'Demographics II',
+        description: 'baseline',
+      })
+      expect(store.crfs[0]!.name).toBe('Demographics II')
+    })
+
+    it('returns the field errors of a 400 per field', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(400, 'Bad Request', {
+        message: 'Validation failed',
+        errors: [{ field: 'name', message: "A CRF named 'AE' already exists" }],
+      }))
+
+      const result = await store.updateCrf('F_DEMOS', { name: 'AE', description: '' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.fieldErrors.name).toBe("A CRF named 'AE' already exists")
+      expect(store.crfs[0]!.name).toBe('Demographics')
+    })
+
+    it('returns a refusal (403) as a message instead of throwing', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(403, 'Forbidden', {
+        message: "Only the CRF's owner may change it",
+      }))
+
+      const result = await store.updateCrf('F_DEMOS', { name: 'X', description: '' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.message).toBe("Only the CRF's owner may change it")
+    })
+
+    it('rethrows a lost session (401)', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(401, 'Unauthorized', null))
+
+      await expect(store.updateCrf('F_DEMOS', { name: 'X', description: '' })).rejects.toBeInstanceOf(ApiError)
     })
   })
 

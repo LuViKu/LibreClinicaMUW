@@ -160,6 +160,46 @@ public final class StudyAdminAuthorization {
     }
 
     /**
+     * @return {@code true} when {@code me} may change the name and
+     *         description of a CRF owned by {@code crfOwnerId}. Legacy
+     *         parity: {@code InitUpdateCRFServlet} + {@code UpdateCRFServlet}
+     *         — a sysadmin always; anyone else only for a CRF they own, and
+     *         only while holding an AVAILABLE {@link Role#STUDYDIRECTOR} or
+     *         {@link Role#ADMIN} binding. A coordinator may not, as in the
+     *         legacy screens. The legacy check read the role of the session's
+     *         current study; like {@link #userMayManageCrfLibrary} this walks
+     *         every binding, since a CRF is not scoped to one study.
+     */
+    static boolean userMayEditCrf(UserAccountBean me, int crfOwnerId,
+                                  List<StudyUserRoleBean> myBindings) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (me.getId() == 0 || me.getId() != crfOwnerId) return false;
+        if (myBindings == null) return false;
+        for (StudyUserRoleBean b : myBindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null
+                    || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            Role r = b.getRole();
+            if (r == Role.STUDYDIRECTOR || r == Role.ADMIN) return true;
+        }
+        return false;
+    }
+
+    /** DAO-aware overload of {@link #userMayEditCrf(UserAccountBean, int, List)}; fails closed. */
+    static boolean userMayEditCrf(UserAccountBean me, int crfOwnerId, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (dataSource == null) return false;
+        try {
+            return userMayEditCrf(me, crfOwnerId,
+                    new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName()));
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
      * DAO-aware overload — loads the caller's full binding set via
      * {@link UserAccountDAO#findAllRolesByUserName(String)} and
      * delegates to {@link #userMayEditStudy(UserAccountBean, List, StudyBean)}.

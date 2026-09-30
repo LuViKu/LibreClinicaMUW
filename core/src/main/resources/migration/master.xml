@@ -115,5 +115,6 @@
   <include  file="migration/lc-muw-2026-12-07-retinal-jobs-follow-file.xml"/>
   <include  file="migration/lc-muw-2026-12-08-audit-labels-and-context.xml"/>
   <include  file="migration/lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-type-crf-field-updated.xml"/>
 </databaseChangeLog>
 

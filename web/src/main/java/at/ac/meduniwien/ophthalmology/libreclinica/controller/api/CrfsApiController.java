@@ -65,6 +65,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -92,6 +93,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       inlined versions</li>
  *   <li>{@code POST   /api/v1/crfs} — create a new CRF shell (no
  *       versions yet)</li>
+ *   <li>{@code PUT    /api/v1/crfs/{crfOid}} — change name and description</li>
  *   <li>{@code POST   /api/v1/crfs/{crfOid}/disable} — soft-delete, with
  *       the rows below it</li>
  *   <li>{@code POST   /api/v1/crfs/{crfOid}/restore} — the inverse</li>
@@ -391,6 +393,115 @@ public class CrfsApiController {
                         + "{} event-definition CRF(s), {} event CRF(s), {} item value(s)",
                 crfOid, me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
                 n.eventCrfs(), n.itemData());
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        return ResponseEntity.ok(toDto(crfDao.findByOid(crfOid), versionDao));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* PUT /api/v1/crfs/{crfOid}                                         */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Changes a CRF's name and description. Legacy parity:
+     * {@code InitUpdateCRFServlet} + {@code UpdateCRFServlet} — the name is
+     * required, at most 255 characters and not used by another CRF; the
+     * description is at most 2048. Who may: see
+     * {@link StudyAdminAuthorization#userMayEditCrf}. The OID does not change.
+     *
+     * <p>Unlike the legacy submit, which also set the CRF available again,
+     * this leaves the status alone, and a removed CRF is refused (restore it
+     * first). One audit row per changed field.
+     */
+    @PutMapping("/{crfOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfDto.class)))
+    public ResponseEntity<?> update(@PathVariable("crfOid") String crfOid,
+                                    @RequestBody(required = false) UpdateCrfRequest body,
+                                    HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean target = crfDao.findByOid(crfOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        if (!StudyAdminAuthorization.userMayEditCrf(me, target.getOwnerId(), dataSource)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Only the CRF's owner, as Data Manager or study administrator, or a system administrator"
+                            + " may change a CRF's name and description"));
+        }
+        if (target.getStatus() != null && target.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF '" + crfOid + "' is removed — restore it before editing"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
+        }
+
+        String name = body.name() == null ? "" : body.name().trim();
+        String description = body.description() == null ? "" : body.description().trim();
+        List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        if (name.isEmpty()) errors.add(fe("name", "CRF name is required"));
+        else if (name.length() > 255) errors.add(fe("name", "CRF name must be 255 characters or fewer"));
+        if (description.length() > 2048) {
+            errors.add(fe("description", "Description must be 2048 characters or fewer"));
+        }
+        if (errors.isEmpty()) {
+            CRFBean other = crfDao.findAnotherByName(name, target.getId());
+            if (other != null && other.getId() > 0) {
+                errors.add(fe("name", "A CRF named '" + name + "' already exists"));
+            }
+        }
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody("Validation failed", errors));
+        }
+
+        String oldName = nullToEmpty(target.getName());
+        String oldDescription = nullToEmpty(target.getDescription());
+        boolean nameChanged = !oldName.equals(name);
+        boolean descriptionChanged = !oldDescription.equals(description);
+        if (nameChanged || descriptionChanged) {
+            try (Connection c = dataSource.getConnection()) {
+                c.setAutoCommit(false);
+                try {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "UPDATE crf SET name = ?, description = ?, update_id = ?, date_updated = now()"
+                                    + " WHERE crf_id = ?")) {
+                        ps.setString(1, name);
+                        ps.setString(2, description);
+                        ps.setInt(3, me.getId());
+                        ps.setInt(4, target.getId());
+                        ps.executeUpdate();
+                    }
+                    if (nameChanged) {
+                        insertAudit(c, AuditTypeIds.CRF_FIELD_UPDATED, me.getId(), "crf", target.getId(),
+                                "name", oldName, name);
+                    }
+                    if (descriptionChanged) {
+                        insertAudit(c, AuditTypeIds.CRF_FIELD_UPDATED, me.getId(), "crf", target.getId(),
+                                "description", oldDescription, description);
+                    }
+                    c.commit();
+                } catch (SQLException | RuntimeException e) {
+                    c.rollback();
+                    throw e;
+                } finally {
+                    c.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                LOG.error("Update CRF failed for oid={} by user={}", crfOid, me.getName(), e);
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Saving CRF '" + crfOid + "' failed; nothing was changed."));
+            }
+            LOG.info("Update CRF: oid={} by user={} (name changed: {}, description changed: {})",
+                    crfOid, me.getName(), nameChanged, descriptionChanged);
+        }
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         return ResponseEntity.ok(toDto(crfDao.findByOid(crfOid), versionDao));

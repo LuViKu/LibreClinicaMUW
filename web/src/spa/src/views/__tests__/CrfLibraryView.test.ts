@@ -26,7 +26,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiGet, apiPost } from '@/api/client'
+import { ApiError, apiGet, apiPost, apiPut } from '@/api/client'
 import CrfLibraryView from '@/views/CrfLibraryView.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Crf, CrfVersion } from '@/types/crfLibrary'
@@ -104,6 +104,7 @@ describe('CrfLibraryView', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockReset()
     vi.mocked(apiPost).mockReset()
+    vi.mocked(apiPut).mockReset()
     confirmMock.mockReset()
     confirmMock.mockResolvedValue(true)
   })
@@ -163,11 +164,53 @@ describe('CrfLibraryView', () => {
     expect(buttons).not.toContain('Remove')
   })
 
+  it('edits name and description in place and saves the trimmed values', async () => {
+    const wrapper = await mountView()
+    await wrapper.find('[data-testid="crf-library-edit-F_DEMO"]').trigger('click')
+
+    const name = wrapper.find('#crf-edit-name-F_DEMO')
+    expect((name.element as HTMLInputElement).value).toBe('Demographics')
+    await name.setValue('  Demographics II  ')
+    await wrapper.find('#crf-edit-desc-F_DEMO').setValue(' Baseline form ')
+    vi.mocked(apiPut).mockResolvedValue({ ...ACTIVE, name: 'Demographics II', description: 'Baseline form' })
+    await wrapper.find('[data-testid="crf-library-edit-save"]').trigger('click')
+    await flushPromises()
+
+    expect(apiPut).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMO', {
+      name: 'Demographics II',
+      description: 'Baseline form',
+    })
+    expect(wrapper.find('[data-testid="crf-library-edit-form-F_DEMO"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Demographics II')
+  })
+
+  it('shows the server\'s answer when the edit is refused', async () => {
+    const wrapper = await mountView()
+    await wrapper.find('[data-testid="crf-library-edit-F_DEMO"]').trigger('click')
+    vi.mocked(apiPut).mockRejectedValueOnce(new ApiError(400, 'Bad Request', {
+      message: 'Validation failed',
+      errors: [{ field: 'name', message: "A CRF named 'AE' already exists" }],
+    }))
+    await wrapper.find('#crf-edit-name-F_DEMO').setValue('AE')
+    await wrapper.find('[data-testid="crf-library-edit-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain("A CRF named 'AE' already exists")
+
+    vi.mocked(apiPut).mockRejectedValueOnce(new ApiError(403, 'Forbidden', {
+      message: "Only the CRF's owner, as Data Manager or study administrator, or a system administrator may change a CRF's name and description",
+    }))
+    await wrapper.find('[data-testid="crf-library-edit-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain("Only the CRF's owner")
+    expect(wrapper.find('[data-testid="crf-library-edit-form-F_DEMO"]').exists()).toBe(true)
+  })
+
   it('offers no CRF actions to a role that may not manage CRFs', async () => {
     const wrapper = await mountView('Investigator')
     await showRemoved(wrapper, [ACTIVE, REMOVED])
 
     expect(wrapper.find('[data-testid="crf-library-restore-F_OLD"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="crf-library-disable-F_DEMO"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="crf-library-edit-F_DEMO"]').exists()).toBe(false)
   })
 })

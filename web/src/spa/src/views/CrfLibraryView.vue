@@ -83,6 +83,42 @@ async function submitCreate() {
   }
 }
 
+/* ------------------------------ Edit ------------------------------ */
+// Name and description, like the legacy InitUpdateCRF / UpdateCRF form.
+// The server decides who may (the CRF's owner as Data Manager, or a system
+// administrator) and says why not; the form shows its answer.
+const editing = ref<{ oid: string; name: string; description: string } | null>(null)
+const editErrors = ref<Record<string, string>>({})
+const editFormError = ref<string | null>(null)
+const isSavingEdit = ref(false)
+
+function openEdit(crf: Crf) {
+  editing.value = { oid: crf.oid, name: crf.name, description: crf.description }
+  editErrors.value = {}
+  editFormError.value = null
+}
+
+async function submitEdit() {
+  if (!editing.value || editing.value.name.trim() === '') return
+  editErrors.value = {}
+  editFormError.value = null
+  isSavingEdit.value = true
+  try {
+    const result = await lib.updateCrf(editing.value.oid, {
+      name: editing.value.name.trim(),
+      description: editing.value.description.trim(),
+    })
+    if (result.ok) {
+      editing.value = null
+    } else {
+      editErrors.value = result.fieldErrors
+      editFormError.value = result.message ?? null
+    }
+  } finally {
+    isSavingEdit.value = false
+  }
+}
+
 /* --------------------------- Upload version ----------------------- */
 interface UploadState {
   crfOid: string
@@ -436,6 +472,14 @@ const visibleRows = computed(() =>
               </div>
               <span class="text-slate-500">·</span>
               <button
+                class="text-muw-blue hover:underline"
+                :data-testid="`crf-library-edit-${crf.oid}`"
+                @click="openEdit(crf)"
+              >
+                {{ t('crfLibrary.edit') }}
+              </button>
+              <span class="text-slate-500">·</span>
+              <button
                 class="text-rose-600 hover:underline"
                 :data-testid="`crf-library-disable-${crf.oid}`"
                 @click="onDisableCrf(crf)"
@@ -451,6 +495,40 @@ const visibleRows = computed(() =>
               >
                 {{ t('crfLibrary.restore') }}
               </button>
+            </div>
+          </div>
+
+          <div
+            v-if="editing && editing.oid === crf.oid"
+            class="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3"
+            :data-testid="`crf-library-edit-form-${crf.oid}`"
+          >
+            <h3 class="text-xs font-semibold mb-2">{{ t('crfLibrary.editHeading', { name: crf.name }) }}</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-2">
+                <FieldLabel :for="`crf-edit-name-${crf.oid}`" required>{{ t('crfLibrary.crfName') }}</FieldLabel>
+                <TextInput :id="`crf-edit-name-${crf.oid}`" v-model="editing.name" />
+                <ErrorText v-if="editErrors.name">{{ editErrors.name }}</ErrorText>
+              </div>
+              <div class="col-span-2">
+                <FieldLabel :for="`crf-edit-desc-${crf.oid}`">{{ t('crfLibrary.crfDescription') }}</FieldLabel>
+                <TextInput :id="`crf-edit-desc-${crf.oid}`" v-model="editing.description" />
+                <ErrorText v-if="editErrors.description">{{ editErrors.description }}</ErrorText>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-2">{{ t('crfLibrary.editOidStays', { oid: crf.oid }) }}</p>
+            <ErrorText v-if="editFormError">{{ editFormError }}</ErrorText>
+            <div class="mt-3 flex items-center gap-2">
+              <button
+                class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+                @click="editing = null"
+              >{{ t('common.cancel') }}</button>
+              <button
+                class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
+                :disabled="editing.name.trim() === '' || isSavingEdit"
+                data-testid="crf-library-edit-save"
+                @click="submitEdit"
+              >{{ isSavingEdit ? t('common.saving') : t('crfLibrary.submitEdit') }}</button>
             </div>
           </div>
 

@@ -465,4 +465,11 @@ public final class AuditTypeIds {
      * {@code lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml}.
      */
     public static final int INGEST_DUPLICATE_HELD            = 141;
+
+    /**
+     * A CRF's name or description changed ({@code PUT /crfs/{oid}}); one row
+     * per field, {@code entity_name} naming it, old and new value. Seeded by
+     * {@code lc-muw-2026-09-30-audit-type-crf-field-updated.xml}.
+     */
+    public static final int CRF_FIELD_UPDATED                = 142;
 }

@@ -33,6 +33,12 @@ export interface CreateCrfInput {
   description?: string
 }
 
+/** Body of `PUT /api/v1/crfs/{crfOid}`: a CRF's name and description. The OID stays. */
+export interface UpdateCrfInput {
+  name: string
+  description: string
+}
+
 export type SdvRequirement = 'AllREQUIRED' | 'PARTIALREQUIRED' | 'NOTREQUIRED' | 'NOTAPPLICABLE'
 
 /**

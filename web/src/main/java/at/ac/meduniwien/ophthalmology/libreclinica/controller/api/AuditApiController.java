@@ -710,7 +710,9 @@ public class AuditApiController {
                  101, 102, 103, 104, 105,
             // Extract-job execution (106-107). Backfill catch-all (108,
             // hidden) routes to admin for the sysadmin view.
-                 106, 107, 108 -> "admin";
+                 106, 107, 108,
+            // CRF name / description edit (142).
+                 AuditTypeIds.CRF_FIELD_UPDATED -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
