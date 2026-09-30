@@ -3242,11 +3242,16 @@
     },
     "job": {
       "label": "Komplettpaket",
+      "export": "Export als {format}",
       "queued": "In Warteschlange …",
       "running": "Wird erstellt …",
       "done": "Fertig.",
       "failed": "Fehlgeschlagen",
-      "download": "Herunterladen"
+      "download": "Herunterladen",
+      "cancel": "Export abbrechen",
+      "cancelling": "Wird angehalten …",
+      "cancelled": "Abgebrochen.",
+      "confirmCancel": "Diesen Export abbrechen? Wartet er noch, läuft er nicht mehr; läuft er schon, hält er am nächsten Prüfpunkt an und hinterlässt keine Datei."
     },
     "schedules": {
       "button": "Zeitpläne",

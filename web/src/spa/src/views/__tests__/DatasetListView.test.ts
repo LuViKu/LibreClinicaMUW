@@ -29,6 +29,11 @@ vi.mock('@/api/client', () => ({
   ApiNetworkError: class ApiNetworkError extends Error {},
 }))
 
+const confirmAnswer = { value: true }
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => () => Promise.resolve(confirmAnswer.value),
+}))
+
 import { apiGet, apiPost } from '@/api/client'
 import DatasetListView from '@/views/DatasetListView.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -256,5 +261,83 @@ describe('DatasetListView — bundle export (P3.8)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+
+/**
+ * R1-export — cancelling an export from its row.
+ *
+ * <p>The row shows the caller's job still in flight after a reload, not only
+ * right after Export now, so a scheduled run can be stopped too. A queued job
+ * is cancelled at once and frees the row; a running one is asked to stop and
+ * says so until the server reports the end.
+ */
+describe('DatasetListView — cancel an export (R1-export)', () => {
+  const RUNNING = {
+    id: 8, datasetId: 11, format: 'odm', status: 'running', progressPct: 50,
+    submittedAt: '2026-09-30T10:00:00Z', startedAt: '2026-09-30T10:00:30Z', finishedAt: null,
+    archivedDatasetFileId: null, errorMessage: null, downloadUrl: null, cancelRequested: false,
+  }
+  const QUEUED = { ...RUNNING, status: 'queued', progressPct: 0, startedAt: null }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    confirmAnswer.value = true
+  })
+
+  async function mountWithJobs(jobs: unknown[]) {
+    ;(apiGet as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url === '/pages/api/v1/studies/S_DEFAULT/datasets') return [ROW]
+      if (url === '/pages/api/v1/exports?pageSize=100') return { jobs, total: jobs.length, page: 0, pageSize: 100 }
+      return []
+    })
+    return mountView({ rows: [ROW] })
+  }
+
+  function exportNowDisabled(w: Awaited<ReturnType<typeof mountView>>): boolean {
+    return (w.get('[data-testid="dataset-export-now"]').element as HTMLButtonElement).disabled
+  }
+
+  it("shows the caller's running export after a reload, and asks it to stop", async () => {
+    const w = await mountWithJobs([RUNNING])
+
+    const strip = w.get('[data-testid="bundle-job-11"]')
+    expect(strip.text()).toContain('Export as ODM (CDISC XML)')
+    expect(strip.text()).toContain(enMessages.dataExport.job.running)
+
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ...RUNNING, cancelRequested: true })
+    await w.get('[data-testid="export-job-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/exports/8/cancel', {})
+    expect(w.get('[data-testid="export-job-cancelling"]').text()).toBe(enMessages.dataExport.job.cancelling)
+    expect(w.find('[data-testid="export-job-cancel"]').exists()).toBe(false)
+  })
+
+  it('a cancelled export frees the row', async () => {
+    const w = await mountWithJobs([QUEUED])
+    expect(exportNowDisabled(w)).toBe(true)
+
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...QUEUED, status: 'cancelled', progressPct: 100, finishedAt: '2026-09-30T10:00:05Z',
+      errorMessage: 'Cancelled by dm',
+    })
+    await w.get('[data-testid="export-job-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[data-testid="export-job-cancelled"]').text()).toBe(enMessages.dataExport.job.cancelled)
+    expect(exportNowDisabled(w)).toBe(false)
+  })
+
+  it('cancels nothing unless confirmed', async () => {
+    const w = await mountWithJobs([QUEUED])
+    confirmAnswer.value = false
+
+    await w.get('[data-testid="export-job-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(w.get('[data-testid="bundle-job-11"]').text()).toContain(enMessages.dataExport.job.queued)
   })
 })

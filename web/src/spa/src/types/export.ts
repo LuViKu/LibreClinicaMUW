@@ -82,7 +82,7 @@ export interface ExportJobDto {
   id: number
   datasetId: number
   format: string
-  status: 'queued' | 'running' | 'done' | 'failed' | string
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | string
   progressPct: number
   submittedAt: string | null
   startedAt: string | null
@@ -91,6 +91,8 @@ export interface ExportJobDto {
   errorMessage: string | null
   /** Set once the job is done. */
   downloadUrl: string | null
+  /** A running job that was asked to stop and has not reached a checkpoint yet. */
+  cancelRequested?: boolean
 }
 
 /**

@@ -3242,11 +3242,16 @@
     },
     "job": {
       "label": "Bundle",
+      "export": "Export as {format}",
       "queued": "Queued …",
       "running": "Building …",
       "done": "Done.",
       "failed": "Failed",
-      "download": "Download"
+      "download": "Download",
+      "cancel": "Cancel export",
+      "cancelling": "Stopping …",
+      "cancelled": "Cancelled.",
+      "confirmCancel": "Cancel this export? If it is waiting it will not run; if it is running it stops at its next checkpoint and leaves no file."
     },
     "schedules": {
       "button": "Schedules",

@@ -103,12 +103,19 @@ async function confirmRemove(datasetId: number, name: string) {
   }
 }
 
+/** Load the list, then the caller's jobs still in flight for it. */
+async function loadPage(oid: string) {
+  await datasets.load(oid)
+  await datasets.loadActiveJobs()
+  if (datasets.hasActiveJobs) ensurePolling()
+}
+
 onMounted(() => {
-  if (studyOid.value) datasets.load(studyOid.value)
+  if (studyOid.value) void loadPage(studyOid.value)
 })
 
 watch(studyOid, (next, prev) => {
-  if (next && next !== prev) datasets.load(next)
+  if (next && next !== prev) void loadPage(next)
 })
 
 const expanded = ref<Set<number>>(new Set())
@@ -201,6 +208,35 @@ function jobFor(datasetId: number) {
 function jobIsActive(datasetId: number): boolean {
   const j = jobFor(datasetId)
   return !!j && (j.status === 'queued' || j.status === 'running')
+}
+
+/** "Bundle" for the multimodal bundle, else the export's format. */
+function jobLabel(datasetId: number): string {
+  const j = jobFor(datasetId)
+  if (!j || j.format === 'bundle') return t('dataExport.job.label')
+  const key = `dataExport.format.${j.format}`
+  const format = t(key)
+  return t('dataExport.job.export', { format: format === key ? j.format : format })
+}
+
+const cancelling = ref<number | null>(null)
+
+/**
+ * R1-export — cancel the row's job. Queued, it never runs; running, it
+ * stops at its next checkpoint and registers no file, so polling goes on
+ * until the job says it has ended.
+ */
+async function cancelExport(datasetId: number) {
+  const job = jobFor(datasetId)
+  if (!job) return
+  if (!(await confirm({ message: t('dataExport.job.confirmCancel'), danger: true }))) return
+  cancelling.value = datasetId
+  try {
+    const next = await datasets.cancelJob(job.id)
+    if (next && (next.status === 'queued' || next.status === 'running')) ensurePolling()
+  } finally {
+    cancelling.value = null
+  }
 }
 
 async function submitExport() {
@@ -411,7 +447,7 @@ function formatBytes(n: number): string {
               <tr v-if="jobFor(row.id)" :data-testid="`bundle-job-${row.id}`">
                 <td colspan="6" class="px-4 py-2 bg-muw-blue-50/40 text-xs">
                   <div class="flex items-center gap-3">
-                    <span class="font-medium text-slate-700">{{ t('dataExport.job.label') }}</span>
+                    <span class="font-medium text-slate-700">{{ jobLabel(row.id) }}</span>
                     <template v-if="jobFor(row.id)!.status === 'done'">
                       <span class="text-muw-teal-700">{{ t('dataExport.job.done') }}</span>
                       <a
@@ -426,6 +462,11 @@ function formatBytes(n: number): string {
                     <span v-else-if="jobFor(row.id)!.status === 'failed'" class="text-rose-700" role="alert">
                       {{ t('dataExport.job.failed') }}<template v-if="jobFor(row.id)!.errorMessage">: {{ jobFor(row.id)!.errorMessage }}</template>
                     </span>
+                    <span
+                      v-else-if="jobFor(row.id)!.status === 'cancelled'"
+                      class="text-slate-600"
+                      data-testid="export-job-cancelled"
+                    >{{ t('dataExport.job.cancelled') }}</span>
                     <template v-else>
                       <span class="text-slate-600">
                         {{ jobFor(row.id)!.status === 'running' ? t('dataExport.job.running') : t('dataExport.job.queued') }}
@@ -440,6 +481,19 @@ function formatBytes(n: number): string {
                       >
                         <span class="block h-full bg-muw-blue" :style="{ width: `${jobFor(row.id)!.progressPct}%` }"></span>
                       </span>
+                      <span
+                        v-if="jobFor(row.id)!.cancelRequested"
+                        class="text-slate-500 italic"
+                        data-testid="export-job-cancelling"
+                      >{{ t('dataExport.job.cancelling') }}</span>
+                      <button
+                        v-else
+                        type="button"
+                        class="px-2 py-0.5 border border-rose-200 rounded bg-white hover:bg-rose-50 text-rose-700 disabled:opacity-50"
+                        data-testid="export-job-cancel"
+                        :disabled="cancelling === row.id"
+                        @click="cancelExport(row.id)"
+                      >{{ t('dataExport.job.cancel') }}</button>
                     </template>
                   </div>
                 </td>
