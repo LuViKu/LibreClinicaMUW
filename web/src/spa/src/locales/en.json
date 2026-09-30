@@ -561,12 +561,13 @@
       "eventDate": "Event date",
       "crf": "CRF",
       "requirement": "Requirement",
-      "status": "Status"
+      "status": "Status",
+      "openQueries": "Open queries",
+      "lastUpdated": "Last updated"
     },
     "action": {
       "markAsVerified": "Mark {count} as verified (SDV)",
       "cancelSelection": "Cancel",
-      "addQuery": "Add query",
       "openCrf": "Open CRF",
       "unverify": "Roll back verification"
     },
@@ -586,22 +587,26 @@
       "title": "Mark as verified?",
       "body": "All {count} selected CRFs will be flipped to Verified (SDV). The action is recorded in the audit log.",
       "note": "If data on a verified CRF is later changed, its SDV status resets to Pending automatically.",
-      "auditNote": "Audit trail entry will reference monitor_demo + the timestamp.",
+      "auditNote": "The audit trail records {user} and the time.",
       "cta": "Mark {count} as verified"
     },
-    "query": {
-      "title": "Add Note",
-      "noteType": "Note type",
-      "descriptionLabel": "Description",
-      "descriptionPlaceholder": "What needs clarifying? Reference the source document if relevant…",
-      "submit": "Submit query",
-      "auditTrailTell": "Audit trail entry will reference: monitor_demo · timestamp",
-      "type": {
-        "query": "Query",
-        "failed-validation": "Failed validation",
-        "annotation": "Annotation",
-        "reason-for-change": "Reason for change"
-      }
+    "view": {
+      "label": "View",
+      "byCrf": "By CRF",
+      "bySubject": "By subject"
+    },
+    "bySubject": {
+      "count": "{count} subject(s)",
+      "complete": "Complete CRFs",
+      "verified": "Verified",
+      "withQueries": "With open queries",
+      "verifiable": "Awaiting SDV",
+      "verify": "Verify {count} CRF(s)",
+      "allVerified": "All verified",
+      "nothingToVerify": "Nothing to verify",
+      "confirmTitle": "Verify the subject?",
+      "confirmBody": "{count} CRF(s) of {subject} will be marked verified (SDV).",
+      "confirmScope": "This covers the subject's complete CRFs that require SDV. A CRF with an open query stays in the queue until the query is closed."
     }
   },
   "notes": {
