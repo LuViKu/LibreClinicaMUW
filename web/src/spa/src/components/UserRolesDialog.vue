@@ -10,6 +10,7 @@ import RoleDots from '@/components/RoleDots.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import { useAdminStudiesStore } from '@/stores/adminStudies'
 import { useConfirm } from '@/composables/useConfirm'
 import type { RoleBinding, StudyUser, UserRole } from '@/types/user'
 
@@ -28,8 +29,12 @@ import type { RoleBinding, StudyUser, UserRole } from '@/types/user'
  * exclude it from the checkbox group; if a study somehow carries an
  * Administrator binding (legacy data) the RoleDots row still shows it.
  *
- * Study picker for "Add study" is sourced from `auth.availableStudies`;
- * we filter to studies the user does not yet have any binding on.
+ * The "Add study" picker offers the studies the user holds no binding on
+ * yet. For a system administrator that is every study and site that is
+ * not removed (the admin study list), as in the legacy Set User Role
+ * page; `auth.availableStudies` holds only the studies the administrator
+ * is bound to, which for an administrator without study roles is none.
+ * Anyone else is refused by the server anyway, and keeps the old list.
  */
 interface Props {
   open: boolean
@@ -41,6 +46,7 @@ const emit = defineEmits<{ 'update:open': [v: boolean]; close: [] }>()
 const { t } = useI18n()
 const users = useUsersStore()
 const auth = useAuthStore()
+const adminStudies = useAdminStudiesStore()
 const confirm = useConfirm()
 
 const bindings = ref<RoleBinding[]>([])
@@ -94,7 +100,8 @@ watch(
       addStudyOid.value = ''
       addStudyDraft.value = []
       addStudyError.value = null
-      if (auth.availableStudies.length === 0) auth.loadStudies()
+      if (auth.isSysAdmin) void adminStudies.ensureLoaded()
+      else if (auth.availableStudies.length === 0) auth.loadStudies()
       refresh()
     }
   },
@@ -133,7 +140,8 @@ const bindingsByStudy = computed<StudyGroup[]>(() => {
    active binding for. */
 const availableForGrant = computed(() => {
   const taken = new Set(bindingsByStudy.value.map((g) => g.studyOid))
-  return auth.availableStudies.filter((s) => !taken.has(s.oid))
+  const source = auth.isSysAdmin && !adminStudies.error ? adminStudies.openable : auth.availableStudies
+  return source.filter((s) => !taken.has(s.oid))
 })
 
 /** Effective selected roles for a study group — local edits win
@@ -361,7 +369,9 @@ function close() {
             <FieldLabel for="add-role-study" required>{{ t('manageUsers.roles.study') }}</FieldLabel>
             <SelectInput id="add-role-study" v-model="addStudyOid" :disabled="isSubmitting">
               <option value="">{{ t('manageUsers.roles.studyPlaceholder') }}</option>
-              <option v-for="s in availableForGrant" :key="s.oid" :value="s.oid">{{ s.name }}</option>
+              <option v-for="s in availableForGrant" :key="s.oid" :value="s.oid">
+                {{ s.parentName ? `${s.parentName} › ${s.name}` : s.name }}
+              </option>
             </SelectInput>
           </div>
           <fieldset v-if="addStudyOid !== ''">

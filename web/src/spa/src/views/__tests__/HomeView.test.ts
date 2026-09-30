@@ -344,6 +344,8 @@ describe('HomeView dashboard', () => {
     const sysadmin = mountWith(['Administrator'], 'SYSADMIN')
     await sysadmin.vm.$nextTick()
     expect(cardIds(sysadmin)).toContain('admin-studies')
+    // A system administrator can open any study, so switching is offered with one binding too.
+    expect(cardIds(sysadmin)).toContain('switch-study')
 
     const studyAdmin = mountWith(['Administrator'], 'USER')
     await studyAdmin.vm.$nextTick()
