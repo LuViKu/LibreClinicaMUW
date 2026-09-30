@@ -137,6 +137,8 @@ class EventCrfRemovalDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(5, statusOf("event_crf", 10));
         for (int value : new int[] {25, 26, 27}) assertEquals(7, statusOf("item_data", value));
         assertEquals(5, statusOf("item_data", 28));
+        assertEquals("modality_baseline", row("SELECT source_kind FROM item_data WHERE item_data_id = ?", 25).get(0),
+                "the removal lost the value's provenance");
 
         mockMvc().perform(post("/api/v1/eventCrfs/10/restore").session(dm))
                 .andExpect(status().isNoContent());
@@ -145,7 +147,7 @@ class EventCrfRemovalDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(5, statusOf("item_data", 28), "a value removed on its own must stay removed");
         assertEquals(valuesBefore, values(10));
         assertEquals("modality_baseline", row("SELECT source_kind FROM item_data WHERE item_data_id = ?", 25).get(0),
-                "the value's provenance was lost");
+                "the restore lost the value's provenance");
     }
 
     /** Legacy lets only a data manager, a coordinator or a system administrator remove a CRF. */
