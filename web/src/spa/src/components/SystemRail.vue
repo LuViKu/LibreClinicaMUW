@@ -2,9 +2,10 @@
 /**
  * System section rail — the instance-level pages, navigable as a section.
  *
- * Five pages are about the running instance rather than any study: the
- * system status, the system-wide audit trail, the password policy, the
- * application configuration and the scheduled jobs. Until 2026-09-22 none of
+ * Six pages are about the running instance rather than any study: the
+ * system status, the system-wide audit trail, the login history (since
+ * 2026-09-30), the password policy, the application configuration and the
+ * scheduled jobs. Until 2026-09-22 none of
  * them was linked from anywhere — the top bar carried one Administrator-only
  * entry, to the audit trail, and the other four were reachable by typing
  * their address. A status page nobody can reach by clicking does not report
@@ -26,10 +27,11 @@ interface RailItem {
   labelKey: string
 }
 
-/** Overview first, then the trail, then the two settings pages, then the jobs. */
+/** Overview first, then the two trails, then the two settings pages, then the jobs. */
 const ITEMS: readonly RailItem[] = [
   { id: 'status', to: '/admin/system-status', labelKey: 'adminSystemStatus.title' },
   { id: 'audit', to: '/system/audit-log', labelKey: 'system.rail.audit' },
+  { id: 'login-history', to: '/admin/login-history', labelKey: 'adminLoginHistory.title' },
   { id: 'password-policy', to: '/admin/password-policy', labelKey: 'adminPasswordPolicy.title' },
   { id: 'config', to: '/admin/config', labelKey: 'adminConfig.title' },
   { id: 'jobs', to: '/admin/jobs', labelKey: 'adminJobs.title' },

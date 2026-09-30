@@ -380,6 +380,45 @@
     "changeRequiredOnFirstLogin": "Passwort-Änderung bei erster Anmeldung erzwingen",
     "discard": "Neu laden"
   },
+  "adminLoginHistory": {
+    "title": "Anmeldeverlauf",
+    "subtitle": "Jede An- und Abmeldung und jede fehlgeschlagene Anmeldung, auch über SSO. Neueste zuerst.",
+    "loadFailed": "Der Anmeldeverlauf konnte nicht geladen werden.",
+    "exportCsv": "CSV exportieren",
+    "exporting": "Wird exportiert…",
+    "exportHint": "Alle Zeilen, die die Filter auswählen, nicht nur diese Seite.",
+    "exportFailed": "Export des Anmeldeverlaufs fehlgeschlagen.",
+    "empty": "Keine Anmeldeversuche für diese Filter.",
+    "range": "{start}–{end} von {total}",
+    "pageOfTotal": "Seite {page} von {total}",
+    "prev": "Zurück",
+    "next": "Weiter",
+    "filter": {
+      "user": "Nutzer/-in",
+      "userPlaceholder": "Teil eines Nutzernamens",
+      "status": "Status",
+      "allStatuses": "Alle Status",
+      "allRefused": "Alle abgewiesenen Anmeldungen",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "col": {
+      "when": "Zeitpunkt",
+      "user": "Nutzername",
+      "status": "Status",
+      "details": "Details"
+    },
+    "status": {
+      "SUCCESSFUL_LOGIN": "Anmeldung erfolgreich",
+      "FAILED_LOGIN": "Anmeldung fehlgeschlagen",
+      "FAILED_LOGIN_LOCKED": "Abgewiesen: Konto gesperrt",
+      "SUCCESSFUL_LOGOUT": "Abmeldung",
+      "ACCESS_CODE_VIEWED": "Zugangscode angezeigt",
+      "SSO_LOGIN": "SSO-Anmeldung",
+      "SSO_LOGIN_FAILED": "SSO-Anmeldung abgewiesen",
+      "UNKNOWN": "Unbekannter Status ({code})"
+    }
+  },
   "adminConfig": {
     "title": "Anwendungskonfiguration",
     "subtitle": "Nur lesend — am MUW über Umgebungsvariablen gesetzt. Diese Ansicht zeigt, was die laufende JVM tatsächlich sieht.",

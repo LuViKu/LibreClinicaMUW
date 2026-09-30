@@ -380,6 +380,45 @@
     "changeRequiredOnFirstLogin": "Force password change on first login",
     "discard": "Reload"
   },
+  "adminLoginHistory": {
+    "title": "Login history",
+    "subtitle": "Every login, logout and failed login, SSO included. Newest first.",
+    "loadFailed": "Failed to load the login history.",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting…",
+    "exportHint": "Every row the filters select, not only this page.",
+    "exportFailed": "Failed to export the login history.",
+    "empty": "No login attempts match these filters.",
+    "range": "{start}–{end} of {total}",
+    "pageOfTotal": "Page {page} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "filter": {
+      "user": "User",
+      "userPlaceholder": "Part of a user name",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "allRefused": "All refused logins",
+      "from": "From",
+      "to": "To"
+    },
+    "col": {
+      "when": "When",
+      "user": "User name",
+      "status": "Status",
+      "details": "Details"
+    },
+    "status": {
+      "SUCCESSFUL_LOGIN": "Successful login",
+      "FAILED_LOGIN": "Failed login",
+      "FAILED_LOGIN_LOCKED": "Refused: account locked",
+      "SUCCESSFUL_LOGOUT": "Logout",
+      "ACCESS_CODE_VIEWED": "Access code viewed",
+      "SSO_LOGIN": "SSO login",
+      "SSO_LOGIN_FAILED": "SSO login refused",
+      "UNKNOWN": "Unknown status ({code})"
+    }
+  },
   "adminConfig": {
     "title": "Application configuration",
     "subtitle": "Read-only — at MUW these are env-var driven. Use this view to verify what the running JVM actually sees.",
