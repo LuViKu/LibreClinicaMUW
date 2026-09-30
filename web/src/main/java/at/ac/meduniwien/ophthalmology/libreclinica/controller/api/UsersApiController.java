@@ -195,6 +195,11 @@ public class UsersApiController {
 
         Map<Integer, UserAccountBean> userCache = new HashMap<>();
         Map<Integer, StudyBean> studyCache = new HashMap<>();
+        // The account details (phone, affiliation, type, who created and
+        // changed it) are for user administration, which is sysadmin-only,
+        // as is the legacy View User page. A study-scoped caller gets the
+        // slim row it always got.
+        Usernames usernames = globalList ? new Usernames(userDao) : null;
         // user_id → best-row-so-far. The best row is the one whose
         // projected SPA role ranks highest in ROLE_PRIORITY.
         Map<Integer, StudyUserDto> bestByUser = new LinkedHashMap<>();
@@ -246,17 +251,8 @@ public class UsersApiController {
             if (activeFilter != null && active != activeFilter) continue;
 
             boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
-            StudyUserDto candidate = new StudyUserDto(
-                    String.valueOf(ua.getId()),
-                    nullToEmpty(ua.getName()),
-                    displayName(ua),
-                    blankToNull(ua.getEmail()),
-                    spaRole,
-                    siteLabel,
-                    auth,
-                    lastLogin,
-                    active,
-                    locked);
+            StudyUserDto candidate = toStudyUserDto(ua, spaRole, siteLabel, auth, lastLogin,
+                    active, locked, usernames);
             StudyUserDto current = bestByUser.get(ua.getId());
             if (current == null || rolePriority(spaRole) > rolePriority(current.role())) {
                 bestByUser.put(ua.getId(), candidate);
@@ -471,17 +467,9 @@ public class UsersApiController {
         String spaRole = RoleMapper.toSpaRole(legacyRole.getName());
         boolean isSite = initialStudy.getParentStudyId() > 0;
         String siteLabel = isSite ? initialStudy.getName() : null;
-        StudyUserDto dto = new StudyUserDto(
-                String.valueOf(persisted.getId()),
-                nullToEmpty(persisted.getName()),
-                displayName(persisted),
-                blankToNull(persisted.getEmail()),
-                spaRole,
-                siteLabel,
-                authForUser(persisted),
-                null,
-                true,
-                false);
+        UserAccountBean created = userDao.findByPK(persisted.getId());
+        StudyUserDto dto = toStudyUserDto(created.getId() > 0 ? created : persisted, spaRole, siteLabel,
+                authForUser(persisted), null, true, false, new Usernames(userDao));
 
         Map<String, Object> response = new HashMap<>();
         response.put("user", dto);
@@ -529,6 +517,11 @@ public class UsersApiController {
 
         requireNonBlank(body.institutionalAffiliation(), "institutionalAffiliation", 255,
                 "Institutional affiliation", out);
+        // user_account.phone is VARCHAR(64).
+        if (body.phone() != null && body.phone().trim().length() > 64) {
+            out.add(new ValidationErrorBody.FieldError(
+                    "phone", "Phone must be 64 characters or fewer"));
+        }
 
         if (body.studyId() == null || body.studyId() <= 0) {
             out.add(new ValidationErrorBody.FieldError(
@@ -1754,6 +1747,14 @@ public class UsersApiController {
                 return ResponseEntity.status(403).body(Map.of("message",
                         "Only a TechAdmin may grant the TECHADMIN user type"));
             }
+            // The other half of the same rule: a business administrator
+            // cannot take the type away either. The legacy list shows a
+            // technical administrator's row without actions to them.
+            if (requestedType != null && requestedType != UserType.TECHADMIN
+                    && target.isTechAdmin() && !me.isTechAdmin()) {
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "Only a TechAdmin may change a TechAdmin's user type"));
+            }
         }
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
@@ -1868,6 +1869,10 @@ public class UsersApiController {
             String s = body.institutionalAffiliation().trim();
             if (s.isEmpty()) out.add(fieldError("institutionalAffiliation", "Institutional affiliation cannot be blank"));
             else if (s.length() > 255) out.add(fieldError("institutionalAffiliation", "Institutional affiliation must be 255 characters or fewer"));
+        }
+        // Optional and clearable; user_account.phone is VARCHAR(64).
+        if (body.phone() != null && body.phone().trim().length() > 64) {
+            out.add(fieldError("phone", "Phone must be 64 characters or fewer"));
         }
         if (body.userType() != null) {
             String s = body.userType();
@@ -2000,6 +2005,22 @@ public class UsersApiController {
                         .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
         boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
         boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
+        return toStudyUserDto(ua, spaRole, siteLabel, authForUser(ua), lastLogin, active, locked,
+                new Usernames(new UserAccountDAO(dataSource)));
+    }
+
+    /**
+     * The wire row for one user. The profile, account-type and
+     * created / updated fields are what the legacy View User page shows;
+     * the SPA's edit dialog pre-fills from them and the periodic access
+     * review reads them. They are filled only when {@code usernames} is
+     * given, that is for a system administrator; otherwise they are null
+     * and left off the wire.
+     */
+    private static StudyUserDto toStudyUserDto(UserAccountBean ua, String spaRole, String siteLabel,
+                                               String auth, String lastLogin, boolean active,
+                                               boolean locked, Usernames usernames) {
+        boolean details = usernames != null;
         return new StudyUserDto(
                 String.valueOf(ua.getId()),
                 nullToEmpty(ua.getName()),
@@ -2007,10 +2028,56 @@ public class UsersApiController {
                 blankToNull(ua.getEmail()),
                 spaRole,
                 siteLabel,
-                authForUser(ua),
+                auth,
                 lastLogin,
                 active,
-                locked);
+                locked,
+                details ? blankToNull(ua.getFirstName()) : null,
+                details ? blankToNull(ua.getLastName()) : null,
+                details ? blankToNull(ua.getPhone()) : null,
+                details ? blankToNull(ua.getInstitutionalAffiliation()) : null,
+                details ? userTypeKey(ua) : null,
+                details ? isoDate(ua.getCreatedDate()) : null,
+                details ? usernames.of(ua.getOwnerId()) : null,
+                details ? isoDate(ua.getUpdatedDate()) : null,
+                details ? usernames.of(ua.getUpdaterId()) : null);
+    }
+
+    /** {@code USER}, {@code SYSADMIN} or {@code TECHADMIN}; see {@link #currentUserType}. */
+    private static String userTypeKey(UserAccountBean ua) {
+        UserType type = currentUserType(ua);
+        if (type == UserType.TECHADMIN) return "TECHADMIN";
+        if (type == UserType.SYSADMIN) return "SYSADMIN";
+        return "USER";
+    }
+
+    /**
+     * ISO date of a {@code DATE} column, in the server's zone the column
+     * was written in. The bean's placeholder (the epoch) means unset.
+     */
+    private static String isoDate(java.util.Date d) {
+        if (d == null || d.getTime() == 0) return null;
+        return java.time.Instant.ofEpochMilli(d.getTime())
+                .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString();
+    }
+
+    /** Usernames by account id for the owner and updater columns, looked up once each. */
+    private static final class Usernames {
+        private final UserAccountDAO dao;
+        private final Map<Integer, String> byId = new HashMap<>();
+
+        Usernames(UserAccountDAO dao) {
+            this.dao = dao;
+        }
+
+        String of(int userId) {
+            if (userId <= 0) return null;
+            if (!byId.containsKey(userId)) {
+                UserAccountBean u = dao.findByPK(userId, false);
+                byId.put(userId, u == null || u.getId() == 0 ? null : u.getName());
+            }
+            return byId.get(userId);
+        }
     }
 
     /* ----------------------------------------------------------------- */
