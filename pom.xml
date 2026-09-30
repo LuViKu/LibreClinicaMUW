@@ -686,12 +686,6 @@
 				<artifactId>jakarta.mail</artifactId>
 				<version>2.0.3</version>
 			</dependency>
-			<dependency>
-				<groupId>xml-apis</groupId>
-				<artifactId>xml-apis</artifactId>
-				<!-- make sure the version matches the one used by the batik libs (e.g. org.apache.xmlgraphics:batik-dom) -->
-				<version>1.3.04</version>
-			</dependency>
 			<!-- HIBERNATE — jakarta-namespaced artifact at 5.6.x.
 			     B.5 bumps to Hibernate 6.4.x (jakarta-native; no separate
 			     artifact suffix needed). Hibernate L2 cache (formerly
@@ -766,26 +760,6 @@
 				<scope>runtime</scope>
 				<version>${jaxb.runtime.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>xerces</groupId>
-				<artifactId>xmlParserAPIs</artifactId>
-				<version>2.2.1</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>jtidy</groupId>
-				<artifactId>jtidy</artifactId>
-				<!-- make sure the version matches the one used by the httpunit -->
-				<version>4aug2000r7-dev</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>javax.servlet</groupId>
-				<artifactId>servlet-api</artifactId>
-				<!-- make sure the version matches the one used by the httpunit -->
-				<version>2.3</version>
-				<scope>provided</scope>
-			</dependency>
 			<!-- Postgres JDBC driver -->
 			<dependency>
 				<groupId>org.postgresql</groupId>
@@ -851,12 +825,6 @@
 				<groupId>com.lowagie</groupId>
 				<artifactId>itext</artifactId>
 				<version>2.1.2</version>
-			</dependency>
-			<dependency>
-				<groupId>httpunit</groupId>
-				<artifactId>httpunit</artifactId>
-				<version>1.6.1</version>
-				<scope>test</scope>
 			</dependency>
 			<!-- XMLUnit 2.x: canonical XML comparison for Phase B.0 Castor
 			     characterisation tests. See DR-006 + phase-b-execution-playbook.md
