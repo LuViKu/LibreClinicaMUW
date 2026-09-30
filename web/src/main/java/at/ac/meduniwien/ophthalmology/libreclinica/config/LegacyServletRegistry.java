@@ -197,7 +197,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ListStudySubje
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ListStudySubjectsSubmitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.MarkEventCRFCompleteServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.MatchPasswordServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ParticipantFormServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.RemoveRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.RestoreRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.RunRuleServlet;
@@ -536,9 +535,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg94 = ctx.addServlet("MatchPasswordServlet", MatchPasswordServlet.class);
             reg94.addMapping("/MatchPassword");
-
-            ServletRegistration.Dynamic reg95 = ctx.addServlet("ParticipantFormServlet", ParticipantFormServlet.class);
-            reg95.addMapping("/ParticipantFormServlet");
 
             ServletRegistration.Dynamic reg96 = ctx.addServlet("PauseJobServlet", PauseJobServlet.class);
             reg96.addMapping("/PauseJob");

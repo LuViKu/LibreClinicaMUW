@@ -6,7 +6,7 @@
  * copyright (C) 2026 Department of Ophthalmology and Optometry,
  *                     Medical University of Vienna
  */
-package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
+package at.ac.meduniwien.ophthalmology.libreclinica.service.xml;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,19 +14,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.SecureXmlFactories;
 import org.junit.jupiter.api.Test;
 import org.xml.sax.SAXParseException;
 
 /**
  * The WAR ships Apache Xerces, which then wins the JAXP service lookup and
- * ignores the JDK's accessExternal* limits. The OpenRosa, XForm and ODM
- * import parsers must refuse a DOCTYPE on this classpath too.
+ * ignores the JDK's accessExternal* limits. The XML import parsers must
+ * refuse a DOCTYPE on this classpath too.
  */
 class SecureXmlOnWarClasspathTest {
 
-    private static final String OPENROSA_SUBMISSION_WITH_DOCTYPE =
+    private static final String DOCUMENT_WITH_DOCTYPE =
             "<?xml version=\"1.0\"?><!DOCTYPE data [<!ENTITY v \"42\">]>"
             + "<data><instance><F_VA><VA_OD>&v;</VA_OD></F_VA></instance></data>";
 
@@ -34,7 +32,7 @@ class SecureXmlOnWarClasspathTest {
     void domParserRefusesDoctype() {
         assertThrows(SAXParseException.class, () -> SecureXmlFactories.newDocumentBuilderFactory()
                 .newDocumentBuilder()
-                .parse(new ByteArrayInputStream(OPENROSA_SUBMISSION_WITH_DOCTYPE.getBytes(StandardCharsets.UTF_8))));
+                .parse(new ByteArrayInputStream(DOCUMENT_WITH_DOCTYPE.getBytes(StandardCharsets.UTF_8))));
     }
 
     @Test

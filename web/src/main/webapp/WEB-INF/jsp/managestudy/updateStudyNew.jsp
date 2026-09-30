@@ -100,20 +100,6 @@
 	         }
            }
        
-           function registerPManage(event){
-               var regURL = 'pages/pmanage/regSubmit?studyoid=' + "${studyToView.oid}";
-               jQuery.ajax({
-        	       type:'GET',
-        	       url: regURL,
-        	       success: function(data){
-                       jQuery('#pManageDiv').html('Registration: ' + data);
-        	    }});
-           }
-           
-           function togglePManage(show){
-        	   if (show) jQuery('#pManageDiv').show();
-        	   else jQuery('#pManageDiv').hide();
-           }
        //-->
  </script>
 

@@ -150,16 +150,9 @@ public class SecurityConfig {
                         "/images/**",
                         "/help/**",
                         "/ws/**",
-                        "/rest2/openrosa/**",
-                        "/pages/odmk/**",
-                        "/pages/openrosa/**",
-                        "/pages/accounts/**",
                         "/pages/itemdata/**",
                         "/pages/auth/api/v1/studies/**",
-                        "/pages/odmss/**",
                         "/pages/healthcheck/**",
-                        "/pages/api/v1/anonymousform/**",
-                        "/pages/api/v2/anonymousform/**",
                         // Phase E.8 Slice L2 (2026-06-20): SPA replacement
                         // for the legacy /pages/Contact JSP. Unauthenticated
                         // by design — same audience as the legacy form.
@@ -209,7 +202,6 @@ public class SecurityConfig {
                         // (404) with core.uploaderHealth.heartbeat.enabled=false.
                         // See UploaderHeartbeatApiController.
                         "/pages/api/v1/device/uploader/**",
-                        "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",
                         "/pages/api/v1/forms/migrate/**",
