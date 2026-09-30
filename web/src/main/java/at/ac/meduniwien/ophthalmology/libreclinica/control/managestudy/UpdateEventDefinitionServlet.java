@@ -110,7 +110,6 @@ public class UpdateEventDefinitionServlet extends SecureController {
         StudyEventDefinitionBean sed = (StudyEventDefinitionBean) session.getAttribute("definition");
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
         String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-        if (participateFormStatus.equals("enabled")) baseUrl();
 
         request.setAttribute("participateFormStatus",participateFormStatus );
 

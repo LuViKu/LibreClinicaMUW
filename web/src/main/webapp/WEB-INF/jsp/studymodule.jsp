@@ -90,34 +90,6 @@
 </c:if>
 
 
-<c:if test="${portalURL!= '' && portalURL!= null}">
-    <script type="text/javascript">
-        jQuery(document).ready(function() {
-            jQuery('#requestParticipateAccess').click(function() {
-                jQuery.blockUI({ message: jQuery('#requestParticipateForm'), css:{left: "300px", top:"10px" } });
-            });
-
-            jQuery('#cancelParticipateAccessRequest').click(function() {
-                jQuery.unblockUI();
-                $('#participateWarnings').empty();
-            });
-            // If there are warnings, we failed in a previous submission and should display the warnings on the popup window.
-            var warnings = "${regMessages}";
-            if (warnings.length > 0) {
-            	jQuery.blockUI({ message: jQuery('#requestParticipateForm'), css:{left: "300px", top:"10px" } });
-            }
-        });
-
-        // Hide the popup window if the escape key is pressed
-        jQuery(document).keyup(function(keyPressed) {
-            if(keyPressed.keyCode === 27) {
-                $('#participateWarnings').empty();
-                jQuery.unblockUI();
-            }
-        });
-    </script>
-</c:if>
-
 <div id="StudyModule">
 <form action="studymodule" method="post">
   
@@ -534,7 +506,7 @@
   <br>
   <br>
 
-<c:if test="${ (portalURL!= '' && portalURL!= null) || (moduleManager!= '' && moduleManager!= null)}"> <!-- display information about participate and randomisation only if applicable -->
+<c:if test="${moduleManager!= '' && moduleManager!= null}"> <!-- display information about randomisation only if applicable -->
       <table class="contenttable">
           <thead>
           <tr>
@@ -545,48 +517,6 @@
               <td><b><fmt:message key="actions" bundle="${resword}"/></b></td>
               </tr>
           </thead>
-
-            <c:if test="${portalURL!= '' && portalURL!= null}">
-
-          <tbody>
-              <tr>
-                  <td>&nbsp;</td>
-                  <td><fmt:message key="participate" bundle="${resword}"/></td>
-                  <td>
-                      <c:choose>
-                          <c:when test="${participateOCStatus == 'disabled'}"><span id="participateStatus" class="participate-inactive-status"><fmt:message key="participate_status_deactivated" bundle="${resword}"/></span></c:when>
-                          <c:when test="${empty participateStatus}"><span id="participateStatus"><fmt:message key="participate_status_notfound" bundle="${resword}"/></span></c:when>
-                          <c:when test="${participateStatus == 'PENDING'}"><span id="participateStatus"><fmt:message key="participate_status_pending" bundle="${resword}"/></span></c:when>
-                          <c:when test="${participateStatus == 'ACTIVE'}"><span id="participateStatus" class="participate-active-status"><fmt:message key="participate_status_active" bundle="${resword}"/></span></c:when>
-                          <c:when test="${participateStatus == 'INACTIVE'}"><span id="participateStatus" class="participate-inactive-status"><fmt:message key="participate_status_inactive" bundle="${resword}"/></span></c:when>
-                      </c:choose>
-                  </td>
-                  <td>
-                      <span id="participateURL">
-                          <c:choose>
-                              <c:when test="${!empty participateURLDisplay}">${participateURLDisplay}</c:when>
-                              <c:otherwise>&nbsp;</c:otherwise>
-                          </c:choose>
-                      </span>
-                  </td>
-                  <td>
-                      <c:url var="reactivateParticipate" value="studymodule/${currentStudy.oid}/reactivate"/>
-                      <c:url var="deactivateParticipate" value="studymodule/${currentStudy.oid}/deactivate"/>
-                      <c:choose>
-                          <c:when test="${participateOCStatus == 'disabled' && !empty participateStatus}">
-                              <a href="${reactivateParticipate}" id="reactivateParticipateAccess" onclick="return studyModulePost(this.href);"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
-                          </c:when>
-                          <c:when test="${participateOCStatus == 'disabled'}">
-                              <a href="javascript:;" id="requestParticipateAccess"><img src="../images/create_new.gif" border="0" alt="<fmt:message key="enable" bundle="${resword}"/>" title="<fmt:message key="enable" bundle="${resword}"/>"/></a>
-                          </c:when>
-                          <c:otherwise>
-                              <a href="${deactivateParticipate}" id="removeParticipateAccess" onclick="return studyModulePost(this.href);"><img src="../images/bt_Remove.gif" border="0" alt="<fmt:message key="disable" bundle="${resword}"/>" title="<fmt:message key="disable" bundle="${resword}"/>"/></a>
-                          </c:otherwise>
-                      </c:choose>
-                  </td>
-              </tr>
-          </tbody>
-          </c:if>
 
          <c:if test="${moduleManager!= '' && moduleManager!= null}">
           <tbody>
@@ -658,32 +588,6 @@
 	</div>
 </form>
 </div> <!-- end of div studymodule -->
-
-<c:if test="${portalURL!= '' && portalURL!= null}">
-    <div id="requestParticipateForm" class="participate-registration-div">
-        <form action="studymodule/${currentStudy.oid}/register" method="post">
-            <h1>
-                <fmt:message key="participate_reg_title" bundle="${resword}"/>
-            </h1>
-            <p class="participate-text"><fmt:message key="participate_reg_instructions_part1" bundle="${resword}"/></p>
-            <p class="participate-text"><fmt:message key="participate_reg_instructions_part2" bundle="${resword}"/></p>
-            <span class="participate-text"><c:out value="${participateURL.protocol}"/>:// </span>
-            <input type="text" name="hostName" id="hostName"/>
-            <span class="participate-text"> .<c:out value="${participateURL.host}"/><c:if test="${participateURL.port > 0}">:<c:out value="${participateURL.port}"/></c:if></span>
-            <br>
-            <c:if test="${!empty regMessages}">
-                <div id="participateWarnings" class="participate-warnings">
-                    <c:forEach var="message" items="${regMessages}">
-                        <c:out value="${message}" escapeXml="false"/>
-                        <br>
-                    </c:forEach>
-                </div>
-            </c:if>
-            <input type="submit" id="submitParticipateAccessRequest" class="button_medium" value="Request Access"/>
-            <input type="button" id="cancelParticipateAccessRequest" class="button" value="Cancel"/>
-        </form>
-    </div>
-</c:if>
 
  <c:if test="${moduleManager!= '' && moduleManager!= null}">
     <div id="requestRandomizationForm" class="randomization-registration-div">
