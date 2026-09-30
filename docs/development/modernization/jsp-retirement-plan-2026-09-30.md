@@ -118,6 +118,7 @@ The work runs in five stages, with code scanning in parallel as track S.
 | R0.8 | Dead-code sweep 2: never reachable, so no bake-in | S | See below |
 | R0.9 | Verify an inferred authorization gap | S | `CreateNewStudyEventServlet.java:107-115` loads a study subject by id with a "make this sensitive to permissions" note and no study check in view. Confirm whether a later check scopes it. If not, fix it now or close the servlet early (the SPA schedules events) |
 | R0.10 | Review the unauthenticated path list in `SecurityConfig` | S | `/pages/auth/api/**` is public as a whole, so each controller under it has to check the session itself. An anonymous probe of nine of these paths returned no data (401, 500 or redirect), and `BatchCRFMigrationController` checks the study role before acting. Narrow the list to the paths that need anonymity; R0.6 removes nine groups |
+| R0.11 | One documentation-drift PR, so the next survey isn't misled | S | See below |
 
 **R0.3 — make retirement tracking work.**
 
@@ -160,6 +161,23 @@ Removing the registrar calls also **fixes the `/ViewStudy` 500**. That page, the
 - `decorator.jsp` and the GWT menu reference: SiteMesh has not been a dependency since 2020.
 - The `ws` / `OpenClinicaJersey` / `OpenClinicaJersey2` zombie registrations, and the `/ws/**` and `/rest2/openrosa/**` public entries: none of it loads on jakarta.
 - The four `Page` constants that point at deleted files but are still compared in `BreadcrumbTrail` / `StudyInfoPanel`. Remove the comparisons with them.
+
+**R0.11 — documentation drift.** Found by the 2026-09-30 plan survey; the second bullet is verified in this plan.
+
+- **`MIGRATION.md`:**
+  - calls Phase C closed, although the archived Phase C playbook records it as partial;
+  - its D-Libs table still lists POI 3.0.1 and FOP 1.0;
+  - it links `ui-modernization-plan.md`, which does not exist;
+  - it still describes an upstream-merge protocol.
+- **`CLAUDE.md`:**
+  - still says "~295 legacy servlets" and SiteMesh; it is 214, and SiteMesh has not been a dependency since 2020;
+  - still lists the listing-page wave as open, although it has shipped.
+- **Phase E playbook and decision lists:**
+  - still show DR-008 and DR-019 as open;
+  - the open-decisions list still carries DR-009 (obsolete), DR-012 (done) and DR-013 (Ehcache 3 in practice).
+- **Heritage-debt audit:** still shows "TBD" for items fixed in `a3268c61b`.
+- **Missing document:** `legacy-retirement-2026-06-20.md` is cited but does not exist.
+- **DR-004** probably needs an amendment: its "no clinical onboarding before Phase D ends" clause is in tension with the imaging pilot while D-Libs is open. This one is inferred, not verified.
 
 ---
 
