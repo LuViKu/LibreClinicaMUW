@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -46,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
@@ -486,23 +489,100 @@ public class StudiesApiController {
     /* ----------------------------------------------------------------- */
     /* POST /api/v1/studies/{studyOid}/disable                            */
     /* POST /api/v1/studies/{studyOid}/restore                            */
+    /* GET  /api/v1/studies/{studyOid}/removal-preview                    */
     /*   (Phase E A8.1 — study lifecycle, sysadmin only)                  */
     /* ----------------------------------------------------------------- */
 
+    /**
+     * Body of {@code POST /studies/{oid}/disable} and {@code /restore}.
+     * The reason is required; it lands in the lifecycle audit row's
+     * {@code reason_for_change}.
+     */
+    @Schema(name = "StudyLifecycleRequest")
+    public record StudyLifecycleRequest(String reason) {}
+
+    /**
+     * Removes a top-level study and auto-removes everything under it:
+     * sites, role bindings, subjects, subject-group classes and maps,
+     * event definitions, events, event CRFs, item data and datasets. The
+     * same cascade as the legacy {@code RemoveStudyServlet}, in one
+     * transaction; {@link StudyLifecycleCascade} lists where it differs.
+     *
+     * <p>Status codes: {@code 200} with the removed study, {@code 400}
+     * without a reason, {@code 401}, {@code 403} for a non-sysadmin,
+     * {@code 404}, {@code 409} for a site (sites have their own
+     * endpoint) or a study that is already removed.
+     */
     @PostMapping("/{studyOid}/disable")
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = StudyIdentityDto.class)))
     public ResponseEntity<?> disable(@PathVariable("studyOid") String studyOid,
+                                     @RequestBody(required = false) StudyLifecycleRequest body,
                                      HttpSession session) {
-        return lifecycle(studyOid, session, Status.DELETED, "disable");
+        return lifecycle(studyOid, body, session, Status.DELETED, "disable");
     }
 
+    /**
+     * Restores a removed study and what its removal auto-removed, like the
+     * legacy {@code RestoreStudyServlet}. The study returns to the status
+     * it had when it was removed. Same status codes as {@link #disable},
+     * with {@code 409} for a study that is not removed.
+     */
     @PostMapping("/{studyOid}/restore")
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = StudyIdentityDto.class)))
     public ResponseEntity<?> restore(@PathVariable("studyOid") String studyOid,
+                                     @RequestBody(required = false) StudyLifecycleRequest body,
                                      HttpSession session) {
-        return lifecycle(studyOid, session, Status.AVAILABLE, "restore");
+        return lifecycle(studyOid, body, session, Status.AVAILABLE, "restore");
+    }
+
+    /**
+     * What removing the study would take with it, counted per kind, for
+     * the confirmation the SPA shows before {@link #disable}. Reads only.
+     * Sysadmin only, like the removal itself.
+     */
+    @GetMapping("/{studyOid}/removal-preview")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyRemovalPreviewDto.class)))
+    public ResponseEntity<?> removalPreview(@PathVariable("studyOid") String studyOid,
+                                            HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (!StudyAdminAuthorization.roleMayLifecycleStudy(me)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit study removal — sysadmin only"));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean target = studyDao.findByOid(studyOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + studyOid + "'"));
+        }
+        if (target.getParentStudyId() > 0) {
+            return siteRefusal(studyOid);
+        }
+        try (Connection c = dataSource.getConnection()) {
+            StudyLifecycleCascade.Impact impact = StudyLifecycleCascade.previewRemoval(c, target.getId());
+            return ResponseEntity.ok(new StudyRemovalPreviewDto(
+                    target.getOid(),
+                    nullToEmpty(target.getName()),
+                    impact.siteNames(),
+                    impact.roleBindings(),
+                    impact.subjects(),
+                    impact.groupClasses(),
+                    impact.eventDefinitions(),
+                    impact.events(),
+                    impact.eventCrfs(),
+                    impact.itemData(),
+                    impact.datasets()));
+        } catch (SQLException e) {
+            LOG.warn("Removal preview failed for study {}: {}", studyOid, e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to count what the removal would take — see server log."));
+        }
     }
 
     /* ----------------------------------------------------------------- */
@@ -688,6 +768,7 @@ public class StudiesApiController {
     }
 
     private ResponseEntity<?> lifecycle(String studyOid,
+                                        StudyLifecycleRequest body,
                                         HttpSession session,
                                         Status targetStatus,
                                         String operation) {
@@ -699,12 +780,24 @@ public class StudiesApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit study " + operation + " — sysadmin only"));
         }
+        boolean removal = targetStatus == Status.DELETED;
+        String reason = body == null || body.reason() == null ? "" : body.reason().trim();
+        if (reason.isEmpty() || reason.length() > 1000) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed",
+                    List.of(fieldError("reason", reason.isEmpty()
+                            ? "A reason is required to " + (removal ? "remove" : "restore") + " a study"
+                            : "Reason must be 1000 characters or fewer"))));
+        }
 
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean target = studyDao.findByOid(studyOid);
         if (target == null || target.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
+        }
+        if (target.getParentStudyId() > 0) {
+            return siteRefusal(studyOid);
         }
         if (target.getStatus() != null && target.getStatus().equals(targetStatus)) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -718,27 +811,103 @@ public class StudiesApiController {
                     "Study '" + studyOid + "' is not disabled — nothing to restore"));
         }
 
-        Status oldStatus = target.getStatus();
-        target.setStatus(targetStatus);
-        target.setUpdater(me);
-        target.setUpdatedDate(new java.util.Date());
-        studyDao.updateStudyStatus(target);
-
-        // Cascade to child sites — mirrors legacy RemoveStudyServlet /
-        // RestoreStudyServlet which call updateSitesStatus.
+        final Status oldStatus = target.getStatus();
+        final int studyId = target.getId();
+        StudyLifecycleCascade.Impact impact;
         try {
-            studyDao.updateSitesStatus(target);
+            impact = FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    me.getId(),
+                    "study",
+                    studyId,
+                    "study_" + operation,
+                    MDC.get("reqId"),
+                    () -> applyLifecycle(studyId, studyOid, me, removal, oldStatus, reason));
         } catch (Exception e) {
-            LOG.warn("Cascade {} to sites of study {} failed (continuing): {}",
-                    operation, studyOid, e.getMessage());
+            LOG.error("Study {} failed for oid={} by admin={}", operation, studyOid, me.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Failed to " + (removal ? "remove" : "restore") + " the study; nothing was changed. "
+                            + "See server log."));
         }
 
-        // One audit row per lifecycle transition.
-        writeLifecycleAudit(AuditTypeIds.STUDY_LIFECYCLE_CHANGED, me,
-                target.getId(), studyOid, oldStatus, targetStatus, "study_" + operation);
+        StudyBean refreshed = studyDao.findByPK(studyId);
 
-        LOG.info("Study {}: oid={} by admin={}", operation, studyOid, me.getName());
-        return ResponseEntity.ok(toIdentityDto(target, studyDao));
+        // Legacy parity: RemoveStudyServlet / RestoreStudyServlet update
+        // the session's current study in place when the change touches it.
+        StudyBean sessionStudy = (StudyBean) session.getAttribute("study");
+        if (sessionStudy != null && sessionStudy.getId() > 0
+                && (sessionStudy.getId() == studyId || sessionStudy.getParentStudyId() == studyId)) {
+            StudyBean current = sessionStudy.getId() == studyId
+                    ? refreshed : studyDao.findByPK(sessionStudy.getId());
+            if (current != null && current.getStatus() != null) {
+                sessionStudy.setStatus(current.getStatus());
+            }
+        }
+
+        LOG.info("Study {}: oid={} by admin={} sites={} roles={} subjects={} definitions={} events={} "
+                        + "eventCrfs={} items={} datasets={}",
+                operation, studyOid, me.getName(), impact.siteNames().size(), impact.roleBindings(),
+                impact.subjects(), impact.eventDefinitions(), impact.events(), impact.eventCrfs(),
+                impact.itemData(), impact.datasets());
+        return ResponseEntity.ok(toIdentityDto(refreshed, studyDao));
+    }
+
+    /**
+     * Runs the cascade and writes its audit row in one transaction, so a
+     * study is never left half removed and never changes without its
+     * audit row.
+     */
+    private StudyLifecycleCascade.Impact applyLifecycle(int studyId, String studyOid, UserAccountBean me,
+                                                        boolean removal, Status oldStatus, String reason)
+            throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                StudyLifecycleCascade.Impact impact = removal
+                        ? StudyLifecycleCascade.remove(c, studyId, me.getId())
+                        : StudyLifecycleCascade.restore(c, studyId, me.getId());
+                Status newStatus;
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT status_id FROM study WHERE study_id = ?")) {
+                    ps.setInt(1, studyId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        newStatus = rs.next() ? Status.get(rs.getInt(1)) : null;
+                    }
+                }
+                try (PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                                + "user_id, audit_table, entity_id, entity_name, "
+                                + "reason_for_change, old_value, new_value) "
+                                + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?, ?)")) {
+                    ps.setInt(1, AuditTypeIds.STUDY_LIFECYCLE_CHANGED);
+                    ps.setInt(2, me.getId());
+                    ps.setInt(3, studyId);
+                    ps.setString(4, studyOid == null ? "" : studyOid);
+                    ps.setString(5, reason);
+                    ps.setString(6, oldStatus == null ? "" : oldStatus.getName());
+                    ps.setString(7, newStatus == null ? "" : newStatus.getName());
+                    ps.executeUpdate();
+                }
+                c.commit();
+                return impact;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    c.rollback();
+                } catch (SQLException rollbackFailure) {
+                    e.addSuppressed(rollbackFailure);
+                }
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
+            }
+        }
+    }
+
+    private static ResponseEntity<?> siteRefusal(String studyOid) {
+        return ResponseEntity.status(409).body(Map.of("message",
+                "'" + studyOid + "' is a site. Sites are removed and restored on the Sites page, "
+                        + "not through the study endpoint."));
     }
 
     /* ----------------------------------------------------------------- */
@@ -865,41 +1034,6 @@ public class StudiesApiController {
         } catch (SQLException e) {
             LOG.warn("Audit write failed for study {} field {} (continuing): {}",
                     target.getOid(), columnName, e.getMessage());
-        }
-    }
-
-    /**
-     * Direct INSERT into {@code audit_log_event} for the study lifecycle
-     * (disable / restore) status flip. Audit-table unification (slice C,
-     * 2026-06-12) — the legacy {@code AuditEventDAO.create} path wrote
-     * to {@code audit_event} (invisible to the SPA Audit Log view); this
-     * writer targets the unified surface with type
-     * {@link AuditTypeIds#STUDY_LIFECYCLE_CHANGED}. The
-     * {@code actionPrefix} argument is no longer persisted but is kept
-     * in the signature for symmetry with the other lifecycle writers.
-     */
-    private void writeLifecycleAudit(int auditTypeId,
-                                     UserAccountBean me,
-                                     int entityId,
-                                     String oid,
-                                     Status oldStatus,
-                                     Status newStatus,
-                                     @SuppressWarnings("unused") String actionPrefix) {
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
-                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
-                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
-            ps.setInt(1, auditTypeId);
-            ps.setInt(2, me.getId());
-            ps.setInt(3, entityId);
-            ps.setString(4, oid == null ? "" : oid);
-            ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
-            ps.setString(6, newStatus == null ? "" : newStatus.getName());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            LOG.warn("Audit write failed for study lifecycle oid={} (continuing): {}",
-                    oid, e.getMessage());
         }
     }
 
