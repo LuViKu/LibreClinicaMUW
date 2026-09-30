@@ -148,18 +148,8 @@ public class SecurityConfig {
                         "/Contact",
                         "/includes/**",
                         "/images/**",
-                        "/help/**",
-                        "/ws/**",
-                        "/rest2/openrosa/**",
-                        "/pages/odmk/**",
-                        "/pages/openrosa/**",
-                        "/pages/accounts/**",
-                        "/pages/itemdata/**",
                         "/pages/auth/api/v1/studies/**",
-                        "/pages/odmss/**",
                         "/pages/healthcheck/**",
-                        "/pages/api/v1/anonymousform/**",
-                        "/pages/api/v2/anonymousform/**",
                         // Phase E.8 Slice L2 (2026-06-20): SPA replacement
                         // for the legacy /pages/Contact JSP. Unauthenticated
                         // by design — same audience as the legacy form.
@@ -209,7 +199,6 @@ public class SecurityConfig {
                         // (404) with core.uploaderHealth.heartbeat.enabled=false.
                         // See UploaderHeartbeatApiController.
                         "/pages/api/v1/device/uploader/**",
-                        "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",
                         "/pages/api/v1/forms/migrate/**",
@@ -259,15 +248,9 @@ public class SecurityConfig {
                         // springdoc.api-docs.path = /pages/v3/api-docs the
                         // OpenApiResource registers at that prefix so its
                         // URLs flow through the same dispatcher as the
-                        // controllers it documents. Both prefixes are
-                        // permitted — the /v3/api-docs/* paths return 404
-                        // now but the permit costs nothing and avoids a
-                        // future-Self surprise.
-                        "/v3/api-docs",
-                        "/v3/api-docs/**",
-                        "/v3/api-docs.yaml",
-                        "/swagger-ui.html",
-                        "/swagger-ui/**",
+                        // controllers it documents. Only the /pages
+                        // prefix is served; the root /v3/api-docs and
+                        // /swagger-ui paths answer 404 and are not listed.
                         "/pages/v3/api-docs",
                         "/pages/v3/api-docs/**",
                         "/pages/v3/api-docs.yaml",

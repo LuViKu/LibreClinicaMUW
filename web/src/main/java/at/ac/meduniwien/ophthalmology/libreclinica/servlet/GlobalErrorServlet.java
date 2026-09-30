@@ -178,11 +178,11 @@ public class GlobalErrorServlet extends HttpServlet {
 
     /**
      * Resolve the application's primary DataSource bean. Mirrors the
-     * lookup pattern used by {@code RestODMFilter} +
-     * {@code ExportScheduleRegistrar} elsewhere in the legacy code
-     * path. Returns null when the Spring context isn't available
-     * (e.g. inside a {@code MockServletContext} that didn't bind a
-     * WebApplicationContext) — the IT exercises that fallback as well.
+     * lookup pattern used by {@code ExportScheduleRegistrar} elsewhere
+     * in the legacy code path. Returns null when the Spring context
+     * isn't available (e.g. inside a {@code MockServletContext} that
+     * didn't bind a WebApplicationContext) — the IT exercises that
+     * fallback as well.
      */
     private DataSource resolveDataSource() {
         try {

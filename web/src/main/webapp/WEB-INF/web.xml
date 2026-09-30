@@ -82,11 +82,6 @@
         <url-pattern>/pages/*</url-pattern>
     </servlet-mapping>
 
-    <servlet-mapping>
-        <servlet-name>pages</servlet-name>
-        <url-pattern>/oauth/*</url-pattern>
-    </servlet-mapping>
-
     <!-- Phase C.16 (2026-05-30): 221 legacy servlet declarations migrated to
          config.LegacyServletRegistry (Boot @Configuration). Only the `pages`
          DispatcherServlet stays here because it loads its child context via

@@ -39,6 +39,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  *       {@code discrepancyManagement} handles, the response carries the
  *       updated values, and the {@code study_parameter_value} table has
  *       been upserted accordingly.</li>
+ *   <li>PUT leaves {@code participantPortal} alone: the handle is
+ *       read-only.</li>
  * </ul>
  */
 class StudyParametersApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
@@ -108,6 +110,31 @@ class StudyParametersApiControllerDatabaseIT extends AbstractApiControllerDataba
                 org.junit.jupiter.api.Assertions.assertTrue(rs.next(),
                         "study_parameter_value(discrepancyManagement) row expected");
                 org.junit.jupiter.api.Assertions.assertEquals("false", rs.getString(1));
+            }
+        }
+    }
+
+    @Test
+    void putLeavesTheParticipantPortalHandleAlone() throws Exception {
+        // The participant portal is not part of this build: the handle is
+        // still reported, but a PUT no longer writes it.
+        String body = "{\"participantPortal\":\"enabled\",\"randomization\":\"disabled\"}";
+
+        mockMvc().perform(put("/api/v1/studies/S_DEFAULTS1/parameters")
+                .contentType("application/json")
+                .content(body)
+                .session(sysadminSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participantPortal").value("disabled"));
+
+        try (Connection conn = DATA_SOURCE.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT count(*) FROM study_parameter_value "
+                     + "WHERE study_id = 1 AND parameter = 'participantPortal'")) {
+            try (ResultSet rs = ps.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(rs.next());
+                org.junit.jupiter.api.Assertions.assertEquals(0, rs.getInt(1),
+                        "no study_parameter_value(participantPortal) row expected");
             }
         }
     }

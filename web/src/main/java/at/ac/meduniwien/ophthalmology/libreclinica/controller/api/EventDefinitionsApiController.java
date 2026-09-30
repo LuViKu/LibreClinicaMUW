@@ -1505,10 +1505,6 @@ public class EventDefinitionsApiController {
         if (body.electronicSignature() != null) target.setElectronicSignature(body.electronicSignature());
         if (body.hideCrf() != null) target.setHideCrf(body.hideCrf());
         if (sdv != null) target.setSourceDataVerification(sdv);
-        if (body.participantForm() != null) target.setParticipantForm(body.participantForm());
-        if (body.allowAnonymousSubmission() != null)
-            target.setAllowAnonymousSubmission(body.allowAnonymousSubmission());
-        if (body.submissionUrl() != null) target.setSubmissionUrl(body.submissionUrl().trim());
         // Note: offline flag is owned by a separate tag service in the
         // legacy code (EventDefinitionCrfTagService) — A8.3 follow-up
         // wires that path; for now we accept the boolean but only

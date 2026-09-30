@@ -1,6 +1,4 @@
-<%@ page contentType="text/html; charset=UTF-8"
-         import="javax.servlet.http.HttpServletRequest,
-                 java.util.Map" %>
+<%@ page contentType="text/html; charset=UTF-8" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 <fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>

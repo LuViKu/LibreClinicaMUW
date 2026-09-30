@@ -28,8 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * Phase E.7 — synchronous client for the retinal-inference sidecar's
  * {@code POST /screen} endpoint.
  *
- * <p>Convention mirrors {@link at.ac.meduniwien.ophthalmology.libreclinica.web.pform.EnketoAPI}:
- * a thin {@link RestTemplate} wrapper with a hand-rolled JSON body and
+ * <p>A thin {@link RestTemplate} wrapper with a hand-rolled JSON body and
  * an SLF4J logger. The connect + read timeout is fixed at 8 seconds via
  * {@link SimpleClientHttpRequestFactory}; on timeout the caller
  * ({@code RetinalInferenceApiController}) leaves the

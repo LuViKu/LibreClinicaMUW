@@ -2041,8 +2041,6 @@
     "edit": "Bearbeiten",
     "remove": "Entfernen",
     "removeConfirm": "CRF »{crf}« von Visite »{event}« lösen? Bereits erfasste Daten bleiben im Audit Trail; neue Eingaben enthalten dieses CRF nicht mehr. Die Aktion wird im Audit Trail dokumentiert.",
-    "showAdvanced": "Teilnehmer-Formular-Optionen anzeigen",
-    "hideAdvanced": "Teilnehmer-Formular-Optionen ausblenden",
     "auditNote": "Alle Zuweisungen, Rollenänderungen und Entfernungen werden im Audit Trail dokumentiert.",
     "sdvLabel": "Quelldatenvergleich",
     "required": "Pflicht",
@@ -2050,9 +2048,6 @@
     "electronicSignature": "Elektronische Unterschrift",
     "hideCrf": "Bei Dateneingabe ausgeblendet",
     "decisionCondition": "Entscheidungsbedingung",
-    "participantForm": "Teilnehmer-Formular (Enketo)",
-    "allowAnonymousSubmission": "Anonyme Übermittlung erlauben",
-    "submissionUrl": "Übermittlungs-URL",
     "sdv": {
       "NOTREQUIRED": "Nicht erforderlich",
       "PARTIALREQUIRED": "Teilweise",
@@ -2672,7 +2667,6 @@
       "interviewDateEditable": "Interviewdatum editierbar",
       "secondaryLabelViewable": "Sekundäres Label sichtbar",
       "adminForcedReasonForChange": "Begründung nach Abschluss erzwingen",
-      "participantPortal": "Teilnehmerportal",
       "randomization": "Randomisierung"
     },
     "enums": {

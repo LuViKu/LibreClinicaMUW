@@ -8,11 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.xml;
 
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -25,13 +22,12 @@ import javax.xml.namespace.QName;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.ODMContainer;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RulesPostImportContainer;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Html;
 
 /**
  * Single Spring-managed wiring point for the project's JAXB contexts.
  *
  * <p>Every unmarshal goes through {@link SecureXmlFactories#saxSource}: the
- * inputs are uploads (rules, ODM clinical data, XForms) and a DOCTYPE is
+ * inputs are uploads (rules, ODM clinical data) and a DOCTYPE is
  * refused, whichever JAXP parser the classpath provides.
  *
  * <p>Phase B.3 ([DR-006] Castor → Jakarta JAXB) introduced this class.
@@ -46,7 +42,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Html;
  *
  * <p>PR 1/3 of B.3 wires only the rules-XML import/export paths. PR 2/3
  * adds CDISC ODM, OpenRosa, and XForm bindings; PR 3/3 drops the Castor
- * dependency declarations once every call site is migrated.
+ * dependency declarations once every call site is migrated. The OpenRosa
+ * and XForm bindings went with the participant-form code (2026-09-30).
  */
 public class OdmJaxbContext {
 
@@ -164,93 +161,6 @@ public class OdmJaxbContext {
         } catch (JAXBException e) {
             throw new IllegalStateException(
                     "Failed to unmarshal ODMContainer (clinical data)", e);
-        }
-    }
-
-    /**
-     * Unmarshal an XForm document (the {@code xform_template.xml}-shaped XHTML
-     * + XForms tree) into the {@code core} {@link Html} DTO used by
-     * {@code XformParser}. Mirrors the Castor behaviour with
-     * {@code unmarshaller.setClass(Html.class)} +
-     * {@code setWhitespacePreserve(false)} — the root element name is taken
-     * from the {@code @XmlRootElement} on {@link Html}.
-     */
-    public Html unmarshalXform(String xml) {
-        try {
-            Unmarshaller unmarshaller = contextFor(Html.class).createUnmarshaller();
-            ByteArrayInputStream in = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
-            return (Html) unmarshaller.unmarshal(SecureXmlFactories.saxSource(in));
-        } catch (JAXBException e) {
-            throw new IllegalStateException("Failed to unmarshal XForm Html", e);
-        }
-    }
-
-    /**
-     * Marshal an XForm {@link Html} DTO to a String. Output is a single-line
-     * (non-indented) XML fragment — no XML declaration prolog — so it can be
-     * sliced and reassembled by {@code OpenRosaXmlGenerator.buildForm} just
-     * like the Castor output.
-     */
-    public String marshalXform(Html html) {
-        try {
-            Marshaller marshaller = contextFor(Html.class).createMarshaller();
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.FALSE);
-            marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
-            marshaller.setProperty(Marshaller.JAXB_FRAGMENT, Boolean.TRUE);
-            StringWriter writer = new StringWriter();
-            marshaller.marshal(html, writer);
-            return writer.toString();
-        } catch (JAXBException e) {
-            throw new IllegalStateException("Failed to marshal XForm Html", e);
-        }
-    }
-
-    /**
-     * Generic unmarshal helper for any {@code @XmlRootElement}-annotated
-     * type. Used by the OpenRosa-side bindings ({@code web/pform/dto/Html},
-     * etc.) where the bean lives outside {@code core}. The root element
-     * name is taken from the JAXB binding on the target class.
-     */
-    public <T> T unmarshalRoot(Class<T> rootClass, String xml) {
-        if (rootClass == null) {
-            throw new IllegalArgumentException("rootClass cannot be null");
-        }
-        try {
-            Unmarshaller unmarshaller = contextFor(rootClass).createUnmarshaller();
-            ByteArrayInputStream in = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
-            return rootClass.cast(unmarshaller.unmarshal(SecureXmlFactories.saxSource(in)));
-        } catch (JAXBException e) {
-            throw new IllegalStateException("Failed to unmarshal " + rootClass.getName(), e);
-        }
-    }
-
-    /**
-     * Generic marshal-to-String helper for OpenRosa-side bindings ({@code
-     * XFormList}, {@code Manifest}, the {@code web/pform/dto/Html}). Lives in
-     * {@code core} so the JAXB context cache stays in one place, but the
-     * caller passes a {@code @XmlRootElement}-annotated bean of any type.
-     * Output is formatted, UTF-8, without the XML prolog so the byte stream
-     * is identical in shape to the Castor output the OpenRosa clients
-     * expect.
-     */
-    public String marshalToString(Object root) {
-        if (root == null) {
-            throw new IllegalArgumentException("root cannot be null");
-        }
-        try {
-            Marshaller marshaller = contextFor(root.getClass()).createMarshaller();
-            // Castor's XForm marshaller pinned indent=false; the OpenRosa
-            // formList/Manifest marshallers didn't set it. Keeping all three
-            // unformatted matches the XForm code path's expectation that
-            // {@code String.indexOf("<instance>")} returns a single token.
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.FALSE);
-            marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
-            marshaller.setProperty(Marshaller.JAXB_FRAGMENT, Boolean.TRUE);
-            StringWriter writer = new StringWriter();
-            marshaller.marshal(root, writer);
-            return writer.toString();
-        } catch (JAXBException e) {
-            throw new IllegalStateException("Failed to marshal " + root.getClass().getName(), e);
         }
     }
 }

@@ -89,7 +89,7 @@ class StudyModuleControllerSecurityTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"deactivate", "reactivate", "deactivaterandomization", "reactivaterandomization"})
+    @ValueSource(strings = {"deactivaterandomization", "reactivaterandomization"})
     void aGetCannotFlipAModule(String action) throws Exception {
         MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).build();
 
@@ -101,18 +101,14 @@ class StudyModuleControllerSecurityTest {
 
     @Test
     void aDataEntryPersonCannotFlipAModule() throws Exception {
-        assertEquals(StudyModuleController.DENIED, controller.deactivateParticipate(STUDY_OID, request(Role.RESEARCHASSISTANT)));
-        assertEquals(StudyModuleController.DENIED, controller.reactivateParticipate(STUDY_OID, request(Role.MONITOR)));
         assertEquals(StudyModuleController.DENIED, controller.deactivateRandomization(STUDY_OID, request(Role.INVESTIGATOR)));
         assertEquals(StudyModuleController.DENIED, controller.reactivateRandomization(STUDY_OID, request(Role.RESEARCHASSISTANT)));
-        assertEquals(StudyModuleController.DENIED, controller.registerParticipate(STUDY_OID, request(Role.RESEARCHASSISTANT)));
 
         verifyNoInteractions(dataSource);
     }
 
     @Test
     void aCoordinatorCannotFlipAModuleOfAnotherStudy() throws Exception {
-        assertEquals(StudyModuleController.DENIED, controller.deactivateParticipate("S_OTHER", request(Role.COORDINATOR)));
         assertEquals(StudyModuleController.DENIED, controller.reactivateRandomization("S_OTHER", request(Role.STUDYDIRECTOR)));
 
         verifyNoInteractions(dataSource);

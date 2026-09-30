@@ -120,17 +120,4 @@ public class OdmJaxbContextXxeTest {
             // refused
         }
     }
-
-    @Test
-    public void xformWithDoctypeIsRefused() {
-        String xml = "<?xml version=\"1.0\"?>\n"
-                + "<!DOCTYPE html [<!ENTITY t \"expanded\">]>\n"
-                + "<h:html xmlns:h=\"http://www.w3.org/1999/xhtml\"><h:head><h:title>&t;</h:title></h:head></h:html>";
-        try {
-            jaxb.unmarshalXform(xml);
-            fail("an XForm with a DOCTYPE was accepted");
-        } catch (IllegalStateException expected) {
-            // refused
-        }
-    }
 }

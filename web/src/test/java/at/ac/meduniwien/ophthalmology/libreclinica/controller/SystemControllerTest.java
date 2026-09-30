@@ -21,6 +21,8 @@ import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.StudyParameterValueBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 /**
@@ -62,5 +64,39 @@ class SystemControllerTest {
         String out = captured.toString(StandardCharsets.UTF_8);
         assertFalse(out.contains(variable.getKey() + "=" + variable.getValue()),
                 "the environment variable " + variable.getKey() + " was printed");
+    }
+
+    @Test
+    void theParticipateModuleIsReportedWithoutAskingTheParticipantPortal() throws Exception {
+        // The participant-portal client needs a library the WAR does not
+        // ship, so asking it for the registration failed the whole modules
+        // report. The module is reported from the study parameter alone.
+        StudyParameterValueBean parameter = new StudyParameterValueBean();
+        parameter.setActive(true);
+        parameter.setValue("enabled");
+        SystemController controller = new SystemController() {
+            @Override
+            public StudyParameterValueBean getParticipateMod(StudyBean studyBean, String value) {
+                return parameter;
+            }
+        };
+        StudyBean study = new StudyBean();
+        study.setOid("S_TEST");
+
+        Field datainfo = CoreResources.class.getDeclaredField("DATAINFO");
+        datainfo.setAccessible(true);
+        Object datainfoBefore = datainfo.get(null);
+        Map<String, Object> module;
+        try {
+            datainfo.set(null, new Properties());
+            module = controller.getParticipateModule(study);
+        } finally {
+            datainfo.set(null, datainfoBefore);
+        }
+
+        Map<?, ?> participate = (Map<?, ?>) module.get("Participate");
+        assertEquals("True", participate.get("enabled"));
+        assertEquals("INACTIVE", participate.get("status"));
+        assertEquals(Map.of(), participate.get("metadata"));
     }
 }

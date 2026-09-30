@@ -37,7 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *   <li>{@code PUT /api/v1/studies/{oid}/parameters} → {@code 401}
  *       anonymous; {@code 400} on missing body; {@code 400} on enum
  *       out-of-range per handle (subjectIdGeneration / collectDob /
- *       discrepancyManagement / participantPortal).</li>
+ *       discrepancyManagement).</li>
  *   <li>Per-handle validation populates a {@code FieldError} list the
  *       SPA store maps onto {@code fieldErrors[handle]}.</li>
  * </ul>
@@ -129,10 +129,11 @@ class StudyParametersApiControllerTest extends AbstractApiControllerTest {
     @Test
     void dtoCarriesNineteenFields() {
         // Reviewer flag — DTO + ACs disagreed at "16 vs 19". Pin to 19
-        // (path-side studyOid + 18 study_parameter_value handles).
+        // (path-side studyOid + 18 study_parameter_value handles). The
+        // request carries 17: participantPortal is read-only.
         org.junit.jupiter.api.Assertions.assertEquals(
                 19, StudyParametersDto.class.getRecordComponents().length);
         org.junit.jupiter.api.Assertions.assertEquals(
-                18, UpdateStudyParametersRequest.class.getRecordComponents().length);
+                17, UpdateStudyParametersRequest.class.getRecordComponents().length);
     }
 }

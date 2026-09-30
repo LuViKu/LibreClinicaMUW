@@ -12,7 +12,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
@@ -71,7 +70,6 @@ public class InitCreateCRFVersionServlet extends SecureController {
         // checks which module the requests are from
         String module = request.getParameter(MODULE);
         request.setAttribute(MODULE, module);
-        session.setAttribute("xformEnabled", CoreResources.getField("xform.enabled"));
 
         if ((idString == null || idString.trim().isEmpty()) || (name == null || name.trim().isEmpty())) {
             addPageMessage(respage.getString("please_choose_a_CRF_to_add_new_version_for"));

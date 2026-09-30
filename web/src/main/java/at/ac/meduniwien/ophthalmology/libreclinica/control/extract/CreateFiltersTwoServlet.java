@@ -343,7 +343,6 @@ public class CreateFiltersTwoServlet extends SecureController {
                     // "IDENTIFIER" reduces to "ENTIFIER"). A name that is not
                     // a number cannot denote an item id, so it is skipped —
                     // the same result as it not having been sent at all.
-                    logger.debug("ignoring request parameter with non-numeric ID suffix: " + title);
                 }
             }
         }

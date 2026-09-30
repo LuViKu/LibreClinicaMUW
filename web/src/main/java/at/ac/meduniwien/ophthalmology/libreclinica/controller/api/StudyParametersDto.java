@@ -17,10 +17,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * <p>The DTO surfaces the 18 {@code study_parameter_value} handles
  * seeded since the OC 2.5 / amethyst / 3.0 / 3.4 / 3.9 migrations,
  * plus {@code studyOid} for round-trip identity. That gives the SPA
- * exactly 19 wire fields (the playbook's "19" count), matching the
- * field count consistently across this DTO, the
- * {@link UpdateStudyParametersRequest} sibling, and the IT
- * assertions.
+ * exactly 19 wire fields (the playbook's "19" count). The
+ * {@link UpdateStudyParametersRequest} sibling carries 17 of them: not
+ * {@code studyOid}, and not {@code participantPortal}, which is
+ * read-only.
  *
  * <p>Each handle is surfaced as a String — the underlying column
  * {@code study_parameter_value.value} is {@code varchar(50)} and the

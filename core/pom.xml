@@ -127,7 +127,7 @@
 		</dependency>
       -->
 		<!-- fileupload2 core types (DiskFileItem, DiskFileItemFactory) are used
-		     directly under web/ and core/ — declare the core artifact alongside
+		     directly under core/ — declare the core artifact alongside
 		     the jakarta.servlet6 entry-point artifact, since maven-dependency
 		     -plugin analyze-only requires every directly-used artifact to be
 		     explicit. -->
