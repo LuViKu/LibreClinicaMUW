@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Utils;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
@@ -125,6 +126,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.form.DataEntryInputGener
 import at.ac.meduniwien.ophthalmology.libreclinica.view.form.FormBeanUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InconsistentStateException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
@@ -5585,6 +5587,41 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
             }
         }
         return n != null && n.getId() > 0 ? n : new SectionBean();
+    }
+
+    /**
+     * Refuses a user whose role in the current study does not enter data. The
+     * rule is {@link SubmitDataServlet#maySubmitData}, which administrative
+     * editing and the table of contents apply: coordinator, director,
+     * investigator and the two research-assistant roles. A Monitor reviews CRFs
+     * through the read-only view. Called before the event CRF is loaded,
+     * because loading it can create it.
+     */
+    protected void mayEnterData(HttpServletRequest request) throws InsufficientPermissionException {
+        HttpSession session = request.getSession();
+        UserAccountBean ub = (UserAccountBean) session.getAttribute(USER_BEAN_NAME);
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!SubmitDataServlet.maySubmitData(ub, currentRole)) {
+            session.setAttribute("mayProcessUploading", "false");
+            addPageMessage(respage.getString("you_may_not_perform_data_entry_on_a_CRF") + " "
+                    + respage.getString("change_study_contact_study_coordinator"), request);
+            throw new InsufficientPermissionException(Page.MENU, resexception.getString("no_permission_to_perform_data_entry"), "1");
+        }
+    }
+
+    /**
+     * Refuses an event CRF outside the session's current study and its sites
+     * ({@link StudyTreeScope}): the role {@link #mayEnterData} checks is the
+     * role in that study. The id is the one {@link #getInputBeans} loads.
+     */
+    protected void mayUseEventCrfOfCurrentStudy(HttpServletRequest request) throws InsufficientPermissionException {
+        EventCRFBean ecb = (EventCRFBean) request.getAttribute(INPUT_EVENT_CRF);
+        int eventCRFId = ecb != null ? ecb.getId() : new FormProcessor(request).getInt(INPUT_EVENT_CRF_ID, true);
+        StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
+        if (eventCRFId > 0 && !new StudyTreeScope(getDataSource()).containsEventCrf(currentStudy, eventCRFId)) {
+            addPageMessage(respage.getString("required_event_CRF_belong"), request);
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("event_CRF_not_belong_current_study"), "1");
+        }
     }
 
     public void mayAccess(HttpServletRequest request) throws InsufficientPermissionException {
