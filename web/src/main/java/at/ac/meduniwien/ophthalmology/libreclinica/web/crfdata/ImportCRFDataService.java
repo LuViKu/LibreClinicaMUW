@@ -117,14 +117,18 @@ public class ImportCRFDataService {
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (sampleOrdinal == null) {
+                    // validateStudyMetadata reports the key; don't guess a visit.
+                    return null;
+                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
                 // @pgawade 16-March-2011 Do not allow the data import
                 // if event status is one of the - stopped, signed,
                 // locked
@@ -220,14 +224,18 @@ public class ImportCRFDataService {
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (sampleOrdinal == null) {
+                    // validateStudyMetadata reports the key; don't guess a visit.
+                    return false;
+                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
                 // @pgawade 16-March-2011 Do not allow the data import
                 // if event status is one of the - stopped, signed,
                 // locked
@@ -296,14 +304,18 @@ public class ImportCRFDataService {
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (sampleOrdinal == null) {
+                    // validateStudyMetadata reports the key; don't guess a visit.
+                    continue;
+                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
 
                 for (FormDataBean formDataBean : formDataBeans) {
 
@@ -958,6 +970,11 @@ public class ImportCRFDataService {
                                 // Event in the Study.");
                                 logger.debug("logged an error with se oid " + sedOid + " and subject oid " + oid);
                             }
+                            if (studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey()) == null) {
+                                mf.applyPattern(respage.getString("your_study_event_repeat_key_is_not_a_number"));
+                                Object[] arguments = { sedOid, oid };
+                                errors.add(mf.format(arguments));
+                            }
 
                             ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
                             if (formDataBeans != null) {
@@ -1111,6 +1128,21 @@ public class ImportCRFDataService {
     private ItemDataDAO getItemDataDao() {
         itemDataDao = this.itemDataDao != null ? itemDataDao : new ItemDataDAO(ds);
         return itemDataDao;
+    }
+
+    /**
+     * The visit ordinal a StudyEventRepeatKey names: 1 when the file leaves
+     * the key out, null when the key is not a whole number.
+     */
+    static Integer studyEventOrdinal(String studyEventRepeatKey) {
+        if (studyEventRepeatKey == null) {
+            return 1;
+        }
+        try {
+            return Integer.valueOf(studyEventRepeatKey);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }
