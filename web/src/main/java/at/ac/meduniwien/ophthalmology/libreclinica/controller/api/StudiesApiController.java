@@ -253,15 +253,14 @@ public class StudiesApiController {
                     "Failed to persist new study"));
         }
 
-        // Legacy convention: OID = "S_<uniqueProtocolId>" (matches the
-        // seed-data shape used by every demo / fixture study).
-        String generatedOid = "S_" + body.uniqueProtocolId().trim().toUpperCase();
-        persisted.setOid(generatedOid);
-        // StudyDAO.updateStepOne dereferences oldStatus on every update
-        // (NPE otherwise). We're not changing the status here — just
-        // back-filling the generated OID — so mirror the current value.
-        persisted.setOldStatus(persisted.getStatus());
-        studyDao.update(persisted);
+        // The OID is the one StudyDAO.createStepOne generated and stored
+        // (StudyOidGenerator, as in the legacy CreateStudyServlet: "S_" and
+        // the first 8 letters and digits of the unique protocol id,
+        // upper-cased). An update cannot change it: updateStepOne does not
+        // write oc_oid. Read it back, so the response carries the OID the
+        // study can be opened by.
+        persisted = studyDao.findByPK(persisted.getId());
+        String generatedOid = persisted.getOid();
 
         AuditEventDAO auditEventDAO = new AuditEventDAO(dataSource);
         EventCrfsApiController.writeAuditEvent(auditEventDAO,

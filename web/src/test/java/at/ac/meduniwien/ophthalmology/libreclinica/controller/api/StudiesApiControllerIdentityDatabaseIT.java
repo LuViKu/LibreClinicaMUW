@@ -53,6 +53,30 @@ class StudiesApiControllerIdentityDatabaseIT extends AbstractApiControllerDataba
     }
 
     @Test
+    void createReturnsTheOidTheNewStudyIsStoredUnder() throws Exception {
+        String where = "unique_identifier = 'ident-create'";
+        String body = mockMvc().perform(post("/api/v1/studies")
+                        .contentType("application/json")
+                        .content("{\"name\":\"Identity create IT\",\"uniqueProtocolId\":\"ident-create\","
+                                + "\"briefSummary\":\"s\",\"principalInvestigator\":\"PI\",\"sponsor\":\"MUW\","
+                                + "\"contactEmail\":\"pm@example.org\",\"collaborators\":\"AKH Wien\","
+                                + "\"protocolDescription\":\"The long description.\"}")
+                        .session(sysadmin()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contactEmail").value("pm@example.org"))
+                .andExpect(jsonPath("$.collaborators").value("AKH Wien"))
+                .andExpect(jsonPath("$.protocolDescription").value("The long description."))
+                .andReturn().getResponse().getContentAsString();
+        // The SPA opens the new study by the OID it gets back.
+        String storedOid = column("oc_oid", where);
+        assertTrue(body.contains("\"oid\":\"" + storedOid + "\""),
+                "response must carry the stored OID " + storedOid + ": " + body);
+        assertEquals("pm@example.org", column("contact_email", where));
+        assertEquals("AKH Wien", column("collaborators", where));
+        assertEquals("The long description.", column("protocol_description", where));
+    }
+
+    @Test
     void createRefusesAMalformedContactEmail() throws Exception {
         mockMvc().perform(post("/api/v1/studies")
                         .contentType("application/json")
