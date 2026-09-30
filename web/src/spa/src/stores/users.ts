@@ -43,7 +43,8 @@ export const useUsersStore = defineStore('users', () => {
         const blob = `${u.username} ${u.displayName} ${u.email ?? ''}`.toLowerCase()
         if (!blob.includes(q)) return false
       }
-      if (roleFilter.value !== 'all' && u.role !== roleFilter.value) return false
+      // A legacy data entry role is projected as Investigator but is not one.
+      if (roleFilter.value !== 'all' && (u.role !== roleFilter.value || u.legacyRole)) return false
       if (authFilter.value !== 'all' && u.auth !== authFilter.value) return false
       if (onlyActive.value && !u.active) return false
       return true

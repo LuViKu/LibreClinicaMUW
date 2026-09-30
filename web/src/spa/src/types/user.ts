@@ -36,7 +36,7 @@ export type StudyUser =
   Omit<Required<components['schemas']['StudyUserDto']>,
        'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'
        | 'firstName' | 'lastName' | 'phone' | 'institutionalAffiliation' | 'userType'
-       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername'>
+       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername' | 'legacyRole'>
   & {
     role: UserRole
     auth: UserAuth
@@ -61,6 +61,11 @@ export type StudyUser =
     /** ISO `yyyy-MM-dd`; absent when never updated. */
     updatedDate?: string | null
     updaterUsername?: string | null
+    /**
+     * Set when the row's role is a legacy data entry role. `role` then says
+     * Investigator, which the role is not; show this instead.
+     */
+    legacyRole?: LegacyRole | null
   }
 
 /**

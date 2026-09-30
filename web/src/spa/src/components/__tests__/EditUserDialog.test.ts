@@ -91,6 +91,18 @@ describe('EditUserDialog', () => {
     document.body.innerHTML = ''
   })
 
+  it('names the role as the user list does: a legacy data entry role under its own name', async () => {
+    const w = mountDialog({ ...USER, legacyRole: 'ra' })
+    await open(w)
+    expect(input('edit-user-role').value).toBe('Data Entry Person (legacy)')
+    w.unmount()
+
+    const w2 = mountDialog({ ...USER, role: 'Data Manager' })
+    await open(w2)
+    expect(input('edit-user-role').value).toBe('Study Director')
+    w2.unmount()
+  })
+
   it('pre-fills every field from the row, phone and affiliation included', async () => {
     const w = mountDialog()
     await open(w)
