@@ -34,11 +34,25 @@ vi.mock('@/api/download', () => ({
   apiDownload: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { apiGet } from '@/api/client'
+vi.mock('@/components/UserAutocomplete.vue', async () => {
+  const { defineComponent } = await import('vue')
+  return {
+    default: defineComponent({
+      name: 'UserAutocomplete',
+      props: { modelValue: { type: String, default: '' } },
+      emits: ['update:modelValue'],
+      template:
+        '<input data-testid="user-autocomplete-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+    }),
+  }
+})
+
+import { apiGet, apiPost } from '@/api/client'
 import NotesDiscrepanciesView from '@/views/NotesDiscrepanciesView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotesStore } from '@/stores/notes'
 import type { DiscrepancyNote } from '@/types/note'
+import type { UserRole } from '@/types/auth'
 
 import enMessages from '@/locales/en.json'
 
@@ -90,13 +104,13 @@ const NOTE: DiscrepancyNote = {
   eventName: 'V1 Inclusion',
 }
 
-function setupAuth() {
+function setupAuth(role: UserRole = 'Data Manager') {
   const auth = useAuthStore()
   auth.user = {
     username: 'demo',
     displayName: 'Demo',
     email: null,
-    role: 'Data Manager',
+    role,
     siteLabel: null,
     source: 'local',
     mfaSatisfied: true,
@@ -110,16 +124,16 @@ function setupAuth() {
       oid: 'S_DEFAULTS1',
       name: 'Default Study',
       isSite: false,
-      role: 'Data Manager',
-      roles: ['Data Manager'],
+      role,
+      roles: [role],
     },
   }
 }
 
-async function mountWith(notes: DiscrepancyNote[]) {
+async function mountWith(notes: DiscrepancyNote[], role: UserRole = 'Data Manager') {
   const pinia = createPinia()
   setActivePinia(pinia)
-  setupAuth()
+  setupAuth(role)
   vi.mocked(apiGet).mockResolvedValue(notes)
   // Pre-populate the store before mount so the row template renders
   // synchronously off the seeded rows. The view's onMounted still
@@ -185,5 +199,41 @@ describe('NotesDiscrepanciesView — notes-deeplink row context', () => {
     expect(link.exists()).toBe(true)
     const href = link.attributes('href') ?? ''
     expect(href).toContain('/subjects/M-001')
+  })
+})
+
+describe('NotesDiscrepanciesView — the Monitor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function buttonsOf(w: Awaited<ReturnType<typeof mountWith>>): string[] {
+    return w.findAll('td button').map((b) => b.text()).filter((s) => s !== '')
+  }
+
+  it('can re-query or close a New query, as legacy offers a monitor', async () => {
+    const w = await mountWith([NOTE], 'Monitor')
+    expect(buttonsOf(w)).toEqual(['Respond', 'Close'])
+  })
+
+  it('can re-open a closed query, reassigning it', async () => {
+    const closed: DiscrepancyNote = { ...NOTE, status: 'closed' }
+    const w = await mountWith([closed], 'Monitor')
+    useNotesStore().statusFilter = 'all'
+    await flushPromises()
+    expect(buttonsOf(w)).toEqual(['Re-open'])
+
+    vi.mocked(apiPost).mockResolvedValueOnce({ ...closed, status: 'updated' })
+    await w.find('[data-testid="notes-action-reopen"]').trigger('click')
+    await w.find('textarea').setValue('Source differs after all')
+    await w.find('[data-testid="user-autocomplete-stub"]').setValue('manual_investigator')
+    await w.findAll('button').find((b) => b.text() === 'Send')!.trigger('click')
+    await flushPromises()
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/discrepancies/1/thread', {
+      newStatus: 'updated',
+      description: 'Source differs after all',
+      assignedTo: 'manual_investigator',
+    })
   })
 })

@@ -657,16 +657,18 @@
       "export": "Export CSV",
       "exportCsv": "Export CSV",
       "exportForSubject": "Export CSV (this subject)",
-      "exporting": "Exporting…"
+      "exporting": "Exporting…",
+      "reopen": "Re-open"
     },
     "error": {
       "exportFailed": "Discrepancy export failed"
     },
     "composer": {
       "label": {
-        "updated": "Reply to monitor",
+        "updated": "Reply",
         "resolution-proposed": "Proposed resolution",
-        "closed": "Closing comment (optional)"
+        "closed": "Closing comment (optional)",
+        "reopen": "Why the query is re-opened"
       },
       "placeholder": "Type your reply…",
       "placeholderClose": "Optional: closing comment…",
@@ -846,7 +848,11 @@
       "statusNotApplicable": "Not applicable",
       "empty": "No messages yet.",
       "loadError": "Could not load thread.",
-      "submitError": "Could not save change."
+      "submitError": "Could not save change.",
+      "reopen": "Re-open",
+      "reassignLabel": "Reassign to (optional)",
+      "reassignPlaceholder": "Keep the current assignee",
+      "subjectLine": "Subject {subject} · {item}"
     },
     "bilateral": {
       "headerItem": "Item",

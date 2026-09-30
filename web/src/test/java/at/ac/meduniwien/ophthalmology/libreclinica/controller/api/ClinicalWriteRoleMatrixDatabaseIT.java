@@ -334,12 +334,12 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     }
 
     /* ------------------------------------------------------------------ */
-    /* Notes: a Monitor raises queries and closes them, but does not      */
-    /* answer them                                                        */
+    /* Notes: a Monitor raises, re-queries and closes queries, but does   */
+    /* not propose their resolution                                       */
     /* ------------------------------------------------------------------ */
 
     @Test
-    void aMonitorMayRaiseAQueryButOnlyAnEntryRoleMayAnswerIt() throws Exception {
+    void aMonitorMayRaiseAndReQueryAQueryButOnlyAnEntryRoleMayProposeItsResolution() throws Exception {
         MvcResult raised = mvc().perform(json(post("/api/v1/discrepancies"),
                         "{\"type\":\"query\",\"subjectId\":\"M-001\",\"itemOid\":\"I_HEIGHT_CM\","
                                 + "\"eventCrfOid\":\"2\",\"description\":\"Please check the source\"}")
@@ -349,12 +349,18 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
         String noteId = new ObjectMapper()
                 .readTree(raised.getResponse().getContentAsString()).get("id").asText();
 
-        String answer = "{\"newStatus\":\"updated\",\"description\":\"Source says 162\"}";
-        mvc().perform(json(post("/api/v1/discrepancies/" + noteId + "/thread"), answer)
+        // Legacy offers a monitor "Update Note" on the thread: a re-query.
+        mvc().perform(json(post("/api/v1/discrepancies/" + noteId + "/thread"),
+                        "{\"newStatus\":\"updated\",\"description\":\"Also compare with V1\"}")
+                        .session(sessionAs("manual_monitor")))
+                .andExpect(status().isOk());
+
+        String proposal = "{\"newStatus\":\"resolution-proposed\",\"description\":\"Source says 162\"}";
+        mvc().perform(json(post("/api/v1/discrepancies/" + noteId + "/thread"), proposal)
                         .session(sessionAs("manual_monitor")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
-        mvc().perform(json(post("/api/v1/discrepancies/" + noteId + "/thread"), answer)
+        mvc().perform(json(post("/api/v1/discrepancies/" + noteId + "/thread"), proposal)
                         .session(sessionAs("manual_crc")))
                 .andExpect(status().isOk());
     }

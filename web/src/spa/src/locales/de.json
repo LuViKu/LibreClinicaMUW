@@ -657,16 +657,18 @@
       "export": "CSV exportieren",
       "exportCsv": "CSV exportieren",
       "exportForSubject": "CSV exportieren (Teilnehmer)",
-      "exporting": "Wird exportiert…"
+      "exporting": "Wird exportiert…",
+      "reopen": "Wieder öffnen"
     },
     "error": {
       "exportFailed": "Discrepancy-Export fehlgeschlagen"
     },
     "composer": {
       "label": {
-        "updated": "Antwort an Monitor",
+        "updated": "Antwort",
         "resolution-proposed": "Lösungsvorschlag",
-        "closed": "Schließbemerkung (optional)"
+        "closed": "Schließbemerkung (optional)",
+        "reopen": "Warum die Rückfrage wieder geöffnet wird"
       },
       "placeholder": "Antwort eingeben…",
       "placeholderClose": "Optional: Schließbemerkung…",
@@ -846,7 +848,11 @@
       "statusNotApplicable": "Nicht anwendbar",
       "empty": "Noch keine Nachrichten.",
       "loadError": "Diskussion konnte nicht geladen werden.",
-      "submitError": "Änderung konnte nicht gespeichert werden."
+      "submitError": "Änderung konnte nicht gespeichert werden.",
+      "reopen": "Wieder öffnen",
+      "reassignLabel": "Neu zuweisen an (optional)",
+      "reassignPlaceholder": "Bisherige Zuweisung behalten",
+      "subjectLine": "Teilnehmer {subject} · {item}"
     },
     "bilateral": {
       "headerItem": "Merkmal",

@@ -233,11 +233,65 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
-    void transitionMatrix_ClosedIsTerminal() {
-        // Any transition out of CLOSED is illegal at this endpoint.
+    void transitionMatrix_OnlyTheMonitorReopensAClosedQuery() {
+        // current=CLOSED(4) → new=UPDATED(2) re-opens the thread: Monitor
+        // only, as legacy offers "Update Note" on a closed thread.
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(4, 2, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(4, 2, 1));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(4, 2, 4));
+        // Nothing else leaves CLOSED, and a closed thread stays closed.
         org.junit.jupiter.api.Assertions.assertEquals(
                 NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
-                NoteTransitionMatrix.check(4, 2, 1));
+                NoteTransitionMatrix.check(4, 3, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
+                NoteTransitionMatrix.check(4, 4, 6));
+    }
+
+    @Test
+    void transitionMatrix_TheMonitorReQueriesAndClosesEveryOpenQuery() {
+        // Legacy ViewDiscrepancyNoteServlet: a Monitor may Update Note and
+        // Close Note on New, Updated and Resolution Proposed threads.
+        for (int current : new int[] {1, 2, 3}) {
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.OK,
+                    NoteTransitionMatrix.check(current, 2, 6), "→ updated from " + current);
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.OK,
+                    NoteTransitionMatrix.check(current, 4, 6), "→ closed from " + current);
+        }
+    }
+
+    @Test
+    void transitionMatrix_TheMonitorNeitherProposesNorWaivesAQuery() {
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(2, 3, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(1, 5, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(2, 5, 6));
+    }
+
+    @Test
+    void transitionMatrix_OnlyTheMonitorClosesAQueryWithoutAProposedResolution() {
+        // New or Updated → CLOSED: Investigator(4), director(3), admin(1) refused.
+        for (int role : new int[] {1, 3, 4}) {
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                    NoteTransitionMatrix.check(1, 4, role), "new → closed, role " + role);
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                    NoteTransitionMatrix.check(2, 4, role), "updated → closed, role " + role);
+        }
     }
 
     @Test

@@ -7,11 +7,12 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import ThreadTimeline from '@/components/discrepancy/ThreadTimeline.vue'
+import UserAutocomplete from '@/components/UserAutocomplete.vue'
 
 import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
 import type { DiscrepancyNote, NoteStatus, NoteType } from '@/types/note'
-import { canRespondToNote, canResolveNote, canCloseNote } from '@/types/note'
+import { canRespondToNote, canResolveNote, canCloseNote, canReopenNote } from '@/types/note'
 
 const { t } = useI18n()
 const notes = useNotesStore()
@@ -30,8 +31,11 @@ onMounted(() => { if (notes.rows.length === 0) notes.load() })
 
 interface ComposerState {
   noteId: string
-  intendedStatus: 'updated' | 'resolution-proposed' | 'closed'
+  /** 'reopen' answers a closed thread and leaves it Updated. */
+  intendedStatus: 'updated' | 'resolution-proposed' | 'closed' | 'reopen'
   description: string
+  /** User name of a new assignee; empty keeps the current one. */
+  assignedTo: string
   /* Inline error from the last failed appendThread attempt — distinct
      from notes.error (which is the store-wide banner). */
   error: string | null
@@ -40,7 +44,12 @@ interface ComposerState {
 const composer = ref<ComposerState | null>(null)
 
 function openComposer(n: DiscrepancyNote, intendedStatus: ComposerState['intendedStatus']) {
-  composer.value = { noteId: n.id, intendedStatus, description: '', error: null }
+  composer.value = { noteId: n.id, intendedStatus, description: '', assignedTo: '', error: null }
+}
+
+/** Updating a thread, a re-open included, may hand it to someone else. */
+function composerReassigns(c: ComposerState): boolean {
+  return c.intendedStatus === 'updated' || c.intendedStatus === 'reopen'
 }
 
 function cancelComposer() {
@@ -57,8 +66,9 @@ async function submitComposer() {
   }
   c.error = null
   const result = await notes.appendThread(c.noteId, {
-    newStatus: c.intendedStatus,
+    newStatus: c.intendedStatus === 'reopen' ? 'updated' : c.intendedStatus,
     description: c.description.trim() || undefined,
+    assignedTo: composerReassigns(c) && c.assignedTo ? c.assignedTo : null,
   })
   if (result) {
     composer.value = null
@@ -362,6 +372,15 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
                   @click="openComposer(n, 'closed')"
                 >{{ t('notes.actions.close') }}</button>
               </span>
+              <span v-if="currentRole() && canReopenNote(currentRole()!, n.status)" class="ml-2">
+                <button
+                  type="button"
+                  class="text-muw-blue underline hover:text-muw-blue-700"
+                  :disabled="notes.isSubmitting"
+                  data-testid="notes-action-reopen"
+                  @click="openComposer(n, 'reopen')"
+                >{{ t('notes.actions.reopen') }}</button>
+              </span>
             </td>
           </tr>
           <tr v-if="expandedRowId === n.id" class="bg-slate-25">
@@ -386,6 +405,16 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
                     : t('notes.composer.placeholder')"
                   rows="3"
                 />
+                <div v-if="composerReassigns(composer)" class="flex flex-col gap-1 max-w-xs">
+                  <label for="notes-composer-assignee" class="text-xs text-slate-600">
+                    {{ t('crfEntry.threadDialog.reassignLabel') }}
+                  </label>
+                  <UserAutocomplete
+                    id="notes-composer-assignee"
+                    v-model="composer.assignedTo"
+                    :placeholder="t('crfEntry.threadDialog.reassignPlaceholder')"
+                  />
+                </div>
                 <p v-if="composer.error" class="text-xs text-red-600">{{ composer.error }}</p>
                 <div class="flex justify-end gap-2">
                   <button

@@ -203,6 +203,7 @@ export const useNotesStore = defineStore('notes', () => {
           assignedTo: input.assignedTo ?? null,
         },
       )
+      threadParents.value = { ...threadParents.value, [parentId]: refreshed }
       const idx = rows.value.findIndex((n) => n.id === parentId)
       if (idx >= 0) {
         rows.value = [
@@ -248,10 +249,21 @@ export const useNotesStore = defineStore('notes', () => {
    */
   const threadCache = ref<Record<string, ThreadEntry[]>>({})
   const loadingThreadId = ref<string | null>(null)
+  /**
+   * The parent note of each thread loaded or answered here, by id. A thread
+   * opened from a CRF item may not be in `rows`: the list is loaded only
+   * where it is shown.
+   */
+  const threadParents = ref<Record<string, DiscrepancyNote>>({})
+
+  /** The parent note by id, from the list or from a thread loaded here. */
+  function parentById(parentId: string): DiscrepancyNote | undefined {
+    return rows.value.find((n) => n.id === parentId) ?? threadParents.value[parentId]
+  }
 
   async function loadThread(parentId: string): Promise<DiscrepancyNote | null> {
     if (threadCache.value[parentId]) {
-      const cached = rows.value.find((n) => n.id === parentId)
+      const cached = parentById(parentId)
       if (cached) return { ...cached, thread: threadCache.value[parentId] }
     }
     loadingThreadId.value = parentId
@@ -261,6 +273,7 @@ export const useNotesStore = defineStore('notes', () => {
         `/pages/api/v1/discrepancies/${parentId}/thread`,
       )
       threadCache.value = { ...threadCache.value, [parentId]: hydrated.thread ?? [] }
+      threadParents.value = { ...threadParents.value, [parentId]: hydrated }
       // Refresh the in-memory row so reactive bindings see the new
       // status / lastActivityAt drawn from the hydrated payload.
       const idx = rows.value.findIndex((n) => n.id === parentId)
@@ -392,6 +405,7 @@ export const useNotesStore = defineStore('notes', () => {
     typeFilter.value = 'all'
     onlyAssignedToMe.value = false
     threadCache.value = {}
+    threadParents.value = {}
     loadingThreadId.value = null
   }
 
@@ -413,6 +427,8 @@ export const useNotesStore = defineStore('notes', () => {
     openCount,
     openTypeTotals,
     threadCache,
+    threadParents,
+    parentById,
     loadingThreadId,
     clearFilters,
     load,
