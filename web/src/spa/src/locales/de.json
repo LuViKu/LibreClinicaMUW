@@ -378,6 +378,10 @@
     "zeroDaysNote": "0 = läuft nie ab",
     "zeroMaxNote": "0 = kein Maximum",
     "changeRequiredOnFirstLogin": "Passwort-Änderung bei erster Anmeldung erzwingen",
+    "lockout": "Kontosperre",
+    "lockoutEnabled": "Konto nach wiederholt fehlgeschlagener Anmeldung sperren",
+    "lockoutFailedAttempts": "Fehlgeschlagene Anmeldungen bis zur Sperre",
+    "lockoutNote": "1–25. Gilt ab der nächsten fehlgeschlagenen Anmeldung. Gesperrte Konten werden in der Nutzerverwaltung entsperrt.",
     "discard": "Neu laden"
   },
   "adminLoginHistory": {

@@ -5,6 +5,12 @@
  * GETs / PUTs /api/v1/admin/password-policy. Sysadmin-only. PUT echoes
  * the canonical persisted shape back so we can rebind the form without
  * a second round-trip.
+ *
+ * R1.2 (2026-09-30) — the account lockout, which only the legacy /Configure
+ * page could edit, is part of the same form: whether repeated failed logins
+ * lock an account, and after how many. The login filter reads both at every
+ * failed login, so a change applies from the next one. Every setting a save
+ * changes is audited on the server.
  */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,6 +32,9 @@ interface PasswordPolicy {
   expirationDays: number
   changeRequiredOnFirstLogin: boolean
   specialsAlphabet: string
+  lockoutEnabled: boolean
+  /** 1–25; null when the database has no value. */
+  lockoutFailedAttempts: number | null
 }
 
 const data = ref<PasswordPolicy | null>(null)
@@ -130,6 +139,20 @@ onMounted(load)
       </div>
 
       <label class="flex items-center gap-2"><input v-model="data.changeRequiredOnFirstLogin" type="checkbox" /> {{ t('adminPasswordPolicy.changeRequiredOnFirstLogin') }}</label>
+
+      <fieldset class="space-y-2 border-t border-slate-100 pt-3">
+        <legend class="text-xs font-medium text-slate-700">{{ t('adminPasswordPolicy.lockout') }}</legend>
+        <label class="flex items-center gap-2"><input v-model="data.lockoutEnabled" type="checkbox" data-testid="lockout-enabled" /> {{ t('adminPasswordPolicy.lockoutEnabled') }}</label>
+        <div class="w-72">
+          <FieldLabel for="lockoutFailedAttempts" :required="data.lockoutEnabled">{{ t('adminPasswordPolicy.lockoutFailedAttempts') }}</FieldLabel>
+          <input id="lockoutFailedAttempts" v-model.number="data.lockoutFailedAttempts" type="number" min="1" max="25"
+                 :disabled="!data.lockoutEnabled"
+                 class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm muw-focus disabled:bg-slate-100 disabled:text-slate-500"
+                 :aria-invalid="!!fieldErrors.lockoutFailedAttempts" />
+          <p v-if="fieldErrors.lockoutFailedAttempts" class="mt-1 text-[11px] text-rose-700">{{ fieldErrors.lockoutFailedAttempts }}</p>
+          <p class="mt-1 text-[10px] text-slate-400">{{ t('adminPasswordPolicy.lockoutNote') }}</p>
+        </div>
+      </fieldset>
 
       <div class="flex items-center gap-3 pt-1">
         <button type="submit" :disabled="saving" class="px-4 py-2 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium muw-focus disabled:opacity-60">

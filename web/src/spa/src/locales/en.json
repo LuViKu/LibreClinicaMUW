@@ -378,6 +378,10 @@
     "zeroDaysNote": "0 = never expires",
     "zeroMaxNote": "0 = no maximum",
     "changeRequiredOnFirstLogin": "Force password change on first login",
+    "lockout": "Account lockout",
+    "lockoutEnabled": "Lock an account after repeated failed logins",
+    "lockoutFailedAttempts": "Failed logins before the account is locked",
+    "lockoutNote": "1–25. Applies from the next failed login. A locked account is unlocked under Users.",
     "discard": "Reload"
   },
   "adminLoginHistory": {
