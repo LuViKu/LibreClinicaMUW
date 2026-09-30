@@ -84,9 +84,20 @@
         </property>
     </bean>
     
+     <!-- A second login of the same account expires the first session
+          (maximumSessions=1 below); that session's next request goes to
+          /MainMenu, which sends it on to the login page. The strategy is
+          given explicitly: the ConcurrentSessionFilter(SessionRegistry,
+          String expiredUrl) constructor redirects through a RedirectStrategy
+          that Spring Security 6 leaves null, so an expired session answered
+          HTTP 500. -->
      <bean id="concurrencyFilter" class="org.springframework.security.web.session.ConcurrentSessionFilter">
      	<constructor-arg name="sessionRegistry" ref="sessionRegistry" />
-        <constructor-arg name="expiredUrl" value="/MainMenu" />
+        <constructor-arg name="sessionInformationExpiredStrategy">
+            <bean class="org.springframework.security.web.session.SimpleRedirectSessionInformationExpiredStrategy">
+                <constructor-arg value="/MainMenu" />
+            </bean>
+        </constructor-arg>
         <property name="logoutHandlers">
             <list>
                <ref bean="openClinicaLogoutHandler"/>
