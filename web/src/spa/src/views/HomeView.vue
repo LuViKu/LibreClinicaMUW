@@ -323,6 +323,17 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     group: 'platform',
   },
   {
+    // Every study on the platform; the list is for system administrators
+    // only, which the Administrator role alone does not tell apart.
+    id: 'admin-studies',
+    to: { name: 'admin-studies' },
+    titleKey: 'adminStudies.title',
+    descKey: 'home.administrator.adminStudiesDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => auth.isSysAdmin,
+    group: 'platform',
+  },
+  {
     id: 'modalities',
     to: { name: 'modalities' },
     titleKey: 'modalities.title',

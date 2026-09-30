@@ -135,7 +135,8 @@
       "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
       "dataExportTitle": "Datenexport",
       "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen.",
-      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen."
+      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen.",
+      "adminStudiesDesc": "Alle Studien und Standorte der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -4093,5 +4094,61 @@
   },
   "pageHeader": {
     "trail": "Pfad"
+  },
+  "adminStudies": {
+    "title": "Studien",
+    "subtitle": "Alle Studien der Plattform, auch entfernte: {studies} Studien, {sites} Standorte.",
+    "create": "Studie anlegen",
+    "searchPlaceholder": "Name, Protokoll-ID, OID oder PI suchen …",
+    "column": {
+      "name": "Name",
+      "uniqueIdentifier": "Eindeutige Protokoll-ID",
+      "oid": "OID",
+      "principalInvestigator": "Studienleitung",
+      "created": "Angelegt",
+      "status": "Status"
+    },
+    "empty": "Keine Studie passt zur Suche.",
+    "metadata": "Metadaten (ODM)",
+    "remove": "Entfernen",
+    "restore": "Wiederherstellen",
+    "sitesNote": "Standorte werden auf der Standortseite ihrer Studie entfernt und wiederhergestellt.",
+    "downloadFailed": "Die Metadaten von {study} konnten nicht heruntergeladen werden. {reason}",
+    "status": {
+      "AVAILABLE": "Verfügbar",
+      "PENDING": "Vorbereitung",
+      "FROZEN": "Eingefroren",
+      "LOCKED": "Gesperrt",
+      "REMOVED": "Entfernt",
+      "AUTO_REMOVED": "Mit der Studie entfernt",
+      "UNAVAILABLE": "Nicht verfügbar",
+      "PRIVATE": "Privat",
+      "UNKNOWN": "Unbekannt"
+    }
+  },
+  "studyLifecycle": {
+    "removeTitle": "Studie entfernen",
+    "restoreTitle": "Studie wiederherstellen",
+    "removeIntro": "Mit der Studie wird alles entfernt, was darunter liegt:",
+    "previewFailed": "Der Umfang der Entfernung konnte nicht ermittelt werden.",
+    "nothingUnder": "Unter dieser Studie liegt noch nichts anderes.",
+    "impact": {
+      "sites": "Standorte: {n}",
+      "roleBindings": "Rollenzuweisungen: {n}",
+      "subjects": "Studienteilnehmer/-innen: {n}",
+      "groupClasses": "Gruppenklassen: {n}",
+      "eventDefinitions": "Visiten-Definitionen: {n}",
+      "events": "Visiten: {n}",
+      "eventCrfs": "Ausgefüllte CRF-Bögen: {n}",
+      "itemData": "Eingetragene Werte: {n}",
+      "datasets": "Datensätze: {n}"
+    },
+    "removeReversible": "Es wird nichts gelöscht: Die Daten bleiben in der Datenbank, und eine entfernte Studie kann wiederhergestellt werden. Bis dahin kann niemand die Studie öffnen oder mit ihren Daten arbeiten.",
+    "restoreIntro": "Die Studie erhält den Status zurück, den sie beim Entfernen hatte, zusammen mit den Standorten, Rollenzuweisungen, Studienteilnehmer/-innen, Visiten und Daten, die mit ihr entfernt wurden. Was schon vorher für sich entfernt wurde, bleibt entfernt.",
+    "reason": "Begründung",
+    "reasonPlaceholder": "Wird im Audit-Trail festgehalten",
+    "reasonRequired": "Bitte eine Begründung angeben; sie wird im Audit-Trail festgehalten.",
+    "removeConfirm": "Studie entfernen",
+    "restoreConfirm": "Studie wiederherstellen"
   }
 }

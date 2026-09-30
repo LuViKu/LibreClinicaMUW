@@ -103,6 +103,16 @@ export const useAuthStore = defineStore('auth', () => {
   const needsPasswordChange = computed(
     () => user.value?.mustChangePassword === true,
   )
+  /**
+   * A system administrator (business or technical). The `Administrator`
+   * role also covers the study-level `admin` role; this is the account
+   * type, which the platform-wide screens need.
+   */
+  const isSysAdmin = computed(
+    () => user.value?.userType === 'SYSADMIN' || user.value?.userType === 'TECHADMIN',
+  )
+  /** Only a technical administrator may make another one. */
+  const isTechAdmin = computed(() => user.value?.userType === 'TECHADMIN')
 
   /**
    * Boot the store on app load. Calls /me; on 401 we know the user is
@@ -434,6 +444,8 @@ export const useAuthStore = defineStore('auth', () => {
     isAnonymous,
     needsStudyPick,
     needsPasswordChange,
+    isSysAdmin,
+    isTechAdmin,
     bootstrap,
     localLogin,
     loadStudies,

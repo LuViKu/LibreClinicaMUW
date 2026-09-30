@@ -80,13 +80,14 @@ function makeRouter() {
       { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
       { path: '/ingest-inbox', name: 'ingest-inbox', component: { template: '<div />' } },
       { path: '/due-visits', name: 'due-visits', component: { template: '<div />' } },
+      { path: '/admin/studies', name: 'admin-studies', component: { template: '<div />' } },
     ],
   })
 }
 
 type Role = 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
 
-function mountWith(roles: Role[] | null) {
+function mountWith(roles: Role[] | null, userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore()
@@ -110,6 +111,7 @@ function mountWith(roles: Role[] | null) {
       timezone: null,
       mustChangePassword: false,
       passwordChangeReason: null,
+      userType,
       activeStudy: {
         id: 1,
         oid: 'S_DEFAULTS1',
@@ -336,6 +338,16 @@ describe('HomeView dashboard', () => {
     expect(ids).not.toContain('sign-queue')
     expect(ids).toContain('sdv')
     expect(ids).toContain('due-visits')
+  })
+
+  it('gives a system administrator the list of every study, and a study-level Administrator not', async () => {
+    const sysadmin = mountWith(['Administrator'], 'SYSADMIN')
+    await sysadmin.vm.$nextTick()
+    expect(cardIds(sysadmin)).toContain('admin-studies')
+
+    const studyAdmin = mountWith(['Administrator'], 'USER')
+    await studyAdmin.vm.$nextTick()
+    expect(cardIds(studyAdmin)).not.toContain('admin-studies')
   })
 
   it('shows the platform section only when there is something in it', async () => {
