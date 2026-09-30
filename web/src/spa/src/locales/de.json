@@ -2252,7 +2252,8 @@
       "phone": "Telefon",
       "affiliation": "Institutszugehörigkeit",
       "submit": "Änderungen speichern",
-      "successFlash": "Profil aktualisiert."
+      "successFlash": "Profil aktualisiert.",
+      "requiredCleared": "Pflichtfeld: Es kann nicht geleert werden."
     },
     "lifecycle": {
       "disable": "Deaktivieren",
@@ -2296,6 +2297,35 @@
       "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
       "savedToast": "Rollen aktualisiert.",
       "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+    },
+    "userType": {
+      "label": "Kontotyp",
+      "USER": "Nutzer/-in",
+      "SYSADMIN": "Fachliche Administration",
+      "TECHADMIN": "Technische Administration",
+      "help": "Die Administration verwaltet Nutzer/-innen und Studien plattformweit. Nur die technische Administration kann jemanden zur technischen Administration machen.",
+      "techOnly": "Nur die technische Administration kann den Kontotyp einer technischen Administration ändern."
+    },
+    "details": {
+      "action": "Angaben",
+      "title": "Kontoangaben",
+      "close": "Schließen",
+      "yes": "Ja",
+      "no": "Nein",
+      "dateBy": "{date} von {user}",
+      "username": "Benutzername",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "affiliation": "Institutszugehörigkeit",
+      "businessAdmin": "Fachliche Administration",
+      "technicalAdmin": "Technische Administration",
+      "status": "Status",
+      "auth": "Anmeldung",
+      "lastLogin": "Letzte Anmeldung",
+      "created": "Angelegt",
+      "updated": "Zuletzt geändert"
     }
   },
   "retinalParked": {
