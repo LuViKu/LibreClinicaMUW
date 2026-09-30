@@ -67,8 +67,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Endpoints:
  * <ul>
  *   <li>{@code GET /pages/api/v1/sdv} — returns one
- *       {@link SdvRowDto} per event-CRF in the session-bound active
- *       study. Reuses the same filter/sort overload as the legacy
+ *       {@link SdvRowDto} per complete event-CRF in the session-bound
+ *       active study. Reuses the same filter/sort overload as the legacy
  *       {@code /viewAllSubjectSdvData} JSON endpoint
  *       ({@code SDVController.java:344}) but reshapes the row to the
  *       SPA's contract so {@code stores/sdv.ts} doesn't have to know
@@ -86,6 +86,10 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link SdvUnverifyAuthorization}. Both need a session-bound active
  * study, and report an event CRF outside the caller's visible studies
  * as rejected.
+ *
+ * <p><strong>Completion:</strong> only a complete event CRF can be
+ * verified ({@link #completeForVerification}). The list leaves the
+ * others out and verify rejects them, as the legacy SDV table does.
  *
  * <p>Status mapping for the read endpoint:
  * <ul>
@@ -144,12 +148,11 @@ public class SdvApiController {
         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
 
         // The legacy /viewAllSubjectSdvData filter restricts to
-        // (status_id ∈ {2, 6} AND source_data_verification_code != 4)
-        // — useful for the "what's left to verify" inbox but it hides
-        // in-progress and signed rows the SPA still wants to render
-        // (so the operator can see SDV requirement vs. completion
-        // state side-by-side). Iterate by study-subject instead and
-        // let the SPA filter client-side.
+        // (status_id ∈ {2, 6} AND source_data_verification_code != 4).
+        // Its status test misses a CRF completed in the SPA, which keeps
+        // status 1 and carries a completion date instead, so iterate by
+        // study-subject and apply completeForVerification per row. Rows
+        // still in data entry are left out: nothing may verify them.
         //
         // A4 — per-site visibility. Walk the visible study set
         // rather than the bare currentStudy.id so a Monitor with a
@@ -211,6 +214,9 @@ public class SdvApiController {
             EventDefinitionCRFBean edc = edcDao
                     .findByStudyEventIdAndCRFVersionId(ownerStudy != null ? ownerStudy : currentStudy,
                             evt.getId(), ec.getCRFVersionId());
+            if (!completeForVerification(ec, edc)) {
+                continue;
+            }
 
             String requirement = requirementFromEdc(edc);
             int openQueries = countOpenQueries(dnDao, ec.getId());
@@ -269,6 +275,8 @@ public class SdvApiController {
 
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
 
         // A4 — per-site visibility. The verify endpoint rejects any
         // event_crf whose study_subject sits outside the user's
@@ -303,6 +311,17 @@ public class SdvApiController {
             // subjects' CRFs. SDV is a data attestation; freezing it
             // alongside the data preserves the audit semantics.
             if (ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED)) {
+                rejected.add(oid);
+                continue;
+            }
+
+            // Only a complete CRF can be verified; one still in data
+            // entry has nothing settled to check against the source.
+            StudyBean ownerStudy = (StudyBean) studyDao.findByPK(ss.getStudyId());
+            EventDefinitionCRFBean edc = edcDao.findByStudyEventIdAndCRFVersionId(
+                    ownerStudy != null && ownerStudy.getId() > 0 ? ownerStudy : currentStudy,
+                    ec.getStudyEventId(), ec.getCRFVersionId());
+            if (!completeForVerification(ec, edc)) {
                 rejected.add(oid);
                 continue;
             }
@@ -458,6 +477,36 @@ public class SdvApiController {
     /* ----------------------------------------------------------------- */
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
+
+    /**
+     * Whether an event CRF is complete, and so may be source-data verified.
+     *
+     * <p>Legacy SDV lists and verifies only event CRFs whose status is
+     * completed ({@link Status#UNAVAILABLE}, id 2) or locked (6): the
+     * {@code /viewAllSubjectSdvData} filter and
+     * {@code SDVUtil.setSDVStatusForStudySubjects}. The SPA completes a CRF
+     * by date and leaves its status available: {@code date_completed} once
+     * initial data entry is complete, {@code date_validate_completed} once
+     * the second pass of double data entry is. Either marker counts, and
+     * double data entry needs its second pass. A removed CRF is never
+     * complete.
+     *
+     * @param edc the CRF's event definition CRF; {@code null} reads as
+     *            single data entry
+     */
+    static boolean completeForVerification(EventCRFBean ec, EventDefinitionCRFBean edc) {
+        Status status = ec.getStatus();
+        if (Status.DELETED.equals(status) || Status.AUTO_DELETED.equals(status)) {
+            return false;
+        }
+        if (Status.UNAVAILABLE.equals(status) || Status.LOCKED.equals(status)) {
+            return true;
+        }
+        boolean doubleEntry = edc != null && edc.isDoubleEntry();
+        return doubleEntry
+                ? ec.getDateValidateCompleted() != null
+                : ec.getDateCompleted() != null;
+    }
 
     private static String statusForRow(EventCRFBean ec, int openQueries) {
         if (ec.isSdvStatus()) return "verified";
