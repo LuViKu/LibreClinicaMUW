@@ -157,7 +157,6 @@ public class ExportDatasetServlet extends SecureController {
             loadList(db, asdfdao, datasetId, fp, eb);
             forwardPage(Page.EXPORT_DATASETS);
         } else {
-            logger.info("**** found action ****: " + action);
             // generate file, and show screen export
             // String generalFileDir = DATASET_DIR + db.getId() +
             // File.separator;

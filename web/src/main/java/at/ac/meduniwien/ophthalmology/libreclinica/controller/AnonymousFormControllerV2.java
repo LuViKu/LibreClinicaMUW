@@ -159,9 +159,6 @@ public class AnonymousFormControllerV2 {
         String url = null;
         if (isOffline) url = enketoURL.split("#",2)[0] + "?" + FORM_CONTEXT + "=" + contextHash + "#" + enketoURL.split("#",2)[1];
         else url = enketoURL + "?" + FORM_CONTEXT + "=" + contextHash;
-        // The query string carries the ecid, the handle a submission presents to
-        // address this form. Log the form, not the handle.
-        logger.debug("Enketo URL for {} = {}", crfVersion.getName(), enketoURL);
         return url;
 
     }

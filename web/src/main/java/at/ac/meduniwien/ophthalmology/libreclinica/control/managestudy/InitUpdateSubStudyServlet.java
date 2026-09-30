@@ -73,7 +73,6 @@ public class InitUpdateSubStudyServlet extends SecureController {
 	public void processRequest() throws Exception {
 		StudyDAO sdao = new StudyDAO(sm.getDataSource());
 		String idString = request.getParameter("id");
-		logger.info("study id:" + idString);
 		// A non-numeric ?id= is as unusable as a missing one, so it takes the
 		// same branch (page message + back to the study list) instead of
 		// letting a NumberFormatException escape into the container's 500 page.
