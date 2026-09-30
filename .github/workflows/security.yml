@@ -41,9 +41,10 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy-fs.sarif
-          # Don't fail the build on findings - report-only until we triage the
-          # initial backlog. Switch to exit-code: 1 once Phase A.2 lands.
-          exit-code: '0'
+          # Fail on any unfixed-excluded finding. The backlog is clear as of
+          # 2026-09-30, so a new vulnerable dependency now fails the job
+          # instead of only appearing in the Security tab.
+          exit-code: '1'
 
       - name: Upload Trivy SARIF to GitHub Security tab
         if: always()

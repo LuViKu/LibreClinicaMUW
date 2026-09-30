@@ -68,7 +68,9 @@
   "pnpm": {
     "overrides": {
       "@babel/runtime@7": "7.26.10",
-      "brace-expansion@1": "1.1.18",
+      "brace-expansion@1": "1.1.21",
+      "brace-expansion@2": "2.1.7",
+      "fast-uri@3": "3.1.8",
       "fflate@0.7": "0.7.5",
       "nanoid@3": "3.3.18",
       "shell-quote": "1.9.0",
