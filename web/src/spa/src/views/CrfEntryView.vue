@@ -27,10 +27,11 @@ import BilateralItemGroup from '@/components/BilateralItemGroup.vue'
 import NewNoteDialog from '@/components/NewNoteDialog.vue'
 import NoteThreadDialog from '@/components/NoteThreadDialog.vue'
 import CrfPrefillModal from '@/components/CrfPrefillModal.vue'
+import ReasonForChangeModal from '@/components/ReasonForChangeModal.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 import { parseShowWhen } from '@/components/showWhen'
 
-import { useCrfEntryStore } from '@/stores/crfEntry'
+import { useCrfEntryStore, parseGroupRowReasonKey } from '@/stores/crfEntry'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
@@ -368,11 +369,13 @@ async function onClearFile(itemOid: string): Promise<void> {
 }
 
 /* -------------------------------------------------------------------- */
-/* Phase E.6 admin-rfc — saveBlockedByRfc guard. The Reason-For-Change   */
-/* modal itself was scoped out; the store's missingReasonItemOids flag   */
-/* survives so onSave() can short-circuit instead of POSTing a save the  */
-/* backend would 400. Restore the modal in a later slice when wiring     */
-/* per-item reasons becomes part of the entry view.                      */
+/* Phase E.6 admin-rfc — reasons for change. A CRF that has been         */
+/* completed once stays under administrative editing after a Reopen, so */
+/* while `requiresReasonForChange` holds every changed value needs a     */
+/* reason before it is saved. The modal opens whenever the store lists   */
+/* keys still lacking one — from the guard below or from the backend's   */
+/* 400 — and on confirm the interrupted action runs again. A key is an   */
+/* item OID, or OID[row] for a value in a repeating group's row.         */
 /* -------------------------------------------------------------------- */
 
 import { ref } from 'vue'
@@ -381,6 +384,47 @@ const saveBlockedByRfc = computed(
   () => store.requiresReasonForChange && store.itemsAwaitingReason.length > 0,
 )
 
+/** The action the reason modal interrupted, resumed once reasons are in. */
+const rfcResume = ref<'save' | 'complete' | null>(null)
+
+const rfcModalOpen = computed(() => store.missingReasonItemOids.length > 0)
+
+function displayValue(v: unknown): string {
+  if (v == null) return ''
+  return Array.isArray(v) ? v.join(', ') : String(v)
+}
+
+const rfcPrompts = computed(() =>
+  store.missingReasonItemOids.map((key) => {
+    const inRow = parseGroupRowReasonKey(key)
+    const oid = inRow ? inRow.itemOid : key
+    const label = itemsByOid.value[oid]?.label ?? oid
+    if (inRow) {
+      const group = store.groups.find((g) => g.itemOids.includes(oid))
+      const row = group?.rows.find((r) => r.ordinal === inRow.rowOrdinal)
+      return {
+        oid: key,
+        label: t('crfEntry.rfc.rowLabel', { label, row: inRow.rowOrdinal }),
+        currentValue: displayValue(row?.values[oid]),
+      }
+    }
+    return { oid: key, label, currentValue: displayValue(store.values[oid]) }
+  }),
+)
+
+async function onReasonsConfirmed(reasons: Record<string, string>) {
+  for (const [key, reason] of Object.entries(reasons)) store.stageReason(key, reason)
+  const resume = rfcResume.value
+  rfcResume.value = null
+  if (resume === 'complete') await onMarkComplete()
+  else await onSave()
+}
+
+function onReasonsCancelled() {
+  rfcResume.value = null
+  store.dismissReasonModal()
+}
+
 async function onSave() {
   submitAttempted.value = true
   // If the operator clicks Save on a post-complete entry without
@@ -388,18 +432,25 @@ async function onSave() {
   // a save that the backend will 400. The store's guard does the
   // same — this just shortens the round-trip.
   if (saveBlockedByRfc.value) {
+    rfcResume.value = 'save'
     store.missingReasonItemOids = [...store.itemsAwaitingReason]
     return
   }
   // #11/#15 — confirm the save. Silent success previously left the
   // operator unsure anything happened (only the passive "last saved"
   // timestamp changed).
+  rfcResume.value = 'save'
   const ok = await store.save()
-  if (ok) notifications.success(t('crfEntry.saveSuccess'))
+  if (ok) {
+    rfcResume.value = null
+    notifications.success(t('crfEntry.saveSuccess'))
+  }
 }
 async function onMarkComplete() {
   submitAttempted.value = true
+  rfcResume.value = 'complete'
   await store.markComplete()
+  if (store.missingReasonItemOids.length === 0) rfcResume.value = null
   if (store.status === 'complete') {
     // #11/#15 — the toast survives the navigation below (app-level store).
     notifications.success(t('crfEntry.markCompleteSuccess'))
@@ -1111,6 +1162,13 @@ function onPrefillApply(values: Record<string, string>) {
       :current-event-crf-id="store.entry.eventCrfOid"
       @close="prefillOpen = false"
       @apply="onPrefillApply"
+    />
+    <ReasonForChangeModal
+      :open="rfcModalOpen"
+      :prompts="rfcPrompts"
+      :initial-reasons="store.pendingReasons"
+      @confirm="onReasonsConfirmed"
+      @cancel="onReasonsCancelled"
     />
   </div>
 </template>

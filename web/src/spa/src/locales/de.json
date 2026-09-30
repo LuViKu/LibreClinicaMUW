@@ -770,6 +770,7 @@
       "confirm": "Begründungen bestätigen",
       "cancel": "Abbrechen",
       "capturedChip": "Begründung erfasst",
+      "rowLabel": "{label} (Zeile {row})",
       "missingForItem": "Für diese Änderung ist eine Begründung erforderlich.",
       "fromTo": {
         "from": "Vorher",

@@ -409,11 +409,12 @@ public class EventCrfsApiController {
         );
 
         // Phase E.6 admin-rfc — `requiresReasonForChange` true once the
-        // CRF is past date_completed. The SPA reads this flag to mount
-        // the ReasonForChangeModal before re-enabling Save on edits to
-        // post-complete entries. SIGNED / LOCKED rows still 409 on save
-        // (legacy unlock path), so we don't need a third state here.
-        boolean requiresRfc = ecb.getDateCompleted() != null;
+        // CRF has ever been completed, reopened or not, and the study
+        // forces a reason (AdministrativeEditing). The SPA reads this flag
+        // to mount the ReasonForChangeModal before Save fires. SIGNED /
+        // LOCKED rows still 409 on save (legacy unlock path), so we don't
+        // need a third state here.
+        boolean requiresRfc = AdministrativeEditing.reasonRequired(dataSource, currentStudy, ecb);
         // Phase E.6 dde — embed the DDE marker block when the parent
         // event_definition_crf has double_entry=true. {@code dde} stays
         // null for single-pass studies so legacy single-entry flows
@@ -460,6 +461,13 @@ public class EventCrfsApiController {
      *
      * <p>A save that changes a value of a source-data-verified CRF
      * withdraws the verification ({@link SdvRevocation}).
+     *
+     * <p>A CRF that has ever been completed is under administrative
+     * editing ({@link AdministrativeEditing}): when the study forces a
+     * reason for change, every changed value, top-level or in a row of a
+     * repeating group, needs one, or nothing is saved (400,
+     * {@code missingReasonItemOids}). A reason given is recorded as a
+     * Reason for Change note whether forced or not.
      *
      * <p>Audit-log: one {@link AuditEventBean} row per changed item,
      * recording (auditTable="item_data", entityId, columnName="value",
@@ -537,19 +545,24 @@ public class EventCrfsApiController {
                     hiddenItemCount, ecb.getId());
         }
 
-        // Phase E.6 admin-rfc — post-complete edits MUST carry a non-blank
-        // reason for every changed item. We do a pre-pass against the
-        // existing values so we can fail-fast with `missingReasonItemOids`
-        // before we touch any rows.
-        boolean postComplete = ecb.getDateCompleted() != null;
+        // Phase E.6 admin-rfc — a CRF that has ever been completed is under
+        // administrative editing for good; reopening it does not end that
+        // (AdministrativeEditing). When the study forces a reason, every
+        // changed value MUST carry a non-blank one: keyed by item OID, or by
+        // OID[row] for a row of a repeating group. We do a pre-pass against
+        // the existing values so we can fail-fast with
+        // `missingReasonItemOids` before we touch any rows.
+        boolean administrativeEditing = AdministrativeEditing.everCompleted(dataSource, ecb);
+        boolean reasonRequired = administrativeEditing
+                && StudyParameters.adminForcedReasonForChange(dataSource, currentStudy);
         Map<String, String> reasons = body.reasons() == null ? Map.of() : body.reasons();
         List<String> missingReasonItemOids = new ArrayList<>();
         Map<String, ItemBean> resolvedItems = new HashMap<>();
         Map<String, ItemDataBean> existingByOid = new HashMap<>();
-        if (postComplete) {
+        if (reasonRequired) {
             for (Map.Entry<String, Object> entry : visibleTopLevelValues.entrySet()) {
                 String itemOid = entry.getKey();
-                String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
+                String newValue = serialiseValueForStorage(entry.getValue());
                 ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
                 if (candidates == null || candidates.isEmpty()) continue;
                 ItemBean item = candidates.get(0);
@@ -558,11 +571,27 @@ public class EventCrfsApiController {
                 existingByOid.put(itemOid, existing);
                 String oldValue = (existing != null && existing.getId() > 0 && existing.getValue() != null)
                         ? existing.getValue() : "";
-                boolean willChange = !oldValue.equals(newValue);
-                if (willChange) {
-                    String reason = reasons.get(itemOid);
-                    if (reason == null || reason.trim().isEmpty()) {
-                        missingReasonItemOids.add(itemOid);
+                if (!oldValue.equals(newValue) && !hasReason(reasons, itemOid)) {
+                    missingReasonItemOids.add(itemOid);
+                }
+            }
+            if (body.groups() != null) {
+                for (SaveItemsRequest.GroupRowSavePayload row : body.groups()) {
+                    if (row == null || row.values() == null) continue;
+                    int ordinal = Math.max(1, row.rowOrdinal());
+                    for (Map.Entry<String, Object> rowVal : row.values().entrySet()) {
+                        String itemOid = rowVal.getKey();
+                        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+                        if (candidates == null || candidates.isEmpty()) continue;
+                        ItemDataBean existing = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                                candidates.get(0).getId(), ecb.getId(), ordinal);
+                        String oldValue = (existing != null && existing.getId() > 0 && existing.getValue() != null)
+                                ? existing.getValue() : "";
+                        String rowKey = groupRowReasonKey(itemOid, ordinal);
+                        if (!oldValue.equals(serialiseValueForStorage(rowVal.getValue()))
+                                && !hasReason(reasons, rowKey)) {
+                            missingReasonItemOids.add(rowKey);
+                        }
                     }
                 }
             }
@@ -576,7 +605,7 @@ public class EventCrfsApiController {
             }
         }
 
-        ReasonForChangeWriter rfcWriter = postComplete
+        ReasonForChangeWriter rfcWriter = administrativeEditing
                 ? new ReasonForChangeWriter(new DiscrepancyNoteDAO(dataSource))
                 : null;
 
@@ -671,27 +700,10 @@ public class EventCrfsApiController {
             }
 
             // Phase E.6 admin-rfc — write the RFC discrepancy note + mapping
-            // when this is a post-complete edit. The writer is best-effort:
-            // it logs + swallows DAO failures so a flaky RFC write never
-            // rolls back the item_data save.
-            if (rfcWriter != null && itemDataIdAfter > 0) {
-                String reason = reasons.get(itemOid);
-                if (reason != null && !reason.trim().isEmpty()) {
-                    DiscrepancyNoteBean rfcDn = rfcWriter.writeRfc(
-                            itemDataIdAfter, currentStudy, currentUser, reason);
-                    if (rfcDn != null) {
-                        rfcCreatedCount++;
-                        // Also emit an audit row carrying the reason itself, so
-                        // the audit log says why the value changed and not only
-                        // that a note exists. Its own type since 2026-09-27:
-                        // it was written under 27, the study_subject trigger's
-                        // "moved to another site".
-                        writeAuditEvent(auditDAO, AuditTypeIds.ITEM_DATA_REASON_FOR_CHANGE,
-                                currentUser, currentStudy, ss,
-                                "item_data_rfc", "item_data", itemDataIdAfter,
-                                itemOid, oldValue, newValue, reason);
-                    }
-                }
+            // when this is an edit under administrative editing.
+            if (recordReasonForChange(rfcWriter, auditDAO, reasons.get(itemOid), itemDataIdAfter,
+                    itemOid, oldValue, newValue, currentUser, currentStudy, ss)) {
+                rfcCreatedCount++;
             }
 
             saved++;
@@ -722,6 +734,7 @@ public class EventCrfsApiController {
                             item.getId(), ecb.getId(), ordinal);
                     String oldValue = "";
                     boolean isCreate;
+                    int rowItemDataId;
                     if (existing != null && existing.getId() > 0) {
                         oldValue = existing.getValue() == null ? "" : existing.getValue();
                         if (oldValue.equals(newValue)) { groupRowsSaved++; continue; }
@@ -732,6 +745,7 @@ public class EventCrfsApiController {
                         existing.setOldStatus(Status.AVAILABLE);
                         idDAO.update(existing);
                         isCreate = false;
+                        rowItemDataId = existing.getId();
                     } else {
                         ItemDataBean idb = new ItemDataBean();
                         idb.setEventCRFId(ecb.getId());
@@ -743,17 +757,23 @@ public class EventCrfsApiController {
                         idb.setStatus(Status.AVAILABLE);
                         idb.setOldStatus(Status.AVAILABLE);
                         idb.setDeleted(false);
-                        idDAO.create(idb);
+                        ItemDataBean createdRow = idDAO.create(idb);
                         isCreate = true;
+                        rowItemDataId = createdRow != null ? createdRow.getId() : idb.getId();
                     }
                     if (!oldValue.equals(newValue)) {
                         dataChanged = true;
                     }
+                    String rowKey = groupRowReasonKey(itemOid, ordinal);
                     writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
                             currentUser, currentStudy, ss,
                             isCreate ? "item_data_create" : "item_data_update",
-                            "item_data", existing != null ? existing.getId() : 0,
-                            itemOid + "[" + ordinal + "]", oldValue, newValue);
+                            "item_data", rowItemDataId,
+                            rowKey, oldValue, newValue);
+                    if (recordReasonForChange(rfcWriter, auditDAO, reasons.get(rowKey), rowItemDataId,
+                            rowKey, oldValue, newValue, currentUser, currentStudy, ss)) {
+                        rfcCreatedCount++;
+                    }
                     groupRowsSaved++;
                 }
             }
@@ -802,6 +822,51 @@ public class EventCrfsApiController {
                 ecb.getId(), saved, groupRowsSaved, rejected, rfcCreatedCount, currentUser.getName(), currentStudy.getOid());
 
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * The {@code reasons} key of a value in a row of a repeating group:
+     * {@code OID[row]}, the column marker its audit row carries.
+     */
+    static String groupRowReasonKey(String itemOid, int rowOrdinal) {
+        return itemOid + "[" + rowOrdinal + "]";
+    }
+
+    private static boolean hasReason(Map<String, String> reasons, String key) {
+        String reason = reasons.get(key);
+        return reason != null && !reason.trim().isEmpty();
+    }
+
+    /**
+     * Phase E.6 admin-rfc — record the reason for a changed value: a Reason
+     * for Change note on its {@code item_data} row, and an audit row that
+     * carries the reason itself, so the audit log says why the value
+     * changed and not only that a note exists. The note writer is
+     * best-effort: it logs + swallows DAO failures so a flaky RFC write
+     * never rolls back the item_data save.
+     *
+     * @param writer null outside administrative editing: nothing is recorded
+     * @return true when a note was written
+     */
+    private static boolean recordReasonForChange(ReasonForChangeWriter writer, AuditEventDAO auditDAO,
+                                                 String reason, int itemDataId, String columnName,
+                                                 String oldValue, String newValue,
+                                                 UserAccountBean user, StudyBean study,
+                                                 StudySubjectBean ss) {
+        if (writer == null || itemDataId <= 0 || reason == null || reason.trim().isEmpty()) {
+            return false;
+        }
+        DiscrepancyNoteBean rfcDn = writer.writeRfc(itemDataId, study, user, reason);
+        if (rfcDn == null) {
+            return false;
+        }
+        // Its own type since 2026-09-27: it was written under 27, the
+        // study_subject trigger's "moved to another site".
+        writeAuditEvent(auditDAO, AuditTypeIds.ITEM_DATA_REASON_FOR_CHANGE,
+                user, study, ss,
+                "item_data_rfc", "item_data", itemDataId,
+                columnName, oldValue, newValue, reason);
+        return true;
     }
 
     /**

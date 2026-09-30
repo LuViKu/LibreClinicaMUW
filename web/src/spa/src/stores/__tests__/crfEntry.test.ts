@@ -352,6 +352,48 @@ describe('useCrfEntryStore', () => {
     expect(store.pendingReasons.I_HEIGHT_CM).toBe('will retry later')
   })
 
+  it('a changed value in a repeating row needs its reason, keyed OID[row]', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        requiresReasonForChange: true,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE', 'I_IOP'], rows: [{ ordinal: 2, values: { I_IOP: 16 } }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    store.setValueInRow('G_EYE_FINDINGS', 2, 'I_IOP', 18)
+
+    await store.save()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.missingReasonItemOids).toEqual(['I_IOP[2]'])
+
+    store.stageReason('I_IOP[2]', 're-measured')
+    await store.save()
+    const [, body] = vi.mocked(apiPost).mock.calls[0]
+    expect((body as { reasons?: Record<string, string> }).reasons).toEqual({ 'I_IOP[2]': 're-measured' })
+  })
+
+  it('markComplete stops when the save is held back for missing reasons', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_CONSENT_DATE', '2026-05-01')
+    store.setValue('I_CONSENT_SIGNED', 'Y')
+    store.setValue('I_HEIGHT_CM', 172)
+    store.setValue('I_WEIGHT_KG', 70.5)
+
+    await store.markComplete()
+
+    const completeCalls = vi.mocked(apiPost).mock.calls.filter(([path]) => path.endsWith('/markComplete'))
+    expect(completeCalls).toHaveLength(0)
+    expect(store.missingReasonItemOids.length).toBeGreaterThan(0)
+    expect(store.status).not.toBe('complete')
+  })
+
   /* ---------------------------------------------------------------- */
   /* Phase E.6 — repeating groups + select-multi + file               */
   /* ---------------------------------------------------------------- */

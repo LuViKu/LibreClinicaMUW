@@ -770,6 +770,7 @@
       "confirm": "Confirm reasons",
       "cancel": "Cancel",
       "capturedChip": "Reason captured",
+      "rowLabel": "{label} (row {row})",
       "missingForItem": "A reason is required for this change.",
       "fromTo": {
         "from": "From",

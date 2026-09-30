@@ -250,9 +250,11 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
     void changingARepeatingRowWithdrawsTheVerification() throws Exception {
         setSdvStatus(10, true);
         try {
+            // Event CRF 10 is complete, so the row's value needs its reason.
             mvc().perform(json(post("/api/v1/eventCrfs/10/items"),
                             "{\"groups\":[{\"groupOid\":\"IG_READINGS\",\"rowOrdinal\":2,"
-                                    + "\"values\":{\"I_BLOOD_PRESSURE_SYS\":\"125\"}}]}")
+                                    + "\"values\":{\"I_BLOOD_PRESSURE_SYS\":\"125\"}}],"
+                                    + "\"reasons\":{\"I_BLOOD_PRESSURE_SYS[2]\":\"late reading\"}}")
                             .session(investigatorSession()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.groupRowsSaved").value(1));

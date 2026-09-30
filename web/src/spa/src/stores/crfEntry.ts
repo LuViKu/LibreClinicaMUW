@@ -350,6 +350,11 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     byItem.set(itemOid, value)
     pendingChanges.value = true
     if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
+    // A changed value in a row needs a reason too; its key is OID[row],
+    // the key the backend reads from `reasons` and reports as missing.
+    if (entry.value.requiresReasonForChange) {
+      dirtyItemOids.value = new Set([...dirtyItemOids.value, groupRowReasonKey(itemOid, rowOrdinal)])
+    }
   }
 
   /**
@@ -673,9 +678,11 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     }
     const target = entry.value
     // Flush pending edits first; if save fails, abort the markComplete.
+    // A save held back for missing reasons fails without an error message
+    // (the reason modal opens instead), so the result decides, not error.
     if (pendingChanges.value) {
-      await save()
-      if (error.value) return
+      const saved = await save()
+      if (!saved || error.value) return
     }
     isSaving.value = true
     error.value = null
@@ -796,6 +803,21 @@ function hasValue(v: unknown): boolean {
   if (typeof v === 'string') return v.trim().length > 0
   if (Array.isArray(v)) return v.length > 0
   return true
+}
+
+/**
+ * The reason-for-change key of a value in a repeating group's row,
+ * `OID[row]`; a top-level item's key is its OID. The backend reads
+ * `reasons` and reports `missingReasonItemOids` with the same keys.
+ */
+export function groupRowReasonKey(itemOid: string, rowOrdinal: number): string {
+  return `${itemOid}[${rowOrdinal}]`
+}
+
+/** Inverse of {@link groupRowReasonKey}; null for a top-level item's key. */
+export function parseGroupRowReasonKey(key: string): { itemOid: string; rowOrdinal: number } | null {
+  const m = /^(.+)\[(\d+)\]$/.exec(key)
+  return m ? { itemOid: m[1], rowOrdinal: Number(m[2]) } : null
 }
 
 /**
