@@ -41,12 +41,7 @@ public class TriggerService {
         // do nothing, for the moment
     }
 
-    public static final String PERIOD = "periodToRun";
-    public static final String TAB = "tab";
-    public static final String CDISC = "cdisc";
-    public static final String SPSS = "spss";
     public static final String DATASET_ID = "dsId";
-    public static final String DATE_START_JOB = "job";
     public static final String EMAIL = "contactEmail";
     public static final String JOB_NAME = "jobName";
     public static final String JOB_DESC = "jobDesc";
@@ -109,40 +104,6 @@ public class TriggerService {
         trigger.getJobDataMap().put("minutes", minutes);
 
         return trigger;
-    }
-
-    public HashMap<String, ArrayList<String>> validateForm(FormProcessor fp, HttpServletRequest request, String[] triggerNames, String properName) {
-        Validator v = new Validator(request);
-        v.addValidation(JOB_NAME, Validator.NO_BLANKS);
-        // need to be unique too
-        v.addValidation(JOB_DESC, Validator.NO_BLANKS);
-        v.addValidation(EMAIL, Validator.IS_A_EMAIL);
-        v.addValidation(PERIOD, Validator.NO_BLANKS);
-        v.addValidation(DATE_START_JOB + "Date", Validator.IS_A_DATE);
-        // v.addValidation(DATE_START_JOB + "Date", new Date(), Validator.DATE_IS_AFTER_OR_EQUAL);
-
-        String tab = fp.getString(TAB);
-        String cdisc = fp.getString(CDISC);
-        String cdisc12 = fp.getString(ExampleSpringJob.CDISC12);
-        String cdisc13 = fp.getString(ExampleSpringJob.CDISC13);
-        String cdisc13oc = fp.getString(ExampleSpringJob.CDISC13OC);
-        String spss = fp.getString(SPSS);
-        Date jobDate = fp.getDateTime(DATE_START_JOB);
-        HashMap<String, ArrayList<String>> errors = v.validate();
-        if ((tab == "") && (cdisc == "") && (spss == "") && (cdisc12 == "") && (cdisc13 == "") && (cdisc13oc == "")) {
-            // throw an error here, at least one should work
-            // errors.put(TAB, "Error Message - Pick one of the below");
-            Validator.addError(errors, TAB, "Please pick at least one of the below.");
-        }
-        for (String triggerName : triggerNames) {
-            if (triggerName.equals(fp.getString(JOB_NAME)) && (!triggerName.equals(properName))) {
-                Validator.addError(errors, JOB_NAME, "A job with that name already exists.  Please pick another name.");
-            }
-        }
-        if (jobDate.before(new Date())) {
-            Validator.addError(errors, DATE_START_JOB + "Date", "This date needs to be later than the present time.");
-        }
-        return errors;
     }
 
     public String generateSummaryStatsMessage(SummaryStatsBean ssBean, ResourceBundle respage) {
@@ -323,18 +284,6 @@ public class TriggerService {
 
     public HashMap<String, ArrayList<String>> validateImportJobForm(FormProcessor fp, HttpServletRequest request, String[] triggerNames) {
         return validateImportJobForm(fp, request, triggerNames, "");
-    }
-
-    public HashMap<String, ArrayList<String>> validateForm(FormProcessor fp, HttpServletRequest request, String[] triggerNames) {
-        return validateForm(fp, request, triggerNames, "");
-    }
-
-    public HashMap<String, ArrayList<String>> validateImportForm(HttpServletRequest request) {
-        Validator v = new Validator(request);
-
-        HashMap<String, ArrayList<String>> errors = v.validate();
-
-        return errors;
     }
     
 }
