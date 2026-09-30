@@ -88,7 +88,9 @@ public class LegacyServletDeprecationCatalog {
         /** Source data verification (Spring MVC pages). */
         SOURCE_DATA_VERIFICATION,
         /** Main menu, study switch, logout, profile and password screens. */
-        SHELL_AND_LOGIN
+        SHELL_AND_LOGIN,
+        /** The OpenClinica 3.x REST API under {@code /pages/auth/api}: API-key callers only. */
+        HERITAGE_API
     }
 
     /**
@@ -432,6 +434,13 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/admin/selectLdapUser", NONE, Bucket.USER_ACCOUNTS);
         // The upstream demo stub that fills user.jsp with sample names (DR-018).
         put(m, "/pages/user", NONE, Bucket.USER_ACCOUNTS);
+        // The OpenClinica 3.x REST API: studies, user accounts, clinical data,
+        // notes, batch CRF migration, the item-data table and system information.
+        // Each call authenticates with an account's API key (ApiSecurityFilter);
+        // nothing in the app, the SPA or the deployment calls it. It renders no
+        // JSP, but it is heritage surface all the same, so one key closes every
+        // path below /pages/auth.
+        put(m, "/pages/auth", NONE, Bucket.HERITAGE_API);
 
         Map<String, Entry> servletMap = new LinkedHashMap<>();
         Map<String, Entry> pagesMap = new LinkedHashMap<>();

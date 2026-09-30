@@ -193,8 +193,11 @@ libreclinica:
   # and their log (dropped), the two-factor letter printout (dropped), the
   # hard delete of an event CRF's data, and the password-requirements page
   # (covered by /admin/password-policy).
+  # Also closed in wave 0: the OpenClinica 3.x REST API under /pages/auth/api
+  # (API-key callers only). Nothing in the app, the SPA or the deployment
+  # calls it; any external caller shows up in the legacy-access log.
   legacy:
-    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:/Enterprise,/TechAdmin,/AdminSystem,/AuditDatabase,/ListSubject,/ListSubjectData,/ViewSubject,/UpdateSubject,/RemoveSubject,/RestoreSubject,/CreateJobImport,/UpdateJobImport,/ViewImportJob,/ViewLogMessage,/PrintoutCertificate,/DeleteEventCRF,/ConfigurePasswordRequirements}
+    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:/Enterprise,/TechAdmin,/AdminSystem,/AuditDatabase,/ListSubject,/ListSubjectData,/ViewSubject,/UpdateSubject,/RemoveSubject,/RestoreSubject,/CreateJobImport,/UpdateJobImport,/ViewImportJob,/ViewLogMessage,/PrintoutCertificate,/DeleteEventCRF,/ConfigurePasswordRequirements,/pages/auth}
 
 # Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
 # left at default (api-docs.path = /v3/api-docs). The OpenApiResource

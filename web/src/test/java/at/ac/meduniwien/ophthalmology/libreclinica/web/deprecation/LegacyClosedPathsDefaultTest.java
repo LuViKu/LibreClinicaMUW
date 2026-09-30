@@ -45,7 +45,8 @@ class LegacyClosedPathsDefaultTest {
             "/ListSubject", "/ListSubjectData", "/ViewSubject", "/UpdateSubject",
             "/RemoveSubject", "/RestoreSubject",
             "/CreateJobImport", "/UpdateJobImport", "/ViewImportJob", "/ViewLogMessage",
-            "/PrintoutCertificate", "/DeleteEventCRF", "/ConfigurePasswordRequirements");
+            "/PrintoutCertificate", "/DeleteEventCRF", "/ConfigurePasswordRequirements",
+            "/pages/auth");
 
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
