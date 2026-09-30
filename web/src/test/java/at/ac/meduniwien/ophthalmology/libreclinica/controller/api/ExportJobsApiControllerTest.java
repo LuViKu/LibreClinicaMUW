@@ -17,8 +17,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
 
 /**
@@ -41,6 +43,12 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new ExportJobsApiController(
                 mockDataSource(),
                 Mockito.mock(ExportScheduleRegistrar.class)));
+    }
+
+    /** Signed in to the study with a role that may not export (Data Entry Person). */
+    private MockHttpSession dataEntrySession() {
+        return (MockHttpSession) authenticatedSessionWithRole(7, "entry", 1, "S_DEFAULTS1",
+                "Default Study", Role.RESEARCHASSISTANT, 1);
     }
 
     /* ---------------------------------------------------------------- */
@@ -102,6 +110,13 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void listJobsByStudyReturns403WithoutAnExportRole() throws Exception {
+        mockMvcWith().perform(get("/api/v1/studies/S_DEFAULTS1/export-jobs")
+                .session(dataEntrySession()))
+                .andExpect(status().isForbidden());
+    }
+
     /* ---------------------------------------------------------------- */
     /* POST /api/v1/datasets/{id}/schedules                             */
     /* ---------------------------------------------------------------- */
@@ -152,6 +167,13 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void listSchedulesReturns403WithoutAnExportRole() throws Exception {
+        mockMvcWith().perform(get("/api/v1/datasets/1/schedules")
+                .session(dataEntrySession()))
+                .andExpect(status().isForbidden());
+    }
+
     /* ---------------------------------------------------------------- */
     /* DELETE /api/v1/schedules/{id}                                    */
     /* ---------------------------------------------------------------- */
@@ -161,5 +183,12 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(delete("/api/v1/schedules/7")
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deleteScheduleReturns403WithoutAnExportRole() throws Exception {
+        mockMvcWith().perform(delete("/api/v1/schedules/7")
+                .session(dataEntrySession()))
+                .andExpect(status().isForbidden());
     }
 }

@@ -95,9 +95,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * <h2>Authorization</h2>
  *
  * <p>Session-bound {@code userBean} required (401 anonymous). The
- * dataset / study scope checks delegate to the same legacy
- * predicate Phase 1's synchronous endpoint uses
- * ({@link DatasetsApiController#roleMayExportData(UserAccountBean, StudyUserRoleBean)}).
+ * role check delegates to the same legacy predicate Phase 1's
+ * synchronous endpoint uses
+ * ({@link DatasetsApiController#roleMayExportData(UserAccountBean, StudyUserRoleBean)}),
+ * and every dataset-scoped endpoint (exports, schedules) also requires
+ * the dataset to belong to the active study, as that endpoint does: a
+ * dataset of another study answers 404. Jobs are visible to their
+ * submitter and to a sysadmin.
  *
  * <h2>Path naming</h2>
  *
@@ -170,6 +174,9 @@ public class ExportJobsApiController {
         if (ds == null) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
+        }
+        if (!inActiveStudy(ds, session)) {
+            return notInActiveStudy(datasetId);
         }
         // P3.8 — the bundle is off unless the study turns it on. Handing a
         // study's imaging out of the platform is the study's decision, not
@@ -309,10 +316,24 @@ public class ExportJobsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit accessing data exports."));
+        }
         StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
         if (study == null || study.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
+        }
+        // The active study or one of its sites, as DatasetsApiController's
+        // study-scoped endpoints allow.
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0
+                || (study.getId() != currentStudy.getId()
+                        && study.getParentStudyId() != currentStudy.getId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Study '" + studyOid + "' is not the currently active study."));
         }
         List<ExportJobDAO.Row> rows = new ExportJobDAO(dataSource).findRecentByStudy(study.getId());
         List<ExportJobDto> out = new ArrayList<>(rows.size());
@@ -357,6 +378,9 @@ public class ExportJobsApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
         }
+        if (!inActiveStudy(ds, session)) {
+            return notInActiveStudy(datasetId);
+        }
 
         Instant nextRun = registrar.computeNextFireTime(cron);
         ExportScheduleDAO scheduleDao = new ExportScheduleDAO(dataSource);
@@ -389,10 +413,18 @@ public class ExportJobsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit exporting data."));
+        }
         DatasetBean ds = loadDataset(datasetId);
         if (ds == null) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
+        }
+        if (!inActiveStudy(ds, session)) {
+            return notInActiveStudy(datasetId);
         }
         List<ExportScheduleDAO.Row> rows =
                 new ExportScheduleDAO(dataSource).findByDataset(datasetId, /* includeInactive */ false);
@@ -409,11 +441,16 @@ public class ExportJobsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit exporting data."));
+        }
         ExportScheduleDAO dao = new ExportScheduleDAO(dataSource);
         ExportScheduleDAO.Row existing = dao.findById(scheduleId);
-        if (existing == null) {
+        if (existing == null || !scheduleInActiveStudy(existing, session)) {
             return ResponseEntity.status(404).body(Map.of("message",
-                    "No schedule with id " + scheduleId));
+                    "No schedule with id " + scheduleId + " in the active study"));
         }
         dao.deactivate(scheduleId);
         registrar.unregisterSchedule(scheduleId);
@@ -428,6 +465,28 @@ public class ExportJobsApiController {
     private DatasetBean loadDataset(int datasetId) {
         DatasetBean ds = (DatasetBean) new DatasetDAO(dataSource).findByPK(datasetId);
         return (ds == null || ds.getId() == 0) ? null : ds;
+    }
+
+    /**
+     * A dataset is acted on only from the study it belongs to, the rule
+     * DatasetsApiController applies to its own dataset endpoints. The role
+     * check alone says the caller may export in the active study, not in
+     * the study the dataset id happens to name.
+     */
+    private static boolean inActiveStudy(DatasetBean ds, HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        return currentStudy != null && currentStudy.getId() != 0
+                && ds.getStudyId() == currentStudy.getId();
+    }
+
+    private boolean scheduleInActiveStudy(ExportScheduleDAO.Row schedule, HttpSession session) {
+        DatasetBean ds = loadDataset(schedule.datasetId);
+        return ds != null && inActiveStudy(ds, session);
+    }
+
+    private static ResponseEntity<?> notInActiveStudy(int datasetId) {
+        return ResponseEntity.status(404).body(Map.of("message",
+                "Dataset " + datasetId + " does not belong to the active study"));
     }
 
     /** Sysadmin sees every job; everybody else only their own. */
