@@ -494,6 +494,8 @@
       "enrolledOn": "Aufnahmedatum",
       "gender": "Geschlecht",
       "yearOfBirth": "Geburtsjahr",
+      "dateOfBirth": "Geburtsdatum",
+      "personId": "Personen-ID",
       "groupLabel": "Gruppenzuordnung"
     },
     "placeholder": {
@@ -503,6 +505,7 @@
     },
     "helper": {
       "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
+      "personId": "Die studienübergreifende Kennung der Person; wer bereits in einer anderen Studie aufgenommen ist, wird daran erkannt.",
       "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",

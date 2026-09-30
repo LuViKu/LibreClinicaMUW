@@ -23,13 +23,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * endpoint also skips it (per its M4 scope note); when the SPA gains
  * a group-class picker we'll extend this DTO + endpoint.
  *
- * @param secondaryId optional secondary identifier. {@code null}
- *                    preserves the current value; empty string
- *                    explicitly clears it.
- * @param gender      required. One of {@code F | M | O | U}
- *                    (case-insensitive).
+ * @param secondaryId optional secondary identifier (the study subject's
+ *                    secondary label). {@code null} preserves the
+ *                    current value; empty string explicitly clears it.
+ * @param gender      one of {@code F | M | O | U} (case-insensitive);
+ *                    required unless the study sets
+ *                    {@code genderRequired=false}, where blank clears it.
  * @param yearOfBirth optional. {@code null} preserves the current
  *                    value. Must be 1900..currentYear when present.
+ *                    Changes the stored year only where the study
+ *                    collects the year of birth alone.
  * @param studyEye    optional ophthalmology study-eye scope (Phase
  *                    E.6 Tier 1). Mirrors the create endpoint:
  *                    one of {@code OD | OS | OU} (case-insensitive)
@@ -44,11 +47,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                    subject that already has eye-scoped CRF data
  *                    are NOT enforced here (matches the create
  *                    path's permissive stance).
+ * @param dateOfBirth optional full date of birth, ISO {@code YYYY-MM-DD},
+ *                    not in the future. {@code null} preserves the
+ *                    current value. Accepted where the study collects
+ *                    the full date ({@code collectDob=1}).
  */
 @Schema(name = "UpdateSubjectRequest")
 public record UpdateSubjectRequest(
         String secondaryId,
         String gender,
         Integer yearOfBirth,
-        String studyEye
+        String studyEye,
+        String dateOfBirth
 ) {}

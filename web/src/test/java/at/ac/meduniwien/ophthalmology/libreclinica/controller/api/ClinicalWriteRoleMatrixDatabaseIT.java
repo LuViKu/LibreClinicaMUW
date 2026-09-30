@@ -235,9 +235,11 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         () -> json(post("/api/v1/events"),
                                 "{\"subjectId\":\"M-001\",\"eventDefinitionOid\":\"SE_V1_INCLUSION\","
                                         + "\"dateStarted\":\"2026-01-05\"}")),
+                // Default Study requires the Person ID and the date of birth.
                 permitted("add a subject", "manual_crc", 201,
                         () -> json(post("/api/v1/subjects"),
-                                "{\"id\":\"IT-CRC-1\",\"gender\":\"F\",\"enrolledOn\":\"2025-01-01\"}")),
+                                "{\"id\":\"IT-CRC-1\",\"gender\":\"F\",\"enrolledOn\":\"2025-01-01\","
+                                        + "\"personId\":\"P-IT-CRC-1\",\"dateOfBirth\":\"1970-01-02\"}")),
                 permitted("sign a subject", "manual_investigator", 401,
                         () -> json(post("/api/v1/subjects/SS_M001/sign"),
                                 "{\"password\":\"wrong\",\"attestation\":true}")),
