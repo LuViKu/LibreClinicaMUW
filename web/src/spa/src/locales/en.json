@@ -150,6 +150,12 @@
     },
     "queue": {
       "loading": "Count is loading"
+    },
+    "studyMetadata": {
+      "title": "Study metadata (ODM)",
+      "description": "Download the study's design as a CDISC ODM 1.3 file.",
+      "downloading": "Downloading…",
+      "failed": "The download failed. Please try again."
     }
   },
   "common": {
