@@ -353,14 +353,19 @@ docker compose pull libreclinica
 #     mid-DML), restore from the §1 backup. The volume name is
 #     derived from the pinned compose project name `libreclinica-muw`
 #     (see `compose.yaml:3` `name: libreclinica-muw`) and the volume
-#     key `libreclinica-db-data`, joined by Docker Compose's
+#     key `libreclinica-db-data-17`, joined by Docker Compose's
 #     standard `<project>_<volume>` underscore separator. The
-#     resulting `libreclinica-muw_libreclinica-db-data` name is the
+#     resulting `libreclinica-muw_libreclinica-db-data-17` name is the
 #     intentional convention; do NOT change either side without a
-#     coordinated DB-volume migration.
+#     coordinated DB-volume migration (the -17 suffix came with the
+#     move to PostgreSQL 17, docs/operations/postgresql-17-upgrade.md).
+#     The production VM has no such volume: its data is the host
+#     directory /var/lib/libreclinica/postgres
+#     (deploy/compose.production.yaml). Restore there as
+#     deploy/README.md, "Restore from backup", describes.
 docker compose down db
 # wipe the data volume only if the dump is verified intact
-docker volume rm libreclinica-muw_libreclinica-db-data
+docker volume rm libreclinica-muw_libreclinica-db-data-17
 docker compose up -d db
 docker compose exec -T db psql -U clinica -d libreclinica \
   < /var/backups/libreclinica/backup-<TIMESTAMP>.sql

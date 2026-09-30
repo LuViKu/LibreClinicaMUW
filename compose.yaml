@@ -86,7 +86,10 @@ services:
         # ws/ module removed in PR #31; nothing to watch there any more.
 
   db:
-    image: docker.io/library/postgres:14-alpine
+    # PostgreSQL 17 (14 reaches end of life on 2026-11-12). Production does
+    # not follow this line: deploy/compose.production.yaml pins its own
+    # version, which moves by docs/operations/postgresql-17-upgrade.md.
+    image: docker.io/library/postgres:17-alpine
     environment:
       POSTGRES_PASSWORD: clinica
       POSTGRES_USER: clinica
@@ -96,8 +99,16 @@ services:
     # Without it, every smoke run starts on an empty user_account
     # table and login lands on /pages/login/login. Wipe via:
     #   docker compose down -v
+    #
+    # The volume is new with PostgreSQL 17: a major version cannot open
+    # another's data directory, so the PostgreSQL 14 volume
+    # (libreclinica-muw_libreclinica-db-data) is left as it was, never opened
+    # by 17. Starting fresh needs nothing: Liquibase builds the schema on the
+    # first boot, with the demo data (LIQUIBASE_CONTEXTS=demo above). To carry
+    # the old data over instead, see "Development stack" in
+    # docs/operations/postgresql-17-upgrade.md.
     volumes:
-      - libreclinica-db-data:/var/lib/postgresql/data
+      - libreclinica-db-data-17:/var/lib/postgresql/data
 
   smtp:
     image: docker.io/marlonb/mailcrab:v1.1.0
@@ -376,4 +387,4 @@ services:
     mem_limit: 12g
 
 volumes:
-  libreclinica-db-data:
+  libreclinica-db-data-17:
