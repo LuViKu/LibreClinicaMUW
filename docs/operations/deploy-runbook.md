@@ -310,7 +310,20 @@ appeared during the smoke, treat as a deploy regression and go to §5.
 
 ## 5. Rollback
 
-> **One release cannot be rolled back by redeploying the old image: the one
+> **Two releases cannot be rolled back by redeploying the old image.**
+>
+> **The first is the one that moves Liquibase from 3.6.3 to 4.31.1.** The first
+> start of the new WAR rewrites every stored changeset checksum from the `8:`
+> to the `9:` format. An older WAR (Liquibase 3.6.3) does not recognise `9:`
+> checksums: it resets them all and then treats every applicable `runOnChange`
+> changeset (25) as changed and runs it again — on the dev copy that inserted
+> 11 duplicate `measurement_unit` rows and re-created a trigger function.
+> Rolling that release back means **restoring the §1 dump** (at the very least
+> the `databasechangelog.md5sum` column), never starting the old image on the
+> upgraded database. Evidence:
+> [liquibase-4-spike-2026-09-30.md §4](../development/modernization/liquibase-4-spike-2026-09-30.md).
+>
+> **The second is the one
 > that renames `image_ingest` to `ingest_item` (Phase 3 / P3.1, changelog
 > `lc-muw-2026-10-05-ingest-item.xml`).** An older WAR queries `image_ingest`,
 > which no longer exists, so its entire ingest surface — the DICOM receiver,
