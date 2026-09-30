@@ -39,6 +39,14 @@ class SecurityConfigPublicPathsTest {
     }
 
     @Test
+    void theRemovedRuleTimezoneHelpersAreNotPublic() {
+        // /pages/healthcheck was OpenClinica's rule-timezone developer helper,
+        // with no caller here; its controller is gone.
+        assertFalse(anonymousMayReach("/pages", "/healthcheck/runtime"));
+        assertFalse(anonymousMayReach("/pages", "/healthcheck/runonschedule"));
+    }
+
+    @Test
     void theSpaApiNeedsALogin() {
         assertFalse(anonymousMayReach("/pages", "/api/v1/me"));
         assertFalse(anonymousMayReach("/pages", "/api/v1/eventCrfs/1/items"));

@@ -83,7 +83,6 @@ public class SecurityConfig {
             "/includes/**",
             "/images/**",
             "/pages/auth/api/v1/studies/**",
-            "/pages/healthcheck/**",
             // Phase E.8 Slice L2 (2026-06-20): SPA replacement
             // for the legacy /pages/Contact JSP. Unauthenticated
             // by design — same audience as the legacy form.
