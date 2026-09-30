@@ -21,6 +21,7 @@ import java.sql.SQLException;
 import java.util.Locale;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -147,6 +148,34 @@ class BuildStudyAcknowledgeDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(1, countAcks(DEFAULT_STUDY_ID, "sites"));
     }
 
+    /**
+     * Recording a task as done is a study-build write. A monitor on the
+     * study can see the tracker but may not record progress on it; legacy
+     * Mark Complete admitted only admin, director and coordinator.
+     */
+    @Test
+    void acknowledgeRefusesAMonitorOnTheStudy() throws Exception {
+        mockMvc().perform(post("/api/v1/studies/" + DEFAULT_STUDY_OID + "/build-status/acknowledge")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"taskId\":\"rules\"}")
+                .session(boundSession("manual_monitor", Role.MONITOR)))
+                .andExpect(status().isForbidden());
+
+        assertEquals(0, countAcks(DEFAULT_STUDY_ID, "rules"));
+    }
+
+    /** The study's data manager (director) may record progress. */
+    @Test
+    void acknowledgeAdmitsTheStudyDataManager() throws Exception {
+        mockMvc().perform(post("/api/v1/studies/" + DEFAULT_STUDY_OID + "/build-status/acknowledge")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"taskId\":\"rules\"}")
+                .session(boundSession("manual_dm", Role.STUDYDIRECTOR)))
+                .andExpect(status().isOk());
+
+        assertEquals(1, countAcks(DEFAULT_STUDY_ID, "rules"));
+    }
+
     /* ====================================================================== */
     /* Helpers                                                                */
     /* ====================================================================== */
@@ -157,6 +186,7 @@ class BuildStudyAcknowledgeDatabaseIT extends AbstractApiControllerDatabaseIT {
         UserAccountBean ub = new UserAccountBean();
         ub.setId(1);
         ub.setName("root");
+        ub.addUserType(UserType.SYSADMIN);
         session.setAttribute("userBean", ub);
         StudyBean study = new StudyBean();
         study.setId(DEFAULT_STUDY_ID);
@@ -168,6 +198,42 @@ class BuildStudyAcknowledgeDatabaseIT extends AbstractApiControllerDatabaseIT {
         role.setStudyId(DEFAULT_STUDY_ID);
         session.setAttribute("userRole", role);
         return session;
+    }
+
+    /**
+     * A session for one of the seeded demo accounts, which hold their role
+     * on the default study in {@code study_user_role}; the authorization
+     * reads those bindings, not the session role alone.
+     */
+    private MockHttpSession boundSession(String userName, Role role) throws SQLException {
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+        MockHttpSession session = new MockHttpSession();
+        UserAccountBean ub = new UserAccountBean();
+        ub.setId(userId(userName));
+        ub.setName(userName);
+        session.setAttribute("userBean", ub);
+        StudyBean study = new StudyBean();
+        study.setId(DEFAULT_STUDY_ID);
+        study.setOid(DEFAULT_STUDY_OID);
+        study.setName("default-study");
+        session.setAttribute("study", study);
+        StudyUserRoleBean sessionRole = new StudyUserRoleBean();
+        sessionRole.setRole(role);
+        sessionRole.setStudyId(DEFAULT_STUDY_ID);
+        session.setAttribute("userRole", sessionRole);
+        return session;
+    }
+
+    private static int userId(String userName) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT user_id FROM user_account WHERE user_name = ?")) {
+            ps.setString(1, userName);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        }
+        throw new IllegalStateException("seed has no user " + userName);
     }
 
     private void seedGroupClass() throws SQLException {
