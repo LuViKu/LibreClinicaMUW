@@ -13,7 +13,6 @@ import java.util.Locale;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityAction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
@@ -37,13 +36,7 @@ public class UnLockUserServlet extends SecureController {
     // < ResourceBundle restext;
     Locale locale;
 
-    public static final String PATH = "DeleteUser";
     public static final String ARG_USERID = "userId";
-    public static final String ARG_ACTION = "action";
-
-    public static String getLink(UserAccountBean u, EntityAction action) {
-        return PATH + "?" + ARG_USERID + "=" + u.getId() + "&" + "&" + ARG_ACTION + "=" + action.getId();
-    }
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {

@@ -36,13 +36,8 @@ public class DeleteUserServlet extends SecureController {
     // < ResourceBundle restext;
     Locale locale;
 
-    public static final String PATH = "DeleteUser";
     public static final String ARG_USERID = "userId";
     public static final String ARG_ACTION = "action";
-
-    public static String getLink(UserAccountBean u, EntityAction action) {
-        return PATH + "?" + ARG_USERID + "=" + u.getId() + "&" + "&" + ARG_ACTION + "=" + action.getId();
-    }
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {

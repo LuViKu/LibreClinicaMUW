@@ -30,14 +30,9 @@ public class DeleteStudyUserRoleServlet extends SecureController {
 	 * 
 	 */
 	private static final long serialVersionUID = -2743608914099183533L;
-	public static final String PATH = "DeleteStudyUserRole";
     public static final String ARG_USERNAME = "userName";
     public static final String ARG_STUDYID = "studyId";
     public static final String ARG_ACTION = "action";
-
-    public static String getLink(String userName, int studyId, EntityAction action) {
-        return PATH + "?" + ARG_USERNAME + "=" + userName + "&" + ARG_STUDYID + "=" + studyId + "&" + ARG_ACTION + "=" + action.getId();
-    }
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
