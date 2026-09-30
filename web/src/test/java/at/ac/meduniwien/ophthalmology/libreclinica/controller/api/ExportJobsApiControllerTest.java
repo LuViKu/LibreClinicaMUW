@@ -107,6 +107,13 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void cancelJobReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/exports/42/cancel")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
     /* ---------------------------------------------------------------- */
     /* GET /api/v1/studies/{oid}/export-jobs                            */
     /* ---------------------------------------------------------------- */

@@ -8,6 +8,9 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.extract;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import javax.sql.DataSource;
 
 import org.quartz.Job;
@@ -23,6 +26,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExportFormatBean
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobInterruptedException;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 
 /**
  * Phase E.6 — Data Export Phase 4.
@@ -59,6 +64,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
  * Same pattern as the existing
  * {@link at.ac.meduniwien.ophthalmology.libreclinica.web.job.ExampleSpringJob}.
  *
+ * <h2>Cancellation</h2>
+ *
+ * <p>A running job can be asked to stop ({@link #requestCancel(long)}).
+ * The worker gives its thread a {@link JobTerminationMonitor}, the
+ * cooperative mechanism the legacy extract jobs use: the ODM extract and
+ * the dataset bundle check it at their checkpoints and throw
+ * {@link JobInterruptedException}, and the job ends {@code cancelled}.
+ * No file is registered for it, as a file is registered only once the
+ * export is complete. The tabular formats have no checkpoint and finish.
+ *
  * <h2>What this is NOT</h2>
  *
  * <p>This does not pre-empt or retry running jobs. A job that takes
@@ -72,6 +87,26 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 public class ExportJobRunner implements Job {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExportJobRunner.class);
+
+    /** The monitor of each job a worker of this JVM is running, by export_job id. */
+    private static final Map<Long, JobTerminationMonitor> RUNNING = new ConcurrentHashMap<>();
+
+    /**
+     * Ask the worker running {@code jobId} to stop at its next checkpoint.
+     * Returns {@code false} when no worker of this JVM is running it.
+     */
+    public static boolean requestCancel(long jobId) {
+        JobTerminationMonitor monitor = RUNNING.get(jobId);
+        if (monitor == null) return false;
+        monitor.terminate();
+        return true;
+    }
+
+    /** True while a worker of this JVM runs {@code jobId} and has been asked to stop. */
+    public static boolean isCancelRequested(long jobId) {
+        JobTerminationMonitor monitor = RUNNING.get(jobId);
+        return monitor != null && monitor.isTerminated();
+    }
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
@@ -114,9 +149,15 @@ public class ExportJobRunner implements Job {
         ExportJobDAO jobDao = new ExportJobDAO(dataSource);
         ExportJobDAO.Row claimed = jobDao.claimNextQueued();
         if (claimed == null) return false;
+        // The extract's checkpoints read this thread's monitor;
+        // requestCancel reaches the same one through RUNNING.
+        RUNNING.put(claimed.id, JobTerminationMonitor.createInstance("export_job " + claimed.id));
         try {
             process(dataSource, materializer, jobDao, claimed);
         } finally {
+            RUNNING.remove(claimed.id);
+            // Quartz pools its threads: the next job must not inherit this monitor.
+            JobTerminationMonitor.clear();
             // After the outcome is recorded: the mail reports it, it cannot change it.
             if (notifier != null && claimed.scheduleId != null) {
                 notifier.notifyFinished(claimed.id);
@@ -154,6 +195,10 @@ public class ExportJobRunner implements Job {
             jobDao.markDone(claimed.id, archivedFileId);
             LOG.info("ExportJobRunner: completed job_id={} archived_dataset_file_id={} in {} ms",
                     claimed.id, archivedFileId, elapsedMs);
+        } catch (JobInterruptedException cancelled) {
+            // Stopped at a checkpoint, before any file was registered.
+            LOG.info("ExportJobRunner: job_id={} cancelled", claimed.id);
+            jobDao.markCancelled(claimed.id, "Cancelled");
         } catch (Throwable t) { // NOSONAR — Quartz can swallow Errors; record everything.
             LOG.error("ExportJobRunner: job_id=" + claimed.id + " failed", t);
             jobDao.markFailed(claimed.id, t.getClass().getSimpleName() + ": " + t.getMessage());

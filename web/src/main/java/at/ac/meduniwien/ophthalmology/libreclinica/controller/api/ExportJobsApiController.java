@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportJobRunner;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
 
 import io.swagger.v3.oas.annotations.media.Content;
@@ -75,6 +76,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *   <li>{@code GET    /api/v1/exports/{jobId}} — current status of an
  *       async export. {@code downloadUrl} is non-null only when
  *       {@code status='done'}.</li>
+ *   <li>{@code POST   /api/v1/exports/{jobId}/cancel} — cancel: a
+ *       queued job at once (200), a running one at its next checkpoint
+ *       (202, {@code cancelRequested=true}); 409 once finished.</li>
  *   <li>{@code GET    /api/v1/exports/{jobId}/download} — convenience
  *       redirect-style stream of the finished file. {@code 410 Gone}
  *       if the {@code archived_dataset_file} or the underlying file on
@@ -235,6 +239,57 @@ public class ExportJobsApiController {
                     "Not authorized to view this export job"));
         }
         return ResponseEntity.ok(toJobDto(row));
+    }
+
+    /**
+     * Cancel an export job. A queued job is cancelled at once and never runs
+     * (200). A running one is asked to stop at the extract's next checkpoint
+     * (202 with {@code cancelRequested=true}; it turns {@code cancelled} when
+     * it gets there): the ODM extract and the dataset bundle have
+     * checkpoints, the tabular formats finish anyway. A cancelled job
+     * registers no file, since a file is registered only once the export is
+     * complete. A finished job answers 409.
+     *
+     * <p>The submitter or a sysadmin may cancel, as they may see the job.
+     */
+    @PostMapping("/exports/{jobId}/cancel")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = ExportJobDto.class)))
+    public ResponseEntity<?> cancelJob(@PathVariable("jobId") long jobId,
+                                       HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        ExportJobDAO dao = new ExportJobDAO(dataSource);
+        ExportJobDAO.Row row = dao.findById(jobId);
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No export job with id " + jobId));
+        }
+        if (!canSeeJob(me, row)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Not authorized to cancel this export job"));
+        }
+        String reason = "Cancelled by " + me.getName();
+        if (dao.cancelIfQueued(jobId, reason)) {
+            LOG.info("Cancel export: job_id={} before it ran, by user={}", jobId, me.getName());
+            return ResponseEntity.ok(toJobDto(dao.findById(jobId)));
+        }
+        // Not queued any more: a worker may have claimed it meanwhile.
+        row = dao.findById(jobId);
+        if (row != null && ExportJobDAO.STATUS_RUNNING.equals(row.status)) {
+            if (ExportJobRunner.requestCancel(jobId)) {
+                dao.noteCancelRequest(jobId, reason);
+                LOG.info("Cancel export: job_id={} asked to stop, by user={}", jobId, me.getName());
+                return ResponseEntity.status(202).body(toJobDto(dao.findById(jobId)));
+            }
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "This export is running on a worker this server cannot reach, "
+                            + "so it cannot be cancelled here."));
+        }
+        return ResponseEntity.status(409).body(Map.of("message",
+                "This export has already finished."));
     }
 
     /**
@@ -639,7 +694,8 @@ public class ExportJobsApiController {
                 toIso(r.finishedAt),
                 r.archivedDatasetFileId,
                 r.errorMessage,
-                downloadUrl);
+                downloadUrl,
+                ExportJobDAO.STATUS_RUNNING.equals(r.status) && ExportJobRunner.isCancelRequested(r.id));
     }
 
     /**
@@ -653,6 +709,7 @@ public class ExportJobsApiController {
             case ExportJobDAO.STATUS_RUNNING -> 50;
             case ExportJobDAO.STATUS_DONE -> 100;
             case ExportJobDAO.STATUS_FAILED -> 100;
+            case ExportJobDAO.STATUS_CANCELLED -> 100;
             default -> 0;
         };
     }

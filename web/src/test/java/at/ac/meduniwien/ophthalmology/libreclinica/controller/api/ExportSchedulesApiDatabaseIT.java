@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +21,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,6 +32,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import javax.sql.DataSource;
 
@@ -38,6 +45,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.quartz.CronTrigger;
 import org.quartz.JobDataMap;
@@ -58,21 +66,28 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DatasetItemStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.OpenClinicaMailSender;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobInterruptedException;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportCompletionNotifier;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportFileMaterializer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportJobRunner;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.PlaceholderExportFileMaterializer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.SynchronousExportMaterializer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
  * Export schedules and queued exports, against a real database and a real
@@ -98,7 +113,19 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static Scheduler SCHEDULER;
 
+    @TempDir
+    static Path FILE_ROOT;
+
     private Integer datasetId;
+
+    @BeforeAll
+    static void pointFilePathAtATempDir() throws Exception {
+        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
+        f.setAccessible(true);
+        Properties live = (Properties) f.get(null);
+        assertNotNull(live, "DATAINFO must be set by AbstractApiControllerDatabaseIT");
+        live.setProperty("filePath", FILE_ROOT.toString() + File.separator);
+    }
 
     @BeforeAll
     static void createScheduler() throws Exception {
@@ -124,6 +151,8 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
             exec("DELETE FROM dataset WHERE dataset_id = " + datasetId);
             datasetId = null;
         }
+        exec("DELETE FROM study_setting WHERE study_id = " + STUDY_ID);
+        exec("DELETE FROM audit_log_event WHERE audit_table = 'study_setting'");
         SCHEDULER.clear();
     }
 
@@ -187,11 +216,15 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** A Data Manager (legacy coordinator) of the given study; not a sysadmin. */
     private MockHttpSession dataManagerIn(int studyId) {
+        return dataManagerIn(studyId, 1, "root");
+    }
+
+    private MockHttpSession dataManagerIn(int studyId, int userId, String userName) {
         ResourceBundleProvider.updateLocale(Locale.ENGLISH);
         MockHttpSession s = new MockHttpSession();
         UserAccountBean ub = new UserAccountBean();
-        ub.setId(1);
-        ub.setName("root");
+        ub.setId(userId);
+        ub.setName(userName);
         s.setAttribute("userBean", ub);
         StudyBean study = new StudyBean();
         study.setId(studyId);
@@ -200,10 +233,25 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         StudyUserRoleBean role = new StudyUserRoleBean();
         role.setRole(Role.COORDINATOR);
         role.setStudyId(studyId);
-        role.setUserName("root");
-        role.setUserAccountId(1);
+        role.setUserName(userName);
+        role.setUserAccountId(userId);
         s.setAttribute("userRole", role);
         return s;
+    }
+
+    private MockHttpSession sysadminIn(int studyId) {
+        MockHttpSession s = dataManagerIn(studyId, 1, "root");
+        ((UserAccountBean) s.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        return s;
+    }
+
+    private org.springframework.test.web.servlet.ResultActions cancel(long jobId, MockHttpSession session)
+            throws Exception {
+        return mockMvc().perform(post("/api/v1/exports/" + jobId + "/cancel").session(session));
+    }
+
+    private long archivedFilesOf(DatasetBean ds) throws Exception {
+        return count("SELECT count(*) FROM archived_dataset_file WHERE dataset_id = " + ds.getId());
     }
 
     private int scheduleTriggers() throws Exception {
@@ -521,6 +569,106 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         mockMvc().perform(get(url).session(dataManagerIn(STUDY_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(jobId));
+    }
+
+    /* ---------------- cancel ---------------- */
+
+    @Test
+    void aQueuedExportIsCancelledAndNeverRuns() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+
+        cancel(jobId, dataManagerIn(STUDY_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("cancelled"))
+                .andExpect(jsonPath("$.errorMessage").value("Cancelled by root"));
+
+        assertFalse(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer()),
+                "a cancelled job is not in the queue");
+        assertEquals("cancelled", new ExportJobDAO(DATA_SOURCE).findById(jobId).status);
+        assertEquals(0, archivedFilesOf(ds));
+    }
+
+    @Test
+    void aRunningExportStopsAtItsNextCheckpointAndRegistersNoFile() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+        CountDownLatch running = new CountDownLatch(1);
+        CountDownLatch proceed = new CountDownLatch(1);
+        ExportFileMaterializer withACheckpoint = (dataset, format, userId) -> {
+            running.countDown();
+            proceed.await(30, TimeUnit.SECONDS);
+            JobTerminationMonitor.check(); // as the ODM extract and the bundle writer do
+            return new ExportFileMaterializer.Result("never.xml", "/placeholder/never.xml", 0L);
+        };
+        Thread worker = new Thread(() -> ExportJobRunner.runOnce(DATA_SOURCE, withACheckpoint));
+        worker.start();
+        assertTrue(running.await(30, TimeUnit.SECONDS), "the worker should have claimed the job");
+
+        try {
+            cancel(jobId, dataManagerIn(STUDY_ID))
+                    .andExpect(status().isAccepted())
+                    .andExpect(jsonPath("$.status").value("running"))
+                    .andExpect(jsonPath("$.cancelRequested").value(true));
+        } finally {
+            proceed.countDown();
+            worker.join(30_000);
+        }
+        assertFalse(worker.isAlive());
+        ExportJobDAO.Row job = new ExportJobDAO(DATA_SOURCE).findById(jobId);
+        assertEquals("cancelled", job.status, job.errorMessage);
+        assertEquals("Cancelled by root", job.errorMessage);
+        assertEquals(0, archivedFilesOf(ds), "a cancelled export registers no file");
+    }
+
+    @Test
+    void aFinishedExportCannotBeCancelled() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer()));
+
+        cancel(jobId, dataManagerIn(STUDY_ID)).andExpect(status().isConflict());
+        assertEquals(ExportJobDAO.STATUS_DONE, new ExportJobDAO(DATA_SOURCE).findById(jobId).status);
+    }
+
+    @Test
+    void onlyTheSubmitterOrASysadminCancels() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+
+        cancel(jobId, dataManagerIn(STUDY_ID, 2, "colleague")).andExpect(status().isForbidden());
+        assertEquals(ExportJobDAO.STATUS_QUEUED, new ExportJobDAO(DATA_SOURCE).findById(jobId).status);
+
+        cancel(jobId, sysadminIn(STUDY_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("cancelled"));
+    }
+
+    @Test
+    void aCancelledBundleLeavesNoFileBehind() throws Exception {
+        new StudySettingService(DATA_SOURCE)
+                .put(STUDY_ID, StudySettingService.EXPORT_BUNDLE_ENABLED, "true", 1);
+        DatasetBean ds = persistDataset();
+        RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt())).thenReturn(new ArrayList<>());
+        SynchronousExportMaterializer materializer =
+                new SynchronousExportMaterializer(DATA_SOURCE, Mockito.mock(CoreResources.class), rules);
+
+        // This thread's job has been asked to stop, as ExportJobRunner would.
+        JobTerminationMonitor.createInstance("cancelled bundle").terminate();
+        try {
+            assertThrows(JobInterruptedException.class, () -> materializer.materialize(ds, "bundle", 1),
+                    "the bundle stops at its first subject");
+        } finally {
+            // the next test runs on this thread
+            JobTerminationMonitor.createInstance("idle");
+        }
+
+        assertEquals(0, archivedFilesOf(ds));
+        try (Stream<Path> files = Files.walk(FILE_ROOT)) {
+            assertTrue(files.noneMatch(p -> p.getFileName().toString().endsWith("_bundle.zip")),
+                    "no partial bundle is left on disk");
+        }
     }
 
     /* ---------------- the worker ---------------- */

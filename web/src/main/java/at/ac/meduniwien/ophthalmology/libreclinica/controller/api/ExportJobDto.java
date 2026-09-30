@@ -30,8 +30,13 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  *   <li>{@code errorMessage} non-null ↔ {@code status='failed'}</li>
  * </ul>
  *
+ * <p>{@code status} is {@code queued}, {@code running}, {@code done},
+ * {@code failed} or {@code cancelled}. {@code cancelRequested} is true
+ * while a running job has been asked to stop and has not yet reached a
+ * checkpoint.
+ *
  * <p>{@code progressPct} is a coarse server-side hint (0 queued, 50
- * running, 100 done/failed) — the underlying extract pipeline doesn't
+ * running, 100 done/failed/cancelled) — the underlying extract pipeline doesn't
  * emit per-step progress events, so the SPA renders an indeterminate
  * shimmer when {@code status='running'} rather than relying on the
  * exact percent.
@@ -47,5 +52,6 @@ public record ExportJobDto(
         String finishedAt,
         Integer archivedDatasetFileId,
         String errorMessage,
-        String downloadUrl) {
+        String downloadUrl,
+        boolean cancelRequested) {
 }

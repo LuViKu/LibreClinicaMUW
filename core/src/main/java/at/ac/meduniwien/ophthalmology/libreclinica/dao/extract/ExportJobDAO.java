@@ -55,6 +55,8 @@ public class ExportJobDAO {
     public static final String STATUS_RUNNING = "running";
     public static final String STATUS_DONE = "done";
     public static final String STATUS_FAILED = "failed";
+    /** Stopped on request: queued and never run, or stopped at a checkpoint. */
+    public static final String STATUS_CANCELLED = "cancelled";
 
     private final DataSource dataSource;
 
@@ -180,6 +182,65 @@ public class ExportJobDAO {
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.error("markFailed failed for job_id={}: {}", jobId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Cancel a job no worker has claimed. Atomic against
+     * {@link #claimNextQueued()}: the status condition is re-checked once a
+     * claim in progress commits, so a job is either cancelled here or
+     * claimed there, never both. Returns {@code false} once the job is no
+     * longer queued.
+     */
+    public boolean cancelIfQueued(long jobId, String reason) {
+        String sql = "UPDATE export_job SET status = '" + STATUS_CANCELLED + "', "
+                + "finished_at = now(), error_message = ? "
+                + "WHERE id = ? AND status = '" + STATUS_QUEUED + "'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, truncate(reason));
+            ps.setLong(2, jobId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOG.error("cancelIfQueued failed for job_id={}: {}", jobId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Note who asked a running job to stop. The job stays {@code running}
+     * until its worker reaches a checkpoint, and a job that finishes first
+     * clears the note on {@link #markDone(long, int)}.
+     */
+    public void noteCancelRequest(long jobId, String reason) {
+        String sql = "UPDATE export_job SET error_message = ? "
+                + "WHERE id = ? AND status = '" + STATUS_RUNNING + "'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, truncate(reason));
+            ps.setLong(2, jobId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.error("noteCancelRequest failed for job_id={}: {}", jobId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * A running job that stopped at a checkpoint. Keeps the note
+     * {@link #noteCancelRequest(long, String)} left, else records
+     * {@code reason}.
+     */
+    public void markCancelled(long jobId, String reason) {
+        String sql = "UPDATE export_job SET status = '" + STATUS_CANCELLED + "', "
+                + "finished_at = now(), error_message = COALESCE(error_message, ?) "
+                + "WHERE id = ? AND status = '" + STATUS_RUNNING + "'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, truncate(reason));
+            ps.setLong(2, jobId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.error("markCancelled failed for job_id={}: {}", jobId, e.getMessage(), e);
         }
     }
 

@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ArchivedDatasetF
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AiArmPolicy;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobInterruptedException;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleExportWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
@@ -309,6 +310,14 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
         try (OutputStream out = new BufferedOutputStream(new FileOutputStream(zip))) {
             written = BundleExportWriter.writeDataset(out, dataSource, subjects, study.getOid(),
                     submittedBy.getName(), false);
+        } catch (JobInterruptedException cancelled) {
+            // The job was cancelled between two subjects. Half a bundle is
+            // no export and can be gigabytes of imaging; nothing is
+            // registered yet, so the zip is the only trace to remove.
+            if (zip.exists() && !zip.delete()) {
+                LOG.warn("Could not remove the partial bundle of a cancelled export: {}", zip.getName());
+            }
+            throw cancelled;
         }
         LOG.info("Dataset bundle: dataset_id={} subjects={} files={} bytes={} omitted={} by user={}",
                 dataset.getId(), subjects.size(), written.filesWritten(), written.bytesWritten(),
