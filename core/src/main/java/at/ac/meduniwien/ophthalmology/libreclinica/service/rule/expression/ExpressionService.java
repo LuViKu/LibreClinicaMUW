@@ -457,7 +457,14 @@ public class ExpressionService {
         if (oid.contains("[")) {
             int leftBracketIndex = oid.indexOf("[");
             int rightBracketIndex = oid.indexOf("]");
-            int ordinal = Integer.parseInt(oid.substring(leftBracketIndex + 1, rightBracketIndex));
+            int ordinal;
+            try {
+                ordinal = Integer.parseInt(oid.substring(leftBracketIndex + 1, rightBracketIndex));
+            } catch (NumberFormatException e) {
+                // [ALL] or [END] names no single occurrence: fail the rule the way an
+                // unknown OID does, so the rule runner skips it instead of the request failing.
+                throw new OpenClinicaSystemException("OCRERR_0019", new String[] { oid });
+            }
             studyEvent = getStudyEventFromDb(oid.substring(0, leftBracketIndex), ordinal, subjectId);
         } else {
             studyEvent = getStudyEventFromDb(oid, 1, subjectId);

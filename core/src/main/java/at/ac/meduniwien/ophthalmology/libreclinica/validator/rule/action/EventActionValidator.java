@@ -83,7 +83,7 @@ public class EventActionValidator implements Validator {
 
     public void validateOidInAction(String oid, Errors e) {
             try {
-            	if (oid.contains(".") ||oid.contains("[ALL]")) {
+            	if (oid.contains(".") ||oid.contains("[ALL]") || oid.contains("[END]")) {
             		getRuleSetBeanWrapper().error(createError("OCRERR_0041", new String[]{oid}));
             		return;
             	}
