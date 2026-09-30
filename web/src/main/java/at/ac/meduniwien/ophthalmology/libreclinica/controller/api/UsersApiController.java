@@ -18,6 +18,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -1059,6 +1060,13 @@ public class UsersApiController {
         return out;
     }
 
+    /** The role a stored {@code role_name} stands for, read as the DAO reads it. */
+    private static Role roleOfStoredName(String roleName) {
+        StudyUserRoleBean probe = new StudyUserRoleBean();
+        probe.setRoleName(roleName);
+        return probe.getRole();
+    }
+
     /**
      * {@code "ra"} or {@code "ra2"} for the two legacy data entry roles,
      * however the name is cased, and null for any other name.
@@ -1355,6 +1363,17 @@ public class UsersApiController {
                     "Validation failed", errors));
         }
 
+        // A row's role_name is written through the terms bundle
+        // (createStudyUserRole), so a role granted here is stored under its
+        // display name: Investigator as "Data Specialist", monitor as
+        // "Monitor". Those are not the names resolved is keyed on. Comparing
+        // names made a kept role look absent: it was added again, and the
+        // removal below, which matches on the name, then took both rows.
+        // Compare the roles the rows stand for.
+        Set<Role> currentRoles = new HashSet<>();
+        for (String raw : current) currentRoles.add(roleOfStoredName(raw));
+        Set<Role> requestedRoles = new HashSet<>(resolved.values());
+
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
         int adds = 0;
         int removes = 0;
@@ -1362,7 +1381,7 @@ public class UsersApiController {
         // Adds: anything in resolved that isn't already active.
         for (Map.Entry<String, Role> e : resolved.entrySet()) {
             String rawRoleName = e.getKey();
-            if (current.contains(rawRoleName)) continue;
+            if (currentRoles.contains(e.getValue())) continue;
             StudyUserRoleBean sur = new StudyUserRoleBean();
             sur.setStudyId(study.getId());
             sur.setRoleName(rawRoleName);
@@ -1391,7 +1410,7 @@ public class UsersApiController {
         // additionally pin status_id=1 to avoid resurrecting an
         // already-deleted row with the same role-name.
         for (String rawRoleName : current) {
-            if (resolved.containsKey(rawRoleName)) continue;
+            if (requestedRoles.contains(roleOfStoredName(rawRoleName))) continue;
             String legacyKey = legacyRoleKey(rawRoleName);
             if (legacyKey != null && keepLegacy.contains(legacyKey)) continue;
             try (Connection conn = dataSource.getConnection();
