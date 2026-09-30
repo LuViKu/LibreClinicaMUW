@@ -113,10 +113,11 @@ onMounted(load)
         </div>
         <div>
           <FieldLabel for="maxLength" required>{{ t('adminPasswordPolicy.maxLength') }}</FieldLabel>
-          <input id="maxLength" v-model.number="data.maxLength" type="number" min="1" max="256"
+          <input id="maxLength" v-model.number="data.maxLength" type="number" min="0" max="256"
                  class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm muw-focus"
                  :aria-invalid="!!fieldErrors.maxLength" />
           <p v-if="fieldErrors.maxLength" class="mt-1 text-[11px] text-rose-700">{{ fieldErrors.maxLength }}</p>
+          <p class="mt-1 text-[10px] text-slate-400">{{ t('adminPasswordPolicy.zeroMaxNote') }}</p>
         </div>
         <div>
           <FieldLabel for="expirationDays" required>{{ t('adminPasswordPolicy.expirationDays') }}</FieldLabel>

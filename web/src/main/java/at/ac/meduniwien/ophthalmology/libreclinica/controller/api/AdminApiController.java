@@ -175,7 +175,9 @@ public class AdminApiController {
         body.put("requireDigits", dao.hasDigits());
         body.put("requireSpecials", dao.hasSpecials());
         body.put("minLength", dao.minLength());
-        body.put("maxLength", dao.maxLength());
+        // PasswordValidator reads a maximum of 0 or less as none; the 2012
+        // seed stores -1. The page shows either as 0, which it can send back.
+        body.put("maxLength", Math.max(dao.maxLength(), 0));
         body.put("expirationDays", dao.expirationDays());
         body.put("changeRequiredOnFirstLogin", dao.changeRequired());
         // Pass through the static specials alphabet so the SPA can
@@ -209,9 +211,10 @@ public class AdminApiController {
 
         List<FieldError> errors = new ArrayList<>();
         validateRange(errors, "minLength", body.minLength(), 1, 256);
-        validateRange(errors, "maxLength", body.maxLength(), 1, 256);
+        // 0 = no maximum, as the stored -1 of the seed means.
+        validateRange(errors, "maxLength", body.maxLength(), 0, 256);
         if (body.minLength() != null && body.maxLength() != null
-                && body.minLength() > body.maxLength()) {
+                && body.maxLength() > 0 && body.minLength() > body.maxLength()) {
             errors.add(new FieldError("minLength",
                     "Minimum length must not exceed maximum length."));
         }
@@ -229,7 +232,11 @@ public class AdminApiController {
         if (body.requireDigits()   != null) dao.setHasDigits(body.requireDigits());
         if (body.requireSpecials() != null) dao.setHasSpecials(body.requireSpecials());
         if (body.minLength()       != null) dao.setMinLength(body.minLength());
-        if (body.maxLength()       != null) dao.setMaxLength(body.maxLength());
+        if (body.maxLength()       != null
+                // 0 and a stored -1 both mean no maximum: leave the one stored.
+                && !(body.maxLength() == 0 && dao.maxLength() <= 0)) {
+            dao.setMaxLength(body.maxLength());
+        }
         if (body.expirationDays()  != null) dao.setExpirationDays(body.expirationDays());
         if (body.changeRequiredOnFirstLogin() != null) {
             // PWD_CHANGE_REQUIRED is persisted as an int despite the

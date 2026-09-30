@@ -376,6 +376,7 @@
     "maxLength": "Maximallänge",
     "expirationDays": "Ablauf (Tage)",
     "zeroDaysNote": "0 = läuft nie ab",
+    "zeroMaxNote": "0 = kein Maximum",
     "changeRequiredOnFirstLogin": "Passwort-Änderung bei erster Anmeldung erzwingen",
     "discard": "Neu laden"
   },
