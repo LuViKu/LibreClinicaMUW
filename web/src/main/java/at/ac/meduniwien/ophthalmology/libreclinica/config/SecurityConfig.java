@@ -149,7 +149,6 @@ public class SecurityConfig {
                         "/includes/**",
                         "/images/**",
                         "/help/**",
-                        "/ws/**",
                         "/pages/itemdata/**",
                         "/pages/auth/api/v1/studies/**",
                         "/pages/healthcheck/**",
