@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import { apiDownload } from '@/api/download'
+import { useAuthStore } from './auth'
 import type { DiscrepancyNote, NoteStatus, NoteType, ThreadEntry } from '@/types/note'
 
 /**
@@ -35,8 +36,16 @@ export const useNotesStore = defineStore('notes', () => {
   const typeFilter = ref<'all' | NoteType>('all')
   const onlyAssignedToMe = ref(false)
 
-  /** Username of the current user — wired from auth store in E.8. */
-  const me = ref<string>('monitor_demo')
+  /**
+   * The signed-in user's name. "Assigned to me" and the CSV download's
+   * `assignedTo` filter match it against the assignee's user name.
+   */
+  const me = computed<string>(() => useAuthStore().user?.username ?? '')
+
+  /** Whether the note is assigned to the signed-in user; the server compares case-insensitively too. */
+  function isMine(n: DiscrepancyNote): boolean {
+    return !!me.value && !!n.assignedTo && n.assignedTo.toLowerCase() === me.value.toLowerCase()
+  }
 
   const filtered = computed<DiscrepancyNote[]>(() => {
     const q = query.value.trim().toLowerCase()
@@ -51,7 +60,7 @@ export const useNotesStore = defineStore('notes', () => {
         return false
       }
       if (typeFilter.value !== 'all' && n.type !== typeFilter.value) return false
-      if (onlyAssignedToMe.value && n.assignedTo !== me.value) return false
+      if (onlyAssignedToMe.value && !isMine(n)) return false
       return true
     })
   })
