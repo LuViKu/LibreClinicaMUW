@@ -57,6 +57,11 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     }
   }
 
+  /**
+   * Removes a CRF. The server removes its versions, event-definition
+   * assignments and event CRFs with it (legacy RemoveCRFServlet parity), so
+   * the returned row, versions included, replaces the cached one.
+   */
   async function disableCrf(crfOid: string): Promise<boolean> {
     try {
       const updated = await apiPost<Crf>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/disable`, {})
@@ -65,6 +70,23 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return true
     } catch (e) {
       error.value = humanError(e, 'disable')
+      return false
+    }
+  }
+
+  /**
+   * Restores a removed CRF and what its removal took with it; the inverse of
+   * {@link disableCrf}. The returned row, versions included, replaces the
+   * cached one.
+   */
+  async function restoreCrf(crfOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<Crf>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/restore`, {})
+      const idx = crfs.value.findIndex((c) => c.oid === crfOid)
+      if (idx >= 0) crfs.value[idx] = updated
+      return true
+    } catch (e) {
+      error.value = humanError(e, 'restore')
       return false
     }
   }
@@ -438,6 +460,7 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     loadCrfs,
     createCrf,
     disableCrf,
+    restoreCrf,
     uploadVersion,
     disableVersion,
     lockVersion,

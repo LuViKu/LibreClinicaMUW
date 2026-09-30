@@ -92,7 +92,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       inlined versions</li>
  *   <li>{@code POST   /api/v1/crfs} — create a new CRF shell (no
  *       versions yet)</li>
- *   <li>{@code POST   /api/v1/crfs/{crfOid}/disable} — soft-delete</li>
+ *   <li>{@code POST   /api/v1/crfs/{crfOid}/disable} — soft-delete, with
+ *       the rows below it</li>
+ *   <li>{@code POST   /api/v1/crfs/{crfOid}/restore} — the inverse</li>
  *   <li>{@code GET    /api/v1/crfs/{crfOid}/versions} — list versions
  *       for one CRF</li>
  *   <li>{@code POST   /api/v1/crfs/{crfOid}/versions} — multipart
@@ -261,6 +263,14 @@ public class CrfsApiController {
     /* POST /api/v1/crfs/{crfOid}/disable                                */
     /* ----------------------------------------------------------------- */
 
+    /**
+     * Removes a CRF with the rows below it. Legacy parity:
+     * {@code RemoveCRFServlet} — its versions and their sections, its
+     * event-definition CRFs, and every event CRF entered on it with its item
+     * data are marked auto-removed. {@link #restore} is the inverse; see
+     * {@link CrfLifecycleCascade}. One transaction: nothing changes when any
+     * step fails.
+     */
     @PostMapping("/{crfOid}/disable")
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = CrfDto.class)))
@@ -282,19 +292,110 @@ public class CrfsApiController {
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         Status oldStatus = target.getStatus();
-        target.setStatus(Status.DELETED);
-        target.setUpdater(me);
-        target.setUpdatedDate(new java.util.Date());
-        crfDao.update(target);
-        writeLifecycleAudit(AuditTypeIds.CRF_LIFECYCLE_CHANGED,
-                me, "crf", target.getId(), target.getOid(),
-                oldStatus, Status.DELETED, "crf_disable");
+        CrfLifecycleCascade.Result cascade;
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                setStatus(c, "crf", "crf_id", target.getId(), Status.DELETED, me.getId());
+                cascade = CrfLifecycleCascade.removeCrf(c, target.getId(), me.getId());
+                insertLifecycleAudit(c, AuditTypeIds.CRF_LIFECYCLE_CHANGED, me.getId(),
+                        "crf", target.getId(), target.getOid(), oldStatus, Status.DELETED);
+                for (CrfLifecycleCascade.VersionChange v : cascade.versions()) {
+                    insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
+                            "crf_version", v.versionId(), v.oid(), Status.get(v.status()), Status.AUTO_DELETED);
+                }
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOG.error("Disable CRF failed for oid={} by user={}; nothing was changed", crfOid, me.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Removing CRF '" + crfOid + "' failed; nothing was changed."));
+        }
 
-        LOG.info("Disable CRF: oid={} by user={}", crfOid, me.getName());
+        CrfLifecycleCascade.Counts n = cascade.counts();
+        LOG.info("Disable CRF: oid={} by user={}; auto-removed {} version(s), {} section(s), "
+                        + "{} event-definition CRF(s), {} event CRF(s), {} item value(s)",
+                crfOid, me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
+                n.eventCrfs(), n.itemData());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
-        return ResponseEntity.ok(toDto(target, versionDao));
+        return ResponseEntity.ok(toDto(crfDao.findByOid(crfOid), versionDao));
     }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/restore                                */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Restores a removed CRF and what its removal took with it. Legacy
+     * parity: {@code RestoreCRFServlet} — auto-removed versions and their
+     * sections, event-definition CRFs, and event CRFs with their item data
+     * come back. Rows removed on their own stay removed, rows come back at
+     * the status they had, and a row that another removal took (an event CRF
+     * of a removed subject, say) is left for that removal's own restore; see
+     * {@link CrfLifecycleCascade}. One transaction.
+     */
+    @PostMapping("/{crfOid}/restore")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfDto.class)))
+    public ResponseEntity<?> restore(@PathVariable("crfOid") String crfOid,
+                                     HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean target = crfDao.findByOid(crfOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        if (target.getStatus() == null || !target.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF '" + crfOid + "' is not removed"));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        Status oldStatus = target.getStatus();
+        CrfLifecycleCascade.Result cascade;
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                setStatus(c, "crf", "crf_id", target.getId(), Status.AVAILABLE, me.getId());
+                cascade = CrfLifecycleCascade.restoreCrf(c, target.getId(), me.getId());
+                insertLifecycleAudit(c, AuditTypeIds.CRF_LIFECYCLE_CHANGED, me.getId(),
+                        "crf", target.getId(), target.getOid(), oldStatus, Status.AVAILABLE);
+                for (CrfLifecycleCascade.VersionChange v : cascade.versions()) {
+                    insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
+                            "crf_version", v.versionId(), v.oid(), Status.AUTO_DELETED, Status.get(v.status()));
+                }
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOG.error("Restore CRF failed for oid={} by user={}; nothing was changed", crfOid, me.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Restoring CRF '" + crfOid + "' failed; nothing was changed."));
+        }
+
+        CrfLifecycleCascade.Counts n = cascade.counts();
+        LOG.info("Restore CRF: oid={} by user={}; restored {} version(s), {} section(s), "
+                        + "{} event-definition CRF(s), {} event CRF(s), {} item value(s)",
+                crfOid, me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
+                n.eventCrfs(), n.itemData());
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        return ResponseEntity.ok(toDto(crfDao.findByOid(crfOid), versionDao));
+    }
+
 
     /* ----------------------------------------------------------------- */
     /* GET /api/v1/crfs/{crfOid}/versions                                */
@@ -1297,6 +1398,17 @@ public class CrfsApiController {
     /* POST /api/v1/crfs/{crfOid}/versions/{versionOid}/disable           */
     /* ----------------------------------------------------------------- */
 
+    /**
+     * Removes a CRF version with the rows below it. Legacy parity:
+     * {@code RemoveCRFVersionServlet} — its sections, and its available,
+     * completed, pending and locked event CRFs with their item data, are
+     * marked auto-removed (a signed event CRF is not removed, as in the
+     * legacy servlet). Event-definition CRFs that default to the version
+     * switch to the newest available version, so new event CRFs are not
+     * created on a removed one; see {@link CrfLifecycleCascade#repointDefaults}.
+     * {@link #restoreVersion} is the inverse of the status changes. One
+     * transaction.
+     */
     @PostMapping("/{crfOid}/versions/{versionOid}/disable")
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = CrfDto.CrfVersionDto.class)))
@@ -1307,10 +1419,10 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
-        CRFVersionBean target = versionDao.findByOid(versionOid);
-        if (target == null || target.getId() == 0) {
+        CRFVersionBean target = versionOf(crfOid, versionOid, versionDao);
+        if (target == null) {
             return ResponseEntity.status(404).body(Map.of("message",
-                    "No CRF version with oid '" + versionOid + "'"));
+                    "No CRF version with oid '" + versionOid + "' on CRF '" + crfOid + "'"));
         }
         if (target.getStatus() != null && target.getStatus().isDeleted()) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -1319,18 +1431,36 @@ public class CrfsApiController {
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         Status oldStatus = target.getStatus();
-        target.setStatus(Status.DELETED);
-        target.setUpdater(me);
-        target.setUpdatedDate(new java.util.Date());
-        versionDao.update(target);
-        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
-                me, "crf_version", target.getId(), target.getOid(),
-                oldStatus, Status.DELETED, "crf_version_disable");
+        CrfLifecycleCascade.Counts n;
+        List<CrfLifecycleCascade.DefaultMove> moves;
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                setStatus(c, "crf_version", "crf_version_id", target.getId(), Status.DELETED, me.getId());
+                n = CrfLifecycleCascade.removeVersion(c, target.getId(), me.getId());
+                moves = CrfLifecycleCascade.repointDefaults(c, target.getCrfId(), target.getId(), me.getId());
+                insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
+                        "crf_version", target.getId(), target.getOid(), oldStatus, Status.DELETED);
+                insertDefaultMoveAudits(c, me.getId(), moves, versionDao);
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOG.error("Disable CRF version failed for versionOid={} by user={}; nothing was changed",
+                    versionOid, me.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Removing CRF version '" + versionOid + "' failed; nothing was changed."));
+        }
 
-        LOG.info("Disable CRF version: crfOid={} versionOid={} by user={}",
-                crfOid, versionOid, me.getName());
+        LOG.info("Disable CRF version: crfOid={} versionOid={} by user={}; auto-removed {} section(s), "
+                        + "{} event CRF(s), {} item value(s); {} default(s) moved",
+                crfOid, versionOid, me.getName(), n.sections(), n.eventCrfs(), n.itemData(), moves.size());
 
-        return ResponseEntity.ok(toVersionDto(target));
+        return ResponseEntity.ok(toVersionDto(versionDao.findByOid(versionOid)));
     }
 
     /* ----------------------------------------------------------------- */
@@ -1343,11 +1473,11 @@ public class CrfsApiController {
      * {@code LockCRFVersionServlet}.
      *
      * <p>Side effect: each {@code event_definition_crf} row that
-     * currently defaults to this version is re-pointed at the next
+     * currently defaults to this version is re-pointed at the newest
      * available version on the same CRF (legacy
-     * {@code RemoveCRFVersionServlet.updateEventDef}). This mirrors the
-     * legacy semantic where locking the default version implicitly
-     * surfaces a different default at data-entry time.
+     * {@code RemoveCRFVersionServlet.updateEventDef}, which the legacy lock
+     * calls; see {@link CrfLifecycleCascade#repointDefaults}), so new event
+     * CRFs are not created on a locked version. One transaction.
      */
     @PostMapping("/{crfOid}/versions/{versionOid}/lock")
     @ApiResponse(responseCode = "200",
@@ -1359,10 +1489,10 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
-        CRFVersionBean target = versionDao.findByOid(versionOid);
-        if (target == null || target.getId() == 0) {
+        CRFVersionBean target = versionOf(crfOid, versionOid, versionDao);
+        if (target == null) {
             return ResponseEntity.status(404).body(Map.of("message",
-                    "No CRF version with oid '" + versionOid + "'"));
+                    "No CRF version with oid '" + versionOid + "' on CRF '" + crfOid + "'"));
         }
         if (target.getStatus() != null && target.getStatus().isLocked()) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -1375,18 +1505,33 @@ public class CrfsApiController {
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         Status oldStatus = target.getStatus();
-        target.setStatus(Status.LOCKED);
-        target.setUpdater(me);
-        target.setUpdatedDate(new java.util.Date());
-        versionDao.update(target);
-        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
-                me, "crf_version", target.getId(), target.getOid(),
-                oldStatus, Status.LOCKED, "crf_version_lock");
+        List<CrfLifecycleCascade.DefaultMove> moves;
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                setStatus(c, "crf_version", "crf_version_id", target.getId(), Status.LOCKED, me.getId());
+                moves = CrfLifecycleCascade.repointDefaults(c, target.getCrfId(), target.getId(), me.getId());
+                insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
+                        "crf_version", target.getId(), target.getOid(), oldStatus, Status.LOCKED);
+                insertDefaultMoveAudits(c, me.getId(), moves, versionDao);
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOG.error("Lock CRF version failed for versionOid={} by user={}; nothing was changed",
+                    versionOid, me.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Locking CRF version '" + versionOid + "' failed; nothing was changed."));
+        }
 
-        LOG.info("Lock CRF version: crfOid={} versionOid={} by user={}",
-                crfOid, versionOid, me.getName());
+        LOG.info("Lock CRF version: crfOid={} versionOid={} by user={}; {} default(s) moved",
+                crfOid, versionOid, me.getName(), moves.size());
 
-        return ResponseEntity.ok(toVersionDto(target));
+        return ResponseEntity.ok(toVersionDto(versionDao.findByOid(versionOid)));
     }
 
     /* ----------------------------------------------------------------- */
@@ -1440,13 +1585,14 @@ public class CrfsApiController {
 
     /**
      * Phase E.6 {@code crf-library} cluster — flip a CRF version from
-     * {@code removed} → {@code available}. Legacy parity:
-     * {@code RestoreCRFVersionServlet} (minus the cascading SECTIONS /
-     * ITEM_DATA AUTO_DELETED → AVAILABLE walk, which we defer to a
-     * follow-up because section-table churn is deep and risks unrelated
-     * audit-row noise; the version itself is restored — operators with
-     * cascaded item_data can re-run the legacy /RestoreCRFVersion
-     * endpoint, which stays mapped via LegacyServletRegistry).
+     * {@code removed} → {@code available}, with what its removal took.
+     * Legacy parity: {@code RestoreCRFVersionServlet} — its auto-removed
+     * sections, and its auto-removed event CRFs with their item data, come
+     * back, at the status they had; an event CRF of a removed subject or
+     * event stays removed (see {@link CrfLifecycleCascade}). A version of a
+     * removed CRF is refused: restore the CRF, which brings back its
+     * auto-removed versions. Defaults moved away by the removal stay where
+     * they are. One transaction.
      */
     @PostMapping("/{crfOid}/versions/{versionOid}/restore")
     @ApiResponse(responseCode = "200",
@@ -1458,30 +1604,50 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
-        CRFVersionBean target = versionDao.findByOid(versionOid);
-        if (target == null || target.getId() == 0) {
+        CRFVersionBean target = versionOf(crfOid, versionOid, versionDao);
+        if (target == null) {
             return ResponseEntity.status(404).body(Map.of("message",
-                    "No CRF version with oid '" + versionOid + "'"));
+                    "No CRF version with oid '" + versionOid + "' on CRF '" + crfOid + "'"));
         }
         if (target.getStatus() == null || !target.getStatus().isDeleted()) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "CRF version '" + versionOid + "' is not removed"));
         }
+        CRFBean crf = new CRFDAO(dataSource).findByPK(target.getCrfId());
+        if (crf != null && crf.getStatus() != null && crf.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF '" + crfOid + "' is removed — restore the CRF, which brings its versions back"));
+        }
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         Status oldStatus = target.getStatus();
-        target.setStatus(Status.AVAILABLE);
-        target.setUpdater(me);
-        target.setUpdatedDate(new java.util.Date());
-        versionDao.update(target);
-        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
-                me, "crf_version", target.getId(), target.getOid(),
-                oldStatus, Status.AVAILABLE, "crf_version_restore");
+        CrfLifecycleCascade.Counts n;
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                setStatus(c, "crf_version", "crf_version_id", target.getId(), Status.AVAILABLE, me.getId());
+                n = CrfLifecycleCascade.restoreVersion(c, target.getId(), me.getId());
+                insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
+                        "crf_version", target.getId(), target.getOid(), oldStatus, Status.AVAILABLE);
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOG.error("Restore CRF version failed for versionOid={} by user={}; nothing was changed",
+                    versionOid, me.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Restoring CRF version '" + versionOid + "' failed; nothing was changed."));
+        }
 
-        LOG.info("Restore CRF version: crfOid={} versionOid={} by user={}",
-                crfOid, versionOid, me.getName());
+        LOG.info("Restore CRF version: crfOid={} versionOid={} by user={}; restored {} section(s), "
+                        + "{} event CRF(s), {} item value(s)",
+                crfOid, versionOid, me.getName(), n.sections(), n.eventCrfs(), n.itemData());
 
-        return ResponseEntity.ok(toVersionDto(target));
+        return ResponseEntity.ok(toVersionDto(versionDao.findByOid(versionOid)));
     }
 
     /* ----------------------------------------------------------------- */
@@ -1784,6 +1950,77 @@ public class CrfsApiController {
                     "Your role does not permit managing CRFs — sysadmin or Director/Coordinator only"));
         }
         return null;
+    }
+
+    /** The version with {@code versionOid}, when it belongs to the CRF {@code crfOid}; otherwise null. */
+    private CRFVersionBean versionOf(String crfOid, String versionOid, CRFVersionDAO versionDao) {
+        CRFVersionBean version = versionDao.findByOid(versionOid);
+        if (version == null || version.getId() == 0) return null;
+        CRFBean crf = new CRFDAO(dataSource).findByOid(crfOid);
+        if (crf == null || crf.getId() == 0 || crf.getId() != version.getCrfId()) return null;
+        return version;
+    }
+
+    /** Status change of one row, inside the caller's transaction. */
+    private static void setStatus(Connection c, String table, String idColumn, int id,
+                                  Status status, int userId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE " + table + " SET status_id = ?, update_id = ?, date_updated = now()"
+                        + " WHERE " + idColumn + " = ?")) {
+            ps.setInt(1, status.getId());
+            ps.setInt(2, userId);
+            ps.setInt(3, id);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * {@link #writeLifecycleAudit} inside the caller's transaction. A failure
+     * here rolls the change back with it: the cascade restore reads these
+     * rows to bring a version back at its prior status.
+     */
+    private static void insertLifecycleAudit(Connection c, int auditTypeId, int userId,
+                                             String auditTable, int entityId, String entityOid,
+                                             Status oldStatus, Status newStatus) throws SQLException {
+        insertAudit(c, auditTypeId, userId, auditTable, entityId, entityOid,
+                oldStatus == null ? "" : oldStatus.getName(),
+                newStatus == null ? "" : newStatus.getName());
+    }
+
+    private static void insertAudit(Connection c, int auditTypeId, int userId, String auditTable,
+                                    int entityId, String entityName, String oldValue, String newValue)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                        + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                        + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, userId);
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityName == null ? "" : entityName);
+            ps.setString(6, oldValue == null ? "" : oldValue);
+            ps.setString(7, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * One {@link AuditTypeIds#CRF_VERSION_MIGRATED} row per moved default,
+     * the shape {@code CrfVersionMigrationService} writes for the same change
+     * (column {@code default_version_id}, version OIDs as old and new value).
+     */
+    private static void insertDefaultMoveAudits(Connection c, int userId,
+                                                List<CrfLifecycleCascade.DefaultMove> moves,
+                                                CRFVersionDAO versionDao) throws SQLException {
+        for (CrfLifecycleCascade.DefaultMove m : moves) {
+            CRFVersionBean from = versionDao.findByPK(m.fromVersionId());
+            CRFVersionBean to = versionDao.findByPK(m.toVersionId());
+            insertAudit(c, AuditTypeIds.CRF_VERSION_MIGRATED, userId, "event_definition_crf",
+                    m.eventDefinitionCrfId(), "default_version_id",
+                    from == null ? String.valueOf(m.fromVersionId()) : from.getOid(),
+                    to == null ? String.valueOf(m.toVersionId()) : to.getOid());
+        }
     }
 
     private static List<ValidationErrorBody.FieldError> validateCreateShape(

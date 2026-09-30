@@ -111,6 +111,40 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
     })
   })
 
+  describe('restoreCrf', () => {
+    it('replaces the CRF row, versions included, with the restored one', async () => {
+      const store = useCrfLibraryStore()
+      const removed: Crf = {
+        ...DEMOS,
+        status: 'removed',
+        versions: [{ ...V1, status: 'auto-removed' }, { ...V2, status: 'auto-removed' }],
+      }
+      seed(store, removed)
+      vi.mocked(apiPost).mockResolvedValue(DEMOS)
+
+      const ok = await store.restoreCrf('F_DEMOS')
+
+      expect(ok).toBe(true)
+      expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS/restore', {})
+      expect(store.crfs[0]!.status).toBe('available')
+      expect(store.crfs[0]!.versions.map((v) => v.status)).toEqual(['available', 'available'])
+    })
+
+    it('keeps the row and surfaces the server message on failure', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, { ...DEMOS, status: 'available' })
+      vi.mocked(apiPost).mockRejectedValue(
+        new ApiError(409, 'Conflict', { message: "CRF 'F_DEMOS' is not removed" }),
+      )
+
+      const ok = await store.restoreCrf('F_DEMOS')
+
+      expect(ok).toBe(false)
+      expect(store.error).toBe("CRF 'F_DEMOS' is not removed")
+      expect(store.crfs[0]!.status).toBe('available')
+    })
+  })
+
   describe('restoreVersion', () => {
     it('patches the version status from removed → available on success', async () => {
       const store = useCrfLibraryStore()

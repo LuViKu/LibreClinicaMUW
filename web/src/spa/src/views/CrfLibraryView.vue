@@ -205,6 +205,11 @@ async function onDisableCrf(crf: Crf) {
   await lib.disableCrf(crf.oid)
 }
 
+async function onRestoreCrf(crf: Crf) {
+  if (!(await confirm({ message: t('crfLibrary.restoreCrfConfirm', { name: crf.name }), danger: false }))) return
+  await lib.restoreCrf(crf.oid)
+}
+
 async function onDisableVersion(crf: Crf, versionOid: string, versionName: string) {
   if (!(await confirm({ message: t('crfLibrary.disableVersionConfirm', { name: crf.name, version: versionName }), danger: true }))) return
   await lib.disableVersion(crf.oid, versionOid)
@@ -430,8 +435,21 @@ const visibleRows = computed(() =>
                 </div>
               </div>
               <span class="text-slate-500">·</span>
-              <button class="text-rose-600 hover:underline" @click="onDisableCrf(crf)">
+              <button
+                class="text-rose-600 hover:underline"
+                :data-testid="`crf-library-disable-${crf.oid}`"
+                @click="onDisableCrf(crf)"
+              >
                 {{ t('crfLibrary.disable') }}
+              </button>
+            </div>
+            <div v-else-if="canManage && crf.status === 'removed'" class="flex items-center gap-2 text-xs">
+              <button
+                class="text-muw-blue hover:underline"
+                :data-testid="`crf-library-restore-${crf.oid}`"
+                @click="onRestoreCrf(crf)"
+              >
+                {{ t('crfLibrary.restore') }}
               </button>
             </div>
           </div>
@@ -451,6 +469,7 @@ const visibleRows = computed(() =>
                 <span class="font-mono text-slate-700">{{ v.name }}</span>
                 <span class="text-slate-400">{{ v.oid }}</span>
                 <StatusPill v-if="v.status === 'removed'" variant="neutral">{{ t('crfLibrary.statusRemoved') }}</StatusPill>
+                <StatusPill v-else-if="v.status === 'auto-removed'" variant="neutral">{{ t('crfLibrary.statusAutoRemoved') }}</StatusPill>
                 <StatusPill v-else-if="v.status === 'locked'" variant="neutral">{{ t('crfLibrary.lock') }}</StatusPill>
                 <span v-if="v.description" class="text-slate-500 truncate">{{ v.description }}</span>
                 <span class="ml-auto" />
@@ -458,7 +477,9 @@ const visibleRows = computed(() =>
                   class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
                   @click="onDownloadXls(crf, v.oid)"
                 >{{ t('crfLibrary.downloadXls') }}</button>
-                <template v-if="canManage">
+                <!-- A removed CRF's versions come back with the CRF (Restore
+                     above); the server refuses to restore one on its own. -->
+                <template v-if="canManage && crf.status !== 'removed'">
                   <button
                     v-if="v.status === 'available'"
                     class="text-muw-blue hover:underline inline-flex items-center min-h-8 px-2 rounded hover:bg-slate-100"
