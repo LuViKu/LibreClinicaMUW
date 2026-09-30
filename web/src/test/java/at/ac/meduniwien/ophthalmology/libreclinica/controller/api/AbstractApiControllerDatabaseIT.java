@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.LaxParsingSpringLiquibase;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 
@@ -152,7 +153,7 @@ public abstract class AbstractApiControllerDatabaseIT {
         // file at the tail of master.xml fixes M-001 .. M-007.
         org.springframework.core.io.ResourceLoader resourceLoader =
                 new org.springframework.core.io.DefaultResourceLoader();
-        SpringLiquibase liquibase = new SpringLiquibase();
+        SpringLiquibase liquibase = new LaxParsingSpringLiquibase();
         liquibase.setDataSource(DATA_SOURCE);
         liquibase.setChangeLog("classpath:migration/master.xml");
         liquibase.setResourceLoader(resourceLoader);

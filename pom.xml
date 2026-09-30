@@ -714,21 +714,23 @@
 	    		<version>3.0.0</version>
 	    		<scope>runtime</scope>
 			</dependency>
-			<!-- LIQUIBASE: keep pinned to 3.6.3. Do NOT drop this pin to let
-			     Boot's BOM pull Liquibase 4.x — 4.x removed the legacy
-			     `modifyColumn` change type still used by the heritage changelog
-			     migration/2.5/changeLogCreateTables.xml (which the checksum rule
-			     forbids editing), so 4.x cannot parse it and the Spring context
-			     fails to start (integration + compose-smoke go red; unit tests
-			     do not catch it). That un-pin was tried in 1e47ca099 and reverted
-			     here. CVE-2022-0839 (XXE in XMLChangeLogSAXParser, CRITICAL; fixed
-			     only in Liquibase 4.8.0+) thus stays open on 3.6.3 — low practical
-			     risk here (changelogs are bundled in the WAR, not attacker-
-			     controlled). Liquibase 4 + this CVE are deferred to Phase D (D-Libs). -->
+			<!-- LIQUIBASE 4.31.1 (was 3.6.3, which carried CVE-2022-0839). This is
+			     the version Boot 3.5.16 manages, pinned so that a Boot bump cannot
+			     move it:
+			     - not 4.33.0: it adds rawDateValue to the checksum of every
+			       changeset that uses valueDate, so startup validation fails on
+			       every database 3.6.3 built (4 heritage changesets; 29 with the
+			       demo seeds). 4.32.0 validates like 4.31.1.
+			     - not 5.x: licensed FSL-1.1-ALv2, not Apache 2.0 (Boot 4.1 manages 5.0.3).
+			     Liquibase 4 needs two shims in core's config package:
+			     LaxParsingSpringLiquibase (the seven heritage modifyColumn
+			     elements, which 3.6.3 skipped silently) and SerialPostgresDatabase
+			     (autoIncrement columns stay serial, as 3.6.3 created them). The
+			     evidence is in docs/development/modernization/liquibase-4-spike-2026-09-30.md. -->
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
-				<version>3.6.3</version>
+				<version>4.31.1</version>
 			</dependency>
 			<!-- LOGBACK -->
 			<dependency>
