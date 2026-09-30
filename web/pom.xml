@@ -638,6 +638,13 @@
                              MeterRegistry supertype lives in micrometer-core,
                              a transitive of micrometer-registry-prometheus. -->
                         <ignoredUsedUndeclaredDependency>io.micrometer:micrometer-core</ignoredUsedUndeclaredDependency>
+                        <!-- 2026-09-30: the legacy-retirement tests read what
+                             the legacy-access logger wrote through logback's
+                             ListAppender. Logback arrives from LibreClinica-core
+                             at compile scope; declaring it here at test scope
+                             would take it out of the WAR. -->
+                        <ignoredUsedUndeclaredDependency>ch.qos.logback:logback-classic</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>ch.qos.logback:logback-core</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
                     <ignoredNonTestScopedDependencies>
                         <!-- Phase E-hardening B1: both micrometer artifacts are used
@@ -654,6 +661,11 @@
                              in core's DataSourceConfig) can apply pending changesets at
                              boot. Same compile-vs-test-scope tension as micrometer. -->
                         <ignoredNonTestScopedDependency>org.liquibase:liquibase-core</ignoredNonTestScopedDependency>
+                        <!-- 2026-09-30: logback, read by the legacy-retirement tests
+                             (see ignoredUsedUndeclaredDependencies above), is the
+                             WAR's logging backend and stays at compile scope. -->
+                        <ignoredNonTestScopedDependency>ch.qos.logback:logback-classic</ignoredNonTestScopedDependency>
+                        <ignoredNonTestScopedDependency>ch.qos.logback:logback-core</ignoredNonTestScopedDependency>
                     </ignoredNonTestScopedDependencies>
 		        </configuration>
 		      </plugin>
