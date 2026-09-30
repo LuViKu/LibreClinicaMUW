@@ -138,9 +138,57 @@ class EventDefinitionRemovalCascadeDatabaseIT extends AbstractApiControllerDatab
         assertEquals(5, statusOf("item_data", 8));
     }
 
+    /**
+     * A removal and a restore change a value's status only: the value and
+     * the record of what wrote it (its provenance) stay as they were.
+     */
+    @Test
+    void removalAndRestoreKeepTheValuesAndTheirProvenance() throws Exception {
+        // M-001's V1 CRF (event_crf 1) holds values 1 to 5; say the platform wrote value 3.
+        exec("UPDATE item_data SET source_kind = 'modality_baseline' WHERE item_data_id = 3");
+        String valuesBefore = valuesOf(1);
+
+        mockMvc().perform(post("/api/v1/studies/" + STUDY_OID + "/event-definitions/SE_V1_INCLUSION/disable")
+                .session(adminSession()))
+                .andExpect(status().isOk());
+        assertEquals(7, statusOf("item_data", 3));
+        assertEquals("modality_baseline", sourceKindOf(3), "the removal lost the value's provenance");
+
+        mockMvc().perform(post("/api/v1/studies/" + STUDY_OID + "/event-definitions/SE_V1_INCLUSION/restore")
+                .session(adminSession()))
+                .andExpect(status().isOk());
+        assertEquals(1, statusOf("item_data", 3));
+        assertEquals("modality_baseline", sourceKindOf(3), "the restore lost the value's provenance");
+        assertEquals(valuesBefore, valuesOf(1));
+    }
+
     /* ---------------------------------------------------------------- */
     /* Helpers                                                          */
     /* ---------------------------------------------------------------- */
+
+    private static String sourceKindOf(int itemDataId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT source_kind FROM item_data WHERE item_data_id = ?")) {
+            ps.setInt(1, itemDataId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    /** The CRF's values in id order, as one string. */
+    private static String valuesOf(int eventCrfId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT string_agg(value, '|' ORDER BY item_data_id) FROM item_data WHERE event_crf_id = ?")) {
+            ps.setInt(1, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
+    }
 
     private static MockHttpSession adminSession() {
         ResourceBundleProvider.updateLocale(Locale.ENGLISH);

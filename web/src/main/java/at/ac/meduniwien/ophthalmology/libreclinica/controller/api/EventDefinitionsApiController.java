@@ -963,8 +963,10 @@ public class EventDefinitionsApiController {
         int[] removed = removeDependents(target, me);
 
         // Single lifecycle row capturing the status flip. The dependent
-        // rows' status changes are recorded by the study_event and
-        // event_crf triggers, as for the legacy removal.
+        // rows' changes to auto-removed get no rows of their own: the
+        // study_event trigger records a visit's own removal and restore
+        // only, and the event_crf and item_data triggers no status change
+        // of this kind; the legacy removal records none either.
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -1006,7 +1008,6 @@ public class EventDefinitionsApiController {
         EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
         StudyEventDAO eventDao = new StudyEventDAO(dataSource);
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
 
         for (EventDefinitionCRFBean edc : edcDao.findAllByDefinition(target.getId())) {
             if (Status.DELETED.equals(edc.getStatus())) continue;
@@ -1030,17 +1031,29 @@ public class EventDefinitionsApiController {
                 eventCrfDao.update(eventCrf);
                 removed[2]++;
 
-                for (ItemDataBean item : itemDataDao.findAllByEventCRFId(eventCrf.getId())) {
-                    if (Status.DELETED.equals(item.getStatus())) continue;
-                    item.setStatus(Status.AUTO_DELETED);
-                    item.setUpdater(me);
-                    item.setUpdatedDate(now);
-                    itemDataDao.update(item);
-                    removed[3]++;
-                }
+                removed[3] += cascadeValues(eventCrf, me, true);
             }
         }
         return removed;
+    }
+
+    /**
+     * The values of an event CRF following it: auto-removed with it, or
+     * available again with it. Only their status changes; going through
+     * {@code ItemDataDAO.update} would also clear a value's provenance
+     * ({@link ItemDataStatusCascade}).
+     *
+     * @return the number of values changed
+     */
+    private int cascadeValues(EventCRFBean eventCrf, UserAccountBean me, boolean remove) {
+        try (Connection c = dataSource.getConnection()) {
+            return remove
+                    ? ItemDataStatusCascade.autoRemove(c, eventCrf.getId(), me.getId()).size()
+                    : ItemDataStatusCascade.restore(c, eventCrf.getId(), me.getId());
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not set the status of the values of event CRF "
+                    + eventCrf.getId(), e);
+        }
     }
 
     /**
@@ -1119,7 +1132,6 @@ public class EventDefinitionsApiController {
         EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
         StudyEventDAO eventDao = new StudyEventDAO(dataSource);
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
 
         ArrayList<EventDefinitionCRFBean> edcs = edcDao.findAllByDefinition(target.getId());
         for (EventDefinitionCRFBean edc : edcs) {
@@ -1147,16 +1159,7 @@ public class EventDefinitionsApiController {
                         eventCrfDao.update(eventCrf);
                         restoredEventCrfCount++;
 
-                        ArrayList<ItemDataBean> itemDatas = itemDataDao.findAllByEventCRFId(eventCrf.getId());
-                        for (ItemDataBean item : itemDatas) {
-                            if (item.getStatus() != null && item.getStatus().equals(Status.AUTO_DELETED)) {
-                                item.setStatus(Status.AVAILABLE);
-                                item.setUpdater(me);
-                                item.setUpdatedDate(now);
-                                itemDataDao.update(item);
-                                restoredItemDataCount++;
-                            }
-                        }
+                        restoredItemDataCount += cascadeValues(eventCrf, me, false);
                     }
                 }
             }
