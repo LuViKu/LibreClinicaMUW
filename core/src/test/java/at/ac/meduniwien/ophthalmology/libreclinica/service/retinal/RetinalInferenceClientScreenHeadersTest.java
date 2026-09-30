@@ -30,7 +30,7 @@ public class RetinalInferenceClientScreenHeadersTest {
 
     @Test
     public void noHeaderWithoutAToken() {
-        assertFalse(RetinalInferenceClient.screenHeaders(null).containsKey("X-MUW-Inference-Token"));
-        assertFalse(RetinalInferenceClient.screenHeaders("  ").containsKey("X-MUW-Inference-Token"));
+        assertFalse(RetinalInferenceClient.screenHeaders(null).containsHeader("X-MUW-Inference-Token"));
+        assertFalse(RetinalInferenceClient.screenHeaders("  ").containsHeader("X-MUW-Inference-Token"));
     }
 }

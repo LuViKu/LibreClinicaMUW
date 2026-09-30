@@ -21,7 +21,7 @@ import org.springframework.security.web.authentication.preauth.PreAuthenticatedA
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.session.ConcurrentSessionFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -33,7 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitF
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
-import org.springframework.security.web.access.channel.ChannelProcessingFilter;
+import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -114,7 +114,7 @@ public class SecurityConfig {
         // /pages/api/** (SPA channel) while keeping the 302 redirect
         // for every other unauthenticated request (legacy JSP channel).
         LinkedHashMap<RequestMatcher, AuthenticationEntryPoint> entryPoints = new LinkedHashMap<>();
-        entryPoints.put(new AntPathRequestMatcher("/pages/api/**"),
+        entryPoints.put(PathPatternRequestMatcher.withDefaults().matcher("/pages/api/**"),
                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED));
         DelegatingAuthenticationEntryPoint splitEntryPoint =
                 new DelegatingAuthenticationEntryPoint(entryPoints);
@@ -323,7 +323,7 @@ public class SecurityConfig {
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )
-            .addFilterBefore(publicOctUploadRateLimitFilter, ChannelProcessingFilter.class)
+            .addFilterBefore(publicOctUploadRateLimitFilter, WebAsyncManagerIntegrationFilter.class) // SPIKE: channel security removed in Security 7
             .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
             .logout(logout -> logout
@@ -380,7 +380,7 @@ public class SecurityConfig {
     private static RequestMatcher[] antPaths(String... patterns) {
         RequestMatcher[] matchers = new RequestMatcher[patterns.length];
         for (int i = 0; i < patterns.length; i++) {
-            matchers[i] = new AntPathRequestMatcher(patterns[i]);
+            matchers[i] = PathPatternRequestMatcher.withDefaults().matcher(patterns[i]);
         }
         return matchers;
     }

@@ -56,14 +56,13 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
     @Transactional
     public T saveOrUpdate(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        getCurrentSession().saveOrUpdate(domainObject);
-        return domainObject;
+        return getCurrentSession().merge(domainObject); // SPIKE: saveOrUpdate removed in Hibernate 7
     }
 
     @Transactional
     public Serializable save(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        return (Serializable) getCurrentSession().save(domainObject);
+        getCurrentSession().persist(domainObject); return (Serializable) getCurrentSession().getIdentifier(domainObject); // SPIKE: save removed in Hibernate 7
     }
 
     @SuppressWarnings("unchecked")

@@ -335,7 +335,7 @@ public class BatchCRFMigrationController implements Runnable {
         eventCrf.setSdvUpdateId(helperObject.getUserAccountBean().getId());
         eventCrf.setUpdateId(helperObject.getUserAccountBean().getId());
         eventCrf.setCrfVersion(crfVersion);
-        session.saveOrUpdate(eventCrf);
+        session.merge(eventCrf); // SPIKE: saveOrUpdate removed in Hibernate 7
 
         String status_before_update = null;
         SubjectEventStatus eventStatus = null;
@@ -350,7 +350,7 @@ public class BatchCRFMigrationController implements Runnable {
                 studySubject.setStatus(status);
             }
             studySubject.setUpdateId(helperObject.getUserAccountBean().getId());
-            session.saveOrUpdate(studySubject);
+            session.merge(studySubject); // SPIKE: saveOrUpdate removed in Hibernate 7
 
         }
 
@@ -364,7 +364,7 @@ public class BatchCRFMigrationController implements Runnable {
             studyEvent.setSubjectEventStatusId(eventStatus.getId());
         }
 
-        session.saveOrUpdate(studyEvent);
+        session.merge(studyEvent); // SPIKE: saveOrUpdate removed in Hibernate 7
     }
 
     public ResponseEntity<HelperObject> runPreviewTest(TransferObject transferObject, HttpServletRequest request) throws Exception {

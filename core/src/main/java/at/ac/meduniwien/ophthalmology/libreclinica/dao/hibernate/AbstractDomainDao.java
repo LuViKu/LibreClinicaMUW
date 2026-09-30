@@ -90,8 +90,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
     @Transactional
     public T saveOrUpdate(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        getCurrentSession().saveOrUpdate(domainObject);
-        return domainObject;
+        return getCurrentSession().merge(domainObject); // SPIKE: saveOrUpdate removed in Hibernate 7
     }
 
     @Transactional
@@ -100,7 +99,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         // Hibernate 6: Session.save(Object) returns Object (deprecated; persist()
         // is the JPA-style replacement but returns void). Callers cast to
         // Integer; the underlying ID is always Serializable.
-        return (Serializable) getCurrentSession().save(domainObject);
+        getCurrentSession().persist(domainObject); return (Serializable) getCurrentSession().getIdentifier(domainObject); // SPIKE: save removed in Hibernate 7
     }
 
     @SuppressWarnings("unchecked")
