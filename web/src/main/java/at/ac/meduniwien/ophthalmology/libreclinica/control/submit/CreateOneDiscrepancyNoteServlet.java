@@ -96,11 +96,39 @@ public class CreateOneDiscrepancyNoteServlet extends SecureController {
         String noAccessMessage = respage.getString("you_may_not_create_discrepancy_note") + respage.getString("change_study_contact_sysadmin");
 
         if (SubmitDataServlet.mayViewData(ub, currentRole)) {
+            mayGiveThreadStatus();
             return;
         }
 
         addPageMessage(noAccessMessage);
         throw new InsufficientPermissionException(Page.MENU, exceptionName, "1");
+    }
+
+    /**
+     * The note page offers each role only some statuses for a thread, and no
+     * reply at all to some threads ({@link DiscrepancyNoteStatusRule}). A request
+     * the page would not have produced is refused before anything is written.
+     */
+    private void mayGiveThreadStatus() throws InsufficientPermissionException {
+        FormProcessor fp = new FormProcessor(request);
+        int parentId = fp.getInt(PARENT_ID);
+        int typeId = fp.getInt("typeId" + parentId);
+        int statusId = fp.getInt(RES_STATUS_ID + parentId);
+        boolean offered;
+        if (parentId > 0) {
+            DiscrepancyNoteBean thread = (DiscrepancyNoteBean) new DiscrepancyNoteDAO(sm.getDataSource()).findByPK(parentId);
+            offered = DiscrepancyNoteStatusRule.mayReply(currentRole.getRole(), thread, typeId, statusId);
+        } else if (fp.getString("typeId" + parentId).isBlank()) {
+            // A browser sends no type when the chosen one is disabled (an
+            // annotation in a frozen study); the form's validation answers that.
+            offered = true;
+        } else {
+            offered = DiscrepancyNoteStatusRule.mayStart(currentRole.getRole(), typeId, statusId);
+        }
+        if (!offered) {
+            addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+            throw new InsufficientPermissionException(Page.MENU, resexception.getString("no_permission_to_create_discrepancy_note"), "1");
+        }
     }
 
     /** Adds a note to a thread, and can change the thread's status and assignee: POST only. */
