@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.XmlSchemaValidationHelper;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
@@ -43,6 +45,13 @@ public class RunRuleServlet extends SecureController {
     XmlSchemaValidationHelper schemaValidator = new XmlSchemaValidationHelper();
     RuleSetServiceInterface ruleSetService;
     RulesPostImportContainerService rulesPostImportContainerService;
+
+    /** GET runs the rules as a dry run; applying their actions takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || "dryRun".equalsIgnoreCase(action);
+    }
 
     @Override
     public void processRequest() throws Exception {

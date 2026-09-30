@@ -133,6 +133,12 @@ public class CreateJobExportServlet extends SecureController {
         // EMAIL, TAB, CDISC, SPSS, PERIOD, DATE_START_JOB
     }
 
+    /** GET shows the form; scheduling the job (action=confirmall) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirmall".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     protected void processRequest() throws Exception {
         // will accept, create, and return the ViewJob servlet

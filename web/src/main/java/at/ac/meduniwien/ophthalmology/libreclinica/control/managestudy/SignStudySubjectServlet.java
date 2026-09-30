@@ -19,6 +19,8 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.StudyEventAuditBean;
@@ -199,6 +201,12 @@ public class SignStudySubjectServlet extends SecureController {
             }
         }
         return updated;
+    }
+
+    /** GET shows the signing page; signing (action=confirm) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirm".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override

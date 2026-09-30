@@ -137,6 +137,12 @@ public class ViewSectionDataEntryServlet extends DataEntryServlet {
     }
 
     // BWP 01/08>>
+    /** GET shows the CRF read-only; saving the notes held in the session (action=saveNotes) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"saveNotes".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         FormProcessor fp = new FormProcessor(request);

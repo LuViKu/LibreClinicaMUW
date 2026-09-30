@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -91,6 +93,12 @@ public class MarkEventCRFCompleteServlet extends SecureController {
     private void getEventDefinitionCRFBean() {
         edcdao = new EventDefinitionCRFDAO(sm.getDataSource());
         edcb = edcdao.findForStudyByStudyEventIdAndCRFVersionId(ecb.getStudyEventId(), ecb.getCRFVersionId());
+    }
+
+    /** GET shows the confirmation; marking the CRF complete (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
     }
 
     /*

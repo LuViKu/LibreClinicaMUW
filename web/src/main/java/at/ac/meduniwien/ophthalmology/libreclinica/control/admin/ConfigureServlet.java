@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
@@ -38,6 +40,12 @@ public class ConfigureServlet extends SecureController {
         }
 
         return;
+    }
+
+    /** GET shows the lockout settings; saving them (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
     }
 
     @Override

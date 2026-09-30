@@ -92,9 +92,14 @@
     
   
   
-    <a href="UpdateRuleSetRule?action=remove&ruleSetId=<c:out value="${ruleSet.id}"/>&source=ViewRuleSet"
-       onClick='return confirm("<fmt:message key="rule_if_you_remove_this_all" bundle="${resword}"/>");'
-       onmouseover="Tip('<fmt:message key="view_rules_remove_all_tip" bundle="${resword}"/>')" 
+    <%-- Remove all, remove and restore post small forms: UpdateRuleSetRule refuses GET. --%>
+    <form name="removeAllRules" action="UpdateRuleSetRule" method="post" style="display:inline; margin:0">
+       <input type="hidden" name="action" value="remove"/>
+       <input type="hidden" name="ruleSetId" value="<c:out value="${ruleSet.id}"/>"/>
+       <input type="hidden" name="source" value="ViewRuleSet"/></form>
+    <a href="#"
+       onClick='if (confirm("<fmt:message key="rule_if_you_remove_this_all" bundle="${resword}"/>")) document.forms["removeAllRules"].submit(); return false;'
+       onmouseover="Tip('<fmt:message key="view_rules_remove_all_tip" bundle="${resword}"/>')"
        onmouseout="UnTip()">
                             <fmt:message key="view_rules_remove_all" bundle="${resword}"/></a> ,
     <a href="DownloadRuleSetXml?ruleSetRuleIds=<c:out value="${validRuleSetRuleIds}"/>"
@@ -181,20 +186,28 @@
     </c:choose>
   
       </td>
-      <td><a href="UpdateRuleSetRule?action=remove&ruleSetRuleId=<c:out value="${ruleSetRule.id}"/>&ruleSetId=<c:out value="${ruleSet.id}"/>&source=ViewRuleSet"
+      <td><form action="UpdateRuleSetRule" method="post" style="display:inline; margin:0"
+      onSubmit='return confirm("<fmt:message key="rule_if_you_remove_this" bundle="${resword}"/>");'>
+      <input type="hidden" name="action" value="remove"/>
+      <input type="hidden" name="ruleSetRuleId" value="<c:out value="${ruleSetRule.id}"/>"/>
+      <input type="hidden" name="ruleSetId" value="<c:out value="${ruleSet.id}"/>"/>
+      <input type="hidden" name="source" value="ViewRuleSet"/>
+      <input type="image" name="bt_Remove1" src="images/bt_Remove.gif" alt="<fmt:message key="remove" bundle="${resword}"/>" title="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="6"
       onMouseDown="javascript:setImage('bt_Remove1','images/bt_Remove_d.gif');"
-      onMouseUp="javascript:setImage('bt_Remove1','images/bt_Remove.gif');"
-      onClick='return confirm("<fmt:message key="rule_if_you_remove_this" bundle="${resword}"/>");'><img
-      name="bt_Remove1" src="images/bt_Remove.gif" border="0" alt="<fmt:message key="remove" bundle="${resword}"/>" title="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="6"></a>
+      onMouseUp="javascript:setImage('bt_Remove1','images/bt_Remove.gif');"></form>
       </td>
       </c:if>
       <c:if test="${ ruleSetRule.status.name eq 'DELETED' }">
       <td>
-      <a href="UpdateRuleSetRule?action=restore&ruleSetRuleId=<c:out value="${ruleSetRule.id}"/>&ruleSetId=<c:out value="${ruleSet.id}"/>&source=ViewRuleSet"
+      <form action="UpdateRuleSetRule" method="post" style="display:inline; margin:0"
+      onSubmit='return confirm("<fmt:message key="rule_if_you_restore_this" bundle="${resword}"/>");'>
+      <input type="hidden" name="action" value="restore"/>
+      <input type="hidden" name="ruleSetRuleId" value="<c:out value="${ruleSetRule.id}"/>"/>
+      <input type="hidden" name="ruleSetId" value="<c:out value="${ruleSet.id}"/>"/>
+      <input type="hidden" name="source" value="ViewRuleSet"/>
+      <input type="image" name="bt_Restore3" src="images/bt_Restore.gif" alt="<fmt:message key="restore" bundle="${resword}"/>" title="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="6"
       onMouseDown="javascript:setImage('bt_Restor3','images/bt_Restore_d.gif');"
-      onMouseUp="javascript:setImage('bt_Restore3','images/bt_Restore.gif');"
-      onClick='return confirm("<fmt:message key="rule_if_you_restore_this" bundle="${resword}"/>");'><img
-      name="bt_Restore3" src="images/bt_Restore.gif" border="0" alt="<fmt:message key="restore" bundle="${resword}"/>" title="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="6"></a>
+      onMouseUp="javascript:setImage('bt_Restore3','images/bt_Restore.gif');"></form>
       </td>
       </c:if>
       <td>

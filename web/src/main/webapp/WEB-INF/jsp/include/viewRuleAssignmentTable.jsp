@@ -45,6 +45,16 @@
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // Remove and restore post a small form: UpdateRuleSetRule refuses GET.
+    function ruleSetRuleForm(action, row, question, label, image) {
+        return '<form action="UpdateRuleSetRule" method="post" style="display:inline; margin:0"'
+             + ' onsubmit="return confirm(\'' + esc(question) + '\');">'
+             + '<input type="hidden" name="action" value="' + action + '"/>'
+             + '<input type="hidden" name="ruleSetRuleId" value="' + esc(row.id) + '"/>'
+             + '<input type="hidden" name="ruleSetId" value="' + esc(row.ruleSetId) + '"/>'
+             + '<input type="image" src="' + image + '" alt="' + esc(label) + '" title="' + esc(label) + '" hspace="2"/></form>&nbsp;';
+    }
+
     function actionsCell(row) {
         var acts = row.availableActions || [];
         var rsId  = encodeURIComponent(row.ruleSetId || '');
@@ -63,16 +73,10 @@
                           + '<img src="images/bt_ExexuteRules.gif" border="0" alt="' + esc(iLabel.execute) + '" hspace="2"/></a>&nbsp;';
                     break;
                 case 'remove':
-                    html += '<a href="UpdateRuleSetRule?action=remove&ruleSetRuleId=' + rsrId
-                          + '&ruleSetId=' + rsId + '" onclick="return confirm(\'' + esc(confirmRemove) + '\');"'
-                          + ' title="' + esc(iLabel.remove) + '">'
-                          + '<img src="images/bt_Remove.gif" border="0" alt="' + esc(iLabel.remove) + '" hspace="2"/></a>&nbsp;';
+                    html += ruleSetRuleForm('remove', row, confirmRemove, iLabel.remove, 'images/bt_Remove.gif');
                     break;
                 case 'restore':
-                    html += '<a href="UpdateRuleSetRule?action=restore&ruleSetRuleId=' + rsrId
-                          + '&ruleSetId=' + rsId + '" onclick="return confirm(\'' + esc(confirmRestore) + '\');"'
-                          + ' title="' + esc(iLabel.restore) + '">'
-                          + '<img src="images/bt_Restore.gif" border="0" alt="' + esc(iLabel.restore) + '" hspace="2"/></a>&nbsp;';
+                    html += ruleSetRuleForm('restore', row, confirmRestore, iLabel.restore, 'images/bt_Restore.gif');
                     break;
                 case 'extract':
                     html += '<a href="DownloadRuleSetXml?ruleSetRuleIds=' + rsrId

@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
@@ -44,6 +46,12 @@ public abstract class ChangeOrdinalServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** Moves an event definition, or a CRF within one, up or down the order: POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
 }

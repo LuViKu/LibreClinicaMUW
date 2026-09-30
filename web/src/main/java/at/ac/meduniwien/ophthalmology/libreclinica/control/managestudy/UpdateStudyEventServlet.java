@@ -18,6 +18,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -96,6 +98,13 @@ public class UpdateStudyEventServlet extends SecureController {
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + " " + respage.getString("change_active_study_or_contact"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
+    }
+
+    /** GET shows the form; saving the event (action=submit) or its signature (action=confirm) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return !"submit".equalsIgnoreCase(action) && !"confirm".equalsIgnoreCase(action);
     }
 
     @Override

@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
@@ -130,6 +131,12 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
 
         addPageMessage(noAccessMessage);
         throw new InsufficientPermissionException(Page.MENU, exceptionName, "1");
+    }
+
+    /** GET opens the note form; saving the note (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
     }
 
     @SuppressWarnings("deprecation")

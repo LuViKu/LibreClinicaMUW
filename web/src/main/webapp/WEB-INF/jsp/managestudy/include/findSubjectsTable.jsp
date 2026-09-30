@@ -71,7 +71,8 @@
                     + ' title="' + esc(iLabel.reassign) + '">'
                     + '<img src="images/bt_Reassign.gif" border="0" alt="' + esc(iLabel.reassign) + '" hspace="4"/></a>';
             case 'sign':
-                return '<a href="' + ctx + '/SignStudySubject?action=confirm&id=' + id + '"'
+                // Opens the signing page; its form posts the signature.
+                return '<a href="' + ctx + '/SignStudySubject?id=' + id + '"'
                     + ' title="' + esc(iLabel.sign) + '">'
                     + '<img src="images/bt_Sign.gif" border="0" alt="' + esc(iLabel.sign) + '" hspace="4"/></a>';
             default:

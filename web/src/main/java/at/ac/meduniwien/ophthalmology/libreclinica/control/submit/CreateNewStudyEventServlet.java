@@ -21,6 +21,8 @@ import java.util.Locale;
 
 import javax.sql.DataSource;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -96,6 +98,12 @@ public class CreateNewStudyEventServlet extends SecureController {
     public final static String[] INPUT_ENDDATE_PREFIX_SCHEDULED = { "endScheduled0", "endScheduled1", "endScheduled2", "endScheduled3" };
     public final static String[] DISPLAY_SCHEDULED = { "display0", "display1", "display2", "display3" };
     public final static int ADDITIONAL_SCHEDULED_NUM = 4;
+
+    /** GET shows the form; scheduling the event (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
+    }
 
     @Override
     protected void processRequest() throws Exception {

@@ -70,8 +70,11 @@ public class ExtractController {
     /**
      * process the page from whence you came, i.e. extract a dataset
      * @return model map, but more importantly, creates a quartz job which runs right away and generates all output there
+     * <p>
+     * POST only: it starts an export job and writes its files, so the export
+     * page posts each format as a small form and a GET answers 405.
      */
-    @RequestMapping(method = RequestMethod.GET)
+    @RequestMapping(method = RequestMethod.POST)
     public ModelMap processSubmit(@RequestParam("id") String id,
                                   @RequestParam("datasetId") String datasetId, HttpServletRequest request, HttpServletResponse response) {
         if(!mayProceed(request)) {

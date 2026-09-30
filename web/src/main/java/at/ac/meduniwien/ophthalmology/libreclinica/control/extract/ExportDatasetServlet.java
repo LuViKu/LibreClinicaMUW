@@ -16,6 +16,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ArchivedDatasetFileBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.CommaReportBean;
@@ -76,6 +78,13 @@ public class ExportDatasetServlet extends SecureController {
     public File CSVFile;
     public String CSVFilePath;
     public ArrayList<ArchivedDatasetFileBean> fileList;
+
+    /** GET lists the dataset's export files; exporting or deleting a file takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
+    }
 
     @Override
     public void processRequest() throws Exception {

@@ -17,6 +17,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
@@ -100,6 +101,12 @@ public class CreateOneDiscrepancyNoteServlet extends SecureController {
 
         addPageMessage(noAccessMessage);
         throw new InsufficientPermissionException(Page.MENU, exceptionName, "1");
+    }
+
+    /** Adds a note to a thread, and can change the thread's status and assignee: POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     @Override

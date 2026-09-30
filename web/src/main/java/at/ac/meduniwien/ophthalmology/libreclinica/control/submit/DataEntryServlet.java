@@ -305,6 +305,12 @@ public abstract class DataEntryServlet extends CoreSecureController {
         LOGGER.trace(message);
     }
 
+    /** GET opens a section; saving it (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !(new FormProcessor(request).isSubmitted() && request.getAttribute(INPUT_IGNORE_PARAMETERS) == null);
+    }
+
     @Override
     protected  void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         //JN:The following were the the global variables, moved as local.
