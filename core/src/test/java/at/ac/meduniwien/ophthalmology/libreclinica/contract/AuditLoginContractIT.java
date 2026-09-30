@@ -128,9 +128,10 @@ public class AuditLoginContractIT extends HibernateOcDbTestCase {
 
     /**
      * AccountController records a participant viewing an access code with
-     * {@link AuditUserLoginDao#save}, the one write path that is not
-     * {@code saveOrUpdate}. Its callers read the generated id back, from
-     * the return value and from the instance.
+     * {@link AuditUserLoginDao#save}. The other callers of save() are the four
+     * inserts of an XForm CRF upload, which {@code AbstractDomainDaoSaveIT}
+     * covers. Callers read the generated id back, from the return value and
+     * from the instance.
      */
     public void testSaveReturnsTheGeneratedIdAndInsertsTheRow() {
         AuditUserLoginDao dao =

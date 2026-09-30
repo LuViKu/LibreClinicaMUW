@@ -99,13 +99,17 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
      * Insert a new entity and return its generated id. Every caller hands in
      * a freshly constructed entity, for which {@code persist} does what the
      * deprecated {@code Session.save} did: it assigns the id to the instance
-     * itself.
+     * itself. The id returned is the one the session holds for the instance,
+     * not {@link DomainObject#getId()}: the {@code DataMapDomainObject}
+     * entities (CrfBean, CrfVersion, ItemGroup, Item and most of
+     * {@code domain.datamap}) map their id on a getter of their own, and
+     * their {@code getId()} returns null.
      */
     @Transactional
     public Serializable save(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
         getCurrentSession().persist(domainObject);
-        return domainObject.getId();
+        return (Serializable) getCurrentSession().getIdentifier(domainObject);
     }
 
     @Transactional
