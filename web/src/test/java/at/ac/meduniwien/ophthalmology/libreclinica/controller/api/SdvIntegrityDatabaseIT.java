@@ -180,6 +180,30 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    @Test
+    void aCleanSecondPassCompletesDoubleDataEntry() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_definition_crf SET double_entry = true WHERE event_definition_crf_id = 2");
+        try {
+            // A second clerk keys the same values into event CRF 11.
+            mvc().perform(json(post("/api/v1/eventCrfs/11/dde-commit"),
+                            "{\"values\":{\"I_HEIGHT_CM\":\"170\",\"I_WEIGHT_KG\":\"64.5\"}}")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.mismatchCount").value(0))
+                    .andExpect(jsonPath("$.status").value("dde-complete"));
+
+            assertTrue(listedEventCrfs().contains("11"),
+                    "the completed second pass makes the CRF ready for verification");
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_definition_crf SET double_entry = false WHERE event_definition_crf_id = 2");
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET date_validate_completed = NULL, sdv_status = false "
+                            + "WHERE event_crf_id = 11");
+        }
+    }
+
     /* ------------------------------------------------------------------ */
     /* A change to verified data withdraws the verification               */
     /* ------------------------------------------------------------------ */

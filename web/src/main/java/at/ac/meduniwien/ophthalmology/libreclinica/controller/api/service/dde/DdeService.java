@@ -173,10 +173,13 @@ public class DdeService {
         // 0 mismatches → DDE complete via markCompleteDDE on the DAO.
         if (mismatch == 0) {
             EventCRFDAO ecDAO = new EventCRFDAO(dataSource);
-            ecDAO.markComplete(ecb, /* ide */ false);
             ecb.setUpdater(ddeClerk);
             ecb.setUpdatedDate(new Date());
             ecDAO.update(ecb);
+            // After the update, not before: update writes every column from
+            // the bean, whose second-pass date is still empty, and would
+            // clear the date markComplete sets.
+            ecDAO.markComplete(ecb, /* ide */ false);
 
             EventCrfsApiController.writeAuditEvent(auditDAO,
                     AuditTypeIds.DDE_PASS2_COMMITTED,
