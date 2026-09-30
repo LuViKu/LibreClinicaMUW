@@ -472,4 +472,23 @@ public final class AuditTypeIds {
      * {@code lc-muw-2026-09-30-audit-type-crf-field-updated.xml}.
      */
     public static final int CRF_FIELD_UPDATED                = 142;
+
+    /*
+     * 143-144 (lc-muw-2026-09-30-audit-types-event-crf-migration.xml), moving
+     * existing event CRFs to another version of their CRF.
+     */
+
+    /**
+     * A batch move of existing event CRFs to another version of their CRF.
+     * One row per run on the {@code crf} row; {@code new_value} packs the
+     * study, both versions and the counts. Each event CRF's own change is in
+     * the rows the {@code event_crf} triggers write (33 version, 32 SDV).
+     */
+    public static final int EVENT_CRF_BATCH_MIGRATION        = 143;
+    /**
+     * A signed event CRF's signature removed because it moved to another
+     * version: {@code status_id} from signed back to its unsigned status. The
+     * {@code event_crf} trigger does not audit that transition.
+     */
+    public static final int EVENT_CRF_SIGNATURE_REMOVED      = 144;
 }

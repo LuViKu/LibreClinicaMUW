@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      CRF library (JSP retirement R1.1): audit types for moving existing event
+      CRFs to another version of their CRF.
+    -->
+
+    <!--
+      143 — existing event CRFs moved to another version of their CRF, one row
+      per run. Each event CRF's own change is recorded by the event_crf
+      triggers (33 version, 32 SDV status).
+    -->
+    <changeSet id="2026-09-30-audit-type-event-crf-batch-migration" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 143;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="143"/>
+            <column name="name" value="event_crf_batch_migration"/>
+            <column name="display_name" value="Event CRFs moved to another CRF version"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 143</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+      144 — a signed event CRF's signature removed because the CRF moved to
+      another version. The event_crf trigger does not audit that status
+      change.
+    -->
+    <changeSet id="2026-09-30-audit-type-event-crf-signature-removed" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 144;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="144"/>
+            <column name="name" value="event_crf_signature_removed"/>
+            <column name="display_name" value="CRF signature removed (moved to another CRF version)"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 144</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

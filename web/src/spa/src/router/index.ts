@@ -190,6 +190,15 @@ const router = createRouter({
       component: () => import('@/views/CrfDetailView.vue'),
       meta: { title: 'CRF', role: ['Data Manager', 'Administrator'] as const },
     },
+    /* Version migration of one CRF: move existing event CRFs to another
+       version (the legacy batch CRF version migration), and change the
+       default version for new event CRFs. */
+    {
+      path: '/crf-library/:crfOid/migrate',
+      name: 'crf-migration',
+      component: () => import('@/views/CrfMigrationView.vue'),
+      meta: { title: 'CRF version migration', role: ['Data Manager', 'Administrator'] as const },
+    },
     /* App-feedback Wave 2 (2026-06-19) — full drag-and-drop CRF builder canvas.
        Now the sole CRF authoring surface; the legacy side-rail wizard
        was removed in the D3 follow-up (2026-06-20) per its

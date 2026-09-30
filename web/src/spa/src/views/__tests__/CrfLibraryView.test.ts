@@ -64,6 +64,7 @@ function makeRouter() {
       { path: '/', name: 'home', component: { template: '<div />' } },
       { path: '/crf-library', name: 'crf-library', component: { template: '<div />' } },
       { path: '/crf-library/:crfOid', name: 'crf-detail', component: { template: '<div />' } },
+      { path: '/crf-library/:crfOid/migrate', name: 'crf-migration', component: { template: '<div />' } },
       { path: '/crf-authoring-canvas/:crfOid', name: 'crfAuthoringCanvas', component: { template: '<div />' } },
     ],
   })
@@ -252,6 +253,16 @@ describe('CrfLibraryView', () => {
 
     expect(wrapper.find('[data-testid="crf-library-action-error"]').text()).toContain('Version contents load failed')
     expect(wrapper.find('[data-testid="crf-preview-root"]').exists()).toBe(false)
+  })
+
+  it('offers version migration for a CRF with more than one version', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-testid="crf-library-migration-F_DEMO"]').exists()).toBe(false)
+
+    await showRemoved(wrapper, [{ ...ACTIVE, versions: [V1, { ...V1, oid: 'F_DEMO_V2', name: 'v2.0' }] }])
+
+    expect(wrapper.find('[data-testid="crf-library-migration-F_DEMO"]').attributes('href'))
+      .toBe('/crf-library/F_DEMO/migrate')
   })
 
   it('links each CRF to its view', async () => {

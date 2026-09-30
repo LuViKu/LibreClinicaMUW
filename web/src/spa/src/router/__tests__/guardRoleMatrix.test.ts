@@ -26,6 +26,7 @@ const ROUTES_THAT_MUST_INCLUDE_ADMINISTRATOR = [
   'event-definitions',
   'crf-library',
   'crf-detail',
+  'crf-migration',
   'group-classes',
   'rules',
   'import-crf-data',

@@ -278,6 +278,7 @@ async function onRestoreVersion(crf: Crf, versionOid: string, versionName: strin
 }
 
 const hardRemoveBlocker = ref<{
+  crfOid: string
   crfName: string
   report: import('@/types/crfLibrary').VersionUsageReport
 } | null>(null)
@@ -290,7 +291,7 @@ async function onHardRemoveVersion(crf: Crf, versionOid: string, versionName: st
     return
   }
   if ('blocker' in result) {
-    hardRemoveBlocker.value = { crfName: crf.name, report: result.blocker }
+    hardRemoveBlocker.value = { crfOid: crf.oid, crfName: crf.name, report: result.blocker }
     return
   }
   actionError.value = result.message ?? null
@@ -509,6 +510,14 @@ const visibleRows = computed(() =>
               >
                 {{ t('crfLibrary.edit') }}
               </button>
+              <template v-if="crf.versions.length > 1">
+                <span class="text-slate-500">·</span>
+                <RouterLink
+                  :to="{ name: 'crf-migration', params: { crfOid: crf.oid } }"
+                  class="text-muw-blue hover:underline"
+                  :data-testid="`crf-library-migration-${crf.oid}`"
+                >{{ t('crfLibrary.migrationAction') }}</RouterLink>
+              </template>
               <span class="text-slate-500">·</span>
               <button
                 class="text-rose-600 hover:underline"
@@ -714,6 +723,12 @@ const visibleRows = computed(() =>
           {{ t('crfLibrary.hardRemoveBlocker.remediation') }}
         </p>
         <div class="flex items-center justify-end gap-2">
+          <RouterLink
+            v-if="hardRemoveBlocker.crfOid"
+            :to="{ name: 'crf-migration', params: { crfOid: hardRemoveBlocker.crfOid } }"
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue"
+            data-testid="crf-library-blocker-migration"
+          >{{ t('crfLibrary.migrationAction') }}</RouterLink>
           <button
             class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
             @click="hardRemoveBlocker = null"

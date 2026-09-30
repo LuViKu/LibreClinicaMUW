@@ -668,6 +668,8 @@ public class AuditApiController {
             // 2026-09-27); rows written before read as 140 too.
             case 140 -> "reason-for-change";
             case 31 -> "signed";
+            // A CRF signature removed when the CRF moved to another version (144).
+            case AuditTypeIds.EVENT_CRF_SIGNATURE_REMOVED -> "signed";
             case 32 -> "sdv";
             // Subject-group-map lifecycle (types 28 + 29 — "added to
             // group" + "moved between groups"). Phase E.5 #2 follow-up:
@@ -711,8 +713,9 @@ public class AuditApiController {
             // Extract-job execution (106-107). Backfill catch-all (108,
             // hidden) routes to admin for the sysadmin view.
                  106, 107, 108,
-            // CRF name / description edit (142).
-                 AuditTypeIds.CRF_FIELD_UPDATED -> "admin";
+            // CRF name / description edit (142) and a batch move of event
+            // CRFs to another CRF version (143, one row per run).
+                 AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,

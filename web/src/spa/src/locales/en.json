@@ -1367,12 +1367,13 @@
     "hardRemoveBlocker": {
       "eventDefs": "{count} event definition(s) default to this version:",
       "eventCrfs": "{count} event-CRF row(s) carry data against this version (sample: {sample}).",
-      "remediation": "Run the Migrate dialog to reassign defaults to another version, then retry."
+      "remediation": "In Version migration, change the default version of these event definitions, and move the event CRFs entered on this version to another version; then retry."
     },
     "downloadXls": "Download .xls",
     "downloadXlsFailed": "Download failed: {message}",
     "preview": "Preview",
     "previewFailed": "The version could not be loaded for the preview: {message}",
+    "migrationAction": "Version migration",
     "migrate": {
       "action": "Reassign defaults",
       "dialogHeading": "Reassign event-def defaults from \"{from}\" to \"{to}\"",
@@ -2036,6 +2037,73 @@
         "label": "Axial length"
       },
       "reasonIfNotDone": "Reason (if not done)"
+    }
+  },
+  "crfMigration": {
+    "title": "Version migration · {name}",
+    "intro": "Two different operations. Moving event CRFs changes the version that existing data is shown on. Changing the default version only decides which version new event CRFs get; it moves no data.",
+    "noStudy": "Pick a study first: event CRFs are moved within one study.",
+    "move": {
+      "heading": "Move existing event CRFs to another version",
+      "intro": "The event CRFs on the current version, with the data entered on them, are shown on the new version from now on. Values of items the new version does not have stay in the database but are no longer shown. SDV is cleared on every moved event CRF, and the signatures over them are removed. Locked data is not moved.",
+      "study": "Study: {study}",
+      "source": "Current version",
+      "target": "New version",
+      "versionOption": "{name} ({count} event CRFs)",
+      "sites": "Sites",
+      "allSites": "The study and all its sites",
+      "studyLevel": "{study} (subjects enrolled at study level)",
+      "events": "Event definitions",
+      "allEvents": "All event definitions",
+      "subject": "Only subject (optional)",
+      "subjectHint": "The subject ID, to move one subject's event CRFs, for instance one entered on the wrong version.",
+      "preview": "Preview",
+      "onlyThis": "Only this one",
+      "onlyEventCrf": "Only event CRF #{id}",
+      "clearOnly": "Show all again",
+      "run": "Move {count} event CRF(s)"
+    },
+    "preview": {
+      "summary": "{count} event CRF(s) of {subjects} subject(s) will move from version \"{from}\" to \"{to}\".",
+      "warningHeading": "Before you move them",
+      "sdv": "Source data verification is cleared on every moved event CRF ({count} are verified now).",
+      "signatures": "Signatures over the moved event CRFs are removed: {subjects} signed subject(s), {events} signed event(s), {crfs} signed event CRF(s).",
+      "hidden": "{count} entered value(s) belong to items that version \"{to}\" does not have; they stay in the database but are no longer shown:",
+      "locked": "{count} event CRF(s) are locked and not moved:",
+      "notOffered": "Not moved, because the site's event definition does not offer both versions:",
+      "notOfferedRow": "{site} · {event}: {count} event CRF(s)",
+      "truncated": "The first {shown} of {count} event CRFs are listed.",
+      "confirm": "I understand that SDV is cleared and the signatures are removed for these {count} event CRF(s)."
+    },
+    "skip": {
+      "subject-locked": "subject locked",
+      "event-locked": "event locked",
+      "event-crf-locked": "event CRF locked"
+    },
+    "flag": {
+      "sdv": "SDV",
+      "subject": "subject signature",
+      "event": "event signature",
+      "crf": "CRF signature"
+    },
+    "col": {
+      "subject": "Subject",
+      "site": "Site",
+      "event": "Event",
+      "clears": "Clears"
+    },
+    "result": {
+      "summary": "Moved {count} event CRF(s) of {subjects} subject(s) from version \"{from}\" to \"{to}\".",
+      "cleared": "SDV cleared on {sdv}; signatures removed: {subjects} subject(s), {events} event(s), {crfs} event CRF(s).",
+      "where": "The log is below and can be downloaded; each change is also in the",
+      "auditLog": "study audit log.",
+      "download": "Download log (CSV)"
+    },
+    "defaults": {
+      "heading": "Change the default version for new event CRFs",
+      "intro": "The event definitions that default to one version get another as their default. Only event CRFs created from now on use it; existing event CRFs and their data stay on their version.",
+      "from": "Current default",
+      "to": "New default"
     }
   },
   "crfPreview": {
