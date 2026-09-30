@@ -21,10 +21,12 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Properties;
 import java.util.UUID;
 
 import jakarta.mail.internet.MimeMessage;
@@ -45,6 +47,7 @@ import org.springframework.security.core.userdetails.User;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.MainMenuServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.LegacyServletHarness;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ChangeStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ChangeDefinitionCRFOrdinalServlet;
@@ -71,13 +74,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.EventDefinitionCrfTagService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanListener;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
  * The legacy actions that changed data on a plain GET, against the real schema:
  * the GET now leaves every row as it was and answers 405, while the POST the
  * pages now send still writes. Covers the actions whose callers were GET links
  * (reordering, signing, the matrix and list actions behind confirmation pages),
- * the Monitor-reachable note and study-switch actions.
+ * the Monitor-reachable note and study-switch actions, and the home page, which
+ * keeps answering GET but now records only the visit.
  * <p>
  * The seeded study 1 and its subjects M-001 to M-007 are the fixture; each test
  * puts back what it changes.
@@ -410,6 +415,34 @@ class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT 
         }
     }
 
+    // ---- the home page ---------------------------------------------------------------------
+
+    @Test
+    void theHomePageRecordsTheVisitWithoutRewritingTheAccount() throws Exception {
+        Timestamp before = Timestamp.valueOf("2020-01-01 00:00:00");
+        update("UPDATE user_account SET date_updated = '2020-01-01', update_id = 1, date_lastvisit = '2020-01-01'"
+                + " WHERE user_name = 'manual_admin'");
+        update("UPDATE study_user_role SET date_created = '2020-01-01' WHERE user_name = 'manual_admin' AND role_name = 'admin'");
+        Properties params = sqlInitParams();
+        params.setProperty("passwd_expiration_time", "360");
+        params.setProperty("change_passwd_required", "1");
+        try {
+            MockHttpServletResponse resp = run(new MainMenuServlet(), "GET", "/MainMenu", user("manual_admin"));
+
+            assertEquals("/WEB-INF/jsp/menu.jsp", resp.getForwardedUrl());
+            assertTrue(timestamp("SELECT date_lastvisit FROM user_account WHERE user_name = 'manual_admin'").after(before),
+                    "the visit is recorded");
+            assertEquals(before, timestamp("SELECT date_updated FROM user_account WHERE user_name = 'manual_admin'"),
+                    "the account's last change is not the visit");
+            assertEquals(1, queryInt("SELECT update_id FROM user_account WHERE user_name = 'manual_admin'"));
+            assertEquals(before, timestamp("SELECT date_created FROM study_user_role"
+                    + " WHERE user_name = 'manual_admin' AND role_name = 'admin'"), "the admin role is left alone");
+        } finally {
+            params.remove("passwd_expiration_time");
+            params.remove("change_passwd_required");
+        }
+    }
+
     // ---- helpers ---------------------------------------------------------------------------
 
     /** manual_dm: the director of study 1, with the roles login would load. */
@@ -471,6 +504,12 @@ class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT 
         return resp;
     }
 
+    private static Properties sqlInitParams() throws ReflectiveOperationException {
+        Field field = SQLInitServlet.class.getDeclaredField("params");
+        field.setAccessible(true);
+        return (Properties) field.get(null);
+    }
+
     private static int definitionOrdinal(int id) throws SQLException {
         return queryInt("SELECT ordinal FROM study_event_definition WHERE study_event_definition_id = " + id);
     }
@@ -518,6 +557,17 @@ class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT 
         }
     }
 
+    private static Timestamp timestamp(String sql) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next(), "no row for " + sql);
+            Timestamp value = rs.getTimestamp(1);
+            assertNotEquals(null, value, sql);
+            return value;
+        }
+    }
+
     private static int queryInt(String sql) throws SQLException {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -540,5 +590,6 @@ class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT 
         assertEquals(AVAILABLE, studySubjectStatus(SUBJECT));
         assertEquals(AVAILABLE, eventStatus(EVENT));
         assertEquals(AVAILABLE, eventCrfStatus(EVENT_CRF));
+        assertTrue(queryInt("SELECT COUNT(*) FROM study_user_role WHERE user_name = 'manual_admin' AND role_name = 'admin'") > 0);
     }
 }

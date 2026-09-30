@@ -266,6 +266,20 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
     }
 
     /**
+     * Records a visit: writes {@code date_lastvisit} and leaves the rest of the
+     * row alone. The home page calls this on every visit. {@link #update} would
+     * also set {@code update_id} and {@code date_updated}, which the admin pages
+     * show as the account's last change, and re-create a system administrator's
+     * admin role.
+     */
+    public void updateLastVisitDate(Integer userId, Date lastVisit) {
+        HashMap<Integer, Object> variables = new HashMap<>();
+        variables.put(1, new Timestamp(lastVisit.getTime()));
+        variables.put(2, userId);
+        this.executeUpdate(digester.getQuery("updateLastVisitDate"), variables);
+    }
+
+    /**
      * Phase D.1.b (2026-05-30): targeted single-column update used by
      * {@code PasswordRehashService} to rewrite a legacy MD5/SHA-1 hash
      * as bcrypt after a successful legacy-format login. Sister of
