@@ -861,7 +861,74 @@ public class EventDefinitionsApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* GET /{sedOid}/removal-impact                                      */
+    /*   What a disable would remove with the definition, for the SPA's  */
+    /*   confirm dialog. Counts the rows removeDependents flips.         */
+    /* ----------------------------------------------------------------- */
+
+    @GetMapping("/{sedOid}/removal-impact")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventDefinitionRemovalImpactDto.class)))
+    public ResponseEntity<?> removalImpact(@PathVariable("studyOid") String studyOid,
+                                           @PathVariable("sedOid") String sedOid,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
+        StudyEventDefinitionBean target = new StudyEventDefinitionDAO(dataSource)
+                .findByOidAndStudy(sedOid, study.getId(), 0);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+
+        // The same rows removeDependents walks: the definition's own CRF
+        // assignments (parent_id IS NULL, as EventDefinitionCRFDAO
+        // .findAllByDefinition reads them), every visit of the definition,
+        // and the CRFs and values under a visit and CRF that are not
+        // removed themselves. Status 5 is Status.DELETED.
+        String sql = """
+                SELECT
+                  (SELECT COUNT(*) FROM event_definition_crf edc
+                    WHERE edc.study_event_definition_id = ? AND edc.parent_id IS NULL
+                      AND edc.status_id IS DISTINCT FROM 5),
+                  (SELECT COUNT(*) FROM study_event se
+                    WHERE se.study_event_definition_id = ? AND se.status_id IS DISTINCT FROM 5),
+                  (SELECT COUNT(DISTINCT se.study_subject_id) FROM study_event se
+                    WHERE se.study_event_definition_id = ? AND se.status_id IS DISTINCT FROM 5),
+                  (SELECT COUNT(*) FROM event_crf ec
+                     JOIN study_event se ON se.study_event_id = ec.study_event_id
+                    WHERE se.study_event_definition_id = ? AND se.status_id IS DISTINCT FROM 5
+                      AND ec.status_id IS DISTINCT FROM 5),
+                  (SELECT COUNT(*) FROM item_data id
+                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
+                     JOIN study_event se ON se.study_event_id = ec.study_event_id
+                    WHERE se.study_event_definition_id = ? AND se.status_id IS DISTINCT FROM 5
+                      AND ec.status_id IS DISTINCT FROM 5 AND id.status_id IS DISTINCT FROM 5)
+                """;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            for (int i = 1; i <= 5; i++) ps.setInt(i, target.getId());
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return ResponseEntity.ok(new EventDefinitionRemovalImpactDto(
+                        rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5)));
+            }
+        } catch (SQLException e) {
+            LOG.error("Failed to count the removal impact of event definition oid={}: {}",
+                    sedOid, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to count what removing the event definition would remove — see server log."));
+        }
+    }
+
+    /* ----------------------------------------------------------------- */
     /* POST /{sedOid}/disable                                            */
+    /*   Removes the definition and marks everything under it            */
+    /*   auto-removed, as legacy RemoveEventDefinitionServlet does, so    */
+    /*   that /restore (which brings back the auto-removed rows) is its   */
+    /*   inverse.                                                         */
     /* ----------------------------------------------------------------- */
 
     @PostMapping("/{sedOid}/disable")
@@ -893,10 +960,11 @@ public class EventDefinitionsApiController {
         target.setUpdatedDate(new java.util.Date());
         sedDao.update(target);
 
-        // Single lifecycle row capturing the status flip. Downstream
-        // event_crf / item_data cascade is owned by the existing DB
-        // trigger pattern; A8.3 will revisit if assignment cleanup is
-        // needed at controller level.
+        int[] removed = removeDependents(target, me);
+
+        // Single lifecycle row capturing the status flip. The dependent
+        // rows' status changes are recorded by the study_event and
+        // event_crf triggers, as for the legacy removal.
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -914,10 +982,90 @@ public class EventDefinitionsApiController {
                     sedOid, e.getMessage());
         }
 
-        LOG.info("Disable event definition: oid={} study={} by admin={}",
-                sedOid, studyOid, me.getName());
+        LOG.info("Disable event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
+                sedOid, studyOid, me.getName(), removed[0], removed[1], removed[2], removed[3]);
 
         return ResponseEntity.ok(toDto(target));
+    }
+
+    /**
+     * The cascade of legacy {@code RemoveEventDefinitionServlet}: every CRF
+     * assignment, visit, event CRF and value under the definition that is not
+     * removed already becomes {@link Status#AUTO_DELETED}. Rows removed on
+     * their own ({@link Status#DELETED}) keep that status, so that
+     * {@link #restore}, which brings back only auto-removed rows, leaves them
+     * removed. Like the legacy servlet, the event CRFs and values of a visit
+     * that was removed on its own are not touched.
+     *
+     * @return rows marked auto-removed: CRF assignments, visits, event CRFs,
+     *         values
+     */
+    private int[] removeDependents(StudyEventDefinitionBean target, UserAccountBean me) {
+        java.util.Date now = new java.util.Date();
+        int[] removed = new int[4];
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        StudyEventDAO eventDao = new StudyEventDAO(dataSource);
+        EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+
+        for (EventDefinitionCRFBean edc : edcDao.findAllByDefinition(target.getId())) {
+            if (Status.DELETED.equals(edc.getStatus())) continue;
+            edc.setStatus(Status.AUTO_DELETED);
+            edc.setUpdater(me);
+            edc.setUpdatedDate(now);
+            edcDao.update(edc);
+            removed[0]++;
+        }
+
+        for (StudyEventBean event : eventDao.findAllByDefinition(target.getId())) {
+            if (Status.DELETED.equals(event.getStatus())) continue;
+            setVisitStatus(event, Status.AUTO_DELETED, me);
+            removed[1]++;
+
+            for (EventCRFBean eventCrf : eventCrfDao.findAllByStudyEvent(event)) {
+                if (Status.DELETED.equals(eventCrf.getStatus())) continue;
+                eventCrf.setStatus(Status.AUTO_DELETED);
+                eventCrf.setUpdater(me);
+                eventCrf.setUpdatedDate(now);
+                eventCrfDao.update(eventCrf);
+                removed[2]++;
+
+                for (ItemDataBean item : itemDataDao.findAllByEventCRFId(eventCrf.getId())) {
+                    if (Status.DELETED.equals(item.getStatus())) continue;
+                    item.setStatus(Status.AUTO_DELETED);
+                    item.setUpdater(me);
+                    item.setUpdatedDate(now);
+                    itemDataDao.update(item);
+                    removed[3]++;
+                }
+            }
+        }
+        return removed;
+    }
+
+    /**
+     * Sets a visit's status as {@code StudyEventDAO.update} would, without
+     * rewriting its other columns: that update dereferences {@code date_start}
+     * and throws for a visit that has none (one never started), which is
+     * where the legacy removal and restore stop too. Only {@code status_id},
+     * {@code update_id} and {@code date_updated} change, so the study_event
+     * trigger records the same status change, and the DAO's rule observer,
+     * which acts on a changed start date or subject-event status, has nothing
+     * to act on.
+     */
+    private void setVisitStatus(StudyEventBean event, Status status, UserAccountBean me) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE study_event SET status_id = ?, update_id = ?, date_updated = now() "
+                             + "WHERE study_event_id = ?")) {
+            ps.setInt(1, status.getId());
+            ps.setInt(2, me.getId());
+            ps.setInt(3, event.getId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not set the status of visit " + event.getId(), e);
+        }
+        event.setStatus(status);
     }
 
     /* ----------------------------------------------------------------- */
@@ -987,10 +1135,7 @@ public class EventDefinitionsApiController {
         ArrayList<StudyEventBean> events = eventDao.findAllByDefinition(target.getId());
         for (StudyEventBean event : events) {
             if (event.getStatus() != null && event.getStatus().equals(Status.AUTO_DELETED)) {
-                event.setStatus(Status.AVAILABLE);
-                event.setUpdater(me);
-                event.setUpdatedDate(now);
-                eventDao.update(event);
+                setVisitStatus(event, Status.AVAILABLE, me);
                 restoredEventCount++;
 
                 ArrayList<EventCRFBean> eventCrfs = eventCrfDao.findAllByStudyEvent(event);

@@ -1035,7 +1035,8 @@
     "disable": "Entfernen",
     "restore": "Wiederherstellen",
     "statusRemoved": "Entfernt",
-    "disableConfirm": "Gruppenklasse »{name}« entfernen? Bereits zugeordnete Teilnehmer/innen bleiben im Audit Trail; neue Zuordnungen verwenden die verbleibenden Klassen. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Gruppenklasse »{name}« entfernen? Die Zuordnungen von Teilnehmer/innen zu ihren Gruppen werden mit entfernt; beim Wiederherstellen der Klasse kommen sie zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableImpact": "Mit entfernt werden: {subjectAssignments} Zuordnung(en) von Teilnehmer/innen zu {groups} Gruppe(n).",
     "field": {
       "name": "Name der Gruppenklasse",
       "type": "Typ",
@@ -2079,7 +2080,8 @@
       "saveError": "Inferenz-Task-Auswahl konnte nicht gespeichert werden."
     },
     "disable": "Entfernen",
-    "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Visite »{name}« entfernen? Ihre CRF-Zuordnungen und alle danach geplanten Termine werden mit entfernt, samt den dort erfassten CRFs und Werten. Beim Wiederherstellen der Visite kommt das mit Entfernte zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableImpact": "Mit entfernt werden: {crfAssignments} CRF-Zuordnung(en), {visits} Termin(e) von {subjects} Teilnehmer/innen, {eventCrfs} CRF(s) und {itemValues} erfasste(r) Wert(e).",
     "restore": "Wiederherstellen",
     "restoreConfirm": "Visite »{name}« wiederherstellen? Automatisch entfernte CRFs und Item-Daten werden reaktiviert; manuell entfernte Zeilen bleiben entfernt. Die Aktion wird im Audit Trail dokumentiert.",
     "lock": "Sperren",

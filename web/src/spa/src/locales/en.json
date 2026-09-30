@@ -1035,7 +1035,8 @@
     "disable": "Remove",
     "restore": "Restore",
     "statusRemoved": "Removed",
-    "disableConfirm": "Remove group class \"{name}\"? Subjects already classified into its groups stay in the audit trail; new classifications use the remaining classes. The action is recorded in the audit trail.",
+    "disableConfirm": "Remove group class \"{name}\"? The assignments of subjects to its groups are removed with it; restoring the class brings them back. The action is recorded in the audit trail.",
+    "disableImpact": "Removed with it: {subjectAssignments} subject assignment(s) to its {groups} group(s).",
     "field": {
       "name": "Group class name",
       "type": "Type",
@@ -2079,7 +2080,8 @@
       "saveError": "Could not save inference task selection."
     },
     "disable": "Remove",
-    "disableConfirm": "Remove event \"{name}\"? Existing CRFs scheduled against it remain in the audit trail but become inaccessible. The action is recorded in the audit trail.",
+    "disableConfirm": "Remove event \"{name}\"? Its CRF assignments and every visit scheduled from it are removed with it, together with the CRFs and values entered in those visits. Restoring the event brings back what was removed with it. The action is recorded in the audit trail.",
+    "disableImpact": "Removed with it: {crfAssignments} CRF assignment(s), {visits} visit(s) of {subjects} subject(s), {eventCrfs} CRF(s) and {itemValues} entered value(s).",
     "restore": "Restore",
     "restoreConfirm": "Restore event \"{name}\"? Auto-removed CRFs and item data flip back to available; rows that were explicitly removed stay removed. The action is recorded in the audit trail.",
     "lock": "Lock",

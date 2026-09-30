@@ -30,9 +30,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyGroupBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyGroupClassBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectGroupMapBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectGroupMapDAO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,10 +73,14 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code PUT /…/group-classes/{groupClassId}} — edit identity,
  *       optionally replace the child-group set</li>
  *   <li>{@code POST /…/group-classes/{groupClassId}/disable} — soft-
- *       delete the class (the children stay AVAILABLE in the row
- *       but become unreachable when the parent is DELETED)</li>
+ *       delete the class and mark its subject assignments
+ *       auto-removed, as {@code RemoveSubjectGroupClassServlet} does
+ *       (the {@code study_group} children have no status and become
+ *       unreachable while the parent is DELETED)</li>
  *   <li>{@code POST /…/group-classes/{groupClassId}/restore} —
- *       inverse</li>
+ *       inverse, bringing back the auto-removed assignments</li>
+ *   <li>{@code GET /…/group-classes/{groupClassId}/removal-impact} —
+ *       what a disable would remove, for the confirm dialog</li>
  * </ul>
  *
  * <p><b>Identifier choice</b>: legacy {@code study_group_class} has
@@ -551,14 +557,90 @@ public class GroupClassesApiController {
         gc.setUpdatedDate(new java.util.Date());
         sgcDao.update(gc);
 
+        int assignments = cascadeToAssignments(gc, target, me);
+
         writeLifecycleAudit(AuditTypeIds.GROUP_CLASS_LIFECYCLE_CHANGED, me, study, gc,
                 oldStatus, target, "group_class_" + operation);
 
-        LOG.info("Group class {}: studyOid={} id={} by user={}",
-                operation, studyOid, gc.getId(), me.getName());
+        LOG.info("Group class {}: studyOid={} id={} by user={} (subject assignments={})",
+                operation, studyOid, gc.getId(), me.getName(), assignments);
 
         StudyGroupDAO sgDao = new StudyGroupDAO(dataSource);
         return ResponseEntity.ok(toDto(gc, sgDao));
+    }
+
+    /**
+     * The subject-assignment cascade of legacy
+     * {@code RemoveSubjectGroupClassServlet} and
+     * {@code RestoreSubjectGroupClassServlet}. Removing the class marks each
+     * of its assignments that is not removed already
+     * {@link Status#AUTO_DELETED}; restoring it brings back exactly the
+     * auto-removed ones, so an assignment removed on its own stays removed.
+     *
+     * @return assignments whose status changed
+     */
+    private int cascadeToAssignments(StudyGroupClassBean gc, Status classStatus, UserAccountBean me) {
+        SubjectGroupMapDAO sgmDao = new SubjectGroupMapDAO(dataSource);
+        boolean removing = classStatus == Status.DELETED;
+        int changed = 0;
+        for (SubjectGroupMapBean sgm : sgmDao.findAllByStudyGroupClassId(gc.getId())) {
+            if (removing) {
+                if (Status.DELETED.equals(sgm.getStatus())) continue;
+                sgm.setStatus(Status.AUTO_DELETED);
+            } else {
+                if (!Status.AUTO_DELETED.equals(sgm.getStatus())) continue;
+                sgm.setStatus(Status.AVAILABLE);
+            }
+            sgm.setUpdater(me);
+            sgmDao.update(sgm);
+            changed++;
+        }
+        return changed;
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /{groupClassId}/removal-impact                                */
+    /*   What a disable would remove with the class, for the SPA's       */
+    /*   confirm dialog.                                                 */
+    /* ----------------------------------------------------------------- */
+
+    @GetMapping("/{groupClassId}/removal-impact")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = GroupClassRemovalImpactDto.class)))
+    public ResponseEntity<?> removalImpact(@PathVariable("studyOid") String studyOid,
+                                           @PathVariable("groupClassId") int groupClassId,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
+        StudyGroupClassBean gc = resolveGroupClass(new StudyGroupClassDAO(dataSource), study, groupClassId);
+        if (gc == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No group class with id " + groupClassId + " in study '" + studyOid + "'"));
+        }
+        // The rows cascadeToAssignments would mark auto-removed; status 5 is
+        // Status.DELETED.
+        String sql = """
+                SELECT
+                  (SELECT COUNT(*) FROM study_group sg WHERE sg.study_group_class_id = ?),
+                  (SELECT COUNT(*) FROM subject_group_map sgm
+                    WHERE sgm.study_group_class_id = ? AND sgm.status_id IS DISTINCT FROM 5)
+                """;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, gc.getId());
+            ps.setInt(2, gc.getId());
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return ResponseEntity.ok(new GroupClassRemovalImpactDto(rs.getInt(1), rs.getInt(2)));
+            }
+        } catch (SQLException e) {
+            LOG.error("Failed to count the removal impact of group class id={}: {}",
+                    groupClassId, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to count what removing the group class would remove — see server log."));
+        }
     }
 
     /* ----------------------------------------------------------------- */

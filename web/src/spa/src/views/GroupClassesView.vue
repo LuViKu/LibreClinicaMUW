@@ -108,9 +108,15 @@ async function submitCreate() {
 
 /* ----------------------------- Lifecycle -------------------------- */
 
+// Removal takes the class's subject assignments with it (as the legacy
+// removal does), so the prompt names them, with counts when the server
+// could supply them.
 async function onDisable(row: GroupClass) {
   if (!studyOid.value) return
-  if (!(await confirm({ message: t('groupClasses.disableConfirm', { name: row.name }), danger: true }))) return
+  const impact = await gc.removalImpact(studyOid.value, row.id)
+  let message = t('groupClasses.disableConfirm', { name: row.name })
+  if (impact) message += ' ' + t('groupClasses.disableImpact', { ...impact })
+  if (!(await confirm({ message, danger: true }))) return
   await gc.disable(studyOid.value, row.id)
 }
 
