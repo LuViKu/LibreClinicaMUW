@@ -283,4 +283,37 @@ describe('NewNoteDialog', () => {
 
     wrapper.unmount()
   })
+
+  it('puts a query on a field of the subject or a visit instead of an item', async () => {
+    const notes = useNotesStore()
+    const createNote = vi.fn().mockResolvedValue(makeNote({ id: 'dn-7', itemOid: '' }))
+    ;(notes as unknown as { createNote: typeof createNote }).createNote = createNote
+
+    const wrapper = mountDialog({
+      itemOid: '',
+      eventCrfOid: '',
+      itemLabel: 'Visit date',
+      field: { entityType: 'studyEvent', column: 'start_date', eventId: '11' },
+    })
+    await flushPromises()
+
+    const textarea = document.body.querySelector('#new-note-description') as HTMLTextAreaElement
+    textarea.value = 'Visit date differs from the source'
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+    getButton('Create query').click()
+    await flushPromises()
+
+    expect(createNote).toHaveBeenCalledWith({
+      subjectId: 'SUB-001',
+      itemOid: '',
+      eventCrfOid: '',
+      description: 'Visit date differs from the source',
+      type: 'query',
+      assignedTo: null,
+      field: { entityType: 'studyEvent', column: 'start_date', eventId: '11' },
+    })
+
+    wrapper.unmount()
+  })
 })

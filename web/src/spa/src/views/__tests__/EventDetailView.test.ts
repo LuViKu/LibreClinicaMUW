@@ -369,3 +369,59 @@ describe('EventDetailView for a Monitor', () => {
     expect(w.find('[data-test="event-detail-restore-crf"]').exists()).toBe(true)
   })
 })
+
+/*
+ * A query on the visit date, as the legacy visit page flags it: the date
+ * shows its open queries and raises a new one on this visit.
+ */
+describe('EventDetailView — queries on the visit date', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+    document.body.innerHTML = ''
+  })
+
+  function serve(subjectNotes: unknown[]) {
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.includes('/discrepancies')) return Promise.resolve(subjectNotes)
+      if (url.includes('/ingest/by-event/')) {
+        return Promise.resolve({ items: [], studyEventId: 42, pendingForSubject: 0, plan: [] })
+      }
+      if (url.includes('/users')) return Promise.resolve([])
+      return Promise.resolve(TWO_ROWS)
+    })
+  }
+
+  it('shows the open query on the date of this visit only', async () => {
+    const onDate = { id: '41', type: 'query', status: 'updated', subjectId: 'M-001', itemOid: '',
+      description: 'Date differs', entityType: 'studyEvent', column: 'start_date', entityId: '42' }
+    const onOtherVisit = { ...onDate, id: '43', entityId: '7' }
+    serve([onDate, onOtherVisit])
+    const w = await mountAt(42, { role: 'Monitor' })
+    expect(w.get('[data-testid="field-note-start_date"]').text()).toContain('1 open')
+  })
+
+  it('raises a query on the date of this visit', async () => {
+    serve([])
+    const w = await mountAt(42, { role: 'Monitor' })
+    apiPostMock.mockResolvedValueOnce({ id: '44', subjectId: 'M-001', itemOid: '' })
+
+    await w.get('[data-testid="field-note-start_date"]').trigger('click')
+    await flushPromises()
+    const text = document.body.querySelector('#new-note-description') as HTMLTextAreaElement
+    text.value = 'Visit date differs from the source'
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    ;(Array.from(document.body.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Create query') as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(apiPostMock).toHaveBeenCalledWith('/pages/api/v1/discrepancies', expect.objectContaining({
+      subjectId: 'M-001',
+      itemOid: '',
+      entityType: 'studyEvent',
+      column: 'start_date',
+      eventId: '42',
+    }))
+  })
+})

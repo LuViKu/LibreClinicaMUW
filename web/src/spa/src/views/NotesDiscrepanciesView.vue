@@ -91,6 +91,12 @@ function itemLink(n: DiscrepancyNote): string {
   return eventCrfLink(userRolesFromAuth(auth), n.eventCrfOid ?? '', n.itemOid)
 }
 
+/** What the note is on: its item, or the field of a note on a subject, visit or CRF header. */
+function targetLabel(n: DiscrepancyNote): string {
+  if (n.entityType && n.entityType !== 'itemData' && n.column) return t(`notes.field.${n.column}`)
+  return n.itemLabel || n.itemOid
+}
+
 function typeVariant(t: NoteType): 'danger' | 'warning' | 'neutral' | 'data-manager' {
   switch (t) {
     case 'query':             return 'danger'
@@ -323,7 +329,7 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
                   data-testid="notes-item-deeplink"
                 >{{ n.itemLabel || n.itemOid }}</RouterLink>
               </template>
-              <span v-else class="font-medium text-slate-800">{{ n.itemLabel || n.itemOid }}</span>
+              <span v-else class="font-medium text-slate-800" data-testid="notes-item-label">{{ targetLabel(n) }}</span>
               <span
                 v-if="n.itemLabel && n.itemOid"
                 class="ml-1 font-mono text-[10px] text-slate-400"

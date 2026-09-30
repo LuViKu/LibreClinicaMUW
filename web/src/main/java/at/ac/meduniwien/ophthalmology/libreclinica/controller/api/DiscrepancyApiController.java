@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubject
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -53,6 +54,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectD
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.discrepancy.DiscrepancyEmailNotifier;
 
@@ -93,7 +95,10 @@ import org.springframework.web.bind.annotation.RestController;
  *       controller resolves both to the matching {@code item_data}
  *       row inside the active study and stores it as
  *       {@code entity_type=itemData} with the corresponding
- *       {@code entity_id} via the discrepancy-note mapping table.</li>
+ *       {@code entity_id} via the discrepancy-note mapping table. With
+ *       {@code entityType} and {@code column} the note goes on a field of
+ *       the subject, the study subject, a visit or a CRF header instead
+ *       ({@link #FIELD_COLUMNS}), as legacy notes them.</li>
  * </ul>
  *
  * <p><strong>Authorization:</strong> chain-level
@@ -363,6 +368,13 @@ public class DiscrepancyApiController {
                         }
                     }
                 }
+            } else if (FIELD_COLUMNS.containsKey(n.getEntityType()) && n.getEntityId() > 0) {
+                FieldContext field = fieldContext(n.getEntityType(), n.getEntityId(), n.getColumn(),
+                        n.getStudyId());
+                subjectLabel = field.subjectLabel();
+                itemValue = field.value();
+                eventCrfOid = field.eventCrfOid();
+                eventName = field.eventName();
             }
 
             String statusStr = statusToSpa(n.getResolutionStatusId());
@@ -403,7 +415,10 @@ public class DiscrepancyApiController {
                     itemLabel,
                     itemValue,
                     eventCrfOid,
-                    eventName));
+                    eventName,
+                    n.getEntityType(),
+                    n.getColumn(),
+                    n.getEntityId() > 0 ? String.valueOf(n.getEntityId()) : null));
         }
 
         return out;
@@ -425,10 +440,37 @@ public class DiscrepancyApiController {
         if (body == null || body.description() == null || body.description().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("message", "'description' is required"));
         }
-        if (body.subjectId() == null || body.subjectId().isBlank()
-                || body.itemOid() == null || body.itemOid().isBlank()) {
+        // Legacy notes a field of the subject, the study subject, a visit or
+        // a CRF header as well as item data (CreateDiscrepancyNoteServlet).
+        String entityType = (body.entityType() == null || body.entityType().isBlank())
+                ? "itemData" : body.entityType().trim();
+        boolean onItem = "itemData".equals(entityType);
+        if (!onItem && !FIELD_COLUMNS.containsKey(entityType)) {
             return ResponseEntity.badRequest().body(Map.of("message",
-                    "'subjectId' and 'itemOid' are required to attach the query to a data point"));
+                    "Unknown entityType '" + entityType + "' — expected one of: itemData | "
+                            + String.join(" | ", FIELD_COLUMNS.keySet().stream().sorted().toList())));
+        }
+        if (!onItem && (body.column() == null
+                || !FIELD_COLUMNS.get(entityType).contains(body.column().trim()))) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Unknown column '" + body.column() + "' for entityType '" + entityType
+                            + "' — expected one of: "
+                            + String.join(" | ", FIELD_COLUMNS.get(entityType).stream().sorted().toList())));
+        }
+        if (body.subjectId() == null || body.subjectId().isBlank()
+                || (onItem && (body.itemOid() == null || body.itemOid().isBlank()))) {
+            return ResponseEntity.badRequest().body(Map.of("message", onItem
+                    ? "'subjectId' and 'itemOid' are required to attach the query to a data point"
+                    : "'subjectId' is required to attach the query to a data point"));
+        }
+        Integer parsedEventId = null;
+        if ("studyEvent".equals(entityType)) {
+            try {
+                parsedEventId = Integer.parseInt(body.eventId() == null ? "" : body.eventId().trim());
+            } catch (NumberFormatException nfe) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "A note on a visit needs its 'eventId'"));
+            }
         }
 
         // Phase E.6 dn — parse the optional eventCrfOid up-front so a
@@ -443,6 +485,10 @@ public class DiscrepancyApiController {
                 return ResponseEntity.badRequest().body(Map.of("message",
                         "Invalid eventCrfOid '" + body.eventCrfOid() + "'"));
             }
+        }
+        if ("eventCrf".equals(entityType) && parsedEventCrfId == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "A note on a CRF header needs its 'eventCrfOid'"));
         }
 
         // Type-name input validation runs up-front too so an unknown
@@ -482,42 +528,12 @@ public class DiscrepancyApiController {
                     "No study subject with label '" + body.subjectId() + "' in study '" + currentStudy.getOid() + "'"));
         }
 
-        ItemDAO itemDao = new ItemDAO(dataSource);
-        ArrayList<ItemBean> items = itemDao.findByOid(body.itemOid());
-        if (items == null || items.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message",
-                    "No item with oid '" + body.itemOid() + "'"));
-        }
-
-        // Phase E.6 dn — when the SPA pins an event_crf, scope the
-        // item_data lookup to that row so repeating events (same OID
-        // across V3 + V4 + V5 …) attach the note to the chosen visit
-        // and not the latest-inserted sibling. The shape-validity check
-        // ran earlier (parsedEventCrfId is non-null here iff the input
-        // was numeric); this block resolves the row + confirms it
-        // belongs to the located subject.
-        Integer scopedEventCrfId = null;
-        if (parsedEventCrfId != null) {
-            EventCRFDAO ecDao = new EventCRFDAO(dataSource);
-            EventCRFBean ec = (EventCRFBean) ecDao.findByPK(parsedEventCrfId);
-            if (ec == null || ec.getId() == 0) {
-                return ResponseEntity.status(404).body(Map.of("message",
-                        "No event_crf with id '" + body.eventCrfOid() + "'"));
-            }
-            if (ec.getStudySubjectId() != ss.getId()) {
-                return ResponseEntity.status(404).body(Map.of("message",
-                        "event_crf does not belong to subject '" + body.subjectId() + "'"));
-            }
-            scopedEventCrfId = parsedEventCrfId;
-        }
-
-        ItemDataBean target = (scopedEventCrfId == null)
-                ? locateItemData(items, ss.getId())
-                : locateItemData(items, ss.getId(), scopedEventCrfId);
-        if (target == null || target.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of("message",
-                    "No item_data row for subject '" + body.subjectId() + "' and item '" + body.itemOid() + "'"));
-        }
+        NoteTarget noteTarget = onItem
+                ? itemDataTarget(body, ss, parsedEventCrfId)
+                : fieldTarget(entityType, ss, parsedEventId, parsedEventCrfId, body);
+        if (noteTarget.refusal() != null) return noteTarget.refusal();
+        final int entityId = noteTarget.id();
+        final String column = onItem ? "value" : body.column().trim();
 
         // typeName + typeId resolved earlier; role gate runs here so
         // it can read currentRole (which was loaded for the visibility
@@ -532,7 +548,8 @@ public class DiscrepancyApiController {
         // Phase B2 (2026-06-10) — failure-audit wrap on the parent
         // discrepancy_note insert + mapping + (best-effort) email
         // notification. The row doesn't exist yet on entry so entity_id
-        // is the attached item_data id — the closest stable anchor for
+        // is the id of the row the note is on (item_data for an item) —
+        // the closest stable anchor for
         // post-mortem correlation. Email-failure exceptions are
         // intentionally caught downstream so an SMTP blip won't
         // surface as a 500 here; THIS wrap only fires when the DAO
@@ -544,9 +561,9 @@ public class DiscrepancyApiController {
             note.setDiscrepancyNoteTypeId(typeId);
             note.setResolutionStatusId(initialStatusId(typeId));
             note.setStudyId(currentStudy.getId());
-            note.setEntityType("itemData");
-            note.setEntityId(target.getId());
-            note.setColumn("value");
+            note.setEntityType(entityType);
+            note.setEntityId(entityId);
+            note.setColumn(column);
             note.setOwner(ub);
 
             Integer assignedUserId = resolveAssignee(body.assignedTo());
@@ -561,14 +578,14 @@ public class DiscrepancyApiController {
         final UserAccountBean ubRef = ub;
         final AddQueryRequest bodyRef = body;
         final String typeNameRef = typeName;
-        final int itemDataId = target.getId();
+        final String targetName = onItem ? body.itemOid() : entityType + "." + column;
         final String reqId = MDC.get("reqId");
         try {
             return FailureAuditTemplate.runOrAudit(
                     new AuditEventDAO(dataSource),
                     ub.getId(),
                     "discrepancy_note",
-                    itemDataId,
+                    entityId,
                     "CREATE_DISCREPANCY",
                     reqId,
                     () -> {
@@ -578,7 +595,7 @@ public class DiscrepancyApiController {
                         writeDnAudit(AUDIT_TYPE_DN_CREATED, ubRef, saved, "", "");
 
                         LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
-                                saved.getId(), typeNameRef, bodyRef.subjectId(), bodyRef.itemOid(),
+                                saved.getId(), typeNameRef, bodyRef.subjectId(), targetName,
                                 ubRef.getName());
 
                         // Phase E.6 — email notification on create
@@ -589,22 +606,32 @@ public class DiscrepancyApiController {
                             emailNotifier.notifyCreated(saved, assignee, studyRef);
                         }
 
+                        FieldContext field = onItem ? null
+                                : fieldContext(entityType, entityId, column, studyRef.getId());
                         DiscrepancyNoteDto dto = new DiscrepancyNoteDto(
                                 String.valueOf(saved.getId()),
                                 typeToSpa(saved.getDiscrepancyNoteTypeId()),
                                 statusToSpa(saved.getResolutionStatusId()),
                                 bodyRef.subjectId(),
-                                bodyRef.itemOid(),
+                                onItem ? bodyRef.itemOid() : "",
                                 saved.getDescription(),
                                 resolveUsername(assignedUserIdRef),
                                 0,
-                                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
+                                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
+                                List.of(),
+                                null,
+                                field == null ? null : field.value(),
+                                field == null ? null : field.eventCrfOid(),
+                                field == null ? null : field.eventName(),
+                                entityType,
+                                column,
+                                String.valueOf(entityId));
 
                         return ResponseEntity.status(201).body(dto);
                     });
         } catch (Exception e) {
             LOG.error("Discrepancy create failed for subject={} item={} user={}",
-                    body.subjectId(), body.itemOid(), ub.getName(), e);
+                    body.subjectId(), targetName, ub.getName(), e);
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to create discrepancy note — see server log."));
         }
@@ -867,7 +894,10 @@ public class DiscrepancyApiController {
                 parentDto.itemLabel(),
                 parentDto.itemValue(),
                 parentDto.eventCrfOid(),
-                parentDto.eventName());
+                parentDto.eventName(),
+                parentDto.entityType(),
+                parentDto.column(),
+                parentDto.entityId());
         return ResponseEntity.ok(hydrated);
     }
 
@@ -943,6 +973,13 @@ public class DiscrepancyApiController {
                     }
                 }
             }
+        } else if (FIELD_COLUMNS.containsKey(n.getEntityType()) && n.getEntityId() > 0) {
+            FieldContext field = fieldContext(n.getEntityType(), n.getEntityId(), n.getColumn(),
+                    n.getStudyId());
+            subjectLabel = field.subjectLabel();
+            itemValue = field.value();
+            eventCrfOid = field.eventCrfOid();
+            eventName = field.eventName();
         }
 
         String assignedTo = (n.getAssignedUser() != null && n.getAssignedUser().getId() > 0)
@@ -966,7 +1003,10 @@ public class DiscrepancyApiController {
                 itemLabel,
                 itemValue,
                 eventCrfOid,
-                eventName);
+                eventName,
+                n.getEntityType(),
+                n.getColumn(),
+                n.getEntityId() > 0 ? String.valueOf(n.getEntityId()) : null);
     }
 
     /**
@@ -1099,6 +1139,166 @@ public class DiscrepancyApiController {
             }
         }
         return null;
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* What a new note is on                                             */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * The fields a note may be on besides item data, by entity type, as
+     * legacy offers them: the subject's sex, date of birth and person ID
+     * and the enrolment date (viewStudySubject.jsp), a visit's location,
+     * start and end (enterDataForStudyEvent.jsp), a CRF's interview date
+     * and interviewer (CreateDiscrepancyNoteServlet).
+     */
+    static final Map<String, Set<String>> FIELD_COLUMNS = Map.of(
+            "subject", Set.of("gender", "date_of_birth", "unique_identifier"),
+            "studySub", Set.of("enrollment_date"),
+            "studyEvent", Set.of("location", "start_date", "end_date"),
+            "eventCrf", Set.of("date_interviewed", "interviewer_name"));
+
+    /** The row a new note is on, or the refusal when there is none. */
+    private record NoteTarget(int id, ResponseEntity<?> refusal) {
+        static NoteTarget notFound(String message) {
+            return new NoteTarget(0, ResponseEntity.status(404).body(Map.of("message", message)));
+        }
+    }
+
+    /**
+     * The item_data row an item note is on. When the SPA pins an
+     * event_crf, the lookup is scoped to that row, so repeating events
+     * (the same OID across V3, V4, V5 …) attach the note to the chosen
+     * visit and not to the latest sibling.
+     */
+    private NoteTarget itemDataTarget(AddQueryRequest body, StudySubjectBean ss, Integer parsedEventCrfId) {
+        ItemDAO itemDao = new ItemDAO(dataSource);
+        ArrayList<ItemBean> items = itemDao.findByOid(body.itemOid());
+        if (items == null || items.isEmpty()) {
+            return NoteTarget.notFound("No item with oid '" + body.itemOid() + "'");
+        }
+        if (parsedEventCrfId != null) {
+            EventCRFBean ec = (EventCRFBean) new EventCRFDAO(dataSource).findByPK(parsedEventCrfId);
+            if (ec == null || ec.getId() == 0) {
+                return NoteTarget.notFound("No event_crf with id '" + body.eventCrfOid() + "'");
+            }
+            if (ec.getStudySubjectId() != ss.getId()) {
+                return NoteTarget.notFound("event_crf does not belong to subject '" + body.subjectId() + "'");
+            }
+        }
+        ItemDataBean target = (parsedEventCrfId == null)
+                ? locateItemData(items, ss.getId())
+                : locateItemData(items, ss.getId(), parsedEventCrfId);
+        if (target == null || target.getId() == 0) {
+            return NoteTarget.notFound("No item_data row for subject '" + body.subjectId()
+                    + "' and item '" + body.itemOid() + "'");
+        }
+        return new NoteTarget(target.getId(), null);
+    }
+
+    /**
+     * The row a field note is on: the subject or study subject itself, or
+     * the visit or event CRF named in the request, which must be the
+     * subject's.
+     */
+    private NoteTarget fieldTarget(String entityType, StudySubjectBean ss, Integer eventId,
+                                   Integer eventCrfId, AddQueryRequest body) {
+        switch (entityType) {
+            case "subject":
+                return new NoteTarget(ss.getSubjectId(), null);
+            case "studySub":
+                return new NoteTarget(ss.getId(), null);
+            case "studyEvent": {
+                StudyEventBean se = (StudyEventBean) new StudyEventDAO(dataSource).findByPK(eventId);
+                if (se == null || se.getId() == 0 || se.getStudySubjectId() != ss.getId()) {
+                    return NoteTarget.notFound("No visit " + body.eventId() + " of subject '"
+                            + body.subjectId() + "'");
+                }
+                return new NoteTarget(se.getId(), null);
+            }
+            default: {
+                EventCRFBean ec = (EventCRFBean) new EventCRFDAO(dataSource).findByPK(eventCrfId);
+                if (ec == null || ec.getId() == 0 || ec.getStudySubjectId() != ss.getId()) {
+                    return NoteTarget.notFound("No event_crf " + body.eventCrfOid() + " of subject '"
+                            + body.subjectId() + "'");
+                }
+                return new NoteTarget(ec.getId(), null);
+            }
+        }
+    }
+
+    /**
+     * Where a note on a field sits, for the list and the thread: the
+     * subject's label, the field's current value, and the visit (with the
+     * event CRF for a CRF-header field).
+     */
+    private record FieldContext(String subjectLabel, String value, String eventCrfOid, String eventName) {}
+
+    private FieldContext fieldContext(String entityType, int entityId, String column, int studyId) {
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = null;
+        StudyEventBean se = null;
+        String value = null;
+        String eventCrfOid = null;
+        String field = column == null ? "" : column;
+        switch (entityType) {
+            case "subject" -> {
+                SubjectBean subject = new SubjectDAO(dataSource).findByPK(entityId);
+                if (subject != null && subject.getId() > 0) {
+                    ss = ssDao.findBySubjectIdAndStudy(entityId, (StudyBean) new StudyDAO(dataSource).findByPK(studyId));
+                    value = switch (field) {
+                        case "gender" -> Character.isLetter(subject.getGender())
+                                ? String.valueOf(subject.getGender()) : null;
+                        case "date_of_birth" -> isoDate(subject.getDateOfBirth());
+                        case "unique_identifier" -> subject.getUniqueIdentifier();
+                        default -> null;
+                    };
+                }
+            }
+            case "studySub" -> {
+                ss = (StudySubjectBean) ssDao.findByPK(entityId);
+                if (ss != null && "enrollment_date".equals(field)) value = isoDate(ss.getEnrollmentDate());
+            }
+            case "studyEvent" -> {
+                se = (StudyEventBean) new StudyEventDAO(dataSource).findByPK(entityId);
+                if (se != null && se.getId() > 0) {
+                    ss = (StudySubjectBean) ssDao.findByPK(se.getStudySubjectId());
+                    value = switch (field) {
+                        case "location" -> se.getLocation();
+                        case "start_date" -> isoDate(se.getDateStarted());
+                        case "end_date" -> isoDate(se.getDateEnded());
+                        default -> null;
+                    };
+                }
+            }
+            case "eventCrf" -> {
+                EventCRFBean ec = (EventCRFBean) new EventCRFDAO(dataSource).findByPK(entityId);
+                if (ec != null && ec.getId() > 0) {
+                    eventCrfOid = String.valueOf(ec.getId());
+                    ss = (StudySubjectBean) ssDao.findByPK(ec.getStudySubjectId());
+                    se = (StudyEventBean) new StudyEventDAO(dataSource).findByPK(ec.getStudyEventId());
+                    value = switch (field) {
+                        case "date_interviewed" -> isoDate(ec.getDateInterviewed());
+                        case "interviewer_name" -> ec.getInterviewerName();
+                        default -> null;
+                    };
+                }
+            }
+            default -> { }
+        }
+        String eventName = null;
+        if (se != null && se.getId() > 0) {
+            StudyEventDefinitionBean def = (StudyEventDefinitionBean)
+                    new StudyEventDefinitionDAO(dataSource).findByPK(se.getStudyEventDefinitionId());
+            if (def != null && def.getId() > 0) eventName = def.getName();
+        }
+        String label = (ss != null && ss.getId() > 0) ? nullToEmpty(ss.getLabel()) : "";
+        return new FieldContext(label, value, eventCrfOid, eventName);
+    }
+
+    /** A date column's day, as the JDBC driver read it (default zone). */
+    private static String isoDate(java.util.Date d) {
+        return d == null ? null : new java.sql.Date(d.getTime()).toLocalDate().toString();
     }
 
     private Integer resolveAssignee(String username) {
@@ -1285,6 +1485,11 @@ public class DiscrepancyApiController {
      * {@code "query"} when null/blank to preserve the M7 baseline
      * behaviour. {@code "reason-for-change"} is gated to DM/Admin per
      * {@link NoteTransitionMatrix#canCreateType(int, int)}.
+     *
+     * <p>A note on a field instead of an item names the field with
+     * {@code entityType} and {@code column} ({@link #FIELD_COLUMNS}); the
+     * subject is always {@code subjectId}, a visit is {@code eventId}, a
+     * CRF header is {@code eventCrfOid}, and {@code itemOid} stays empty.
      */
     public record AddQueryRequest(
             String subjectId,
@@ -1292,7 +1497,10 @@ public class DiscrepancyApiController {
             String description,
             String assignedTo,
             String type,
-            String eventCrfOid
+            String eventCrfOid,
+            String entityType,
+            String column,
+            String eventId
     ) {
         /** Backwards-compat ctor — defaults type to "query". */
         public AddQueryRequest(String subjectId, String itemOid,
@@ -1305,6 +1513,13 @@ public class DiscrepancyApiController {
                                String description, String assignedTo,
                                String type) {
             this(subjectId, itemOid, description, assignedTo, type, null);
+        }
+
+        /** A note on item data, the shape before field notes. */
+        public AddQueryRequest(String subjectId, String itemOid,
+                               String description, String assignedTo,
+                               String type, String eventCrfOid) {
+            this(subjectId, itemOid, description, assignedTo, type, eventCrfOid, null, null, null);
         }
     }
 }

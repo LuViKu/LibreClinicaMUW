@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import { apiDownload } from '@/api/download'
 import { useAuthStore } from './auth'
-import type { DiscrepancyNote, NoteStatus, NoteType, ThreadEntry } from '@/types/note'
+import type { DiscrepancyNote, NoteField, NoteStatus, NoteType, ThreadEntry } from '@/types/note'
 
 /**
  * Phase E.6 + E.4 M7 — Discrepancy-notes store.
@@ -127,6 +127,22 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  /**
+   * One subject's notes, for the subject and visit pages' field indicators.
+   * The list's own `rows` stay as they are; a failure reads as no notes.
+   */
+  async function notesForSubject(subjectId: string): Promise<DiscrepancyNote[]> {
+    try {
+      const found = await apiGet<DiscrepancyNote[]>(
+        `/pages/api/v1/discrepancies?subjectId=${encodeURIComponent(subjectId)}`,
+      )
+      return Array.isArray(found) ? found : []
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      return []
+    }
+  }
+
   async function add(input: {
     subjectId: string
     itemOid: string
@@ -149,6 +165,11 @@ export const useNotesStore = defineStore('notes', () => {
      * the option for non-permitted roles before the request fires.
      */
     type?: NoteType
+    /**
+     * A field of the subject, a visit or a CRF header instead of an item;
+     * `itemOid` is then empty. See {@link NoteField}.
+     */
+    field?: NoteField | null
   }): Promise<DiscrepancyNote | null> {
     isSubmitting.value = true
     error.value = null
@@ -156,10 +177,13 @@ export const useNotesStore = defineStore('notes', () => {
       const created = await apiPost<DiscrepancyNote>('/pages/api/v1/discrepancies', {
         subjectId: input.subjectId,
         itemOid: input.itemOid,
-        eventCrfOid: input.eventCrfOid ?? null,
+        eventCrfOid: input.field?.eventCrfOid ?? input.eventCrfOid ?? null,
         description: input.description,
         assignedTo: input.assignedTo ?? null,
         type: input.type ?? 'query',
+        ...(input.field
+          ? { entityType: input.field.entityType, column: input.field.column, eventId: input.field.eventId ?? null }
+          : {}),
       })
       rows.value = [created, ...rows.value]
       return created
@@ -441,6 +465,7 @@ export const useNotesStore = defineStore('notes', () => {
     loadingThreadId,
     clearFilters,
     load,
+    notesForSubject,
     add,
     // Phase E.6 DN — alias for `add` used by the new dialog/wiring slices
     // (NewNoteDialog, CrfEntryView). Keeps the legacy `add` callsites

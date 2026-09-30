@@ -45,7 +45,7 @@ vi.mock('@/api/client', () => {
 })
 
 // eslint-disable-next-line import/first
-import { apiGet } from '@/api/client'
+import { apiGet, apiPost } from '@/api/client'
 // eslint-disable-next-line import/first
 import SubjectDetailView from '@/views/SubjectDetailView.vue'
 // eslint-disable-next-line import/first
@@ -54,6 +54,8 @@ import { useAuthStore } from '@/stores/auth'
 import type { SubjectDetail, EyeTransitionDto, StudyEye } from '@/types/subject'
 // eslint-disable-next-line import/first
 import type { UserRole } from '@/types/auth'
+// eslint-disable-next-line import/first
+import type { DiscrepancyNote } from '@/types/note'
 // eslint-disable-next-line import/first
 import enMessages from '@/locales/en.json'
 
@@ -156,6 +158,8 @@ interface MountOptions {
   detail?: SubjectDetail
   activeStudyOid?: string
   activeStudyName?: string
+  /** The subject's notes, as GET /discrepancies?subjectId= returns them. */
+  subjectNotes?: DiscrepancyNote[]
 }
 
 async function mountAt(options: MountOptions = {}) {
@@ -199,8 +203,10 @@ async function mountAt(options: MountOptions = {}) {
   // Default tail-fallback for the ModalityBaselinesPanel's own apiGet
   // calls (one per mounted panel). The subject detail itself is fixed
   // via mockResolvedValueOnce so it stays the first response regardless
-  // of how many baseline calls land afterwards.
-  apiGetMock.mockResolvedValue([])
+  // of how many baseline calls land afterwards. The subject's notes,
+  // for the field indicators, come from options.subjectNotes.
+  apiGetMock.mockImplementation((url: string) => Promise.resolve(
+    String(url).includes('/pages/api/v1/discrepancies') ? (options.subjectNotes ?? []) : []))
   apiGetMock.mockResolvedValueOnce(detail)
 
   const wrapper = mount(SubjectDetailView, {
@@ -473,5 +479,51 @@ describe('SubjectDetailView — a Monitor views read-only', () => {
   it('still offers an Investigator the sign link', async () => {
     const w = await mountAt({ role: 'Investigator', detail: makeDetail() })
     expect(w.find('a[href="/subjects/M-001/sign"]').exists()).toBe(true)
+  })
+})
+
+/*
+ * Queries on the subject's own fields, as legacy View Subject flags them:
+ * each field shows its open queries and raises a new one on the field.
+ */
+describe("SubjectDetailView — queries on the subject's fields", () => {
+  const genderQuery = {
+    id: '31', type: 'query', status: 'new', subjectId: 'M-001', itemOid: '',
+    description: 'Sex differs from the source', assignedTo: null, daysOpen: 1,
+    lastActivityAt: '2026-09-29T08:00:00Z', thread: [], itemLabel: null, itemValue: 'f',
+    eventCrfOid: null, eventName: null, entityType: 'subject', column: 'gender', entityId: '1',
+  } as DiscrepancyNote
+
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    vi.mocked(apiPost).mockReset()
+    document.body.innerHTML = ''
+  })
+
+  it('shows the open query on the sex, and raises one on the year of birth', async () => {
+    const w = await mountAt({ role: 'Monitor', subjectNotes: [genderQuery] })
+    await flushPromises()
+
+    expect(w.get('[data-testid="field-note-gender"]').text()).toContain('1 open')
+
+    vi.mocked(apiPost).mockResolvedValueOnce({ ...genderQuery, id: '32', column: 'date_of_birth' })
+    await w.get('[data-testid="field-note-date_of_birth"]').trigger('click')
+    await flushPromises()
+    const text = document.body.querySelector('#new-note-description') as HTMLTextAreaElement
+    text.value = 'Year of birth differs from the source'
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    const create = Array.from(document.body.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Create query') as HTMLButtonElement
+    create.click()
+    await flushPromises()
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/discrepancies', expect.objectContaining({
+      subjectId: 'M-001',
+      itemOid: '',
+      description: 'Year of birth differs from the source',
+      entityType: 'subject',
+      column: 'date_of_birth',
+    }))
   })
 })

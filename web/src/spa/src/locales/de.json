@@ -693,6 +693,17 @@
     },
     "email": {
       "subjectAssigned": "Rückfrage zugewiesen"
+    },
+    "field": {
+      "gender": "Geschlecht",
+      "date_of_birth": "Geburtsdatum",
+      "unique_identifier": "Personen-ID",
+      "enrollment_date": "Einschlussdatum",
+      "location": "Ort der Visite",
+      "start_date": "Visitendatum",
+      "end_date": "Ende der Visite",
+      "date_interviewed": "Datum des Interviews",
+      "interviewer_name": "Interviewer"
     }
   },
   "auditLog": {

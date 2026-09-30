@@ -204,6 +204,19 @@ describe('NotesDiscrepanciesView — notes-deeplink row context', () => {
     expect(href).toBe('/event-crfs/1/readonly?item=I_HEIGHT_CM')
   })
 
+  it('names the field of a query on a visit, with the visit and the value', async () => {
+    const onVisitDate: DiscrepancyNote = {
+      ...NOTE, itemOid: '', itemLabel: null, itemValue: '2020-10-06', eventCrfOid: null,
+      entityType: 'studyEvent', column: 'start_date', entityId: '1',
+    }
+    const w = await mountWith([onVisitDate])
+    expect(w.find('[data-testid="notes-item-deeplink"]').exists()).toBe(false)
+    const itemCell = w.get('[data-testid="notes-item-context"]').element.closest('td') as HTMLElement
+    expect(itemCell.textContent).toContain('Visit date')
+    expect(w.get('[data-testid="notes-item-context"]').text()).toContain('V1 Inclusion')
+    expect(w.get('[data-testid="notes-item-context"]').text()).toContain('2020-10-06')
+  })
+
   it('wraps the subject cell in a router-link to /subjects/<subjectId>', async () => {
     const w = await mountWith([NOTE])
     const link = w.find('[data-testid="notes-subject-link"]')

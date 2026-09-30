@@ -71,6 +71,18 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                        when unresolvable
  * @param eventName       {@code study_event_definition.name} (e.g.
  *                        "V1 Inclusion"); null when unresolvable
+ * @param entityType      what the note is on, as legacy names it:
+ *                        {@code itemData}, or a field of a
+ *                        {@code subject}, {@code studySub},
+ *                        {@code studyEvent} or {@code eventCrf}
+ * @param column          the field, for a note that is not on item data
+ *                        ({@code date_of_birth}, {@code start_date}, …);
+ *                        {@code value} for item data
+ * @param entityId        the id of the row the note is on (subject,
+ *                        study subject, study event, event CRF or item
+ *                        data), as a string; null when unresolvable. For
+ *                        a field note {@code itemValue} carries the
+ *                        field's current value
  */
 @Schema(name = "DiscrepancyNoteDto")
 public record DiscrepancyNoteDto(
@@ -87,8 +99,32 @@ public record DiscrepancyNoteDto(
         String itemLabel,
         String itemValue,
         String eventCrfOid,
-        String eventName
+        String eventName,
+        String entityType,
+        String column,
+        String entityId
 ) {
+    /** The notes-deeplink shape, for a note whose entity is not reported. */
+    public DiscrepancyNoteDto(
+            String id,
+            String type,
+            String status,
+            String subjectId,
+            String itemOid,
+            String description,
+            String assignedTo,
+            int daysOpen,
+            String lastActivityAt,
+            List<DiscrepancyThreadEntryDto> thread,
+            String itemLabel,
+            String itemValue,
+            String eventCrfOid,
+            String eventName) {
+        this(id, type, status, subjectId, itemOid, description,
+                assignedTo, daysOpen, lastActivityAt, thread,
+                itemLabel, itemValue, eventCrfOid, eventName, null, null, null);
+    }
+
     /** Convenience constructor — defaults {@code thread} to an empty list
      *  AND nulls the deeplink context fields. */
     public DiscrepancyNoteDto(

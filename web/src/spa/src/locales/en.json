@@ -693,6 +693,17 @@
     },
     "email": {
       "subjectAssigned": "Discrepancy assigned"
+    },
+    "field": {
+      "gender": "Sex",
+      "date_of_birth": "Date of birth",
+      "unique_identifier": "Person ID",
+      "enrollment_date": "Enrolment date",
+      "location": "Visit location",
+      "start_date": "Visit date",
+      "end_date": "Visit end",
+      "date_interviewed": "Interview date",
+      "interviewer_name": "Interviewer"
     }
   },
   "auditLog": {

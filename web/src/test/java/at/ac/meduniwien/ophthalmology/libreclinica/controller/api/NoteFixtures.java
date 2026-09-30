@@ -56,9 +56,16 @@ final class NoteFixtures {
                 description);
     }
 
+    /** The mapping tables, one per entity type a note can be on. */
+    static final String[] MAP_TABLES = {
+        "dn_item_data_map", "dn_subject_map", "dn_study_subject_map", "dn_study_event_map", "dn_event_crf_map",
+    };
+
     static void delete(DataSource dataSource, int noteId) throws SQLException {
-        ClinicalWriteFixtures.execute(dataSource,
-                "DELETE FROM dn_item_data_map WHERE discrepancy_note_id = " + noteId);
+        for (String map : MAP_TABLES) {
+            ClinicalWriteFixtures.execute(dataSource,
+                    "DELETE FROM " + map + " WHERE discrepancy_note_id = " + noteId);
+        }
         ClinicalWriteFixtures.execute(dataSource,
                 "DELETE FROM discrepancy_note WHERE parent_dn_id = " + noteId);
         ClinicalWriteFixtures.execute(dataSource,
