@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -172,6 +173,53 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(get("/api/v1/datasets/1/schedules")
                 .session(dataEntrySession()))
                 .andExpect(status().isForbidden());
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* PATCH /api/v1/schedules/{id}                                     */
+    /* ---------------------------------------------------------------- */
+
+    @Test
+    void updateScheduleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"enabled\":false}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateScheduleReturns403WithoutAnExportRole() throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"enabled\":false}")
+                .session(dataEntrySession()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateScheduleReturns400OnInvalidCron() throws Exception {
+        // The mocked registrar rejects every cron, as a real one rejects this.
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"cronExpression\":\"every night\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Invalid cron expression")));
+    }
+
+    @Test
+    void updateScheduleReturns400OnUnsupportedFormat() throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"format\":\"pdf\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Unsupported format 'pdf'")));
     }
 
     /* ---------------------------------------------------------------- */

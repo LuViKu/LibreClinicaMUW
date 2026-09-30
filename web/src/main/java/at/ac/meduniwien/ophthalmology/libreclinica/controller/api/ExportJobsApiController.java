@@ -31,6 +31,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -87,7 +88,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *   <li>{@code POST   /api/v1/datasets/{id}/schedules} — create a
  *       recurring schedule. Cron validated by
  *       {@link org.quartz.CronExpression}.</li>
- *   <li>{@code GET    /api/v1/datasets/{id}/schedules} — list active.</li>
+ *   <li>{@code GET    /api/v1/datasets/{id}/schedules} — list active
+ *       (paused ones included).</li>
+ *   <li>{@code PATCH  /api/v1/schedules/{id}} — change format, cron or
+ *       {@code enabled}; {@code enabled=false} pauses, {@code true}
+ *       resumes. Rescheduled before the response.</li>
  *   <li>{@code DELETE /api/v1/schedules/{id}} — soft-delete
  *       ({@code active=false}).</li>
  * </ul>
@@ -433,6 +438,89 @@ public class ExportJobsApiController {
         return ResponseEntity.ok(out);
     }
 
+    /**
+     * Change a schedule: its format, its cron, or whether it runs. A field
+     * left out of the body keeps its value, so {@code {"enabled":false}}
+     * pauses a schedule and {@code {"enabled":true}} resumes it.
+     *
+     * <p>The change reaches Quartz before the response, as create and
+     * delete do: an enabled schedule is registered again with its new cron
+     * and format, a paused one loses its trigger. The schedule keeps its
+     * creator, whose account the exports run as.
+     */
+    @PatchMapping("/schedules/{id}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = ExportScheduleDto.class)))
+    public ResponseEntity<?> updateSchedule(@PathVariable("id") long scheduleId,
+                                            @RequestBody(required = false) UpdateScheduleRequest body,
+                                            HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit exporting data."));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Request body is required"));
+        }
+        String format = null;
+        if (body.format() != null) {
+            format = body.format().trim().toLowerCase();
+            if (!SUPPORTED_FORMATS.contains(format)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Unsupported format '" + format + "' — accepted: " + SUPPORTED_FORMATS));
+            }
+        }
+        String cron = null;
+        if (body.cronExpression() != null) {
+            cron = body.cronExpression().trim();
+            if (!registrar.isValidCron(cron)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Invalid cron expression: '" + cron + "'"));
+            }
+        }
+
+        ExportScheduleDAO dao = new ExportScheduleDAO(dataSource);
+        ExportScheduleDAO.Row existing = dao.findById(scheduleId);
+        if (existing == null || !existing.active || !scheduleInActiveStudy(existing, session)) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No schedule with id " + scheduleId + " in the active study"));
+        }
+        if (format == null) format = existing.format;
+        if (cron == null) cron = existing.cronExpression;
+        boolean enabled = body.enabled() == null ? existing.enabled : body.enabled();
+
+        Instant nextRun = enabled ? registrar.computeNextFireTime(cron) : null;
+        if (!dao.update(scheduleId, format, cron, enabled, nextRun)) {
+            ExportScheduleDAO.Row now = dao.findById(scheduleId);
+            if (now == null || !now.active) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No schedule with id " + scheduleId + " in the active study"));
+            }
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to update schedule"));
+        }
+        try {
+            if (enabled) {
+                registrar.registerSchedule(scheduleId, existing.datasetId, format, cron);
+            } else {
+                registrar.unregisterSchedule(scheduleId);
+            }
+        } catch (Exception e) {
+            // The row is saved and is what a tick reads, so a stale trigger
+            // cannot run a paused schedule or the old format; the boot pass
+            // re-registers the cron on the next restart.
+            LOG.warn("Schedule id={} updated but Quartz rescheduling failed: {}",
+                    scheduleId, e.getMessage());
+        }
+        LOG.info("Update schedule: id={} format={} cron='{}' enabled={} by user={}",
+                scheduleId, format, cron, enabled, me.getName());
+        return ResponseEntity.ok(toScheduleDto(dao.findById(scheduleId)));
+    }
+
     @DeleteMapping("/schedules/{id}")
     @ApiResponse(responseCode = "204")
     public ResponseEntity<?> deleteSchedule(@PathVariable("id") long scheduleId,
@@ -541,6 +629,7 @@ public class ExportJobsApiController {
                 r.format,
                 r.cronExpression,
                 r.active,
+                r.enabled,
                 toIso(r.createdAt),
                 toIso(r.nextRunAt),
                 toIso(r.lastRunAt),
@@ -565,6 +654,9 @@ public class ExportJobsApiController {
     public record EnqueueExportRequest(String format) {}
 
     public record CreateScheduleRequest(String format, String cronExpression) {}
+
+    /** Body of {@code PATCH /schedules/{id}}: a null field keeps its value. */
+    public record UpdateScheduleRequest(String format, String cronExpression, Boolean enabled) {}
 
     /** Wire shape of {@code GET /exports?...}. */
     public record ExportJobListResponse(

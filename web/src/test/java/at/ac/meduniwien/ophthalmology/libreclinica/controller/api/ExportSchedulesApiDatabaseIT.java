@@ -9,9 +9,13 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,13 +29,27 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
+import javax.sql.DataSource;
+
+import com.fasterxml.jackson.databind.json.JsonMapper;
+
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.quartz.CronTrigger;
+import org.quartz.JobDataMap;
+import org.quartz.JobExecutionContext;
 import org.quartz.Scheduler;
+import org.quartz.SchedulerContext;
+import org.quartz.Trigger;
+import org.quartz.TriggerKey;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -71,6 +89,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int OTHER_STUDY_ID = 2;
     private static final String CRON = "0 0 3 ? * MON";
     private static final String SCHEDULE_GROUP = "exportSchedule";
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private static Scheduler SCHEDULER;
 
@@ -185,6 +204,67 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         return SCHEDULER.getTriggerKeys(GroupMatcher.triggerGroupEquals(SCHEDULE_GROUP)).size();
     }
 
+    private Trigger triggerOf(long scheduleId) throws Exception {
+        return SCHEDULER.getTrigger(
+                TriggerKey.triggerKey("exportScheduleTrigger-" + scheduleId, SCHEDULE_GROUP));
+    }
+
+    private long createViaApi(DatasetBean ds) throws Exception {
+        String json = mockMvc().perform(post("/api/v1/datasets/" + ds.getId() + "/schedules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"odm\",\"cronExpression\":\"" + CRON + "\"}")
+                        .session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JSON.readTree(json).get("id").asLong();
+    }
+
+    /** The job data a schedule's trigger carries, as registered for it. */
+    private JobDataMap jobDataOf(long scheduleId) throws Exception {
+        return SCHEDULER.getJobDetail(triggerOf(scheduleId).getJobKey()).getJobDataMap();
+    }
+
+    /** Job data as a trigger registered before an edit or pause would still carry it. */
+    private static JobDataMap staleJobData(long scheduleId, int datasetId, String format) {
+        JobDataMap data = new JobDataMap();
+        data.put(ExportScheduleRegistrar.ScheduleFireJob.KEY_SCHEDULE_ID, scheduleId);
+        data.put(ExportScheduleRegistrar.ScheduleFireJob.KEY_DATASET_ID, datasetId);
+        data.put(ExportScheduleRegistrar.ScheduleFireJob.KEY_FORMAT, format);
+        data.put(ExportScheduleRegistrar.ScheduleFireJob.KEY_CRON, CRON);
+        return data;
+    }
+
+    /**
+     * One tick of a schedule, through the Quartz job Quartz would run, with
+     * the job data given. Returns the id of the newest export job of the
+     * dataset afterwards, or -1 when the tick queued none.
+     */
+    private long tick(JobDataMap data, int datasetId) throws Exception {
+        long before = count("SELECT count(*) FROM export_job WHERE dataset_id = " + datasetId);
+        ApplicationContext app = Mockito.mock(ApplicationContext.class);
+        Mockito.when(app.getBean("dataSource", DataSource.class)).thenReturn(DATA_SOURCE);
+        SchedulerContext schedulerContext = new SchedulerContext();
+        schedulerContext.put("applicationContext", app);
+        Scheduler scheduler = Mockito.mock(Scheduler.class);
+        Mockito.when(scheduler.getContext()).thenReturn(schedulerContext);
+        JobExecutionContext ctx = Mockito.mock(JobExecutionContext.class);
+        Mockito.when(ctx.getMergedJobDataMap()).thenReturn(data);
+        Mockito.when(ctx.getScheduler()).thenReturn(scheduler);
+
+        new ExportScheduleRegistrar.ScheduleFireJob().execute(ctx);
+
+        if (count("SELECT count(*) FROM export_job WHERE dataset_id = " + datasetId) == before) return -1L;
+        return count("SELECT max(id) FROM export_job WHERE dataset_id = " + datasetId);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions patchSchedule(long id, String body, int studyId)
+            throws Exception {
+        return mockMvc().perform(patch("/api/v1/schedules/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .session(dataManagerIn(studyId)));
+    }
+
     /* ---------------- study scope ---------------- */
 
     @Test
@@ -251,6 +331,110 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         mockMvc().perform(delete("/api/v1/schedules/" + id).session(dataManagerIn(STUDY_ID)))
                 .andExpect(status().isNoContent());
         assertTrue(!new ExportScheduleDAO(DATA_SOURCE).findById(id).active);
+    }
+
+    @Test
+    void aScheduleIsEditedOnlyFromTheDatasetsStudy() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createViaApi(ds);
+
+        patchSchedule(id, "{\"cronExpression\":\"0 30 4 * * ?\"}", OTHER_STUDY_ID)
+                .andExpect(status().isNotFound());
+        assertEquals(CRON, new ExportScheduleDAO(DATA_SOURCE).findById(id).cronExpression);
+        assertEquals(CRON, ((CronTrigger) triggerOf(id)).getCronExpression(),
+                "a refused edit leaves the trigger as it was");
+
+        patchSchedule(id, "{\"cronExpression\":\"0 30 4 * * ?\"}", STUDY_ID)
+                .andExpect(status().isOk());
+    }
+
+    /* ---------------- edit, pause, resume ---------------- */
+
+    @Test
+    void anEditReachesTheSchedulerAtOnce() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createViaApi(ds);
+        assertEquals(CRON, ((CronTrigger) triggerOf(id)).getCronExpression());
+
+        String newCron = "0 30 4 * * ?";
+        patchSchedule(id, "{\"format\":\"csv\",\"cronExpression\":\"" + newCron + "\"}", STUDY_ID)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.format").value("csv"))
+                .andExpect(jsonPath("$.cronExpression").value(newCron))
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.nextRunAt").isNotEmpty());
+
+        ExportScheduleDAO.Row row = new ExportScheduleDAO(DATA_SOURCE).findById(id);
+        assertEquals("csv", row.format);
+        assertEquals(newCron, row.cronExpression);
+        CronTrigger trigger = (CronTrigger) triggerOf(id);
+        assertEquals(newCron, trigger.getCronExpression(), "rescheduled without a restart");
+        assertEquals("csv", SCHEDULER.getJobDetail(trigger.getJobKey()).getJobDataMap().getString("format"));
+
+        long jobId = tick(jobDataOf(id), ds.getId());
+        assertEquals("csv", new ExportJobDAO(DATA_SOURCE).findById(jobId).format,
+                "the next tick exports the new format");
+        // and so does a tick of a trigger the edit did not replace
+        long staleJobId = tick(staleJobData(id, ds.getId(), "odm"), ds.getId());
+        assertEquals("csv", new ExportJobDAO(DATA_SOURCE).findById(staleJobId).format,
+                "the schedule row, not the trigger's job data, says what to export");
+    }
+
+    @Test
+    void aPausedScheduleHasNoTriggerAndQueuesNothingUntilResumed() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createViaApi(ds);
+
+        patchSchedule(id, "{\"enabled\":false}", STUDY_ID)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.nextRunAt").value(Matchers.nullValue()));
+        assertNull(triggerOf(id), "a paused schedule has no trigger");
+        mockMvc().perform(get("/api/v1/datasets/" + ds.getId() + "/schedules").session(dataManagerIn(STUDY_ID)))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].enabled").value(false));
+        // a tick from a trigger that outlived the pause queues nothing
+        assertEquals(-1L, tick(staleJobData(id, ds.getId(), "odm"), ds.getId()));
+        assertEquals(0, count("SELECT count(*) FROM export_job WHERE dataset_id = " + ds.getId()));
+
+        patchSchedule(id, "{\"enabled\":true}", STUDY_ID)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.nextRunAt").isNotEmpty());
+        assertEquals(CRON, ((CronTrigger) triggerOf(id)).getCronExpression(), "resumed with its own cron");
+        assertTrue(tick(jobDataOf(id), ds.getId()) > 0, "a resumed schedule queues again");
+    }
+
+    @Test
+    void aPausedScheduleStaysPausedAcrossARestart() throws Exception {
+        DatasetBean ds = persistDataset();
+        long running = createViaApi(ds);
+        long paused = createViaApi(ds);
+        patchSchedule(paused, "{\"enabled\":false}", STUDY_ID).andExpect(status().isOk());
+
+        // A restart with an empty store, except for a trigger that a failed
+        // pause left behind in it.
+        SCHEDULER.clear();
+        new ExportScheduleRegistrar(SCHEDULER, DATA_SOURCE).registerSchedule(paused, ds.getId(), "odm", CRON);
+
+        ApplicationContext root = Mockito.mock(ApplicationContext.class); // no parent: the root context
+        new ExportScheduleRegistrar(SCHEDULER, DATA_SOURCE).onApplicationEvent(new ContextRefreshedEvent(root));
+
+        assertNotNull(triggerOf(running), "an enabled schedule is registered at boot");
+        assertNull(triggerOf(paused), "a paused one is not, and loses a stale trigger");
+    }
+
+    @Test
+    void aDeletedScheduleCannotBeEditedBackToLife() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createViaApi(ds);
+        mockMvc().perform(delete("/api/v1/schedules/" + id).session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isNoContent());
+
+        patchSchedule(id, "{\"enabled\":true}", STUDY_ID).andExpect(status().isNotFound());
+        assertNull(triggerOf(id));
+        assertFalse(new ExportScheduleDAO(DATA_SOURCE).findById(id).active);
     }
 
     @Test
