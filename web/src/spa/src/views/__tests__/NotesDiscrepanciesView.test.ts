@@ -83,6 +83,11 @@ function makeRouter() {
         name: 'crf-entry',
         component: { template: '<div />' },
       },
+      {
+        path: '/event-crfs/:eventCrfOid/readonly',
+        name: 'crf-readonly',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
@@ -191,6 +196,12 @@ describe('NotesDiscrepanciesView — notes-deeplink row context', () => {
     const href = link.attributes('href') ?? ''
     expect(href).toContain('/event-crfs/1')
     expect(href).toContain('item=I_HEIGHT_CM')
+  })
+
+  it('opens the CRF read-only, at the item, for a Monitor', async () => {
+    const w = await mountWith([NOTE], 'Monitor')
+    const href = w.find('[data-testid="notes-item-deeplink"]').attributes('href') ?? ''
+    expect(href).toBe('/event-crfs/1/readonly?item=I_HEIGHT_CM')
   })
 
   it('wraps the subject cell in a router-link to /subjects/<subjectId>', async () => {

@@ -435,3 +435,43 @@ describe('SubjectDetailView — Schedule-event button role gating (multi-role pe
     expect(w.find('[data-testid="schedule-event-button"]').exists()).toBe(false)
   })
 })
+
+/*
+ * A Monitor now reaches this page (legacy View Subject lets a monitor look)
+ * and must find nothing here the API would refuse them.
+ */
+describe('SubjectDetailView — a Monitor views read-only', () => {
+  const visit = {
+    eventDefinitionOid: 'SE_V1',
+    eventId: '11',
+    label: 'V1 Inclusion',
+    dateStart: '2026-05-02',
+    location: null,
+    status: 'complete',
+    dataEntryStage: 'complete',
+    openQueries: 0,
+  }
+
+  beforeEach(() => {
+    apiGetMock.mockReset()
+  })
+
+  it('offers no sign, edit, schedule, lock or remove, and no visit actions', async () => {
+    const w = await mountAt({
+      role: 'Monitor',
+      detail: makeDetail({ events: [visit] } as unknown as Partial<SubjectDetail>),
+    })
+
+    expect(w.find('a[href="/subjects/M-001/sign"]').exists()).toBe(false)
+    expect(w.findAll('button').map((b) => b.text())).not.toContain('Edit')
+    expect(w.find('[data-testid="schedule-event-button"]').exists()).toBe(false)
+    expect(w.find('[data-testid="event-row-more-menu"]').exists()).toBe(false)
+    // The visit still opens, to look.
+    expect(w.find('[data-testid="event-row-open-link"]').attributes('href')).toBe('/events/11')
+  })
+
+  it('still offers an Investigator the sign link', async () => {
+    const w = await mountAt({ role: 'Investigator', detail: makeDetail() })
+    expect(w.find('a[href="/subjects/M-001/sign"]').exists()).toBe(true)
+  })
+})

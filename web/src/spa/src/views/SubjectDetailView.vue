@@ -108,6 +108,13 @@ const canEdit = computed(() => {
 })
 
 /*
+ * Signing a subject follows EventEditAuthorization#roleMayEdit on the
+ * server: the roles that edit a subject. A Monitor, who views this page
+ * read-only, gets no "Sign subject" link.
+ */
+const canSignSubject = canEdit
+
+/*
  * 2026-07-13 — cohort-edit gate (trial blinding, defense-in-depth).
  * The group-assignment dialog is the surface that moves a subject
  * between the AI_SHOWN / AI_HIDDEN arms, so restrict the affordance to
@@ -1566,7 +1573,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               :subject-label="subject.id"
             />
             <RouterLink
-              v-if="!subject.signed"
+              v-if="!subject.signed && canSignSubject"
               :to="`/subjects/${subject.id}/sign`"
               class="px-4 py-2 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 inline-flex items-center gap-1.5 font-medium"
             >

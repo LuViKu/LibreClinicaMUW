@@ -10,7 +10,11 @@ import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 import { useEventDetailStore } from '@/stores/eventDetail'
 import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
+import { useAuthStore } from '@/stores/auth'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { canBindVisitImages, canEditEvent, canEnterData, canRestoreCrf } from '@/types/event'
+import { eventCrfLink } from '@/lib/crfLink'
+import { userRolesFromAuth } from '@/router'
 import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
 import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
@@ -31,6 +35,20 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEventDetailStore()
+const auth = useAuthStore()
+
+/*
+ * What the signed-in role may change here, as the API decides it. A Monitor
+ * opens this page to look: no start, no completion, no restore, no image
+ * removal, and the CRF opens read-only.
+ */
+const role = computed(() => auth.user?.role ?? null)
+const mayEnterData = computed(() => !!role.value && canEnterData(role.value))
+const mayRestoreCrf = computed(() => !!role.value && canRestoreCrf(role.value))
+const mayBindImages = computed(() => !!role.value && canBindVisitImages(role.value))
+function crfLink(eventCrfOid: string): string {
+  return eventCrfLink(userRolesFromAuth(auth), eventCrfOid)
+}
 // Pluggable study-module SPI — event-detail panels slot.
 // Each entry's optional predicate(ctx) is evaluated with the current
 // event ref so a module can gate per-event without hard-coded
@@ -139,6 +157,8 @@ const markEventCompleteError = ref<string | null>(null)
 const canMarkEventComplete = computed(() => {
   const s = event.value?.status
   if (!s) return false
+  // Completing a visit edits it: EventEditAuthorization decides who may.
+  if (!role.value || !canEditEvent(role.value, s)) return false
   // Terminal-ish states block: completed (already), signed, locked,
   // stopped, skipped. Anything else may be marked complete by the
   // operator (matches the role gate on the PUT endpoint).
@@ -432,6 +452,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               <td class="px-5 py-2.5 text-right text-xs">
                 <template v-if="crf.status === 'removed'">
                   <button
+                    v-if="mayRestoreCrf"
                     type="button"
                     class="text-emerald-700 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed"
                     :disabled="restoringEventCrfId === crf.eventCrfId || store.isRestoringCrf"
@@ -447,7 +468,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 </template>
                 <RouterLink
                   v-else-if="crf.eventCrfOid"
-                  :to="`/event-crfs/${crf.eventCrfOid}`"
+                  :to="crfLink(crf.eventCrfOid)"
                   class="text-muw-blue hover:underline"
                   data-test="event-detail-open-crf"
                 >
@@ -455,6 +476,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 </RouterLink>
                 <template v-else>
                   <button
+                    v-if="mayEnterData"
                     type="button"
                     class="text-muw-blue hover:underline disabled:text-slate-400 disabled:cursor-not-allowed"
                     :disabled="startingEdcId === crf.eventDefinitionCrfId || store.isStartingCrf"
@@ -579,7 +601,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                       · {{ sourceLabel(img) }}
                     </div>
                     <button
-                      v-if="!visitSealed"
+                      v-if="!visitSealed && mayBindImages"
                       type="button"
                       class="mt-1 text-[11px] text-slate-500 hover:text-rose-700 underline"
                       :data-testid="`event-detail-image-remove-${img.id}`"

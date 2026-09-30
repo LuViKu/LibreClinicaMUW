@@ -258,10 +258,13 @@ const router = createRouter({
       meta: { title: 'Sign Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
+      // A Monitor views the subject read-only, as legacy View Subject lets a
+      // monitor; the page hides every change the role cannot make, and the
+      // API refuses them.
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: ['Investigator', 'Administrator'] as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used

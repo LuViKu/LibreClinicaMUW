@@ -13,6 +13,8 @@ import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
 import type { DiscrepancyNote, NoteStatus, NoteType } from '@/types/note'
 import { canRespondToNote, canResolveNote, canCloseNote, canReopenNote } from '@/types/note'
+import { eventCrfLink } from '@/lib/crfLink'
+import { userRolesFromAuth } from '@/router'
 
 const { t } = useI18n()
 const notes = useNotesStore()
@@ -82,6 +84,11 @@ async function submitComposer() {
 /** Bridge for the role enum — auth.user is null while bootstrap is in flight. */
 function currentRole(): import('@/types/auth').UserRole | null {
   return auth.user?.role ?? null
+}
+
+/** The CRF a note is on, at the item: read-only for a Monitor. */
+function itemLink(n: DiscrepancyNote): string {
+  return eventCrfLink(userRolesFromAuth(auth), n.eventCrfOid ?? '', n.itemOid)
 }
 
 function typeVariant(t: NoteType): 'danger' | 'warning' | 'neutral' | 'data-manager' {
@@ -311,7 +318,7 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
             <td class="px-3 py-2 align-top">
               <template v-if="n.eventCrfOid && n.itemOid">
                 <RouterLink
-                  :to="`/event-crfs/${encodeURIComponent(n.eventCrfOid)}?item=${encodeURIComponent(n.itemOid)}`"
+                  :to="itemLink(n)"
                   class="font-medium text-slate-800 hover:text-muw-blue hover:underline"
                   data-testid="notes-item-deeplink"
                 >{{ n.itemLabel || n.itemOid }}</RouterLink>
