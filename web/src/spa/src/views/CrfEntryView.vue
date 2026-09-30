@@ -29,6 +29,7 @@ import NoteThreadDialog from '@/components/NoteThreadDialog.vue'
 import CrfPrefillModal from '@/components/CrfPrefillModal.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 import { parseShowWhen } from '@/components/showWhen'
+import { mapTristateReasonSiblings } from '@/components/tristateReason'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -271,7 +272,8 @@ function showError(item: CrfItem): string | null {
  * here so the section loop only sees the top-level items.
  */
 function topLevelItems(items: CrfItem[]): CrfItem[] {
-  return items.filter((it) => !it.groupOid)
+  const consumed = tristatePairing.value.consumedReasonOids
+  return items.filter((it) => !it.groupOid && !consumed.has(it.oid))
 }
 
 /**
@@ -313,6 +315,43 @@ function hasBilateralRow(rows: BilateralRow[]): boolean {
   return rows.some(
     (r) => r.kind === 'bilateral' || r.kind === 'both-eyes' || r.kind === 'compound-bilateral',
   )
+}
+
+/**
+ * TRISTATE_REASON pairing for this CRF.
+ *
+ * <p>A tri-state parent renders its reason textarea inline, but the text is
+ * persisted on a separate sibling item. Two things follow, and neither
+ * happened before: what is typed inline has to be routed onto that sibling,
+ * and the sibling must not ALSO be rendered as a row of its own, or the
+ * operator is shown the same reason field twice and only the second one
+ * saves.
+ */
+const tristatePairing = computed(() =>
+  mapTristateReasonSiblings(
+    Object.values(itemsByOid.value),
+    (oid) => ophthCatalog.entryForOid(oid),
+  ),
+)
+
+/** The sibling OID carrying the reason for a tri-state parent, if any. */
+function reasonOidFor(item: CrfItem): string | null {
+  return tristatePairing.value.reasonOidByParentOid.get(item.oid) ?? null
+}
+
+/** Reason text currently stored on the sibling, for the inline textarea. */
+function reasonTextFor(item: CrfItem): string {
+  const oid = reasonOidFor(item)
+  if (oid == null) return ''
+  const v = store.values[oid]
+  return v == null ? '' : String(v)
+}
+
+/** Persist what was typed inline onto the sibling reason item. */
+function onTristateReason(item: CrfItem, text: string): void {
+  const oid = reasonOidFor(item)
+  if (oid == null) return
+  store.setValue(oid, text)
 }
 
 /** Lookup table the {@code RepeatingGroupSection} consumes. */
@@ -866,7 +905,9 @@ function onPrefillApply(values: Record<string, string>) {
                   :file-extensions="store.entry?.fileExtensions ?? ''"
                   :suppress-label="true"
                   :parent-value="parentValueFor(row.item)"
+                  :tristate-reason="reasonTextFor(row.item)"
                   @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
+                  @update:tristate-reason="(v: string) => onTristateReason(row.item, v)"
                   @upload-file="(f: File) => onUploadFile(row.item.oid, f)"
                   @clear-file="() => onClearFile(row.item.oid)"
                   @report-validation="onReportValidation"
@@ -902,7 +943,9 @@ function onPrefillApply(values: Record<string, string>) {
                     :suppress-label="true"
                     :parent-value="parentValueFor(item)"
                     :data-bilateral-side="side"
+                    :tristate-reason="reasonTextFor(item)"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @update:tristate-reason="(v: string) => onTristateReason(item, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
                     @clear-file="() => onClearFile(item.oid)"
                     @report-validation="onReportValidation"
@@ -931,7 +974,9 @@ function onPrefillApply(values: Record<string, string>) {
                     :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                     :file-extensions="store.entry?.fileExtensions ?? ''"
                     :suppress-label="true"
+                    :tristate-reason="reasonTextFor(item)"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @update:tristate-reason="(v: string) => onTristateReason(item, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
                     @clear-file="() => onClearFile(item.oid)"
                     @report-validation="onReportValidation"
@@ -959,7 +1004,9 @@ function onPrefillApply(values: Record<string, string>) {
                     :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                     :file-extensions="store.entry?.fileExtensions ?? ''"
                     :suppress-label="true"
+                    :tristate-reason="reasonTextFor(item)"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @update:tristate-reason="(v: string) => onTristateReason(item, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
                     @clear-file="() => onClearFile(item.oid)"
                     @report-validation="onReportValidation"
