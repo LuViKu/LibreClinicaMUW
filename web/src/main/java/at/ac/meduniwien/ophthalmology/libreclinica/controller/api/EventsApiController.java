@@ -1339,7 +1339,8 @@ public class EventsApiController {
                                 it.setStatus(Status.AUTO_DELETED);
                                 it.setUpdater(ubRef);
                                 it.setUpdatedDate(new java.util.Date());
-                                idDao.update(it);
+                                // Not update(): that clears the value's provenance.
+                                idDao.updateStatusOnly(it);
                             }
                         }
 
@@ -1713,7 +1714,8 @@ public class EventsApiController {
                 it.setStatus(Status.AVAILABLE);
                 it.setUpdater(ub);
                 it.setUpdatedDate(new java.util.Date());
-                idDao.update(it);
+                // Not update(): that clears the value's provenance.
+                idDao.updateStatusOnly(it);
             }
         }
 

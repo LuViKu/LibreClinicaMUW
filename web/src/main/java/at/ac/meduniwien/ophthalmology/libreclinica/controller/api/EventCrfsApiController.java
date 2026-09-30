@@ -1597,7 +1597,8 @@ public class EventCrfsApiController {
             it.setStatus(Status.AVAILABLE);
             it.setUpdater(currentUser);
             it.setUpdatedDate(new Date());
-            idDao.update(it);
+            // Not update(): that clears the value's provenance.
+            idDao.updateStatusOnly(it);
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);

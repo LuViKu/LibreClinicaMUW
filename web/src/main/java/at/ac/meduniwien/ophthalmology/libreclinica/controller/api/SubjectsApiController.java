@@ -2492,7 +2492,8 @@ public class SubjectsApiController {
                     it.setStatus(cascadeChildStatus);
                     it.setUpdater(currentUser);
                     it.setUpdatedDate(now);
-                    itemDataDAO.update(it);
+                    // Not update(): that clears the value's provenance.
+                    itemDataDAO.updateStatusOnly(it);
                 }
             }
         }
