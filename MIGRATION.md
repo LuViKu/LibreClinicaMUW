@@ -1,8 +1,9 @@
 # LibreClinica MUW — Backend Modernization Plan
 
 **Owner:** Department of Ophthalmology and Optometry, Medical University of Vienna
-**Status (last refreshed 2026-07-09):** **Phases 0, A, B (all sub-phases), C, D-Sec closed.** Phase D-Libs and Phase E remain active. The 1.5.0-beta.4-muw release (lc-develop @ `06509d24d`, 2026-06-26) shipped on the modernised stack: JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + JSP/JSTL Jakarta taglibs + bcrypt + reverse-proxy SSO + `at.ac.meduniwien.ophthalmology.libreclinica.*` package namespace. **Post-B runtime bump (2026-07-09, heading to 1.5.0-beta.5-muw): lc-develop now builds + runs on JDK 25 (latest LTS)** — Temurin 25 across the Dockerfile builder + runtime and all CI workflows, with `maven.compiler.release=25`. Two Java-25 CI breakages were fixed in the same pass: `maven-dependency-plugin`'s ASM was pinned to 9.10.1 (so `analyze-only` can read class-file major version 69), and `liquibase-core` was re-pinned to 3.6.3 (Liquibase 4.x drops the heritage `modifyColumn` change type used by `migration/2.5/changeLogCreateTables.xml`; the 4.x upgrade + CVE-2022-0839 remain deferred to Phase D-Libs).
+**Status (last refreshed 2026-07-09):** **Phases 0, A, B (all sub-phases), C, D-Sec closed.** Phase D-Libs and Phase E remain active. The 1.5.0-beta.4-muw release (lc-develop @ `06509d24d`, 2026-06-26) shipped on the modernised stack: JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + JSP/JSTL Jakarta taglibs + bcrypt + reverse-proxy SSO + `at.ac.meduniwien.ophthalmology.libreclinica.*` package namespace. **Post-B runtime bump (2026-07-09, heading to 1.5.0-beta.5-muw): lc-develop now builds + runs on JDK 25 (latest LTS)** — Temurin 25 across the Dockerfile builder + runtime and all CI workflows, with `maven-compiler-plugin` `<source>`/`<target>` 25. Two Java-25 CI breakages were fixed in the same pass: `maven-dependency-plugin`'s ASM was pinned to 9.10.1 (so `analyze-only` can read class-file major version 69), and `liquibase-core` was re-pinned to 3.6.3 (Liquibase 4.x drops the heritage `modifyColumn` change type used by `migration/2.5/changeLogCreateTables.xml`; the 4.x upgrade + CVE-2022-0839 remain deferred to Phase D-Libs).
 **Target:** Spring Boot 3 + Java 21 → 25 (LTS) + Jakarta EE + library replacement (full re-platform)
+**Refresh 2026-09-30:** Spring Boot 3.5 reached open-source end of life on 2026-06-30 (3.5.16, which this project runs, was the last free release), and PostgreSQL 14 reaches end of life on 2026-11-12 — see [DR-037](docs/development/modernization/decision-record.md) and the risk register. The legacy JSP layer is being retired in full under [DR-018](docs/development/modernization/decision-record.md), sequenced by the [JSP retirement plan](docs/development/modernization/jsp-retirement-plan-2026-09-30.md).
 **Posture:** **Released, independent fork — no upstream sync** (as of 2026-06-26; supersedes the original Eclipse-Transformer cherry-pick framing in DR-003). The fork no longer merges or cherry-picks from upstream LibreClinica.
 **Estimated effort (original 2026-05-28):** 12–18 months · 2–3 developers FTE. **Actual to date:** ~5 weeks of one-developer-with-AI-assist (2026-05-28 → 2026-06-28) to ship Phases 0 + A + B + C + D-Sec to lc-develop. The remaining D-Libs + Phase E work is incremental + parallelisable.
 
@@ -46,16 +47,16 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 
 ---
 
-## Phase status — quick read (last refreshed 2026-06-28)
+## Phase status — quick read (last refreshed 2026-09-30)
 
 | Phase | Sub-phases | Status | Closing landmark |
 |---|---|---|---|
 | **0 — Safety net** | 0.1 test triage, 0.2 schema bootstrap, 0.3 IT harness, 0.4 Castor characterisation | **✅ Closed** | 63 IT pass on `postgres:14-alpine`, CI integration-tests job green |
 | **A — Spring 5.x hardening** | A.1 low-risk bumps, A.2 framework bumps | **✅ Closed** | 63 IT pass on Spring 5.3.39 + Sec 5.8.16 + Hibernate 5.6.15 |
-| **B — Java 21 + Spring 6 + Jakarta cliff** | B.0 Castor characterisation, B.1 JDK 21 baseline, B.2 Eclipse Transformer dry run, B.3 Castor → JAXB (DR-008/009), B.4 jmesa eviction (9 cohort PRs), B.5 Hibernate 6 + EntityManagerFactory wiring, B.6 Tomcat 10, B.7 JSP/JSTL Jakarta taglibs, B.10 Joda-Time → java.time, B.11 Java package rename to MUW namespace (DR-010), B.12 reconciliation sweep | **✅ Closed** | lc-develop runs JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10. **The 2026-06-28 heritage-debt audit (PR #263) revealed the supposed B.5 DAO cliff was a phantom — the 85 `@SuppressWarnings("deprecation")` markers in `dao/hibernate/` are stale; zero Hibernate 6 deprecation warnings surface when they're stripped.** |
-| **C — Spring Boot 3 conversion** | C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) | **✅ Closed** | XML application contexts retired; Boot autoconfiguration owns the lifecycle |
+| **B — Java 21 + Spring 6 + Jakarta cliff** | B.0 Castor characterisation, B.1 JDK 21 baseline, B.2 Eclipse Transformer dry run, B.3 Castor → JAXB (DR-006), B.4 jmesa eviction (9 cohort PRs), B.5 Hibernate 6 + EntityManagerFactory wiring, B.6 Tomcat 10, B.7 JSP/JSTL Jakarta taglibs, B.10 Joda-Time → java.time, B.11 Java package rename to MUW namespace (DR-010), B.12 reconciliation sweep | **✅ Closed** | lc-develop runs JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10. **The 2026-06-28 heritage-debt audit (PR #263) revealed the supposed B.5 DAO cliff was a phantom — the 85 `@SuppressWarnings("deprecation")` markers in `dao/hibernate/` are stale; zero Hibernate 6 deprecation warnings surface when they're stripped.** |
+| **C — Spring Boot 3 conversion** | C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) | **✅ Closed (boot conversion); residue open** | Boot autoconfiguration owns the lifecycle. **Not yet retired:** 10 XML application contexts (~120 DAO, service and security beans) are still imported by `LibreClinicaApplication`, `datainfo.properties` is still the configuration source, and the pool is DBCP 1.x (DR-011). Finishing this is plan item R4, after the legacy servlets that use those beans are deleted |
 | **D — Authentication modernization + library long-tail** | D-Sec (10/11 sub-phases: bcrypt + lazy rehash; institution-agnostic SSO via reverse-proxy pre-auth, DR-014/015; sso-deployment-guide.md cookbook draft); D-Libs (long tail untouched) | **⚠️ D-Sec substantially closed; D-Libs open** | D.10 e-sig re-auth scaffolded behind flag (legal ratification pending). Operator tasks remain: SAMLtest.id SP-metadata upload; MedUni Wien IT institutional SP registration for production cutover |
-| **E — UI modernization** | E.1 SPA scaffold, E.4 M1 foundations, E.5 follow-ups, E.6 study-nurse polish, E-hardening B integration | **🚧 Active** | Vue 3 + Vite + Tailwind v4 SPA shipped for nAMD workspace + retinal jobs + study-subject admin + SSO consent + study-module SPI. Continues incrementally; not on a fixed cliff |
+| **E — UI modernization** | E.1 SPA scaffold, E.4 M1 foundations, E.5 follow-ups, E.6 study-nurse polish, E-hardening B integration | **🚧 Active** | Vue 3 + Vite + Tailwind v4 SPA serves the Investigator, Monitor, Data Manager and Administrator workspaces and the imaging screens (the listing-page wave has shipped). The whole JSP layer is now being retired ([DR-018](docs/development/modernization/decision-record.md), [plan](docs/development/modernization/jsp-retirement-plan-2026-09-30.md)) |
 
 **Net:** the modernization spine (Phase 0 → D-Sec) is **done**. The release train is on lc-develop. The remaining work is **D-Libs** (parallel, no dependency cliff) and **incremental Phase E** (one feature wave at a time per clinical priority).
 
@@ -132,7 +133,7 @@ For per-phase detail and exit criteria, scroll to the corresponding `## Phase X`
 
   **Counts:** unit suite 33 → 39 (+4 password + 2 framework); integration suite 67 → 74 (+3 audit-user-login extensions; the +4 from ConfigurationDaoTest were counted in the earlier 63 → 67).
 
-  **What's NOT done (still in the 20-test backlog):** items 1–2, 4–20 inclusive. The Castor characterisation IT subclasses (one per ODM code path: `ODMMetadataRestResource`, `ImportCRFDataServlet`, `MetaDataCollector`, `AdminDataCollector`, rule XSLT) are scaffold-ready: pick a code path, subclass `CastorCharacterisationIT`, capture a golden on first run, commit. The [Phase B execution playbook §B.0](docs/development/modernization/archive/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) lists the five canonical code paths.
+  **Status of the 20-test backlog (checked 2026-09-30):** `core` has ITs for the login flow, study CRUD, subject enrolment, study-event scheduling and the audit trail (`core/src/test/.../it/`). CRF data entry, discrepancy notes, SDV, ODM import, randomization and study lock have no dedicated `core` IT; data entry, import and failure auditing are exercised by the `web` API database ITs instead. The original backlog note read: items 1–2, 4–20 not done. The Castor characterisation IT subclasses (one per ODM code path: `ODMMetadataRestResource`, `ImportCRFDataServlet`, `MetaDataCollector`, `AdminDataCollector`, rule XSLT) are scaffold-ready: pick a code path, subclass `CastorCharacterisationIT`, capture a golden on first run, commit. The [Phase B execution playbook §B.0](docs/development/modernization/archive/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) lists the five canonical code paths.
 
 #### Integration-test authoring pattern (post Phase 0.3)
 
@@ -301,7 +302,7 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ## Phase C — Spring Boot 3 conversion
 
-**Status:** ✅ **Closed.** C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) all shipped. XML application contexts retired in favour of Boot autoconfiguration. lc-develop ships as a Boot-bootable application (WAR delivery retained for Tomcat 10 compatibility; executable-JAR follow-up is optional).
+**Status:** ✅ **Closed** for the Boot conversion itself: C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) all shipped. **Correction (2026-09-30):** the XML application contexts were *not* all retired — 10 are still imported (~120 beans), and the checklist below is still open. The remainder is plan item R4. lc-develop ships as a Boot-bootable application (WAR delivery retained for Tomcat 10 compatibility; executable-JAR follow-up is optional).
 
 **Goal (original):** XML application contexts → Java config + Spring Boot autoconfiguration. WAR → executable JAR. Externalize config.
 **Timeline (original):** 2–3 months · **Actual:** ~2 weeks (2026-06-19 → 2026-06-26).
@@ -370,11 +371,11 @@ Independent of D-Sec; one PR per library. Pick up opportunistically.
 |---------|---------|-------------|-------------|-------|
 | Castor 1.4.1 | **REMOVED in B.3** | Jakarta JAXB 4 | (done) | Forced by Phase B. PRs #27/#28. |
 | iText | **2.1.2** | OpenPDF 1.4+ (LGPL fork) or PDFBox 3.x | PDF generation (audit logs, subject reports, CRF blank prints) | License-driven (post-2.1 iText is AGPL). OpenPDF is the drop-in replacement. See DR-007. |
-| Apache POI | 3.0.1 (legacy refs) | **POI 5.3+** | Excel CRF upload, Excel exports — `SpreadsheetPreview`, `SpreadSheetTable*`, `CreateCRFVersionServlet` | API changes: HSSFWorkbook → XSSF in places. |
-| Apache FOP | 1.0 (legacy refs) | **FOP 2.9+** | XSL-FO → PDF reports | |
-| Quartz | 2.2.3 baseline | **Quartz 2.5.0** | Scheduled jobs (cleanup, notifications, recurring exports) | Now pinned at Spring Boot's managed version after Phase C.5; verify before bumping. |
-| GWT-compiled menu widget | nocache.js at `web/src/main/webapp/gwt/GwtMenu/` | **removed** — vanilla HTML / framework-native nav | Top nav bar | GWT abandoned. Phase E may subsume. |
-| Prototype.js + Scriptaculous | 1.6 / unversioned | **removed** | ~20 JSP screens using `$()` / `Effect.*` | Rewrite in vanilla JS. (JMesa removed in B.4 so jQuery is no longer transitively available.) |
+| Apache POI | **5.4.1 — done** | POI 5.x | Excel CRF upload, Excel exports | Upgraded in `560b7ea72` and `5d302f1f1`; the HSSF importers work on 5.x. |
+| Apache FOP | **removed** | — | XSL-FO → PDF post-processor | Removed in `71035e89b` instead of upgraded: nothing shipped used it. |
+| Quartz | **2.3.2** (pinned in `pom.xml`, below Boot's managed 2.5.x) | **Quartz 2.5.x** | Scheduled jobs (cleanup, notifications, recurring exports) | Not on Boot's managed version, despite earlier notes; align with the Boot BOM (plan R4). |
+| GWT-compiled menu widget | referenced only by the unused SiteMesh `decorator.jsp` | **removed** — vanilla HTML / framework-native nav | Top nav bar | Dead code: SiteMesh is no longer a dependency. Deleted with the JSP retirement (plan R0.8). |
+| Prototype.js + Scriptaculous | 1.7.1 / unversioned | **removed** | ~20 JSP screens using `$()` / `Effect.*` | Rewrite in vanilla JS. (JMesa removed in B.4 so jQuery is no longer transitively available.) |
 | EhCache | **3.10.8** (already on EhCache 3 post B.5) | (stay) or Caffeine + JCache | Hibernate L2 cache | See DR-013. |
 | log4jdbc4 | 1.2 (abandoned) | log4jdbc-log4j2 1.16 or remove | SQL logging (dev profiles only) | Optional. |
 | JMesa | **REMOVED in B.4** | DataTables.net + vanilla JS | (done — 9 cohort PRs #32–#49) | Phase B eviction; ~5000 LOC retired. |
@@ -385,13 +386,13 @@ Independent of D-Sec; one PR per library. Pick up opportunistically.
 
 ## Phase E — UI modernization
 
-**Status (refreshed 2026-06-28):** 🚧 **Active.** Vue 3 + Vite + Tailwind v4 SPA scaffold landed; nAMD workspace, retinal-jobs admin, study-subject admin, SSO consent screens, study-module SPI, role-gated SPA application manual, and the IOWA layer-segmentation correction UI (PR #261) are all in production on lc-develop. Continues incrementally per clinical priority — no fixed exit cliff. See [`docs/development/modernization/ui-modernization-plan.md`](docs/development/modernization/ui-modernization-plan.md) for the longer roadmap (jmesa eviction is done — Phase B.4 took care of it; the listing-page SPA conversion is the next wave).
+**Status (refreshed 2026-06-28):** 🚧 **Active.** Vue 3 + Vite + Tailwind v4 SPA scaffold landed; nAMD workspace, retinal-jobs admin, study-subject admin, SSO consent screens, study-module SPI, role-gated SPA application manual, and the IOWA layer-segmentation correction UI (PR #261) are all in production on lc-develop. Continues incrementally per clinical priority — no fixed exit cliff. See the [Phase E execution playbook](docs/development/modernization/phase-e-execution-playbook.md) and the [JSP retirement plan](docs/development/modernization/jsp-retirement-plan-2026-09-30.md) for the roadmap.
 
 **Shipped sub-phases:** E.1 SPA scaffold, E.4 M1 foundations (Liquibase demo seed + /me + /studies + /me/activeStudy + SPA LoginView + study-picker), E.5 follow-ups (test infra + per-site auth + audit polish + new endpoint + codegen), E.6 study-nurse polish (PR #159 — modality CRUD + per-eye baselines + cross-study patient overview + Chart.js + reverse-transition IT), E-hardening B integration.
 
-**Open:** the listing-page wave (Subjects table, CRF datatables, dataset listings) — currently still JSP + DataTables.net post Phase B.4. SPA conversion is per-table, parallel-friendly, no shared cliff.
+**Listing-page wave:** shipped — `/subjects`, `/crf-library` and `/datasets` replace the JSP tables.
 
-Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (data entry, dashboards, subject/study lists, discrepancy review), JSP retained for admin/low-frequency screens. **Proposed change (2026-09-30, [DR-018](docs/development/modernization/decision-record.md)):** the JSP layer is retired in full, admin screens included, to reduce legacy code that can carry undetected vulnerabilities. A 2026-09-30 survey maps the 421 JSPs to 97 screens — 31 covered by the SPA, 18 partly, 48 not at all, plus 38 unreachable files; admin is the least covered area.
+Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (data entry, dashboards, subject/study lists, discrepancy review), JSP retained for admin/low-frequency screens. **Decided (2026-09-30, [DR-018](docs/development/modernization/decision-record.md), accepted):** the JSP layer is retired in full, admin screens included, to reduce legacy code that can carry undetected vulnerabilities. The sequence is in the [JSP retirement plan](docs/development/modernization/jsp-retirement-plan-2026-09-30.md). A 2026-09-30 survey maps the 421 JSPs to 97 screens — 31 covered by the SPA, 18 partly, 48 not at all, plus 38 unreachable files; admin is the least covered area.
 
 **Feature-parity baseline:** [`docs/development/modernization/phase-e/`](docs/development/modernization/phase-e/) — live-walkthrough catalogue of every UI feature reachable today as Investigator, Monitor, and Data Manager, with screenshots and servlet-to-class cross-references. The SPA rewrite must preserve every feature listed there unless explicitly retired.
 
@@ -416,7 +417,9 @@ For institutional teams running observational or longitudinal studies where each
 
 Continuous through all phases. Target end-of-Phase-B: 30% line coverage on `core/`. Critical-path integration tests are added in Phase 0 and grow throughout.
 
-### Upstream merge protocol (hard fork)
+### Upstream merge protocol (hard fork) — historical
+
+*Historical: the fork stopped syncing from upstream on 2026-06-26 (see the Posture line at the top and DR-003). Kept for reference only.*
 
 1. Watch `reliatec-gmbh/LibreClinica:lc-develop` for new commits.
 2. For each commit deemed relevant (bug fix, security patch):
@@ -430,8 +433,8 @@ Continuous through all phases. Target end-of-Phase-B: 30% line coverage on `core
 ### CVE / vulnerability monitoring
 
 - Dependabot weekly (configured in [.github/dependabot.yml](.github/dependabot.yml))
-- Trivy or `dependency-check-maven` in CI (Phase 0 follow-up)
-- GitHub Advanced Security CodeQL (Phase 0 follow-up)
+- Trivy filesystem scan in CI (`security.yml`); it fails the job on findings since 2026-09-30. OWASP dependency-check runs on schedule.
+- GitHub CodeQL (`codeql.yml`) on pushes to `lc-develop` and `main`; code-scanning alerts reflect `main`.
 
 ### Database migration discipline
 
@@ -452,7 +455,9 @@ Continuous through all phases. Target end-of-Phase-B: 30% line coverage on `core
 | R5 | First clinical trial goes live before Phase D ships, forcing freeze on modernization | L | M | Confirmed not a concern (2026-05-28 — no trial deadline) |
 | R6 | Upstream ReliaTec also migrates to Jakarta, making divergence un-necessary | L | L | Accept; we retain optionality to re-converge later |
 | R7 | Validation overhead per phase blows out timeline | M | M | Plan validation cycles per phase exit; not per dep bump |
-| R8 | GWT menu widget cannot be cleanly replaced without UI regressions | M | M | Replace before Phase E (during D); manual click-through QA |
+| R8 | GWT menu widget cannot be cleanly replaced without UI regressions | L | L | Moot: the widget is referenced only by the unused SiteMesh decorator; deleted with the JSP retirement |
+| R9 | Spring Boot 3.5 / Spring Framework 6.2 receive no more open-source fixes (OSS end of life 2026-06-30) | H | H | Plan the Boot 4 migration ([DR-037](docs/development/modernization/decision-record.md)); retiring the JSP layer first shrinks it; watch advisories for 3.5 meanwhile |
+| R10 | PostgreSQL 14 reaches end of life on 2026-11-12 | H | M | Move to PostgreSQL 17 before that date: dev/test/CI first, production by the upgrade runbook ([DR-037](docs/development/modernization/decision-record.md)) |
 
 ---
 
