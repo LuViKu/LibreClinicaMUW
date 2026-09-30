@@ -20,6 +20,12 @@ export type UserRole =
   | 'Administrator'
   | 'CRC' /* Clinical Research Coordinator */
 
+/**
+ * The two legacy data entry roles. The SPA neither grants nor migrates
+ * them; a binding that holds one says so in {@link RoleBinding.legacyRole}.
+ */
+export type LegacyRole = 'ra' | 'ra2'
+
 export type UserAuth =
   | 'sso'              // institutional SSO via reverse-proxy pre-auth
   | 'local'            // local username/password (legacy + sponsor monitors)
@@ -121,6 +127,12 @@ export interface RoleBinding {
   siteLabel: string | null
   role: UserRole
   active: boolean
+  /**
+   * Set when the binding holds a legacy data entry role. `role` then says
+   * Investigator, which the role is not: show this instead, and pass it in
+   * `legacyRoles` when saving the study's roles to keep it.
+   */
+  legacyRole?: LegacyRole | null
 }
 
 /**

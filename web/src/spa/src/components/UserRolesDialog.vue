@@ -12,7 +12,7 @@ import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStudiesStore } from '@/stores/adminStudies'
 import { useConfirm } from '@/composables/useConfirm'
-import type { RoleBinding, StudyUser, UserRole } from '@/types/user'
+import type { LegacyRole, RoleBinding, StudyUser, UserRole } from '@/types/user'
 
 /**
  * Phase E A7.5 (multi-role) — Manage role bindings for a single user.
@@ -35,6 +35,11 @@ import type { RoleBinding, StudyUser, UserRole } from '@/types/user'
  * page; `auth.availableStudies` holds only the studies the administrator
  * is bound to, which for an administrator without study roles is none.
  * Anyone else is refused by the server anyway, and keeps the old list.
+ *
+ * The legacy data entry roles `ra` and `ra2` cannot be granted here. The
+ * server projects them as Investigator; a binding that holds one says so
+ * in `legacyRole`, and the row shows it under its own name, ticked. Saving
+ * the row keeps it; unticking it and saving is what removes it.
  */
 interface Props {
   open: boolean
@@ -60,6 +65,8 @@ const isSubmitting = ref(false)
    persisted state). On Save we collapse local-edits[oid] back to
    undefined; on dirty change we lazily seed it. */
 const localEdits = ref<Record<string, UserRole[]>>({})
+/* The same for the legacy roles a study row keeps. */
+const legacyEdits = ref<Record<string, LegacyRole[]>>({})
 const rowErrors = ref<Record<string, string>>({})
 
 const addStudyOid = ref<string>('')
@@ -71,6 +78,7 @@ const addStudyError = ref<string | null>(null)
 const SELECTABLE_ROLES: UserRole[] = ['Investigator', 'CRC', 'Monitor', 'Data Manager']
 
 const roleLabel = (r: UserRole) => t(`manageUsers.role.${r}`)
+const legacyRoleLabel = (r: LegacyRole) => t(`manageUsers.roles.legacyRole.${r}`)
 
 async function refresh() {
   if (!props.user) return
@@ -79,6 +87,7 @@ async function refresh() {
   try {
     bindings.value = await users.listUserRoles(props.user.username)
     localEdits.value = {}
+    legacyEdits.value = {}
     rowErrors.value = {}
   } catch (e) {
     bindings.value = []
@@ -96,6 +105,7 @@ watch(
       loadError.value = null
       formError.value = null
       localEdits.value = {}
+      legacyEdits.value = {}
       rowErrors.value = {}
       addStudyOid.value = ''
       addStudyDraft.value = []
@@ -113,6 +123,8 @@ interface StudyGroup {
   studyLabel: string
   siteLabel: string | null
   roles: UserRole[]
+  /** Legacy data entry roles held on the study; never counted in `roles`. */
+  legacyRoles: LegacyRole[]
 }
 
 /** Group active bindings by study. Inactive (revoked) bindings are
@@ -121,16 +133,21 @@ const bindingsByStudy = computed<StudyGroup[]>(() => {
   const map = new Map<string, StudyGroup>()
   for (const b of bindings.value) {
     if (!b.active || !b.studyOid) continue
-    const existing = map.get(b.studyOid)
-    if (existing) {
-      if (!existing.roles.includes(b.role)) existing.roles.push(b.role)
-    } else {
-      map.set(b.studyOid, {
+    let group = map.get(b.studyOid)
+    if (!group) {
+      group = {
         studyOid: b.studyOid,
         studyLabel: b.studyName ?? b.studyOid,
         siteLabel: b.siteLabel,
-        roles: [b.role],
-      })
+        roles: [],
+        legacyRoles: [],
+      }
+      map.set(b.studyOid, group)
+    }
+    if (b.legacyRole) {
+      if (!group.legacyRoles.includes(b.legacyRole)) group.legacyRoles.push(b.legacyRole)
+    } else if (!group.roles.includes(b.role)) {
+      group.roles.push(b.role)
     }
   }
   return Array.from(map.values())
@@ -151,13 +168,40 @@ function selectedRolesFor(group: StudyGroup): UserRole[] {
   return edit ?? group.roles
 }
 
+/** The legacy roles a study row keeps — local edits win. */
+function keptLegacyFor(group: StudyGroup): LegacyRole[] {
+  return legacyEdits.value[group.studyOid] ?? group.legacyRoles
+}
+
+function sameRoles(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  const x = [...a].sort()
+  const y = [...b].sort()
+  return x.every((r, i) => r === y[i])
+}
+
 function isRowDirty(group: StudyGroup): boolean {
   const edit = localEdits.value[group.studyOid]
-  if (!edit) return false
-  if (edit.length !== group.roles.length) return true
-  const a = [...edit].sort()
-  const b = [...group.roles].sort()
-  return a.some((r, i) => r !== b[i])
+  const legacyEdit = legacyEdits.value[group.studyOid]
+  return (edit !== undefined && !sameRoles(edit, group.roles))
+    || (legacyEdit !== undefined && !sameRoles(legacyEdit, group.legacyRoles))
+}
+
+function toggleLegacy(group: StudyGroup, role: LegacyRole, checked: boolean) {
+  const current = keptLegacyFor(group)
+  const next = checked
+    ? Array.from(new Set([...current, role]))
+    : current.filter((r) => r !== role)
+  legacyEdits.value = { ...legacyEdits.value, [group.studyOid]: next }
+}
+
+function clearRowEdits(studyOid: string) {
+  const next = { ...localEdits.value }
+  delete next[studyOid]
+  localEdits.value = next
+  const nextLegacy = { ...legacyEdits.value }
+  delete nextLegacy[studyOid]
+  legacyEdits.value = nextLegacy
 }
 
 function toggleRole(group: StudyGroup, role: UserRole, checked: boolean) {
@@ -169,9 +213,7 @@ function toggleRole(group: StudyGroup, role: UserRole, checked: boolean) {
 }
 
 function cancelRowEdit(group: StudyGroup) {
-  const next = { ...localEdits.value }
-  delete next[group.studyOid]
-  localEdits.value = next
+  clearRowEdits(group.studyOid)
   const errs = { ...rowErrors.value }
   delete errs[group.studyOid]
   rowErrors.value = errs
@@ -180,15 +222,16 @@ function cancelRowEdit(group: StudyGroup) {
 async function onSaveRow(group: StudyGroup) {
   if (!props.user) return
   const rolesToSet = selectedRolesFor(group)
+  const legacyToKeep = keptLegacyFor(group)
+  // Nothing left takes the user off the study: ask first, as Remove study does.
+  if (rolesToSet.length === 0 && legacyToKeep.length === 0) return onRemoveStudy(group)
   isSubmitting.value = true
   formError.value = null
   try {
-    const result = await users.setStudyRoles(props.user.username, group.studyOid, rolesToSet)
+    const result = await users.setStudyRoles(props.user.username, group.studyOid, rolesToSet, legacyToKeep)
     if (result.ok) {
       bindings.value = result.bindings
-      const next = { ...localEdits.value }
-      delete next[group.studyOid]
-      localEdits.value = next
+      clearRowEdits(group.studyOid)
       const errs = { ...rowErrors.value }
       delete errs[group.studyOid]
       rowErrors.value = errs
@@ -210,12 +253,10 @@ async function onRemoveStudy(group: StudyGroup) {
   isSubmitting.value = true
   formError.value = null
   try {
-    const result = await users.setStudyRoles(props.user.username, group.studyOid, [])
+    const result = await users.setStudyRoles(props.user.username, group.studyOid, [], [])
     if (result.ok) {
       bindings.value = result.bindings
-      const next = { ...localEdits.value }
-      delete next[group.studyOid]
-      localEdits.value = next
+      clearRowEdits(group.studyOid)
     } else {
       rowErrors.value = { ...rowErrors.value, [group.studyOid]: result.message ?? t('manageUsers.roles.saveError') }
     }
@@ -334,7 +375,25 @@ function close() {
                   />
                   <span>{{ roleLabel(r) }}</span>
                 </label>
+                <label
+                  v-for="lr in group.legacyRoles"
+                  :key="lr"
+                  class="inline-flex items-center gap-1.5 text-sm text-slate-700"
+                  :data-testid="`legacy-role-${group.studyOid}-${lr}`"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="keptLegacyFor(group).includes(lr)"
+                    :disabled="isSubmitting"
+                    :aria-label="legacyRoleLabel(lr)"
+                    @change="(e) => toggleLegacy(group, lr, (e.target as HTMLInputElement).checked)"
+                  />
+                  <span>{{ legacyRoleLabel(lr) }}</span>
+                </label>
               </div>
+              <p v-if="group.legacyRoles.length > 0" class="mt-1 text-xs text-slate-500">
+                {{ t('manageUsers.roles.legacyHint') }}
+              </p>
             </fieldset>
             <div v-if="isRowDirty(group)" class="mt-2 flex items-center gap-2">
               <button

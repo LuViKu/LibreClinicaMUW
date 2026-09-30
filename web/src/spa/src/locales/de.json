@@ -2296,7 +2296,12 @@
       "rolesForNewStudy": "Rollen für die neue Studie",
       "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
       "savedToast": "Rollen aktualisiert.",
-      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert.",
+      "legacyRole": {
+        "ra": "Dateneingabe (Altrolle)",
+        "ra2": "Dateneingabe 2 (Altrolle)"
+      },
+      "legacyHint": "Altrolle: Beim Speichern der Zeile bleibt sie erhalten. Zum Entfernen abwählen; hier lässt sie sich nicht neu vergeben."
     },
     "userType": {
       "label": "Kontotyp",

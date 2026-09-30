@@ -1,7 +1,16 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
-import type { CreateUserInput, CreateUserResult, RoleBinding, StudyUser, UpdateUserInput, UserAuth, UserRole } from '@/types/user'
+import type {
+  CreateUserInput,
+  CreateUserResult,
+  LegacyRole,
+  RoleBinding,
+  StudyUser,
+  UpdateUserInput,
+  UserAuth,
+  UserRole,
+} from '@/types/user'
 
 /**
  * Phase E.7 + E.4 M12 — Study-users store.
@@ -417,11 +426,16 @@ export const useUsersStore = defineStore('users', () => {
    * Mirrors {@link grantRole}'s success-path refresh by calling
    * {@link listUserRoles} so the dialog's local cache picks up the new
    * binding set without an extra round-trip from the view layer.
+   *
+   * `legacyRoles` lists the legacy data entry roles the user holds on
+   * the study that are to stay; one left out is removed. Omit it only
+   * where the user holds none: the server then refuses rather than guess.
    */
   async function setStudyRoles(
     username: string,
     studyOid: string,
     roles: UserRole[],
+    legacyRoles?: LegacyRole[],
   ): Promise<
     | { ok: true; bindings: RoleBinding[] }
     | { ok: false; fieldErrors: Record<string, string>; message?: string }
@@ -429,7 +443,7 @@ export const useUsersStore = defineStore('users', () => {
     try {
       await apiPut<RoleBinding[]>(
         `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
-        { roles },
+        legacyRoles === undefined ? { roles } : { roles, legacyRoles },
       )
       const refreshed = await listUserRoles(username)
       return { ok: true, bindings: refreshed }
