@@ -53,6 +53,20 @@ class StudyTreeScopeDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    /** {study_event_definition_id, study_id} of some seeded definition of a top-level study. */
+    private static int[] anyEventDefinition() throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT sed.study_event_definition_id, s.study_id FROM study_event_definition sed"
+                     + " JOIN study s ON s.study_id = sed.study_id"
+                     + " WHERE COALESCE(s.parent_study_id, 0) = 0"
+                     + " ORDER BY sed.study_event_definition_id LIMIT 1");
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next(), "the demo seed has event definitions");
+            return new int[] {rs.getInt(1), rs.getInt(2)};
+        }
+    }
+
     /** A top-level study that is neither the given study nor its parent, or -1. */
     private static int unrelatedTopLevelStudy(int studyId, int parentId) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
@@ -102,6 +116,19 @@ class StudyTreeScopeDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertFalse(scope.containsStudySubject(owner, Integer.MAX_VALUE));
         assertNull(scope.crfIdOfEventCrf(Integer.MAX_VALUE));
         assertNull(scope.crfIdOfVersion(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void eventDefinitionsServeTheirStudyAndItsSites() throws Exception {
+        int[] def = anyEventDefinition();
+        int other = unrelatedTopLevelStudy(def[1], 0);
+        StudyTreeScope scope = new StudyTreeScope(DATA_SOURCE);
+
+        assertTrue(scope.containsEventDefinition(study(def[1], 0), def[0]));
+        assertTrue(scope.containsEventDefinition(study(Integer.MAX_VALUE, def[1]), def[0]),
+                "a session in one of the study's sites schedules from the parent's definitions");
+        assertFalse(scope.containsEventDefinition(other > 0 ? study(other, 0) : study(Integer.MAX_VALUE, 0), def[0]));
+        assertFalse(scope.containsEventDefinition(study(def[1], 0), Integer.MAX_VALUE));
     }
 
     @Test

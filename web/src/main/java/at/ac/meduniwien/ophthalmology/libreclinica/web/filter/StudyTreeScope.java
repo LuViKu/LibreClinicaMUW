@@ -22,12 +22,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 
 /**
  * "Does this record belong to the study the session is working in?" for the
- * heritage Spring MVC controllers that take record ids from the request.
+ * heritage controllers and servlets that take record ids from the request.
  *
  * <p>The rule is the legacy study tree, the same one those controllers use to
  * list records: a record belongs when its study subject sits in the current
  * study itself or — when the current study is a parent — in one of that
- * parent's sites. A session pointed at a site sees only that site.
+ * parent's sites. A session pointed at a site sees only that site. Event
+ * definitions are kept in the parent study and shared by its sites, so for them
+ * a site session counts as its parent.
  *
  * <p>Unknown ids and lookup failures answer "no": an unanswerable access
  * question is a refusal.
@@ -47,6 +49,11 @@ public class StudyTreeScope {
             "SELECT s.study_id, s.parent_study_id FROM study_subject ss"
             + " JOIN study s ON s.study_id = ss.study_id"
             + " WHERE ss.study_subject_id = ?";
+
+    private static final String EVENT_DEFINITION_STUDY =
+            "SELECT s.study_id, s.parent_study_id FROM study_event_definition sed"
+            + " JOIN study s ON s.study_id = sed.study_id"
+            + " WHERE sed.study_event_definition_id = ?";
 
     private static final String EVENT_CRF_CRF =
             "SELECT cv.crf_id FROM event_crf ec"
@@ -72,6 +79,14 @@ public class StudyTreeScope {
         return inTree(currentStudy, lookupStudy(STUDY_SUBJECT_STUDY, studySubjectId));
     }
 
+    /**
+     * True when the event definition is one {@code currentStudy} schedules from:
+     * one in the study's tree, with a site session counting as its parent.
+     */
+    public boolean containsEventDefinition(StudyBean currentStudy, int definitionId) {
+        return inTree(definitionStudy(currentStudy), lookupStudy(EVENT_DEFINITION_STUDY, definitionId));
+    }
+
     /** The CRF an event CRF's current version belongs to, or null when unknown. */
     public Integer crfIdOfEventCrf(int eventCrfId) {
         return lookupInt(EVENT_CRF_CRF, eventCrfId);
@@ -93,6 +108,16 @@ public class StudyTreeScope {
         }
         int current = currentStudy.getId();
         return owner[0] == current || owner[1] == current;
+    }
+
+    /** The study whose event definitions {@code currentStudy} uses: itself, or a site's parent. */
+    static StudyBean definitionStudy(StudyBean currentStudy) {
+        if (currentStudy == null || currentStudy.getParentStudyId() <= 0) {
+            return currentStudy;
+        }
+        StudyBean parent = new StudyBean();
+        parent.setId(currentStudy.getParentStudyId());
+        return parent;
     }
 
     private int[] lookupStudy(String sql, int id) {
