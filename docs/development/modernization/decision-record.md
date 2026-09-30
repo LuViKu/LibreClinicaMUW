@@ -876,7 +876,7 @@ The second problem is the one that decided the shape. A camera that sits in the 
 ## DR-018 — The legacy JSP layer is retired in full, admin screens included
 
 **Date:** 2026-09-30
-**Status:** Proposed. Becomes Accepted when the owner signs off the strategy in the Decision below; until then DR-004's scoping clause stands.
+**Status:** Accepted (2026-09-30), when the owner directed the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) to be implemented in full. DR-004's scoping clause is superseded from that date.
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Supersedes:** the scoping clause of [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes) — *"only the high-traffic SPA screens are within scope; admin screens remain on JSP."* DR-004's decision on clinical-use timing is untouched.
 **Related:** [DR-008](#dr-008--ui-framework-for-phase-e-vue-3) (Vue 3), [DR-019](#dr-019--phase-e-usability-acceptance-bar) (usability bar), Phase E execution playbook §E.11 (which reserved this number for the retirement strategy); the feature-parity catalogue in `docs/development/modernization/phase-e/` (`investigator-features.md`, `monitor-features.md`, `data-manager-features.md`).
@@ -914,12 +914,47 @@ A static coverage survey (2026-09-30) mapped the 421 JSPs to 97 screens: **31 co
 
 ---
 
+## DR-037 — Two support windows set the order of platform upgrades: PostgreSQL 17 now, Spring Boot 4 next
+
+**Date:** 2026-09-30
+**Status:** Accepted for PostgreSQL. Proposed for Spring Boot 4 (a plan, not started).
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** [DR-018](#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included) (JSP retirement), DR-011 (connection pool, open), the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) §9 (R4), the MIGRATION.md risk register (R9, R10), `docs/operations/postgresql-17-upgrade.md`.
+
+**Context.** Two support windows close around the platform.
+
+- **Spring Boot 3.5 and Spring Framework 6.2 reached open-source end of life on 2026-06-30.** Spring Boot 3.5.16, which this project runs, was the last free 3.5 release (2026-06-25). Spring Framework 6.2 and Spring Security 6.5 belong to the same generation: further fixes for them now come only with a commercial subscription (6.2 enterprise support runs to 2032). The current open-source line is Spring Boot 4 / Spring Framework 7 (7.0 is supported until 2027-07-31).
+- **PostgreSQL 14 reaches community end of life on 2026-11-12.** A major version is supported for five years, and 14 was released on 2021-09-30.
+
+The two are not alike. The database upgrade is operational and bounded: a dump and restore, with the application unchanged. The framework upgrade is a code migration across the whole application: Spring 7, Spring Security 7, Hibernate 7, Jakarta EE 11 / Tomcat 11 and Jackson 3. Much of the code it would touch is the legacy layer that DR-018 retires.
+
+**Decision.**
+
+1. **PostgreSQL 17 is the target major.**
+   - **Why 17, not 18:** 18's official image moves the data directory (`/var/lib/postgresql/18/docker`), which would change the production volume mapping for no benefit. 17 is supported until November 2029.
+   - **Dev, test and CI move now:** the compose `db` service, on a new volume so an old 14 volume is never opened by 17; the Testcontainers image; and the CI integration-test matrix, which runs 14 and 17 until production has moved.
+   - **Production moves by the upgrade runbook** (`docs/operations/postgresql-17-upgrade.md`, `deploy/pg-major-upgrade.sh`) before 2026-11-12. Its production overlay pins 14 explicitly until the runbook's last step, because a 17 image cannot start on a 14 data directory.
+2. **Spring Boot 4 is the next platform phase, sized by a spike first.**
+   - **The spike** measures what breaks when the build moves to Boot 4, and in which code: the legacy servlets, Jersey `web/restful`, the XML contexts, heritage DAOs, or the SPA-facing API.
+   - **Timing** depends on the spike. Every legacy file deleted under DR-018 before the migration is a file that never has to be ported. But DR-018's six-month bake-in keeps closed screens in the tree until mid-2027, and running an unsupported framework for that long is itself a risk.
+   - **Until the migration:** keep Dependabot, CodeQL and the blocking Trivy scan on. Review every Spring, Spring Security and Tomcat advisory for 3.5 / 6.2 / 6.5 applicability. Buy commercial support if an advisory lands that the open-source line will not fix.
+
+**Consequences.**
+
+- **Developers' dev databases start empty on the new volume;** Liquibase re-creates the schema and demo data. The runbook covers carrying data over.
+- **CI runs the integration tests twice** until production is on 17.
+- **The framework risk is accepted for now,** with compensating controls, and is tracked as risk R9 until the Boot 4 decision is taken.
+
+**Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started.
+
+---
+
 ## Future decisions (open)
 
+*Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains).*
+
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
-- DR-009 — Spring Authorization Server adoption (replaces deprecated Spring Security OAuth2 — superseded by DR-014's reverse-proxy SSO architecture; close as obsolete)
-- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP; decide during Phase C)
-- DR-012 — Date/time API: Joda-Time → `java.time` (recommend `java.time`; decide during Phase B)
-- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache (recommend Caffeine + JCache for Spring Boot 3 default; decide during Phase B)
+- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP). The app still runs on DBCP 1.x; plan item R4
+- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache. De facto EhCache 3 (3.10.8) since B.5; decide with the Spring Boot 4 migration (DR-037)
 - DR-016 — JIT vs LOOKUP_ONLY provisioning default for SSO users (decide during Phase D execution after MedUni Wien admin-process review)
 - DR-017 — Authority/role mapping from SSO attributes (institution-specific; document a mapping-rule format)
