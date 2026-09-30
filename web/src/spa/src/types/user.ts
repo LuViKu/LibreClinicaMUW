@@ -11,6 +11,7 @@
  */
 
 import type { components } from './api'
+import type { AccountType } from './auth'
 
 export type UserRole =
   | 'Investigator'
@@ -26,7 +27,10 @@ export type UserAuth =
   | 'pending-invite'   // user invited, not logged in yet
 
 export type StudyUser =
-  Omit<Required<components['schemas']['StudyUserDto']>, 'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'>
+  Omit<Required<components['schemas']['StudyUserDto']>,
+       'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'
+       | 'firstName' | 'lastName' | 'phone' | 'institutionalAffiliation' | 'userType'
+       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername'>
   & {
     role: UserRole
     auth: UserAuth
@@ -35,6 +39,22 @@ export type StudyUser =
     siteLabel: string | null
     /** ISO instant of last login, or null when never logged in. */
     lastLoginAt: string | null
+    /*
+     * The profile, account type and created / updated details: what the
+     * legacy View User page showed, and what the edit dialog pre-fills
+     * from and the access review reads. The server omits blank values.
+     */
+    firstName?: string | null
+    lastName?: string | null
+    phone?: string | null
+    institutionalAffiliation?: string | null
+    userType?: AccountType
+    /** ISO `yyyy-MM-dd`. */
+    createdDate?: string | null
+    ownerUsername?: string | null
+    /** ISO `yyyy-MM-dd`; absent when never updated. */
+    updatedDate?: string | null
+    updaterUsername?: string | null
   }
 
 /**
@@ -56,7 +76,7 @@ export interface CreateUserInput {
   phone?: string | null
   studyId: number
   role: UserRole
-  userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN'
+  userType?: AccountType
   userSource?: 'local'
   authtype?: string | null
   runWebservices?: boolean
@@ -108,7 +128,8 @@ export interface RoleBinding {
  *
  * Every field is optional: omit a field (or pass `undefined`) to
  * leave it unchanged. Pass an empty string only for fields that
- * legitimately may be cleared (currently `phone` and `authtype`).
+ * legitimately may be cleared (currently `phone` and `authtype`); the
+ * server refuses a blank name, e-mail or affiliation.
  *
  * `username` is NOT editable — identity rename is unsupported. Use
  * the A7.4 reset-password endpoint for credential changes and the
@@ -120,7 +141,7 @@ export interface UpdateUserInput {
   email?: string
   phone?: string
   institutionalAffiliation?: string
-  userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN'
+  userType?: AccountType
   authtype?: string
   runWebservices?: boolean
 }

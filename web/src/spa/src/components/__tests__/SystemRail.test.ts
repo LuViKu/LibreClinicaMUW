@@ -7,7 +7,7 @@ import SystemRail from '@/components/SystemRail.vue'
 import deMessages from '@/locales/de.json'
 
 /**
- * The System rail lists the six instance-level pages in a fixed order,
+ * The System rail lists the seven instance-level pages in a fixed order,
  * highlights the current one, and is a labelled landmark — the same contract
  * as the Studienaufbau rail, minus the study and role scoping it does not need.
  */
@@ -24,10 +24,19 @@ async function mountAt(path: string) {
 }
 
 describe('SystemRail', () => {
-  it('lists the six system pages, overview first, and marks the current one', async () => {
+  it('lists the seven system pages, overview first, and marks the current one', async () => {
     const w = await mountAt('/admin/config')
     const ids = w.findAll('a[data-testid^="rail-"]').map((a) => a.attributes('data-testid'))
-    expect(ids).toEqual(['rail-status', 'rail-audit', 'rail-login-history', 'rail-password-policy', 'rail-config', 'rail-jobs'])
+    expect(ids).toEqual([
+      'rail-status',
+      'rail-studies',
+      'rail-audit',
+      'rail-login-history',
+      'rail-password-policy',
+      'rail-config',
+      'rail-jobs',
+    ])
+    expect(w.get('[data-testid="rail-studies"]').attributes('href')).toBe('/admin/studies')
     expect(w.get('[data-testid="rail-config"]').attributes('aria-current')).toBe('page')
     expect(w.get('[data-testid="rail-status"]').attributes('aria-current')).toBeUndefined()
     expect(w.get('[data-testid="rail-audit"]').attributes('href')).toBe('/system/audit-log')

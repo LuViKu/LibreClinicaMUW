@@ -81,7 +81,9 @@ const ROLE_TO_VARIANT: Record<UserRole, RoleVariant> = {
   Administrator: 'administrator',
 }
 
-const canSwitchStudy = computed(() => (auth.availableStudies?.length ?? 0) > 1)
+// A system administrator can open any study (the picker lists them all),
+// whatever their own bindings.
+const canSwitchStudy = computed(() => auth.isSysAdmin || (auth.availableStudies?.length ?? 0) > 1)
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
 const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
 const displayName = computed(() => auth.user?.displayName || auth.user?.username || '')
@@ -320,6 +322,17 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     titleKey: 'home.administrator.createStudyTitle',
     descKey: 'home.administrator.createStudyDesc',
     allowedRoles: ['Administrator'],
+    group: 'platform',
+  },
+  {
+    // Every study on the platform; the list is for system administrators
+    // only, which the Administrator role alone does not tell apart.
+    id: 'admin-studies',
+    to: { name: 'admin-studies' },
+    titleKey: 'adminStudies.title',
+    descKey: 'home.administrator.adminStudiesDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => auth.isSysAdmin,
     group: 'platform',
   },
   {

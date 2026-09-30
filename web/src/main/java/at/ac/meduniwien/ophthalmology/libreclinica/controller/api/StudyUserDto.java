@@ -39,6 +39,22 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                     and LDAP users authenticate against the IdP /
  *                     directory so the SPA hides the Unlock affordance
  *                     for them.
+ * @param firstName    user_account.first_name; null when blank. Like the
+ *                     fields below, what the legacy View User page shows
+ *                     and the SPA's edit dialog and access review need.
+ * @param lastName     user_account.last_name; null when blank
+ * @param phone        user_account.phone; null when blank
+ * @param institutionalAffiliation user_account.institutional_affiliation;
+ *                     null when blank
+ * @param userType     {@code USER}, {@code SYSADMIN} (business
+ *                     administrator) or {@code TECHADMIN} (technical
+ *                     administrator), the vocabulary the create and edit
+ *                     endpoints take
+ * @param createdDate  ISO {@code yyyy-MM-dd} of user_account.date_created
+ * @param ownerUsername username of the account that created this one
+ * @param updatedDate  ISO {@code yyyy-MM-dd} of user_account.date_updated;
+ *                     null when never updated
+ * @param updaterUsername username of the account that last updated it
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(name = "StudyUserDto")
@@ -52,5 +68,14 @@ public record StudyUserDto(
         String auth,
         String lastLoginAt,
         boolean active,
-        boolean locked
+        boolean locked,
+        String firstName,
+        String lastName,
+        String phone,
+        String institutionalAffiliation,
+        String userType,
+        String createdDate,
+        String ownerUsername,
+        String updatedDate,
+        String updaterUsername
 ) {}

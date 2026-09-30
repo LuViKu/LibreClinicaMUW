@@ -27,6 +27,7 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -84,7 +85,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Authorization: chain-level {@code .anyRequest().hasRole("USER")}
  * gates all three. {@code /me/activeStudy} additionally verifies the
  * user has a {@link StudyUserRoleBean} on the target study (HTTP 403
- * if not).
+ * if not); a system administrator may open any study that is not
+ * removed (see {@link #setActiveStudy}).
  *
  * <p>{@code mfaSatisfied} returns {@code true} unconditionally for
  * first-cut — proper integration with the legacy 2FA path lives
@@ -278,12 +280,39 @@ public class MeApiController {
                 timezone,
                 req.mustChange,
                 req.reason,
-                activeStudy
+                activeStudy,
+                ub.isTechAdmin() ? "TECHADMIN" : ub.isSysAdmin() ? "SYSADMIN" : "USER"
         );
 
         return ResponseEntity.ok(dto);
     }
 
+    /**
+     * Binds the session to a study: the SPA's study picker.
+     *
+     * <p>A user needs an active role binding on the study itself. A system
+     * administrator may open any study or site that is not removed, bound
+     * or not: the administration screens (users, sites, study settings)
+     * work on the session's study, and an administrator who holds no study
+     * role would otherwise never get one in the SPA.
+     *
+     * <p>The session role is the one the legacy {@code SecureController}
+     * gives the same administrator on that study: their own binding if
+     * they have one (the highest-ranked, as for every user); on a site
+     * without a binding of their own, the role they hold on the parent
+     * study; otherwise none, the legacy "invalid" role. So checks on the
+     * study role (signing, reopening a CRF, source-data verification) do
+     * not pass for an unbound administrator, while checks that admit every
+     * system administrator whatever their study role (study settings, data
+     * import and export) do, as in the corresponding legacy servlets.
+     * Legacy {@code ChangeStudyServlet} lists only bound studies, but
+     * {@code SecureController} already opens whatever study an account's
+     * {@code active_study} names with this role, so this changes which
+     * study an administrator can reach, not the role they hold in it.
+     *
+     * <p>A removed or auto-removed study is refused for everyone, as in
+     * {@code ChangeStudyServlet} ("restore it first").
+     */
     @PostMapping("/activeStudy")
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = MeDto.class)))
@@ -301,6 +330,10 @@ public class MeApiController {
         if (target == null || target.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + body.oid() + "'"));
+        }
+        if (Status.DELETED.equals(target.getStatus()) || Status.AUTO_DELETED.equals(target.getStatus())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Study '" + body.oid() + "' is removed; restore it before working in it"));
         }
 
         UserAccountDAO userDAO = new UserAccountDAO(dataSource);
@@ -331,6 +364,9 @@ public class MeApiController {
                 grantedRole = r;
             }
         }
+        if (grantedRole == null && ub.isSysAdmin()) {
+            grantedRole = legacySessionRoleWithoutBinding(roles, target);
+        }
         if (grantedRole == null) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "User has no role on study '" + body.oid() + "'"));
@@ -348,6 +384,27 @@ public class MeApiController {
                 target.getOid(), target.getId(), ub.getName());
 
         return getMe(session);
+    }
+
+    /**
+     * The session role {@code SecureController} gives an account on a
+     * study it holds no binding on: on a site, the role of its binding on
+     * the parent study ({@code Role.max} of none and the parent's role);
+     * otherwise an empty binding, whose role is {@link Role#INVALID}.
+     */
+    private static StudyUserRoleBean legacySessionRoleWithoutBinding(List<StudyUserRoleBean> roles,
+                                                                    StudyBean target) {
+        StudyUserRoleBean sessionRole = new StudyUserRoleBean();
+        if (target.getParentStudyId() > 0) {
+            Role best = Role.INVALID;
+            for (StudyUserRoleBean r : roles) {
+                if (r.getStudyId() != target.getParentStudyId()) continue;
+                if (r.getStatus() == null || r.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                if (privilegeRank(r.getRole()) > privilegeRank(best)) best = r.getRole();
+            }
+            sessionRole.setRole(Role.max(sessionRole.getRole(), best));
+        }
+        return sessionRole;
     }
 
     @PutMapping("/profile")

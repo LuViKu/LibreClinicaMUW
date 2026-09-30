@@ -135,7 +135,8 @@
       "auditLogDesc": "See who changed what, and when.",
       "dataExportTitle": "Data Export",
       "dataExportDesc": "Export datasets and download the generated files.",
-      "modalitiesDesc": "Maintain the imaging modalities and their CRF fields."
+      "modalitiesDesc": "Maintain the imaging modalities and their CRF fields.",
+      "adminStudiesDesc": "Every study and site on the platform: status, remove and restore, metadata download."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
@@ -2220,8 +2221,14 @@
       "submit": "Save changes",
       "saved": "Saved. Changes are reflected throughout the platform.",
       "leaveUnchanged": "— Leave unchanged —",
-      "parametersLink": "Parameters & modules"
-    }
+      "parametersLink": "Parameters & modules",
+      "downloadMetadata": "Download metadata (ODM)",
+      "downloadFailed": "The metadata could not be downloaded."
+    },
+    "protocolDescription": "Detailed description",
+    "collaborators": "Collaborators",
+    "contactEmail": "Contact e-mail",
+    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on."
   },
   "manageUsers": {
     "title": "Manage Users",
@@ -2301,7 +2308,8 @@
       "phone": "Phone",
       "affiliation": "Institutional affiliation",
       "submit": "Save changes",
-      "successFlash": "Profile updated."
+      "successFlash": "Profile updated.",
+      "requiredCleared": "Required: this field cannot be emptied."
     },
     "lifecycle": {
       "disable": "Disable",
@@ -2345,6 +2353,35 @@
       "saveError": "Saving roles failed. Please try again.",
       "savedToast": "Roles updated.",
       "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
+    },
+    "userType": {
+      "label": "Account type",
+      "USER": "User",
+      "SYSADMIN": "Business administrator",
+      "TECHADMIN": "Technical administrator",
+      "help": "Administrators manage users and studies across the platform. Only a technical administrator can make someone a technical administrator.",
+      "techOnly": "Only a technical administrator can change a technical administrator's account type."
+    },
+    "details": {
+      "action": "Details",
+      "title": "Account details",
+      "close": "Close",
+      "yes": "Yes",
+      "no": "No",
+      "dateBy": "{date} by {user}",
+      "username": "Username",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "E-mail",
+      "phone": "Phone",
+      "affiliation": "Institutional affiliation",
+      "businessAdmin": "Business administrator",
+      "technicalAdmin": "Technical administrator",
+      "status": "Status",
+      "auth": "Authentication",
+      "lastLogin": "Last login",
+      "created": "Created",
+      "updated": "Last updated"
     }
   },
   "retinalParked": {
@@ -4149,5 +4186,61 @@
   },
   "pageHeader": {
     "trail": "Breadcrumb"
+  },
+  "adminStudies": {
+    "title": "Studies",
+    "subtitle": "Every study on the platform, removed ones included: {studies} studies, {sites} sites.",
+    "create": "Create study",
+    "searchPlaceholder": "Search name, protocol ID, OID or PI…",
+    "column": {
+      "name": "Name",
+      "uniqueIdentifier": "Unique protocol ID",
+      "oid": "OID",
+      "principalInvestigator": "Principal investigator",
+      "created": "Created",
+      "status": "Status"
+    },
+    "empty": "No study matches.",
+    "metadata": "Metadata (ODM)",
+    "remove": "Remove",
+    "restore": "Restore",
+    "sitesNote": "Sites are removed and restored on the Sites page of their study.",
+    "downloadFailed": "The metadata of {study} could not be downloaded. {reason}",
+    "status": {
+      "AVAILABLE": "Available",
+      "PENDING": "Pending",
+      "FROZEN": "Frozen",
+      "LOCKED": "Locked",
+      "REMOVED": "Removed",
+      "AUTO_REMOVED": "Removed with its study",
+      "UNAVAILABLE": "Unavailable",
+      "PRIVATE": "Private",
+      "UNKNOWN": "Unknown"
+    }
+  },
+  "studyLifecycle": {
+    "removeTitle": "Remove study",
+    "restoreTitle": "Restore study",
+    "removeIntro": "Removing the study also removes everything under it:",
+    "previewFailed": "Could not count what the removal would take.",
+    "nothingUnder": "Nothing else is under this study yet.",
+    "impact": {
+      "sites": "Sites: {n}",
+      "roleBindings": "Role bindings: {n}",
+      "subjects": "Subjects: {n}",
+      "groupClasses": "Subject group classes: {n}",
+      "eventDefinitions": "Event definitions: {n}",
+      "events": "Events: {n}",
+      "eventCrfs": "CRFs: {n}",
+      "itemData": "Entered values: {n}",
+      "datasets": "Datasets: {n}"
+    },
+    "removeReversible": "Nothing is deleted: the data stays in the database and a removed study can be restored. Until then nobody can open the study or work with its data.",
+    "restoreIntro": "The study returns to the status it had when it was removed, with the sites, role bindings, subjects, events and data that were removed with it. Anything removed on its own before the study stays removed.",
+    "reason": "Reason",
+    "reasonPlaceholder": "Recorded in the audit trail",
+    "reasonRequired": "Enter a reason; it is recorded in the audit trail.",
+    "removeConfirm": "Remove study",
+    "restoreConfirm": "Restore study"
   }
 }

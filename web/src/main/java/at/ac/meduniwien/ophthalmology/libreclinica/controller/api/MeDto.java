@@ -58,6 +58,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * always serialise {@code mustChangePassword=false} — their
  * upstream identity provider owns the credential lifecycle per
  * DR-014.
+ *
+ * <p>{@code userType} is the account type, {@code USER}, {@code SYSADMIN}
+ * (business administrator) or {@code TECHADMIN} (technical
+ * administrator), in the vocabulary {@code POST /api/v1/users} and
+ * {@code PUT /api/v1/users/{username}} take. The SPA's
+ * {@code Administrator} role does not tell a system administrator from
+ * someone holding the study-level {@code admin} role; screens that only
+ * a system administrator can use, and the one choice only a technical
+ * administrator may make (creating another technical administrator),
+ * read this instead.
  */
 @Schema(name = "MeDto")
 public record MeDto(
@@ -74,7 +84,8 @@ public record MeDto(
         String timezone,
         boolean mustChangePassword,
         String passwordChangeReason,
-        ActiveStudyDto activeStudy
+        ActiveStudyDto activeStudy,
+        String userType
 ) {
 
     /** Allowed values of the {@code passwordChangeReason} field. */

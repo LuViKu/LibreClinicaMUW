@@ -4,25 +4,38 @@ import { useI18n } from 'vue-i18n'
 
 import Modal from '@/components/Modal.vue'
 import TextInput from '@/components/TextInput.vue'
+import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useUsersStore } from '@/stores/users'
-import type { StudyUser } from '@/types/user'
+import { useAuthStore } from '@/stores/auth'
+import type { AccountType } from '@/types/auth'
+import type { StudyUser, UpdateUserInput } from '@/types/user'
 
 /**
  * Phase E A7.2 — Edit User dialog.
  *
- * Pre-fills with the current {@link StudyUser} row and lets the
- * sysadmin edit firstName / lastName / email / phone /
- * institutionalAffiliation. Per-field diff happens server-side; the
- * dialog forwards every shown field regardless of whether it changed
- * (the backend's null-vs-string distinction means "shown but
- * unchanged" still resolves to a no-op once it sees the same value).
+ * Pre-fills with the current {@link StudyUser} row (first and last name,
+ * e-mail, phone, institutional affiliation and account type) and lets the
+ * sysadmin edit them. Per-field diff happens server-side; the dialog
+ * forwards every shown field regardless of whether it changed (the
+ * backend's null-vs-string distinction means "shown but unchanged" still
+ * resolves to a no-op once it sees the same value).
+ *
+ * Clearing follows the server's rules: the phone is optional and is sent
+ * even when emptied, which clears it; the name, e-mail and affiliation
+ * are required and cannot be emptied. An account created without an
+ * affiliation keeps none until one is entered.
+ *
+ * The account type makes an account a user, a business administrator or
+ * a technical administrator. Only a technical administrator may make or
+ * unmake a technical administrator, so for anyone else that account's
+ * type is shown and not offered.
  *
  * Username is read-only (legacy parity — identity rename unsupported).
- * Role, userType and lifecycle (disable/restore) are owned by the
- * sibling A7.3/A7.5 dialogs.
+ * Roles and lifecycle (disable/restore) are owned by the sibling
+ * A7.3/A7.5 dialogs.
  */
 interface Props {
   open: boolean
@@ -33,6 +46,7 @@ const emit = defineEmits<{ 'update:open': [v: boolean]; close: [] }>()
 
 const { t } = useI18n()
 const users = useUsersStore()
+const auth = useAuthStore()
 
 interface Form {
   firstName: string
@@ -40,6 +54,7 @@ interface Form {
   email: string
   phone: string
   institutionalAffiliation: string
+  userType: AccountType
 }
 
 function blankForm(): Form {
@@ -49,10 +64,13 @@ function blankForm(): Form {
     email: '',
     phone: '',
     institutionalAffiliation: '',
+    userType: 'USER',
   }
 }
 
 const form = ref<Form>(blankForm())
+/** What the form was opened with, to tell a cleared field from one that was never set. */
+const original = ref<Form>(blankForm())
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const isSubmitting = ref(false)
@@ -61,21 +79,39 @@ const successFlag = ref(false)
 function hydrateFromUser() {
   if (!props.user) {
     form.value = blankForm()
+    original.value = blankForm()
     return
   }
-  // The list endpoint returns a slim StudyUser — we have displayName +
-  // email, but the legacy first/last split isn't on the wire. Best-effort
-  // split on the first space; the user can refine in the form.
-  const display = props.user.displayName ?? ''
+  const u = props.user
+  // The row carries first and last name. A row without them (from a
+  // server before they were on the wire) falls back to splitting the
+  // display name on its first space.
+  const display = u.displayName ?? ''
   const sep = display.indexOf(' ')
   form.value = {
-    firstName: sep >= 0 ? display.slice(0, sep) : display,
-    lastName: sep >= 0 ? display.slice(sep + 1) : '',
-    email: props.user.email ?? '',
-    phone: '',
-    institutionalAffiliation: '',
+    firstName: u.firstName ?? (sep >= 0 ? display.slice(0, sep) : display),
+    lastName: u.lastName ?? (sep >= 0 ? display.slice(sep + 1) : ''),
+    email: u.email ?? '',
+    phone: u.phone ?? '',
+    institutionalAffiliation: u.institutionalAffiliation ?? '',
+    userType: u.userType ?? 'USER',
   }
+  original.value = { ...form.value }
 }
+
+/** A technical administrator's type is theirs to change only for another technical administrator. */
+const canChangeType = computed(() => auth.isTechAdmin || original.value.userType !== 'TECHADMIN')
+
+const userTypeOptions = computed<AccountType[]>(() =>
+  auth.isTechAdmin || original.value.userType === 'TECHADMIN'
+    ? ['USER', 'SYSADMIN', 'TECHADMIN']
+    : ['USER', 'SYSADMIN'],
+)
+
+/** The affiliation is required: it may stay empty only if it already was. */
+const affiliationCleared = computed(
+  () => form.value.institutionalAffiliation.trim() === '' && original.value.institutionalAffiliation.trim() !== '',
+)
 
 watch(
   () => [props.open, props.user] as const,
@@ -94,6 +130,7 @@ const canSubmit = computed(() => {
     form.value.firstName.trim().length > 0 &&
     form.value.lastName.trim().length > 0 &&
     form.value.email.trim().length > 0 &&
+    !affiliationCleared.value &&
     props.user != null
   )
 })
@@ -104,15 +141,17 @@ async function submit() {
   formError.value = null
   isSubmitting.value = true
   try {
-    const patch = {
+    const affiliation = form.value.institutionalAffiliation.trim()
+    const patch: UpdateUserInput = {
       firstName: form.value.firstName.trim(),
       lastName: form.value.lastName.trim(),
       email: form.value.email.trim(),
-      // phone / affiliation: only forward when non-empty — empty would
-      // clear the column, which is reasonable but ideally a user opt-in.
-      ...(form.value.phone.trim() !== '' ? { phone: form.value.phone.trim() } : {}),
-      ...(form.value.institutionalAffiliation.trim() !== ''
-        ? { institutionalAffiliation: form.value.institutionalAffiliation.trim() }
+      // Optional: sent even when empty, so emptying the field clears it.
+      phone: form.value.phone.trim(),
+      // Required: never sent empty (the server refuses a blank one).
+      ...(affiliation !== '' ? { institutionalAffiliation: affiliation } : {}),
+      ...(canChangeType.value && form.value.userType !== original.value.userType
+        ? { userType: form.value.userType }
         : {}),
     }
     const result = await users.updateUser(props.user.username, patch)
@@ -181,11 +220,25 @@ function close() {
         <div>
           <FieldLabel for="edit-user-phone">{{ t('manageUsers.edit.phone') }}</FieldLabel>
           <TextInput id="edit-user-phone" v-model="form.phone" type="tel" autocomplete="tel" />
+          <ErrorText v-if="fieldErrors.phone">{{ fieldErrors.phone }}</ErrorText>
         </div>
         <div class="col-span-2">
-          <FieldLabel for="edit-user-affiliation">{{ t('manageUsers.edit.affiliation') }}</FieldLabel>
+          <FieldLabel for="edit-user-affiliation" required>{{ t('manageUsers.edit.affiliation') }}</FieldLabel>
           <TextInput id="edit-user-affiliation" v-model="form.institutionalAffiliation" />
-          <ErrorText v-if="fieldErrors.institutionalAffiliation">{{ fieldErrors.institutionalAffiliation }}</ErrorText>
+          <ErrorText v-if="affiliationCleared">{{ t('manageUsers.edit.requiredCleared') }}</ErrorText>
+          <ErrorText v-else-if="fieldErrors.institutionalAffiliation">{{ fieldErrors.institutionalAffiliation }}</ErrorText>
+        </div>
+        <div class="col-span-2">
+          <FieldLabel for="edit-user-usertype">{{ t('manageUsers.userType.label') }}</FieldLabel>
+          <SelectInput id="edit-user-usertype" v-model="form.userType" :disabled="!canChangeType">
+            <option v-for="type in userTypeOptions" :key="type" :value="type">
+              {{ t(`manageUsers.userType.${type}`) }}
+            </option>
+          </SelectInput>
+          <p class="text-xs text-slate-500 mt-1">
+            {{ canChangeType ? t('manageUsers.userType.help') : t('manageUsers.userType.techOnly') }}
+          </p>
+          <ErrorText v-if="fieldErrors.userType">{{ fieldErrors.userType }}</ErrorText>
         </div>
       </div>
 

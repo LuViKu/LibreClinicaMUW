@@ -19,6 +19,15 @@ export type UserRole =
 
 export type AuthSource = 'sso' | 'local' | 'ldap'
 
+/**
+ * The account type: a user, a business administrator (`SYSADMIN`) or a
+ * technical administrator (`TECHADMIN`). Both administrator types are
+ * system administrators. The SPA role `Administrator` also covers the
+ * study-level `admin` role, so screens only a system administrator can use
+ * read this instead.
+ */
+export type AccountType = 'USER' | 'SYSADMIN' | 'TECHADMIN'
+
 export type AuthState =
   | 'anonymous'
   | 'profile-incomplete'
@@ -38,10 +47,12 @@ export type AuthState =
 export type AuthenticatedUser =
   Omit<Required<components['schemas']['MeDto']>,
        'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
-       | 'passwordChangeReason' | 'activeStudy'>
+       | 'passwordChangeReason' | 'activeStudy' | 'userType'>
   & {
     role: UserRole
     source: AuthSource
+    /** Optional for /me responses from before the field existed. */
+    userType?: AccountType
     email: string | null
     siteLabel: string | null
     locale: string | null

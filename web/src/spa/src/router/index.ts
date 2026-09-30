@@ -128,6 +128,15 @@ const router = createRouter({
       component: () => import('@/views/AdminSystemStatusView.vue'),
       meta: { title: 'System Status', role: 'Administrator' as const },
     },
+    /* Every study on the platform, with remove / restore and the ODM
+       metadata download: the legacy /ListStudy. The API admits system
+       administrators only; the view shows its refusal to anyone else. */
+    {
+      path: '/admin/studies',
+      name: 'admin-studies',
+      component: () => import('@/views/AdminStudiesView.vue'),
+      meta: { title: 'Studies', role: 'Administrator' as const },
+    },
     {
       path: '/admin/password-policy',
       name: 'admin-password-policy',
