@@ -23,8 +23,12 @@ public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole
     }
 
     public ArrayList<StudyUserRole> findAllUserRolesByUserAccount(UserAccount userAccount, int studyId, int parentStudyId) {
-        String query = "from " + getDomainClassName()
-                + "   where   user_name=:username  AND  status_id=1  AND  ( study_id=:studyId OR study_id=:parentStudyId) ";
+        // user_name, status_id and study_id are mapped as attributes of the
+        // embedded id. Hibernate 6 resolves only attribute paths, so the bare
+        // column names are a semantic error.
+        String query = "from " + getDomainClassName() + " sur"
+                + " where sur.id.userName = :username and sur.id.statusId = 1"
+                + " and (sur.id.studyId = :studyId or sur.id.studyId = :parentStudyId)";
         Query<StudyUserRole> q = getCurrentSession().createQuery(query, StudyUserRole.class);
         q.setParameter("username", userAccount.getUserName());
         q.setParameter("studyId", studyId);
