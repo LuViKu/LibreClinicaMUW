@@ -4,9 +4,15 @@
  * ends, and a UTF-8 BOM so Excel reads umlauts.
  */
 
-/** One cell, quoted when it holds a comma, a quote or a line break. */
+/**
+ * One cell, quoted when it holds a comma, a quote or a line break. Text that
+ * starts with = + - @, a tab or a carriage return gets a leading apostrophe,
+ * so a spreadsheet shows it as text instead of evaluating it as a formula;
+ * quoting alone does not stop that. Numbers are written as they are.
+ */
 export function csvCell(v: unknown): string {
-  const s = v == null ? '' : String(v)
+  let s = v == null ? '' : String(v)
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
