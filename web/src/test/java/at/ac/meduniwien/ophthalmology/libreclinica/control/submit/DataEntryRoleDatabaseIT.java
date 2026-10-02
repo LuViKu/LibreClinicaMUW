@@ -38,6 +38,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.LegacyServletHarness;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AbstractApiControllerDatabaseIT;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
@@ -337,6 +338,109 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    // ---- closed records -------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = { "event CRF removed", "event CRF auto-removed", "event removed", "study subject removed",
+            "study subject locked", "study subject signed", "subject removed", "study locked", "study frozen" })
+    void nothingIsSavedIntoAClosedRecordInInitialDataEntry(String closed) throws Exception {
+        int ec = addEventCrf(AVAILABLE);
+        String reopen = close(closed, ec);
+        try {
+            Outcome out = run(new InitialDataEntryServlet(), "POST", "/InitialDataEntry", user("manual_crc"), saveVitals(ec));
+
+            assertEquals(0, itemDataRows(ec), "nothing was saved");
+            assertNull(updater(ec), "the event CRF is as it was");
+            assertClosedRefusal(out);
+        } finally {
+            update(reopen);
+            removeEventCrf(ec);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "event CRF removed", "event removed", "study subject locked", "study subject signed",
+            "study locked" })
+    void nothingIsSavedIntoAClosedRecordInDoubleDataEntry(String closed) throws Exception {
+        int ec = addEventCrf(PENDING);
+        String reopen = close(closed, ec);
+        try {
+            Outcome out = run(new DoubleDataEntryServlet(), "POST", "/DoubleDataEntry", user("manual_crc"), saveVitals(ec));
+
+            assertEquals(0, itemDataRows(ec), "nothing was saved");
+            assertEquals(0, validator(ec), "no second entry was recorded");
+            assertClosedRefusal(out);
+        } finally {
+            update(reopen);
+            removeEventCrf(ec);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "event removed", "study subject locked", "study subject signed", "study frozen" })
+    // (A removed event CRF has no stage to edit in: administrative editing already stops it before the save.)
+    void nothingIsSavedIntoAClosedRecordInAdministrativeEditing(String closed) throws Exception {
+        int ec = addEventCrf(UNAVAILABLE);
+        String reopen = close(closed, ec);
+        try {
+            Outcome out = run(new AdministrativeEditingServlet(), "POST", "/AdministrativeEditing", user("manual_crc"),
+                    saveVitals(ec));
+
+            assertEquals(0, itemDataRows(ec), "nothing was saved");
+            assertNull(updater(ec), "the event CRF is as it was");
+            assertClosedRefusal(out);
+        } finally {
+            update(reopen);
+            removeEventCrf(ec);
+        }
+    }
+
+    @Test
+    void administrativeEditingStillSavesIntoAnOpenRecord() throws Exception {
+        int ec = addEventCrf(UNAVAILABLE);
+        try {
+            Outcome out = run(new AdministrativeEditingServlet(), "POST", "/AdministrativeEditing", user("manual_crc"),
+                    saveVitals(ec));
+
+            assertEquals("71.5", itemValue(ec, 4), "the weight was saved");
+            assertNotEquals("/ViewStudySubject", out.forwardedUrl());
+        } finally {
+            removeEventCrf(ec);
+        }
+    }
+
+    private static void assertClosedRefusal(Outcome out) {
+        assertEquals("/ViewStudySubject", out.forwardedUrl());
+        assertTrue(out.pageMessages().stream().anyMatch(m -> m.contains("nothing can be saved")),
+                String.valueOf(out.pageMessages()));
+    }
+
+    /** Closes the record the event CRF {@code ec} sits in; returns the SQL that opens it again. */
+    private static String close(String closed, int ec) throws SQLException {
+        String table;
+        String key;
+        int status;
+        switch (closed) {
+            case "event CRF removed" -> { table = "event_crf"; key = "event_crf_id = " + ec; status = 5; }
+            case "event CRF auto-removed" -> { table = "event_crf"; key = "event_crf_id = " + ec; status = 7; }
+            case "event removed" -> { table = "study_event"; key = "study_event_id = " + EVENT; status = 5; }
+            case "study subject removed" -> { table = "study_subject"; key = "study_subject_id = " + SUBJECT; status = 5; }
+            case "study subject locked" -> { table = "study_subject"; key = "study_subject_id = " + SUBJECT; status = 6; }
+            case "study subject signed" -> { table = "study_subject"; key = "study_subject_id = " + SUBJECT; status = 8; }
+            case "subject removed" -> {
+                table = "subject";
+                key = "subject_id = (SELECT subject_id FROM study_subject WHERE study_subject_id = " + SUBJECT + ")";
+                status = 5;
+            }
+            case "study locked" -> { table = "study"; key = "study_id = 1"; status = 6; }
+            case "study frozen" -> { table = "study"; key = "study_id = 1"; status = 9; }
+            default -> throw new IllegalArgumentException(closed);
+        }
+        int before = queryInt("SELECT status_id FROM " + table + " WHERE " + key);
+        update("UPDATE " + table + " SET status_id = " + status + " WHERE " + key);
+        return "UPDATE " + table + " SET status_id = " + before + " WHERE " + key;
+    }
+
     /** Guards the fixture: the rows the tests rely on exist and are as described. */
     @Test
     void theFixtureRowsExist() throws Exception {
@@ -390,6 +494,10 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
         MockHttpServletRequest req = harness.request(method, path, user);
         for (int i = 0; i < params.length; i += 2) {
             req.addParameter(params[i], params[i + 1]);
+        }
+        if (servlet instanceof AdministrativeEditingServlet) {
+            // Without a forced reason for change, an edit saves with the form alone.
+            ((StudyBean) req.getSession().getAttribute("study")).getStudyParameterConfig().setAdminForcedReasonForChange("false");
         }
         MockHttpServletResponse resp = harness.run(servlet, req);
         Object messages = req.getAttribute("pageMessages");
