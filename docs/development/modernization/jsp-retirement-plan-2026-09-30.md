@@ -1,6 +1,6 @@
 # Plan — retiring the legacy JSP layer and clearing code scanning (2026-09-30)
 
-**Status:** draft for review. It depends on [DR-018](decision-record.md#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included), which is still *Proposed*.
+**Status:** [DR-018](decision-record.md#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included) is accepted. Implementation is recorded in [§14](#14-implementation-status-2026-10-02).
 
 **Goal:** the SPA is the only user interface. No JSP, no legacy servlet, no SiteMesh decorator, no jQuery 1.9 / Prototype / Scriptaculous / GWT and no Jersey remain in the WAR. Security-level code-scanning alerts on `main` are zero at every release, and every remaining quality alert is either fixed or dismissed with a reason.
 
@@ -430,3 +430,77 @@ SELECT count(*) FROM event_definition_crf WHERE participant_form = true;
 Plus `2fa.activated`, `xform.enabled` and `portalURL` in the production `datainfo.properties`.
 
 *The queries ran against the dev schema on 2026-09-30. The participant-portal query only finds studies where the setting was saved; an unset parameter means disabled.*
+
+## 14. Implementation status (2026-10-02)
+
+The plan was implemented in one pass starting on 2026-09-30, as a set of pull requests against `lc-develop`. This section records what shipped, what was decided along the way, what was added because the work found it, and what is deferred and why. Where there is no PR, the branch is named instead.
+
+### 14.1 Decisions taken while implementing
+
+These were delegated ("make the best educated choice") and are recorded here so each can be reviewed.
+
+| # | Decision | Reason |
+|---|---|---|
+| D1 | **The XForm / OpenRosa / participant-portal chain is dropped** (R0.6, §3.2.2) | It cannot work end to end: Jersey no longer loads, HttpClient 5 is not shipped, no portal or Enketo is deployed, `xform.enabled` is unset, and the MUW public pages do not use it |
+| D2 | **`ra` / `ra2` holders are not migrated automatically** (§3.2.3) | Both targets widen rights: CRC passes study-admin and dataset gates, Investigator adds e-signature and reopen. The roles stay as they are, are shown in the SPA as "Data Entry Person (legacy)", and a role change needs an explicit choice (the API answers 409 without one). The migration waits for the production count (§13) and a deliberate GCP decision |
+| D3 | DR-018 is accepted | The whole plan depends on it |
+| D4 | The six-month bake-in is kept | DR-018 requires it; R3 deletions are therefore deferred by design |
+| D5 | **Open:** the role model for the legacy `coordinator` ("Data Manager" in legacy, CRC in the SPA) | The backend already lets `coordinator` administer the study; the SPA routes do not. Recommendation: make the SPA gates follow the backend. Blocks W3 |
+| D6 | **The heritage REST API under `/pages/auth` closes in wave 0** | Seven OpenClinica 3.x controllers, API-key only, with no caller in the app, the SPA, the legacy pages or the deployment. Closing is a configuration change and every call is logged during the bake-in |
+| D7 | Investigators, monitors and data-entry users download the study metadata from the SPA home page | So `/DownloadStudyMetadata` can close in W1; no SPA page for the current study existed for these roles |
+| D8 | **Export schedules: only the creator or a system administrator changes one** | Its runs execute as the creator |
+| D9 | **The server-side notes CSV neutralises formula-like text cells; clinical data exports are unchanged** | A spreadsheet opens a cell that begins with a formula character as a formula; changing clinical data exports would alter their content |
+
+### 14.2 What shipped
+
+| Plan item | What | PR |
+|---|---|---|
+| R0.1 | tri-state reason, dead JSPs, DR-018 + catalogue + plan | #362, #363, #364 |
+| R0.2 / S1–S4 | log lines; SPA overrides; Trivy blocking with an accepted-findings gate | #365, #366 |
+| R0.3 / R0.4 | working legacy-access log (220-day retention), per-path closure, `/legacy/` alias | #370 |
+| R0.5 / R0.9 | admin actions POST-only; event scheduling checks the study | #367 |
+| R0.6–R0.8, R0.10 | participant chain removed; broken pages fixed; dead code; public paths narrowed (session migrate endpoints need a login; the public rule-timezone helper deleted) | #373, #374 |
+| R0.11 | documentation drift | #364 |
+| R1.0 | SPA-coverage columns for the investigator, monitor and data-manager catalogues | #364 |
+| R1.1 / R1.2 (studies, users) | all-studies list, remove/restore cascades, grant in any study, study fields, metadata download, admin types, account details, legacy roles explicit | #377 |
+| R1.1 / R1.2 (audit, security) | login history, lockout settings, test e-mail | #381 |
+| R1.1 / R1.2 (CRFs) | CRF edit, restore, view with item table and studies, version preview, event-CRF version migration (batch and single) | #387 |
+| R1.2 (jobs) | export schedule edit, pause/resume; legacy XSLT jobs; cancel; dataset wizard link | #389 |
+| R1.3 | SPA login answers JSON; SPA logout API | #384 |
+| R1.3 (DR-029) | old SPA upload pages deleted | #378 |
+| R2 W0 | 17 not-needed screens and the heritage REST API closed | #371 |
+| R4 | PostgreSQL 17 for dev/test/CI + production runbook | #376 |
+| R4 | OpenPDF (DR-007), Hibernate 6.6, Quartz 2.5 | #385 |
+| R4 | Liquibase 4 | #388 |
+| R4 | Spring Boot 4 spike | branch `spike/muw-spring-boot-4` (report in this branch) |
+| Track S | quality alerts: core dao, bean, logic, service, web support | #372, #375, #379, #382 (core service), #383 (web support) |
+
+### 14.3 Added because the work found it
+
+The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each was evaluated and fixed with red-then-green tests:
+
+- **Server-side role checks on the SPA's clinical writes** and SDV integrity (only complete CRFs; a data change withdraws SDV; un-verify needs a reason) — #386.
+- **Every legacy action that changes data takes a POST** (107 servlets), and the legacy data-entry servlets require a data-entry role — #380.
+- **Clinical data-integrity gaps in the SPA data-entry path** (reason for change after reopen, required items at completion, subject identifiers, rules on save) — #391.
+- **The monitor's SPA gaps** — #390.
+- **The data manager's SPA gaps** (import commit, audit paging, cascades) — #392.
+- **Item-data provenance** survives status cascades (`ItemDataDAO.updateStatusOnly`) — #377.
+- **Dependabot:** 20 open alerts on the SPA lockfile; 3 fixed, 17 dismissed with the reason on each alert — #366.
+
+### 14.4 Deferred, with the reason
+
+| Item | Reason | Next step |
+|---|---|---|
+| R3 deletions | The six-month bake-in (DR-018, D4) | W0 deletion no earlier than six months after #371 reaches production |
+| W1–W3 closure | Each wave closes only once its SPA gaps have landed and parity is recorded | Close per the retirement log once the packages above are merged |
+| W3 | Also blocked by D5 (role model) | Maintainer decision |
+| W4 | Needs the E.10 usability panel on the SPA (DR-019), a human study | Schedule the panel |
+| W5 | Needs every other wave closed, and four couplings removed first: the expired-session redirect targets `/MainMenu` (also for SPA API calls); SSO logins land on `/MainMenu` and get their session set-up there; e-mail links use `sysURL`; the legacy logout's success target | A follow-up package before W5 |
+| `ra` / `ra2` migration | D2 | Production count (§13), then an explicit choice |
+| DR-029 backend endpoints | The combined upload controller delegates to both older controllers, so only their HTTP mappings are unused | Remove the mappings with W4 |
+| SPA toolchain (vitest 4, Vite 6+, Histoire 1.x) | Dependabot #23/#24 need vitest 4, which needs Vite 6; dev-only and not exploitable as used | A separate toolchain PR |
+| Liquibase 4 | done (#388) | none |
+| Spring Boot 4 | DR-037; see the spike result | Per the spike |
+| commons-lang/collections, Phase C finish | Most affected files are legacy (§9) | After R3 |
+| Production checks (§13) | No production access in this pass | Lukas runs the queries |
+| Legacy servlets still clear item-data provenance on status changes | Retiring; the SPA paths are fixed | A small follow-up switching them to `updateStatusOnly`, or their closure |
