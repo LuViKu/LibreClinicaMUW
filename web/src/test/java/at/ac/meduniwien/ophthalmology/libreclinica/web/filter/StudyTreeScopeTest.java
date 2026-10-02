@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.filter;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,6 +51,13 @@ class StudyTreeScopeTest {
     }
 
     @Test
+    void aSiteSessionSchedulesFromItsParentsEventDefinitions() {
+        assertEquals(10, StudyTreeScope.definitionStudy(study(11, 10)).getId(), "a site uses its parent's definitions");
+        assertEquals(10, StudyTreeScope.definitionStudy(study(10, 0)).getId(), "a parent uses its own");
+        assertNull(StudyTreeScope.definitionStudy(null));
+    }
+
+    @Test
     void noSessionStudyOrNoRecordMeansNo() {
         assertFalse(StudyTreeScope.inTree(null, new int[] {10, 0}));
         assertFalse(StudyTreeScope.inTree(study(0, 0), new int[] {0, 0}));
@@ -64,6 +72,7 @@ class StudyTreeScopeTest {
 
         assertFalse(scope.containsEventCrf(study(10, 0), 5));
         assertFalse(scope.containsStudySubject(study(10, 0), 5));
+        assertFalse(scope.containsEventDefinition(study(10, 0), 5));
         assertNull(scope.crfIdOfEventCrf(5));
         assertNull(scope.crfIdOfVersion(5));
         assertFalse(scope.containsEventCrf(study(10, 0), 0), "non-positive ids never match");
