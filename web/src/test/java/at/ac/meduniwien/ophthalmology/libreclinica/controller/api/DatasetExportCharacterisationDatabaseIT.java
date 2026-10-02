@@ -240,7 +240,9 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
             while (entries.hasMoreElements()) {
                 ZipEntry e = entries.nextElement();
                 all.append("=== ").append(e.getName()).append(" ===\n");
-                all.append(new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+                try (java.io.InputStream in = zip.getInputStream(e)) {
+                    all.append(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                }
             }
         }
         return all.toString();
@@ -651,8 +653,9 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
             var entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry e = entries.nextElement();
-                out.put(e.getName(),
-                        new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+                try (java.io.InputStream in = zip.getInputStream(e)) {
+                    out.put(e.getName(), new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                }
             }
         }
         return out;

@@ -65,6 +65,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  * M-007's third visit (event 21, not scheduled, no CRF yet) in study 1, or one
  * at a new visit of subject EIAMD139 in study 102.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** M-007's "V3 Day 90": not scheduled, no event CRF. */

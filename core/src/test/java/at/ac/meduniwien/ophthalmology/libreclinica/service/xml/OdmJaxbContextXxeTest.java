@@ -31,6 +31,7 @@ import org.junit.rules.TemporaryFolder;
  * unmarshaller must refuse a DOCTYPE — and with it every entity declaration —
  * whichever JAXP parser wins the service lookup; plain documents still bind.
  */
+@SuppressWarnings("resource") // in-memory streams and objects only; nothing here holds an OS resource
 public class OdmJaxbContextXxeTest {
 
     private static final String SECRET = "TOP-SECRET-MARKER-9d2e";

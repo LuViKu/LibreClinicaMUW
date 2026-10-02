@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 
 /** The study-tree rule; the SQL is covered by {@code StudyTreeScopeDatabaseIT}. */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class StudyTreeScopeTest {
 
     private static StudyBean study(int id, int parentId) {

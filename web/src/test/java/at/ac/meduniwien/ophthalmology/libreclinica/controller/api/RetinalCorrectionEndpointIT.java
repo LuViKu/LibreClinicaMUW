@@ -148,11 +148,12 @@ class RetinalCorrectionEndpointIT extends AbstractApiControllerDatabaseIT {
             }
         }
         if (masksDir != null && Files.isDirectory(masksDir)) {
-            Files.walk(masksDir)
-                    .sorted(java.util.Comparator.reverseOrder())
-                    .forEach(p -> {
-                        try { Files.deleteIfExists(p); } catch (Exception ignored) { }
-                    });
+            try (var walk = Files.walk(masksDir)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try { Files.deleteIfExists(p); } catch (Exception ignored) { }
+                        });
+            }
         }
     }
 

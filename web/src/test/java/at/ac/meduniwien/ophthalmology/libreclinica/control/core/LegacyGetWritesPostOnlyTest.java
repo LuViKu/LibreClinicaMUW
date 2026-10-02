@@ -156,6 +156,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceIn
  * {@code LegacyGetWritesPostOnlyDatabaseIT}; the five admin actions of the
  * first pass are in {@code LegacyAdminPostOnlyTest}.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class LegacyGetWritesPostOnlyTest {
 
     private final UserAccountBean admin = LegacyServletHarness.sysAdmin(1, "root");

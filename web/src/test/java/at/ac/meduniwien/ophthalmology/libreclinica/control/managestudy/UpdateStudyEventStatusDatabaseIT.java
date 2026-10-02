@@ -56,6 +56,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  * The event is M-007's "V3 Day 90" (event 21): not scheduled, with no CRF,
  * so the form never offers "completed" or "locked" for it.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class UpdateStudyEventStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int SUBJECT = 7;

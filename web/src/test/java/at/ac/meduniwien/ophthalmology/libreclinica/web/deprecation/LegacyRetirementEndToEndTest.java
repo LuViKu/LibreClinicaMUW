@@ -70,6 +70,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * to the login page before the alias sees it; the alias's own 404 for a
  * request without a user is the second line, and is what this test sees.
  */
+@SuppressWarnings("resource") // java.net.http.HttpClient needs no closing and the servlet request/response belong to the container
 class LegacyRetirementEndToEndTest {
 
     private static final String CONTEXT = "/LibreClinica";

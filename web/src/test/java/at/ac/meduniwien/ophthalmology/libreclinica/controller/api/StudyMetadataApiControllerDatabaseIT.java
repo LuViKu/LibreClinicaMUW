@@ -57,6 +57,7 @@ import org.springframework.web.context.support.StaticWebApplicationContext;
  * servlet's: a system administrator, or anyone whose active role on the
  * study (or, for a site, on its parent) lets them view the study's data.
  */
+@SuppressWarnings("resource") // the mock-servlet request and response hold nothing to close
 class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Both paths get the same collaborators, so any difference is in the generation. */

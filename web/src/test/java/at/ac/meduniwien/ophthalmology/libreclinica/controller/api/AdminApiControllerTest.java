@@ -62,7 +62,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *       swallowed.</li>
  * </ul>
  */
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "resource"}) // resource: Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class AdminApiControllerTest extends AbstractApiControllerTest {
 
     /**

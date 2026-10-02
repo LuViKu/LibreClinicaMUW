@@ -67,6 +67,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * contract pinned here is enough to catch the SPA-facing wire shape
  * from drifting.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
 
     /** Active for every {@code cancel*} test — close in @AfterEach. */

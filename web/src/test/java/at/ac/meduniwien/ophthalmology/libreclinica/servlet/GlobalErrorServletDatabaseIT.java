@@ -76,6 +76,7 @@ import jakarta.servlet.ServletException;
  * {@code audit_log_event} table + the OPERATION_FAILED lookup row
  * the A1 changeset seeds.
  */
+@SuppressWarnings("resource") // the web application context lives as long as the servlet context it is attached to
 class GlobalErrorServletDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /* ====================================================================== */

@@ -61,7 +61,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.XsltTriggerSe
  * {@code getMergedJobDataMap()} and {@code getInt(...)}. That shape is pinned
  * as well, when the trigger fires and after a restart.
  */
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "resource"}) // resource: the helper hands the running factory and its context back to the test, which stops them
 class QuartzJobStoreDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final String GROUP = "quartz-it";

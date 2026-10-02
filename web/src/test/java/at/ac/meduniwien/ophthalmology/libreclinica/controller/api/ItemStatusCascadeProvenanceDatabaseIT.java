@@ -51,6 +51,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  *
  * <p>Each test has its own subject, so the tests do not depend on order.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class ItemStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final String KIND = "retinal_inference";

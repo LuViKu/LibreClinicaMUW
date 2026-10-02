@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
  * is still null when getConnection() itself fails, so the upload answered a
  * NullPointerException and the database error was lost.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 public class NewCRFBeanRollbackTest {
 
     @Test

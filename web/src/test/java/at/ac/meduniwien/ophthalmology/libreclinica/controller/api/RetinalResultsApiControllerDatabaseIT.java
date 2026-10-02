@@ -148,9 +148,8 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         }
         if (tmpRoot != null) {
             // Recursive delete — fine for test fixtures.
-            try {
-                Files.walk(tmpRoot)
-                        .sorted(java.util.Comparator.reverseOrder())
+            try (var walk = Files.walk(tmpRoot)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
                         .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) { } });
             } catch (IOException ignored) { /* best-effort */ }
         }

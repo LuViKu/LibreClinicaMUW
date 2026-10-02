@@ -89,6 +89,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  * The seeded study 1 and its subjects M-001 to M-007 are the fixture; each test
  * puts back what it changes.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int STUDY = LegacyServletHarness.STUDY_ID;

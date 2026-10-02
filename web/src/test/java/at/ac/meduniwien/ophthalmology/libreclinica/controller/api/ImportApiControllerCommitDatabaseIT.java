@@ -62,6 +62,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * </ul>
  * Item ids: 1 I_CONSENT_DATE, 3 I_HEIGHT_CM, 5 I_BLOOD_PRESSURE_SYS.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class ImportApiControllerCommitDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final ObjectMapper JSON = new ObjectMapper();

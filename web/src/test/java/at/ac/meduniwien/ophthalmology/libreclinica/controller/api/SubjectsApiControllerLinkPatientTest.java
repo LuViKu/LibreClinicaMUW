@@ -49,6 +49,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * per-audit-insert sequence. We capture every {@code prepareStatement}
  * call and route it to the matching mock by sniffing the SQL.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
 
     /* ---------------------------------------------------------------- */

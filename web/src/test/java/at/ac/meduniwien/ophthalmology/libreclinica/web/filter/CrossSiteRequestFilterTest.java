@@ -183,8 +183,10 @@ class CrossSiteRequestFilterTest {
         File contextXml = new File("src/main/webapp/META-INF/context.xml");
         assertTrue(contextXml.isFile(), "META-INF/context.xml must ship in the WAR");
 
-        Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                .parse(Files.newInputStream(contextXml.toPath()));
+        Document doc;
+        try (java.io.InputStream in = Files.newInputStream(contextXml.toPath())) {
+            doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+        }
         NodeList processors = doc.getDocumentElement().getElementsByTagName("CookieProcessor");
         assertEquals(1, processors.getLength());
         Element processor = (Element) processors.item(0);

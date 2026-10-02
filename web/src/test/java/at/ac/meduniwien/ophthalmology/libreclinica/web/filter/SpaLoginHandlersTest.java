@@ -57,6 +57,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
  * accepts anything, gets the legacy redirects. {@code SpaLoginLogoutDatabaseIT}
  * drives the whole login filter against a database.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class SpaLoginHandlersTest {
 
     private static final String BROWSER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";

@@ -51,6 +51,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  * no CRF yet), with its definition CRF switched to double entry, and removes
  * both again.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class MarkEventCRFCompleteDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int SUBJECT = 7;

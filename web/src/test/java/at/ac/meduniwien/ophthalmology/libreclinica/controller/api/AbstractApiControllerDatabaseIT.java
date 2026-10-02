@@ -75,7 +75,7 @@ import org.testcontainers.utility.DockerImageName;
  * every test in the class — a 10-method IT class still pays only one
  * 7-second migration tax.
  */
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "resource"}) // resource: the Testcontainers PostgreSQL container is shared by every IT and stopped when the JVM exits
 public abstract class AbstractApiControllerDatabaseIT {
 
     /** Image for the per-class container; see the class comment. */
