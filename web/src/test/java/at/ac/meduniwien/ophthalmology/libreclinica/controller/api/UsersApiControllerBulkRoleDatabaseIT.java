@@ -30,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -103,7 +104,7 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
     private MockMvc usersMockMvc() {
         SecurityManager securityManager = Mockito.mock(SecurityManager.class);
         Mockito.when(securityManager.genPassword()).thenReturn("Tmp-Bulk-12!");
-        Mockito.when(securityManager.encryptPassword(Mockito.anyString(), Mockito.anyBoolean()))
+        Mockito.when(securityManager.encryptPassword(ArgumentMatchers.anyString(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("{bcrypt}$2a$10$hashedplaceholder");
         UsersApiController controller = new UsersApiController(
                 DATA_SOURCE,

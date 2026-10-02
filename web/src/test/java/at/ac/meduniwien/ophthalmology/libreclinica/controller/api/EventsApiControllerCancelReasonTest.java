@@ -33,6 +33,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -88,9 +89,9 @@ class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
         // null.
 
         seDaoMock = Mockito.mockConstruction(StudyEventDAO.class,
-                (mock, _) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ev));
+                (mock, _) -> Mockito.when(mock.findByPK(ArgumentMatchers.anyInt())).thenReturn(ev));
         ssDaoMock = Mockito.mockConstruction(StudySubjectDAO.class,
-                (mock, _) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ss));
+                (mock, _) -> Mockito.when(mock.findByPK(ArgumentMatchers.anyInt())).thenReturn(ss));
     }
 
     @AfterEach
@@ -116,7 +117,7 @@ class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
         Mockito.when(ds.getConnection()).thenReturn(conn);
 
         PreparedStatement ps = Mockito.mock(PreparedStatement.class);
-        Mockito.when(conn.prepareStatement(Mockito.anyString())).thenReturn(ps);
+        Mockito.when(conn.prepareStatement(ArgumentMatchers.anyString())).thenReturn(ps);
 
         ResultSet rs = Mockito.mock(ResultSet.class);
         Mockito.when(ps.executeQuery()).thenReturn(rs);
@@ -133,7 +134,7 @@ class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
 
         SiteVisibilityFilter visibility = Mockito.mock(SiteVisibilityFilter.class);
         Mockito.when(visibility.visibleStudyIds(
-                        Mockito.any(), Mockito.any(), Mockito.any()))
+                        ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(Set.of(1));
 
         return mockMvcFor(new EventsApiController(ds, visibility,
@@ -220,7 +221,7 @@ class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
         Connection conn = Mockito.mock(Connection.class);
         Mockito.when(ds.getConnection()).thenReturn(conn);
         PreparedStatement ps = Mockito.mock(PreparedStatement.class);
-        Mockito.when(conn.prepareStatement(Mockito.anyString())).thenReturn(ps);
+        Mockito.when(conn.prepareStatement(ArgumentMatchers.anyString())).thenReturn(ps);
         ResultSet rs = Mockito.mock(ResultSet.class);
         Mockito.when(ps.executeQuery()).thenReturn(rs);
         // Two rows, then end.

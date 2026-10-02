@@ -18,10 +18,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockFilterChain;
@@ -195,7 +197,7 @@ class LegacyServletTelemetryFilterTest {
         verify(chain, never()).doFilter(any(), any());
         assertEquals(HttpServletResponse.SC_GONE, resp.getStatus());
         assertEquals("no-store", resp.getHeader("Cache-Control"));
-        assertTrue(resp.getContentType().startsWith("application/json"), resp.getContentType());
+        assertTrue(Objects.requireNonNull(resp.getContentType()).startsWith("application/json"), resp.getContentType());
         String body = resp.getContentAsString();
         assertTrue(body.contains("\"legacyPath\":\"/ListUserAccounts\""), body);
         assertTrue(body.contains("\"spaRoute\":\"/app/manage-users\""), body);
@@ -214,7 +216,7 @@ class LegacyServletTelemetryFilterTest {
 
         verify(chain, never()).doFilter(any(), any());
         assertEquals(HttpServletResponse.SC_GONE, resp.getStatus());
-        assertTrue(resp.getContentType().startsWith("text/html"), resp.getContentType());
+        assertTrue(Objects.requireNonNull(resp.getContentType()).startsWith("text/html"), resp.getContentType());
         assertTrue(resp.getContentAsString().contains("href=\"/LibreClinica/app/manage-users\""),
                 resp.getContentAsString());
         assertTrue(hits().get(0).endsWith("user=manual_dm alias=false action=gone"), hits().get(0));
@@ -272,7 +274,7 @@ class LegacyServletTelemetryFilterTest {
         MockHttpServletResponse spa = new MockHttpServletResponse();
         FilterChain spaChain = Mockito.mock(FilterChain.class);
         filter.doFilter(request("GET", "/pages", "/api/v1/me"), spa, spaChain);
-        Mockito.verify(spaChain).doFilter(Mockito.any(), Mockito.any());
+        Mockito.verify(spaChain).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
     @Test

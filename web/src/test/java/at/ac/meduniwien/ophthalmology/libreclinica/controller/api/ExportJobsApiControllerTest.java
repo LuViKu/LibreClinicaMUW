@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,7 +54,7 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
     /** A registrar that accepts any cron, so validation reaches the fields after it. */
     private MockMvc mockMvcAcceptingAnyCron() {
         ExportScheduleRegistrar registrar = Mockito.mock(ExportScheduleRegistrar.class);
-        Mockito.when(registrar.isValidCron(Mockito.anyString())).thenReturn(true);
+        Mockito.when(registrar.isValidCron(ArgumentMatchers.anyString())).thenReturn(true);
         return mockMvcFor(new ExportJobsApiController(mockDataSource(), registrar));
     }
 

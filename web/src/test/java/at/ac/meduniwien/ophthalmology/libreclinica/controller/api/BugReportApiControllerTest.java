@@ -23,6 +23,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.OpenClinicaMailSender;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -80,11 +81,11 @@ class BugReportApiControllerTest extends AbstractApiControllerTest {
         verify(sender).sendEmail(
                 eq("ops@example.org"),
                 any(), // from header — derived from EmailEngine.getAdminEmail()
-                Mockito.argThat(s -> s != null
+                ArgumentMatchers.argThat(s -> s != null
                         && s.contains("[LibreClinicaMUW Bug Report]")
                         && s.contains("BUG-")
                         && s.contains("Subjects list misrenders")),
-                Mockito.argThat(b -> b != null
+                ArgumentMatchers.argThat(b -> b != null
                         && b.contains("Title: Subjects list misrenders")
                         && b.contains("Reporter: physician (7)")
                         && b.contains("Active study: none")
@@ -204,7 +205,7 @@ class BugReportApiControllerTest extends AbstractApiControllerTest {
                 eq("ops@example.org"),
                 any(),
                 any(),
-                Mockito.argThat(b -> b != null
+                ArgumentMatchers.argThat(b -> b != null
                         && b.contains("Recent console output (3):")
                         && b.contains("[2026-06-11T09:00:00Z]  error  TypeError: x is undefined")
                         && b.contains("[2026-06-11T09:00:01Z]  warn  deprecated API foo")
@@ -238,7 +239,7 @@ class BugReportApiControllerTest extends AbstractApiControllerTest {
                 eq("ops@example.org"),
                 any(),
                 any(),
-                Mockito.argThat(b -> b != null
+                ArgumentMatchers.argThat(b -> b != null
                         && !b.contains("Recent console output")),
                 eq(false));
     }

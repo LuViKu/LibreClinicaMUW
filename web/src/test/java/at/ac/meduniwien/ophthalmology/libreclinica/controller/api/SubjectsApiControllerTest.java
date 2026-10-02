@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -157,9 +158,9 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         // DataSource.
         SiteVisibilityFilter filter = Mockito.mock(SiteVisibilityFilter.class);
         Mockito.when(filter.visibleStudyIds(
-                        Mockito.any(UserAccountBean.class),
-                        Mockito.any(StudyBean.class),
-                        Mockito.any(StudyUserRoleBean.class)))
+                        ArgumentMatchers.any(UserAccountBean.class),
+                        ArgumentMatchers.any(StudyBean.class),
+                        ArgumentMatchers.any(StudyUserRoleBean.class)))
                 .thenThrow(new RuntimeException("FILTER_INVOKED"));
         SubjectsApiController controller = new SubjectsApiController(
                 mockDataSource(), Mockito.mock(SecurityManager.class), filter);
@@ -182,9 +183,9 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
 
         Mockito.verify(filter, Mockito.atLeastOnce())
                 .visibleStudyIds(
-                        Mockito.any(UserAccountBean.class),
-                        Mockito.any(StudyBean.class),
-                        Mockito.any(StudyUserRoleBean.class));
+                        ArgumentMatchers.any(UserAccountBean.class),
+                        ArgumentMatchers.any(StudyBean.class),
+                        ArgumentMatchers.any(StudyUserRoleBean.class));
     }
 
     @Test

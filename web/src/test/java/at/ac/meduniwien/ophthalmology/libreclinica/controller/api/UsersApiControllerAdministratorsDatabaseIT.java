@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -197,7 +198,7 @@ class UsersApiControllerAdministratorsDatabaseIT extends AbstractApiControllerDa
     private MockMvc mockMvc() {
         SecurityManager securityManager = Mockito.mock(SecurityManager.class);
         Mockito.when(securityManager.genPassword()).thenReturn("Tmp-Admin-12!");
-        Mockito.when(securityManager.encryptPassword(Mockito.anyString(), Mockito.anyBoolean()))
+        Mockito.when(securityManager.encryptPassword(ArgumentMatchers.anyString(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("{bcrypt}$2a$10$hashedplaceholder");
         UsersApiController controller = new UsersApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE),
                 securityManager, Mockito.mock(AuthoritiesDao.class), new SsoProperties());

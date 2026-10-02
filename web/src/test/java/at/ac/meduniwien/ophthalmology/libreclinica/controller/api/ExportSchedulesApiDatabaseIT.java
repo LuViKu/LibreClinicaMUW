@@ -53,6 +53,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.quartz.CronTrigger;
 import org.quartz.JobDataMap;
@@ -787,7 +788,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .put(STUDY_ID, StudySettingService.EXPORT_BUNDLE_ENABLED, "true", 1);
         DatasetBean ds = persistDataset();
         RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
-        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt())).thenReturn(new ArrayList<>());
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(ArgumentMatchers.anyInt())).thenReturn(new ArrayList<>());
         SynchronousExportMaterializer materializer =
                 new SynchronousExportMaterializer(DATA_SOURCE, Mockito.mock(CoreResources.class), rules);
 
@@ -845,7 +846,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         DatasetBean ds = persistDataset();
         Path datasetDir = FILE_ROOT.resolve("datasets").resolve(String.valueOf(ds.getId()));
         RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
-        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt())).thenReturn(new ArrayList<>());
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(ArgumentMatchers.anyInt())).thenReturn(new ArrayList<>());
         // The cancel arrives once the first section is on disk: the next
         // database call after that asks this thread's job to stop, as
         // ExportJobRunner.requestCancel would, and the next checkpoint throws.

@@ -28,6 +28,7 @@ import java.util.Locale;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -129,7 +130,7 @@ class UsersApiControllerResetPasswordDatabaseIT extends AbstractApiControllerDat
         // Happy-path returns a deterministic generated password +
         // arbitrary hash — the IT doesn't pin the cleartext value.
         Mockito.when(securityManager.genPassword()).thenReturn("Tmp-Pw-12!");
-        Mockito.when(securityManager.encryptPassword(Mockito.anyString(), Mockito.anyBoolean()))
+        Mockito.when(securityManager.encryptPassword(ArgumentMatchers.anyString(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("{bcrypt}$2a$10$hashedplaceholder");
         UsersApiController controller = new UsersApiController(
                 DATA_SOURCE,

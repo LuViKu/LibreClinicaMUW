@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -44,7 +45,7 @@ class DueVisitsApiDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mockMvcWith(Set<Integer> visible) {
         SiteVisibilityFilter filter = Mockito.mock(SiteVisibilityFilter.class);
-        Mockito.when(filter.visibleStudyIds(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(filter.visibleStudyIds(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(visible);
         return MockMvcBuilders
                 // The interval calculator is only touched by the scheduling
