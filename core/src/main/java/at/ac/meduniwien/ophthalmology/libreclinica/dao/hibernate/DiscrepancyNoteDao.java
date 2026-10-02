@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNot
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
 
     @Override

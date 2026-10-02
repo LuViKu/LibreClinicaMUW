@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Section;
 import org.hibernate.query.NativeQuery;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class SectionDao extends AbstractDomainDao<Section> {
 
     @Override

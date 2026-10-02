@@ -146,6 +146,7 @@ public final class CrossSiteRequestFilter implements Filter {
         return host;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     private static void refuse(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         LOG.warn("Refused cross-site {} {} (Sec-Fetch-Site={}, Origin={})",
                 clean(req.getMethod()), clean(req.getRequestURI()),

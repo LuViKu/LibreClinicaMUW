@@ -352,9 +352,9 @@ public class SubjectExportApiController {
         BundleExportWriter.Policy policy = new BundleExportWriter.Policy(maskAi);
 
         if (dryRun) {
-            try {
+            try (OutputStream sink = OutputStream.nullOutputStream()) {
                 BundleExportWriter.Result r = BundleExportWriter.write(
-                        OutputStream.nullOutputStream(), dataSource, ss.getId(), ss.getLabel(),
+                        sink, dataSource, ss.getId(), ss.getLabel(),
                         pathStudy.getOid(), odm, csv, policy, currentUser.getName(), true);
                 return ResponseEntity.ok(r.manifest());
             } catch (IOException e) {
@@ -421,6 +421,7 @@ public class SubjectExportApiController {
      *       italicised at the bottom of each form.</li>
      * </ul>
      */
+    @SuppressWarnings("resource") // in-memory Document/PdfWriter over a ByteArrayOutputStream; no OS resource is held
     private byte[] renderPdf(CasebookSnapshot snap) throws DocumentException, IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         Document doc = new Document(PageSize.A4, 48f, 48f, 48f, 48f);

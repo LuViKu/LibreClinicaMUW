@@ -215,6 +215,7 @@ public class LegacyServletTelemetryFilter implements Filter {
                 + UriUtils.encodePath(path.substring(1), StandardCharsets.UTF_8) + suffix;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     private static void gone(HttpServletRequest req, HttpServletResponse resp, Entry entry) throws IOException {
         resp.setStatus(HttpServletResponse.SC_GONE);
         resp.setHeader("Cache-Control", "no-store");

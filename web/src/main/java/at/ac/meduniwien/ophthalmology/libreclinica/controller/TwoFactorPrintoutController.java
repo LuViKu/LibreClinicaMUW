@@ -44,6 +44,7 @@ public class TwoFactorPrintoutController {
 	 * @param response
 	 * @throws Exception In cases of errors
 	 */
+	@SuppressWarnings("resource") // the servlet container owns and closes the response stream
 	@GetMapping(produces = MediaType.APPLICATION_PDF_VALUE) // @formatter:off // ResponseEntity<TowFactorBean>
 	public void printout(@RequestParam(name = "userId", required = true) int userId, HttpServletResponse response) throws Exception {
 		response.setHeader("Content-Disposition", "attachment; filename=\"certificate.pdf\"");

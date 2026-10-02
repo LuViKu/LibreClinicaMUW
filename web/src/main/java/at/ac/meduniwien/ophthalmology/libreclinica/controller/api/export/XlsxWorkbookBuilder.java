@@ -62,6 +62,7 @@ public final class XlsxWorkbookBuilder implements AutoCloseable {
     private int rowIdx;
     private int headerCellCount;
 
+    @SuppressWarnings("resource") // the template workbook is wrapped by the SXSSFWorkbook, which close() releases
     public XlsxWorkbookBuilder(String sheetName) {
         // Phase E.6 (POI 5.3.0 + JDK 21 + Saxon 8.7 on classpath):
         // Saxon 8.7 (pulled in by LibreClinica-core for ODM XSLT) wins

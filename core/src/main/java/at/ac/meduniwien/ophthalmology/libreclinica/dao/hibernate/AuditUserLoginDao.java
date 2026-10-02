@@ -29,6 +29,7 @@ import org.hibernate.query.Query;
  * {@link Session#getCriteriaBuilder()} and let {@link AuditUserLoginFilter}
  * / {@link AuditUserLoginSort} contribute predicates and ordering.
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class AuditUserLoginDao extends AbstractDomainDao<AuditUserLoginBean> {
 
     @Override

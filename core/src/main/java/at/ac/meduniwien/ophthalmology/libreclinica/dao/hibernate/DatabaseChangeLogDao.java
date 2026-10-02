@@ -25,6 +25,7 @@ import org.hibernate.query.Query;
  * EntityManager. Same rationale as {@link AbstractDomainDao} — Spring 6's
  * hibernate5 legacy package can't link against Hibernate 6.
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DatabaseChangeLogDao {
 
     @PersistenceContext

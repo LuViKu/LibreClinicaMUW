@@ -455,6 +455,7 @@ public class IngestInboxApiController {
                 "pendingForSubject", pendingForSubject, "plan", plan));
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping("/{id:[0-9]+}/preview")
     public ResponseEntity<?> preview(@PathVariable("id") long id, HttpSession session,
                                      HttpServletResponse response) {

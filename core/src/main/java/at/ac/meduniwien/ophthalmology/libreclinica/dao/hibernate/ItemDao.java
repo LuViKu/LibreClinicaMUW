@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.OidGenerator;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item;
 import org.hibernate.query.NativeQuery;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class ItemDao extends AbstractDomainDao<Item> {
 
     @Override

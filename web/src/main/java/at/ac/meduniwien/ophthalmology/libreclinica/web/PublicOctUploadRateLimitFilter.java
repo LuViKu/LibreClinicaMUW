@@ -177,6 +177,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         return true;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,

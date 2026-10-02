@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemFormMetadataBean> {
 
     protected static final Logger LOG = LoggerFactory.getLogger(DynamicsItemFormMetadataDao.class);

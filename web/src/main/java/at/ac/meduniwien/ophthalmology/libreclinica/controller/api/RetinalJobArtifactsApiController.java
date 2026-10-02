@@ -110,6 +110,7 @@ public class RetinalJobArtifactsApiController {
         return jobsDelegate;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/artifacts/{name:.+}")
     public ResponseEntity<?> streamArtifact(@PathVariable("jobId") long jobId,
                                             @PathVariable("name") String name,
@@ -230,6 +231,7 @@ public class RetinalJobArtifactsApiController {
     /* onl/pr = surface_y float32 (z, cols). Only fluid is wired in this     */
     /* push; ga/onl/pr surface 501 Not Implemented until their loaders land. */
     /* ====================================================================== */
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation")
     public ResponseEntity<?> streamSegmentation(@PathVariable("jobId") long jobId,
                                                 HttpSession session,

@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The {@code getCurrentSession()} / {@code getSessionFactory()} accessor
  * surface is preserved so subclasses keep working without per-DAO edits.
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public abstract class AbstractDomainDao<T extends DomainObject> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());

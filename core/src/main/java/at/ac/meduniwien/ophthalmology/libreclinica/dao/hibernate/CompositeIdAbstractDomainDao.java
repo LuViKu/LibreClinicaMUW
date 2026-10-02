@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link #saveOrUpdate} and to run its own query, so that is all this base
  * still offers.
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainObject> {
 
     @PersistenceContext

@@ -211,6 +211,7 @@ public class ImageIngestApiController {
 
     // ----- GET /{id}/preview -----
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping("/{id:[0-9]+}/preview")
     public ResponseEntity<?> preview(@PathVariable("id") long id, HttpSession session,
                                      HttpServletResponse response) {
