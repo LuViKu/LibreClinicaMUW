@@ -4,10 +4,19 @@ LibreClinica MUW Ophthalmology — Phase A7 (pre-launch hardening).
 
 ## Changelog
 
+- **2026-10-02 (Liquibase 3.6.3 → 4.31.1):** the Liquibase 1.9.1.0 Maven
+  plugin is removed from the build, and with it the §1 `liquibase:status`
+  preview and the §2 `liquibase:validate` check. It ran its own Liquibase
+  1.9 engine, without the app's contexts or LAX parsing, so its answers
+  were wrong for these databases, and it was never shown to be read-only.
+  The §2 staging dry-run is now the only pre-deploy check. §5 says why the
+  Liquibase 4 release is rolled back by restoring the dump, and what that
+  costs.
 - **2026-06-10 (Phase B hardening, Stream 8 / PR #170 follow-up):** resolved
   all 6 in-doc gaps left from v1: §1 documents the existing
   `liquibase-maven-plugin` v1.9.1.0 (`pom.xml:1310`) `status` goal; §2
   adds a pre-deploy validation subsection covering `liquibase:validate`
+  (both removed 2026-10-02, see above)
   + the `LIQUIBASE_CONTEXTS` env var; §3 prescribes the
   `ghcr.io/luviku/libreclinicamuw:<semver>` image-tag convention and
   documents the new Dockerfile `HEALTHCHECK` + its 90 s `start-period`
@@ -82,28 +91,21 @@ The `db` and `smtp` services stay running. The Liquibase changelog
 runs against the live database when `libreclinica` starts again, so
 the database MUST be reachable through the rest of this runbook.
 
-### Preview pending changesets (optional, recommended)
+### Preview pending changesets
 
-The `liquibase-maven-plugin` v1.9.1.0 is already declared at
-[`pom.xml:1310`](../../pom.xml). Its `status` goal lists the
-changesets that would be applied on the next `update`, against a live
-DB whose credentials come from the `<config.file>` property — no
-extra compose service required. Run it on the deploy host (or any
-host with network reach to the production DB and the project
-checkout):
+Do not run any Liquibase tool against the production database to
+preview the release. The list of changesets a release will apply comes
+from the §2 staging dry-run, on a restored copy: its update summary
+says how many ran (`Run:`) and how many were already applied
+(`Previously run:`).
 
-```bash
-docker run --rm \
-  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-25 \
-  mvn -B -pl core liquibase:status \
-      -Dconfig.file=docker/config/datainfo.properties
-```
-
-A clean release prints something like
-`X changesets have not been applied to clinica@jdbc:postgresql://…`
-or `clinica is up to date` — if it lists anything you did not expect
-to ship, stop and reconcile against the diff.
+Until 2026-10-02 this section recommended `mvn liquibase:status`
+through the Liquibase 1.9.1.0 Maven plugin. That plugin is gone from
+the build. It brought its own Liquibase 1.9 engine, which applies
+neither the app's `!demo` context default nor the LAX parsing the
+heritage changelog needs, and does not understand the `9:` checksums
+Liquibase 4 stores, so its report was wrong. Nor was it ever shown to
+leave `databasechangelog` and `databasechangeloglock` untouched.
 
 ---
 
@@ -134,17 +136,27 @@ the new image and watch the Liquibase log lines:
 ```bash
 docker compose -p libreclinica-staging up -d libreclinica
 docker compose -p libreclinica-staging logs -f libreclinica \
-  | grep -iE 'liquibase|changeset|sqlexception'
+  | grep -iE 'liquibase|changeset|sqlexception|run:|filtered out'
 ```
 
-Expected output for a clean release:
+Expected output for a clean release: one line per new changeset, then
+Liquibase's update summary. `Run:` must equal the number of changesets
+the release adds, and `Previously run:` the number the database already
+had (`SELECT count(*) FROM databasechangelog` on the restored dump). For
+the Liquibase 4 release itself, which adds none, that is `Run: 0`.
 
 ```
-INFO liquibase.changelog : Reading from public.databasechangelog
-INFO liquibase.changelog : ChangeSet migration/lc-muw-2026-06-08-...::muw applied
-INFO liquibase.changelog : ChangeSet migration/lc-muw-2026-06-09-...::muw applied
-INFO liquibase.changelog : Database is up to date, no changesets to execute
+INFO  liquibase.changelog.ChangeSet - ChangeSet migration/lc-muw-2026-06-08-...::muw ran successfully in 7ms
+INFO  liquibase.changelog.ChangeSet - ChangeSet migration/lc-muw-2026-06-09-...::muw ran successfully in 5ms
+INFO  liquibase.util - UPDATE SUMMARY
+INFO  liquibase.util - Run:                          2
+INFO  liquibase.util - Previously run:            1167
+INFO  liquibase.util - Filtered out:               106
 ```
+
+`Filtered out` counts the changesets the production contexts (`!demo`)
+and the database type skip; it does not change between releases unless
+a release adds demo-only or non-PostgreSQL changesets.
 
 Read the applied changeset list against the diff being deployed
 and flag the three highest-risk patterns before approving:
@@ -175,23 +187,21 @@ skips dev-only seed changesets. Staging can override it (e.g.
 `LIQUIBASE_CONTEXTS=demo` to seed demo data) by adding the env var to
 `compose.yaml`.
 
-For a read-only "does the candidate changelog even parse?" check
-that does NOT write to the DB, use the plugin's `validate` goal —
-it walks the changelog and reports parse errors / duplicate
-changeset IDs / preCondition syntax errors without applying
-anything:
-
-```bash
-docker run --rm \
-  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-25 \
-  mvn -B -pl core liquibase:validate \
-      -Dconfig.file=docker/config/datainfo.properties
-```
-
-Run this before the staging boot-log dry-run; it surfaces
-authoring mistakes in seconds and avoids burning a staging restart
-cycle on a typo.
+There is no separate validation tool, and nothing in this runbook runs
+Liquibase against the production database except the app itself (the
+`liquibase:validate` goal this section used to recommend went with the
+Liquibase 1.9.1.0 plugin, see §1). The staging boot above is the
+validation. Before it applies anything, the app's Liquibase parses the
+whole changelog and checks every stored checksum. A parse error, a
+duplicate changeset ID or a changed checksum (on a changeset that is not
+`runOnChange`) stops the boot with a
+`ValidationFailedException` and leaves the database untouched, so it
+shows up on the staging clone, not on production. Authoring mistakes
+are caught earlier still: CI builds a database from scratch
+(`LiquibaseChangelogIdempotencyIT`), checks that a database whose
+changelog Liquibase 3.6.3 wrote upgrades without running anything
+(`Liquibase363UpgradeDatabaseIT`), and rejects unknown changelog
+elements (`ChangelogElementsTest`).
 
 ---
 

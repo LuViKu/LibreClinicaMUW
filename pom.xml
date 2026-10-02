@@ -35,9 +35,6 @@
 		<!-- Project's source control URL -->
 		<git.url>https://github.com/reliatec-gmbh/LibreClinica.git</git.url>
 
-		<!-- Config file - required by liquibase plugin -->
-		<config.file>src/main/resources/datainfo.properties</config.file>
-
 		<!-- Library versions. Phase B.4 (2026-05-29) crossed the jakarta cliff:
 		     Spring 5.3 → 6.1, Spring Security 5.8 → 6.3, javax.* → jakarta.*,
 		     hibernate-core swapped to the hibernate-core-jakarta artifact (still
@@ -727,7 +724,10 @@
 			     LaxParsingSpringLiquibase (the seven heritage modifyColumn
 			     elements, which 3.6.3 skipped silently) and SerialPostgresDatabase
 			     (autoIncrement columns stay serial, as 3.6.3 created them). The
-			     evidence is in docs/development/modernization/liquibase-4-spike-2026-09-30.md. -->
+			     evidence is in docs/development/modernization/liquibase-4-spike-2026-09-30.md.
+			     There is deliberately no Liquibase Maven plugin: the only tool that
+			     runs this changelog is the app's own LaxParsingSpringLiquibase bean,
+			     with its contexts (the 1.9.1.0 liquibase-plugin was removed). -->
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
@@ -1379,14 +1379,6 @@
 							<home>${catalina.home}</home>
 							<type>existing</type>
 						</configuration>
-					</configuration>
-				</plugin>
-				<plugin>
-					<groupId>org.liquibase</groupId>
-					<artifactId>liquibase-plugin</artifactId>
-					<version>1.9.1.0</version>
-					<configuration>
-						<propertyFile>${config.file}</propertyFile>
 					</configuration>
 				</plugin>
 				<plugin>
