@@ -171,9 +171,12 @@ export const dataManagerDe: ManualChapter = {
         'Für ein gespeichertes Dataset öffnet **Jetzt exportieren** eine Formatauswahl — **ODM**, **CSV**, **TSV**, **Excel**, **SAS** oder **SPSS** — und lädt das Ergebnis herunter.',
         '**Dateien anzeigen** klappt eine Unterzeile auf, die jede erzeugte Datei mit Größe, Zeitstempel und einem **Herunterladen**-Link auflistet.',
         '**Entfernen** löscht ein Dataset weich (soft-delete); setzen Sie das Häkchen bei **entfernte anzeigen**, um es wieder**herzustellen**.',
+        'Unter **Zeitpläne** richten Sie wiederkehrende Exporte ein: ein Format, einen Zeitpunkt (ein Quartz-Cron-Ausdruck, mit Vorlagen) und optional eine Kontakt-E-Mail, die nach jedem fertigen oder fehlgeschlagenen Lauf eine Nachricht erhält. Dort bearbeiten, pausieren, fortsetzen oder löschen Sie einen Zeitplan; Änderungen gelten sofort.',
+        'Ein Export, der im Hintergrund läuft, zeigt seinen Fortschritt unter seinem Dataset; **Export abbrechen** hält ihn an und hinterlässt keine Datei.',
       ],
       notes: [
         'Das Bearbeiten eines Datasets ist gesperrt, sobald es ausgeführt wurde (um einen reproduzierbaren Extrakt zu wahren); legen Sie stattdessen ein neues an.',
+        'Die Exporte eines Zeitplans laufen unter dem Konto, das ihn angelegt hat.',
       ],
     },
     {

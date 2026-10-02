@@ -165,9 +165,12 @@ export const administratorDe: ManualChapter = {
         'Klicken Sie für einen schnellen Auszug auf **Schnell-ODM-Export**. Klicken Sie für einen maßgeschneiderten Auszug auf **Neuer Datensatz** und füllen Sie den Datensatz-Assistenten aus.',
         'Erweitern Sie in der Datensatz-Tabelle **View files**, **Open wizard**, um einen Datensatz zu bearbeiten (deaktiviert, sobald er ausgeführt wurde), oder **Remove** / **Restore**, um seinen Lebenszyklus zu verwalten.',
         'Klicken Sie auf **Export now** und wählen Sie ein Format — *odm*, *csv*, *tsv*, *excel*, *sas* oder *spss* — und laden Sie dann die erzeugte Datei herunter.',
+        'Unter **Zeitpläne** richten Sie wiederkehrende Exporte ein: ein Format, einen Zeitpunkt (ein Quartz-Cron-Ausdruck, mit Vorlagen für täglich, wöchentlich und monatlich) und optional eine Kontakt-E-Mail, die nach jedem fertigen oder fehlgeschlagenen Lauf eine Nachricht erhält. Ein Zeitplan lässt sich bearbeiten, pausieren, fortsetzen und löschen; Änderungen gelten sofort.',
+        'Ein Export, der im Hintergrund läuft (das Komplettpaket oder ein geplanter Lauf), zeigt seinen Fortschritt unter seinem Datensatz; **Export abbrechen** hält ihn an. Ein wartender Export läuft nicht mehr, ein laufender hält am nächsten Prüfpunkt an und hinterlässt keine Datei.',
       ],
       notes: [
         'Zugänglich für Administrator/-in, Studienleitung und Monitor. Aktivieren Sie **Entfernte einschließen**, um sanft gelöschte Datensätze anzuzeigen. Ein bereits ausgeführter Datensatz kann nicht bearbeitet werden — klonen Sie ihn oder legen Sie stattdessen einen neuen an.',
+        'Zeitpläne ersetzen die klassische Maske *Create Scheduled Job: Export Dataset*; die Exporte eines Zeitplans laufen unter dem Konto, das ihn angelegt hat.',
       ],
     },
     {
@@ -250,8 +253,9 @@ export const administratorDe: ManualChapter = {
         'Öffnen Sie **Geplante Jobs** über die Seitenleiste **System** (`/admin/jobs`).',
         'Prüfen Sie die Statusleiste des Schedulers (Name, gestartet/Bereitschaft) und die Jobtabelle: Name, Gruppe, Status, vorherige und nächste Auslösezeiten, Beschreibung.',
         'Klicken Sie auf **Aktualisieren**, um erneut abzufragen.',
+        'Ein geplanter Export aus der klassischen Maske *Create Scheduled Job* trägt die Plakette **Alter Export-Job** mit Datensatz, Intervall, Format und Kontakt-E-Mail und läuft weiter, bis er gelöscht wird. Legen Sie ihn als Zeitplan des Datensatzes neu an (**Datenexport** → **Zeitpläne**) und klicken Sie dann hier auf **Löschen**.',
       ],
-      notes: ['Ausschließlich Administrator/-innen vorbehalten und schreibgeschützt. Die Status-Plakette ist farblich codiert (NORMAL grün, PAUSED gelb, ERROR/BLOCKED rot). Eine leere Liste zeigt *Keine Jobs*.'],
+      notes: ['Ausschließlich Administrator/-innen vorbehalten. Löschen lassen sich hier nur alte geplante Exporte; alle anderen Trigger gehören der Plattform und sind schreibgeschützt. Neue Export-Zeitpläne legen Sie je Datensatz unter **Datenexport** an. Die Status-Plakette ist farblich codiert (NORMAL grün, PAUSED gelb, ERROR/BLOCKED rot). Eine leere Liste zeigt *Keine Jobs*.'],
     },
     {
       id: 'ad-subject', num: '17', title: 'Probandendetail · Studien-Identität', deutsch: 'Subject Detail, Study Identity & Parameters', route: '/subjects/<id>',

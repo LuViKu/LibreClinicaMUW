@@ -306,6 +306,15 @@ Administrator's and wider than a Monitor's. Common entry points:
 4. **View files** expands a sub-row listing every generated file with size,
    timestamp, and a **download** link.
 5. **Remove** soft-deletes a dataset; tick **show removed** to **restore** it.
+6. **Schedules** sets up recurring exports of the dataset: a format, a time (a
+   Quartz cron expression, with presets for daily, weekly and monthly runs)
+   and an optional contact e-mail that is mailed when a run finishes or fails.
+   A schedule can be edited, paused, resumed or deleted; a change applies at
+   once.
+7. An export running in the background (the bundle, or a scheduled run) shows
+   its progress under its dataset. **Cancel export** stops it: a waiting export
+   does not run, and a running one stops at its next checkpoint and leaves no
+   file.
 
 ![Datasets / Data Export](screenshots/data-manager/09-datasets.png)
 
@@ -314,6 +323,7 @@ Administrator's and wider than a Monitor's. Common entry points:
 - Editing a dataset is blocked once it has been run (to preserve a reproducible
   extract); create a new one instead.
 - Export is available to Data Managers, Monitors, and Administrators.
+- A schedule's exports run as the user who created it.
 
 ---
 
