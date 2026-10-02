@@ -135,7 +135,8 @@
       "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
       "dataExportTitle": "Datenexport",
       "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen.",
-      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen."
+      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen.",
+      "adminStudiesDesc": "Alle Studien und Standorte der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -149,6 +150,12 @@
     },
     "queue": {
       "loading": "Anzahl wird geladen"
+    },
+    "studyMetadata": {
+      "title": "Studienmetadaten (ODM)",
+      "description": "Das Studiendesign als CDISC-ODM-1.3-Datei herunterladen.",
+      "downloading": "Wird heruntergeladen…",
+      "failed": "Der Download ist fehlgeschlagen. Bitte erneut versuchen."
     }
   },
   "common": {
@@ -2159,8 +2166,14 @@
       "submit": "Änderungen speichern",
       "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
       "leaveUnchanged": "— Unverändert lassen —",
-      "parametersLink": "Parameter & Module"
-    }
+      "parametersLink": "Parameter & Module",
+      "downloadMetadata": "Metadaten herunterladen (ODM)",
+      "downloadFailed": "Die Metadaten konnten nicht heruntergeladen werden."
+    },
+    "protocolDescription": "Ausführliche Beschreibung",
+    "collaborators": "Kooperationspartner",
+    "contactEmail": "Kontakt-E-Mail",
+    "contactEmailHint": "Adresse der Projektleitung. Pflicht, solange die Anmelde-Benachrichtigung per E-Mail aktiv ist."
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
@@ -2240,7 +2253,8 @@
       "phone": "Telefon",
       "affiliation": "Institutszugehörigkeit",
       "submit": "Änderungen speichern",
-      "successFlash": "Profil aktualisiert."
+      "successFlash": "Profil aktualisiert.",
+      "requiredCleared": "Pflichtfeld: Es kann nicht geleert werden."
     },
     "lifecycle": {
       "disable": "Deaktivieren",
@@ -2283,7 +2297,41 @@
       "rolesForNewStudy": "Rollen für die neue Studie",
       "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
       "savedToast": "Rollen aktualisiert.",
-      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert.",
+      "legacyRole": {
+        "ra": "Dateneingabe (Altrolle)",
+        "ra2": "Dateneingabe 2 (Altrolle)"
+      },
+      "legacyHint": "Altrolle: Beim Speichern der Zeile bleibt sie erhalten. Zum Entfernen abwählen; hier lässt sie sich nicht neu vergeben."
+    },
+    "userType": {
+      "label": "Kontotyp",
+      "USER": "Nutzer/-in",
+      "SYSADMIN": "Fachliche Administration",
+      "TECHADMIN": "Technische Administration",
+      "help": "Die Administration verwaltet Nutzer/-innen und Studien plattformweit. Nur die technische Administration kann jemanden zur technischen Administration machen.",
+      "techOnly": "Nur die technische Administration kann den Kontotyp einer technischen Administration ändern."
+    },
+    "details": {
+      "action": "Angaben",
+      "title": "Kontoangaben",
+      "close": "Schließen",
+      "yes": "Ja",
+      "no": "Nein",
+      "dateBy": "{date} von {user}",
+      "username": "Benutzername",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "affiliation": "Institutszugehörigkeit",
+      "businessAdmin": "Fachliche Administration",
+      "technicalAdmin": "Technische Administration",
+      "status": "Status",
+      "auth": "Anmeldung",
+      "lastLogin": "Letzte Anmeldung",
+      "created": "Angelegt",
+      "updated": "Zuletzt geändert"
     }
   },
   "retinalParked": {
@@ -4087,5 +4135,61 @@
   },
   "pageHeader": {
     "trail": "Pfad"
+  },
+  "adminStudies": {
+    "title": "Studien",
+    "subtitle": "Alle Studien der Plattform, auch entfernte: {studies} Studien, {sites} Standorte.",
+    "create": "Studie anlegen",
+    "searchPlaceholder": "Name, Protokoll-ID, OID oder PI suchen …",
+    "column": {
+      "name": "Name",
+      "uniqueIdentifier": "Eindeutige Protokoll-ID",
+      "oid": "OID",
+      "principalInvestigator": "Studienleitung",
+      "created": "Angelegt",
+      "status": "Status"
+    },
+    "empty": "Keine Studie passt zur Suche.",
+    "metadata": "Metadaten (ODM)",
+    "remove": "Entfernen",
+    "restore": "Wiederherstellen",
+    "sitesNote": "Standorte werden auf der Standortseite ihrer Studie entfernt und wiederhergestellt.",
+    "downloadFailed": "Die Metadaten von {study} konnten nicht heruntergeladen werden. {reason}",
+    "status": {
+      "AVAILABLE": "Verfügbar",
+      "PENDING": "Vorbereitung",
+      "FROZEN": "Eingefroren",
+      "LOCKED": "Gesperrt",
+      "REMOVED": "Entfernt",
+      "AUTO_REMOVED": "Mit der Studie entfernt",
+      "UNAVAILABLE": "Nicht verfügbar",
+      "PRIVATE": "Privat",
+      "UNKNOWN": "Unbekannt"
+    }
+  },
+  "studyLifecycle": {
+    "removeTitle": "Studie entfernen",
+    "restoreTitle": "Studie wiederherstellen",
+    "removeIntro": "Mit der Studie wird alles entfernt, was darunter liegt:",
+    "previewFailed": "Der Umfang der Entfernung konnte nicht ermittelt werden.",
+    "nothingUnder": "Unter dieser Studie liegt noch nichts anderes.",
+    "impact": {
+      "sites": "Standorte: {n}",
+      "roleBindings": "Rollenzuweisungen: {n}",
+      "subjects": "Studienteilnehmer/-innen: {n}",
+      "groupClasses": "Gruppenklassen: {n}",
+      "eventDefinitions": "Visiten-Definitionen: {n}",
+      "events": "Visiten: {n}",
+      "eventCrfs": "Ausgefüllte CRF-Bögen: {n}",
+      "itemData": "Eingetragene Werte: {n}",
+      "datasets": "Datensätze: {n}"
+    },
+    "removeReversible": "Es wird nichts gelöscht: Die Daten bleiben in der Datenbank, und eine entfernte Studie kann wiederhergestellt werden. Bis dahin kann niemand die Studie öffnen oder mit ihren Daten arbeiten.",
+    "restoreIntro": "Die Studie erhält den Status zurück, den sie beim Entfernen hatte, zusammen mit den Standorten, Rollenzuweisungen, Studienteilnehmer/-innen, Visiten und Daten, die mit ihr entfernt wurden. Was schon vorher für sich entfernt wurde, bleibt entfernt.",
+    "reason": "Begründung",
+    "reasonPlaceholder": "Wird im Audit-Trail festgehalten",
+    "reasonRequired": "Bitte eine Begründung angeben; sie wird im Audit-Trail festgehalten.",
+    "removeConfirm": "Studie entfernen",
+    "restoreConfirm": "Studie wiederherstellen"
   }
 }

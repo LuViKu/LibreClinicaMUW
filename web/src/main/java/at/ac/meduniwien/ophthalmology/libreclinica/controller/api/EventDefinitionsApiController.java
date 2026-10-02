@@ -1008,7 +1008,8 @@ public class EventDefinitionsApiController {
                                 item.setStatus(Status.AVAILABLE);
                                 item.setUpdater(me);
                                 item.setUpdatedDate(now);
-                                itemDataDao.update(item);
+                                // Not update(): that clears the value's provenance.
+                                itemDataDao.updateStatusOnly(item);
                                 restoredItemDataCount++;
                             }
                         }
@@ -1190,7 +1191,8 @@ public class EventDefinitionsApiController {
                     item.setStatus(newStatus);
                     item.setUpdater(me);
                     item.setUpdatedDate(now);
-                    itemDataDao.update(item);
+                    // Not update(): that clears the value's provenance.
+                    itemDataDao.updateStatusOnly(item);
                     touched++;
                 }
             }

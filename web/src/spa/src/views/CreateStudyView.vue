@@ -39,6 +39,9 @@ interface Form {
   secondaryProtocolId: string
   protocolType: string
   phase: string
+  protocolDescription: string
+  collaborators: string
+  contactEmail: string
 }
 
 function blankForm(): Form {
@@ -52,6 +55,9 @@ function blankForm(): Form {
     secondaryProtocolId: '',
     protocolType: 'Interventional',
     phase: '',
+    protocolDescription: '',
+    collaborators: '',
+    contactEmail: '',
   }
 }
 
@@ -96,6 +102,9 @@ async function submit() {
       secondaryProtocolId: form.value.secondaryProtocolId.trim() || undefined,
       protocolType: form.value.protocolType.trim() || undefined,
       phase: form.value.phase.trim() || undefined,
+      protocolDescription: form.value.protocolDescription.trim() || undefined,
+      collaborators: form.value.collaborators.trim() || undefined,
+      contactEmail: form.value.contactEmail.trim() || undefined,
     })
     if (result.ok) {
       // 2026-06-21 user-feedback round 4 — auto-bind the new study
@@ -161,6 +170,17 @@ function cancel() {
             <TextInput id="study-summary" v-model="form.briefSummary" />
             <ErrorText v-if="fieldErrors.briefSummary">{{ fieldErrors.briefSummary }}</ErrorText>
           </div>
+          <div class="col-span-2">
+            <FieldLabel for="study-description">{{ t('studyForm.protocolDescription') }}</FieldLabel>
+            <textarea
+              id="study-description"
+              v-model="form.protocolDescription"
+              rows="4"
+              maxlength="1000"
+              class="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus"
+            />
+            <ErrorText v-if="fieldErrors.protocolDescription">{{ fieldErrors.protocolDescription }}</ErrorText>
+          </div>
           <div>
             <FieldLabel for="study-pi" required>{{ t('studyForm.principalInvestigator') }}</FieldLabel>
             <TextInput id="study-pi" v-model="form.principalInvestigator" />
@@ -170,6 +190,17 @@ function cancel() {
             <FieldLabel for="study-sponsor" required>{{ t('studyForm.sponsor') }}</FieldLabel>
             <TextInput id="study-sponsor" v-model="form.sponsor" />
             <ErrorText v-if="fieldErrors.sponsor">{{ fieldErrors.sponsor }}</ErrorText>
+          </div>
+          <div>
+            <FieldLabel for="study-collaborators">{{ t('studyForm.collaborators') }}</FieldLabel>
+            <TextInput id="study-collaborators" v-model="form.collaborators" />
+            <ErrorText v-if="fieldErrors.collaborators">{{ fieldErrors.collaborators }}</ErrorText>
+          </div>
+          <div>
+            <FieldLabel for="study-contact-email">{{ t('studyForm.contactEmail') }}</FieldLabel>
+            <TextInput id="study-contact-email" v-model="form.contactEmail" type="email" autocomplete="email" />
+            <p class="text-xs text-slate-500 mt-1">{{ t('studyForm.contactEmailHint') }}</p>
+            <ErrorText v-if="fieldErrors.contactEmail">{{ fieldErrors.contactEmail }}</ErrorText>
           </div>
           <div class="col-span-2">
             <FieldLabel for="study-official-title">{{ t('studyForm.officialTitle') }}</FieldLabel>

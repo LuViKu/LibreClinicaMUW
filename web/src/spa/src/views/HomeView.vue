@@ -29,6 +29,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingCard, { type RoleVariant } from '@/components/LandingCard.vue'
 import WorkQueueCard from '@/components/WorkQueueCard.vue'
+import StudyMetadataCard from '@/components/StudyMetadataCard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSdvStore } from '@/stores/sdv'
 import { useNotesStore } from '@/stores/notes'
@@ -37,6 +38,7 @@ import { useRulesStore } from '@/stores/rules'
 import { useSubjectsStore, matchesStatusFilter } from '@/stores/subjects'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { entryAllowsRoles } from '@/studyModules/roleGate'
+import { userMayDownloadStudyMetadata } from '@/lib/studyMetadataAccess'
 import { ingestInboxCounts } from '@/api/ingest'
 import { listDueVisits } from '@/api/events'
 import type { UserRole } from '@/types/auth'
@@ -81,9 +83,13 @@ const ROLE_TO_VARIANT: Record<UserRole, RoleVariant> = {
   Administrator: 'administrator',
 }
 
-const canSwitchStudy = computed(() => (auth.availableStudies?.length ?? 0) > 1)
+// A system administrator can open any study (the picker lists them all),
+// whatever their own bindings.
+const canSwitchStudy = computed(() => auth.isSysAdmin || (auth.availableStudies?.length ?? 0) > 1)
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
 const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
+/** The study's design as ODM, for the roles the endpoint admits: the legacy Download Study Metadata page. */
+const canDownloadMetadata = computed(() => userMayDownloadStudyMetadata(auth.user))
 const displayName = computed(() => auth.user?.displayName || auth.user?.username || '')
 
 /** Today, in the operator's language — the one thing a dashboard header should say. */
@@ -323,6 +329,17 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     group: 'platform',
   },
   {
+    // Every study on the platform; the list is for system administrators
+    // only, which the Administrator role alone does not tell apart.
+    id: 'admin-studies',
+    to: { name: 'admin-studies' },
+    titleKey: 'adminStudies.title',
+    descKey: 'home.administrator.adminStudiesDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => auth.isSysAdmin,
+    group: 'platform',
+  },
+  {
     id: 'modalities',
     to: { name: 'modalities' },
     titleKey: 'modalities.title',
@@ -501,7 +518,7 @@ onMounted(() => {
 
     <!-- Where else to go, in the active study. -->
     <section
-      v-if="studyWorkspaces.length > 0 || moduleCards.length > 0"
+      v-if="studyWorkspaces.length > 0 || moduleCards.length > 0 || canDownloadMetadata"
       :aria-label="t('home.sections.study', { study: activeStudyName })"
       class="mb-10"
       data-testid="home-study-workspaces"
@@ -528,6 +545,7 @@ onMounted(() => {
           v-for="entry in moduleCards"
           :key="entry.key"
         />
+        <StudyMetadataCard v-if="canDownloadMetadata" :study-oid="activeStudyOid" />
       </div>
     </section>
 

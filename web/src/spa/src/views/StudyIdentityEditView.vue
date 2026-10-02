@@ -12,6 +12,7 @@ import ErrorText from '@/components/ErrorText.vue'
 import { apiGet } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyStore } from '@/stores/study'
+import { useAdminStudiesStore } from '@/stores/adminStudies'
 import type { StudyIdentity } from '@/types/study'
 
 /**
@@ -27,18 +28,20 @@ import type { StudyIdentity } from '@/types/study'
  * commonly-edited fields. The PUT response carries the canonical
  * StudyIdentityDto we hydrate the form with on first edit.).
  *
- * Note: the M12 read-side doesn't yet expose every identity field
- * (collaborators / protocolDescription / contactEmail), so the form
- * starts blank for those fields. An A8.1 follow-up adds
- * GET /api/v1/studies/{oid} so the form can pre-fill — for now this
- * slice ships the edit path with explicit "leave blank to keep current
- * value" semantics.
+ * The detailed description, collaborators and contact e-mail are bound
+ * like the rest: pre-filled from GET /api/v1/studies/{oid}, and a field
+ * emptied here is cleared (all three are optional). The server refuses
+ * to clear the contact e-mail while login e-mail notification is on.
+ *
+ * The page also offers the study's ODM metadata as a download, for the
+ * archive at study close.
  */
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const studies = useStudyStore()
 const auth = useAuthStore()
+const adminStudies = useAdminStudiesStore()
 
 const oid = computed(() => String(route.params.oid))
 
@@ -51,6 +54,9 @@ interface Form {
   secondaryProtocolId: string
   protocolType: string
   phase: string
+  protocolDescription: string
+  collaborators: string
+  contactEmail: string
 }
 
 const form = ref<Form>({
@@ -62,6 +68,9 @@ const form = ref<Form>({
   secondaryProtocolId: '',
   protocolType: '',
   phase: '',
+  protocolDescription: '',
+  collaborators: '',
+  contactEmail: '',
 })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
@@ -91,6 +100,9 @@ onMounted(async () => {
       secondaryProtocolId: identity.secondaryProtocolId ?? '',
       protocolType: identity.protocolType ?? '',
       phase: identity.phase ?? '',
+      protocolDescription: identity.protocolDescription ?? '',
+      collaborators: identity.collaborators ?? '',
+      contactEmail: identity.contactEmail ?? '',
     }
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Unknown error'
@@ -98,6 +110,21 @@ onMounted(async () => {
     isLoading.value = false
   }
 })
+
+const downloading = ref(false)
+const downloadError = ref<string | null>(null)
+
+async function downloadMetadata() {
+  downloading.value = true
+  downloadError.value = null
+  try {
+    await adminStudies.downloadMetadata(oid.value)
+  } catch (e) {
+    downloadError.value = e instanceof Error ? e.message : t('studyForm.edit.downloadFailed')
+  } finally {
+    downloading.value = false
+  }
+}
 
 // #7/#12 — required identity fields (uniqueProtocolId is create-only, so
 // it's not part of the edit form). Validated client-side before the PUT so
@@ -216,6 +243,17 @@ function cancel() {
             <TextInput id="study-summary" v-model="form.briefSummary" />
             <ErrorText v-if="fieldErrors.briefSummary">{{ fieldErrors.briefSummary }}</ErrorText>
           </div>
+          <div class="col-span-2">
+            <FieldLabel for="study-description">{{ t('studyForm.protocolDescription') }}</FieldLabel>
+            <textarea
+              id="study-description"
+              v-model="form.protocolDescription"
+              rows="4"
+              maxlength="1000"
+              class="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus"
+            />
+            <ErrorText v-if="fieldErrors.protocolDescription">{{ fieldErrors.protocolDescription }}</ErrorText>
+          </div>
           <div>
             <FieldLabel for="study-pi" required>{{ t('studyForm.principalInvestigator') }}</FieldLabel>
             <TextInput id="study-pi" v-model="form.principalInvestigator" />
@@ -225,6 +263,17 @@ function cancel() {
             <FieldLabel for="study-sponsor" required>{{ t('studyForm.sponsor') }}</FieldLabel>
             <TextInput id="study-sponsor" v-model="form.sponsor" />
             <ErrorText v-if="fieldErrors.sponsor">{{ fieldErrors.sponsor }}</ErrorText>
+          </div>
+          <div>
+            <FieldLabel for="study-collaborators">{{ t('studyForm.collaborators') }}</FieldLabel>
+            <TextInput id="study-collaborators" v-model="form.collaborators" />
+            <ErrorText v-if="fieldErrors.collaborators">{{ fieldErrors.collaborators }}</ErrorText>
+          </div>
+          <div>
+            <FieldLabel for="study-contact-email">{{ t('studyForm.contactEmail') }}</FieldLabel>
+            <TextInput id="study-contact-email" v-model="form.contactEmail" type="email" autocomplete="email" />
+            <p class="text-xs text-slate-500 mt-1">{{ t('studyForm.contactEmailHint') }}</p>
+            <ErrorText v-if="fieldErrors.contactEmail">{{ fieldErrors.contactEmail }}</ErrorText>
           </div>
           <div class="col-span-2">
             <FieldLabel for="study-official-title">{{ t('studyForm.officialTitle') }}</FieldLabel>
@@ -259,14 +308,24 @@ function cancel() {
           <!-- #7/#12 discoverability — modules are enabled on the Study
                Parameters page, which was hard to find. Surface a direct
                link from the identity-edit flow. -->
+          <button
+            type="button"
+            class="ml-auto px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue font-medium disabled:opacity-50"
+            :disabled="downloading"
+            data-testid="study-edit-download-metadata"
+            @click="downloadMetadata"
+          >
+            {{ t('studyForm.edit.downloadMetadata') }}
+          </button>
           <RouterLink
             :to="`/studies/${oid}/parameters`"
-            class="ml-auto px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue font-medium"
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue font-medium"
             data-testid="study-edit-parameters-link"
           >
             {{ t('studyForm.edit.parametersLink') }} →
           </RouterLink>
         </div>
+        <ErrorText v-if="downloadError">{{ downloadError }}</ErrorText>
       </div>
     </div>
   </div>

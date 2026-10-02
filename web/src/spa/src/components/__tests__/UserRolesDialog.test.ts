@@ -13,7 +13,7 @@
  *   - Auth store's `availableStudies` is seeded with the test studies
  *     so the "Add study" picker has something to render.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -288,5 +288,173 @@ describe('UserRolesDialog — per-study multi-select', () => {
     expect(path).toBe('/pages/api/v1/users/alice/roles/S1')
     expect(payload.roles).toEqual(['Investigator'])
     wrapper.unmount()
+  })
+})
+
+/**
+ * A system administrator grants roles in any study, not only in the ones
+ * they are bound to themselves: the "Add study" choice lists every study
+ * and site that is not removed, from the admin study list.
+ */
+describe('UserRolesDialog — system administrator', () => {
+  const ADMIN_STUDIES = [
+    { oid: 'S1', name: 'Study One', uniqueIdentifier: 's1', principalInvestigator: 'PI', createdDate: null,
+      status: 'AVAILABLE', parentOid: null, sites: [] },
+    { oid: 'S9', name: 'Unbound Study', uniqueIdentifier: 's9', principalInvestigator: 'PI', createdDate: null,
+      status: 'AVAILABLE', parentOid: null, sites: [
+        { oid: 'S9_A', name: 'Site A', uniqueIdentifier: 's9a', principalInvestigator: 'PI', createdDate: null,
+          status: 'AVAILABLE', parentOid: 'S9', sites: [] },
+        { oid: 'S9_B', name: 'Site B', uniqueIdentifier: 's9b', principalInvestigator: 'PI', createdDate: null,
+          status: 'AUTO_REMOVED', parentOid: 'S9', sites: [] },
+      ] },
+    { oid: 'S_GONE', name: 'Removed Study', uniqueIdentifier: 'gone', principalInvestigator: 'PI',
+      createdDate: null, status: 'REMOVED', parentOid: null, sites: [] },
+  ]
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedAuth()
+    const auth = useAuthStore()
+    auth.user = { username: 'admin', role: 'Administrator', userType: 'SYSADMIN' } as unknown as ReturnType<
+      typeof useAuthStore
+    >['user']
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path === '/pages/api/v1/admin/studies') return ADMIN_STUDIES
+      if (path === '/pages/api/v1/users/alice/roles') return [BINDING_S1_INV]
+      throw new Error(`unexpected GET ${path}`)
+    })
+  })
+
+  it('offers every study and site not yet granted and not removed, whatever the admin is bound to', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const picker = document.body.querySelector('#add-role-study') as HTMLSelectElement
+    expect(picker).not.toBeNull()
+    const offered = Array.from(picker.options).map((o) => o.value).filter((v) => v !== '')
+    // S1 is already granted; the removed study and the auto-removed site are left out;
+    // S2 comes only from the admin's own bindings and is not a study on the platform list.
+    expect(offered).toEqual(['S9', 'S9_A'])
+    const labels = Array.from(picker.options).map((o) => o.textContent?.trim())
+    expect(labels).toContain('Unbound Study › Site A')
+    wrapper.unmount()
+  })
+})
+
+/**
+ * The legacy data entry roles `ra` and `ra2`. The server projects them as
+ * Investigator; the dialog shows them for what they are, keeps them when a
+ * row is saved, and drops one only when it is unticked.
+ */
+describe('UserRolesDialog — legacy data entry roles', () => {
+  const RA: RoleBinding = { ...BINDING_S1_INV, legacyRole: 'ra' }
+  const RA2: RoleBinding = { ...BINDING_S1_INV, legacyRole: 'ra2' }
+  const MONITOR: RoleBinding = { ...BINDING_S1_INV, role: 'Monitor', legacyRole: null }
+
+  let wrapper: ReturnType<typeof mountDialog> | null = null
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedAuth()
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPut).mockReset()
+    confirmMock.mockClear()
+  })
+
+  it('shows the legacy role under its own name and not as Investigator', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([RA, MONITOR])
+    wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    expect(checkboxFor('Data Entry Person (legacy)')?.checked).toBe(true)
+    expect(checkboxFor('Investigator')?.checked).toBe(false)
+    expect(checkboxFor('Monitor')?.checked).toBe(true)
+    const dots = document.body.querySelector('[data-testid="role-dots"]')?.getAttribute('data-roles')
+    expect(dots).toBe('Monitor')
+  })
+
+  it('saving the row keeps the legacy role and does not send Investigator', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([RA, MONITOR]).mockResolvedValueOnce([RA, MONITOR])
+    vi.mocked(apiPut).mockResolvedValueOnce([])
+    wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const crc = checkboxFor('Coordinator')!
+    crc.checked = true
+    crc.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+    clickSaveOnFirstRow()
+    await flushPromises()
+
+    expect(apiPut).toHaveBeenCalledTimes(1)
+    const [, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[]; legacyRoles: string[] }]
+    expect([...payload.roles].sort()).toEqual(['CRC', 'Monitor'])
+    expect(payload.legacyRoles).toEqual(['ra'])
+  })
+
+  it('unticking the legacy role is what removes it', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([RA2]).mockResolvedValueOnce([])
+    vi.mocked(apiPut).mockResolvedValueOnce([])
+    wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const legacy = checkboxFor('Data Entry Person 2 (legacy)')!
+    legacy.checked = false
+    legacy.dispatchEvent(new Event('change', { bubbles: true }))
+    const inv = checkboxFor('Investigator')!
+    inv.checked = true
+    inv.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+    clickSaveOnFirstRow()
+    await flushPromises()
+
+    const [, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[]; legacyRoles: string[] }]
+    expect(payload.roles).toEqual(['Investigator'])
+    expect(payload.legacyRoles).toEqual([])
+  })
+
+  it('Remove study removes the legacy role as well', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([RA]).mockResolvedValueOnce([])
+    vi.mocked(apiPut).mockResolvedValueOnce([])
+    confirmMock.mockResolvedValueOnce(true)
+    wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const buttons = Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
+    buttons.find((b) => b.textContent?.trim() === 'Remove study')!.click()
+    await flushPromises()
+
+    const [, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[]; legacyRoles: string[] }]
+    expect(payload).toEqual({ roles: [], legacyRoles: [] })
+  })
+
+  it('a row saved with nothing left asks first, as Remove study does', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([RA, MONITOR])
+    confirmMock.mockResolvedValueOnce(false)
+    wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    for (const label of ['Data Entry Person (legacy)', 'Monitor']) {
+      const box = checkboxFor(label)!
+      box.checked = false
+      box.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await nextTick()
+    clickSaveOnFirstRow()
+    await flushPromises()
+
+    expect(confirmMock).toHaveBeenCalled()
+    expect(apiPut).not.toHaveBeenCalled()
   })
 })

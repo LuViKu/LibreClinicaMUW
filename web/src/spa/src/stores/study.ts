@@ -81,14 +81,6 @@ export const useStudyStore = defineStore('study', () => {
     )
   }
 
-  async function disable(oid: string): Promise<boolean> {
-    return lifecycle(oid, 'disable')
-  }
-
-  async function restore(oid: string): Promise<boolean> {
-    return lifecycle(oid, 'restore')
-  }
-
   async function submitStudyMutation(
     op: () => Promise<StudyIdentity>,
     label: 'create' | 'update',
@@ -126,31 +118,6 @@ export const useStudyStore = defineStore('study', () => {
         fieldErrors: {},
         message: e instanceof Error ? e.message : `Unbekannter Fehler beim Studie-${label}.`,
       }
-    }
-  }
-
-  async function lifecycle(oid: string, op: 'disable' | 'restore'): Promise<boolean> {
-    try {
-      await apiPost<StudyIdentity>(
-        `/pages/api/v1/studies/${encodeURIComponent(oid)}/${op}`,
-        {},
-      )
-      return true
-    } catch (e) {
-      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
-        const body = e.body as { message?: string } | null
-        error.value = body?.message ?? `Studie ${op} nicht erlaubt (HTTP ${e.status}).`
-        throw e
-      }
-      if (e instanceof ApiNetworkError) {
-        error.value = `Backend nicht erreichbar — Studie ${op} fehlgeschlagen.`
-      } else if (e instanceof ApiError) {
-        const body = e.body as { message?: string } | null
-        error.value = body?.message ?? `Studie ${op} fehlgeschlagen (HTTP ${e.status}).`
-      } else {
-        error.value = e instanceof Error ? e.message : `Unbekannter Fehler beim Studie-${op}.`
-      }
-      return false
     }
   }
 
@@ -293,8 +260,6 @@ export const useStudyStore = defineStore('study', () => {
     loadIdentity,
     create,
     update,
-    disable,
-    restore,
     setStatus,
     acknowledgeTask,
     reset,
