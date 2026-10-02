@@ -532,6 +532,19 @@ public class SubjectsApiController {
     }
 
     /**
+     * May the session's binding sign a subject? Investigator and study
+     * director: the preflight's {@code user-role-can-sign} check, which
+     * blocks the sign endpoint for every other binding. {@code GET /me}
+     * reports it as {@code activeStudy.permissions.signSubject}.
+     *
+     * @param roleId legacy {@link Role} id; 0 for no role (refused)
+     */
+    static boolean roleMaySignSubject(int roleId) {
+        return roleId == Role.INVESTIGATOR.getId()
+                || roleId == Role.STUDYDIRECTOR.getId();
+    }
+
+    /**
      * Phase E.4 M3 + M8 — shared preflight computation.
      *
      * <p>Extracted so both the {@code GET /preflightForSign} endpoint
@@ -764,10 +777,7 @@ public class SubjectsApiController {
         if (currentRole != null && currentRole.getRole() != null) {
             Role r = currentRole.getRole();
             legacyRoleName = r.getName();
-            // Investigator (id=4) or Study Director (id=3) can sign;
-            // ra / ra2 / coordinator / monitor cannot.
-            canSign = (r.getId() == Role.INVESTIGATOR.getId()
-                    || r.getId() == Role.STUDYDIRECTOR.getId());
+            canSign = roleMaySignSubject(r.getId());
         }
         SignPreflightDto.CheckRow roleCheck;
         if (canSign) {
@@ -1604,7 +1614,10 @@ public class SubjectsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         // Signing is an attest action: the rule that governs signing a
-        // visit, which is the legacy SignStudySubjectServlet's role set.
+        // visit, narrowed further by the preflight (roleMaySignSubject).
+        // No system-administrator short-circuit, unlike the legacy
+        // SignStudySubjectServlet: the signature attests as the binding
+        // (see ClinicalWriteAuthorization).
         if (!EventEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
             return ClinicalWriteAuthorization.forbidden("signing subjects");
         }

@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -102,6 +103,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                                 Mockito.mock(SecurityManager.class), filter),
                         new EyeCohortTransitionsApiController(DATA_SOURCE, filter),
                         new SdvApiController(DATA_SOURCE, filter),
+                        new MeApiController(DATA_SOURCE),
                         new DiscrepancyApiController(DATA_SOURCE, filter),
                         new ImportApiController(),
                         new NamdClinicalApiController(DATA_SOURCE, filter),
@@ -251,8 +253,64 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     }
 
     /* ------------------------------------------------------------------ */
+    /* /me says what the binding may write                                */
+    /* ------------------------------------------------------------------ */
+
+    static Stream<Arguments> bindingsAndWhatTheyMayWrite() {
+        // role, enter data, edit a subject, sign a subject
+        return Stream.of(
+                Arguments.of(Role.INVESTIGATOR, true, true, true),
+                Arguments.of(Role.STUDYDIRECTOR, true, true, true),
+                Arguments.of(Role.COORDINATOR, true, true, false),
+                Arguments.of(Role.ADMIN, true, true, false),
+                Arguments.of(Role.RESEARCHASSISTANT, true, false, false),
+                Arguments.of(Role.RESEARCHASSISTANT2, true, false, false),
+                Arguments.of(Role.MONITOR, false, false, false));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("bindingsAndWhatTheyMayWrite")
+    void meReportsWhatTheBindingMayWrite(Role role, boolean enterData, boolean editSubject,
+                                         boolean signSubject) throws Exception {
+        // ra and ra2 are the SPA's "Investigator" too: only these flags
+        // tell the SPA that they may not sign or move an eye.
+        mvc().perform(get("/api/v1/me").session(investigatorHolding(role)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeStudy.permissions.enterData").value(enterData))
+                .andExpect(jsonPath("$.activeStudy.permissions.editSubject").value(editSubject))
+                .andExpect(jsonPath("$.activeStudy.permissions.signSubject").value(signSubject));
+    }
+
+    @Test
+    void meTellsASystemAdministratorBoundAsMonitorThatItMayNotWrite() throws Exception {
+        // /me projects every system administrator as "Administrator"; the
+        // flags follow the binding, as the write endpoints do.
+        MockHttpSession session = asSystemAdministrator(
+                ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_monitor", Role.MONITOR));
+        mvc().perform(get("/api/v1/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("Administrator"))
+                .andExpect(jsonPath("$.activeStudy.permissions.enterData").value(false))
+                .andExpect(jsonPath("$.activeStudy.permissions.editSubject").value(false))
+                .andExpect(jsonPath("$.activeStudy.permissions.signSubject").value(false));
+    }
+
+    /* ------------------------------------------------------------------ */
     /* A system administrator is held to the binding                      */
     /* ------------------------------------------------------------------ */
+
+    @Test
+    void aSystemAdministratorBoundAsMonitorDoesNotSignASubject() throws Exception {
+        // Deliberately narrower than SignStudySubjectServlet, which admits
+        // any system administrator: the signature attests as the binding.
+        MockHttpSession session = asSystemAdministrator(
+                ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_monitor", Role.MONITOR));
+
+        mvc().perform(json(post("/api/v1/subjects/SS_M001/sign"),
+                        "{\"password\":\"x\",\"attestation\":true}").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+    }
 
     @Test
     void aSystemAdministratorBoundAsMonitorDoesNotEnterData() throws Exception {

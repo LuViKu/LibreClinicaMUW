@@ -45,7 +45,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  * <h2>Roles</h2>
  *
  * <pre>
- *   ADM  admin (1)         SPA "Administrator"; the binding a system administrator gets
+ *   ADM  admin (1)         SPA "Administrator"; a study role row like the others,
+ *                          the usual binding of a system administrator
  *   CRC  coordinator (2)   SPA "CRC"
  *   DM   director (3)      SPA "Data Manager"
  *   INV  Investigator (4)  SPA "Investigator"
@@ -67,7 +68,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *   Restore a removed CRF        x   x   x   x   .   .   .   .   {@link EventCrfRestoreAuthorization}
  *   Edit, cancel, restore or
  *     sign a visit               .   x   x   x   x   .   .   .   {@link EventEditAuthorization}
- *   Sign a subject               .   x   x   x   x   .   .   .   {@link EventEditAuthorization#roleMayEdit}
+ *   Sign a subject               .   .   .   x   x   .   .   .   SubjectsApiController.roleMaySignSubject
  *   Edit a subject               .   x   x   x   x   .   .   .   {@link SubjectEditAuthorization}
  *   Remove, restore, lock or
  *     unlock a subject; link
@@ -131,22 +132,33 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *       carry commented out: coordinator, director, investigator, ra and ra2.</li>
  *   <li>SDV follows {@code SDVController.mayProceed}: director, coordinator
  *       and monitor.</li>
- *   <li>Signing a subject follows {@code SignStudySubjectServlet}: director,
- *       coordinator and investigator. It shares the visit-signing rule.</li>
+ *   <li>Signing a subject is narrower than {@code SignStudySubjectServlet}
+ *       (director, coordinator, investigator and any system administrator):
+ *       the endpoint refuses with 403 what the visit-signing rule refuses,
+ *       and its preflight check {@code user-role-can-sign} then blocks with
+ *       412 every binding but director and investigator. A signature attests
+ *       as the role held on the study.</li>
  * </ul>
  *
- * <p>System administrators: every helper here admits the {@code admin}
- * binding, which is how the SPA binds a system administrator to a study,
- * and the rules in this class do the same. A helper short-circuits on
- * {@code isSysAdmin()} only where its legacy servlet does, which is the
- * restore and import gates. {@code maySubmitData} and
- * {@code SDVController} have no such short-circuit, so neither rule here
- * has one.
+ * <p>System administrators: every rule goes by the binding on the active
+ * study, which {@code POST /me/activeStudy} takes from the caller's own
+ * role rows; a system administrator is usually bound as {@code admin}, and
+ * every helper here admits that binding. Only the restore and import gates
+ * also admit a system administrator whatever the binding
+ * ({@code isSysAdmin()}). {@code maySubmitData} and {@code SDVController}
+ * have no such short-circuit either. {@code SignStudySubjectServlet},
+ * {@code UpdateStudySubjectServlet}, {@code RemoveStudySubjectServlet} and
+ * {@code RestoreStudySubjectServlet} do; their rules here deliberately do
+ * not, so a system administrator bound as, say, monitor neither signs nor
+ * edits, removes or restores a subject through the SPA.
  *
  * <p>Some older helpers are deliberately narrower than their legacy
  * servlet, and stay so: editing a subject or a visit refuses ra and ra2,
+ * signing a subject refuses the coordinator and the admin binding (above),
  * and un-verifying SDV refuses the coordinator, whom {@code SDVController}
- * admits.
+ * admits. {@code GET /me} reports what the session's binding may do
+ * ({@code activeStudy.permissions}), so that the SPA offers only what
+ * these rules admit; ra and ra2 share the SPA role "Investigator".
  *
  * <h2>Order of checks</h2>
  *
