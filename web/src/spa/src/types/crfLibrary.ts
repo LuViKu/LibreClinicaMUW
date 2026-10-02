@@ -68,9 +68,6 @@ export interface EventCrfAssignmentInput {
   electronicSignature?: boolean
   hideCrf?: boolean
   sourceDataVerification?: SdvRequirement
-  participantForm?: boolean
-  allowAnonymousSubmission?: boolean
-  submissionUrl?: string
   offline?: boolean
 }
 

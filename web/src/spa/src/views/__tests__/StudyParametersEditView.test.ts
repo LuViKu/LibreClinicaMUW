@@ -246,3 +246,37 @@ describe.skip('StudyParametersEditView', () => {
     expect(errors.recent).toHaveLength(0)
   })
 })
+
+// 2026-09-30 — the participant portal is not part of this build, and the
+// backend no longer writes the participantPortal handle, so the form does
+// not offer it. The two panels at the foot of the page fetch their own data
+// and are stubbed out; this spec only looks at the parameter form.
+describe('StudyParametersEditView without the participant portal', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPutMock.mockReset()
+  })
+
+  async function mountForm() {
+    setActivePinia(createPinia())
+    const router = makeRouter()
+    router.push('/studies/S_DEMO/parameters')
+    await router.isReady()
+    apiGetMock.mockResolvedValue(FIXTURE)
+    const wrapper = mount(StudyParametersEditView, {
+      global: {
+        plugins: [router, i18n],
+        stubs: { BuildStudyRail: true, StudyModuleEnrollmentPanel: true, StudySettingsPanel: true },
+      },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('offers randomization but not the participant portal', async () => {
+    const wrapper = await mountForm()
+
+    expect(wrapper.find('#sp-randomization').exists()).toBe(true)
+    expect(wrapper.find('#sp-participantPortal').exists()).toBe(false)
+  })
+})

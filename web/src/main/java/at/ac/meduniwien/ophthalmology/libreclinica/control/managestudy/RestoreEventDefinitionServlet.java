@@ -116,7 +116,6 @@ public class RestoreEventDefinitionServlet extends SecureController {
             }
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
             request.setAttribute("participateFormStatus",participateFormStatus );
-            if (participateFormStatus.equals("enabled")) baseUrl();
                         
             request.setAttribute("definitionToRestore", sed);
             request.setAttribute("eventDefinitionCRFs", eventDefinitionCRFs);

@@ -13,8 +13,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Phase E.6 study-params — PUT /api/v1/studies/{studyOid}/parameters
  * request body. Mirror of {@link StudyParametersDto} minus
- * {@code studyOid} (that lives in the path), with every field
- * nullable.
+ * {@code studyOid} (that lives in the path) and minus
+ * {@code participantPortal}, which is read-only because the participant
+ * portal is not part of this build. Every field is nullable.
  *
  * <p>Same null-means-leave-unchanged contract as
  * {@link UpdateStudyRequest}. The controller diffs each supplied
@@ -44,6 +45,5 @@ public record UpdateStudyParametersRequest(
         String interviewDateEditable,
         String secondaryLabelViewable,
         String adminForcedReasonForChange,
-        String participantPortal,
         String randomization
 ) {}

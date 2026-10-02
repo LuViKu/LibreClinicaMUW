@@ -4012,7 +4012,6 @@ export interface components {
             interviewDateEditable?: string;
             secondaryLabelViewable?: string;
             adminForcedReasonForChange?: string;
-            participantPortal?: string;
             randomization?: string;
         };
         StudyParametersDto: {
@@ -4110,9 +4109,6 @@ export interface components {
             electronicSignature?: boolean;
             hideCrf?: boolean;
             sourceDataVerification?: string;
-            participantForm?: boolean;
-            allowAnonymousSubmission?: boolean;
-            submissionUrl?: string;
             offline?: boolean;
         };
         EventCrfAssignmentDto: {

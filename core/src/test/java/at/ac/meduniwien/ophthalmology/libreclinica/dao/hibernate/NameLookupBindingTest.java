@@ -27,9 +27,8 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * The XForm CRF-version upload looks up versions and items by the names it
- * was given. The names are bound as query parameters, never spliced into
- * the SQL text.
+ * Look-ups of CRF versions and items by name bind the name as a query
+ * parameter; it is never spliced into the SQL text.
  */
 public class NameLookupBindingTest {
 

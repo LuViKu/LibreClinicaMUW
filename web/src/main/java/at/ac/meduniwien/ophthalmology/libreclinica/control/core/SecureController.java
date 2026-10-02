@@ -18,9 +18,6 @@ import java.io.FileInputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -85,8 +82,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.Authorization;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanel;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanelLine;
@@ -1195,28 +1190,6 @@ public abstract class SecureController extends HttpServlet {
             forwardPage(Page.MENU_SERVLET);
             return;
         }
-    }
-
-    protected void baseUrl() throws MalformedURLException {
-        String portalURL = CoreResources.getField("portalURL");
-        URL pManageUrl;
-        try {
-            pManageUrl = URI.create(portalURL).toURL();
-        } catch (IllegalArgumentException e) {
-            throw new MalformedURLException(e.getMessage());
-        }
-
-        ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
-        Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());
-        String url = "";
-
-        if (pManageAuthorization != null) {
-            url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
-                    + ((pManageUrl.getPort() > 0) ? ":" + pManageUrl.getPort() : "");
-        }
-        
-        logger.debug("the url: " + url);
-        request.setAttribute("participantUrl",url + "/");
     }
 
     /**

@@ -68,6 +68,176 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class SecurityConfig {
 
     /**
+     * Paths any caller may reach without a session. A live handler behind a
+     * path is not a reason to list it here: the handler must be one that is
+     * meant to answer anonymous callers (login, public portals, device
+     * uploaders with their own tokens, probes). {@code SecurityConfigPublicPathsTest}
+     * pins the ones that must stay closed.
+     */
+    static final String[] PUBLIC_PATHS = {
+            "/pages/login/login",
+            "/SystemStatus",
+            "/RequestPassword",
+            "/RequestAccount",
+            "/Contact",
+            "/includes/**",
+            "/images/**",
+            "/pages/auth/api/v1/studies/**",
+            // Phase E.8 Slice L2 (2026-06-20): SPA replacement
+            // for the legacy /pages/Contact JSP. Unauthenticated
+            // by design — same audience as the legacy form.
+            // Rate-limit lives at the reverse proxy.
+            "/pages/api/v1/contact",
+            // Public OCT upload portal — see oct-upload-portal plan.
+            // Trust-the-reverse-proxy exposure: must NOT be exposed
+            // to public internet. Token CSRF is disabled for this
+            // chain (see above); the page posts same-origin, so
+            // CrossSiteRequestFilter lets it through.
+            "/pages/api/v1/public/oct-upload/**",
+            // 2026-06-24 user-feedback round — public BCVA-entry
+            // portal (mirrors OCT-upload posture). Same
+            // trust-the-reverse-proxy gate; nurses don't have
+            // accounts. See PublicBcvaEntryController.
+            "/pages/api/v1/public/bcva-entry/**",
+            // DR-025 — public Remidio image-upload portal (no
+            // account; reverse-proxy gated like the OCT/BCVA ones).
+            // Lands in ingest_item(source_kind='upload').
+            "/pages/api/v1/public/image-upload/**",
+            // DR-029 — the combined upload page (OCT, DICOM, JPEG/PNG);
+            // same posture as the two pages it replaces, which stay
+            // mounted for one release.
+            "/pages/api/v1/public/upload/**",
+            // DR-025 — internal DICOM ingest handoff from the
+            // dicom-scp sidecar. Trust-the-reverse-proxy exposure +
+            // a shared-secret X-MUW-Dicom-Token gate in
+            // DicomIngestApiController; never expose publicly.
+            "/pages/api/v1/internal/dicom-ingest/**",
+            // DR-025 — Modality Worklist source for the sidecar
+            // (same shared-secret gate; the Lumo pulls scheduled
+            // visits via the sidecar's C-FIND).
+            "/pages/api/v1/internal/dicom-worklist/**",
+            // 2026-09-23 — the Optomed Client's worklist file for a
+            // USB-docked Lumo (the camera cannot join the Enterprise
+            // WLAN). Reached from a clinic PC THROUGH the proxy, so
+            // unlike the two internal paths above it is not refused
+            // at the edge; it earns that by carrying a placeholder
+            // date of birth, its own X-MUW-Optomed-Token, and being
+            // off (404) unless core.optomed.worklist.enabled=true.
+            // See OptomedWorklistApiController.
+            "/pages/api/v1/device/optomed/**",
+            // DR-033 — heartbeats from the uploaders on the
+            // acquisition PCs (Export Watcher, Optomed Bridge).
+            // No patient data; bounded fields, 16 KB body, at most
+            // 50 programs, rows keyed by a random instance id. Off
+            // (404) with core.uploaderHealth.heartbeat.enabled=false.
+            // See UploaderHeartbeatApiController.
+            "/pages/api/v1/device/uploader/**",
+            "/pages/auth/api/v1/discrepancynote/**",
+            "/pages/auth/api/v1/forms/migrate/**",
+            "/pages/auth/api/**",
+            "/pages/auth/api/v1/system/**",
+            // Phase C.15 (2026-05-30): unauthenticated probes for
+            // k8s/load-balancer liveness + info. /actuator/health/*
+            // sub-paths show details only `when-authorized` per
+            // application.yml — anonymous probes see status only.
+            "/actuator/health",
+            "/actuator/health/**",
+            "/actuator/info",
+            // Phase E-hardening B1 (2026-06-10): Prometheus scrape
+            // endpoint. The institutional reverse-proxy is the
+            // canonical gate preventing public exposure — the
+            // permitAll here lets the metrics endpoint be readable
+            // from inside the deployment network (Prometheus +
+            // node-exporter sidecar) without requiring a session.
+            "/actuator/prometheus",
+            // Phase D.10 (DR-014): e-signature re-auth
+            // scaffolding endpoint. Always permits — the
+            // reverse proxy may strip the existing session
+            // before re-challenge, so the 302 emitter
+            // doesn't need a LibreClinica session. The
+            // production-readiness of this path is gated
+            // by libreclinica.sso.reauth.enabled (default
+            // false); the endpoint itself is always
+            // wired so a future Sign Subject controller
+            // can invoke it when legal/regulatory
+            // ratifies proxy-mediated §11.50 e-signatures.
+            // Resolved on the pages dispatcher because
+            // Boot's root @ComponentScan does not include
+            // the controller package.
+            "/pages/sso/reauth",
+            // Phase E.5 B3: springdoc-openapi spec + Swagger
+            // UI. Contains the API surface description
+            // (paths + DTO schemas), no clinical data.
+            // Public access lets the SPA's
+            // `codegen:openapi` step + ops sanity checks
+            // run without an auth session.
+            //
+            // Phase E.5 follow-up (2026-06-01): springdoc beans
+            // were relocated into the `pages` DispatcherServlet
+            // child context (the only place its
+            // RequestMappingHandlerMapping sees the
+            // /api/v1/** @RestController family). With
+            // springdoc.api-docs.path = /pages/v3/api-docs the
+            // OpenApiResource registers at that prefix so its
+            // URLs flow through the same dispatcher as the
+            // controllers it documents. Only the /pages
+            // prefix is served; the root /v3/api-docs and
+            // /swagger-ui paths answer 404 and are not listed.
+            "/pages/v3/api-docs",
+            "/pages/v3/api-docs/**",
+            "/pages/v3/api-docs.yaml",
+            "/pages/swagger-ui.html",
+            "/pages/swagger-ui/**",
+            // Phase E.5 (2026-06-03): Vue 3 SPA static bundle.
+            // The SPA's index.html, /app/assets/* (JS + CSS +
+            // source maps), favicon.svg and every client-side
+            // route (/app/login, /app/first-login, /app/home,
+            // /app/subjects, ...) all serve the same index.html
+            // and the router handles routing in-browser.
+            //
+            // Anonymous access is intentional + safe:
+            //   - the bundle contains zero PHI and zero secrets;
+            //     only compiled Vue source code that references
+            //     API URLs that are independently auth-gated;
+            //   - the SPA's auth.bootstrap() probes
+            //     GET /pages/api/v1/me on load — that endpoint
+            //     stays behind hasRole("USER"), returns 401 for
+            //     anonymous, and the router-guard then routes
+            //     the SPA to /app/login client-side;
+            //   - API endpoint paths the bundle exposes are also
+            //     discoverable from springdoc-openapi at
+            //     /pages/v3/api-docs (already permitAll above),
+            //     so opening /app/** doesn't widen the
+            //     enumeration surface;
+            //   - source maps reveal source structure but no
+            //     secrets; matches the standard SPA-on-static-
+            //     hosting threat model (S3 + CloudFront + API
+            //     behind auth).
+            //
+            // Without this rule, /app/login itself was behind
+            // hasRole("USER") and unauthenticated users got
+            // 302'd to the legacy /pages/login/login JSP before
+            // the SPA's LoginView ever loaded — the SPA's own
+            // login screen was unreachable in production builds
+            // and only visible via the Vite dev server.
+            "/app/**",
+            // Phase E hardening (A2): GlobalErrorServlet is
+            // mapped at /error in web.xml and is the target of
+            // every <error-page> entry. Without an explicit
+            // permitAll, the catch-all hasRole("USER") below
+            // 302s anonymous failure paths to the login page —
+            // hiding the German error JSP from unauthenticated
+            // callers and breaking the SPA's JSON-500 contract
+            // for the un-logged-in case. Safe to expose
+            // anonymously: the servlet renders ONLY the
+            // Tomcat-supplied javax.servlet.error.* request
+            // attributes (status, exception class+message,
+            // request URI), never DB contents nor session
+            // state.
+            "/error"
+    };
+
+    /**
      * Phase D.3 (DR-014): SSO config bean with a stable ID
      * ({@code ssoProperties}) so the legacy
      * {@code applicationContext-security.xml} can {@code <ref bean=…/>}
@@ -140,187 +310,7 @@ public class SecurityConfig {
             .anonymous(anon -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(antPaths(
-                        "/pages/login/login",
-                        "/SystemStatus",
-                        "/RequestPassword",
-                        "/RequestAccount",
-                        "/Contact",
-                        "/includes/**",
-                        "/images/**",
-                        "/help/**",
-                        "/ws/**",
-                        "/rest2/openrosa/**",
-                        "/pages/odmk/**",
-                        "/pages/openrosa/**",
-                        "/pages/accounts/**",
-                        "/pages/itemdata/**",
-                        "/pages/auth/api/v1/studies/**",
-                        "/pages/odmss/**",
-                        "/pages/healthcheck/**",
-                        "/pages/api/v1/anonymousform/**",
-                        "/pages/api/v2/anonymousform/**",
-                        // Phase E.8 Slice L2 (2026-06-20): SPA replacement
-                        // for the legacy /pages/Contact JSP. Unauthenticated
-                        // by design — same audience as the legacy form.
-                        // Rate-limit lives at the reverse proxy.
-                        "/pages/api/v1/contact",
-                        // Public OCT upload portal — see oct-upload-portal plan.
-                        // Trust-the-reverse-proxy exposure: must NOT be exposed
-                        // to public internet. Token CSRF is disabled for this
-                        // chain (see above); the page posts same-origin, so
-                        // CrossSiteRequestFilter lets it through.
-                        "/pages/api/v1/public/oct-upload/**",
-                        // 2026-06-24 user-feedback round — public BCVA-entry
-                        // portal (mirrors OCT-upload posture). Same
-                        // trust-the-reverse-proxy gate; nurses don't have
-                        // accounts. See PublicBcvaEntryController.
-                        "/pages/api/v1/public/bcva-entry/**",
-                        // DR-025 — public Remidio image-upload portal (no
-                        // account; reverse-proxy gated like the OCT/BCVA ones).
-                        // Lands in ingest_item(source_kind='upload').
-                        "/pages/api/v1/public/image-upload/**",
-                        // DR-029 — the combined upload page (OCT, DICOM, JPEG/PNG);
-                        // same posture as the two pages it replaces, which stay
-                        // mounted for one release.
-                        "/pages/api/v1/public/upload/**",
-                        // DR-025 — internal DICOM ingest handoff from the
-                        // dicom-scp sidecar. Trust-the-reverse-proxy exposure +
-                        // a shared-secret X-MUW-Dicom-Token gate in
-                        // DicomIngestApiController; never expose publicly.
-                        "/pages/api/v1/internal/dicom-ingest/**",
-                        // DR-025 — Modality Worklist source for the sidecar
-                        // (same shared-secret gate; the Lumo pulls scheduled
-                        // visits via the sidecar's C-FIND).
-                        "/pages/api/v1/internal/dicom-worklist/**",
-                        // 2026-09-23 — the Optomed Client's worklist file for a
-                        // USB-docked Lumo (the camera cannot join the Enterprise
-                        // WLAN). Reached from a clinic PC THROUGH the proxy, so
-                        // unlike the two internal paths above it is not refused
-                        // at the edge; it earns that by carrying a placeholder
-                        // date of birth, its own X-MUW-Optomed-Token, and being
-                        // off (404) unless core.optomed.worklist.enabled=true.
-                        // See OptomedWorklistApiController.
-                        "/pages/api/v1/device/optomed/**",
-                        // DR-033 — heartbeats from the uploaders on the
-                        // acquisition PCs (Export Watcher, Optomed Bridge).
-                        // No patient data; bounded fields, 16 KB body, at most
-                        // 50 programs, rows keyed by a random instance id. Off
-                        // (404) with core.uploaderHealth.heartbeat.enabled=false.
-                        // See UploaderHeartbeatApiController.
-                        "/pages/api/v1/device/uploader/**",
-                        "/pages/api/v1/editform/**",
-                        "/pages/auth/api/v1/discrepancynote/**",
-                        "/pages/auth/api/v1/forms/migrate/**",
-                        "/pages/api/v1/forms/migrate/**",
-                        "/pages/auth/api/**",
-                        "/pages/auth/api/v1/system/**",
-                        // Phase C.15 (2026-05-30): unauthenticated probes for
-                        // k8s/load-balancer liveness + info. /actuator/health/*
-                        // sub-paths show details only `when-authorized` per
-                        // application.yml — anonymous probes see status only.
-                        "/actuator/health",
-                        "/actuator/health/**",
-                        "/actuator/info",
-                        // Phase E-hardening B1 (2026-06-10): Prometheus scrape
-                        // endpoint. The institutional reverse-proxy is the
-                        // canonical gate preventing public exposure — the
-                        // permitAll here lets the metrics endpoint be readable
-                        // from inside the deployment network (Prometheus +
-                        // node-exporter sidecar) without requiring a session.
-                        "/actuator/prometheus",
-                        // Phase D.10 (DR-014): e-signature re-auth
-                        // scaffolding endpoint. Always permits — the
-                        // reverse proxy may strip the existing session
-                        // before re-challenge, so the 302 emitter
-                        // doesn't need a LibreClinica session. The
-                        // production-readiness of this path is gated
-                        // by libreclinica.sso.reauth.enabled (default
-                        // false); the endpoint itself is always
-                        // wired so a future Sign Subject controller
-                        // can invoke it when legal/regulatory
-                        // ratifies proxy-mediated §11.50 e-signatures.
-                        // Resolved on the pages dispatcher because
-                        // Boot's root @ComponentScan does not include
-                        // the controller package.
-                        "/pages/sso/reauth",
-                        // Phase E.5 B3: springdoc-openapi spec + Swagger
-                        // UI. Contains the API surface description
-                        // (paths + DTO schemas), no clinical data.
-                        // Public access lets the SPA's
-                        // `codegen:openapi` step + ops sanity checks
-                        // run without an auth session.
-                        //
-                        // Phase E.5 follow-up (2026-06-01): springdoc beans
-                        // were relocated into the `pages` DispatcherServlet
-                        // child context (the only place its
-                        // RequestMappingHandlerMapping sees the
-                        // /api/v1/** @RestController family). With
-                        // springdoc.api-docs.path = /pages/v3/api-docs the
-                        // OpenApiResource registers at that prefix so its
-                        // URLs flow through the same dispatcher as the
-                        // controllers it documents. Both prefixes are
-                        // permitted — the /v3/api-docs/* paths return 404
-                        // now but the permit costs nothing and avoids a
-                        // future-Self surprise.
-                        "/v3/api-docs",
-                        "/v3/api-docs/**",
-                        "/v3/api-docs.yaml",
-                        "/swagger-ui.html",
-                        "/swagger-ui/**",
-                        "/pages/v3/api-docs",
-                        "/pages/v3/api-docs/**",
-                        "/pages/v3/api-docs.yaml",
-                        "/pages/swagger-ui.html",
-                        "/pages/swagger-ui/**",
-                        // Phase E.5 (2026-06-03): Vue 3 SPA static bundle.
-                        // The SPA's index.html, /app/assets/* (JS + CSS +
-                        // source maps), favicon.svg and every client-side
-                        // route (/app/login, /app/first-login, /app/home,
-                        // /app/subjects, ...) all serve the same index.html
-                        // and the router handles routing in-browser.
-                        //
-                        // Anonymous access is intentional + safe:
-                        //   - the bundle contains zero PHI and zero secrets;
-                        //     only compiled Vue source code that references
-                        //     API URLs that are independently auth-gated;
-                        //   - the SPA's auth.bootstrap() probes
-                        //     GET /pages/api/v1/me on load — that endpoint
-                        //     stays behind hasRole("USER"), returns 401 for
-                        //     anonymous, and the router-guard then routes
-                        //     the SPA to /app/login client-side;
-                        //   - API endpoint paths the bundle exposes are also
-                        //     discoverable from springdoc-openapi at
-                        //     /pages/v3/api-docs (already permitAll above),
-                        //     so opening /app/** doesn't widen the
-                        //     enumeration surface;
-                        //   - source maps reveal source structure but no
-                        //     secrets; matches the standard SPA-on-static-
-                        //     hosting threat model (S3 + CloudFront + API
-                        //     behind auth).
-                        //
-                        // Without this rule, /app/login itself was behind
-                        // hasRole("USER") and unauthenticated users got
-                        // 302'd to the legacy /pages/login/login JSP before
-                        // the SPA's LoginView ever loaded — the SPA's own
-                        // login screen was unreachable in production builds
-                        // and only visible via the Vite dev server.
-                        "/app/**",
-                        // Phase E hardening (A2): GlobalErrorServlet is
-                        // mapped at /error in web.xml and is the target of
-                        // every <error-page> entry. Without an explicit
-                        // permitAll, the catch-all hasRole("USER") below
-                        // 302s anonymous failure paths to the login page —
-                        // hiding the German error JSP from unauthenticated
-                        // callers and breaking the SPA's JSON-500 contract
-                        // for the un-logged-in case. Safe to expose
-                        // anonymously: the servlet renders ONLY the
-                        // Tomcat-supplied javax.servlet.error.* request
-                        // attributes (status, exception class+message,
-                        // request URI), never DB contents nor session
-                        // state.
-                        "/error"
-                )).permitAll()
+                .requestMatchers(antPaths(PUBLIC_PATHS)).permitAll()
                 .anyRequest().hasRole("USER")
             )
             .addFilterBefore(publicOctUploadRateLimitFilter, ChannelProcessingFilter.class)
@@ -377,7 +367,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private static RequestMatcher[] antPaths(String... patterns) {
+    static RequestMatcher[] antPaths(String... patterns) {
         RequestMatcher[] matchers = new RequestMatcher[patterns.length];
         for (int i = 0; i < patterns.length; i++) {
             matchers[i] = new AntPathRequestMatcher(patterns[i]);

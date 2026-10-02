@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import Modal from '@/components/Modal.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import SelectInput from '@/components/SelectInput.vue'
-import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
@@ -22,10 +21,10 @@ import type { EventDefinition } from '@/types/eventDefinition'
  * - Top: list of currently-attached CRFs with badges (required /
  *   double-entry / SDV mode) + per-row Edit + Remove.
  * - Bottom: "Attach CRF" form with a CRF picker and a default-version
- *   picker. The 14 backend fields are split: the compact attach form
- *   surfaces the four most-used flags (required, doubleEntry, SDV,
- *   electronicSignature); the full edit panel (toggled via "Show
- *   advanced") exposes the participant-form / Enketo cluster.
+ *   picker. The compact attach form surfaces the four most-used flags
+ *   (required, doubleEntry, SDV, electronicSignature); the edit panel
+ *   adds the rest. The participant-form / Enketo fields are not offered:
+ *   those forms are not part of this build.
  */
 interface Props {
   open: boolean
@@ -162,15 +161,11 @@ interface EditState {
   electronicSignature: boolean
   hideCrf: boolean
   sourceDataVerification: SdvRequirement
-  participantForm: boolean
-  allowAnonymousSubmission: boolean
-  submissionUrl: string
 }
 const editing = ref<EditState | null>(null)
 const editErrors = ref<Record<string, string>>({})
 const editFormError = ref<string | null>(null)
 const isSavingEdit = ref(false)
-const showAdvanced = ref(false)
 
 function openEdit(a: EventCrfAssignment) {
   editing.value = {
@@ -183,13 +178,9 @@ function openEdit(a: EventCrfAssignment) {
     electronicSignature: a.electronicSignature,
     hideCrf: a.hideCrf,
     sourceDataVerification: a.sourceDataVerification,
-    participantForm: a.participantForm,
-    allowAnonymousSubmission: a.allowAnonymousSubmission,
-    submissionUrl: a.submissionUrl,
   }
   editErrors.value = {}
   editFormError.value = null
-  showAdvanced.value = false
 }
 
 const versionsForEdit = computed(() => {
@@ -213,9 +204,6 @@ async function submitEdit() {
       electronicSignature: editing.value.electronicSignature,
       hideCrf: editing.value.hideCrf,
       sourceDataVerification: editing.value.sourceDataVerification,
-      participantForm: editing.value.participantForm,
-      allowAnonymousSubmission: editing.value.allowAnonymousSubmission,
-      submissionUrl: editing.value.submissionUrl,
     }
     const result = await lib.updateAssignment(props.studyOid, props.eventDef.oid, editing.value.crfOid, body)
     if (result.ok) {
@@ -299,7 +287,6 @@ const activeAssignments = computed(() =>
                   <StatusPill v-if="a.doubleEntry" variant="info">{{ t('assignCrfs.doubleEntry') }}</StatusPill>
                   <StatusPill v-if="a.electronicSignature" variant="info">{{ t('assignCrfs.electronicSignature') }}</StatusPill>
                   <StatusPill v-if="a.hideCrf" variant="neutral">{{ t('assignCrfs.hideCrf') }}</StatusPill>
-                  <StatusPill v-if="a.participantForm" variant="info">{{ t('assignCrfs.participantForm') }}</StatusPill>
                   <StatusPill variant="neutral">SDV: {{ sdvLabel(a.sourceDataVerification) }}</StatusPill>
                 </div>
               </div>
@@ -325,10 +312,6 @@ const activeAssignments = computed(() =>
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-700">
             {{ t('assignCrfs.editHeading', { crf: editing.crfName }) }}
           </h3>
-          <button
-            class="text-[10px] uppercase tracking-wider text-muw-blue hover:underline"
-            @click="showAdvanced = !showAdvanced"
-          >{{ showAdvanced ? t('assignCrfs.hideAdvanced') : t('assignCrfs.showAdvanced') }}</button>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -361,20 +344,6 @@ const activeAssignments = computed(() =>
             <label class="flex items-center gap-1.5 text-xs">
               <input type="checkbox" v-model="editing.decisionCondition" /> {{ t('assignCrfs.decisionCondition') }}
             </label>
-          </div>
-
-          <!-- Advanced section: Enketo / participant-form fields -->
-          <div v-if="showAdvanced" class="col-span-2 mt-2 pt-2 border-t border-amber-200 space-y-2">
-            <label class="flex items-center gap-1.5 text-xs">
-              <input type="checkbox" v-model="editing.participantForm" /> {{ t('assignCrfs.participantForm') }}
-            </label>
-            <label class="flex items-center gap-1.5 text-xs">
-              <input type="checkbox" v-model="editing.allowAnonymousSubmission" /> {{ t('assignCrfs.allowAnonymousSubmission') }}
-            </label>
-            <div>
-              <FieldLabel for="ec-edit-submission-url">{{ t('assignCrfs.submissionUrl') }}</FieldLabel>
-              <TextInput id="ec-edit-submission-url" v-model="editing.submissionUrl" />
-            </div>
           </div>
         </div>
 

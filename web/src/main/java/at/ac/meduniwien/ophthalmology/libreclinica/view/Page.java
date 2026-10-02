@@ -353,12 +353,9 @@ public enum Page {
      * Page for creating crf version.
      */
     CREATE_CRF_VERSION ("/WEB-INF/jsp/admin/createCRFVersion.jsp", "Create a new CRF Version"),
-    UPLOAD_CRF_VERSION ("/WEB-INF/jsp/admin/uploadCRFVersionFile.jsp", "Upload a new CRF Version"),
 
     REMOVE_CRF_VERSION ("/WEB-INF/jsp/admin/removeCRFVersion.jsp", "Remove CRF Version"),
     RESTORE_CRF_VERSION ("/WEB-INF/jsp/admin/restoreCRFVersion.jsp", "Restore CRF Version"),
-
-    CREATE_XFORM_CRF_VERSION_SERVLET ("/WEB-INF/jsp/admin/createXformCRFVersion.jsp", "Create a new Xform CRF Version"),
 
     /**
      * Page for creating crf data imports
@@ -393,8 +390,6 @@ public enum Page {
      * Page for confirming crf version.
      */
     CREATE_CRF_VERSION_CONFIRM ("/WEB-INF/jsp/admin/createCRFVersionConfirm.jsp", "Create a new CRF Version Confirm"),
-    CREATE_CRF_VERSION_CONFIRMSQL ("/WEB-INF/jsp/admin/createCRFVersionConfirmSQL.jsp",
-            "Create a new CRF Version Confirm SQL"),
     CREATE_CRF_VERSION_DONE ("/WEB-INF/jsp/admin/createCRFVersionDone.jsp", "Create a new CRF Version Done"),
     REMOVE_CRF_VERSION_CONFIRM ("/WEB-INF/jsp/admin/removeCRFVersionConfirm.jsp", "Remove CRF Version Confirm"),
     CREATE_CRF_VERSION_NODELETE("/WEB-INF/jsp/admin/createCRFVersionNoDelete.jsp", "Create a new CRF cannot delete version"),
@@ -437,9 +432,6 @@ public enum Page {
     // Page("/WEB-INF/jsp/extract/selectDiscrepancyAttributes.jsp","Create
     // Dataset and select discrepancy Attribute"),
     CREATE_DATASET_SELECT_ITEMS ("/WEB-INF/jsp/extract/selectItems.jsp", "Create Dataset and select Items"),
-
-   // CREATE_DATASET_APPLY_FILTER_SERVLET ("CreateDatasetApplyFilter", "Create Dataset Apply Filter"),
-    CREATE_DATASET_APPLY_FILTER ("/WEB-INF/jsp/extract/createDatasetApplyFilter.jsp", "Create Dataset Apply Filter"),
 
     CREATE_DATASET_VIEW_SELECTED ("/WEB-INF/jsp/extract/viewSelected.jsp", "View Selected Items"),
     CREATE_DATASET_VIEW_SELECTED_HTML ("/WEB-INF/jsp/extract/viewSelectedHtml.jsp", "View Selected Items in a static way"),
@@ -519,7 +511,6 @@ public enum Page {
     INTERVIEWER ("/WEB-INF/jsp/" + "submit/interviewer.jsp", "Event CRF Interview Info Submission"),
     INTERVIEWER_ENTIRE_PAGE ("/WEB-INF/jsp/" + "submit/interviewerEntirePage.jsp", "Event CRF Interview Info Submission"),
 
-    INITIAL_DATA_ENTRY ("/WEB-INF/jsp/" + "submit/initialDataEntry.jsp", "Initial Data Entry"),
     INITIAL_DATA_ENTRY_SERVLET ("/InitialDataEntry", "Initial Data Entry"),
 
     DOUBLE_DATA_ENTRY ("/WEB-INF/jsp/" + "submit/doubleDataEntry.jsp", "Double Data Entry"),
@@ -647,8 +638,7 @@ public enum Page {
     VIEW_ALL_DEFAULT_CRF_VERSIONS_PRINT ("/WEB-INF/jsp/managestudy/defaultAllCrfVersionPrint.jsp",
             "View default crf versions print"),
      MANAGE_STUDY_MODULE ( "/pages/studymodule",null),
-     VIEW_SECTION_DATA_ENTRY_SERVLET_REST_URL ("/ViewSectionDataEntryRESTUrlServlet", "View Section Data Entry Servlet for REST Url call"),
-     PARTICIPANT_FORM_SERVLET("/WEB-INF/jsp/submit/participantFormServlet.jsp","Participant Form Servlet");
+     VIEW_SECTION_DATA_ENTRY_SERVLET_REST_URL ("/ViewSectionDataEntryRESTUrlServlet", "View Section Data Entry Servlet for REST Url call");
     
       	
   //  private final static String path = "/WEB-INF/jsp/";

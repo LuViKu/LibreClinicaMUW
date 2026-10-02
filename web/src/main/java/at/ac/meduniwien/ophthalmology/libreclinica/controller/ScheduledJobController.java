@@ -134,9 +134,14 @@ public class ScheduledJobController {
             Set<TriggerKey> triggerKeys = scheduler.getTriggerKeys(
                     GroupMatcher.triggerGroupEquals(triggerGroup));
             for (TriggerKey triggerKey : triggerKeys) {
-                TriggerState state = scheduler.getTriggerState(triggerKey);
-                if (state != TriggerState.PAUSED) {
-                    simpleTriggers.add((SimpleTrigger) scheduler.getTrigger(triggerKey));
+                if (scheduler.getTriggerState(triggerKey) == TriggerState.PAUSED) {
+                    continue;
+                }
+                // The export jobs run on simple triggers. The scheduler also
+                // carries other jobs, some on cron triggers (the retention
+                // job, for one); this page does not list them.
+                if (scheduler.getTrigger(triggerKey) instanceof SimpleTrigger simpleTrigger) {
+                    simpleTriggers.add(simpleTrigger);
                 }
             }
         }
@@ -225,7 +230,10 @@ public class ScheduledJobController {
         scheduler.getJobDetail(jobKey);
         logger.debug("About to pause the job-->" + theJobName + "Job Group Name -->" + theJobGroupName);
 
-        SimpleTrigger oldTrigger = (SimpleTrigger) scheduler.getTrigger(triggerKey);
+        // Only an export job's simple trigger is cancelled here; any other
+        // trigger (a cron trigger, for one) is left as it is.
+        SimpleTrigger oldTrigger = scheduler.getTrigger(triggerKey) instanceof SimpleTrigger simpleTrigger
+                ? simpleTrigger : null;
         if (oldTrigger != null) {
             
             Date startTime = new Date(oldTrigger.getStartTime().getTime() + oldTrigger.getRepeatInterval());

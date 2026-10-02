@@ -9,7 +9,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
-import java.net.MalformedURLException;
 import java.util.ArrayList;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
@@ -119,8 +118,6 @@ public class InitUpdateSubStudyServlet extends SecureController {
 							// scg.getValue().getValue());
 							StudyParameterValueBean spvb = spvdao.findByHandleAndStudy(study.getId(),
 									scg.getParameter().getHandle());
-							if (spvb.getValue().equals("enabled"))
-								baseUrl();
 							if (spvb.getId() > 0) {
 								// the sub study itself has the parameter
 								scg.setValue(spvb);
@@ -158,7 +155,7 @@ public class InitUpdateSubStudyServlet extends SecureController {
 
 	}
 
-	private void createEventDefinitions(StudyBean parentStudy) throws MalformedURLException {
+	private void createEventDefinitions(StudyBean parentStudy) {
 		StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());
 
 		int siteId = Integer.valueOf(request.getParameter("id").trim());
@@ -171,8 +168,6 @@ public class InitUpdateSubStudyServlet extends SecureController {
 		for (StudyEventDefinitionBean sed : seds) {
 			String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal")
 					.getValue();
-			if (participateFormStatus.equals("enabled"))
-				baseUrl();
 			request.setAttribute("participateFormStatus", participateFormStatus);
 
 			int defId = sed.getId();

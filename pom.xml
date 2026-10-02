@@ -586,8 +586,8 @@
 			</dependency>
 			<dependency>
 				<!-- Direct dependency since Phase A.2 (Spring Security 5.8 bump):
-				     OpenClinicaPasswordEncoder + SecurityManager + EnketoAPI +
-				     PFormCache import org.springframework.security.crypto.*
+				     OpenClinicaPasswordEncoder + SecurityManager import
+				     org.springframework.security.crypto.*
 				     (Hex, Utf8, PasswordEncoder). Was transitive before; declared
 				     explicitly here to satisfy maven-dependency-plugin:analyze-only. -->
 				<groupId>org.springframework.security</groupId>
