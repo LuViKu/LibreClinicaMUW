@@ -16,9 +16,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
@@ -39,6 +44,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * The SPA's CRF writes refuse an event CRF that is removed, or whose visit,
  * subject or study is (and one that is locked), against a real database.
  * Restoring the CRF stays open and makes it writable again.
+ *
+ * <p>A refused write changes nothing: not the CRF's values, rows, files,
+ * status, completion or verification.
  *
  * <p>Seed (Default Study): event CRFs 5, 9, 11 and 16 are in data entry, on
  * subjects M-002, M-004, M-005 and M-007; event CRF 9 is on visit 10.
@@ -91,14 +99,51 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
                 () -> post(crf + ":autoPopulateRetinal"));
     }
 
+    /** Each write is refused with {@code code}, and none of them changed anything. */
     private void assertEveryWriteRefused(int eventCrfId, String code) throws Exception {
+        String before = state(eventCrfId);
         for (Supplier<MockHttpServletRequestBuilder> write : writes(eventCrfId)) {
             MvcResult result = mvc().perform(write.get().session(investigator())).andReturn();
             String body = result.getResponse().getContentAsString();
-            assertEquals(409, result.getResponse().getStatus(),
-                    result.getRequest().getMethod() + " " + result.getRequest().getRequestURI() + ": " + body);
+            String call = result.getRequest().getMethod() + " " + result.getRequest().getRequestURI();
+            assertEquals(409, result.getResponse().getStatus(), call + ": " + body);
             assertTrue(body.contains(code), body);
+            assertEquals(before, state(eventCrfId), call + " changed the CRF");
         }
+    }
+
+    /**
+     * What a write could change: the event CRF's status, completion and
+     * verification, every item_data row of it, and the stored files.
+     */
+    private static String state(int eventCrfId) throws Exception {
+        StringBuilder out = new StringBuilder();
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT status_id, date_completed, date_validate_completed, sdv_status, "
+                            + "electronic_signature_status FROM event_crf WHERE event_crf_id = ?")) {
+                ps.setInt(1, eventCrfId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    for (int i = 1; i <= 5; i++) out.append(rs.getString(i)).append('|');
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT item_data_id, item_id, ordinal, value, status_id, deleted "
+                            + "FROM item_data WHERE event_crf_id = ? ORDER BY item_data_id")) {
+                ps.setInt(1, eventCrfId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        out.append('\n');
+                        for (int i = 1; i <= 6; i++) out.append(rs.getString(i)).append('|');
+                    }
+                }
+            }
+        }
+        try (Stream<Path> files = Files.walk(attachments)) {
+            out.append("\nfiles=").append(files.filter(Files::isRegularFile).count());
+        }
+        return out.toString();
     }
 
     @Test
@@ -138,6 +183,28 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
                     .andExpect(jsonPath("$.code").value("EVENT_CRF_REMOVED"));
         } finally {
             ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_subject SET status_id = 1 WHERE study_subject_id = 5");
+        }
+    }
+
+    @Test
+    void aCrfOnASignedVisitTakesNoWrite() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE study_event SET subject_event_status_id = 8 WHERE study_event_id = 10");
+        try {
+            assertEveryWriteRefused(9, "EVENT_CRF_SIGNED");
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE study_event SET subject_event_status_id = 3 WHERE study_event_id = 10");
+        }
+    }
+
+    @Test
+    void aCrfOfASignedSubjectTakesNoWrite() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_subject SET status_id = 8 WHERE study_subject_id = 4");
+        try {
+            assertEveryWriteRefused(9, "EVENT_CRF_SIGNED");
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_subject SET status_id = 1 WHERE study_subject_id = 4");
         }
     }
 
