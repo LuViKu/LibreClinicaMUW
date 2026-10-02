@@ -88,9 +88,9 @@ class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
         // null.
 
         seDaoMock = Mockito.mockConstruction(StudyEventDAO.class,
-                (mock, ctx) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ev));
+                (mock, _) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ev));
         ssDaoMock = Mockito.mockConstruction(StudySubjectDAO.class,
-                (mock, ctx) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ss));
+                (mock, _) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ss));
     }
 
     @AfterEach

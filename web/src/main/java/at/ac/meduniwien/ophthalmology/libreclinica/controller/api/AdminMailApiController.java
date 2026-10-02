@@ -148,7 +148,7 @@ public class AdminMailApiController {
      */
     private long reserve(int userId, long now) {
         AtomicLong wait = new AtomicLong();
-        lastRequest.compute(userId, (id, previous) -> {
+        lastRequest.compute(userId, (_, previous) -> {
             if (previous != null && now - previous < MIN_INTERVAL.toMillis()) {
                 wait.set(MIN_INTERVAL.toMillis() - (now - previous));
                 return previous;

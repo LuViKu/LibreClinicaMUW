@@ -143,7 +143,7 @@ class CascadeRollbackDatabaseIT extends AbstractApiControllerDatabaseIT {
     /** {@code real}, except that preparing an {@code UPDATE item_data} throws while armed. */
     private static DataSource failingOnValues(DataSource real) {
         return (DataSource) Proxy.newProxyInstance(CascadeRollbackDatabaseIT.class.getClassLoader(),
-                new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+                new Class<?>[] {DataSource.class}, (_, method, args) -> {
                     Object result = call(real, method, args);
                     return result instanceof Connection c ? failingOnValues(c) : result;
                 });
@@ -151,7 +151,7 @@ class CascadeRollbackDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static Connection failingOnValues(Connection real) {
         return (Connection) Proxy.newProxyInstance(CascadeRollbackDatabaseIT.class.getClassLoader(),
-                new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+                new Class<?>[] {Connection.class}, (_, method, args) -> {
                     if (FAIL_ON_VALUES.get() && method.getName().equals("prepareStatement")
                             && args[0] instanceof String sql && sql.startsWith("UPDATE item_data")) {
                         throw new IllegalStateException("injected failure");

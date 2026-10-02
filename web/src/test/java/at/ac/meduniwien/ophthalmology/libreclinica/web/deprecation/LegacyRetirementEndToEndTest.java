@@ -111,7 +111,7 @@ class LegacyRetirementEndToEndTest {
         StandardManager sessions = new StandardManager();
         sessions.setPathname(null); // no session persistence across the stop
         context.setManager(sessions);
-        context.addServletContainerInitializer((classes, servletContext) -> register(servletContext), null);
+        context.addServletContainerInitializer((_, servletContext) -> register(servletContext), null);
         tomcat.start();
         baseUrl = "http://127.0.0.1:" + tomcat.getConnector().getLocalPort();
     }

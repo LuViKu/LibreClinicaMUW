@@ -178,7 +178,7 @@ public class NamdClinicalApiController {
         ResponseEntity<?> denied = access.guardSession(session);
         if (denied != null) return denied;
         Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
+        try (Connection _ = dataSource.getConnection()) {
             subjectStudyId = access.studyIdForStudySubject(studySubjectId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(
@@ -322,7 +322,7 @@ public class NamdClinicalApiController {
         ResponseEntity<?> denied = access.guardSession(session);
         if (denied != null) return denied;
         Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
+        try (Connection _ = dataSource.getConnection()) {
             subjectStudyId = access.studyIdForStudySubject(studySubjectId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(
@@ -682,7 +682,7 @@ public class NamdClinicalApiController {
                     "message", "CRT compute service is not wired in this context"));
         }
         Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
+        try (Connection _ = dataSource.getConnection()) {
             subjectStudyId = access.studyIdForStudySubject(studySubjectId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(

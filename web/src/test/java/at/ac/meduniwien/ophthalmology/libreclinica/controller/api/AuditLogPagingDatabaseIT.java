@@ -192,7 +192,7 @@ class AuditLogPagingDatabaseIT extends AbstractApiControllerDatabaseIT {
         JsonNode all = page("/api/v1/audit", studySession(), "from", "2031-01-01", "to", "2031-01-01");
         Map<String, Set<String>> byVariant = new HashMap<>();
         for (JsonNode e : all.get("events")) {
-            byVariant.computeIfAbsent(e.get("variant").asText(), v -> new HashSet<>()).add(e.get("id").asText());
+            byVariant.computeIfAbsent(e.get("variant").asText(), _ -> new HashSet<>()).add(e.get("id").asText());
         }
         assertEquals(12, all.get("totalCount").asInt());
         assertEquals(4, byVariant.get("data").size(), byVariant.toString());

@@ -336,7 +336,7 @@ public class EventCrfsApiController {
                         && grp.getOid() != null) {
                     groupOid = grp.getOid();
                     itemOidsByItemGroupId
-                            .computeIfAbsent(grp.getId(), k -> new ArrayList<>())
+                            .computeIfAbsent(grp.getId(), _ -> new ArrayList<>())
                             .add(ib.getOid());
                 }
                 itemDtos.add(buildItemDto(ib, ifm, groupOid, showWhenByItemId.get(ib.getId()),
@@ -369,8 +369,8 @@ public class EventCrfsApiController {
             if (repeating) {
                 int ordinal = Math.max(1, idb.getOrdinal());
                 groupRowValues
-                        .computeIfAbsent(grp.getId(), k -> new LinkedHashMap<>())
-                        .computeIfAbsent(ordinal, k -> new LinkedHashMap<>())
+                        .computeIfAbsent(grp.getId(), _ -> new LinkedHashMap<>())
+                        .computeIfAbsent(ordinal, _ -> new LinkedHashMap<>())
                         .put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
             } else {
                 values.put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
@@ -1530,7 +1530,7 @@ public class EventCrfsApiController {
             if (isOpen) openByOid.merge(itemOid, 1, Integer::sum);
             Instant when = latestActivityInstant(n);
             latestByOid.merge(itemOid, when, (a, b) -> a.isAfter(b) ? a : b);
-            noteIdsByOid.computeIfAbsent(itemOid, k -> new ArrayList<>())
+            noteIdsByOid.computeIfAbsent(itemOid, _ -> new ArrayList<>())
                     .add(String.valueOf(n.getId()));
         }
 

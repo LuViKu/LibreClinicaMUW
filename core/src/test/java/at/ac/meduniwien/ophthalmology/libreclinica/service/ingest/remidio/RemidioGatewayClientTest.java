@@ -72,7 +72,7 @@ public class RemidioGatewayClientTest {
         }
     }
 
-    private static final RemidioGatewayClient.Downloader NO_DOWNLOADS = (uri, timeout) -> {
+    private static final RemidioGatewayClient.Downloader NO_DOWNLOADS = (_, _) -> {
         throw new IllegalStateException("no download expected");
     };
 
@@ -280,7 +280,7 @@ public class RemidioGatewayClientTest {
     @Test
     public void downloadOpensTheSignedUrlWithoutGatewayHeadersAndRefusesNonHttps() throws Exception {
         List<URI> opened = new ArrayList<>();
-        RemidioGatewayClient.Downloader dl = (uri, timeout) -> {
+        RemidioGatewayClient.Downloader dl = (uri, _) -> {
             opened.add(uri);
             return new RemidioGatewayClient.Download(200, new ByteArrayInputStream(new byte[] {1, 2, 3}));
         };
@@ -299,7 +299,7 @@ public class RemidioGatewayClientTest {
 
     @Test
     public void anExpiredSignedUrlIsReportedAsSuch() {
-        RemidioGatewayClient.Downloader dl = (uri, timeout) ->
+        RemidioGatewayClient.Downloader dl = (_, _) ->
                 new RemidioGatewayClient.Download(403, new ByteArrayInputStream(new byte[0]));
         RemidioGatewayClient client = new RemidioGatewayClient(SETTINGS, new ScriptedTransport(), dl);
 

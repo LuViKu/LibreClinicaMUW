@@ -62,11 +62,11 @@ public class RetinalJobStatusBroadcaster {
      */
     public SseEmitter subscribe(long jobId, SseEmitter emitter) {
         CopyOnWriteArrayList<SseEmitter> list =
-                emitters.computeIfAbsent(jobId, k -> new CopyOnWriteArrayList<>());
+                emitters.computeIfAbsent(jobId, _ -> new CopyOnWriteArrayList<>());
         list.add(emitter);
         emitter.onCompletion(() -> remove(jobId, emitter));
         emitter.onTimeout(() -> remove(jobId, emitter));
-        emitter.onError(t -> remove(jobId, emitter));
+        emitter.onError(_ -> remove(jobId, emitter));
         return emitter;
     }
 

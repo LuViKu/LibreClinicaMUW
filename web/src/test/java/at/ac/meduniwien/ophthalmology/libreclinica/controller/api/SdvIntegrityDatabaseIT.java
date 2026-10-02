@@ -906,13 +906,13 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
         AtomicBoolean ran = new AtomicBoolean();
         ClassLoader loader = SdvIntegrityDatabaseIT.class.getClassLoader();
         return (DataSource) Proxy.newProxyInstance(loader, new Class<?>[] {DataSource.class},
-                (proxy, method, args) -> {
+                (_, method, args) -> {
                     Object result = invoke(method, DATA_SOURCE, args);
                     if (!(result instanceof Connection connection)) {
                         return result;
                     }
                     return Proxy.newProxyInstance(loader, new Class<?>[] {Connection.class},
-                            (p, m, a) -> {
+                            (_, m, a) -> {
                                 if ("prepareStatement".equals(m.getName()) && a != null
                                         && a[0] instanceof String sql
                                         && sql.toLowerCase(Locale.ROOT).contains("item_data")

@@ -158,11 +158,6 @@ public class PublicBcvaEntryController {
             Map.entry(Field.OS_AXIS,     Set.of("OS_BCVA_REFRACTION_AXIS",     "REFRACT_OS_AXIS"))
     );
 
-    /** Inverse lookup: every OID the controller knows about, flat. */
-    private static final Set<String> ALL_KNOWN_OIDS = OID_BY_FIELD.values().stream()
-            .flatMap(Set::stream)
-            .collect(Collectors.toUnmodifiableSet());
-
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
     /**
@@ -587,7 +582,7 @@ public class PublicBcvaEntryController {
         // Build a parameterised IN list — OIDs are whitelisted from
         // BCVA_ITEM_OIDS so SQL injection is moot; the explicit
         // PreparedStatement parameterisation is still hygiene.
-        String placeholders = wantedOids.stream().map(o -> "?").collect(Collectors.joining(","));
+        String placeholders = wantedOids.stream().map(_ -> "?").collect(Collectors.joining(","));
         String sql = "SELECT i.name, i.item_id "
                 + "  FROM item_form_metadata ifm "
                 + "  JOIN item i ON i.item_id = ifm.item_id "

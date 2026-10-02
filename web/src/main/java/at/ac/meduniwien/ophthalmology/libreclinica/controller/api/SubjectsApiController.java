@@ -3481,7 +3481,7 @@ public class SubjectsApiController {
                 Integer groupId = rs.wasNull() ? null : Integer.valueOf(rawGroupId);
                 String groupName = rs.getString(5);
                 String subjectAssignment = rs.getString(6);
-                out.computeIfAbsent(studySubjectId, k -> new ArrayList<>())
+                out.computeIfAbsent(studySubjectId, _ -> new ArrayList<>())
                    .add(new GroupAssignmentSnapshot(
                            groupClassId, groupClassName, groupId, groupName, subjectAssignment));
             }

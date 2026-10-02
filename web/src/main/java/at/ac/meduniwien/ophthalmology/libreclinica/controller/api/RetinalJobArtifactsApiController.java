@@ -40,7 +40,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -87,8 +86,6 @@ public class RetinalJobArtifactsApiController {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RetinalJobArtifactsApiController.class);
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final DataSource dataSource;
     private final RetinalArtifactStorageService artifactStore;

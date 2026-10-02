@@ -261,7 +261,7 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     @Order(5)
     void aRemovalThatFailsPartWayChangesNothing() throws Exception {
         // The datasets are the cascade's last step.
-        try (AutoCloseable failing = failUpdatesOf("dataset", "dataset_id", dataset)) {
+        try (AutoCloseable _ = failUpdatesOf("dataset", "dataset_id", dataset)) {
             mockMvc().perform(post("/api/v1/studies/" + OID + "/disable")
                             .contentType("application/json").content("{\"reason\":\"doomed\"}")
                             .session(sysadminSession()))

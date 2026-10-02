@@ -512,7 +512,7 @@ public class ImagingModalitiesApiController {
             ps.setInt(1, studyId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    out.computeIfAbsent(rs.getInt(1), k -> new ArrayList<>())
+                    out.computeIfAbsent(rs.getInt(1), _ -> new ArrayList<>())
                        .add(new BindingDto(rs.getInt(2), rs.getString(3), rs.getString(4),
                                rs.getString(5), rs.getString(6)));
                 }

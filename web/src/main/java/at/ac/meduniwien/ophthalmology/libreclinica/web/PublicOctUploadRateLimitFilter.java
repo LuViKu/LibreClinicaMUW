@@ -191,7 +191,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         boolean commit = isUploadCommit(prefix, request.getMethod(), uri);
         String key = clientIp(request) + "|" + prefix + (commit ? "|commit" : "");
         long now = nowMs();
-        Bucket bucket = buckets.computeIfAbsent(key, k -> commit
+        Bucket bucket = buckets.computeIfAbsent(key, _ -> commit
                 ? new Bucket(MAX_COMMITS_PER_HOUR, MAX_COMMITS_PER_HOUR, COMMIT_REFILL_INTERVAL_MS, now)
                 : HEARTBEAT_PREFIX.equals(prefix)
                         ? new Bucket(MAX_HEARTBEATS_PER_HOUR, MAX_HEARTBEATS_PER_HOUR, HEARTBEAT_REFILL_INTERVAL_MS, now)

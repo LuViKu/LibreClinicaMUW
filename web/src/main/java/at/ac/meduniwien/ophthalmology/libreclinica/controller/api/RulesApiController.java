@@ -407,10 +407,6 @@ public class RulesApiController {
     private static final Pattern RULE_OID_PATTERN =
             Pattern.compile("^[A-Z][A-Z0-9_]*$");
 
-    /** Max length per legacy {@code rule.oc_oid} column width. */
-    private static final int OID_MAX_LENGTH = 40;
-    private static final int NAME_MAX_LENGTH = 255;
-    private static final int DESCRIPTION_MAX_LENGTH = 2000;
     private static final int MESSAGE_MAX_LENGTH = 2000;
     /** Lightweight RFC-5322ish email shape — non-blank + one @ + one ".". */
     private static final Pattern EMAIL_PATTERN =
@@ -1663,12 +1659,6 @@ public class RulesApiController {
             out.add(pb);
         }
         return out;
-    }
-
-    private void writeRuleCreateAudit(UserAccountBean me, StudyBean study, RuleBean rule) {
-        writeRuleAudit(AuditTypeIds.RULE_CREATED, me.getId(),
-                "rule", rule.getId(),
-                "create", "", rule.getOid() == null ? "" : rule.getOid());
     }
 
     private void writeRuleSetCreateAudit(UserAccountBean me, StudyBean study, RuleSetBean rs) {

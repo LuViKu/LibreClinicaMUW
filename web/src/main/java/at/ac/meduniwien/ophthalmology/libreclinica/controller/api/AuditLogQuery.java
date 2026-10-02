@@ -85,7 +85,7 @@ final class AuditLogQuery {
         Map<String, List<Integer>> out = new LinkedHashMap<>();
         for (int id = 0; id < TYPE_ID_BOUND; id++) {
             String variant = AuditApiController.variantForType(id, null);
-            if (!"data".equals(variant)) out.computeIfAbsent(variant, v -> new ArrayList<>()).add(id);
+            if (!"data".equals(variant)) out.computeIfAbsent(variant, _ -> new ArrayList<>()).add(id);
         }
         return out;
     }

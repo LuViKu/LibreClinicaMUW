@@ -231,7 +231,7 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
      */
     private static OpenClinicaUsernamePasswordAuthenticationFilter loginFilter() {
         OpenClinicaUsernamePasswordAuthenticationFilter filter = new OpenClinicaUsernamePasswordAuthenticationFilter();
-        filter.setAuthenticationManager(authentication -> {
+        filter.setAuthenticationManager(_ -> {
             throw new BadCredentialsException("Bad credentials");
         });
         filter.setConfigurationDao(jpa.getBean(ConfigurationDao.class));

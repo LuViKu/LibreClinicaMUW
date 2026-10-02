@@ -81,7 +81,7 @@ public class StudiesAdminApiController {
         for (StudyBean s : all) oidById.put(s.getId(), s.getOid());
         for (StudyBean s : all) {
             if (s.getParentStudyId() > 0) {
-                sitesByParent.computeIfAbsent(s.getParentStudyId(), k -> new ArrayList<>())
+                sitesByParent.computeIfAbsent(s.getParentStudyId(), _ -> new ArrayList<>())
                         .add(toDto(s, oidById.get(s.getParentStudyId()), List.of()));
             }
         }
