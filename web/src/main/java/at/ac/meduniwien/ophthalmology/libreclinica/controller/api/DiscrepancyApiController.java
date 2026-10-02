@@ -508,9 +508,19 @@ public class DiscrepancyApiController {
         ItemDataBean target = (scopedEventCrfId == null)
                 ? locateItemData(items, ss.getId())
                 : locateItemData(items, ss.getId(), scopedEventCrfId);
+        // An item of the pinned event CRF that holds no value yet has no
+        // row to carry the note. Legacy data entry takes a note on such a
+        // field and saves it with the value; here the row is started empty,
+        // so a value the CRF validation refuses can be saved once its note
+        // exists, and a required item can be left empty with a note.
+        ItemBean emptyRowItem = null;
         if (target == null || target.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of("message",
-                    "No item_data row for subject '" + body.subjectId() + "' and item '" + body.itemOid() + "'"));
+            emptyRowItem = scopedEventCrfId == null
+                    ? null : itemAwaitingRow(items, scopedEventCrfId, session);
+            if (emptyRowItem == null) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No item_data row for subject '" + body.subjectId() + "' and item '" + body.itemOid() + "'"));
+            }
         }
 
         // typeName + typeId resolved earlier; role gate runs here so
@@ -521,6 +531,10 @@ public class DiscrepancyApiController {
         if (!NoteTransitionMatrix.canCreateType(typeId, roleId)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit creating notes of type '" + typeName + "'"));
+        }
+
+        if (emptyRowItem != null) {
+            target = startEmptyRow(emptyRowItem, scopedEventCrfId, ub);
         }
 
         // Phase B2 (2026-06-10) — failure-audit wrap on the parent
@@ -1004,6 +1018,57 @@ public class DiscrepancyApiController {
             }
         }
         return best;
+    }
+
+    /**
+     * The candidate item that is on the event CRF's version, when the caller
+     * may start a row for it there: a role that enters data, and an event
+     * CRF whose values may change ({@link ClinicalWriteState}). Null otherwise.
+     */
+    private ItemBean itemAwaitingRow(List<ItemBean> candidates, int eventCrfId, HttpSession session) {
+        if (!ClinicalWriteAuthorization.roleMayEnterData(ClinicalWriteAuthorization.roleIdOf(session))
+                || ClinicalWriteState.refuseUnlessWritable(dataSource, eventCrfId, "starting a row") != null) {
+            return null;
+        }
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT 1 FROM item_form_metadata ifm "
+                             + "  JOIN event_crf ec ON ec.crf_version_id = ifm.crf_version_id "
+                             + " WHERE ec.event_crf_id = ? AND ifm.item_id = ?")) {
+            for (ItemBean item : candidates) {
+                ps.setInt(1, eventCrfId);
+                ps.setInt(2, item.getId());
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return item;
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not read the items of event_crf " + eventCrfId, e);
+        }
+        return null;
+    }
+
+    /** An empty first row of {@code item} on the event CRF, owned by the caller. */
+    private ItemDataBean startEmptyRow(ItemBean item, int eventCrfId, UserAccountBean ub) {
+        ItemDataBean row = new ItemDataBean();
+        row.setEventCRFId(eventCrfId);
+        row.setItemId(item.getId());
+        row.setValue("");
+        row.setOrdinal(1);
+        row.setOwnerId(ub.getId());
+        row.setOwner(ub);
+        row.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE);
+        row.setOldStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE);
+        row.setDeleted(false);
+        ItemDataBean created = new ItemDataDAO(dataSource).create(row);
+        ItemDataBean out = created != null && created.getId() > 0 ? created : row;
+        if (out.getId() <= 0) {
+            throw new IllegalStateException("Could not start a row of item " + item.getId()
+                    + " on event_crf " + eventCrfId);
+        }
+        LOG.info("discrepancy add: started empty item_data {} (item {}, event_crf {}) to carry a note",
+                out.getId(), item.getId(), eventCrfId);
+        return out;
     }
 
     /**

@@ -41,10 +41,17 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SimpleConditi
  *       {@code dyn_item_group_metadata});</li>
  *   <li>for an item with a simple conditional display, its control item holds
  *       the option that shows it
- *       ({@link SimpleConditionalDisplayService#conditionalDisplayToBeShown}).</li>
+ *       ({@link SimpleConditionalDisplayService#conditionalDisplayToBeShown});
+ *       in a repeating group whose rows also hold the control item, the
+ *       control item of the same row.</li>
  * </ul>
  * In a repeating group every row is checked, and a group without any row
  * counts as one empty row, which is what the legacy form presents.
+ *
+ * <p>An empty value whose row carries an active discrepancy note is not
+ * missing: legacy lets a field with a note through every check but the
+ * always-executed ones ({@code DiscrepancyValidator}), and {@code IS_REQUIRED}
+ * is not one of them. That is how a site documents a value it cannot obtain.
  *
  * <p>The check reads the stored values: the SPA saves before it completes.
  */
@@ -73,11 +80,17 @@ final class RequiredItemsCheck {
                     + " WHERE ifm.crf_version_id = ? "
                     + " ORDER BY s.ordinal, ifm.ordinal, i.item_id";
 
-    /** Live values: removed rows and removed values do not count. */
+    /**
+     * Live values: removed rows and removed values do not count. The last
+     * column says whether the row carries an active discrepancy note.
+     */
     private static final String VALUES_SQL =
-            "SELECT item_id, COALESCE(ordinal, 1), value FROM item_data "
-                    + " WHERE event_crf_id = ? AND COALESCE(deleted, false) = false "
-                    + "   AND COALESCE(status_id, 1) NOT IN (5, 7)";
+            "SELECT d.item_id, COALESCE(d.ordinal, 1), d.value, "
+                    + "       EXISTS (SELECT 1 FROM dn_item_data_map m "
+                    + "                WHERE m.item_data_id = d.item_data_id AND m.activated = true) "
+                    + "  FROM item_data d "
+                    + " WHERE d.event_crf_id = ? AND COALESCE(d.deleted, false) = false "
+                    + "   AND COALESCE(d.status_id, 1) NOT IN (5, 7)";
 
     private static final String SCD_SQL =
             "SELECT scd.scd_item_form_metadata_id, scd.control_item_form_metadata_id, "
@@ -101,7 +114,10 @@ final class RequiredItemsCheck {
     static List<Missing> missing(DataSource dataSource, EventCRFBean ecb) {
         try (Connection c = dataSource.getConnection()) {
             List<ItemMeta> items = items(c, ecb.getCRFVersionId());
-            Map<Integer, Map<Integer, String>> values = values(c, ecb.getId());
+            Set<String> noted = new HashSet<>();
+            Map<Integer, Map<Integer, String>> values = values(c, ecb.getId(), noted);
+            Map<Integer, ItemMeta> itemById = new HashMap<>();
+            for (ItemMeta item : items) itemById.putIfAbsent(item.itemId(), item);
             Set<Integer> shownByRule = ids(c, DYN_ITEMS_SQL, ecb.getId());
             Set<Integer> groupsShownByRule = ids(c, DYN_GROUPS_SQL, ecb.getId());
             Map<Integer, List<String[]>> scdByIfm = scd(c, ecb.getCRFVersionId(), items);
@@ -120,8 +136,6 @@ final class RequiredItemsCheck {
                 if (!item.showItem() && !shownByRule.contains(item.ifmId())) continue;
                 if (item.groupId() != null && !item.showGroup()
                         && !groupsShownByRule.contains(item.groupId())) continue;
-                if (!shownByConditionalDisplay(item, scdByIfm, values)) continue;
-
                 Map<Integer, String> stored = values.getOrDefault(item.itemId(), Map.of());
                 if (item.repeating()) {
                     TreeSet<Integer> rows = rowsByGroup.get(item.groupId());
@@ -129,12 +143,14 @@ final class RequiredItemsCheck {
                         rows = new TreeSet<>(Set.of(1));
                     }
                     for (int row : rows) {
-                        if (blank(stored.get(row))) {
+                        if (missing(item, row, stored, noted)
+                                && shownByConditionalDisplay(item, row, scdByIfm, values, itemById)) {
                             out.add(new Missing(EventCrfsApiController.groupRowReasonKey(item.oid(), row),
                                     item.label()));
                         }
                     }
-                } else if (blank(stored.get(1))) {
+                } else if (missing(item, 1, stored, noted)
+                        && shownByConditionalDisplay(item, 1, scdByIfm, values, itemById)) {
                     out.add(new Missing(item.oid(), item.label()));
                 }
             }
@@ -145,6 +161,11 @@ final class RequiredItemsCheck {
         }
     }
 
+    /** Empty in that row, and no active discrepancy note on the row. */
+    private static boolean missing(ItemMeta item, int row, Map<Integer, String> stored, Set<String> noted) {
+        return blank(stored.get(row)) && !noted.contains(item.itemId() + ":" + row);
+    }
+
     private static boolean blank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -152,17 +173,22 @@ final class RequiredItemsCheck {
     /**
      * Legacy shows an item with a simple conditional display when its control
      * item holds the option; with several conditions, when any holds. A
-     * condition whose control item is not on the form never shows it.
+     * condition whose control item is not on the form never shows it. A
+     * control item in the same repeating group is read in the same row.
      */
-    private static boolean shownByConditionalDisplay(ItemMeta item, Map<Integer, List<String[]>> scdByIfm,
-                                                     Map<Integer, Map<Integer, String>> values) {
+    private static boolean shownByConditionalDisplay(ItemMeta item, int row, Map<Integer, List<String[]>> scdByIfm,
+                                                     Map<Integer, Map<Integer, String>> values,
+                                                     Map<Integer, ItemMeta> itemById) {
         List<String[]> conditions = scdByIfm.get(item.ifmId());
         if (conditions == null || conditions.isEmpty()) {
             return true;
         }
         for (String[] condition : conditions) {
             int controlItemId = Integer.parseInt(condition[0]);
-            String chosen = values.getOrDefault(controlItemId, Map.of()).get(1);
+            ItemMeta control = itemById.get(controlItemId);
+            boolean sameRows = item.repeating() && control != null && control.repeating()
+                    && item.groupId().equals(control.groupId());
+            String chosen = values.getOrDefault(controlItemId, Map.of()).get(sameRows ? row : 1);
             SCDItemMetadataBean cd = new SCDItemMetadataBean();
             cd.setOptionValue(condition[1]);
             if (SimpleConditionalDisplayService.conditionalDisplayToBeShown(chosen, cd)) {
@@ -189,15 +215,24 @@ final class RequiredItemsCheck {
         return out;
     }
 
-    /** item id → ordinal → value. */
-    private static Map<Integer, Map<Integer, String>> values(Connection c, int eventCrfId) throws SQLException {
+    /**
+     * item id → ordinal → value.
+     *
+     * @param noted receives {@code itemId:ordinal} of every row with an active note
+     */
+    private static Map<Integer, Map<Integer, String>> values(Connection c, int eventCrfId, Set<String> noted)
+            throws SQLException {
         Map<Integer, Map<Integer, String>> out = new HashMap<>();
         try (PreparedStatement ps = c.prepareStatement(VALUES_SQL)) {
             ps.setInt(1, eventCrfId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
+                    int ordinal = Math.max(1, rs.getInt(2));
                     out.computeIfAbsent(rs.getInt(1), k -> new LinkedHashMap<>())
-                            .put(Math.max(1, rs.getInt(2)), rs.getString(3));
+                            .put(ordinal, rs.getString(3));
+                    if (rs.getBoolean(4)) {
+                        noted.add(rs.getInt(1) + ":" + ordinal);
+                    }
                 }
             }
         }
