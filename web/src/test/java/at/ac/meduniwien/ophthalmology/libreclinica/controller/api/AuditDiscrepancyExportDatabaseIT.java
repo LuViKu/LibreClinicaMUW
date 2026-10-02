@@ -84,10 +84,11 @@ class AuditDiscrepancyExportDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void auditListReturns200WithArrayPayload() throws Exception {
+        // A page of the trail: the rows are under "events".
         auditMockMvc().perform(get("/api/v1/audit")
                 .session(authenticatedRootSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.events").isArray());
     }
 
     @Test

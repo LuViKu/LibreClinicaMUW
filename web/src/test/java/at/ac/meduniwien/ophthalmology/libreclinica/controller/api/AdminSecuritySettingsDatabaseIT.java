@@ -376,7 +376,7 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         JsonNode row = null;
-        for (JsonNode r : rows) {
+        for (JsonNode r : rows.path("events")) {
             if (SWITCH.equals(r.path("details").asText())) row = r;
         }
         assertNotNull(row, "the change is listed with the key of the setting");
