@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfWriteRules;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudyBindings;
 
@@ -513,6 +514,16 @@ public class NamdClinicalApiController {
             }
             int eventCrfId = instance.eventCrfId();
 
+            // No change to data that is removed, locked or signed, at the
+            // CRF, visit, subject or study (EventCrfWriteRules).
+            EventCrfWriteRules.Refusal refusal = EventCrfWriteRules.refusal(c, eventCrfId);
+            if (refusal != null) {
+                c.rollback();
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "The visit CRF " + refusal.reason() + "; the flags were not saved",
+                        "code", "EVENT_CRF_" + refusal.name()));
+            }
+
             // Resolve item_ids for the four per-eye flag items on this CRF
             // version. An item the version does not carry is skipped rather
             // than created: a flag with nowhere to go means the CRF and the
@@ -537,10 +548,15 @@ public class NamdClinicalApiController {
             // Walk the body's per-eye maps + upsert each provided flag.
             Map<String, Object> od = castMap(body.get("od"));
             Map<String, Object> os = castMap(body.get("os"));
+            boolean changed = false;
             for (FlagRole role : flagRoles) {
                 Map<String, Object> eyeBody = "od".equals(role.eye()) ? od : os;
-                upsertFlag(c, itemIds, role.itemOid(), eyeBody, role.field(),
+                changed |= upsertFlag(c, itemIds, role.itemOid(), eyeBody, role.field(),
                         eventCrfId, currentUser.getId());
+            }
+            // A changed value ends the CRF's source data verification.
+            if (changed) {
+                EventCrfWriteRules.withdrawVerification(c, eventCrfId, currentUser.getId());
             }
 
             c.commit();
@@ -572,16 +588,22 @@ public class NamdClinicalApiController {
      * for these non-repeating items.
      *
      * <p>Skips silently when the CRF version doesn't carry that item
-     * (defensive — production installs may drift from the demo seed).
+     * (defensive — production installs may drift from the demo seed),
+     * and leaves a value that would not change alone. A flag is a
+     * person's entry, so the row it writes carries no machine provenance.
+     * The {@code item_data} triggers audit the change.
+     *
+     * @return whether the stored value changed
      */
-    private static void upsertFlag(Connection c, Map<String, Integer> itemIds,
-                                   String itemOid, Map<String, Object> eyeBody,
-                                   String bodyKey, int eventCrfId, int userId) throws SQLException {
+    private static boolean upsertFlag(Connection c, Map<String, Integer> itemIds,
+                                      String itemOid, Map<String, Object> eyeBody,
+                                      String bodyKey, int eventCrfId, int userId) throws SQLException {
         Integer itemId = itemIds.get(itemOid);
-        if (itemId == null) return;
-        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return;
+        if (itemId == null) return false;
+        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return false;
         Object raw = eyeBody.get(bodyKey);
         String value = raw instanceof Boolean ? String.valueOf(raw) : String.valueOf(raw);
+        if (value.equals(liveValue(c, itemId, eventCrfId))) return false;
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO item_data ("
                         + "  item_id, event_crf_id, status_id, value, "
@@ -591,12 +613,30 @@ public class NamdClinicalApiController {
                         + "SET value = EXCLUDED.value, "
                         + "    date_updated = now(), "
                         + "    update_id = EXCLUDED.owner_id, "
-                        + "    deleted = false")) {
+                        + "    deleted = false, "
+                        + "    source_kind = NULL, "
+                        + "    source_retinal_job_id = NULL, "
+                        + "    source_ingest_item_id = NULL")) {
             ps.setInt(1, itemId);
             ps.setInt(2, eventCrfId);
             ps.setString(3, value);
             ps.setInt(4, userId);
             ps.executeUpdate();
+        }
+        return true;
+    }
+
+    /** The value in the flag's row, or null when there is none or it was deleted. */
+    private static String liveValue(Connection c, int itemId, int eventCrfId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT value FROM item_data "
+                        + " WHERE item_id = ? AND event_crf_id = ? AND ordinal = 1 "
+                        + "   AND COALESCE(deleted, false) = false")) {
+            ps.setInt(1, itemId);
+            ps.setInt(2, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
         }
     }
 
