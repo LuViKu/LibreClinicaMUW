@@ -359,7 +359,7 @@ public class RuleSetRuleBean extends AbstractAuditableMutableDomainObject implem
             if (other.actions != null)
                 return false;
         } else {// if (!actions.equals(other.actions))
-            if (actions.size() != other.actions.size())
+            if (other.actions == null || actions.size() != other.actions.size())
                 return false;
             for (RuleActionBean ruleActionBean : other.actions) {
                 if (!actions.contains(ruleActionBean))

@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubject
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEvent;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionBeanObjectWrapper;
+import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 import org.apache.commons.lang.time.DateUtils;
 //import org.mvel2.MVEL;
 import org.slf4j.Logger;
@@ -99,7 +100,14 @@ public class ExpressionBeanService {
         	{
         		int leftBracketIndex = oid.indexOf("[");
         		int rightBracketIndex = oid.indexOf("]");
-        		int ordinal =  Integer.valueOf(oid.substring(leftBracketIndex + 1,rightBracketIndex));
+        		int ordinal;
+        		try {
+        			ordinal = Integer.valueOf(oid.substring(leftBracketIndex + 1,rightBracketIndex));
+        		} catch (NumberFormatException e) {
+        			// [END] or [ALL] names no single occurrence. Fail the rule, which the rule
+        			// runner logs and skips, rather than the event update that triggered it.
+        			throw new OpenClinicaSystemException("OCRERR_0019", new String[] { oid });
+        		}
         		studyEvent= expressionBeanWrapper.getStudyEventDaoHib().fetchByStudyEventDefOIDAndOrdinal(oid.substring(0,leftBracketIndex), ordinal, subjectId);
         	}	
         	else studyEvent= expressionBeanWrapper.getStudyEventDaoHib().fetchByStudyEventDefOIDAndOrdinal(oid, 1, subjectId);

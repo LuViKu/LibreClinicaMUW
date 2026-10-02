@@ -116,7 +116,7 @@ public class HideActionBean extends RuleActionBean {
             if (other.properties != null)
                 return false;
         } else {// if (!properties.equals(other.properties))
-            if (properties.size() != other.properties.size())
+            if (other.properties == null || properties.size() != other.properties.size())
                 return false;
             for (PropertyBean propertyBean : other.properties) {
                 if (!properties.contains(propertyBean))
