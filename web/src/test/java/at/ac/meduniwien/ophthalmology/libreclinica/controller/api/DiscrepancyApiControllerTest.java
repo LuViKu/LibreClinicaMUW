@@ -523,4 +523,18 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(answered,
                 DiscrepancyApiController.lastActivity(created, answered));
     }
+
+    @Test
+    void aThreadWhoseAnswersCannotBeReadIsAnErrorNotUnanswered() throws Exception {
+        // Before, a failed read returned no answers, and every thread then
+        // showed its creation date as its last activity and a closed one
+        // 0 days open, in a 200 response.
+        javax.sql.DataSource failing = Mockito.mock(javax.sql.DataSource.class);
+        Mockito.when(failing.getConnection()).thenThrow(new java.sql.SQLException("connection refused"));
+        DiscrepancyApiController controller = new DiscrepancyApiController(failing,
+                Mockito.mock(SiteVisibilityFilter.class));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.dao.DataAccessException.class,
+                () -> controller.latestChildActivity(java.util.List.of(1, 2)));
+    }
 }

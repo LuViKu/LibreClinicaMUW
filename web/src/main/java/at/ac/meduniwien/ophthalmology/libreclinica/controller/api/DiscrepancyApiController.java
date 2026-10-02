@@ -63,6 +63,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataRetrievalFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -1055,8 +1056,12 @@ public class DiscrepancyApiController {
     /**
      * The creation time of each parent's newest child note, by parent id.
      * A parent nobody has answered is absent. One query for the whole list.
+     *
+     * <p>A failed read is an error (500), not an empty map: an empty map
+     * would read as "nobody answered", so every thread would show its
+     * creation date as its last activity and a closed one 0 days open.
      */
-    private Map<Integer, Instant> latestChildActivity(List<Integer> parentIds) {
+    Map<Integer, Instant> latestChildActivity(List<Integer> parentIds) {
         Map<Integer, Instant> out = new HashMap<>();
         if (parentIds.isEmpty()) return out;
         try (Connection c = dataSource.getConnection();
@@ -1071,8 +1076,8 @@ public class DiscrepancyApiController {
                 }
             }
         } catch (SQLException e) {
-            LOG.warn("Could not read the latest thread entries of {} discrepancy notes: {}",
-                    parentIds.size(), e.getMessage());
+            throw new DataRetrievalFailureException("Could not read the latest thread entries of "
+                    + parentIds.size() + " discrepancy notes", e);
         }
         return out;
     }
