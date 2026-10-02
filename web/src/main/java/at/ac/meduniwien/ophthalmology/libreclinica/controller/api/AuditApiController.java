@@ -627,7 +627,8 @@ public class AuditApiController {
     }
 
     static boolean roleMayViewStudyAudit(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role r) {
-        return r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
+        return r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.ADMIN
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
                 || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.COORDINATOR
                 || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR;
     }

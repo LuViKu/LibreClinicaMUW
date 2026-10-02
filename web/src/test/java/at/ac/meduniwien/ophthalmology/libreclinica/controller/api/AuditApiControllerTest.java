@@ -335,7 +335,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
 
     @Test
     void directorCoordinatorAndMonitorPassTheStudyAuditGate() throws Exception {
-        for (Role role : new Role[] {Role.STUDYDIRECTOR, Role.COORDINATOR, Role.MONITOR})
+        for (Role role : new Role[] {Role.ADMIN, Role.STUDYDIRECTOR, Role.COORDINATOR, Role.MONITOR})
         for (String url : new String[] {"/api/v1/audit", "/api/v1/audit/facets"}) {
             mockMvcWithFailingDb().perform(get(url).session(sessionWithRole(role)))
                     .andExpect(status().isInternalServerError());
