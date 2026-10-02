@@ -76,6 +76,9 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
             insertRole(c, "meta_site_only", site, "Investigator", 1);
             insertUser(c, "meta_removed_role");
             insertRole(c, "meta_removed_role", 1, "Investigator", 5);
+            // An ordinary account holding the study-level Administrator role.
+            insertUser(c, "meta_admin_role");
+            insertRole(c, "meta_admin_role", 1, "admin", 1);
         }
     }
 
@@ -126,6 +129,20 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
                 .andExpect(status().isForbidden());
         mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("meta_removed_role")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theStudyLevelAdministratorRoleDoesNotViewTheStudysData() throws Exception {
+        // SubmitDataServlet.mayViewData leaves out the "admin" role.
+        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("meta_admin_role")))
+                .andExpect(status().isForbidden());
+        // Nor does the parent's "admin" binding open one of its sites.
+        mockMvc().perform(get("/api/v1/studies/S_META_SITE/metadata").session(user("meta_admin_role")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unknownStudiesAndAnonymousCallersAreRefused() throws Exception {
         mockMvc().perform(get("/api/v1/studies/S_NO_SUCH_STUDY/metadata").session(sysadmin()))
                 .andExpect(status().isNotFound());
         mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(new MockHttpSession()))

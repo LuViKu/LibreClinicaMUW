@@ -78,6 +78,24 @@ class UsersApiControllerLegacyRolesDatabaseIT extends AbstractApiControllerDatab
     }
 
     @Test
+    void theRoleFilterMatchesALegacyRoleByItsOwnName() throws Exception {
+        // A legacy row is not an Investigator; a granted Investigator row is.
+        mockMvc().perform(get("/api/v1/users").param("role", "Investigator").session(sysadmin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.username == 'list-ra')]", empty()))
+                .andExpect(jsonPath("$[?(@.username == 'list-ra2-inv')].role", contains("Investigator")))
+                .andExpect(jsonPath("$[?(@.username == 'list-ra2-inv')].legacyRole", empty()));
+        mockMvc().perform(get("/api/v1/users").param("role", "ra").session(sysadmin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.username == 'list-ra')].legacyRole", contains("ra")))
+                .andExpect(jsonPath("$[?(@.username == 'list-ra2-inv')]", empty()));
+        mockMvc().perform(get("/api/v1/users").param("role", "ra2").session(sysadmin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.username == 'list-ra2-inv')].legacyRole", contains("ra2")))
+                .andExpect(jsonPath("$[?(@.username == 'list-ra')]", empty()));
+    }
+
+    @Test
     void theRoleListNamesTheLegacyRole() throws Exception {
         mockMvc().perform(get("/api/v1/users/legacy-ra-mon/roles").session(sysadmin()))
                 .andExpect(status().isOk())

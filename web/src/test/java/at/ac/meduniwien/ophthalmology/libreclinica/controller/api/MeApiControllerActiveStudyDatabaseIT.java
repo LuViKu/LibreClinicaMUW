@@ -57,11 +57,19 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
             study = insertStudy(c, null, "pick-it", "S_PICK_IT", 1);
             site = insertStudy(c, study, "pick-it-a", "S_PICK_IT_A", 1);
             int removed = insertStudy(c, null, "pick-gone", "S_PICK_GONE", 5);
+            // Auto-removed with its study, as RemoveStudyServlet leaves a site.
+            insertStudy(c, removed, "pick-gone-a", "S_PICK_GONE_A", 7);
             // user_type_id 1 = business administrator; no binding, no active study.
             insertUser(c, "pick_admin", 1);
             // An administrator bound on the parent study only.
             insertUser(c, "pick_parent_admin", 1);
             insertRole(c, "pick_parent_admin", study, "director");
+            // An administrator whose only binding on the parent study was revoked.
+            insertUser(c, "pick_revoked_admin", 1);
+            insertRole(c, "pick_revoked_admin", study, "director");
+            try (Statement s = c.createStatement()) {
+                s.executeUpdate("UPDATE study_user_role SET status_id = 5 WHERE user_name = 'pick_revoked_admin'");
+            }
             // An ordinary user whose only binding is on a removed study.
             insertUser(c, "pick_user_removed", 2);
             insertRole(c, "pick_user_removed", removed, "Investigator");
@@ -96,6 +104,15 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
     }
 
     @Test
+    void aRevokedParentBindingCarriesNoRoleOntoTheSite() throws Exception {
+        MockHttpSession session = sessionOf("pick_revoked_admin");
+        mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
+                        .content("{\"oid\":\"S_PICK_IT_A\"}").session(session))
+                .andExpect(status().isOk());
+        assertEquals(Role.INVALID, ((StudyUserRoleBean) session.getAttribute("userRole")).getRole());
+    }
+
+    @Test
     void anyoneElseStillNeedsABindingOnTheStudy() throws Exception {
         MockHttpSession session = sessionOf("manual_dm");
         Object before = session.getAttribute("study");
@@ -110,6 +127,12 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
                         .content("{\"oid\":\"S_PICK_GONE\"}").session(sessionOf("pick_admin")))
                 .andExpect(status().isConflict());
+        // A site auto-removed with its study is refused as well.
+        MockHttpSession admin = sessionOf("pick_admin");
+        mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
+                        .content("{\"oid\":\"S_PICK_GONE_A\"}").session(admin))
+                .andExpect(status().isConflict());
+        assertNull(admin.getAttribute("study"));
         MockHttpSession user = sessionOf("pick_user_removed");
         mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
                         .content("{\"oid\":\"S_PICK_GONE\"}").session(user))
