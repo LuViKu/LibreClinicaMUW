@@ -1519,6 +1519,11 @@ public class EventCrfsApiController {
      *   <li>{@code 409} — parent study_event is currently DELETED;
      *       legacy {@code RestoreEventCRFServlet} blocks the per-CRF
      *       restore in that case (restore the event first).</li>
+     *   <li>{@code 409} — its CRF or its CRF version is removed. That
+     *       removal took the row and recorded its status; its restore
+     *       brings it back at that status (see
+     *       {@code CrfLifecycleCascade}), where this one would make a
+     *       signed or locked event CRF available.</li>
      * </ol>
      *
      * <p>Returns 204 on success — the SPA refetches the event-detail
@@ -1580,6 +1585,19 @@ public class EventCrfsApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " cannot be restored — "
                             + "study_event is removed (restore the event first)"));
+        }
+        CRFVersionBean version = new CRFVersionDAO(dataSource).findByPK(ecb.getCRFVersionId());
+        CRFBean crf = version == null || version.getId() == 0 ? null
+                : new CRFDAO(dataSource).findByPK(version.getCrfId());
+        if (crf != null && crf.getStatus() != null && crf.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " cannot be restored on its own — its CRF '"
+                            + crf.getName() + "' is removed (restoring the CRF brings it back)"));
+        }
+        if (version != null && version.getStatus() != null && version.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " cannot be restored on its own — its CRF version '"
+                            + version.getName() + "' is removed (restoring the version brings it back)"));
         }
 
         ecb.setStatus(Status.AVAILABLE);

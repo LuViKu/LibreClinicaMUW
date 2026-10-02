@@ -117,5 +117,6 @@
   <include  file="migration/lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-type-crf-field-updated.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-types-event-crf-migration.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-types-crf-lifecycle-cascade.xml"/>
 </databaseChangeLog>
 

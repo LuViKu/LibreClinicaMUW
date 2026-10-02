@@ -18,11 +18,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanListener;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.context.ApplicationContext;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -40,6 +50,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
+
+    private static final int STUDY = CrfLibraryFixtures.STUDY_ID;
+    private static final int SED = CrfLibraryFixtures.SED_ID;
 
     private static CrfLibraryFixtures fx;
     private static int dmId;
@@ -74,8 +87,38 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
                 .build();
     }
 
+    private static MockMvc of(Object controller) {
+        return MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+    }
+
+    private static MockMvc eventCrfs() {
+        return of(new EventCrfsApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE),
+                Mockito.mock(CrfFileStorageService.class), new EventCrfPresenceRegistry(),
+                new RetinalResultItemDataPopulator(DATA_SOURCE)));
+    }
+
+    private static MockMvc events() {
+        return of(new EventsApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE),
+                new VisitIntervalCalculator(DATA_SOURCE)));
+    }
+
+    private MockMvc subjects() {
+        return of(buildSubjectsController());
+    }
+
+    private static MockMvc eventDefinitions() {
+        return of(new EventDefinitionsApiController(DATA_SOURCE));
+    }
+
     private static MockHttpSession dm() {
         return CrfLibraryFixtures.session(dmId, "crfit-dm", false);
+    }
+
+    /** The Data Manager with study 1 as the session's current role, as the subject and event screens read it. */
+    private static MockHttpSession dmInStudy() {
+        return CrfLibraryFixtures.session(dmId, "crfit-dm", false, Role.STUDYDIRECTOR);
     }
 
     private static MockHttpSession crc() {
@@ -98,6 +141,17 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         return "LC" + SEQ.incrementAndGet();
     }
 
+    /** Audit rows of {@code typeId} on event CRF {@code ec} from {@code oldValue} to {@code newValue}. */
+    private static int eventCrfAudit(int typeId, int ec, String oldValue, String newValue) throws Exception {
+        return fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = ?"
+                + " AND audit_table = 'event_crf' AND entity_id = ? AND event_crf_id = ? AND entity_name = 'Status'"
+                + " AND old_value = ? AND new_value = ?", typeId, ec, ec, oldValue, newValue);
+    }
+
+    private static int oldStatus(String table, int id) throws Exception {
+        return fx.intValue("SELECT COALESCE(old_status_id, -1) FROM " + table + " WHERE " + table + "_id = ?", id);
+    }
+
     /* ------------------------------------------------------------------ */
     /* CRF disable / restore                                              */
     /* ------------------------------------------------------------------ */
@@ -118,7 +172,8 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         int ecA = fx.eventCrf(fx.event(subjA, CrfLibraryFixtures.SED_ID, 4, 1), subjA, v1, 1, false, true, false);
         int idA = fx.itemData(ecA, item, "a", 1);
         int subjB = fx.subject(t + "-B", CrfLibraryFixtures.STUDY_ID, 1);
-        int ecB = fx.eventCrf(fx.event(subjB, CrfLibraryFixtures.SED_ID, 8, 1), subjB, v2, 8, true, true, true);
+        int evB = fx.event(subjB, CrfLibraryFixtures.SED_ID, 8, 1);
+        int ecB = fx.eventCrf(evB, subjB, v2, 8, true, true, true);
         int idB = fx.itemData(ecB, item, "b", 1);
 
         mvc().perform(post("/api/v1/crfs/F_" + t + "/disable").session(dm()))
@@ -138,6 +193,11 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         assertThat(fx.intValue("SELECT old_status_id FROM event_crf WHERE event_crf_id = ?", ecB)).isEqualTo(8);
         assertThat(fx.status("item_data", idA)).isEqualTo(7);
         assertThat(fx.status("item_data", idB)).isEqualTo(7);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, ecA, "1", "7")).isEqualTo(1);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, ecB, "8", "7"))
+                .as("each event CRF the removal took is in its study's audit log").isEqualTo(1);
+        assertThat(fx.intValue("SELECT study_event_id FROM audit_log_event WHERE audit_log_event_type_id = ?"
+                + " AND entity_id = ?", AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, ecB)).isEqualTo(evB);
 
         mvc().perform(post("/api/v1/crfs/F_" + t + "/restore").session(dm()))
                 .andExpect(status().isOk())
@@ -156,6 +216,8 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         assertThat(fx.status("item_data", idB)).isEqualTo(1);
         assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 76"
                 + " AND entity_id = ? AND new_value = 'auto-removed'", v2)).isEqualTo(1);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_RESTORED, ecA, "7", "1")).isEqualTo(1);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_RESTORED, ecB, "7", "8")).isEqualTo(1);
     }
 
     @Test
@@ -175,6 +237,392 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         mvc().perform(post("/api/v1/crfs/F_" + t + "/restore").session(dm())).andExpect(status().isOk());
         assertThat(fx.status("event_crf", ecA)).isEqualTo(1);
         assertThat(fx.status("event_crf", ecR)).as("belongs to the subject's own restore").isEqualTo(7);
+    }
+
+    @Test
+    void aSignedEventCrfOnAVersionRemovedOnItsOwnComesBackWithItsCrf() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        fx.version(crf, "v2", "F_" + t + "_V2", 1);
+        int item = fx.item(t + "_A", 5);
+        int subjA = fx.subject(t + "-A", STUDY, 1);
+        int ecA = fx.eventCrf(fx.event(subjA, SED, 4, 1), subjA, v1, 1, false, true, false);
+        int idA = fx.itemData(ecA, item, "a", 1);
+        // Signed (SPA subject signing marks every CRF of the subject signed).
+        int subjS = fx.subject(t + "-S", STUDY, 8);
+        int ecS = fx.eventCrf(fx.event(subjS, SED, 8, 1), subjS, v1, 8, true, true, true);
+        int idS = fx.itemData(ecS, item, "s", 1);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/disable").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(7);
+        assertThat(fx.status("event_crf", ecS)).as("a version's removal leaves a signed event CRF").isEqualTo(8);
+
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecS)).as("the CRF's removal takes it").isEqualTo(7);
+
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("crf_version", v1)).as("removed on its own: stays removed").isEqualTo(5);
+        assertThat(fx.status("event_crf", ecS)).as("what the CRF's removal took comes back").isEqualTo(8);
+        assertThat(fx.status("item_data", idS)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecA)).as("the version's removal took it").isEqualTo(7);
+        assertThat(fx.status("item_data", idA)).isEqualTo(7);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(1);
+        assertThat(fx.status("item_data", idA)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecS)).isEqualTo(8);
+    }
+
+    @Test
+    void rowsAnOlderScreenRemovedComeBackAvailableWhateverTheyRecorded() throws Exception {
+        String t = tag();
+        // As RemoveCRFServlet leaves a CRF, and every CRF removed before this
+        // code: removed, its versions and event CRFs auto-removed, no audit
+        // rows, and old_status_id holding whatever an earlier writer left.
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        fx.execute("UPDATE crf SET status_id = 5 WHERE crf_id = ?", crf);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 7);
+        int item = fx.item(t + "_A", 5);
+        int subjA = fx.subject(t + "-A", STUDY, 1);
+        int ecA = fx.eventCrf(fx.event(subjA, SED, 4, 1), subjA, v1, 7, false, true, false);
+        fx.execute("UPDATE event_crf SET old_status_id = 11 WHERE event_crf_id = ?", ecA);   // DeleteEventCRFServlet
+        int idA = fx.itemData(ecA, item, "a", 7);
+        fx.execute("UPDATE item_data SET old_status_id = 6 WHERE item_data_id = ?", idA);
+        int subjB = fx.subject(t + "-B", STUDY, 1);
+        int ecB = fx.eventCrf(fx.event(subjB, SED, 4, 1), subjB, v1, 7, false, true, false);
+        fx.execute("UPDATE event_crf SET old_status_id = 8 WHERE event_crf_id = ?", ecB);    // a signing long undone
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/restore").session(dm())).andExpect(status().isOk());
+
+        assertThat(fx.status("crf_version", v1)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecA)).as("not reset").isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 40"
+                + " AND entity_id = ?", ecA)).as("no 'CRF deleted' row").isZero();
+        assertThat(fx.status("item_data", idA)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecB)).as("not signed again").isEqualTo(1);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_RESTORED, ecB, "7", "1")).isEqualTo(1);
+    }
+
+    @Test
+    void aVersionComesBackAtTheStatusItsLatestRemovalRecorded() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int v2 = fx.version(crf, "v2", "F_" + t + "_V2", 1);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/lock").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("crf_version", v2)).as("removed while locked").isEqualTo(6);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/unlock").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("crf_version", v2)).as("unlocked before this removal").isEqualTo(1);
+
+        // Locked, removed and restored again, then unlocked; then removed by
+        // the older screen, which writes no audit row.
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/lock").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/unlock").session(dm())).andExpect(status().isOk());
+        fx.execute("UPDATE crf SET status_id = 5 WHERE crf_id = ?", crf);
+        fx.execute("UPDATE crf_version SET status_id = 7 WHERE crf_id = ?", crf);
+
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("crf_version", v2)).as("available when the older screen removed it").isEqualTo(1);
+    }
+
+    @Test
+    void anEventCrfWhoseAssignmentIsRemovedStaysRemoved() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        fx.version(crf, "v2", "F_" + t + "_V2", 1);
+        // As RemoveCRFFromDefinition and UpdateEventDefinition leave it: the
+        // assignment removed, its event CRFs auto-removed with their status
+        // recorded, the subject and the event untouched.
+        int edcGone = fx.eventDefinitionCrf(SED, STUDY, crf, v1, null);
+        fx.execute("UPDATE event_definition_crf SET status_id = 5 WHERE event_definition_crf_id = ?", edcGone);
+        int item = fx.item(t + "_A", 5);
+        int subjA = fx.subject(t + "-A", STUDY, 1);
+        int ecA = fx.eventCrf(fx.event(subjA, SED, 4, 1), subjA, v1, 7, false, true, false);
+        fx.execute("UPDATE event_crf SET old_status_id = 1 WHERE event_crf_id = ?", ecA);
+        int idA = fx.itemData(ecA, item, "a", 7);
+        fx.execute("UPDATE item_data SET old_status_id = 1 WHERE item_data_id = ?", idA);
+        fx.eventDefinitionCrf(CrfLibraryFixtures.SED2_ID, STUDY, crf, v1, null);
+        int subjB = fx.subject(t + "-B", STUDY, 1);
+        int ecB = fx.eventCrf(fx.event(subjB, CrfLibraryFixtures.SED2_ID, 4, 1), subjB, v1, 1, false, true, false);
+
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_definition_crf", edcGone)).isEqualTo(5);
+        assertThat(fx.status("event_crf", ecA)).as("its assignment is removed").isEqualTo(7);
+        assertThat(fx.status("item_data", idA)).isEqualTo(7);
+        assertThat(fx.status("event_crf", ecB)).isEqualTo(1);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecA)).as("nor with its version").isEqualTo(7);
+        assertThat(fx.status("event_crf", ecB)).isEqualTo(1);
+    }
+
+    @Test
+    void rowsRemovedBeforeTheCrfKeepWhatTheyRecorded() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int itemA = fx.item(t + "_A", 5);
+        int itemB = fx.item(t + "_B", 5);
+        // As RemoveEventCRFServlet leaves it: removed, its values auto-removed.
+        int subjD = fx.subject(t + "-D", STUDY, 1);
+        int ecD = fx.eventCrf(fx.event(subjD, SED, 4, 1), subjD, v1, 5, false, true, false);
+        int idD = fx.itemData(ecD, itemA, "d", 7);
+        // A live event CRF with one value removed on its own (a deleted repeating row).
+        int subjA = fx.subject(t + "-A", STUDY, 1);
+        int ecA = fx.eventCrf(fx.event(subjA, SED, 4, 1), subjA, v1, 1, false, true, false);
+        int idLive = fx.itemData(ecA, itemA, "a", 1);
+        int idGone = fx.itemData(ecA, itemB, "x", 5);
+        int ecDRecorded = oldStatus("event_crf", ecD);
+        int idDRecorded = oldStatus("item_data", idD);
+        int idGoneRecorded = oldStatus("item_data", idGone);
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/disable").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecD)).isEqualTo(5);
+        assertThat(oldStatus("event_crf", ecD)).as("what it recorded is untouched").isEqualTo(ecDRecorded);
+        assertThat(fx.status("item_data", idD)).isEqualTo(7);
+        assertThat(oldStatus("item_data", idD)).isEqualTo(idDRecorded);
+        assertThat(fx.status("item_data", idGone)).isEqualTo(5);
+        assertThat(oldStatus("item_data", idGone)).isEqualTo(idGoneRecorded);
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(7);
+        assertThat(fx.status("item_data", idLive)).isEqualTo(7);
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecD)).as("removed before the CRF: stays removed").isEqualTo(5);
+        assertThat(fx.status("item_data", idD)).isEqualTo(7);
+        assertThat(fx.status("item_data", idGone)).isEqualTo(5);
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(1);
+        assertThat(fx.status("item_data", idLive)).isEqualTo(1);
+    }
+
+    @Test
+    void aRemovedEventEventDefinitionOrSiteKeepsItsRowsRemoved() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        // As RemoveStudyEventServlet leaves it: the event removed, its event
+        // CRFs auto-removed, the subject available.
+        int subjE = fx.subject(t + "-E", STUDY, 1);
+        int ecE = fx.eventCrf(fx.event(subjE, SED, 4, 5), subjE, v1, 7, false, true, false);
+        // As RemoveEventDefinitionServlet leaves it: the definition removed,
+        // its assignments auto-removed.
+        int sedGone = fx.eventDefinition(STUDY, "Removed " + t, "SE_R" + t, 5);
+        int edcOfSed = fx.eventDefinitionCrf(sedGone, STUDY, crf, v1, null);
+        fx.execute("UPDATE event_definition_crf SET status_id = 7 WHERE event_definition_crf_id = ?", edcOfSed);
+        // A removed site with its own assignment, auto-removed with it.
+        int site = fx.site("S_" + t, "Site " + t);
+        fx.execute("UPDATE study SET status_id = 5 WHERE study_id = ?", site);
+        int edcOfSite = fx.eventDefinitionCrf(SED, site, crf, v1, null);
+        fx.execute("UPDATE event_definition_crf SET status_id = 7 WHERE event_definition_crf_id = ?", edcOfSite);
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/restore").session(dm())).andExpect(status().isOk());
+
+        assertThat(fx.status("event_crf", ecE)).as("its event is removed").isEqualTo(7);
+        assertThat(fx.status("event_definition_crf", edcOfSed)).as("its event definition is removed").isEqualTo(7);
+        assertThat(fx.status("event_definition_crf", edcOfSite)).as("its site is removed").isEqualTo(7);
+    }
+
+    @Test
+    void anAssignmentOfALockedEventDefinitionComesBackLocked() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int sedLocked = fx.eventDefinition(STUDY, "Locked " + t, "SE_L" + t, 6);
+        int edcLocked = fx.eventDefinitionCrf(sedLocked, STUDY, crf, v1, null);
+        fx.execute("UPDATE event_definition_crf SET status_id = 6 WHERE event_definition_crf_id = ?", edcLocked);
+        int sedLater = fx.eventDefinition(STUDY, "Locked later " + t, "SE_K" + t, 1);
+        int edcLater = fx.eventDefinitionCrf(sedLater, STUDY, crf, v1, null);
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/disable").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_definition_crf", edcLocked)).isEqualTo(7);
+        assertThat(fx.status("event_definition_crf", edcLater)).isEqualTo(7);
+        // Locked while the CRF was removed; the lock skips removed assignments.
+        fx.execute("UPDATE study_event_definition SET status_id = 6 WHERE study_event_definition_id = ?", sedLater);
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_definition_crf", edcLocked)).isEqualTo(6);
+        assertThat(fx.status("event_definition_crf", edcLater)).isEqualTo(6);
+    }
+
+    @Test
+    void anEventCrfItsCrfOrVersionHoldsIsNotRestoredOnItsOwn() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        fx.version(crf, "v2", "F_" + t + "_V2", 1);
+        int subjA = fx.subject(t + "-A", STUDY, 1);
+        int ecA = fx.eventCrf(fx.event(subjA, SED, 4, 1), subjA, v1, 1, false, true, false);
+        int subjS = fx.subject(t + "-S", STUDY, 8);
+        int ecS = fx.eventCrf(fx.event(subjS, SED, 8, 1), subjS, v1, 8, true, true, true);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/disable").session(dm())).andExpect(status().isOk());
+        eventCrfs().perform(post("/api/v1/eventCrfs/" + ecA + "/restore").session(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("version")));
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(7);
+
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+        eventCrfs().perform(post("/api/v1/eventCrfs/" + ecS + "/restore").session(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("CRF 'CRF " + t + "' is removed")));
+        assertThat(fx.status("event_crf", ecS)).as("not made available").isEqualTo(7);
+
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecS)).isEqualTo(8);
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(1);
+    }
+
+    @Test
+    void theRestoreOfASubjectAnEventOrAnEventDefinitionLeavesWhatTheCrfsRemovalHolds() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int subjA = fx.subject(t + "-A", STUDY, 1);
+        int ecA = fx.eventCrf(fx.event(subjA, SED, 4, 1), subjA, v1, 8, false, true, true);
+        int subjB = fx.subject(t + "-B", STUDY, 1);
+        int evB = fx.event(subjB, SED, 4, 1);
+        int ecB = fx.eventCrf(evB, subjB, v1, 8, false, true, true);
+        int sed = fx.eventDefinition(STUDY, "Visit " + t, "SE_V" + t, 1);
+        int edc = fx.eventDefinitionCrf(sed, STUDY, crf, v1, null);
+        int subjC = fx.subject(t + "-C", STUDY, 1);
+        int evC = fx.event(subjC, sed, 4, 1);
+        int ecC = fx.eventCrf(evC, subjC, v1, 2, false, true, false);
+
+        mvc().perform(post(base + "/disable").session(dm())).andExpect(status().isOk());
+
+        // StudyEventDAO.update runs the event rules through the Spring
+        // context; there are none here.
+        ApplicationContext rules = Mockito.mock(ApplicationContext.class);
+        Mockito.when(rules.getBean("ruleSetDao", RuleSetDao.class)).thenReturn(Mockito.mock(RuleSetDao.class));
+        StudyEventBeanListener listener = new StudyEventBeanListener(new StudyEventDAO(DATA_SOURCE));
+        listener.setApplicationContext(rules);
+        try {
+            restoresLeaveWhatTheCrfsRemovalHolds(t, base, subjA, ecA, evB, ecB, sed, edc, evC, ecC);
+        } finally {
+            listener.setApplicationContext(null);
+        }
+    }
+
+    private void restoresLeaveWhatTheCrfsRemovalHolds(String t, String base, int subjA, int ecA, int evB, int ecB,
+                                                      int sed, int edc, int evC, int ecC) throws Exception {
+        subjects().perform(post("/api/v1/subjects/" + t + "-A/remove").session(dmInStudy()))
+                .andExpect(status().isOk());
+        subjects().perform(post("/api/v1/subjects/" + t + "-A/restore").session(dmInStudy()))
+                .andExpect(status().isOk());
+        assertThat(fx.status("study_subject", subjA)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecA)).as("the subject's restore leaves it to the CRF's").isEqualTo(7);
+
+        // As the SPA's cancel leaves an event.
+        fx.execute("UPDATE study_event SET status_id = 5 WHERE study_event_id = ?", evB);
+        events().perform(post("/api/v1/events/" + evB + "/restore").session(dmInStudy()))
+                .andExpect(status().isOk());
+        assertThat(fx.status("study_event", evB)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecB)).as("the event's restore leaves it to the CRF's").isEqualTo(7);
+
+        // As RemoveEventDefinitionServlet leaves a definition and its events.
+        fx.execute("UPDATE study_event_definition SET status_id = 5 WHERE study_event_definition_id = ?", sed);
+        fx.execute("UPDATE study_event SET status_id = 7 WHERE study_event_id = ?", evC);
+        eventDefinitions().perform(post("/api/v1/studies/" + CrfLibraryFixtures.STUDY_OID
+                        + "/event-definitions/SE_V" + t + "/restore").session(admin()))
+                .andExpect(status().isOk());
+        assertThat(fx.status("study_event", evC)).isEqualTo(1);
+        assertThat(fx.status("event_definition_crf", edc)).as("its CRF is removed").isEqualTo(7);
+        assertThat(fx.status("event_crf", ecC)).isEqualTo(7);
+
+        mvc().perform(post(base + "/restore").session(dm())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecA)).isEqualTo(8);
+        assertThat(fx.status("event_crf", ecB)).isEqualTo(8);
+        assertThat(fx.status("event_crf", ecC)).isEqualTo(2);
+        assertThat(fx.status("event_definition_crf", edc)).isEqualTo(1);
+    }
+
+    @Test
+    void aRemovalThatChangesAnotherStudysDataNeedsItsDataManagerAndAStudyThatTakesChanges() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int other = fx.topStudy("S_O" + t, "Other " + t, 1);
+        int sedOther = fx.eventDefinition(other, "Visit " + t, "SE_O" + t, 1);
+        int subjO = fx.subject(t + "-O", other, 1);
+        int ecO = fx.eventCrf(fx.event(subjO, sedOther, 4, 1), subjO, v1, 1, false, true, false);
+
+        mvc().perform(post(base + "/disable").session(dm()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString("'Other " + t + "' (1)")));
+        mvc().perform(post(base + "/versions/F_" + t + "_V1/disable").session(crc()))
+                .andExpect(status().isForbidden());
+        assertThat(fx.status("crf", crf)).as("nothing changed").isEqualTo(1);
+        assertThat(fx.status("crf_version", v1)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ecO)).isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = ?"
+                + " AND entity_id = ?", AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, ecO)).isZero();
+
+        mvc().perform(post(base + "/disable").session(admin())).andExpect(status().isOk());
+        assertThat(fx.status("event_crf", ecO)).isEqualTo(7);
+
+        fx.execute("UPDATE study SET status_id = 6 WHERE study_id = ?", other);    // locked since
+        mvc().perform(post(base + "/restore").session(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("locked")));
+        assertThat(fx.status("crf", crf)).isEqualTo(5);
+        assertThat(fx.status("crf_version", v1)).isEqualTo(7);
+        assertThat(fx.status("event_crf", ecO)).isEqualTo(7);
+    }
+
+    @Test
+    void aFailureAfterTheCascadeChangesNothing() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int s1 = fx.section(v1, "S1", 1);
+        int edc = fx.eventDefinitionCrf(SED, STUDY, crf, v1, null);
+        int item = fx.item(t + "_A", 5);
+        int subj = fx.subject(t + "-A", STUDY, 8);
+        int ec = fx.eventCrf(fx.event(subj, SED, 8, 1), subj, v1, 8, true, true, true);
+        int id = fx.itemData(ec, item, "a", 1);
+        // The last write of the removal is the versions' lifecycle audit row.
+        String fn = "crfit_fail_" + t.toLowerCase();
+        fx.execute("CREATE FUNCTION " + fn + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN"
+                + " IF NEW.audit_log_event_type_id = 76 AND NEW.entity_id = " + v1
+                + " THEN RAISE EXCEPTION 'injected failure'; END IF; RETURN NEW; END $$");
+        fx.execute("CREATE TRIGGER " + fn + " BEFORE INSERT ON audit_log_event FOR EACH ROW EXECUTE PROCEDURE "
+                + fn + "()");
+        try {
+            mvc().perform(post("/api/v1/crfs/F_" + t + "/disable").session(dm()))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.message").value(containsString("nothing was changed")));
+        } finally {
+            fx.execute("DROP TRIGGER " + fn + " ON audit_log_event");
+            fx.execute("DROP FUNCTION " + fn + "()");
+        }
+
+        assertThat(fx.status("crf", crf)).isEqualTo(1);
+        assertThat(fx.status("crf_version", v1)).isEqualTo(1);
+        assertThat(fx.status("section", s1)).isEqualTo(1);
+        assertThat(fx.status("event_definition_crf", edc)).isEqualTo(1);
+        assertThat(fx.status("event_crf", ec)).isEqualTo(8);
+        assertThat(fx.status("item_data", id)).isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE (audit_log_event_type_id = ? AND entity_id = ?)"
+                + " OR (audit_table = 'crf' AND entity_id = ?)", AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, ec, crf)).isZero();
     }
 
     @Test
@@ -221,6 +669,12 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         int idA = fx.itemData(ecA, item, "a", 1);
         int subjS = fx.subject(t + "-S", CrfLibraryFixtures.STUDY_ID, 8);
         int ecS = fx.eventCrf(fx.event(subjS, CrfLibraryFixtures.SED_ID, 8, 1), subjS, v1, 8, true, true, true);
+        // Completed (MarkEventCRFComplete sets the CRF and its values unavailable) and locked.
+        int subjC = fx.subject(t + "-C", CrfLibraryFixtures.STUDY_ID, 1);
+        int ecC = fx.eventCrf(fx.event(subjC, CrfLibraryFixtures.SED_ID, 4, 1), subjC, v1, 2, false, true, false);
+        int idC = fx.itemData(ecC, item, "c", 2);
+        int subjL = fx.subject(t + "-L", CrfLibraryFixtures.STUDY_ID, 1);
+        int ecL = fx.eventCrf(fx.event(subjL, CrfLibraryFixtures.SED_ID, 4, 1), subjL, v1, 6, false, true, false);
 
         mvc().perform(post("/api/v1/crfs/F_" + t + "/versions/F_" + t + "_V1/disable").session(dm()))
                 .andExpect(status().isOk())
@@ -231,6 +685,10 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         assertThat(fx.status("event_crf", ecA)).isEqualTo(7);
         assertThat(fx.status("item_data", idA)).isEqualTo(7);
         assertThat(fx.status("event_crf", ecS)).as("a signed event CRF is not removed").isEqualTo(8);
+        assertThat(fx.status("event_crf", ecC)).as("completed").isEqualTo(7);
+        assertThat(fx.status("item_data", idC)).isEqualTo(7);
+        assertThat(fx.status("event_crf", ecL)).as("locked").isEqualTo(7);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION, ecC, "2", "7")).isEqualTo(1);
         assertThat(fx.intValue("SELECT default_version_id FROM event_definition_crf WHERE event_definition_crf_id = ?",
                 edcFree)).isEqualTo(v2);
         assertThat(fx.intValue("SELECT default_version_id FROM event_definition_crf WHERE event_definition_crf_id = ?",
@@ -247,6 +705,29 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         assertThat(fx.status("event_crf", ecA)).isEqualTo(1);
         assertThat(fx.status("item_data", idA)).isEqualTo(1);
         assertThat(fx.status("event_crf", ecS)).isEqualTo(8);
+        assertThat(fx.status("event_crf", ecC)).as("back completed").isEqualTo(2);
+        assertThat(fx.status("item_data", idC)).isEqualTo(2);
+        assertThat(fx.status("event_crf", ecL)).as("back locked").isEqualTo(6);
+        assertThat(eventCrfAudit(AuditTypeIds.EVENT_CRF_RESTORED, ecL, "7", "6")).isEqualTo(1);
+    }
+
+    @Test
+    void aVersionRemovedWhileLockedComesBackLocked() throws Exception {
+        String t = tag();
+        String base = "/api/v1/crfs/F_" + t;
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int v2 = fx.version(crf, "v2", "F_" + t + "_V2", 1);
+
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/lock").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/disable").session(dm())).andExpect(status().isOk());
+        mvc().perform(post(base + "/versions/F_" + t + "_V2/restore").session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("locked"));
+
+        assertThat(fx.status("crf_version", v2)).isEqualTo(6);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 76"
+                + " AND entity_id = ? AND old_value = 'removed' AND new_value = 'locked'", v2)).isEqualTo(1);
     }
 
     @Test

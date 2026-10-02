@@ -491,4 +491,19 @@ public final class AuditTypeIds {
      * {@code event_crf} trigger does not audit that transition.
      */
     public static final int EVENT_CRF_SIGNATURE_REMOVED      = 144;
+
+    /*
+     * 190-191 (lc-muw-2026-09-30-audit-types-crf-lifecycle-cascade.xml): an
+     * event CRF that the removal of its CRF, or of its CRF version, took with
+     * it. One row per event CRF, on the event CRF, in the event_crf trigger's
+     * shape (column "Status", status ids as values), so the change is in the
+     * study's and the subject's audit log. The restore writes
+     * EVENT_CRF_RESTORED (139) per event CRF. CrfLifecycleCascade reads the
+     * latest of these rows to tell which removal holds an event CRF.
+     */
+
+    /** An event CRF auto-removed with its CRF. */
+    public static final int EVENT_CRF_REMOVED_WITH_CRF       = 190;
+    /** An event CRF auto-removed with its CRF version. */
+    public static final int EVENT_CRF_REMOVED_WITH_VERSION   = 191;
 }

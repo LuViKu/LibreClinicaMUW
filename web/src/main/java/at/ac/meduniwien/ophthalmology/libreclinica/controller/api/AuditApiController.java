@@ -724,6 +724,9 @@ public class AuditApiController {
             // CRF reopened (138) and restored (139), a dismissed file
             // restored (137) — 2026-09-27.
                  137, 138, 139,
+            // An event CRF removed with its CRF or with its CRF version
+            // (190-191); its restore is 139.
+                 AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION,
             // Eye-cohort transition (57) — per-subject clinical event,
             // not admin config. Discrepancy-note threading + create
             // (71-74) and the subject-demographics update (100) also

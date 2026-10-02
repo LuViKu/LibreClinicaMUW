@@ -15,7 +15,9 @@ import java.sql.SQLException;
 
 import javax.sql.DataSource;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 
@@ -96,6 +98,22 @@ final class CrfLibraryFixtures {
     }
 
     int site(String oid, String name) throws SQLException {
+        return study(1, oid, name, 1);
+    }
+
+    /** A study of its own (no parent), in {@code statusId}. */
+    int topStudy(String oid, String name, int statusId) throws SQLException {
+        return study(null, oid, name, statusId);
+    }
+
+    /** An event definition of {@code studyId}, in {@code statusId}. */
+    int eventDefinition(int studyId, String name, String oid, int statusId) throws SQLException {
+        return insert("study_event_definition_id", "INSERT INTO study_event_definition (study_id, name, description,"
+                + " repeating, type, category, owner_id, status_id, date_created, ordinal, oc_oid)"
+                + " VALUES (?, ?, '', false, 'scheduled', '', 1, ?, now(), 9, ?)", studyId, name, statusId, oid);
+    }
+
+    private int study(Integer parentStudyId, String oid, String name, int statusId) throws SQLException {
         return insert("study_id", "INSERT INTO study (parent_study_id, unique_identifier, secondary_identifier, "
                 + "name, summary, date_planned_start, date_planned_end, date_created, "
                 + "owner_id, type_id, status_id, principal_investigator, facility_name, "
@@ -108,12 +126,12 @@ final class CrfLibraryFixtures {
                 + "age_max, age_min, healthy_volunteer_accepted, purpose, allocation, "
                 + "masking, control, assignment, endpoint, interventions, duration, "
                 + "selection, timing, official_title, results_reference, oc_oid) "
-                + "VALUES (1, ?, ?, ?, '', NOW(), NOW(), NOW(), 1, 1, 1, 'default', "
+                + "VALUES (CAST(? AS INTEGER), ?, ?, ?, '', NOW(), NOW(), NOW(), 1, 1, ?, 'default', "
                 + "'', '', '', '', '', '', '', '', '', '', 'observational', '', NOW(), "
                 + "'default', 0, 'default', '', '', '', '', '', '', '', 'both', '', '', "
                 + "false, 'Natural History', '', '', '', '', '', '', 'longitudinal', "
                 + "'Convenience Sample', 'Retrospective', '', false, ?)",
-                oid, oid, name, oid);
+                parentStudyId, oid, oid, name, statusId, oid);
     }
 
     int subject(String label, int studyId, int statusId) throws SQLException {
@@ -161,8 +179,12 @@ final class CrfLibraryFixtures {
     }
 
     void role(String userName, int studyId, String roleName) throws SQLException {
+        role(userName, studyId, roleName, 1);
+    }
+
+    void role(String userName, int studyId, String roleName, int statusId) throws SQLException {
         execute("INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, user_name)"
-                + " VALUES (?, ?, 1, 1, now(), ?)", roleName, studyId, userName);
+                + " VALUES (?, ?, ?, 1, now(), ?)", roleName, studyId, statusId, userName);
     }
 
     int intValue(String sql, Object... params) throws SQLException {
@@ -219,6 +241,16 @@ final class CrfLibraryFixtures {
         study.setOid(STUDY_OID);
         study.setName("Default Study");
         session.setAttribute("study", study);
+        return session;
+    }
+
+    /** {@link #session} with {@code role} on study 1 as the session's current role, as the study screens read it. */
+    static MockHttpSession session(int userId, String userName, boolean sysAdmin, Role role) {
+        MockHttpSession session = session(userId, userName, sysAdmin);
+        StudyUserRoleBean current = new StudyUserRoleBean();
+        current.setRole(role);
+        current.setStudyId(STUDY_ID);
+        session.setAttribute("userRole", current);
         return session;
     }
 

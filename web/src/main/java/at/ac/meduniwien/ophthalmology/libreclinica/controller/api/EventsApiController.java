@@ -1689,6 +1689,12 @@ public class EventsApiController {
                             + "study subject is removed (restore subject first)"));
         }
 
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        ItemDataDAO idDao = new ItemDataDAO(dataSource);
+        java.util.ArrayList<EventCRFBean> ecs = ecDao.findAllByStudyEvent(ev);
+        Set<Integer> held = CrfLifecycleCascade.heldByRemoval(dataSource,
+                ecs.stream().map(EventCRFBean::getId).toList());
+
         ev.setStatus(Status.AVAILABLE);
         ev.setUpdater(ub);
         ev.setUpdatedDate(new java.util.Date());
@@ -1696,12 +1702,12 @@ public class EventsApiController {
 
         // Cascade AUTO_DELETED children back to AVAILABLE. Hard-DELETED
         // children stay put — that's the operator-issued delete, not
-        // the parent cascade.
-        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
-        ItemDataDAO idDao = new ItemDataDAO(dataSource);
-        java.util.ArrayList<EventCRFBean> ecs = ecDao.findAllByStudyEvent(ev);
+        // the parent cascade. So do the event CRFs a removal of their CRF
+        // or version holds: that restore brings them back, at the status
+        // they had (CrfLifecycleCascade).
         for (EventCRFBean ec : ecs) {
             if (ec.getStatus() == null || !ec.getStatus().equals(Status.AUTO_DELETED)) continue;
+            if (held.contains(ec.getId())) continue;
             ec.setStatus(Status.AVAILABLE);
             ec.setUpdater(ub);
             ec.setUpdatedDate(new java.util.Date());

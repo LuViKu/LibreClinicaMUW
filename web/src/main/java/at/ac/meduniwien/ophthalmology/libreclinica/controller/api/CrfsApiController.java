@@ -34,7 +34,9 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
@@ -46,6 +48,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBea
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
@@ -271,9 +274,10 @@ public class CrfsApiController {
      * Removes a CRF with the rows below it. Legacy parity:
      * {@code RemoveCRFServlet} — its versions and their sections, its
      * event-definition CRFs, and every event CRF entered on it with its item
-     * data are marked auto-removed. {@link #restore} is the inverse; see
-     * {@link CrfLifecycleCascade}. One transaction: nothing changes when any
-     * step fails.
+     * data are marked auto-removed, each event CRF with an audit row.
+     * {@link #restore} is the inverse; see {@link CrfLifecycleCascade}. The
+     * library is shared, the event CRFs are not: see {@link #refuseStudies}.
+     * One transaction: nothing changes when any step fails or is refused.
      */
     @PostMapping("/{crfOid}/disable")
     @ApiResponse(responseCode = "200",
@@ -302,6 +306,11 @@ public class CrfsApiController {
             try {
                 setStatus(c, "crf", "crf_id", target.getId(), Status.DELETED, me.getId());
                 cascade = CrfLifecycleCascade.removeCrf(c, target.getId(), me.getId());
+                ResponseEntity<?> refused = refuseStudies(me, cascade.studies(), "Removing CRF '" + crfOid + "'");
+                if (refused != null) {
+                    c.rollback();
+                    return refused;
+                }
                 insertLifecycleAudit(c, AuditTypeIds.CRF_LIFECYCLE_CHANGED, me.getId(),
                         "crf", target.getId(), target.getOid(), oldStatus, Status.DELETED);
                 for (CrfLifecycleCascade.VersionChange v : cascade.versions()) {
@@ -339,10 +348,12 @@ public class CrfsApiController {
      * Restores a removed CRF and what its removal took with it. Legacy
      * parity: {@code RestoreCRFServlet} — auto-removed versions and their
      * sections, event-definition CRFs, and event CRFs with their item data
-     * come back. Rows removed on their own stay removed, rows come back at
-     * the status they had, and a row that another removal took (an event CRF
-     * of a removed subject, say) is left for that removal's own restore; see
-     * {@link CrfLifecycleCascade}. One transaction.
+     * come back. Rows removed on their own stay removed, the rows its removal
+     * took come back at the status they had, and a row that another removal
+     * took (an event CRF of a removed subject, or one on a version removed on
+     * its own, say) is left for that removal's own restore; see
+     * {@link CrfLifecycleCascade}. Refused like {@link #disable} (see
+     * {@link #refuseStudies}). One transaction.
      */
     @PostMapping("/{crfOid}/restore")
     @ApiResponse(responseCode = "200",
@@ -371,6 +382,11 @@ public class CrfsApiController {
             try {
                 setStatus(c, "crf", "crf_id", target.getId(), Status.AVAILABLE, me.getId());
                 cascade = CrfLifecycleCascade.restoreCrf(c, target.getId(), me.getId());
+                ResponseEntity<?> refused = refuseStudies(me, cascade.studies(), "Restoring CRF '" + crfOid + "'");
+                if (refused != null) {
+                    c.rollback();
+                    return refused;
+                }
                 insertLifecycleAudit(c, AuditTypeIds.CRF_LIFECYCLE_CHANGED, me.getId(),
                         "crf", target.getId(), target.getOid(), oldStatus, Status.AVAILABLE);
                 for (CrfLifecycleCascade.VersionChange v : cascade.versions()) {
@@ -1605,8 +1621,8 @@ public class CrfsApiController {
      * legacy servlet). Event-definition CRFs that default to the version
      * switch to the newest available version, so new event CRFs are not
      * created on a removed one; see {@link CrfLifecycleCascade#repointDefaults}.
-     * {@link #restoreVersion} is the inverse of the status changes. One
-     * transaction.
+     * {@link #restoreVersion} is the inverse of the status changes. Refused
+     * like {@link #disable} (see {@link #refuseStudies}). One transaction.
      */
     @PostMapping("/{crfOid}/versions/{versionOid}/disable")
     @ApiResponse(responseCode = "200",
@@ -1636,7 +1652,15 @@ public class CrfsApiController {
             c.setAutoCommit(false);
             try {
                 setStatus(c, "crf_version", "crf_version_id", target.getId(), Status.DELETED, me.getId());
-                n = CrfLifecycleCascade.removeVersion(c, target.getId(), me.getId());
+                CrfLifecycleCascade.Result cascade =
+                        CrfLifecycleCascade.removeVersion(c, target.getId(), me.getId());
+                ResponseEntity<?> refused = refuseStudies(me, cascade.studies(),
+                        "Removing CRF version '" + versionOid + "'");
+                if (refused != null) {
+                    c.rollback();
+                    return refused;
+                }
+                n = cascade.counts();
                 moves = CrfLifecycleCascade.repointDefaults(c, target.getCrfId(), target.getId(), me.getId());
                 insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
                         "crf_version", target.getId(), target.getOid(), oldStatus, Status.DELETED);
@@ -1783,15 +1807,19 @@ public class CrfsApiController {
     /* ----------------------------------------------------------------- */
 
     /**
-     * Phase E.6 {@code crf-library} cluster — flip a CRF version from
-     * {@code removed} → {@code available}, with what its removal took.
-     * Legacy parity: {@code RestoreCRFVersionServlet} — its auto-removed
-     * sections, and its auto-removed event CRFs with their item data, come
-     * back, at the status they had; an event CRF of a removed subject or
-     * event stays removed (see {@link CrfLifecycleCascade}). A version of a
-     * removed CRF is refused: restore the CRF, which brings back its
-     * auto-removed versions. Defaults moved away by the removal stay where
-     * they are. One transaction.
+     * Phase E.6 {@code crf-library} cluster — bring a removed CRF version
+     * back, with what its removal took. The version comes back at the status
+     * it had: locked when it was removed while locked
+     * ({@link CrfLifecycleCascade#statusBeforeRemoval}), else available; the
+     * legacy {@code RestoreCRFVersionServlet} made every version available,
+     * which reopened an archived one for new data. Its auto-removed sections,
+     * and the event CRFs its removal took with their item data, come back at
+     * the status they had; an event CRF of a removed subject or event stays
+     * removed (see {@link CrfLifecycleCascade}). A version of a removed CRF
+     * is refused: restore the CRF, which brings back its auto-removed
+     * versions. Defaults moved away by the removal stay where they are.
+     * Refused like {@link #disable} (see {@link #refuseStudies}). One
+     * transaction.
      */
     @PostMapping("/{crfOid}/versions/{versionOid}/restore")
     @ApiResponse(responseCode = "200",
@@ -1824,10 +1852,20 @@ public class CrfsApiController {
         try (Connection c = dataSource.getConnection()) {
             c.setAutoCommit(false);
             try {
-                setStatus(c, "crf_version", "crf_version_id", target.getId(), Status.AVAILABLE, me.getId());
-                n = CrfLifecycleCascade.restoreVersion(c, target.getId(), me.getId());
+                Status restoredTo = Status.get(
+                        CrfLifecycleCascade.statusBeforeRemoval(c, target.getId(), Status.DELETED));
+                setStatus(c, "crf_version", "crf_version_id", target.getId(), restoredTo, me.getId());
+                CrfLifecycleCascade.Result cascade =
+                        CrfLifecycleCascade.restoreVersion(c, target.getId(), me.getId());
+                ResponseEntity<?> refused = refuseStudies(me, cascade.studies(),
+                        "Restoring CRF version '" + versionOid + "'");
+                if (refused != null) {
+                    c.rollback();
+                    return refused;
+                }
+                n = cascade.counts();
                 insertLifecycleAudit(c, AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED, me.getId(),
-                        "crf_version", target.getId(), target.getOid(), oldStatus, Status.AVAILABLE);
+                        "crf_version", target.getId(), target.getOid(), oldStatus, restoredTo);
                 c.commit();
             } catch (SQLException | RuntimeException e) {
                 c.rollback();
@@ -1939,6 +1977,7 @@ public class CrfsApiController {
 
         return ResponseEntity.noContent().build();
     }
+
 
     /* ----------------------------------------------------------------- */
     /* GET /api/v1/crfs/{crfOid}/versions/{versionOid}/xls                 */
@@ -2149,6 +2188,50 @@ public class CrfsApiController {
                     "Your role does not permit managing CRFs — sysadmin or Director/Coordinator only"));
         }
         return null;
+    }
+
+    /**
+     * A CRF's removal or restore changes the event CRFs of every study that
+     * uses it, but the library is shared: a Data Manager or CRC of any one
+     * study may manage it (legacy parity, {@link #preflightWrite}). So the
+     * change is refused, and the caller rolls it back, when it touches event
+     * CRFs of a study that does not take changes (409: locked, frozen or
+     * removed), or of a study where the caller is neither a system
+     * administrator nor holds an active Data Manager or CRC binding on the
+     * study itself (403). Null when it may go ahead; a change that touches no
+     * event CRF is never refused here.
+     */
+    private ResponseEntity<?> refuseStudies(UserAccountBean me, List<CrfLifecycleCascade.StudyTouch> studies,
+                                            String what) {
+        for (CrfLifecycleCascade.StudyTouch s : studies) {
+            Status status = Status.get(s.statusId());
+            if (status == Status.LOCKED || status == Status.FROZEN || status.isDeleted()) {
+                return ResponseEntity.status(409).body(Map.of("message", what + " would change "
+                        + s.eventCrfs() + " event CRF(s) of study '" + s.name() + "', which is "
+                        + status.getName() + "; nothing was changed."));
+            }
+        }
+        if (studies.isEmpty() || me.isSysAdmin()) return null;
+        List<StudyUserRoleBean> bindings;
+        try {
+            bindings = new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName());
+        } catch (RuntimeException e) {
+            bindings = List.of();
+        }
+        List<String> refused = new ArrayList<>();
+        for (CrfLifecycleCascade.StudyTouch s : studies) {
+            boolean mayChange = false;
+            for (StudyUserRoleBean b : bindings) {
+                if (b == null || b.getRole() == null || b.getStudyId() != s.studyId()) continue;
+                if (b.getStatus() == null || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                if (b.getRole() == Role.STUDYDIRECTOR || b.getRole() == Role.COORDINATOR) mayChange = true;
+            }
+            if (!mayChange) refused.add("'" + s.name() + "' (" + s.eventCrfs() + ")");
+        }
+        if (refused.isEmpty()) return null;
+        return ResponseEntity.status(403).body(Map.of("message", what + " would change event CRFs of study "
+                + String.join(", ", refused) + ", where you are not Data Manager or CRC;"
+                + " nothing was changed. A system administrator may."));
     }
 
     /** The version with {@code versionOid}, when it belongs to the CRF {@code crfOid}; otherwise null. */
