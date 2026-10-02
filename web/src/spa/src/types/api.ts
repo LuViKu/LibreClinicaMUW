@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crfs/{crfOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail"];
+        put: operations["update_9"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/password-policy": {
         parameters: {
             query?: never;
@@ -2248,6 +2264,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crfs/{crfOid}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_9"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/event-crf-migration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/event-crf-migration/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crfs/{crfOid}/disable": {
         parameters: {
             query?: never;
@@ -2992,7 +3056,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail"];
+        get: operations["detail_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3088,7 +3152,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["preview"];
+        get: operations["preview_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3184,7 +3248,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["preview_1"];
+        get: operations["preview_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3473,6 +3537,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getVersionContents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/event-crf-migration/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["options"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4335,6 +4415,25 @@ export interface components {
             numRuns?: number;
             hasRun?: boolean;
         };
+        UpdateCrfRequest: {
+            name?: string;
+            description?: string;
+        };
+        CrfDto: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            status?: string;
+            versions?: components["schemas"]["CrfVersionDto"][];
+        };
+        CrfVersionDto: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            revisionNotes?: string;
+            status?: string;
+            uploadedAt?: string;
+        };
         PasswordPolicyUpdate: {
             requireLower?: boolean;
             requireUpper?: boolean;
@@ -5111,21 +5210,6 @@ export interface components {
             name?: string;
             description?: string;
         };
-        CrfDto: {
-            oid?: string;
-            name?: string;
-            description?: string;
-            status?: string;
-            versions?: components["schemas"]["CrfVersionDto"][];
-        };
-        CrfVersionDto: {
-            oid?: string;
-            name?: string;
-            description?: string;
-            revisionNotes?: string;
-            status?: string;
-            uploadedAt?: string;
-        };
         Autocomplete: {
             system?: string;
             fills?: components["schemas"]["Fill"][];
@@ -5231,6 +5315,106 @@ export interface components {
             sedName?: string;
             migrated?: boolean;
             reasonSkipped?: string;
+        };
+        EventCrfMigrationRequest: {
+            studyOid?: string;
+            sourceVersionOid?: string;
+            targetVersionOid?: string;
+            siteOids?: string[];
+            eventDefinitionOids?: string[];
+            studySubjectLabel?: string;
+            eventCrfIds?: number[];
+            /** Format: int32 */
+            expectedEventCrfCount?: number;
+            expectedSelectionDigest?: string;
+        };
+        EventCrfMigrationRef: {
+            oid?: string;
+            name?: string;
+        };
+        EventCrfMigrationResult: {
+            crfOid?: string;
+            crfName?: string;
+            study?: components["schemas"]["EventCrfMigrationRef"];
+            sourceVersion?: components["schemas"]["EventCrfMigrationRef"];
+            targetVersion?: components["schemas"]["EventCrfMigrationRef"];
+            /** Format: int32 */
+            migratedEventCrfCount?: number;
+            /** Format: int32 */
+            subjectCount?: number;
+            /** Format: int32 */
+            sdvClearedCount?: number;
+            /** Format: int32 */
+            unsignedSubjectCount?: number;
+            /** Format: int32 */
+            unsignedEventCount?: number;
+            /** Format: int32 */
+            unsignedEventCrfCount?: number;
+            log?: components["schemas"]["EventCrfMigrationRow"][];
+            completedAt?: string;
+        };
+        EventCrfMigrationRow: {
+            /** Format: int32 */
+            eventCrfId?: number;
+            studySubjectLabel?: string;
+            siteOid?: string;
+            siteName?: string;
+            eventDefinitionOid?: string;
+            eventName?: string;
+            /** Format: int32 */
+            eventOrdinal?: number;
+            sdvVerified?: boolean;
+            subjectSigned?: boolean;
+            eventSigned?: boolean;
+            eventCrfSigned?: boolean;
+        };
+        EventCrfMigrationHiddenItem: {
+            name?: string;
+            oid?: string;
+            /** Format: int32 */
+            valueCount?: number;
+        };
+        EventCrfMigrationNotOffered: {
+            siteOid?: string;
+            siteName?: string;
+            eventDefinitionOid?: string;
+            eventName?: string;
+            /** Format: int32 */
+            eventCrfCount?: number;
+        };
+        EventCrfMigrationPreview: {
+            crfOid?: string;
+            crfName?: string;
+            study?: components["schemas"]["EventCrfMigrationRef"];
+            sourceVersion?: components["schemas"]["EventCrfMigrationRef"];
+            targetVersion?: components["schemas"]["EventCrfMigrationRef"];
+            sites?: components["schemas"]["EventCrfMigrationRef"][];
+            eventDefinitions?: components["schemas"]["EventCrfMigrationRef"][];
+            studySubjectLabel?: string;
+            /** Format: int32 */
+            eventCrfCount?: number;
+            /** Format: int32 */
+            subjectCount?: number;
+            /** Format: int32 */
+            sdvVerifiedCount?: number;
+            /** Format: int32 */
+            signedSubjectCount?: number;
+            /** Format: int32 */
+            signedEventCount?: number;
+            /** Format: int32 */
+            signedEventCrfCount?: number;
+            eventCrfs?: components["schemas"]["EventCrfMigrationRow"][];
+            eventCrfsTruncated?: boolean;
+            locked?: components["schemas"]["EventCrfMigrationSkippedRow"][];
+            notOffered?: components["schemas"]["EventCrfMigrationNotOffered"][];
+            /** Format: int32 */
+            hiddenValueCount?: number;
+            hiddenItems?: components["schemas"]["EventCrfMigrationHiddenItem"][];
+            selectionDigest?: string;
+        };
+        EventCrfMigrationSkippedRow: {
+            row?: components["schemas"]["EventCrfMigrationRow"];
+            reason?: string;
         };
         ContactRequest: {
             name?: string;
@@ -5685,6 +5869,52 @@ export interface components {
             status?: string;
             lastActivityAt?: string;
             noteIds?: string[];
+        };
+        CrfDetailDto: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            status?: string;
+            mayEdit?: boolean;
+            versions?: components["schemas"]["CrfVersionDto"][];
+            items?: components["schemas"]["CrfDetailItem"][];
+            studies?: components["schemas"]["CrfDetailStudyUse"][];
+        };
+        CrfDetailItem: {
+            name?: string;
+            oid?: string;
+            description?: string;
+            dataType?: string;
+            versions?: string[];
+            integrity?: string;
+            placements?: components["schemas"]["CrfDetailItemPlacement"][];
+        };
+        CrfDetailItemPlacement: {
+            groupLabel?: string;
+            versionName?: string;
+        };
+        CrfDetailStudyUse: {
+            oid?: string;
+            name?: string;
+            uniqueProtocolId?: string;
+            status?: string;
+            parentOid?: string;
+            parentName?: string;
+        };
+        EventCrfMigrationOptions: {
+            crfOid?: string;
+            crfName?: string;
+            study?: components["schemas"]["EventCrfMigrationRef"];
+            versions?: components["schemas"]["EventCrfMigrationVersionOption"][];
+            sites?: components["schemas"]["EventCrfMigrationRef"][];
+            eventDefinitions?: components["schemas"]["EventCrfMigrationRef"][];
+        };
+        EventCrfMigrationVersionOption: {
+            oid?: string;
+            name?: string;
+            status?: string;
+            /** Format: int32 */
+            eventCrfCount?: number;
         };
         AuditEventDto: {
             id?: string;
@@ -6673,6 +6903,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DatasetDto"];
+                };
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfDetailDto"];
+                };
+            };
+        };
+    };
+    update_9: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateCrfRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfDto"];
                 };
             };
         };
@@ -10126,6 +10404,80 @@ export interface operations {
             };
         };
     };
+    restore_9: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfDto"];
+                };
+            };
+        };
+    };
+    run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EventCrfMigrationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfMigrationResult"];
+                };
+            };
+        };
+    };
+    preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EventCrfMigrationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfMigrationPreview"];
+                };
+            };
+        };
+    };
     disable_5: {
         parameters: {
             query?: never;
@@ -11189,7 +11541,7 @@ export interface operations {
             };
         };
     };
-    detail: {
+    detail_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -11323,7 +11675,7 @@ export interface operations {
             };
         };
     };
-    preview: {
+    preview_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -11463,7 +11815,7 @@ export interface operations {
             };
         };
     };
-    preview_1: {
+    preview_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -11882,6 +12234,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CrfVersionAuthoringRequest"];
+                };
+            };
+        };
+    };
+    options: {
+        parameters: {
+            query?: {
+                studyOid?: string;
+            };
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfMigrationOptions"];
                 };
             };
         };
