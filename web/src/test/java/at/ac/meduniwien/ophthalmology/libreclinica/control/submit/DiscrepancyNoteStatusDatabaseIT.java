@@ -274,6 +274,35 @@ class DiscrepancyNoteStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "back to the note page: " + resp.getForwardedUrl());
     }
 
+    @Test
+    void aFailedCheckShownAgainAfterAFailedSaveKeepsItsOwnStatusChoices() throws Exception {
+        // The director's failed check with a blank description goes back to
+        // the note page, which shows the box again. The page then rebuilds the
+        // box's status choices from "typeID0": with it, "new" and "resolution
+        // proposed", the two mayStart accepts; without it, a query's four.
+        UserAccountBean director = user("manual_dm");
+        MockHttpServletRequest failed = harness.request("POST", "/CreateOneDiscrepancyNote", director);
+        for (String[] p : new String[][] { {"parentId", "0"}, {"name", "itemData"}, {"id", itemData},
+                {"field", "input1"}, {"column", "value"}, {"description0", ""}, {"detailedDes0", ""},
+                {"typeId0", String.valueOf(FAILED_CHECK)}, {"resStatusId0", String.valueOf(NEW)},
+                {"viewDNLink0", "/ViewDiscrepancyNote?name=itemData&id=" + itemData} }) {
+            failed.addParameter(p[0], p[1]);
+        }
+        MockHttpServletResponse resp = harness.run(new CreateOneDiscrepancyNoteServlet(), failed);
+        assertTrue(String.valueOf(resp.getForwardedUrl()).contains("fromBox=1"), String.valueOf(resp.getForwardedUrl()));
+
+        MockHttpServletRequest page = harness.request("GET", "/ViewDiscrepancyNote", director);
+        page.setSession(failed.getSession());
+        for (String[] p : new String[][] { {"name", "itemData"}, {"id", itemData}, {"field", "input1"},
+                {"column", "value"}, {"fromBox", "1"} }) {
+            page.addParameter(p[0], p[1]);
+        }
+        harness.run(new ViewDiscrepancyNoteServlet(), page);
+
+        assertEquals("2", page.getAttribute("whichResStatus"), "a director's status lists");
+        assertEquals(String.valueOf(FAILED_CHECK), page.getAttribute("typeID0"));
+    }
+
     // ---- helpers ------------------------------------------------------------------------------
 
     /**
