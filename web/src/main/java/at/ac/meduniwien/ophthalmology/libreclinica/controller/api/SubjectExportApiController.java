@@ -57,7 +57,6 @@ import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
@@ -449,12 +448,15 @@ public class SubjectExportApiController {
         PdfWriter.getInstance(doc, baos);
         doc.open();
 
-        Font h1 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16);
-        Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12);
-        Font h3 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
-        Font normal = FontFactory.getFont(FontFactory.HELVETICA, 10);
-        Font small = FontFactory.getFont(FontFactory.HELVETICA, 8);
-        Font italic = FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 8);
+        // new Font(family, ...) rather than FontFactory.getFont(name, ...): the factory
+        // font is WinAnsi-only and silently drops glyphs such as the greater-or-equal
+        // and less-or-equal signs; the family constructor encodes them.
+        Font h1 = new Font(Font.HELVETICA, 16, Font.BOLD);
+        Font h2 = new Font(Font.HELVETICA, 12, Font.BOLD);
+        Font h3 = new Font(Font.HELVETICA, 10, Font.BOLD);
+        Font normal = new Font(Font.HELVETICA, 10);
+        Font small = new Font(Font.HELVETICA, 8);
+        Font italic = new Font(Font.HELVETICA, 8, Font.ITALIC);
 
         // ---- Title + identity block ----
         Paragraph title = new Paragraph(snap.study().getName(), h1);

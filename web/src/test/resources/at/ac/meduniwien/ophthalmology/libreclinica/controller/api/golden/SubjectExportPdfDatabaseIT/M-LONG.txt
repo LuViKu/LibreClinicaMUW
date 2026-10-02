@@ -16,7 +16,7 @@ Status: completed · Started 2020-10-06
  
 D emographics
 Item Value Units
-Date of informed consent VA  20/40 and CST  300 µm
+Date of informed consent VA ≥ 20/40 and CST ≤ 300 µm
 Date of informed consent Subretinal fluid resolved after the third injection;
 a small pigment epithelial detachment persists
 nasally, unchanged against the previous visit,

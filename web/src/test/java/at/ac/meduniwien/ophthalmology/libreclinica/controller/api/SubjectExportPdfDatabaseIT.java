@@ -57,11 +57,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
  * they cannot show the first and last of those. A further subject, built by
  * this class from M-001's first form, carries thirty repeats of that form's
  * rows (several pages, the item table split across them), one value too long
- * for its cell, and one with "≥" and "≤", which the standard fonts cannot
- * encode. Its golden is captured from OpenPDF. The casebook's Helvetica drops
- * both characters, so the golden records "VA  20/40 and CST  300 µm": that is
- * what the export does today, pinned here so a change to it is seen, not an
- * endorsement of it.
+ * for its cell, and one with "≥" and "≤", which are outside WinAnsi. Its
+ * golden is captured from OpenPDF and records "VA ≥ 20/40 and CST ≤ 300 µm":
+ * the casebook font must encode both characters rather than drop them. It
+ * once recorded "VA  20/40 and CST  300 µm", the glyphs silently missing.
  *
  * <p>The one value that changes from day to day, the "Generated" date, is
  * replaced by a placeholder before the comparison. A golden that is missing
