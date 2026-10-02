@@ -21,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.export.CsvWrit
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
@@ -545,6 +547,8 @@ public class DiscrepancyApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit creating notes of type '" + typeName + "'"));
         }
+        ResponseEntity<?> badAssignee = assigneeRefusal(body.assignedTo(), currentStudy.getId());
+        if (badAssignee != null) return badAssignee;
 
         // Phase B2 (2026-06-10) — failure-audit wrap on the parent
         // discrepancy_note insert + mapping + (best-effort) email
@@ -743,6 +747,8 @@ public class DiscrepancyApiController {
         }
 
         // Resolve optional reassignment before mutating the parent.
+        ResponseEntity<?> badAssignee = assigneeRefusal(body.assignedTo(), parent.getStudyId());
+        if (badAssignee != null) return badAssignee;
         Integer assignedUserId = resolveAssignee(body.assignedTo());
         int previousStatusId = parent.getResolutionStatusId();
         int previousAssignedUserId = parent.getAssignedUserId();
@@ -1304,6 +1310,45 @@ public class DiscrepancyApiController {
     /** A date column's day, as the JDBC driver read it (default zone). */
     private static String isoDate(java.util.Date d) {
         return d == null ? null : new java.sql.Date(d.getTime()).toLocalDate().toString();
+    }
+
+    /**
+     * The refusal (400) when a note is to be assigned to a user who does not
+     * exist or holds no active role in the note's study, its parent or a
+     * site of it, as legacy offers only the study's users; {@code null} when
+     * no assignee is named or the assignee may hold the note. Before, an
+     * unknown name was dropped silently and any account was accepted.
+     */
+    private ResponseEntity<?> assigneeRefusal(String username, int noteStudyId) {
+        if (username == null || username.isBlank()) return null;
+        UserAccountDAO udao = new UserAccountDAO(dataSource);
+        UserAccountBean ua = (UserAccountBean) udao.findByUserName(username);
+        if (ua == null || ua.getId() <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No user '" + username + "' to assign the note to"));
+        }
+        StudyDAO sDao = new StudyDAO(dataSource);
+        StudyBean noteStudy = (StudyBean) sDao.findByPK(noteStudyId);
+        int top = (noteStudy != null && noteStudy.getParentStudyId() > 0)
+                ? noteStudy.getParentStudyId() : noteStudyId;
+        Set<Integer> studyTree = new HashSet<>();
+        studyTree.add(top);
+        List<StudyBean> sites = sDao.findAllByParent(top);
+        if (sites != null) {
+            for (StudyBean site : sites) {
+                if (site != null) studyTree.add(site.getId());
+            }
+        }
+        List<StudyUserRoleBean> roles = udao.findAllRolesByUserName(ua.getName());
+        if (roles != null) {
+            for (StudyUserRoleBean r : roles) {
+                if (r != null && studyTree.contains(r.getStudyId()) && Status.AVAILABLE.equals(r.getStatus())) {
+                    return null;
+                }
+            }
+        }
+        return ResponseEntity.badRequest().body(Map.of("message",
+                "User '" + username + "' holds no role in this study and cannot be assigned the note"));
     }
 
     private Integer resolveAssignee(String username) {
