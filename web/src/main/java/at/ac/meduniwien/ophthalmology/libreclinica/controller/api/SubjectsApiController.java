@@ -2419,15 +2419,16 @@ public class SubjectsApiController {
 
         // Flip the parent, then cascade. The legacy
         // RemoveSubjectServlet walks the chain inline; we do the
-        // same here. The parent's update commits on its own, as in
-        // legacy; the cascade below it is one transaction.
+        // same here. A removal or restore flips the parent in the
+        // cascade's transaction, so a failure changes nothing; a lock
+        // or unlock has no cascade.
         ss.setStatus(newSubjectStatus);
         ss.setUpdater(currentUser);
         ss.setUpdatedDate(new java.util.Date());
-        studySubjectDAO.update(ss);
-
         if (cascadeChildStatus != null) {
             cascadeChildren(ss, currentUser, cascadeChildStatus);
+        } else {
+            studySubjectDAO.update(ss);
         }
 
         LOG.info("Subject lifecycle {}: study_subject {} (label={}) by user={} role={}; "
@@ -2470,9 +2471,10 @@ public class SubjectsApiController {
      *   <li>Only auto-removed rows come back, and a visit only when its
      *       event definition is not removed. This cascade used to make
      *       every row that was not removed available.</li>
-     *   <li>Status-only SQL in one transaction: {@code ItemDataDAO.update}
-     *       clears a value's provenance, and {@code StudyEventDAO.update}
-     *       fails on a visit without a start date.</li>
+     *   <li>Status-only SQL in one transaction, the subject's own status
+     *       included: {@code ItemDataDAO.update} clears a value's
+     *       provenance, and {@code StudyEventDAO.update} fails on a visit
+     *       without a start date.</li>
      * </ul>
      */
     private void cascadeChildren(StudySubjectBean ss, UserAccountBean currentUser,
@@ -2482,6 +2484,7 @@ public class SubjectsApiController {
             boolean autoCommit = c.getAutoCommit();
             c.setAutoCommit(false);
             try {
+                setSubjectStatus(c, ss, currentUser);
                 if (remove) {
                     autoRemoveChildren(c, ss.getId(), currentUser.getId());
                 } else {
@@ -2507,6 +2510,18 @@ public class SubjectsApiController {
                         + " RETURNING study_event_id",
                 userId, studySubjectId);
         EventDataStatusCascade.autoRemove(c, visits, userId);
+    }
+
+    /** The subject's status, updater and update date, on the cascade's connection. */
+    private static void setSubjectStatus(Connection c, StudySubjectBean ss, UserAccountBean currentUser)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("UPDATE study_subject SET status_id = ?, "
+                + "update_id = ?, date_updated = now() WHERE study_subject_id = ?")) {
+            ps.setInt(1, ss.getStatus().getId());
+            ps.setInt(2, currentUser.getId());
+            ps.setInt(3, ss.getId());
+            ps.executeUpdate();
+        }
     }
 
     private static void restoreChildren(Connection c, int studySubjectId, int userId) throws SQLException {

@@ -959,8 +959,9 @@ public class EventDefinitionsApiController {
         target.setStatus(Status.DELETED);
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
-        sedDao.update(target);
-
+        // The definition's own status changes with the cascade, in one
+        // transaction: a failure leaves the definition and everything under
+        // it as it was.
         int[] removed = removeDependents(target, me);
 
         // Single lifecycle row capturing the status flip. The dependent
@@ -1001,13 +1002,15 @@ public class EventDefinitionsApiController {
      * CRF and value records the status it had and gets it back on
      * {@link #restore} ({@link EventDataStatusCascade}). The servlet's
      * restore makes them available, which unsigns a signed CRF and unlocks a
-     * locked one. Status-only SQL in one transaction.
+     * locked one. Status-only SQL in one transaction, which marks the
+     * definition itself removed first.
      *
      * @return rows marked auto-removed: CRF assignments, visits, event CRFs,
      *         values
      */
     private int[] removeDependents(StudyEventDefinitionBean target, UserAccountBean me) {
         return inTransaction(target, c -> {
+            setDefinitionStatus(c, target, Status.DELETED, me);
             int assignments = EventDataStatusCascade.ids(c,
                     "UPDATE event_definition_crf SET status_id = 7, date_updated = now(), update_id = ? "
                             + "WHERE study_event_definition_id = ? AND parent_id IS NULL "
@@ -1028,12 +1031,13 @@ public class EventDefinitionsApiController {
      * assignments, and the auto-removed visits of subjects that are not
      * removed, with the event CRFs and values the removal took, each with
      * the status it had. The visit of a removed subject stays removed with
-     * the subject.
+     * the subject. In one transaction with the definition's own restore.
      *
      * @return rows restored: CRF assignments, visits, event CRFs, values
      */
     private int[] restoreDependents(StudyEventDefinitionBean target, UserAccountBean me) {
         return inTransaction(target, c -> {
+            setDefinitionStatus(c, target, Status.AVAILABLE, me);
             int assignments = EventDataStatusCascade.ids(c,
                     "UPDATE event_definition_crf SET status_id = 1, date_updated = now(), update_id = ? "
                             + "WHERE study_event_definition_id = ? AND parent_id IS NULL AND status_id = 7 "
@@ -1048,6 +1052,22 @@ public class EventDefinitionsApiController {
             EventDataStatusCascade.Counts data = EventDataStatusCascade.restore(c, visits, me.getId());
             return new int[] {assignments, visits.size(), data.eventCrfs(), data.values()};
         });
+    }
+
+    /**
+     * The definition's status, updater and update date, on the cascade's
+     * connection. {@code StudyEventDefinitionDAO.update} would commit on a
+     * connection of its own.
+     */
+    private static void setDefinitionStatus(Connection c, StudyEventDefinitionBean target, Status status,
+                                            UserAccountBean me) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("UPDATE study_event_definition SET status_id = ?, "
+                + "update_id = ?, date_updated = now() WHERE study_event_definition_id = ?")) {
+            ps.setInt(1, status.getId());
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target.getId());
+            ps.executeUpdate();
+        }
     }
 
     /** One step of the cascade under a definition, on the transaction's connection. */
@@ -1115,8 +1135,8 @@ public class EventDefinitionsApiController {
         target.setStatus(Status.AVAILABLE);
         target.setUpdater(me);
         target.setUpdatedDate(now);
-        sedDao.update(target);
 
+        // The definition's restore and the cascade, in one transaction.
         // Cascade restore: only rows the removal auto-removed come back,
         // with the status they had; rows removed on their own stay removed
         // (RestoreEventDefinitionServlet:130/154/163), and so does the
