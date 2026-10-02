@@ -110,7 +110,6 @@ public class InitUpdateEventDefinitionServlet extends SecureController {
 
         StudyEventDefinitionDAO sdao = new StudyEventDefinitionDAO(sm.getDataSource());
         String idString = request.getParameter("id");
-        logger.info("definition id: " + idString);
         // A non-numeric id is as unusable as a missing one, so it takes the
         // same branch instead of raising a NumberFormatException.
         int defId = 0;
