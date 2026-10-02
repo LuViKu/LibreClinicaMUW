@@ -11,6 +11,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useGroupClassesStore } from '@/stores/groupClasses'
 import { useAuthStore } from '@/stores/auth'
+import { mayBuildStudy } from '@/lib/studyBuildAccess'
 import { useConfirm } from '@/composables/useConfirm'
 import type { GroupClass, GroupClassType, SubjectAssignment } from '@/types/groupClass'
 
@@ -27,10 +28,7 @@ const auth = useAuthStore()
 const confirm = useConfirm()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager'
-})
+const canManage = computed(() => mayBuildStudy(auth.user?.role))
 
 onMounted(() => { if (studyOid.value) gc.load(studyOid.value) })
 watch(studyOid, (next) => { if (next) gc.load(next) })

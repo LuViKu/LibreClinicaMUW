@@ -38,7 +38,7 @@ describe('primaryNavFor', () => {
     expect(inv.map((i) => i.to)).toEqual(['/', '/subjects', '/notes', '/due-visits', '/ingest-inbox'])
   })
 
-  it('gives a CRC neither the inbox nor due visits — they have no route there', () => {
+  it('gives a CRC neither the inbox nor due visits link — their routes list no CRC role of their own', () => {
     const paths = primaryNavFor(['CRC']).map((i) => i.to)
     expect(paths).not.toContain('/ingest-inbox')
     expect(paths).not.toContain('/due-visits')

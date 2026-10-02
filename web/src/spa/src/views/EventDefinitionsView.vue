@@ -12,6 +12,7 @@ import EventCrfAssignmentsDialog from '@/components/EventCrfAssignmentsDialog.vu
 
 import { useEventDefinitionsStore } from '@/stores/eventDefinitions'
 import { useAuthStore } from '@/stores/auth'
+import { mayBuildStudy, maySysadminOnly } from '@/lib/studyBuildAccess'
 import { useImagingModalitiesStore } from '@/stores/imagingModalities'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useConfirm } from '@/composables/useConfirm'
@@ -65,15 +66,12 @@ function modalityLabel(row: { labelDe: string; labelEn: string }): string {
 }
 const REQUIREMENT_OPTIONS: readonly ImagingRequirement[] = ['optional', 'required'] as const
 const LATERALITY_OPTIONS: ReadonlyArray<ImagingLaterality | ''> = ['', 'OU', 'OD', 'OS'] as const
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager'
-})
+const canManage = computed(() => mayBuildStudy(auth.user?.role))
 // Phase E.6 — lock + unlock are sysadmin-only on the backend (matches
 // the legacy UnlockEventDefinitionServlet mayProceed guard). Gating the
 // buttons client-side avoids surfacing them to roles that would only
 // see a 403 on click.
-const canLifecycle = computed(() => auth.user?.role === 'Administrator')
+const canLifecycle = computed(() => maySysadminOnly(auth.user?.role))
 
 onMounted(() => {
   if (studyOid.value) {

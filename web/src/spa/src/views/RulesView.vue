@@ -10,6 +10,7 @@ import RuleEditDialog from '@/components/RuleEditDialog.vue'
 import RuleActionEditDialog from '@/components/RuleActionEditDialog.vue'
 
 import { useAuthStore } from '@/stores/auth'
+import { mayBuildStudy } from '@/lib/studyBuildAccess'
 import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
 import { useConfirm } from '@/composables/useConfirm'
 import type { ActionType, AttachedRule, RuleAction, RuleSet } from '@/types/rule'
@@ -37,10 +38,7 @@ const confirm = useConfirm()
  * roleMayEditStudy} (sysadmin OR director/coordinator), so the SPA
  * gate is a UI hint — anyone bypassing it lands on a 403.
  */
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager'
-})
+const canManage = computed(() => mayBuildStudy(auth.user?.role))
 
 onMounted(() => { if (rules.rows.length === 0) rules.load() })
 
