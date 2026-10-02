@@ -149,13 +149,6 @@ const canEdit = computed(() => {
 })
 
 /*
- * Signing a subject follows EventEditAuthorization#roleMayEdit on the
- * server: the roles that edit a subject. A Monitor, who views this page
- * read-only, gets no "Sign subject" link.
- */
-const canSignSubject = canEdit
-
-/*
  * 2026-07-13 — cohort-edit gate (trial blinding, defense-in-depth).
  * The group-assignment dialog is the surface that moves a subject
  * between the AI_SHOWN / AI_HIDDEN arms, so restrict the affordance to
@@ -714,7 +707,9 @@ const canTransitionEye = computed(() => {
  * says whether the session's binding is one. Without that, the link
  * shows as before and the sign page's preflight explains a refusal.
  */
-const canSignSubject = computed(() => auth.permits('signSubject') ?? true)
+// Signing follows EventEditAuthorization#roleMayEdit on the server (the roles
+// that edit a subject; a Monitor gets no link) and what /me permits.
+const canSignSubject = computed(() => canEdit.value && (auth.permits('signSubject') ?? true))
 
 function eyeInScope(eye: 'OD' | 'OS'): boolean {
   const studyEye = subject.value?.studyEye ?? null
