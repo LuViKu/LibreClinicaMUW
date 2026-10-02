@@ -14,7 +14,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 |-------|-----|----|
 | Java | **25** (build + runtime, per Dockerfile; 21→25 bump 2026-07) | (achieved — exceeds the original Java 21 target) |
 | Framework | Spring Boot 3.5.16 + Java config (Spring 6.2.19 + Security 6.5.11; residual security XML) | (achieved — Phase C) |
-| Web | JSP + SiteMesh + Spring MVC + ~295 legacy servlets; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
+| Web | JSP + Spring MVC + 214 servlet registrations; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
 | Persistence | Hibernate 6.4 (jakarta) + Liquibase 4.31.1 (pinned; LAX parsing + serial shims) + PostgreSQL 14 | (Liquibase 4 achieved — Phase D-Libs, 2026-10) + PostgreSQL 14+ |
 | Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
@@ -104,7 +104,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | Path | Contents |
 |------|----------|
 | [`core/`](core/) | Domain entities, services, DAOs, Hibernate mappings, Liquibase migrations (`core/src/main/resources/migration/`) |
-| [`web/`](web/) | Spring MVC controllers, 295 legacy servlets, 413 JSPs, static assets — produces `LibreClinica-web.war` |
+| [`web/`](web/) | Spring MVC controllers, 214 servlet registrations, 413 JSPs, static assets — produces `LibreClinica-web.war` |
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |
@@ -120,8 +120,8 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 ## Things to know
 
 - **Test coverage is uneven, not thin** — 1301 unit tests run by default, plus a Testcontainers database suite of ~1400 in `web/src/test/**/*DatabaseIT.java`. The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
-- **`@SuppressWarnings("all")` sits on 1,244 of 2,004 main-source Java files**, but it currently suppresses nothing measurable: removing 1,140 of them changed javac's output by zero warnings (231 before and after, same sources). It would still mask *new* warnings in those files, so do not add more — but a zero-warning result in this tree is not automatically an artefact of it. The Phase B.5 Hibernate-6 manifest was checked this way and its finding holds.
-- **CodeQL and javac disagree about Hibernate deprecation, and javac is right for this build.** CodeQL reports 49 deprecated Hibernate calls under `core/.../dao/hibernate/`; javac reports none, because `Session.createQuery(String)` and `createNativeQuery(String)` were deprecated in Hibernate **6.5** and this project compiles against **6.4.10**. The calls become real deprecations when Hibernate moves. Treat those alerts as forward-looking, not as a present defect.
+- **`@SuppressWarnings("all")` sits on ~1,244 main-source Java files, and javac ignores it; VS Code's compiler (Eclipse JDT) honours it.** "all" is not a javac lint key, so the annotation hides warnings only in the IDE, never from `javac -Xlint`. Removing it therefore cannot change javac's output, and doing so proves nothing (an earlier note here drew the opposite conclusion from exactly that test). Do not add more; remove it from a file when you work on it.
+- **A default build hides deprecations.** It prints only "Some input files use or override a deprecated API". To measure, compile with `-Xlint:deprecation` and raise `-Xmaxwarns` (javac prints at most 100 by default). Measured on Hibernate 6.4.10, 2026-09-30: core has 128 deprecation warnings. They include exactly the 49 Hibernate calls CodeQL flags (`createNativeQuery(String)` 30, `Session.createQuery(String)` 15, `save` 2, `saveOrUpdate` 2) and 61 uses of `@GenericGenerator`'s `strategy()`. So the 49 are present-day deprecations, not forward-looking; the Hibernate 6.6 move (`chore/muw-libs-openpdf-boot-bom`) retires 47 of them.
 - **Database migrations are versioned** — every change adds a new Liquibase changeset under `core/src/main/resources/migration/`, never edit existing changesets. Institutional changes go in `migration/lc-muw-<yyyy-mm-dd>-<topic>.xml`.
 - **Liquibase is pinned at 4.31.1 and must never go back to 3.x, nor to 4.33.0+ or 5.x without a re-check.** The first start on 4.x rewrites every stored checksum from `8:` to `9:`. Liquibase 3.6.3 does not recognise `9:` checksums: started on an upgraded database, it re-runs 25 `runOnChange` changesets and inserts duplicate data, so an upgraded database is rolled back only by restoring the pre-upgrade dump ([deploy runbook §5](docs/operations/deploy-runbook.md#5-rollback)). 4.33.0 changes the checksum of every `valueDate` changeset and fails startup on every existing database; `Liquibase363UpgradeDatabaseIT` fails on it. 5.x is FSL-licensed. There is no Liquibase Maven plugin; only the app runs the changelog. Details: [liquibase-4-spike-2026-09-30.md](docs/development/modernization/liquibase-4-spike-2026-09-30.md).
 - **Released, independent fork** — since 2026-06-26 the project no longer syncs from upstream LibreClinica (no cherry-picks; don't suggest pulling upstream changes). See [DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica) for the original fork rationale; the cherry-pick workflow it describes is now historical.

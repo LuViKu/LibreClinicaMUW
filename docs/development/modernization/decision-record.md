@@ -947,13 +947,56 @@ The two are not alike. The database upgrade is operational and bounded: a dump a
 
 **Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started.
 
+**Spike result (2026-09-30).** [spring-boot-4-spike-2026-09-30.md](spring-boot-4-spike-2026-09-30.md) built, tested and started the tree on Spring Boot 4.1.1, on branch `spike/muw-spring-boot-4`. That branch is a measurement, not for merging.
+
+- **Compile:** 32 errors in 6 files, none of them in the legacy servlets, Jersey or the SPA API.
+  - **Where:** Boot bootstrap and `SecurityConfig` (23), the two heritage base DAOs (4), `BatchCRFMigrationController` (3) and one test.
+  - **Causes:**
+    - auto-configuration split into modules;
+    - Hibernate 7 dropping `save`/`saveOrUpdate`;
+    - Security 7 dropping `AntPathRequestMatcher` and `ChannelProcessingFilter`;
+    - `HttpHeaders` no longer a map.
+- **Beyond compile:**
+  - Core 359/359 and all 445 database ITs pass on Hibernate 7.4.5, and the WAR starts on Tomcat 11.
+  - Web is 951/964. The 13 failures share one cause: Jackson 3 refuses `null` for a primitive before the controller runs.
+  - There is one XML startup blocker: `applicationContext-core-security.xml` sets a `DaoAuthenticationProvider` property that Security 7 removed.
+- **Estimate:** 8–16 developer-days. That covers the compile fixes, a review of 97 `save`/`saveOrUpdate` call sites, the Jackson 2-or-3 choice and verification. DR-018 deletions would save only about 2–4 of those days.
+- **Consequence for timing:** waiting for the mid-2027 bake-in saves little and keeps an unsupported Spring for nine more months.
+- **Recommendation:** start the migration as its own phase, as soon as the current retirement PRs have landed. Keep Liquibase pinned, because Boot 4.1 would pull the FSL-licensed 5.x, and keep the logback pin.
+
+---
+
+## DR-007 — iText 2.1.2 replacement: OpenPDF 2.0.x
+
+**Date:** 2026-09-30
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) §9 (R4), MIGRATION.md (Phase D-Libs).
+
+**Context.** Two code paths write PDFs: the discrepancy-note export and the per-subject casebook. Both used iText 2.1.2, from 2008. iText 2.1.2 is unmaintained, every later iText release is AGPL, and it brought BouncyCastle 1.38 into the WAR. The options were:
+
+- **OpenPDF 2.0.x:** LGPL/MPL, maintained, keeps the `com.lowagie.text` packages.
+- **OpenPDF 3.x:** renames the packages.
+- **PDFBox:** tables, page breaks and running headers would be built by hand, so the documents would change.
+- **iText 7+:** AGPL.
+
+**Decision.** OpenPDF 2.0.5.
+
+**Consequences.**
+
+- The code change is one line: an enum overload that stores the same value.
+- Characterisation tests pin both documents. Text, page breaks and page counts match the output of iText 2.1.2, except that OpenPDF prints a "≥" character the old library silently dropped.
+- The WAR loses iText and BouncyCastle 1.38.
+- A character the standard fonts cannot render would still need an embedded Unicode font.
+
+**Revisit** when 2.0.x stops receiving fixes. Moving to 3.x is a mechanical package rename plus a re-run of the two characterisation tests.
+
 ---
 
 ## Future decisions (open)
 
-*Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains).*
+*Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*
 
-- DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
 - DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP). The app still runs on DBCP 1.x; plan item R4
 - DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache. De facto EhCache 3 (3.10.8) since B.5; decide with the Spring Boot 4 migration (DR-037)
 - DR-016 — JIT vs LOOKUP_ONLY provisioning default for SSO users (decide during Phase D execution after MedUni Wien admin-process review)
