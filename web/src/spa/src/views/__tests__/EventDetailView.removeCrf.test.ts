@@ -129,11 +129,13 @@ describe('EventDetailView — remove a CRF', () => {
       crfs: EVENT.crfs.map((c) => (c.eventCrfId === 7 ? { ...c, status: 'removed' as const } : c)),
     })
 
+    const callsBefore = apiGetMock.mock.calls.length
     wrapper.findComponent({ name: 'RemoveEventCrfDialog' }).vm.$emit('removed')
     await flushPromises()
 
     expect(wrapper.findComponent({ name: 'RemoveEventCrfDialog' }).exists()).toBe(false)
-    expect(apiGetMock).toHaveBeenLastCalledWith('/pages/api/v1/events/42')
+    // The reload reads the visit first; the visit's field notes may follow.
+    expect(apiGetMock.mock.calls[callsBefore]?.[0]).toBe('/pages/api/v1/events/42')
     const rows = wrapper.findAll('[data-test="event-detail-crf-row"]')
     expect(rows[0].find('[data-test="event-detail-restore-crf"]').exists()).toBe(true)
   })
