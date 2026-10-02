@@ -59,6 +59,15 @@ public class ListNotesFilter implements CriteriaCommand {
         return null;
     }
 
+    /** The filter value as an int, or null when it is not one (a malformed filter is ignored). */
+    private static Integer parseIntOrNull(String value) {
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private String buildCriteria(String criteria, String property, Object value, HashMap<Integer, Object> variables) {
         if (value != null) {
             if (property.equals("studySubject.labelExact")) {
@@ -74,35 +83,34 @@ public class ListNotesFilter implements CriteriaCommand {
                 criteria = criteria + " and ";
                 criteria = criteria + "ss.study_id in ( SELECT study_id FROM study WHERE unique_identifier like  ? )";
                 variables.put(variables.size() + 1, '%' + value.toString() + '%');
-            } else if (property.equals("age")) {
-                if (value.toString().startsWith(">") || value.toString().startsWith("<") || value.toString().startsWith("=")) {
+            } else if (property.equals("age") || property.equals("days")) {
+                // "<5", ">10" or "=3" from the notes table's filter box. A
+                // comparison whose number is not a number filters nothing, the
+                // same as an empty box, rather than failing the whole listing.
+                String filterValue = value.toString();
+                Integer bound = filterValue.isEmpty() ? null : parseIntOrNull(filterValue.substring(1));
+                if (bound != null && (filterValue.startsWith(">") || filterValue.startsWith("<") || filterValue.startsWith("="))) {
                     criteria = criteria + " and ";
-                    criteria = criteria + " " + columnMapping.get(property) + " " + value.toString().substring(0, 1) + " ?";
-                    variables.put(variables.size() + 1, Integer.valueOf(value.toString().substring(1)));
-                }
-            } else if (property.equals("days")) {
-                if (value.toString().startsWith(">") || value.toString().startsWith("<") || value.toString().startsWith("=")) {
-                    criteria = criteria + " and ";
-                    criteria = criteria + " " + columnMapping.get(property) + " " + value.toString().substring(0, 1) + " ?";
-                    variables.put(variables.size() + 1, Integer.valueOf(value.toString().substring(1)));
+                    criteria = criteria + " " + columnMapping.get(property) + " " + filterValue.substring(0, 1) + " ?";
+                    variables.put(variables.size() + 1, bound);
                 }
             } else if ("discrepancyNoteBean.disType".equalsIgnoreCase(property)) {
                 if ("31".equals(value.toString())) {
                     criteria = criteria + " and ";
                     criteria = criteria + " (dn.discrepancy_note_type_id = 1 or dn.discrepancy_note_type_id = 3)";
-                } else {
+                } else if (parseIntOrNull(value.toString()) != null) {
                     criteria = criteria + " and ";
                     criteria = criteria + " " + columnMapping.get(property) + " = ? ";
-                    variables.put(variables.size() + 1, Integer.valueOf(value.toString()));
+                    variables.put(variables.size() + 1, parseIntOrNull(value.toString()));
                 }
             } else if ("discrepancyNoteBean.resolutionStatus".equalsIgnoreCase(property)) {
                 if ("21".equals(value.toString())) {
                     criteria = criteria + " and ";
                     criteria = criteria + " (dn.resolution_status_id = 1 or dn.resolution_status_id = 2)";
-                } else {
+                } else if (parseIntOrNull(value.toString()) != null) {
                     criteria = criteria + " and ";
                     criteria = criteria + " " + columnMapping.get(property) + " = ? ";
-                    variables.put(variables.size() + 1, Integer.valueOf(value.toString()));
+                    variables.put(variables.size() + 1, parseIntOrNull(value.toString()));
                 }
             } else if ("discrepancyNoteBean.createdDate".equalsIgnoreCase(property) || "discrepancyNoteBean.updatedDate".equalsIgnoreCase(property)) {
                 criteria = criteria + " and ";
