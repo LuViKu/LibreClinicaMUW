@@ -1,7 +1,16 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
-import type { CreateUserInput, CreateUserResult, RoleBinding, StudyUser, UpdateUserInput, UserAuth, UserRole } from '@/types/user'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import type {
+  CreateUserInput,
+  CreateUserResult,
+  LegacyRole,
+  RoleBinding,
+  StudyUser,
+  UpdateUserInput,
+  UserAuth,
+  UserRole,
+} from '@/types/user'
 
 /**
  * Phase E.7 + E.4 M12 — Study-users store.
@@ -34,7 +43,8 @@ export const useUsersStore = defineStore('users', () => {
         const blob = `${u.username} ${u.displayName} ${u.email ?? ''}`.toLowerCase()
         if (!blob.includes(q)) return false
       }
-      if (roleFilter.value !== 'all' && u.role !== roleFilter.value) return false
+      // A legacy data entry role is projected as Investigator but is not one.
+      if (roleFilter.value !== 'all' && (u.role !== roleFilter.value || u.legacyRole)) return false
       if (authFilter.value !== 'all' && u.auth !== authFilter.value) return false
       if (onlyActive.value && !u.active) return false
       return true
@@ -392,18 +402,6 @@ export const useUsersStore = defineStore('users', () => {
     )
   }
 
-  async function revokeRole(
-    username: string,
-    studyOid: string,
-  ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
-    return roleAssignment(
-      () => apiDelete<RoleBinding>(
-        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
-      ),
-      'revoke',
-    )
-  }
-
   /**
    * Multi-role per (user, study) — atomic bulk replace via
    * {@code PUT /pages/api/v1/users/{username}/roles/{studyOid}} with
@@ -417,11 +415,16 @@ export const useUsersStore = defineStore('users', () => {
    * Mirrors {@link grantRole}'s success-path refresh by calling
    * {@link listUserRoles} so the dialog's local cache picks up the new
    * binding set without an extra round-trip from the view layer.
+   *
+   * `legacyRoles` lists the legacy data entry roles the user holds on
+   * the study that are to stay; one left out is removed. Omit it only
+   * where the user holds none: the server then refuses rather than guess.
    */
   async function setStudyRoles(
     username: string,
     studyOid: string,
     roles: UserRole[],
+    legacyRoles?: LegacyRole[],
   ): Promise<
     | { ok: true; bindings: RoleBinding[] }
     | { ok: false; fieldErrors: Record<string, string>; message?: string }
@@ -429,7 +432,7 @@ export const useUsersStore = defineStore('users', () => {
     try {
       await apiPut<RoleBinding[]>(
         `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
-        { roles },
+        legacyRoles === undefined ? { roles } : { roles, legacyRoles },
       )
       const refreshed = await listUserRoles(username)
       return { ok: true, bindings: refreshed }
@@ -462,7 +465,7 @@ export const useUsersStore = defineStore('users', () => {
 
   async function roleAssignment(
     op: () => Promise<RoleBinding>,
-    label: 'grant' | 'update' | 'revoke',
+    label: 'grant' | 'update',
   ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     try {
       const binding = await op()
@@ -538,7 +541,6 @@ export const useUsersStore = defineStore('users', () => {
     listUserRoles,
     grantRole,
     updateRole,
-    revokeRole,
     setStudyRoles,
     reset,
   }

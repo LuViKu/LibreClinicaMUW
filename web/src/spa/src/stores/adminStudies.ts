@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import { apiDownload } from '@/api/download'
+import { downloadStudyMetadata } from '@/api/studyMetadata'
 import type { StudyOption } from '@/types/auth'
 import type { AdminStudy, StudyRemovalPreview } from '@/types/study'
 
@@ -92,10 +92,7 @@ export const useAdminStudiesStore = defineStore('adminStudies', () => {
 
   /** Downloads the study's ODM metadata document. */
   async function downloadMetadata(oid: string): Promise<void> {
-    await apiDownload(
-      `/pages/api/v1/studies/${encodeURIComponent(oid)}/metadata`,
-      `${oid}_metadata.xml`,
-    )
+    await downloadStudyMetadata(oid)
   }
 
   function reset() {

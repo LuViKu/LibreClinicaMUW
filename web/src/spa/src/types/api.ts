@@ -30,7 +30,7 @@ export interface paths {
         get?: never;
         put: operations["updateRole"];
         post?: never;
-        delete: operations["revokeRole"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2553,6 +2553,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/removal-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["removalPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/modules": {
         parameters: {
             query?: never;
@@ -2561,6 +2577,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_15"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["metadata"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3578,6 +3610,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/studies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_20"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/storage": {
         parameters: {
             query?: never;
@@ -3856,16 +3904,27 @@ export interface components {
             displayName?: string;
             email?: string;
             role?: string;
+            legacyRole?: string;
             siteLabel?: string;
             auth?: string;
             lastLoginAt?: string;
             active?: boolean;
             locked?: boolean;
+            firstName?: string;
+            lastName?: string;
+            phone?: string;
+            institutionalAffiliation?: string;
+            userType?: string;
+            createdDate?: string;
+            ownerUsername?: string;
+            updatedDate?: string;
+            updaterUsername?: string;
         };
         RoleAssignmentRequest: {
             studyOid?: string;
             role?: string;
             roles?: string[];
+            legacyRoles?: string[];
         };
         RoleBindingDto: {
             /** Format: int32 */
@@ -3875,6 +3934,11 @@ export interface components {
             siteLabel?: string;
             role?: string;
             active?: boolean;
+            /**
+             * @description The legacy data entry role the binding holds, or null.
+             * @enum {string|null}
+             */
+            legacyRole?: "ra" | "ra2" | null;
         };
         UpdateSubjectRequest: {
             secondaryId?: string;
@@ -4268,6 +4332,7 @@ export interface components {
             mustChangePassword?: boolean;
             passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
+            userType?: string;
         };
         UpdateEventRequest: {
             dateStarted?: string;
@@ -4469,6 +4534,9 @@ export interface components {
         };
         SetStudyStatusRequest: {
             targetStatus?: string;
+            reason?: string;
+        };
+        StudyLifecycleRequest: {
             reason?: string;
         };
         CreateGroupClassRequest: {
@@ -5361,6 +5429,27 @@ export interface components {
             isSite?: boolean;
             isActive?: boolean;
         };
+        StudyRemovalPreviewDto: {
+            oid?: string;
+            name?: string;
+            siteNames?: string[];
+            /** Format: int32 */
+            roleBindings?: number;
+            /** Format: int32 */
+            subjects?: number;
+            /** Format: int32 */
+            groupClasses?: number;
+            /** Format: int32 */
+            eventDefinitions?: number;
+            /** Format: int32 */
+            events?: number;
+            /** Format: int32 */
+            eventCrfs?: number;
+            /** Format: int32 */
+            itemData?: number;
+            /** Format: int32 */
+            datasets?: number;
+        };
         EventTreeCrfNode: {
             crfOid?: string;
             crfName?: string;
@@ -5700,6 +5789,16 @@ export interface components {
             after?: string;
             reason?: string;
         };
+        AdminStudyDto: {
+            oid?: string;
+            name?: string;
+            uniqueIdentifier?: string;
+            principalInvestigator?: string;
+            createdDate?: string;
+            status?: string;
+            parentOid?: string;
+            sites?: components["schemas"]["AdminStudyDto"][];
+        };
         CancelEventRequest: {
             reasonCode?: string;
             reasonText?: string;
@@ -5769,29 +5868,6 @@ export interface operations {
                 "application/json": components["schemas"]["RoleAssignmentRequest"];
             };
         };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RoleBindingDto"];
-                };
-            };
-        };
-    };
-    revokeRole: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                username: string;
-                studyOid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -7314,7 +7390,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StudyLifecycleRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -7763,7 +7843,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StudyLifecycleRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -10563,6 +10647,28 @@ export interface operations {
             };
         };
     };
+    removalPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyRemovalPreviewDto"];
+                };
+            };
+        };
+    };
     list_15: {
         parameters: {
             query?: never;
@@ -10581,6 +10687,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": string;
                 };
             };
         };
@@ -12014,6 +12142,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    list_20: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStudyDto"];
                 };
             };
         };

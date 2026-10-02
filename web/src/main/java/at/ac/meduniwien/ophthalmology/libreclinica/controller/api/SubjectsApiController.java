@@ -879,6 +879,10 @@ public class SubjectsApiController {
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
+        }
         if (body == null) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
@@ -2492,7 +2496,8 @@ public class SubjectsApiController {
                     it.setStatus(cascadeChildStatus);
                     it.setUpdater(currentUser);
                     it.setUpdatedDate(now);
-                    itemDataDAO.update(it);
+                    // Not update(): that clears the value's provenance.
+                    itemDataDAO.updateStatusOnly(it);
                 }
             }
         }

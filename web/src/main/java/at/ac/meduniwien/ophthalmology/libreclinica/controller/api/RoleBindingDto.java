@@ -21,6 +21,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * <p>{@code role} is the SPA's UserRole union string (resolved via
  * {@link RoleMapper}); {@code active} reflects {@code status_id ==
  * AVAILABLE}.
+ *
+ * <p>{@code legacyRole} is {@code "ra"} or {@code "ra2"} when the
+ * binding holds one of the two legacy data entry roles, and null
+ * otherwise. {@code role} projects both as Investigator, which they are
+ * not, so a client shows {@code legacyRole} when it is set.
  */
 @Schema(name = "RoleBindingDto")
 public record RoleBindingDto(
@@ -29,5 +34,8 @@ public record RoleBindingDto(
         String studyName,
         String siteLabel,
         String role,
-        boolean active
+        boolean active,
+        @Schema(nullable = true, allowableValues = {"ra", "ra2"},
+                description = "The legacy data entry role the binding holds, or null.")
+        String legacyRole
 ) {}

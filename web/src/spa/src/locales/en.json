@@ -150,6 +150,12 @@
     },
     "queue": {
       "loading": "Count is loading"
+    },
+    "studyMetadata": {
+      "title": "Study metadata (ODM)",
+      "description": "Download the study's design as a CDISC ODM 1.3 file.",
+      "downloading": "Downloading…",
+      "failed": "The download failed. Please try again."
     }
   },
   "common": {
@@ -2352,7 +2358,12 @@
       "rolesForNewStudy": "Roles for the new study",
       "saveError": "Saving roles failed. Please try again.",
       "savedToast": "Roles updated.",
-      "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
+      "auditNote": "All grants, role changes, and revocations are recorded in the audit trail.",
+      "legacyRole": {
+        "ra": "Data Entry Person (legacy)",
+        "ra2": "Data Entry Person 2 (legacy)"
+      },
+      "legacyHint": "Legacy role: saving the row keeps it. Untick it to remove it; it cannot be granted again here."
     },
     "userType": {
       "label": "Account type",

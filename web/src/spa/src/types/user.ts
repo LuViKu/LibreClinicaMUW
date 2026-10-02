@@ -20,6 +20,12 @@ export type UserRole =
   | 'Administrator'
   | 'CRC' /* Clinical Research Coordinator */
 
+/**
+ * The two legacy data entry roles. The SPA neither grants nor migrates
+ * them; a binding that holds one says so in {@link RoleBinding.legacyRole}.
+ */
+export type LegacyRole = 'ra' | 'ra2'
+
 export type UserAuth =
   | 'sso'              // institutional SSO via reverse-proxy pre-auth
   | 'local'            // local username/password (legacy + sponsor monitors)
@@ -30,7 +36,7 @@ export type StudyUser =
   Omit<Required<components['schemas']['StudyUserDto']>,
        'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'
        | 'firstName' | 'lastName' | 'phone' | 'institutionalAffiliation' | 'userType'
-       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername'>
+       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername' | 'legacyRole'>
   & {
     role: UserRole
     auth: UserAuth
@@ -55,6 +61,11 @@ export type StudyUser =
     /** ISO `yyyy-MM-dd`; absent when never updated. */
     updatedDate?: string | null
     updaterUsername?: string | null
+    /**
+     * Set when the row's role is a legacy data entry role. `role` then says
+     * Investigator, which the role is not; show this instead.
+     */
+    legacyRole?: LegacyRole | null
   }
 
 /**
@@ -121,6 +132,12 @@ export interface RoleBinding {
   siteLabel: string | null
   role: UserRole
   active: boolean
+  /**
+   * Set when the binding holds a legacy data entry role. `role` then says
+   * Investigator, which the role is not: show this instead, and pass it in
+   * `legacyRoles` when saving the study's roles to keep it.
+   */
+  legacyRole?: LegacyRole | null
 }
 
 /**

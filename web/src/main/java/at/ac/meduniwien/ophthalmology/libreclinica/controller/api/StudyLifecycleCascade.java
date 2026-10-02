@@ -17,9 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Removal and restoration of a top-level study together with everything
- * under it: the SPA counterpart of {@code RemoveStudyServlet} and
- * {@code RestoreStudyServlet}.
+ * Removal and restoration of a top-level study, or of one site, together
+ * with everything under it: the SPA counterpart of
+ * {@code RemoveStudyServlet} / {@code RestoreStudyServlet} and
+ * {@code RemoveSiteServlet} / {@code RestoreSiteServlet}.
  *
  * <p><b>What it changes.</b> The same tables, to the same statuses, as the
  * servlets. The study becomes removed (5). Its sites, role bindings,
@@ -30,6 +31,12 @@ import java.util.List;
  * {@code old_status_id} and get it back, so a locked study comes back
  * locked. The other tables have no such column and come back available,
  * as they do in the servlets.
+ *
+ * <p>A site's removal ({@link #removeSite}) takes what the site servlet
+ * takes: the site becomes removed, and its role bindings, the subject
+ * maps of its own subject-group classes, its subjects with their events,
+ * event CRFs and item data, and its datasets become auto-removed. Event
+ * definitions belong to the parent study and stay as they are.
  *
  * <p><b>Where it deliberately differs from the servlets.</b>
  * <ul>
@@ -47,8 +54,31 @@ import java.util.List;
  *       subject, definition, event, event CRF or item removed on its own
  *       before the study keeps that state through removal and restore.
  *       The servlets bring back the subjects and role bindings of a
- *       removed site, the events of a removed subject and the study roles
- *       of a removed user account.</li>
+ *       removed site, the events of a removed subject, the study subjects
+ *       of a removed person and the study roles of a removed user
+ *       account. {@code RestoreSiteServlet} also makes every dataset of
+ *       the site available, including one removed on its own.</li>
+ *   <li><em>A subject map goes with its subject.</em> Removal auto-removes
+ *       only the maps of the subjects it auto-removes itself, so the map
+ *       of a subject removed on its own (or of a removed person, or on a
+ *       site removed on its own) stays live and comes back with the
+ *       subject. No subject removal touches the maps, so taking such a
+ *       map here would hide the subject's group and AI arm for good: the
+ *       restore cannot bring it back while the subject is removed, and
+ *       restoring the subject later does not either.
+ *       {@code RestoreStudyServlet} restores every auto-removed map of a
+ *       restored class, whatever its subject.</li>
+ *   <li><em>The study or site must still have the status the caller
+ *       saw.</em> The first update matches only a live study or site on
+ *       removal, a removed one on restore; when it matches nothing (a
+ *       concurrent request got there first) the whole operation fails
+ *       with {@link StatusChangedException}, so a second removal cannot
+ *       overwrite the status recorded by the first.</li>
+ *   <li><em>Subject maps of a site's own group classes.</em> The site
+ *       servlets read a status that study groups do not have, so on a site
+ *       with its own subject groups they stop there with an exception,
+ *       after the site and its roles have changed. Here those maps are
+ *       auto-removed and restored like the rest.</li>
  * </ul>
  *
  * <p>Every changed row gets {@code date_updated = now()} and
@@ -62,6 +92,32 @@ final class StudyLifecycleCascade {
     /** Neither removed (5) nor auto-removed (7). */
     private static final String LIVE = "status_id NOT IN (5, 7)";
 
+    /** Removed (5) or auto-removed (7). */
+    private static final String REMOVED = "status_id IN (5, 7)";
+
+    /**
+     * The study or site no longer has the status the operation starts
+     * from: another request removed or restored it in the meantime. The
+     * caller's transaction must roll back.
+     */
+    static final class StatusChangedException extends IllegalStateException {
+        StatusChangedException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * The person behind a study subject is not removed. Removing a person
+     * (the subject record) auto-removes their study subjects and what is
+     * under them; those stay removed with the person.
+     */
+    private static final String PERSON_LIVE =
+            "subject_id IN (SELECT subject_id FROM subject WHERE " + LIVE + ")";
+
+    /** Subject maps whose group class is one of the site's own, live classes. */
+    private static final String SITE_GROUP_CLASS = "study_group_class_id IN (SELECT study_group_class_id "
+            + "FROM study_group_class WHERE study_id = ? AND " + LIVE + ")";
+
     /**
      * The status a restored study or site returns to: the one recorded at
      * removal, or available when nothing usable was recorded.
@@ -71,6 +127,18 @@ final class StudyLifecycleCascade {
 
     /** The status a restored event CRF or item returns to. */
     private static final String RECORDED_STATUS = "COALESCE(NULLIF(old_status_id, 0), 1)";
+
+    /** What a site removal or restore changed, counted per kind of row. */
+    record SiteImpact(int roleBindings,
+                      int subjects,
+                      int groupMaps,
+                      int events,
+                      int eventCrfs,
+                      int itemData,
+                      int datasets) {}
+
+    /** Event CRFs and item data changed under a set of events. */
+    private record EventData(int eventCrfs, int itemData) {}
 
     /** What a removal takes with it, counted per kind of row. */
     record Impact(List<String> siteNames,
@@ -114,20 +182,22 @@ final class StudyLifecycleCascade {
      * caller owns the transaction on {@code c}.
      */
     static Impact remove(Connection c, int studyId, int userId) throws SQLException {
-        update(c, userId, "study", "study_id", "old_status_id = status_id, status_id = 5",
-                "study_id = ?", studyId);
+        requireOne(update(c, userId, "study", "study_id", "old_status_id = status_id, status_id = 5",
+                "study_id = ? AND " + LIVE, studyId), "study", studyId);
         List<Integer> sites = update(c, userId, "study", "study_id",
                 "old_status_id = status_id, status_id = 7", "parent_study_id = ? AND " + LIVE, studyId);
         Array tree = tree(c, studyId, sites);
 
         int roles = update(c, userId, "study_user_role", "study_id", "status_id = 7",
                 "study_id = ANY(?) AND " + LIVE, tree).size();
-        int subjects = update(c, userId, "study_subject", "study_subject_id", "status_id = 7",
-                "study_id = ANY(?) AND " + LIVE, tree).size();
+        List<Integer> subjects = update(c, userId, "study_subject", "study_subject_id", "status_id = 7",
+                "study_id = ANY(?) AND " + LIVE, tree);
         List<Integer> groups = update(c, userId, "study_group_class", "study_group_class_id", "status_id = 7",
                 "study_id = ANY(?) AND " + LIVE, tree);
+        // Only the maps of the subjects removed here: see the class comment.
         update(c, userId, "subject_group_map", "subject_group_map_id", "status_id = 7",
-                "study_group_class_id = ANY(?) AND " + LIVE, array(c, groups));
+                "study_group_class_id = ANY(?) AND study_subject_id = ANY(?) AND " + LIVE,
+                array(c, groups), array(c, subjects));
 
         List<Integer> defs = update(c, userId, "study_event_definition", "study_event_definition_id",
                 "status_id = 7", "study_id = ANY(?) AND " + LIVE, tree);
@@ -137,29 +207,12 @@ final class StudyLifecycleCascade {
                 "study_event_definition_id = ANY(?) AND parent_id IS NULL AND " + LIVE, defIds);
         List<Integer> events = update(c, userId, "study_event", "study_event_id", "status_id = 7",
                 "study_event_definition_id = ANY(?) AND " + LIVE, defIds);
-        Array eventIds = array(c, events);
-
-        // Event CRFs and items record the status they had. Rows already
-        // auto-removed record that too, so that restore leaves them removed;
-        // the servlet does the same by copying every non-removed status.
-        // The already auto-removed rows go first: afterwards they could no
-        // longer be told apart from the ones this removal takes.
-        List<Integer> hiddenEventCrfs = recordAutoRemoved(c, "event_crf", "event_crf_id",
-                "study_event_id = ANY(?)", eventIds);
-        List<Integer> liveEventCrfs = update(c, userId, "event_crf", "event_crf_id",
-                "old_status_id = status_id, status_id = 7", "study_event_id = ANY(?) AND " + LIVE, eventIds);
-        List<Integer> eventCrfs = new ArrayList<>(liveEventCrfs);
-        eventCrfs.addAll(hiddenEventCrfs);
-        Array eventCrfIds = array(c, eventCrfs);
-        recordAutoRemoved(c, "item_data", "item_data_id", "event_crf_id = ANY(?)", eventCrfIds);
-        int items = update(c, userId, "item_data", "item_data_id",
-                "old_status_id = status_id, status_id = 7", "event_crf_id = ANY(?) AND " + LIVE,
-                eventCrfIds).size();
+        EventData data = autoRemoveEventData(c, userId, array(c, events));
 
         int datasets = update(c, userId, "dataset", "dataset_id", "status_id = 7",
                 "study_id = ANY(?) AND " + LIVE, tree).size();
-        return new Impact(names(c, sites), roles, subjects, groups.size(), defs.size(), events.size(),
-                liveEventCrfs.size(), items, datasets);
+        return new Impact(names(c, sites), roles, subjects.size(), groups.size(), defs.size(), events.size(),
+                data.eventCrfs(), data.itemData(), datasets);
     }
 
     /**
@@ -167,8 +220,8 @@ final class StudyLifecycleCascade {
      * caller owns the transaction on {@code c}.
      */
     static Impact restore(Connection c, int studyId, int userId) throws SQLException {
-        update(c, userId, "study", "study_id", "status_id = " + RECORDED_STUDY_STATUS,
-                "study_id = ?", studyId);
+        requireOne(update(c, userId, "study", "study_id", "status_id = " + RECORDED_STUDY_STATUS,
+                "study_id = ? AND " + REMOVED, studyId), "study", studyId);
         List<Integer> sites = update(c, userId, "study", "study_id", "status_id = " + RECORDED_STUDY_STATUS,
                 "parent_study_id = ? AND status_id = 7", studyId);
         Array tree = tree(c, studyId, sites);
@@ -179,7 +232,7 @@ final class StudyLifecycleCascade {
                         + "AND user_name IN (SELECT user_name FROM user_account WHERE " + LIVE + ")",
                 tree).size();
         int subjects = update(c, userId, "study_subject", "study_subject_id", "status_id = 1",
-                "study_id = ANY(?) AND status_id = 7", tree).size();
+                "study_id = ANY(?) AND status_id = 7 AND " + PERSON_LIVE, tree).size();
         List<Integer> groups = update(c, userId, "study_group_class", "study_group_class_id", "status_id = 1",
                 "study_id = ANY(?) AND status_id = 7", tree);
         update(c, userId, "subject_group_map", "subject_group_map_id", "status_id = 1",
@@ -199,31 +252,127 @@ final class StudyLifecycleCascade {
                 "study_event_definition_id = ANY(?) AND status_id = 7 "
                         + "AND study_subject_id IN (SELECT study_subject_id FROM study_subject WHERE " + LIVE + ")",
                 defIds);
-
-        // Rows whose recorded status is itself removed stay as they are.
-        List<Integer> eventCrfs = update(c, userId, "event_crf", "event_crf_id",
-                "status_id = " + RECORDED_STATUS,
-                "study_event_id = ANY(?) AND status_id = 7 "
-                        + "AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))",
-                array(c, events));
-        int items = update(c, userId, "item_data", "item_data_id", "status_id = " + RECORDED_STATUS,
-                "event_crf_id = ANY(?) AND status_id = 7 "
-                        + "AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))",
-                array(c, eventCrfs)).size();
+        EventData data = restoreEventData(c, userId, array(c, events));
 
         int datasets = update(c, userId, "dataset", "dataset_id", "status_id = 1",
                 "study_id = ANY(?) AND status_id = 7", tree).size();
         return new Impact(names(c, sites), roles, subjects, groups.size(), defs.size(), events.size(),
-                eventCrfs.size(), items, datasets);
+                data.eventCrfs(), data.itemData(), datasets);
+    }
+
+    /**
+     * Removes the site {@code siteId} and auto-removes what lives under it.
+     * The caller owns the transaction on {@code c}.
+     */
+    static SiteImpact removeSite(Connection c, int siteId, int userId) throws SQLException {
+        requireOne(update(c, userId, "study", "study_id", "old_status_id = status_id, status_id = 5",
+                "study_id = ? AND " + LIVE, siteId), "site", siteId);
+        int roles = update(c, userId, "study_user_role", "study_id", "status_id = 7",
+                "study_id = ? AND " + LIVE, siteId).size();
+        List<Integer> subjects = update(c, userId, "study_subject", "study_subject_id", "status_id = 7",
+                "study_id = ? AND " + LIVE, siteId);
+        // Only the maps of the subjects removed here: see the class comment.
+        int maps = update(c, userId, "subject_group_map", "subject_group_map_id", "status_id = 7",
+                SITE_GROUP_CLASS + " AND study_subject_id = ANY(?) AND " + LIVE,
+                siteId, array(c, subjects)).size();
+        // The servlet reaches events through the subjects, not the definitions.
+        List<Integer> events = update(c, userId, "study_event", "study_event_id", "status_id = 7",
+                "study_subject_id = ANY(?) AND " + LIVE, array(c, subjects));
+        EventData data = autoRemoveEventData(c, userId, array(c, events));
+        int datasets = update(c, userId, "dataset", "dataset_id", "status_id = 7",
+                "study_id = ? AND " + LIVE, siteId).size();
+        return new SiteImpact(roles, subjects.size(), maps, events.size(), data.eventCrfs(), data.itemData(),
+                datasets);
+    }
+
+    /**
+     * Restores the site {@code siteId} and what its removal auto-removed.
+     * The caller owns the transaction on {@code c}, and refuses a site whose
+     * parent study is removed, as {@code RestoreSiteServlet} does.
+     */
+    static SiteImpact restoreSite(Connection c, int siteId, int userId) throws SQLException {
+        requireOne(update(c, userId, "study", "study_id", "status_id = " + RECORDED_STUDY_STATUS,
+                "study_id = ? AND " + REMOVED, siteId), "site", siteId);
+        // A removed account keeps its auto-removed roles until the account is restored.
+        int roles = update(c, userId, "study_user_role", "study_id", "status_id = 1",
+                "study_id = ? AND status_id = 7 "
+                        + "AND user_name IN (SELECT user_name FROM user_account WHERE " + LIVE + ")",
+                siteId).size();
+        List<Integer> subjects = update(c, userId, "study_subject", "study_subject_id", "status_id = 1",
+                "study_id = ? AND status_id = 7 AND " + PERSON_LIVE, siteId);
+        int maps = update(c, userId, "subject_group_map", "subject_group_map_id", "status_id = 1",
+                SITE_GROUP_CLASS + " AND status_id = 7 "
+                        + "AND study_subject_id IN (SELECT study_subject_id FROM study_subject WHERE " + LIVE + ")",
+                siteId).size();
+        // An event of a definition removed on its own stays with the definition.
+        List<Integer> events = update(c, userId, "study_event", "study_event_id", "status_id = 1",
+                "study_subject_id = ANY(?) AND status_id = 7 AND study_event_definition_id IN "
+                        + "(SELECT study_event_definition_id FROM study_event_definition WHERE " + LIVE + ")",
+                array(c, subjects));
+        EventData data = restoreEventData(c, userId, array(c, events));
+        int datasets = update(c, userId, "dataset", "dataset_id", "status_id = 1",
+                "study_id = ? AND status_id = 7", siteId).size();
+        return new SiteImpact(roles, subjects.size(), maps, events.size(), data.eventCrfs(), data.itemData(),
+                datasets);
     }
 
     /* ------------------------------------------------------------------ */
 
+    /**
+     * Auto-removes the event CRFs and item data under {@code eventIds}.
+     *
+     * <p>They record the status they had. Rows already auto-removed record
+     * that too, so that restore leaves them removed; the servlets do the
+     * same by copying every non-removed status. The already auto-removed
+     * rows go first: afterwards they could no longer be told apart from
+     * the ones this removal takes.
+     */
+    private static EventData autoRemoveEventData(Connection c, int userId, Array eventIds) throws SQLException {
+        List<Integer> hiddenEventCrfs = recordAutoRemoved(c, "event_crf", "event_crf_id",
+                "study_event_id = ANY(?)", eventIds);
+        List<Integer> liveEventCrfs = update(c, userId, "event_crf", "event_crf_id",
+                "old_status_id = status_id, status_id = 7", "study_event_id = ANY(?) AND " + LIVE, eventIds);
+        List<Integer> eventCrfs = new ArrayList<>(liveEventCrfs);
+        eventCrfs.addAll(hiddenEventCrfs);
+        Array eventCrfIds = array(c, eventCrfs);
+        recordAutoRemoved(c, "item_data", "item_data_id", "event_crf_id = ANY(?)", eventCrfIds);
+        int items = update(c, userId, "item_data", "item_data_id",
+                "old_status_id = status_id, status_id = 7", "event_crf_id = ANY(?) AND " + LIVE,
+                eventCrfIds).size();
+        return new EventData(liveEventCrfs.size(), items);
+    }
+
+    /**
+     * Brings back the event CRFs and item data under {@code eventIds} that a
+     * removal took. Rows whose recorded status is itself removed stay as
+     * they are.
+     */
+    private static EventData restoreEventData(Connection c, int userId, Array eventIds) throws SQLException {
+        List<Integer> eventCrfs = update(c, userId, "event_crf", "event_crf_id",
+                "status_id = " + RECORDED_STATUS,
+                "study_event_id = ANY(?) AND status_id = 7 "
+                        + "AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))",
+                eventIds);
+        int items = update(c, userId, "item_data", "item_data_id", "status_id = " + RECORDED_STATUS,
+                "event_crf_id = ANY(?) AND status_id = 7 "
+                        + "AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))",
+                array(c, eventCrfs)).size();
+        return new EventData(eventCrfs.size(), items);
+    }
+
     /** Changes the matching rows and returns their ids. */
     private static List<Integer> update(Connection c, int userId, String table, String idColumn,
-                                        String set, String where, Object param) throws SQLException {
+                                        String set, String where, Object... params) throws SQLException {
         return ids(c, "UPDATE " + table + " SET " + set + ", date_updated = now(), update_id = ? WHERE "
-                + where + " RETURNING " + idColumn, userId, param);
+                + where + " RETURNING " + idColumn, userId, params);
+    }
+
+    /** Fails the operation unless the study or site row changed: see {@link StatusChangedException}. */
+    private static void requireOne(List<Integer> changed, String kind, int id) {
+        if (changed.isEmpty()) {
+            throw new StatusChangedException("The " + kind + " (id " + id
+                    + ") was removed or restored by another request; nothing was changed");
+        }
     }
 
     /**
@@ -243,12 +392,12 @@ final class StudyLifecycleCascade {
         return ids(c, "SELECT " + idColumn + " FROM " + table + " WHERE " + where, null, param);
     }
 
-    private static List<Integer> ids(Connection c, String sql, Integer userId, Object param)
+    private static List<Integer> ids(Connection c, String sql, Integer userId, Object... params)
             throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             int i = 1;
             if (userId != null) ps.setInt(i++, userId);
-            ps.setObject(i, param);
+            for (Object param : params) ps.setObject(i++, param);
             List<Integer> out = new ArrayList<>();
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) out.add(rs.getInt(1));

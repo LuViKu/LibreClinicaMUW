@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
 import type { StudyUser, UserAuth, UserRole } from '@/types/user'
 import { formatDate } from '@/lib/dateFormat'
+import { userRoleLabelKey } from '@/lib/userRoleLabel'
 
 const { t } = useI18n()
 const users = useUsersStore()
@@ -284,7 +285,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
             <div class="text-xs text-slate-500 font-mono">{{ u.username }}<span v-if="u.email"> · {{ u.email }}</span></div>
           </td>
           <td class="px-3 py-2">
-            <StatusPill :variant="roleVariant(u.role)">{{ t(`manageUsers.role.${u.role}`) }}</StatusPill>
+            <StatusPill :variant="u.legacyRole ? 'neutral' : roleVariant(u.role)">{{ t(userRoleLabelKey(u)) }}</StatusPill>
           </td>
           <td class="px-3 py-2 text-slate-600">{{ u.siteLabel ?? t('manageUsers.studyWide') }}</td>
           <td class="px-3 py-2">

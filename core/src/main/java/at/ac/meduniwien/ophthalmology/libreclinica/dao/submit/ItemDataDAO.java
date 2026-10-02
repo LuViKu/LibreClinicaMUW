@@ -255,6 +255,28 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         return idb;
     }
 
+    /**
+     * Changes only the item's status, stamped with its updater. For the
+     * cascades that hide or show a value (an event cancelled or restored, a
+     * subject removed or restored, an event definition restored, locked or
+     * unlocked): unlike {@link #update}, the path for writing a value, it
+     * leaves the value and its provenance alone.
+     */
+    public ItemDataBean updateStatusOnly(ItemDataBean idb) {
+        idb.setActive(false);
+        HashMap<Integer, Object> variables = new HashMap<>();
+        variables.put(Integer.valueOf(1), Integer.valueOf(idb.getStatus().getId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(idb.getUpdaterId()));
+        variables.put(Integer.valueOf(3), Integer.valueOf(idb.getId()));
+        this.executeUpdate(digester.getQuery("updateStatusOnly"), variables);
+
+        if (isQuerySuccessful()) {
+            idb.setActive(true);
+        }
+
+        return idb;
+    }
+
     /*
      * current_df_string= yyyy-MM-dd oc_df_string = yyyy-mm-dd local_df_string = dd-MMM-yyyy
      */

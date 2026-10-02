@@ -4,8 +4,9 @@
  * Pins: sites are listed under their study; removed studies are listed
  * with their status and offer Restore instead of Remove; removal shows
  * what it will take (the server's count) and needs a reason before it
- * posts; sites are not removed here; every row offers the ODM metadata
- * download; a refusal from the server is shown, not swallowed.
+ * posts, and only once that count has loaded; sites are not removed here;
+ * every row offers the ODM metadata download; a refusal from the server
+ * (of the list or of a removal) is shown, not swallowed.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -137,6 +138,51 @@ describe('AdminStudiesView', () => {
     })
     // The list is reloaded afterwards.
     expect(vi.mocked(apiGet).mock.calls.filter(([p]) => p === '/pages/api/v1/admin/studies')).toHaveLength(2)
+    w.unmount()
+  })
+
+  it('does not remove a study whose removal count failed to load', async () => {
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path === '/pages/api/v1/admin/studies') return STUDIES
+      throw new ApiError(500, 'Server Error', { message: 'preview failed' })
+    })
+    vi.mocked(apiPost).mockResolvedValue({})
+    const w = await mountView()
+    ;(document.body.querySelector('[data-testid="remove-S_ALPHA"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="study-removal-impact"]')).toBeNull()
+
+    const reason = document.body.querySelector('#study-lifecycle-reason') as HTMLTextAreaElement
+    reason.value = 'Study terminated by the sponsor'
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+    const confirm = document.body.querySelector('[data-testid="study-lifecycle-confirm"]') as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    confirm.click()
+    await flushPromises()
+    expect(apiPost).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
+  it('shows the server’s refusal of a removal and keeps the dialog open', async () => {
+    vi.mocked(apiPost).mockRejectedValue(
+      new ApiError(409, 'Conflict', { message: 'Study was removed by another request; nothing was changed.' }),
+    )
+    const w = await mountView()
+    ;(document.body.querySelector('[data-testid="remove-S_ALPHA"]') as HTMLButtonElement).click()
+    await flushPromises()
+    const reason = document.body.querySelector('#study-lifecycle-reason') as HTMLTextAreaElement
+    reason.value = 'Study terminated by the sponsor'
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+    ;(document.body.querySelector('[data-testid="study-lifecycle-confirm"]') as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    expect(document.body.textContent).toContain('Study was removed by another request; nothing was changed.')
+    // Still open, and the list was not reloaded as after a success.
+    expect(document.body.querySelector('[data-testid="study-lifecycle-confirm"]')).not.toBeNull()
+    expect(vi.mocked(apiGet).mock.calls.filter(([p]) => p === '/pages/api/v1/admin/studies')).toHaveLength(1)
     w.unmount()
   })
 

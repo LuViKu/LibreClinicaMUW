@@ -251,6 +251,17 @@
 		<sql>UPDATE item_data SET status_id=? WHERE item_data_id=?</sql>
 	</query>
 	<query>
+		<name>updateStatusOnly</name>
+		<!--
+		  A status change (an event cancelled, a subject removed, a definition
+		  locked) hides or shows a value; it does not author it. Unlike `update`,
+		  the path for writing a value, it leaves the value and its provenance
+		  (source_kind and the source ids) alone. It stamps the row, so the
+		  audit trigger names who made the change.
+		-->
+		<sql>UPDATE item_data SET status_id=?, date_updated=NOW(), update_id=? WHERE item_data_id=?</sql>
+	</query>
+	<query>
 		<name>findAllByEventCRFIdAndItemGroupId</name>
 		<sql>select id.* 
 			from item_data id 

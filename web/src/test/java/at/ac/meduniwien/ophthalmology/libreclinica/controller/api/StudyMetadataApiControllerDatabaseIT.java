@@ -52,8 +52,9 @@ import org.springframework.web.context.support.StaticWebApplicationContext;
  * {@code GET /api/v1/studies/{oid}/metadata} against the legacy
  * {@code DownloadStudyMetadataServlet}: for the same study both must
  * produce the same ODM document, apart from the two header attributes
- * that carry the generation time. Plus the access gate: sysadmin or a
- * director / coordinator of the study.
+ * that carry the generation time. Plus the access gate, which is the
+ * servlet's: a system administrator, or anyone whose active role on the
+ * study (or, for a site, on its parent) lets them view the study's data.
  */
 class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
@@ -62,14 +63,22 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
     private static final CoreResources CORE = Mockito.mock(CoreResources.class);
 
     @BeforeAll
-    static void seedOtherStudy() throws SQLException {
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO study (unique_identifier, name, summary, date_created, owner_id, type_id, "
-                             + "status_id, old_status_id, principal_investigator, protocol_type, sponsor, oc_oid) "
-                             + "VALUES ('meta-other', 'Metadata other', '', now(), 1, 1, 1, 1, 'PI', "
-                             + "'observational', 'MUW', 'S_META_OTHER')")) {
-            ps.executeUpdate();
+    static void seed() throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            insertStudy(c, null, "meta-other", "Metadata other", "S_META_OTHER");
+            int site = insertStudy(c, 1, "meta-site", "Metadata site", "S_META_SITE");
+            // The two data entry roles the SPA does not grant, still held by legacy accounts.
+            insertUser(c, "meta_ra");
+            insertRole(c, "meta_ra", 1, "ra", 1);
+            insertUser(c, "meta_ra2");
+            insertRole(c, "meta_ra2", 1, "ra2", 1);
+            insertUser(c, "meta_site_only");
+            insertRole(c, "meta_site_only", site, "Investigator", 1);
+            insertUser(c, "meta_removed_role");
+            insertRole(c, "meta_removed_role", 1, "Investigator", 5);
+            // An ordinary account holding the study-level Administrator role.
+            insertUser(c, "meta_admin_role");
+            insertRole(c, "meta_admin_role", 1, "admin", 1);
         }
     }
 
@@ -94,22 +103,46 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
     }
 
     @Test
-    void aStudyDirectorOrCoordinatorOfTheStudyMayDownload() throws Exception {
-        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("manual_dm")))
-                .andExpect(status().isOk());
-        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("manual_crc")))
-                .andExpect(status().isOk());
+    void everyRoleThatMayViewTheStudysDataMayDownloadItsDesign() throws Exception {
+        for (String name : new String[] {"manual_dm", "manual_crc", "manual_investigator", "manual_monitor",
+                "meta_ra", "meta_ra2"}) {
+            mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user(name)))
+                    .andExpect(status().isOk());
+        }
     }
 
     @Test
-    void otherRolesAndOtherStudiesAreRefused() throws Exception {
-        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("manual_investigator")))
+    void aSiteIsOpenToItsOwnRolesAndToThoseOfItsParent() throws Exception {
+        mockMvc().perform(get("/api/v1/studies/S_META_SITE/metadata").session(user("meta_site_only")))
+                .andExpect(status().isOk());
+        mockMvc().perform(get("/api/v1/studies/S_META_SITE/metadata").session(user("manual_monitor")))
+                .andExpect(status().isOk());
+        // A site role does not reach up to the parent study.
+        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("meta_site_only")))
                 .andExpect(status().isForbidden());
-        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("manual_monitor")))
-                .andExpect(status().isForbidden());
-        // A director of the Default Study has no say over another study.
+    }
+
+    @Test
+    void callersWithoutAnActiveRoleOnTheStudyAreRefused() throws Exception {
+        // A role on the Default Study gives nothing on another study.
         mockMvc().perform(get("/api/v1/studies/S_META_OTHER/metadata").session(user("manual_dm")))
                 .andExpect(status().isForbidden());
+        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("meta_removed_role")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theStudyLevelAdministratorRoleDoesNotViewTheStudysData() throws Exception {
+        // SubmitDataServlet.mayViewData leaves out the "admin" role.
+        mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(user("meta_admin_role")))
+                .andExpect(status().isForbidden());
+        // Nor does the parent's "admin" binding open one of its sites.
+        mockMvc().perform(get("/api/v1/studies/S_META_SITE/metadata").session(user("meta_admin_role")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unknownStudiesAndAnonymousCallersAreRefused() throws Exception {
         mockMvc().perform(get("/api/v1/studies/S_NO_SUCH_STUDY/metadata").session(sysadmin()))
                 .andExpect(status().isNotFound());
         mockMvc().perform(get("/api/v1/studies/S_DEFAULTS1/metadata").session(new MockHttpSession()))
@@ -183,5 +216,49 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
         ub.setName(name);
         session.setAttribute("userBean", ub);
         return session;
+    }
+
+    private static int insertStudy(Connection c, Integer parent, String uid, String name, String oid)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO study (parent_study_id, unique_identifier, name, summary, date_created, owner_id, "
+                        + "type_id, status_id, old_status_id, principal_investigator, protocol_type, sponsor, oc_oid) "
+                        + "VALUES (?, ?, ?, '', now(), 1, 1, 1, 1, 'PI', 'observational', 'MUW', ?) "
+                        + "RETURNING study_id")) {
+            if (parent == null) ps.setNull(1, java.sql.Types.INTEGER); else ps.setInt(1, parent);
+            ps.setString(2, uid);
+            ps.setString(3, name);
+            ps.setString(4, oid);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    private static void insertUser(Connection c, String name) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO user_account (user_name, passwd, first_name, last_name, email, active_study, "
+                        + "institutional_affiliation, status_id, owner_id, date_created, user_type_id, enabled, "
+                        + "account_non_locked, lock_counter, run_webservices, authtype, enable_api_key) "
+                        + "VALUES (?, 'x', 'F', 'L', ?, 1, 'MUW', 1, 1, now(), 2, true, true, 0, false, "
+                        + "'STANDARD', false)")) {
+            ps.setString(1, name);
+            ps.setString(2, name + "@example.invalid");
+            ps.executeUpdate();
+        }
+    }
+
+    private static void insertRole(Connection c, String user, int studyId, String role, int statusId)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, user_name) "
+                        + "VALUES (?, ?, ?, 1, now(), ?)")) {
+            ps.setString(1, role);
+            ps.setInt(2, studyId);
+            ps.setInt(3, statusId);
+            ps.setString(4, user);
+            ps.executeUpdate();
+        }
     }
 }

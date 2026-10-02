@@ -301,8 +301,10 @@ public class MeApiController {
      * they have one (the highest-ranked, as for every user); on a site
      * without a binding of their own, the role they hold on the parent
      * study; otherwise none, the legacy "invalid" role. So checks on the
-     * study role (signing, reopening a CRF, source-data verification) do
-     * not pass for an unbound administrator, while checks that admit every
+     * study role (signing, reopening a CRF, source-data verification) and
+     * data entry ({@link DataEntryRoleGuard}: enrolling, scheduling, CRF
+     * start, save and completion) do not pass for an unbound
+     * administrator, while checks that admit every
      * system administrator whatever their study role (study settings, data
      * import and export) do, as in the corresponding legacy servlets.
      * Legacy {@code ChangeStudyServlet} lists only bound studies, but

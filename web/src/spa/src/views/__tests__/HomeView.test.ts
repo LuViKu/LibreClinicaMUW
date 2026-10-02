@@ -18,6 +18,10 @@ import { createI18n } from 'vue-i18n'
 // Stub the API client so the per-store .load() actions resolve to
 // empty arrays. The landing doesn't assert on the badge counts —
 // only on which cards render — so we don't need a richer stub.
+vi.mock('@/api/download', () => ({
+  apiDownload: vi.fn().mockResolvedValue({ filename: 'metadata.xml', bytes: 1 }),
+}))
+
 vi.mock('@/api/client', () => ({
   apiGet: vi.fn().mockResolvedValue([]),
   apiPost: vi.fn().mockResolvedValue({}),
@@ -27,6 +31,7 @@ vi.mock('@/api/client', () => ({
   ApiNetworkError: class ApiNetworkError extends Error {},
 }))
 
+import { apiDownload } from '@/api/download'
 import HomeView from '@/views/HomeView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSdvStore } from '@/stores/sdv'
@@ -359,5 +364,46 @@ describe('HomeView dashboard', () => {
     const admin = mountWith(['Administrator'])
     await admin.vm.$nextTick()
     expect(admin.find('[data-testid="home-platform-workspaces"]').exists()).toBe(true)
+  })
+})
+
+/**
+ * The study metadata download: the study's design as CDISC ODM, which the
+ * legacy Download Study Metadata page gives. Offered to the roles the
+ * endpoint admits, on the study the operator is working in.
+ */
+describe('HomeView study metadata', () => {
+  it('offers the download to every role that may view the study data', async () => {
+    for (const role of ['Investigator', 'CRC', 'Monitor', 'Data Manager'] as Role[]) {
+      const w = mountWith([role])
+      await flushPromises()
+      expect(w.find('[data-testid="home-study-metadata"]').exists(), role).toBe(true)
+      w.unmount()
+    }
+  })
+
+  it('does not offer it to a study-level Administrator, and offers it to a system administrator', async () => {
+    const w = mountWith(['Administrator'])
+    await flushPromises()
+    expect(w.find('[data-testid="home-study-metadata"]').exists()).toBe(false)
+    w.unmount()
+
+    const w2 = mountWith(['Administrator'], 'SYSADMIN')
+    await flushPromises()
+    expect(w2.find('[data-testid="home-study-metadata"]').exists()).toBe(true)
+    w2.unmount()
+  })
+
+  it('downloads the metadata of the active study', async () => {
+    vi.mocked(apiDownload).mockClear()
+    const w = mountWith(['Monitor'])
+    await flushPromises()
+    await w.find('[data-testid="home-study-metadata"]').trigger('click')
+    await flushPromises()
+    expect(apiDownload).toHaveBeenCalledWith(
+      '/pages/api/v1/studies/S_DEFAULTS1/metadata',
+      'S_DEFAULTS1_metadata.xml',
+    )
+    w.unmount()
   })
 })

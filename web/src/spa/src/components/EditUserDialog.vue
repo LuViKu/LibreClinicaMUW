@@ -12,6 +12,7 @@ import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import type { AccountType } from '@/types/auth'
 import type { StudyUser, UpdateUserInput } from '@/types/user'
+import { userRoleLabelKey } from '@/lib/userRoleLabel'
 
 /**
  * Phase E A7.2 — Edit User dialog.
@@ -199,7 +200,7 @@ function close() {
         </div>
         <div>
           <FieldLabel for="edit-user-role">{{ t('manageUsers.edit.role') }}</FieldLabel>
-          <TextInput id="edit-user-role" :model-value="props.user.role" disabled />
+          <TextInput id="edit-user-role" :model-value="t(userRoleLabelKey(props.user))" disabled />
           <p class="text-xs text-slate-500 mt-1">{{ t('manageUsers.edit.roleNote') }}</p>
         </div>
         <div>
