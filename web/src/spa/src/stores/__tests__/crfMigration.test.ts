@@ -170,4 +170,13 @@ describe('migrationLogCsv', () => {
       + 'Event_CRF_ID,SDV_Cleared,Subject_Signature_Removed,Event_Signature_Removed,CRF_Signature_Removed')
     expect(line).toBe('Adverse events,v1,v2,M-001,Default Study,"V1, Inclusion",1,7,true,false,false,true')
   })
+
+  it('writes a subject label or a name that starts like a formula as text', () => {
+    const csv = migrationLogCsv({
+      ...RESULT,
+      log: [{ ...ROW, studySubjectLabel: '=1+2', siteName: '@Site', eventName: '-V1' }],
+    })
+    const [, line] = csv.trim().split('\r\n')
+    expect(line).toBe("Adverse events,v1,v2,'=1+2,'@Site,'-V1,1,7,true,false,false,true")
+  })
 })

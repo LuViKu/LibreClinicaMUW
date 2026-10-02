@@ -7,6 +7,7 @@ import type {
   EventCrfMigrationRequest,
   EventCrfMigrationResult,
 } from '@/types/crfMigration'
+import { csvCell } from '@/lib/csv'
 
 /**
  * Moving existing event CRFs to another version of their CRF: options, then
@@ -154,11 +155,6 @@ const CSV_HEADER = [
   'CRF_Name', 'Origin_Version', 'Target_Version', 'Subject_ID', 'Site', 'Event', 'Event_Ordinal',
   'Event_CRF_ID', 'SDV_Cleared', 'Subject_Signature_Removed', 'Event_Signature_Removed', 'CRF_Signature_Removed',
 ]
-
-function csvCell(value: string | number | boolean): string {
-  const s = String(value)
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
 
 /**
  * The run's log as CSV: the legacy report's columns (CRF name, origin and
