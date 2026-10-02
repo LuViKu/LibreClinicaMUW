@@ -117,6 +117,7 @@
   <include  file="migration/lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml"/>
   <include  file="migration/lc-muw-2026-09-30-login-history-index.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-type-system-setting.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-dn-stats-unanswered-threads.xml"/>
   <include  file="migration/lc-muw-2026-09-30-dde-second-pass-date.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-type-crf-field-updated.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-types-event-crf-migration.xml"/>

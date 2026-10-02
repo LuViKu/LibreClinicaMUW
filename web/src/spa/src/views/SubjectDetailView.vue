@@ -33,6 +33,12 @@ import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import ItemNoteIndicator from '@/components/ItemNoteIndicator.vue'
+import NewNoteDialog from '@/components/NewNoteDialog.vue'
+import NoteThreadDialog from '@/components/NoteThreadDialog.vue'
+import { useNotesStore } from '@/stores/notes'
+import type { DiscrepancyNote, NoteField } from '@/types/note'
+import { fieldNoteSummary, notesOnField } from '@/lib/fieldNotes'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -41,6 +47,41 @@ const subjects = useSubjectsStore()
 const events = useEventsStore()
 const auth = useAuthStore()
 const confirm = useConfirm()
+const notes = useNotesStore()
+
+/*
+ * Queries on the subject's own fields, as legacy View Subject flags sex,
+ * date of birth and enrolment date. Every role may raise one; a Monitor
+ * reviews the record here.
+ */
+const SUBJECT_FIELDS = {
+  gender: { entityType: 'subject', column: 'gender' },
+  dateOfBirth: { entityType: 'subject', column: 'date_of_birth' },
+  enrolledOn: { entityType: 'studySub', column: 'enrollment_date' },
+} satisfies Record<string, NoteField>
+
+const subjectNotes = ref<DiscrepancyNote[]>([])
+async function loadSubjectNotes(): Promise<void> {
+  const id = subject.value?.id
+  subjectNotes.value = id ? await notes.notesForSubject(id) : []
+}
+function fieldSummary(field: NoteField) {
+  return fieldNoteSummary(notesOnField(subjectNotes.value, field))
+}
+
+const fieldNote = ref<{ field: NoteField; label: string } | null>(null)
+const fieldThread = ref<{ noteIds: string[]; label: string } | null>(null)
+function openFieldNote(field: NoteField, label: string): void {
+  fieldNote.value = { field, label }
+}
+function openFieldThread(noteIds: string[], label: string): void {
+  fieldThread.value = { noteIds, label }
+}
+async function onFieldNotesChanged(): Promise<void> {
+  fieldNote.value = null
+  fieldThread.value = null
+  await loadSubjectNotes()
+}
 
 /**
  * 2026-06-21 round 6 follow-up — local click-outside directive used by
@@ -666,7 +707,9 @@ const canTransitionEye = computed(() => {
  * says whether the session's binding is one. Without that, the link
  * shows as before and the sign page's preflight explains a refusal.
  */
-const canSignSubject = computed(() => auth.permits('signSubject') ?? true)
+// Signing follows EventEditAuthorization#roleMayEdit on the server (the roles
+// that edit a subject; a Monitor gets no link) and what /me permits.
+const canSignSubject = computed(() => canEdit.value && (auth.permits('signSubject') ?? true))
 
 function eyeInScope(eye: 'OD' | 'OS'): boolean {
   const studyEye = subject.value?.studyEye ?? null
@@ -787,6 +830,9 @@ watch(subjectId, (next, prev) => {
 })
 
 const subject = computed(() => subjects.selected)
+
+// The field indicators follow the subject on the page.
+watch(() => subject.value?.id, () => { void loadSubjectNotes() }, { immediate: true })
 
 /**
  * P3.0 — panels contributed by the enrolled study modules.
@@ -974,8 +1020,8 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           <dl v-if="!editing" class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.subjectId') }}</dt><dd class="font-medium">{{ subject.id }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.secondaryId') }}</dt><dd class="font-medium">{{ subject.secondaryId ?? '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.gender') }}</dt><dd class="font-medium">{{ genderLabel(subject.gender) }}</dd></div>
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.gender') }}</dt><dd class="font-medium">{{ genderLabel(subject.gender) }}<ItemNoteIndicator data-testid="field-note-gender" :summary="fieldSummary(SUBJECT_FIELDS.gender)" @create="openFieldNote(SUBJECT_FIELDS.gender, t('addSubject.field.gender'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.gender'))" /></dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}<ItemNoteIndicator data-testid="field-note-date_of_birth" :summary="fieldSummary(SUBJECT_FIELDS.dateOfBirth)" @create="openFieldNote(SUBJECT_FIELDS.dateOfBirth, t('addSubject.field.yearOfBirth'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.yearOfBirth'))" /></dd></div>
             <div class="flex justify-between items-baseline gap-3">
               <dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt>
               <dd class="font-medium flex items-baseline gap-2">
@@ -1009,7 +1055,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 </button>
               </dd>
             </div>
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.enrolledOn') }}</dt><dd class="font-medium font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.enrolledOn') }}</dt><dd class="font-medium font-mono text-xs">{{ formatDate(subject.enrolledOn) }}<ItemNoteIndicator data-testid="field-note-enrollment_date" :summary="fieldSummary(SUBJECT_FIELDS.enrolledOn)" @create="openFieldNote(SUBJECT_FIELDS.enrolledOn, t('addSubject.field.enrolledOn'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.enrolledOn'))" /></dd></div>
             <!-- Phase E.6 Tier 1 + per-eye cohort transition workflow —
                  ophthalmology study-eye block. Each eye row carries a
                  Transition button when the operator role permits AND
@@ -1695,6 +1741,28 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       :error-message="transitionError"
       @submit="onTransitionSubmit"
       @cancel="dialogState = null"
+    />
+
+    <!-- Queries on the subject's fields (sex, date of birth, enrolment). -->
+    <NewNoteDialog
+      v-if="fieldNote && subject"
+      :open="true"
+      :subject-id="subject.id"
+      item-oid=""
+      event-crf-oid=""
+      :item-label="fieldNote.label"
+      :field="fieldNote.field"
+      @close="fieldNote = null"
+      @created="onFieldNotesChanged"
+    />
+    <NoteThreadDialog
+      v-if="fieldThread && subject"
+      :parent-note-ids="fieldThread.noteIds"
+      :subject-id="subject.id"
+      :item-oid="fieldThread.label"
+      :item-label="fieldThread.label"
+      @close="fieldThread = null"
+      @updated="onFieldNotesChanged"
     />
   </div>
 </template>

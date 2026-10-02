@@ -633,12 +633,13 @@
       "eventDate": "Visitendatum",
       "crf": "CRF",
       "requirement": "Anforderung",
-      "status": "Status"
+      "status": "Status",
+      "openQueries": "Offene Rückfragen",
+      "lastUpdated": "Zuletzt geändert"
     },
     "action": {
       "markAsVerified": "{count} als verifiziert markieren (SDV)",
       "cancelSelection": "Abbrechen",
-      "addQuery": "Rückfrage stellen",
       "openCrf": "CRF öffnen",
       "unverify": "Verifizierung zurücknehmen"
     },
@@ -658,22 +659,26 @@
       "title": "Als verifiziert markieren?",
       "body": "Alle {count} ausgewählten CRFs werden auf »Verifiziert« (SDV) gesetzt. Der Vorgang wird im Audit Trail dokumentiert.",
       "note": "Werden Daten an einem verifizierten CRF später geändert, wird der SDV-Status automatisch auf »Ausstehend« zurückgesetzt.",
-      "auditNote": "Audit-Trail-Eintrag mit monitor_demo + Zeitstempel.",
+      "auditNote": "Der Audit Trail hält {user} und den Zeitpunkt fest.",
       "cta": "{count} als verifiziert markieren"
     },
-    "query": {
-      "title": "Anmerkung hinzufügen",
-      "noteType": "Art der Anmerkung",
-      "descriptionLabel": "Beschreibung",
-      "descriptionPlaceholder": "Was ist klärungsbedürftig? Quelldokument-Referenz angeben…",
-      "submit": "Rückfrage absenden",
-      "auditTrailTell": "Audit-Trail-Eintrag mit monitor_demo · Zeitstempel",
-      "type": {
-        "query": "Rückfrage",
-        "failed-validation": "Fehlgeschlagene Validierung",
-        "annotation": "Notiz",
-        "reason-for-change": "Änderungsgrund"
-      }
+    "view": {
+      "label": "Ansicht",
+      "byCrf": "Nach CRF",
+      "bySubject": "Nach Teilnehmer"
+    },
+    "bySubject": {
+      "count": "{count} Teilnehmer",
+      "complete": "Abgeschlossene CRFs",
+      "verified": "Verifiziert",
+      "withQueries": "Mit offenen Rückfragen",
+      "verifiable": "Zu verifizieren",
+      "verify": "{count} CRF(s) verifizieren",
+      "allVerified": "Alle verifiziert",
+      "nothingToVerify": "Nichts zu verifizieren",
+      "confirmTitle": "Teilnehmer verifizieren?",
+      "confirmBody": "{count} CRF(s) von {subject} werden als verifiziert (SDV) markiert.",
+      "confirmScope": "Das umfasst die abgeschlossenen CRFs des Teilnehmers, die SDV erfordern. Ein CRF mit offener Rückfrage bleibt in der Liste, bis die Rückfrage geschlossen ist."
     }
   },
   "notes": {
@@ -729,16 +734,18 @@
       "export": "CSV exportieren",
       "exportCsv": "CSV exportieren",
       "exportForSubject": "CSV exportieren (Teilnehmer)",
-      "exporting": "Wird exportiert…"
+      "exporting": "Wird exportiert…",
+      "reopen": "Wieder öffnen"
     },
     "error": {
       "exportFailed": "Discrepancy-Export fehlgeschlagen"
     },
     "composer": {
       "label": {
-        "updated": "Antwort an Monitor",
+        "updated": "Antwort",
         "resolution-proposed": "Lösungsvorschlag",
-        "closed": "Schließbemerkung (optional)"
+        "closed": "Schließbemerkung (optional)",
+        "reopen": "Warum die Rückfrage wieder geöffnet wird"
       },
       "placeholder": "Antwort eingeben…",
       "placeholderClose": "Optional: Schließbemerkung…",
@@ -758,6 +765,17 @@
     },
     "email": {
       "subjectAssigned": "Rückfrage zugewiesen"
+    },
+    "field": {
+      "gender": "Geschlecht",
+      "date_of_birth": "Geburtsdatum",
+      "unique_identifier": "Personen-ID",
+      "enrollment_date": "Einschlussdatum",
+      "location": "Ort der Visite",
+      "start_date": "Visitendatum",
+      "end_date": "Ende der Visite",
+      "date_interviewed": "Datum des Interviews",
+      "interviewer_name": "Interviewer"
     }
   },
   "auditLog": {
@@ -918,7 +936,11 @@
       "statusNotApplicable": "Nicht anwendbar",
       "empty": "Noch keine Nachrichten.",
       "loadError": "Diskussion konnte nicht geladen werden.",
-      "submitError": "Änderung konnte nicht gespeichert werden."
+      "submitError": "Änderung konnte nicht gespeichert werden.",
+      "reopen": "Wieder öffnen",
+      "reassignLabel": "Neu zuweisen an (optional)",
+      "reassignPlaceholder": "Bisherige Zuweisung behalten",
+      "subjectLine": "Teilnehmer {subject} · {item}"
     },
     "bilateral": {
       "headerItem": "Merkmal",

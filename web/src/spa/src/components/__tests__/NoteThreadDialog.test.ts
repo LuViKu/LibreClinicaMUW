@@ -222,7 +222,7 @@ describe('NoteThreadDialog', () => {
     wrapper.unmount()
   })
 
-  it('shows only Close for Monitor + resolution-proposed → submits newStatus=closed', async () => {
+  it('offers a Monitor re-query and Close on a proposed resolution → Close submits newStatus=closed', async () => {
     const notes = useNotesStore()
     const proposed: DiscrepancyNote = { ...PARENT_1, status: 'resolution-proposed' }
     notes.rows = [proposed]
@@ -235,7 +235,8 @@ describe('NoteThreadDialog', () => {
     const wrapper = mountDialog({ parentNoteIds: ['n1'] })
     await flushPromises()
 
-    expect(document.body.querySelector('[data-testid="note-thread-action-respond"]')).toBeNull()
+    // Legacy offers a monitor Update Note and Close Note on the thread.
+    expect(document.body.querySelector('[data-testid="note-thread-action-respond"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="note-thread-action-propose"]')).toBeNull()
     const closeBtn = document.body.querySelector(
       '[data-testid="note-thread-action-close"]',
@@ -255,6 +256,67 @@ describe('NoteThreadDialog', () => {
     const [parentId, payload] = appendSpy.mock.calls[0]
     expect(parentId).toBe('n1')
     expect(payload.newStatus).toBe('closed')
+
+    wrapper.unmount()
+  })
+
+  it('offers a Monitor Respond and Close on a New query', async () => {
+    const notes = useNotesStore()
+    notes.rows = [PARENT_1]
+    notes.threadCache = { n1: THREAD_1 }
+    seedAuthUser('Monitor')
+
+    const wrapper = mountDialog({ parentNoteIds: ['n1'] })
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="note-thread-action-respond"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-testid="note-thread-action-close"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-testid="note-thread-action-reopen"]')).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('lets a Monitor re-open a closed query and reassign it → submits newStatus=updated', async () => {
+    const notes = useNotesStore()
+    const closed: DiscrepancyNote = { ...PARENT_1, status: 'closed' }
+    notes.rows = [closed]
+    notes.threadCache = { n1: THREAD_1 }
+    const appendSpy = vi
+      .spyOn(notes, 'appendThread')
+      .mockResolvedValue({ ...closed, status: 'updated' as NoteStatus })
+    seedAuthUser('Monitor')
+
+    const wrapper = mountDialog({ parentNoteIds: ['n1'] })
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="note-thread-action-respond"]')).toBeNull()
+    expect(document.body.querySelector('[data-testid="note-thread-action-close"]')).toBeNull()
+    const reopen = document.body.querySelector(
+      '[data-testid="note-thread-action-reopen"]',
+    ) as HTMLButtonElement
+    expect(reopen).not.toBeNull()
+    reopen.click()
+    await nextTick()
+
+    const text = document.body.querySelector(
+      '[data-testid="note-thread-composer-text"]',
+    ) as HTMLTextAreaElement
+    text.value = 'Source differs after all'
+    text.dispatchEvent(new Event('input'))
+    const assignee = document.body.querySelector(
+      '[data-testid="user-autocomplete-stub"]',
+    ) as HTMLInputElement
+    assignee.value = 'manual_investigator'
+    assignee.dispatchEvent(new Event('input'))
+    await nextTick()
+    ;(document.body.querySelector('[data-testid="note-thread-composer-submit"]') as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(appendSpy).toHaveBeenCalledWith('n1', {
+      newStatus: 'updated',
+      description: 'Source differs after all',
+      assignedTo: 'manual_investigator',
+    })
 
     wrapper.unmount()
   })

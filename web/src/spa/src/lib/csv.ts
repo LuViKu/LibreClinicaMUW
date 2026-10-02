@@ -1,15 +1,35 @@
 /**
- * One CSV cell (RFC 4180 quoting) that a spreadsheet opens as text.
- *
- * Excel, LibreOffice and Google Sheets evaluate a cell whose text starts with
- * `=`, `+`, `-` or `@` (or a tab or carriage return before one) as a formula,
- * quoted or not. Text such as a subject label typed at a site therefore gets
- * a leading `'`, which shows the value as written. Numbers and booleans are
- * written as they are.
+ * A table as a CSV download, built in the browser from what the page shows.
+ * Same conventions as the Subject Matrix export: comma-separated, CRLF line
+ * ends, and a UTF-8 BOM so Excel reads umlauts.
  */
-export function csvCell(value: unknown): string {
-  if (value == null) return ''
-  let s = String(value)
-  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+
+/**
+ * One cell, quoted when it holds a comma, a quote or a line break. Text that
+ * starts with = + - @, a tab or a carriage return gets a leading apostrophe,
+ * so a spreadsheet shows it as text instead of evaluating it as a formula;
+ * quoting alone does not stop that. Numbers are written as they are.
+ */
+export function csvCell(v: unknown): string {
+  let s = v == null ? '' : String(v)
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+/** The rows as CSV text, BOM first. */
+export function toCsv(rows: unknown[][]): string {
+  return '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n')
+}
+
+/** Offers the rows to the browser as a CSV file. */
+export function downloadCsv(filename: string, rows: unknown[][]): void {
+  const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }

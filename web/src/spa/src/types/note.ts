@@ -44,11 +44,40 @@ export interface ThreadEntry {
   createdAt: string
 }
 
+/** What a note is on, as the server names it (DiscrepancyNoteDto.entityType). */
+export type NoteEntityType = 'itemData' | 'subject' | 'studySub' | 'studyEvent' | 'eventCrf'
+
+/**
+ * A field a note can be on instead of item data, as legacy notes them:
+ * the subject's sex, date of birth, person ID; the enrolment date; a
+ * visit's location, start and end; a CRF's interview date and interviewer.
+ */
+export interface NoteField {
+  entityType: Exclude<NoteEntityType, 'itemData'>
+  /** gender, date_of_birth, unique_identifier, enrollment_date, location, start_date, … */
+  column: string
+  /** The visit, for a studyEvent field. */
+  eventId?: string
+  /** The CRF, for an eventCrf field. */
+  eventCrfOid?: string
+}
+
 export type DiscrepancyNote =
   Omit<Required<components['schemas']['DiscrepancyNoteDto']>,
     'type' | 'status' | 'assignedTo' | 'thread'
-    | 'itemLabel' | 'itemValue' | 'eventCrfOid' | 'eventName'>
+    | 'itemLabel' | 'itemValue' | 'eventCrfOid' | 'eventName'
+    | 'entityType' | 'column' | 'entityId'>
   & {
+    /*
+     * What the note is on. Typed here until types/api.ts is regenerated
+     * from the spec that carries them; optional because notes built in the
+     * SPA before a round trip do not know them.
+     */
+    entityType?: NoteEntityType | null
+    /** The field for a field note; 'value' for item data. */
+    column?: string | null
+    /** Id of the row the note is on (subject, study subject, visit, event CRF, item data). */
+    entityId?: string | null
     type: NoteType
     status: NoteStatus
     /** Assigned user id, or null when nobody is assigned. */
@@ -81,19 +110,53 @@ export type DiscrepancyNote =
 import type { UserRole } from './auth'
 
 /**
- * The user can append a reply to (or restart) a query that's awaiting
- * Investigator/CRC attention. Used to render the "Respond" button on
- * `new` / `updated` / `resolution-proposed` notes.
+ * May the role move a note from `from` to `to`? A port of
+ * `NoteTransitionMatrix.check`, whose table is authoritative. SPA roles
+ * stand for legacy ones: Investigator for investigator (ra and ra2 too),
+ * CRC for coordinator, Data Manager for director, Administrator for admin.
+ *
+ * The Monitor's rows follow legacy `ViewDiscrepancyNoteServlet`: a Monitor
+ * may update (re-query, reply, reassign) and close any open thread, and
+ * re-open a closed one. The Data Manager and Administrator re-open a closed
+ * thread too, as legacy stores their reply to one as Updated.
+ */
+export function canTransitionNote(role: UserRole, from: NoteStatus, to: NoteStatus): boolean {
+  const investigator = role === 'Investigator' || role === 'CRC'
+  const manager = role === 'Data Manager' || role === 'Administrator'
+  const monitor = role === 'Monitor'
+  // Same status: only another reply in an Updated thread.
+  if (from === to) return from === 'updated'
+  switch (from) {
+    case 'new':
+      if (to === 'updated') return investigator || manager || monitor
+      if (to === 'not-applicable') return manager
+      if (to === 'closed') return monitor
+      return false
+    case 'updated':
+      if (to === 'resolution-proposed') return investigator
+      if (to === 'not-applicable') return manager
+      if (to === 'closed') return monitor
+      return false
+    case 'resolution-proposed':
+      return (to === 'closed' || to === 'updated') && (monitor || manager)
+    case 'closed':
+      return to === 'updated' && (monitor || manager)
+    default:
+      return false
+  }
+}
+
+/**
+ * The user can answer an open thread and leave it Updated: a reply, or,
+ * for the Monitor, a re-query. Renders "Respond".
  */
 export function canRespondToNote(role: UserRole, status: NoteStatus): boolean {
-  if (role === 'Monitor') return false
-  if (status === 'closed' || status === 'not-applicable') return false
-  return (
-    role === 'Investigator' ||
-    role === 'CRC' ||
-    role === 'Data Manager' ||
-    role === 'Administrator'
-  )
+  return status !== 'closed' && canTransitionNote(role, status, 'updated')
+}
+
+/** The user can re-open a closed thread (back to Updated). Renders "Re-open". */
+export function canReopenNote(role: UserRole, status: NoteStatus): boolean {
+  return status === 'closed' && canTransitionNote(role, status, 'updated')
 }
 
 /**
@@ -102,20 +165,16 @@ export function canRespondToNote(role: UserRole, status: NoteStatus): boolean {
  * have at least one Investigator response first).
  */
 export function canResolveNote(role: UserRole, status: NoteStatus): boolean {
-  return (role === 'Investigator' || role === 'CRC') && status === 'updated'
+  return canTransitionNote(role, status, 'resolution-proposed')
 }
 
 /**
- * The user can close a `resolution-proposed` note. Closing is the
- * Monitor's prerogative (or DM/Admin override) — Investigators
- * cannot close their own resolutions, per GCP separation of
- * concerns.
+ * The user can close the note. A Monitor may close any open thread; the
+ * Data Manager and Administrator close a proposed resolution. The
+ * Investigator never closes their own resolution.
  */
 export function canCloseNote(role: UserRole, status: NoteStatus): boolean {
-  return (
-    (role === 'Monitor' || role === 'Data Manager' || role === 'Administrator') &&
-    status === 'resolution-proposed'
-  )
+  return canTransitionNote(role, status, 'closed')
 }
 
 /**

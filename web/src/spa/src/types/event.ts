@@ -97,6 +97,27 @@ export function canCancelEvent(role: UserRole, status: StudyEventStatus): boolea
   return canEditEvent(role, status)
 }
 
+/*
+ * Controls for other clinical writes, each following its server rule in
+ * ClinicalWriteAuthorization's role matrix, so the SPA hides what the API
+ * refuses. The Monitor, who may view but not change data, gets none.
+ */
+
+/** Add a subject, start a CRF, enter data: ClinicalWriteAuthorization.roleMayEnterData. */
+export function canEnterData(role: UserRole): boolean {
+  return role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator'
+}
+
+/** Restore a removed CRF: EventCrfRestoreAuthorization (coordinator, director, admin). */
+export function canRestoreCrf(role: UserRole): boolean {
+  return role === 'CRC' || role === 'Data Manager' || role === 'Administrator'
+}
+
+/** File an image to a visit or take it off one: IngestBindAuthorization. */
+export function canBindVisitImages(role: UserRole): boolean {
+  return role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator'
+}
+
 /** Phase E A4 — body of PUT /api/v1/events/{id}. */
 export type UpdateEventRequest = components['schemas']['UpdateEventRequest']
 

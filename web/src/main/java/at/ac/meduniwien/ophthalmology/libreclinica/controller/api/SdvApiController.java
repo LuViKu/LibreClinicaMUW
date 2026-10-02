@@ -21,6 +21,7 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -105,8 +106,13 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>The {@code query} override matches the legacy "any open
  * discrepancy parks SDV" semantics — it does NOT correspond to a
- * column on event_crf. The count comes from
- * {@code DiscrepancyNoteDAO.findAllParentItemNotesByEventCRF}.
+ * column on event_crf. The count covers the threads on the CRF's item
+ * data ({@code DiscrepancyNoteDAO.findAllParentItemNotesByEventCRF}) and
+ * on its header fields, the interview date and interviewer
+ * ({@code findOnlyParentEventCRFDNotesFromEventCRF}), and counts queries
+ * and failed validation checks only ({@link #countOpenQueries}). Notes on
+ * the subject, the study subject or the visit are not about one CRF's
+ * data and hold none of its CRFs.
  */
 @RestController
 @RequestMapping("/api/v1/sdv")
@@ -224,7 +230,7 @@ public class SdvApiController {
             }
 
             String requirement = requirementFromEdc(edc);
-            int openQueries = countOpenQueries(dnDao, ec.getId());
+            int openQueries = countOpenQueries(dnDao, ec);
             String status = statusForRow(ec, openQueries);
 
             String eventStartDate = evt.getDateStarted() == null
@@ -573,11 +579,26 @@ public class SdvApiController {
         };
     }
 
-    private static int countOpenQueries(DiscrepancyNoteDAO dao, int eventCrfId) {
-        ArrayList<DiscrepancyNoteBean> notes = dao.findAllParentItemNotesByEventCRF(eventCrfId);
-        if (notes == null || notes.isEmpty()) return 0;
+    /**
+     * The event CRF's open queries and failed validation checks, on its
+     * items and on its header fields. An annotation or a reason for change
+     * asks nobody anything: legacy stores both as Not Applicable, and an SPA
+     * annotation stored as New before that was fixed must not park the CRF
+     * either.
+     */
+    private static int countOpenQueries(DiscrepancyNoteDAO dao, EventCRFBean ec) {
+        ArrayList<DiscrepancyNoteBean> notes = new ArrayList<>();
+        ArrayList<DiscrepancyNoteBean> onItems = dao.findAllParentItemNotesByEventCRF(ec.getId());
+        if (onItems != null) notes.addAll(onItems);
+        ArrayList<DiscrepancyNoteBean> onHeader = dao.findOnlyParentEventCRFDNotesFromEventCRF(ec);
+        if (onHeader != null) notes.addAll(onHeader);
         int open = 0;
         for (DiscrepancyNoteBean n : notes) {
+            int type = n.getDiscrepancyNoteTypeId();
+            if (type != DiscrepancyNoteType.QUERY.getId()
+                    && type != DiscrepancyNoteType.FAILEDVAL.getId()) {
+                continue;
+            }
             int status = n.getResolutionStatusId();
             // OPEN(1), UPDATED(2), RESOLVED(3) are still actionable;
             // CLOSED(4) and NOT_APPLICABLE(5) are terminal.

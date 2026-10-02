@@ -10,7 +10,17 @@ import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 import { useEventDetailStore } from '@/stores/eventDetail'
 import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
+import { useAuthStore } from '@/stores/auth'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { canBindVisitImages, canEditEvent, canEnterData, canRestoreCrf } from '@/types/event'
+import { eventCrfLink } from '@/lib/crfLink'
+import { userRolesFromAuth } from '@/router'
+import ItemNoteIndicator from '@/components/ItemNoteIndicator.vue'
+import NewNoteDialog from '@/components/NewNoteDialog.vue'
+import NoteThreadDialog from '@/components/NoteThreadDialog.vue'
+import { useNotesStore } from '@/stores/notes'
+import type { DiscrepancyNote, NoteField } from '@/types/note'
+import { fieldNoteSummary, notesOnField } from '@/lib/fieldNotes'
 import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
 import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
@@ -31,6 +41,46 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEventDetailStore()
+const auth = useAuthStore()
+
+/*
+ * What the signed-in role may change here, as the API decides it. A Monitor
+ * opens this page to look: no start, no completion, no restore, no image
+ * removal, and the CRF opens read-only.
+ */
+const role = computed(() => auth.user?.role ?? null)
+const mayEnterData = computed(() => !!role.value && canEnterData(role.value))
+const mayRestoreCrf = computed(() => !!role.value && canRestoreCrf(role.value))
+const mayBindImages = computed(() => !!role.value && canBindVisitImages(role.value))
+function crfLink(eventCrfOid: string): string {
+  return eventCrfLink(userRolesFromAuth(auth), eventCrfOid)
+}
+
+/*
+ * Queries on the visit's date, as the legacy visit page flags it. Every
+ * role may raise one; a Monitor reviews the visit here.
+ */
+const notes = useNotesStore()
+const visitNotes = ref<DiscrepancyNote[]>([])
+const visitDateField = computed<NoteField>(() => ({
+  entityType: 'studyEvent',
+  column: 'start_date',
+  eventId: String(event.value?.eventId ?? ''),
+}))
+const visitDateSummary = computed(() =>
+  fieldNoteSummary(notesOnField(visitNotes.value, visitDateField.value, visitDateField.value.eventId)),
+)
+const visitDateNoteOpen = ref(false)
+const visitDateThread = ref<string[] | null>(null)
+async function loadVisitNotes(): Promise<void> {
+  const ev = event.value
+  visitNotes.value = ev ? await notes.notesForSubject(ev.subjectLabel) : []
+}
+async function onVisitNotesChanged(): Promise<void> {
+  visitDateNoteOpen.value = false
+  visitDateThread.value = null
+  await loadVisitNotes()
+}
 // Pluggable study-module SPI — event-detail panels slot.
 // Each entry's optional predicate(ctx) is evaluated with the current
 // event ref so a module can gate per-event without hard-coded
@@ -139,6 +189,8 @@ const markEventCompleteError = ref<string | null>(null)
 const canMarkEventComplete = computed(() => {
   const s = event.value?.status
   if (!s) return false
+  // Completing a visit edits it: EventEditAuthorization decides who may.
+  if (!role.value || !canEditEvent(role.value, s)) return false
   // Terminal-ish states block: completed (already), signed, locked,
   // stopped, skipped. Anything else may be marked complete by the
   // operator (matches the role gate on the PUT endpoint).
@@ -190,6 +242,9 @@ watch(eventId, (id) => {
 })
 
 const event = computed(() => store.event)
+
+// The visit-date indicator follows the visit on the page.
+watch(() => event.value?.eventId, () => { void loadVisitNotes() }, { immediate: true })
 
 // The ancestors of this visit, for the page header: the register and the
 // subject. The visit itself is the H1, so it is not repeated as a crumb.
@@ -331,7 +386,14 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
             <StatusPill :variant="statusVariant(event.status)">{{ t(`subjectMatrix.status.${event.status}`) }}</StatusPill>
           </h1>
           <div class="mt-1 flex items-center justify-between gap-3 flex-wrap">
-            <p class="text-xs text-slate-500 font-mono">{{ formatDate(event.dateStart) }}</p>
+            <p class="text-xs text-slate-500 font-mono">
+              {{ formatDate(event.dateStart) }}<ItemNoteIndicator
+                data-testid="field-note-start_date"
+                :summary="visitDateSummary"
+                @create="visitDateNoteOpen = true"
+                @open="(ids) => visitDateThread = ids"
+              />
+            </p>
             <!-- 2026-06-21 user-feedback round 5 — manual visit-completion
                  button. The cascade in EventCrfsApiController used to
                  flip the visit to COMPLETED automatically on the last
@@ -432,6 +494,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
               <td class="px-5 py-2.5 text-right text-xs">
                 <template v-if="crf.status === 'removed'">
                   <button
+                    v-if="mayRestoreCrf"
                     type="button"
                     class="text-emerald-700 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed"
                     :disabled="restoringEventCrfId === crf.eventCrfId || store.isRestoringCrf"
@@ -447,7 +510,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 </template>
                 <RouterLink
                   v-else-if="crf.eventCrfOid"
-                  :to="`/event-crfs/${crf.eventCrfOid}`"
+                  :to="crfLink(crf.eventCrfOid)"
                   class="text-muw-blue hover:underline"
                   data-test="event-detail-open-crf"
                 >
@@ -455,6 +518,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 </RouterLink>
                 <template v-else>
                   <button
+                    v-if="mayEnterData"
                     type="button"
                     class="text-muw-blue hover:underline disabled:text-slate-400 disabled:cursor-not-allowed"
                     :disabled="startingEdcId === crf.eventDefinitionCrfId || store.isStartingCrf"
@@ -579,7 +643,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                       · {{ sourceLabel(img) }}
                     </div>
                     <button
-                      v-if="!visitSealed"
+                      v-if="!visitSealed && mayBindImages"
                       type="button"
                       class="mt-1 text-[11px] text-slate-500 hover:text-rose-700 underline"
                       :data-testid="`event-detail-image-remove-${img.id}`"
@@ -614,6 +678,28 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           :image="removeTarget"
           @removed="onImageRemoved"
           @close="removeTarget = null"
+        />
+
+        <!-- Queries on the visit date. -->
+        <NewNoteDialog
+          v-if="visitDateNoteOpen"
+          :open="true"
+          :subject-id="event.subjectLabel"
+          item-oid=""
+          event-crf-oid=""
+          :item-label="t('notes.field.start_date')"
+          :field="visitDateField"
+          @close="visitDateNoteOpen = false"
+          @created="onVisitNotesChanged"
+        />
+        <NoteThreadDialog
+          v-if="visitDateThread"
+          :parent-note-ids="visitDateThread"
+          :subject-id="event.subjectLabel"
+          :item-oid="t('notes.field.start_date')"
+          :item-label="t('notes.field.start_date')"
+          @close="visitDateThread = null"
+          @updated="onVisitNotesChanged"
         />
 
         <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.
