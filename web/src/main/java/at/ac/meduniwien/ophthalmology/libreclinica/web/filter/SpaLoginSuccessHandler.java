@@ -145,8 +145,14 @@ public class SpaLoginSuccessHandler implements AuthenticationSuccessHandler {
      * on a site is raised to its role in the parent study. Without an active
      * study both attributes are empty beans, as there. A removed or
      * auto-removed study gets no role, which is what {@code SecureController}
-     * gives such a study from the next request on. Attributes a previous
-     * login left in this browser session are replaced.
+     * gives such a study from the next request on.
+     *
+     * <p>Unlike {@code SecureController}, which keeps the stored study bound
+     * for an account without a valid role in it (and answers each page with
+     * "no correct privilege"), the study is bound only when the account has
+     * a valid role there or is a system administrator; otherwise both
+     * attributes stay empty. Attributes a previous login left in this
+     * browser session are replaced.
      */
     private void bindActiveStudy(HttpSession session, UserAccountBean ub) {
         StudyBean study = new StudyBean();
@@ -171,6 +177,13 @@ public class SpaLoginSuccessHandler implements AuthenticationSuccessHandler {
                     role.setRole(Role.max(role.getRole(), roleInParent.getRole()));
                 }
             }
+        }
+        // Bound only where the account may work: a valid role in the study (or
+        // its parent), or a system administrator. Otherwise the SPA asks for
+        // a study to be picked.
+        if (!ub.isSysAdmin() && role.isInvalid()) {
+            study = new StudyBean();
+            role = new StudyUserRoleBean();
         }
         session.setAttribute("study", study);
         session.setAttribute("userRole", role);

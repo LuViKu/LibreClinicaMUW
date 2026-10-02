@@ -156,6 +156,10 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int ON_SITE = 30121;
     private static final int IN_REMOVED = 30122;
     private static final int IN_AUTO_REMOVED = 30123;
+    private static final int ROLE_REMOVED = 30124;
+    private static final int NO_ROLE = 30125;
+    private static final int SYS_ADMIN = 30126;
+    private static final int SYS_ADMIN_REMOVED_STUDY = 30127;
 
     /** S_DEFAULTS1, the study every other account here is bound to. */
     private static final int DEFAULT_STUDY = 1;
@@ -207,6 +211,15 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         seedStudy(AUTO_REMOVED_STUDY, null, Status.AUTO_DELETED);
         seedAccount(IN_AUTO_REMOVED, "spa-in-auto-removed", String.valueOf(AUTO_REMOVED_STUDY));
         grant("spa-in-auto-removed", "director", AUTO_REMOVED_STUDY);
+        seedAccount(ROLE_REMOVED, "spa-role-removed", String.valueOf(DEFAULT_STUDY));
+        grant("spa-role-removed", "director", DEFAULT_STUDY);
+        sql("UPDATE study_user_role SET status_id = " + Status.DELETED.getId()
+                + " WHERE user_name = 'spa-role-removed'");
+        seedAccount(NO_ROLE, "spa-no-role", String.valueOf(DEFAULT_STUDY));
+        seedAccount(SYS_ADMIN, "spa-sys-admin", String.valueOf(DEFAULT_STUDY));
+        sql("UPDATE user_account SET user_type_id = 1 WHERE user_id = " + SYS_ADMIN);
+        seedAccount(SYS_ADMIN_REMOVED_STUDY, "spa-sys-admin-removed-study", String.valueOf(REMOVED_STUDY));
+        sql("UPDATE user_account SET user_type_id = 1 WHERE user_id = " + SYS_ADMIN_REMOVED_STUDY);
         sql("UPDATE user_account SET status_id = " + Status.LOCKED.getId()
                 + ", account_non_locked = false WHERE user_id = " + LEGACY_LOCKED);
         // Lock after three consecutive failures (off by default).
@@ -778,9 +791,39 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
             assertEquals(204, login(account, PASSWORD, JSON).getStatus(), account);
 
             MockHttpSession session = session();
-            assertTrue(study(session).getId() > 0, account + ": the study is bound");
+            assertEquals(0, study(session).getId(), account + ": no role in it, so it is not bound");
             assertEquals(0, role(session).getId(), account + ": no role in it");
         }
+    }
+
+    @Test
+    void aSystemAdministratorInARemovedActiveStudyKeepsTheStudyWithoutARole() throws Exception {
+        assertEquals(204, login("spa-sys-admin-removed-study", PASSWORD, JSON).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals(REMOVED_STUDY, study(session).getId());
+        assertEquals(0, role(session).getId());
+    }
+
+    @Test
+    void anSpaLoginBindsNoStudyWhereTheUserHasNoRole() throws Exception {
+        for (String account : List.of("spa-role-removed", "spa-no-role")) {
+            assertEquals(204, login(account, PASSWORD, JSON).getStatus(), account);
+
+            MockHttpSession session = session();
+            assertEquals(0, study(session).getId(), account + ": no study is bound");
+            assertEquals(0, role(session).getId(), account + ": no role is bound");
+        }
+    }
+
+    @Test
+    void anSpaLoginOfASystemAdministratorBindsTheStoredStudyWithoutARole() throws Exception {
+        assertEquals(204, login("spa-sys-admin", PASSWORD, JSON).getStatus());
+
+        MockHttpSession session = session();
+        assertTrue(((UserAccountBean) session.getAttribute("userBean")).isSysAdmin());
+        assertEquals(DEFAULT_STUDY, study(session).getId());
+        assertEquals(0, role(session).getId());
     }
 
     // --- the legacy sign-outs ------------------------------------------------
