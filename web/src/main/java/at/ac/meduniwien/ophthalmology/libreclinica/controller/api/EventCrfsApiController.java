@@ -508,6 +508,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "saving CRF data");
+        if (closed != null) {
+            return closed;
+        }
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked — cannot save"));
@@ -852,6 +857,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "completing the CRF");
+        if (closed != null) {
+            return closed;
+        }
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is already locked"));
@@ -983,6 +993,11 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
 
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "reopening the CRF");
+        if (closed != null) {
+            return closed;
+        }
         if (ecb.getStatus() == Status.LOCKED || ecb.getStatus() == Status.SIGNED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked or signed — "
@@ -2331,6 +2346,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "adding a row");
+        if (closed != null) {
+            return closed;
+        }
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked — cannot add rows"));
@@ -2418,6 +2438,11 @@ public class EventCrfsApiController {
         if (ss == null || !visible.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "deleting a row");
+        if (closed != null) {
+            return closed;
         }
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -2595,6 +2620,11 @@ public class EventCrfsApiController {
         if (ss == null || !visible.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "uploading a file");
+        if (closed != null) {
+            return closed;
         }
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -2797,6 +2827,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "deleting a file");
+        if (closed != null) {
+            return closed;
+        }
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked -- cannot delete files"));
@@ -2950,6 +2985,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "committing the second pass");
+        if (closed != null) {
+            return closed;
+        }
         if (!isDoubleEntryEnabled(ecb)) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "event_crf " + eventCrfId + " is not DDE-enabled"));
@@ -3082,6 +3122,11 @@ public class EventCrfsApiController {
         if (ss == null || !visible.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "resolving a double-data-entry conflict");
+        if (closed != null) {
+            return closed;
         }
         try {
             String uri = ddeService().resolveConflict(
@@ -3234,6 +3279,12 @@ public class EventCrfsApiController {
         // call must 404 too.
         ResponseEntity<?> visibility = guardEventCrfVisibility(eventCrfId, currentUser, session);
         if (visibility != null) return visibility;
+        EventCRFBean target = new EventCRFDAO(dataSource).findByPK(eventCrfId);
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource,
+                (StudyBean) session.getAttribute("study"),
+                (StudySubjectBean) new StudySubjectDAO(dataSource).findByPK(target.getStudySubjectId()),
+                null, target, "populating retinal values");
+        if (closed != null) return closed;
 
         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.PopulateResult result;
         try {

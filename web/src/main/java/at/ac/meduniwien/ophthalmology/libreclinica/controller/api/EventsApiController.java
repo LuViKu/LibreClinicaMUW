@@ -446,6 +446,11 @@ public class EventsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "study_event " + eventId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, ev, null, "starting data entry");
+        if (closed != null) {
+            return closed;
+        }
 
         // Resolve the event_definition_crf slot the SPA is asking to
         // populate, and verify it belongs to the same event definition
@@ -762,6 +767,11 @@ public class EventsApiController {
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study subject with label '" + body.subjectId() + "' in study '" + currentStudy.getOid() + "'"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, null, "scheduling a visit");
+        if (closed != null) {
+            return closed;
         }
 
         StudyEventDefinitionBean def = sedDao.findByOidAndStudy(

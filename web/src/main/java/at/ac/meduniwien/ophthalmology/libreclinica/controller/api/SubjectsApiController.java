@@ -2077,14 +2077,13 @@ public class SubjectsApiController {
      *       via {@link #restore}.</li>
      * </ul>
      *
-     * <p><strong>Downstream enforcement deferred:</strong> the SPA's
-     * other write endpoints (subject-edit, event-edit/cancel, CRF
-     * save, query-thread, SDV verify) don't yet check
-     * {@code ss.getStatus() == LOCKED}. The lock marker is recorded
-     * here so the audit trail captures intent; a follow-up slice
-     * adds the {@code refuse-if-locked} guard to each. The SPA
-     * surfaces a locked badge so the UI nudges users away from
-     * locked subjects in the meantime.
+     * <p><strong>Downstream enforcement:</strong> subject edit, visit
+     * edit, cancel and sign refuse a locked subject
+     * ({@link SubjectLockGuard}), and so do the data-entry endpoints
+     * (CRF save, completion, reopening, rows, files, double data entry,
+     * starting a CRF, scheduling a visit, clinical flags, scan upload;
+     * {@link ClinicalRecordGuard}). SDV and query threads do not check
+     * the lock yet.
      *
      * <p>Role: DM / Admin only (same as remove).
      */

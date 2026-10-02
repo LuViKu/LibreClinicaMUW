@@ -267,6 +267,11 @@ public class RetinalInferenceApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "uploading a scan");
+        if (closed != null) {
+            return closed;
+        }
 
         // ---- persist the upload to disk ----------------------------------------
         Path savedPath;
