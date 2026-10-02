@@ -9,6 +9,10 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
 import java.io.Serializable;
+import java.sql.Connection;
+import java.sql.Statement;
+
+import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfBean;
@@ -33,7 +37,10 @@ import org.dbunit.operation.DatabaseOperation;
  * {@code getId()} is the mapped id.
  *
  * <p>Each test runs in the per-test transaction of {@link HibernateOcDbTestCase},
- * which is rolled back, so nothing is left in the database.
+ * which is rolled back, so nothing is left in the database. The id sequences
+ * are first moved past the highest existing id: rows seeded with explicit ids
+ * by other ITs leave a sequence behind its table, and the generated id would
+ * then collide with an existing row.
  */
 public class AbstractDomainDaoSaveIT extends HibernateOcDbTestCase {
 
@@ -50,6 +57,24 @@ public class AbstractDomainDaoSaveIT extends HibernateOcDbTestCase {
     @Override
     protected DatabaseOperation getTearDownOperation() {
         return DatabaseOperation.NONE;
+    }
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        DataSource dataSource = (DataSource) getContext().getBean("dataSource");
+        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            for (String[] t : new String[][] {
+                    { "crf", "crf_id" },
+                    { "crf_version", "crf_version_id" },
+                    { "item_group", "item_group_id" },
+                    { "item", "item_id" } }) {
+                // setval is not transactional, so this holds after the test's rollback.
+                st.execute("SELECT setval('" + t[0] + "_" + t[1] + "_seq', "
+                        + "GREATEST((SELECT COALESCE(MAX(" + t[1] + "), 0) FROM " + t[0] + "), "
+                        + "(SELECT last_value FROM " + t[0] + "_" + t[1] + "_seq)))");
+            }
+        }
     }
 
     public void testSaveReturnsTheCrfId() {
