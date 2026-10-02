@@ -99,7 +99,12 @@ public class ImportDataRuleRunnerContainer {
                     cvs.put(cvOid, crfVersion);
                 }
                 String sedOrd = studyEventDataBean.getStudyEventRepeatKey();
-                Integer sedOrdinal = sedOrd != null && !sedOrd.isEmpty() ? Integer.valueOf(sedOrd) : 1;
+                Integer sedOrdinal = repeatKey(sedOrd);
+                if (sedOrdinal == null) {
+                    // Not a whole number: the import's metadata check reports it.
+                    // No visit is guessed for it, so its rules are not run.
+                    continue;
+                }
                 StudyEventBean studyEvent = (StudyEventBean)new StudyEventDAO(ds).findByStudySubjectIdAndDefinitionIdAndOrdinal(
                         studySubject.getId(), sed.getId(), sedOrdinal);
                 List<RuleSetBean> ruleSets = ruleSetService.getRuleSetsByCrfStudyAndStudyEventDefinition(studyBean, sed, crfVersion);
@@ -123,7 +128,11 @@ public class ImportDataRuleRunnerContainer {
                                         ItemBean item = new ItemDAO(ds).findByOid(importItemDataBean.getItemOID()).get(0);
                                         String igOid = itemGroupDataBean.getItemGroupOID();
                                         String igOrd = itemGroupDataBean.getItemGroupRepeatKey();
-                                        Integer igOrdinal = igOrd != null && !igOrd.isEmpty() ? Integer.valueOf(igOrd) : 1;
+                                        Integer igOrdinal = repeatKey(igOrd);
+                                        if (igOrdinal == null) {
+                                            // Reported by the import's metadata check; never row 1.
+                                            continue;
+                                        }
                                         //
                                         //logic from DataEntryServlet method: populateRuleSpecificHashMaps()
                                         if(isRepeatIGForSure(ds, crfVersion.getId(), igOid, igOrdinal, item.getId())) {
@@ -236,5 +245,22 @@ public class ImportDataRuleRunnerContainer {
 
     public void setShouldRunRules(Boolean shouldRunRules) {
         this.shouldRunRules = shouldRunRules;
+    }
+
+    /**
+     * The ordinal an import repeat key names: 1 when the key is left out, null
+     * when it is not a whole number of 1 or more. A bad key is reported by the
+     * import's metadata check and must not be read as row or visit 1.
+     */
+    static Integer repeatKey(String key) {
+        if (key == null || key.isEmpty()) {
+            return 1;
+        }
+        try {
+            int ordinal = Integer.parseInt(key);
+            return ordinal >= 1 ? ordinal : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
