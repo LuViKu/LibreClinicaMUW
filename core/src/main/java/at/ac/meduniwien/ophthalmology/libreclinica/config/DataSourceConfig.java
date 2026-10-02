@@ -80,7 +80,9 @@ public class DataSourceConfig {
     @Bean
     @DependsOn("coreResources")
     public SpringLiquibase liquibase(ExtendedBasicDataSource dataSource) {
-        SpringLiquibase liquibase = new SpringLiquibase();
+        // LAX parsing: seven heritage changesets hold modifyColumn, which
+        // Liquibase 3.6.3 skipped and 4.x rejects in STRICT mode.
+        SpringLiquibase liquibase = new LaxParsingSpringLiquibase();
         liquibase.setDataSource(dataSource);
         liquibase.setChangeLog("classpath:migration/master.xml");
         // Phase E.5 chronic CI fix (2026-06-03): the demo-data seed

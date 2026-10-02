@@ -4,8 +4,5 @@
 # CRITICAL finding with a fix fails the job. Each entry carries an expiry:
 # when it passes, the gate fails again and the entry must be re-examined.
 
-# liquibase-core 3.6.3 (core, web): XML external entities while parsing a
-# changelog. Liquibase parses only the changelogs packaged in this WAR,
-# never request input or operator-supplied files. Fixed by the move to
-# Liquibase 4 (MIGRATION.md Phase D-Libs). Alerts 5075, 5640, 10679, 10680.
-CVE-2022-0839 exp:2027-03-31
+# (No accepted findings. The last one, CVE-2022-0839 in liquibase-core 3.6.3,
+# went with the move to Liquibase 4.31.1.)

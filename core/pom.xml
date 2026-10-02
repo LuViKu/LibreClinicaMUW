@@ -350,10 +350,6 @@
 	<build>
 		<plugins>
 			<plugin>
-				<groupId>org.liquibase</groupId>
-				<artifactId>liquibase-plugin</artifactId>
-			</plugin>
-			<plugin>
 				<groupId>org.zeroturnaround</groupId>
 				<artifactId>jrebel-maven-plugin</artifactId>
 			</plugin>
