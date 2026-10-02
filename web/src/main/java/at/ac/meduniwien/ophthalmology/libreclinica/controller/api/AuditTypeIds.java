@@ -465,4 +465,13 @@ public final class AuditTypeIds {
      * {@code lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml}.
      */
     public static final int INGEST_DUPLICATE_HELD            = 141;
+
+    /**
+     * A clean second pass of double data entry given back the
+     * {@code date_validate_completed} the pass itself cleared before
+     * 1.5.0-beta.16-muw. Written only by
+     * {@code lc-muw-2026-09-30-dde-second-pass-date.xml}, which seeds it,
+     * one row per restored event CRF.
+     */
+    public static final int DDE_SECOND_PASS_DATE_RESTORED    = 150;
 }
