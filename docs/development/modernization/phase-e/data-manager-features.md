@@ -173,7 +173,7 @@ The navigation rows in this section are not counted in §24; the features they l
   - The SPA does not read the legacy `study_module_status`, so a task marked complete on one page is not complete on the other.
   - The CRF count is install-wide: 3 on this stack, where the legacy page counts the CRFs the study uses (1).
   - For a Data Manager the *Create Study* tile reads *Administrator only*, and the *Users* tile links to `/manage-users`, which the router refuses for this role.
-- **Mark complete.** The SPA acknowledgement (`POST /studies/{oid}/build-status/acknowledge`, table `study_build_task_ack`) exists for groups, rules and sites only, and the API has no way to withdraw one. Its backend checks that the caller can see the study, not the caller's role (§25.3).
+- **Mark complete.** The SPA acknowledgement (`POST /studies/{oid}/build-status/acknowledge`, table `study_build_task_ack`) exists for groups, rules and sites only, and the API has no way to withdraw one. The role gate on it is fixed in #392 (§25.3).
 - **Study status.** `StudyAdminAuthorization.roleMayLifecycleStudy` is sysadmin-only by design; its comment gives the audit-of-record weight of LOCKED and FROZEN as the reason. The legacy Build Study lets a study-level admin, director or coordinator set any of the four statuses. In the SPA, freezing or locking a study at database lock therefore needs a system administrator.
 - **Users per site** appears in `studymodule.jsp` only when the study has sites; Default Study has none. The SPA shows the site count only, and `/sites` shows no users.
 
@@ -1017,19 +1017,19 @@ If a legacy screen were closed too early, these would be lost first:
 
 The empty legacy CRF item tables (§6) are a property of this stack's seed data, not of the code (§26).
 
-### 25.2 Actions that change data on a plain GET
+### 25.2 Actions that changed data on a plain GET
 
-Two kinds occur in the Data Manager's screens:
+Two kinds occurred in the Data Manager's screens:
 
-- **The link itself commits.**
+- **The link itself committed.**
   - Reordering event definitions (`/ChangeDefinitionOrdinal`) and the CRFs within one (`/ChangeDefinitionCRFOrdinal`).
   - Removing or restoring a rule, or all rules of a set (`/UpdateRuleSetRule`).
-  - Applying a rule run: *Submit* on the dry-run result navigates by GET to `/RunRuleSet` or `/RunRule`, which then applies the rule actions (notes, e-mails, inserted values).
-  - Starting an export: every format link on the legacy export page is a GET to `/pages/extract`, which creates and runs an export job.
-  - Deleting an archived export file (`/ExportDataset?action=delete`, behind a JavaScript confirm).
-- **The servlet commits on any request that lacks `action=confirm`.** This holds for the remove and restore servlets for event definitions, sites, CRFs, study user roles, study subjects, study events and event CRFs; for event-definition lock and unlock; and for `/SetStudyUserRole`, `/UpdateStudyEvent` and `/DeleteStudyEvent`. Their confirmation pages submit by POST form, but `SecureController` handles GET and POST alike. Most of these removals cascade to events, event CRFs and item data.
+  - Applying a rule run (`/RunRuleSet`, `/RunRule`).
+  - Starting an export (`/pages/extract`).
+  - Deleting an archived export file (`/ExportDataset?action=delete`).
+- **The servlet committed on any request that lacked `action=confirm`.** This held for the remove and restore servlets for event definitions, sites, CRFs, study user roles, study subjects, study events and event CRFs; for event-definition lock and unlock; and for `/SetStudyUserRole`, `/UpdateStudyEvent` and `/DeleteStudyEvent`.
 
-Why it matters: the token-free CSRF defence in `SecurityConfig` assumes, in its point 3, that "handlers that change data accept POST only", so that a SameSite=Lax session cookie on a cross-site GET navigation cannot trigger them. `CrossSiteRequestFilter` inspects POST, PUT, PATCH and DELETE only. The handlers above do not meet that assumption. Plan item R0.5 lists five admin actions; none of these is on it.
+Fixed: every legacy action that changes data now takes POST only (#380, #367). The server also checks that a reorder stays within the user's study (#380). The token-free CSRF defence in `SecurityConfig` depends on this property.
 
 ### 25.3 Role and route mismatches in the SPA
 
@@ -1037,7 +1037,7 @@ Why it matters: the token-free CSRF defence in `SecurityConfig` assumes, in its 
 - **The Build Study rail lists four pages a Data Manager cannot open.** Study, Parameters, Modalities and Manage users have an empty role list in `BuildStudyRail.vue`, so every role sees them, but their routes are Administrator-only and the router sends a Data Manager home. The rail's own comment says a data manager "does not see the administrator-only pages listed", and its test asserts all four entries for a Data Manager.
 - **Views that serve the role behind routes that refuse it.** `SubjectDetailView.vue` gates remove, restore, lock and unlock, event cancel and group edits to Data Manager and Administrator, but `/subjects/:subjectId` admits Investigator and Administrator. The *Users* tile on `/build-study` and the subject and item links on `/notes` lead to routes that refuse a Data Manager as well.
 - **Buttons whose API refuses the role.** Site *Disable* and *Restore* are shown to a Data Manager and answered with HTTP 403 (sysadmin-only).
-- **The Build Study acknowledgement has no role check.** `POST /studies/{oid}/build-status/acknowledge` checks only that the caller can see the study, so any role that can see it can record one. It writes `study_build_task_ack` and an audit row. The legacy *Mark Complete* requires admin, director or coordinator.
+- **The Build Study acknowledgement had no role check.** Fixed in #392: it now follows the legacy *Mark Complete* rule (admin, director or coordinator).
 
 ### 25.4 SPA removals do not cascade
 
@@ -1084,7 +1084,7 @@ The telemetry filter never fires for legacy servlet URLs ([admin §16.4](adminis
 ### Not exercised, because the walk was read-only
 
 - Any form submit: Build Study *Save* and *Save Status*; creating, updating, removing or restoring event definitions, CRFs, sites, group classes, rules, datasets and study roles; the import commit; note replies; SDV actions.
-- Actions that fire on GET (§25.2): reordering, rule removal and restore, applying a rule run, starting an export, deleting an archived file.
+- The former GET-writes (§25.2): reordering, rule removal and restore, applying a rule run, starting an export, deleting an archived file. Fixed in #380 and #367; the fix is covered by tests, not by a walk.
 - The SPA side of every write. The verdicts rest on the views and the API source, not on a completed action.
 
 ### Not reachable with this data or account

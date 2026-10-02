@@ -23,7 +23,7 @@ The test data shapes several observations. Default Study has 7 subjects, 21 stud
 
 > A Monitor **cannot enter or change study data** — they review data, raise Queries, close discrepancies, and audit. The Monitor is also the **only role with authority to close a discrepancy**.
 >
-> On this build the first statement holds for the menus and screens of both UIs, but not for every handler behind them: several SPA endpoints do not check the role, and neither does the legacy initial-data-entry servlet (§12, §19.4). The second statement does not hold in either UI: legacy also offers Close to the study director and coordinator, and the SPA to the Data Manager and Administrator (§19.7).
+> The first statement held for the menus and screens of both UIs when this catalogue was walked, but not for every handler behind them: several SPA endpoints and the legacy initial-data-entry servlet did not check the role. Those handler gaps are fixed (#380, #386, #390; §12, §19.4). The second statement does not hold in either UI: legacy also offers Close to the study director and coordinator, and the SPA to the Data Manager and Administrator (§19.7).
 
 > **Verdicts**
 >
@@ -522,7 +522,7 @@ The lifecycle rows describe behaviour and are not counted in §18.
 - The *Add subject* button is shown to the Monitor; the route sends the Monitor home.
 - The event view `/events/:eventId` admits the Monitor. But:
   - it is linked only from Subject detail and from the breadcrumb of the CRF view, neither of which the Monitor can reach (§5);
-  - it shows *Start* on CRF slots not yet started, and *Mark visit complete*, whatever the role. The start endpoint has no role check (§19.4); mark-complete answers 403;
+  - it shows *Start* on CRF slots not yet started, and *Mark visit complete*, whatever the role. The start endpoint had no role check; fixed in #386 (§19.4); mark-complete answers 403;
   - its *Open* link goes to the data-entry route, which refuses the Monitor.
 - `/patients` admits the Monitor and is the nearest SPA view of a subject: demographics and enrolments across studies, with an eye-timeline modal, but no events, CRFs or notes.
 
@@ -659,9 +659,9 @@ Checked from source; nothing here was exercised. Not counted in §18.
 
 | Action | Legacy handler, for the Monitor | SPA screens | SPA API |
 |---|---|---|---|
-| Add Subject | `AddNewSubjectServlet` refuses | `/subjects/new` refuses; the *Add subject* button still shows on `/subjects` | `POST /pages/api/v1/subjects` has no study-role check |
-| Schedule an event | not in the menu; handler not checked | no control the Monitor can reach | `POST /pages/api/v1/events` has no study-role check |
-| Start a CRF, enter data, mark it complete | `InitialDataEntryServlet` checks only that the event CRF is in the user's studies; its role check is commented out. `AdministrativeEditingServlet` (completed CRFs) refuses | `/event-crfs/:oid` refuses; the read-only view has no save; *Start* is shown on `/events/:eventId` | `POST /pages/api/v1/events/{id}/crfs/{edcId}:start`, `POST /pages/api/v1/eventCrfs/{id}/items` and `…/markComplete` have no study-role check |
+| Add Subject | `AddNewSubjectServlet` refuses | `/subjects/new` refuses; the *Add subject* button still shows on `/subjects` | had no study-role check; fixed in #386 |
+| Schedule an event | not in the menu; handler not checked | no control the Monitor can reach | had no study-role check; fixed in #386 |
+| Start a CRF, enter data, mark it complete | `InitialDataEntryServlet` had no role check; fixed in #380. `AdministrativeEditingServlet` (completed CRFs) refuses | `/event-crfs/:oid` refuses; the read-only view has no save; *Start* is shown on `/events/:eventId` | the start, item-save and mark-complete endpoints had no study-role check; fixed in #386 |
 | Mark a visit complete | `UpdateStudyEventServlet` refuses | *Mark visit complete* is shown on `/events/:eventId` | refused (`EventEditAuthorization`) |
 | Import Data | not in the menu | `/import-crf-data` refuses | refused (`BulkImportAuthorization`) |
 | Build Study, users, rules, groups, CRFs | not in the menu | routes refuse | not checked |
@@ -887,15 +887,9 @@ The gaps most likely to cost clinical or regulatory capability if a screen were 
 
 ### 19.2 Legacy actions that change data on a plain GET
 
-`SecureController.doGet` and `doPost` run the same code, and GET requests pass `CrossSiteRequestFilter` by design. These Monitor-reachable handlers decide to write from their request parameters alone, whatever the HTTP method:
+`SecureController.doGet` and `doPost` run the same code, and GET requests pass `CrossSiteRequestFilter` by design. When this catalogue was walked, several Monitor-reachable handlers (note creation and status change, saving session-held notes from the read-only CRF, profile and active-study changes, dataset creation) decided to write from their request parameters alone, whatever the HTTP method. The SDV handlers already accepted POST only.
 
-- `/CreateOneDiscrepancyNote` adds a note to a thread and can change the thread's status, including to Closed, and its assignee. It checks only that the role may view data, so the Monitor's Close authority is enforced by the page, not the servlet.
-- `/CreateDiscrepancyNote` creates a note.
-- `/ViewSectionDataEntry` saves the notes held in the session from the read-only CRF.
-- `/UpdateProfile` updates the user's profile; `/ChangeStudy` changes the active study.
-- `/CreateDataset` saves the dataset held in the session wizard.
-
-The SDV handlers already accept POST only. These should too, as R0.5 in [the retirement plan](../jsp-retirement-plan-2026-09-30.md) does for the admin actions. None of them was exercised.
+Fixed: legacy actions that change data now take POST only (#380, #367), and the note-status change is checked on the server (#380). None of the original findings was exercised on a running stack.
 
 ### 19.3 SPA defects on the Monitor's path
 
@@ -913,25 +907,15 @@ The SDV handlers already accept POST only. These should too, as R0.5 in [the ret
 - **Notes *days open* and *last activity* are always 0 and the time of the request**, on screen and in the CSV (§6.8).
 - **CRF item and section note indicators are always empty** (§5).
 - ***Add subject* on `/subjects`** is shown to the Monitor.
-- **On `/events/:eventId`, *Start* and *Mark visit complete* are shown to the Monitor.** *Start* succeeds (§19.4); mark-complete is refused.
+- **On `/events/:eventId`, *Start* and *Mark visit complete* are shown to the Monitor.** *Start* was accepted when walked, now fixed in #386 (§19.4); mark-complete is refused.
 
-### 19.4 Handlers that do not check the study role
+### 19.4 Handlers that did not check the study role
 
-In several places the Monitor's read-only status rests on the router alone. From source, these SPA endpoints check authentication, the active study and site visibility, but not the study role:
+When this catalogue was walked, the Monitor's read-only status rested on the router alone in several places. The SPA write endpoints for creating a subject, scheduling an event, starting a CRF, saving item data and completing a CRF had no study-role check, and `/sdv/verify` accepted any study role. Fixed in #386, which also enforces SDV integrity (only complete CRFs; a data change withdraws SDV; un-verify needs a reason).
 
-- `POST /pages/api/v1/subjects` creates a subject. Its Javadoc says the role check is deferred.
-- `POST /pages/api/v1/events` schedules an event, and `POST /pages/api/v1/events/{id}/crfs/{edcId}:start` starts a CRF.
-- `POST /pages/api/v1/eventCrfs/{id}/items` saves item data, and `…/markComplete` completes the CRF.
-- `POST /pages/api/v1/sdv/verify` accepts any study role, where legacy SDV requires director, coordinator or monitor.
-  - It also accepts `verified: false`, which removes SDV without the reason that `/sdv/unverify` requires.
-  - The database trigger still writes an audit row for the change, with no reason.
+On the legacy side, `AddNewSubjectServlet`, `UpdateStudyEventServlet`, `AdministrativeEditingServlet` and the SDV handlers refused the Monitor. `InitialDataEntryServlet` had no role check; fixed in #380. The Monitor's read-only paths and query authority are fixed in #390.
 
-On the legacy side:
-
-- `AddNewSubjectServlet`, `UpdateStudyEventServlet`, `AdministrativeEditingServlet` and the SDV handlers refuse the Monitor.
-- `InitialDataEntryServlet` does not check the role: its role check is commented out, and `DataEntryServlet.mayAccess` checks only that the event CRF belongs to the user's studies. Whether a later step refuses a Monitor was not traced.
-
-The plan's authorization review (R0.9) is the natural home for these. None was exercised.
+None of the original findings was exercised on a running stack.
 
 Two SPA permissions are wider than legacy's; neither is a gap:
 
@@ -1007,13 +991,12 @@ This matters during the transition, while both UIs run on one database:
 
 - The rule that deleting data auto-closes its notes (§6.4), in either UI.
 - Whether the SPA refuses SDV changes in a locked study. From source, it refuses them for locked subjects.
-- Whether any later step of legacy initial data entry refuses a Monitor (§19.4).
 - The German handbook, beyond confirming that it has the same Monitor chapter.
 
 ### Outside this catalogue, but found on the way
 
 - The SPA `/sdv` route admits the Monitor and Administrator only. Legacy SDV also admits the study director and coordinator, the SPA's Data Manager and CRC. This belongs in [data-manager-features.md](data-manager-features.md).
-- `RestoreDatasetServlet` does not check that the dataset belongs to the current study.
+- `RestoreDatasetServlet`'s check that the dataset belongs to the current study: open; the legacy dataset screens retire in W2.
 
 ### Build provenance
 

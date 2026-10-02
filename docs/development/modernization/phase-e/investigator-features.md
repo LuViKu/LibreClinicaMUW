@@ -1142,8 +1142,8 @@ Two heritage list pages still answer by URL and are linked from nowhere: `/ListS
   - It writes `date_lastvisit`, and through `UserAccountDAO.update` it sets `update_id` to the caller and `date_updated` to now.
   - The administrator's View User shows "Updated by" and "Date updated" from these columns ([administrator catalogue §5](administrator-features.md#view-user)). After any visit to the home page they name the user, not the last administrative change.
   - This walk updated both accounts that way.
-- **Subject signing is accepted on GET.** The matrix links the signing branch with a GET (§6.7), and `SignStudySubjectServlet` signs on GET as well as on POST. The signing form itself posts.
-- **More generally,** `SecureController.doGet` and `doPost` run the same `process`, so every legacy form action on these screens is also accepted as a GET. The Investigator's own forms all post. R0.5 of the plan covers the administrator actions that are *linked* as GETs; the sign link is the Investigator's equivalent.
+- **Subject signing was accepted on GET** (§6.7). Fixed: legacy actions that change data now take POST only (#380, #367).
+- **More generally,** `SecureController.doGet` and `doPost` run the same `process`. The legacy actions that change data were moved to POST in #380 and #367.
 
 ### 19.3 Where the two UIs disagree
 
@@ -1159,14 +1159,14 @@ Two heritage list pages still answer by URL and are linked from nowhere: `/ListS
 
 ### 19.4 SPA weaknesses found in the source
 
-- **The reason-for-change gap after Reopen** (§6.3).
-- **The rules engine is not called** from `saveItems` (§6.1).
-- **`markComplete` does not check required items** on the server (§6.1).
+- **The reason-for-change gap after Reopen** (§6.3): fixed in #391.
+- **The rules engine is not called** from `saveItems` (§6.1): rules on save fixed in #391.
+- **`markComplete` did not check required items** on the server (§6.1): fixed in #391.
 - **The Reason for Change note is written best-effort.** In a save against a complete CRF, `saveItems` writes the value first, then the note, and logs and swallows a failed note write. The value change then stands without its note, and without the audit row that carries the reason, which is written only after the note succeeds.
 - **The SPA login sends no two-factor code** (§1.1).
 - **Two SPA flows run through legacy servlets:** the login lands on `/MainMenu`, and sign-out calls `/Logout` (§1.1, §1.4). Both must stay until the SPA has its own (plan R1.3).
 - **"Days open" is approximated** for notes without replies (§7.1).
-- **Subject creation does not enforce the study parameters** (§4.1).
+- **Subject creation did not enforce the study parameters** (§4.1): subject identifiers fixed in #391. Writes to removed or locked records are also refused (#391).
 
 ### 19.5 Where this revision corrects the 2026-05-28 text
 
