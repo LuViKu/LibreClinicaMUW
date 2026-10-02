@@ -168,8 +168,8 @@ class LegacyServletDeprecationCatalogTest {
      */
     @Test
     void screensFoundUncoveredNameNoSpaRoute() {
-        for (String path : List.of("/Configure", "/RestoreCRF", "/InitUpdateCRF", "/RemoveStudy",
-                "/RestoreStudy", "/PauseJob", "/AuditUserActivity", "/AuditUserActivityData",
+        for (String path : List.of("/RestoreCRF", "/InitUpdateCRF",
+                "/ViewStudy",
                 "/AuditDatabase", "/ViewLogMessage", "/UpdateCRF", "/BatchCRFMigration",
                 "/ViewStudyEvents")) {
             Entry entry = catalog.entry(path).orElseThrow(() -> new AssertionError(path + " not catalogued"));

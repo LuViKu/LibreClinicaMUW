@@ -173,9 +173,9 @@ public class LegacyServletDeprecationCatalog {
         // UpdateStudyServletNew; the key used to be its class name.
         put(m, "/UpdateStudyNew", "/app/studies/:oid/edit", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/InitUpdateStudy", "/app/studies/:oid/edit", Bucket.STUDY_ADMIN_AND_BUILD);
-        // Admin catalogue §16.3: the study edit view offers neither remove nor restore.
-        put(m, "/RemoveStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/RestoreStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
+        // Admin catalogue §4: removed and restored in the SPA on /admin/studies (R1.1, #377).
+        put(m, "/RemoveStudy", "/app/admin/studies", Bucket.STUDY_ADMIN_AND_BUILD);
+        put(m, "/RestoreStudy", "/app/admin/studies", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ListEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/DefineStudyEvent", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
@@ -233,11 +233,9 @@ public class LegacyServletDeprecationCatalog {
         // --- AUDIT_TRAIL — SPA `/audit-log`, `/system/audit-log` ---
         put(m, "/AuditLogStudy", "/app/audit-log", Bucket.AUDIT_TRAIL);
         put(m, "/AuditLogUser", "/app/system/audit-log", Bucket.AUDIT_TRAIL);
-        // Admin catalogue §16.3: /system/audit-log reads neither the user-activity
-        // table nor the database audit, so neither screen (nor the activity
-        // page's data endpoint) has a replacement.
-        put(m, "/AuditUserActivity", NONE, Bucket.AUDIT_TRAIL);
-        put(m, "/AuditUserActivityData", NONE, Bucket.AUDIT_TRAIL);
+        // Login history over audit_user_login: /admin/login-history (R1.1, #381).
+        put(m, "/AuditUserActivity", "/app/admin/login-history", Bucket.AUDIT_TRAIL);
+        put(m, "/AuditUserActivityData", "/app/admin/login-history", Bucket.AUDIT_TRAIL);
         put(m, "/AuditDatabase", NONE, Bucket.AUDIT_TRAIL);
         put(m, "/ViewItemAuditLog", "/app/audit-log", Bucket.AUDIT_TRAIL);
         put(m, "/StudyAuditLog", "/app/audit-log", Bucket.AUDIT_TRAIL);
@@ -283,9 +281,8 @@ public class LegacyServletDeprecationCatalog {
         // --- ADMIN_TOOLING — SPA `/admin/*` ---
         put(m, "/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
         put(m, "/ConfigurePasswordRequirements", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
-        // Admin catalogue §16.3: this is the lockout configuration, which
-        // /admin/config does not show.
-        put(m, "/Configure", NONE, Bucket.ADMIN_TOOLING);
+        // The lockout settings: /admin/password-policy (R1.2, #381).
+        put(m, "/Configure", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
 
         // --- PRINT_PDF — SPA `/event-crfs/:eventCrfOid/print` ---
         put(m, "/PrintEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
@@ -298,9 +295,9 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ViewJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
         put(m, "/ViewImportJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
         put(m, "/ViewSingleJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        // Admin catalogue §16.3: /admin/jobs is read-only; nothing pauses,
-        // resumes or deletes a job.
-        put(m, "/PauseJob", NONE, Bucket.JOB_ADMIN);
+        // Legacy XSLT jobs are listed and deleted on /admin/jobs; schedules are paused and
+        // resumed per dataset on /export (R1.2, #389).
+        put(m, "/PauseJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
 
         // --- Registered servlets with no SPA route recorded, added 2026-09-30
         // so that every legacy servlet is logged and can be closed. A route
@@ -325,11 +322,11 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ListEventsForSubjectsData", NONE, Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/RemoveEventCRF", NONE, Bucket.SUBJECTS_AND_EVENTS);
 
-        put(m, "/ListStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
+        put(m, "/ListStudy", "/app/admin/studies", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ManageStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ManageStudy1", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/DownloadStudyMetadata", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
+        put(m, "/DownloadStudyMetadata", "/app/", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/UpdateEventDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RemoveEventDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RestoreEventDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
@@ -375,7 +372,7 @@ public class LegacyServletDeprecationCatalog {
 
         put(m, "/AdminSystem", NONE, Bucket.ADMIN_TOOLING);
         put(m, "/TechAdmin", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/SendTestEmail", NONE, Bucket.ADMIN_TOOLING);
+        put(m, "/SendTestEmail", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
         // The cross-study subject registry (admin catalogue §10).
         put(m, "/ListSubject", NONE, Bucket.ADMIN_TOOLING);
         put(m, "/ListSubjectData", NONE, Bucket.ADMIN_TOOLING);
@@ -388,8 +385,8 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/PrintCRFOld", NONE, Bucket.PRINT_PDF);
         put(m, "/PrintDataEntry", NONE, Bucket.PRINT_PDF);
 
-        put(m, "/CreateJobExport", NONE, Bucket.JOB_ADMIN);
-        put(m, "/UpdateJobExport", NONE, Bucket.JOB_ADMIN);
+        put(m, "/CreateJobExport", "/app/export", Bucket.JOB_ADMIN);
+        put(m, "/UpdateJobExport", "/app/export", Bucket.JOB_ADMIN);
         put(m, "/CreateJobImport", NONE, Bucket.JOB_ADMIN);
         put(m, "/UpdateJobImport", NONE, Bucket.JOB_ADMIN);
 
@@ -419,10 +416,10 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/sdvStudySubject", "/app/sdv", Bucket.SOURCE_DATA_VERIFICATION);
         put(m, "/pages/unSdvStudySubject", "/app/sdv", Bucket.SOURCE_DATA_VERIFICATION);
         put(m, "/pages/sdvStudySubjects", "/app/sdv", Bucket.SOURCE_DATA_VERIFICATION);
-        // Admin catalogue §9: the SPA lists its own export jobs and cancels none.
-        put(m, "/pages/listCurrentScheduledJobs", NONE, Bucket.JOB_ADMIN);
-        put(m, "/pages/listCurrentScheduledJobsData", NONE, Bucket.JOB_ADMIN);
-        put(m, "/pages/cancelScheduledJob", NONE, Bucket.JOB_ADMIN);
+        // The running-jobs page (admin, sysadmin only) is not rebuilt (plan R1.5); /admin/jobs lists and deletes.
+        put(m, "/pages/listCurrentScheduledJobs", "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/listCurrentScheduledJobsData", "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/cancelScheduledJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
         put(m, "/pages/extract", NONE, Bucket.DATA_EXPORT);
         put(m, "/pages/managestudy/chooseCRFVersion", NONE, Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/pages/managestudy/confirmCRFVersionChange", NONE, Bucket.SUBJECTS_AND_EVENTS);

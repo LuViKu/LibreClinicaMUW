@@ -48,6 +48,38 @@ class LegacyClosedPathsDefaultTest {
             "/PrintoutCertificate", "/DeleteEventCRF", "/ConfigurePasswordRequirements",
             "/pages/auth");
 
+    /**
+     * Wave 1 (2026-10-02): administration. Every screen here was open to
+     * system administrators only, and each has an SPA replacement or a
+     * recorded "not needed" in the retirement log.
+     */
+    private static final List<String> WAVE_1 = List.of(
+            // users and accounts
+            "/ListUserAccounts", "/CreateUserAccount", "/ViewUserAccount", "/EditUserAccount",
+            "/SetUserRole", "/EditStudyUserRole", "/DeleteStudyUserRole", "/DeleteUser", "/UnLockUser",
+            "/pages/admin/listLdapUsers", "/pages/admin/selectLdapUser",
+            // security configuration, mail, login history, user audit
+            "/Configure", "/SendTestEmail", "/AuditUserActivity", "/AuditUserActivityData", "/AuditLogUser",
+            // studies
+            "/ListStudy", "/RemoveStudy", "/RestoreStudy", "/DownloadStudyMetadata",
+            // jobs
+            "/ViewAllJobs", "/ViewJob", "/ViewSingleJob", "/PauseJob", "/CreateJobExport", "/UpdateJobExport",
+            "/pages/listCurrentScheduledJobs", "/pages/listCurrentScheduledJobsData", "/pages/cancelScheduledJob",
+            // CRF library: the one servlet only a system administrator may use
+            "/DeleteCRFVersion");
+
+    /**
+     * Administration screens wave 1 leaves open, each with its reason (see the
+     * retirement log). The CRF servlets admit the legacy Data Manager
+     * (coordinator) and the SPA's CRF library does not (D5); /ViewStudy and
+     * /AuditLogStudy are read by other roles from open pages.
+     */
+    private static final List<String> WAVE_1_HELD_OPEN = List.of(
+            "/ListCRF", "/CreateCRF", "/CreateCRFVersion", "/InitCreateCRFVersion", "/ViewCRF",
+            "/RemoveCRF", "/RestoreCRF", "/InitUpdateCRF", "/UpdateCRF", "/RemoveCRFVersion",
+            "/RestoreCRFVersion", "/DownloadVersionSpreadSheet", "/BatchCRFMigration",
+            "/ViewStudy", "/AuditLogStudy", "/ListStudyUser");
+
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
 
@@ -78,6 +110,43 @@ class LegacyClosedPathsDefaultTest {
         for (String path : WAVE_0) {
             assertTrue(closed.contains(path), "wave 0 screen reopened: " + path);
         }
+    }
+
+    @Test
+    void waveOneIsClosed() {
+        List<String> closed = defaultClosedPaths();
+        List<String> open = new ArrayList<>();
+        for (String path : WAVE_1) {
+            if (!closed.contains(path)) {
+                open.add(path);
+            }
+        }
+        assertEquals(List.of(), open, "wave 1 screens that are still open");
+    }
+
+    @Test
+    void waveOneHoldsBackTheScreensOtherRolesStillUse() {
+        List<String> closed = defaultClosedPaths();
+        List<String> shut = new ArrayList<>();
+        for (String path : WAVE_1_HELD_OPEN) {
+            if (closed.contains(path)) {
+                shut.add(path);
+            }
+        }
+        assertEquals(List.of(), shut, "screens held open for the legacy Data Manager and other roles were closed");
+    }
+
+    @Test
+    void everyClosedScreenNamesAnSpaReplacementOrIsRecordedAsNotNeeded() {
+        // Not needed, by decision (plan R1.5: LDAP, replaced by SSO): no route to name.
+        Set<String> notNeeded = Set.of("/pages/admin/listLdapUsers", "/pages/admin/selectLdapUser");
+        List<String> unnamed = new ArrayList<>();
+        for (String path : WAVE_1) {
+            if (!notNeeded.contains(path) && !catalog.entry(path).orElseThrow().hasSpaRoute()) {
+                unnamed.add(path);
+            }
+        }
+        assertEquals(List.of(), unnamed, "wave 1 screens whose 410 names no SPA route");
     }
 
     /** The default of {@code libreclinica.legacy.closedPaths}, read from the one line that sets it. */
