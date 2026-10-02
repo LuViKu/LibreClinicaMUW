@@ -115,6 +115,14 @@ public class StudyTreeScope {
     private static final String CRF_VERSION_CRF =
             "SELECT crf_id FROM crf_version WHERE crf_version_id = ?";
 
+    private static final String RULE_SET_STUDY =
+            "SELECT study_id FROM rule_set WHERE id = ?";
+
+    private static final String RULE_SET_RULE_STUDY =
+            "SELECT rs.study_id FROM rule_set_rule rsr"
+            + " JOIN rule_set rs ON rs.id = rsr.rule_set_id"
+            + " WHERE rsr.id = ?";
+
     private final DataSource dataSource;
 
     public StudyTreeScope(DataSource dataSource) {
@@ -176,6 +184,28 @@ public class StudyTreeScope {
             return anyInTree(currentStudy, SUBJECT_STUDIES, entityId, 1);
         }
         return false;
+    }
+
+    /**
+     * True when the rule set belongs to {@code currentStudy}: rule sets are kept
+     * on the study they were uploaded to, and a site session counts as its
+     * parent.
+     */
+    public boolean containsRuleSet(StudyBean currentStudy, int ruleSetId) {
+        return ownedByStudyOrParent(currentStudy, lookupInt(RULE_SET_STUDY, ruleSetId));
+    }
+
+    /** True when the rule set rule's rule set belongs to {@code currentStudy}, by the rule of {@link #containsRuleSet}. */
+    public boolean containsRuleSetRule(StudyBean currentStudy, int ruleSetRuleId) {
+        return ownedByStudyOrParent(currentStudy, lookupInt(RULE_SET_RULE_STUDY, ruleSetRuleId));
+    }
+
+    private static boolean ownedByStudyOrParent(StudyBean currentStudy, Integer ownerStudyId) {
+        if (currentStudy == null || currentStudy.getId() <= 0 || ownerStudyId == null) {
+            return false;
+        }
+        return ownerStudyId == currentStudy.getId()
+                || (currentStudy.getParentStudyId() > 0 && ownerStudyId == currentStudy.getParentStudyId());
     }
 
     /** The CRF an event CRF's current version belongs to, or null when unknown. */

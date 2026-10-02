@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceIn
 import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,17 +47,29 @@ public class DownloadRuleSetXmlServlet extends SecureController {
      */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
-        if (ub.isSysAdmin()) {
-            return;
+        if (!ub.isSysAdmin() && !currentRole.getRole().equals(Role.STUDYDIRECTOR) && !currentRole.getRole().equals(Role.COORDINATOR)) {
+            addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+            throw new InsufficientPermissionException(Page.MANAGE_STUDY_SERVLET, resexception.getString("not_study_director"), "1");
         }
 
-        if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)) {
+        // The rule set rules are named by id: each must be the current study's.
+        String ruleSetRuleIds = request.getParameter("ruleSetRuleIds");
+        if (ruleSetRuleIds == null || ruleSetRuleIds.trim().isEmpty()) {
             return;
         }
-
-        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MANAGE_STUDY_SERVLET, resexception.getString("not_study_director"), "1");
-
+        StudyTreeScope scope = new StudyTreeScope(sm.getDataSource());
+        for (String id : ruleSetRuleIds.split(",")) {
+            int ruleSetRuleId = 0;
+            try {
+                ruleSetRuleId = Integer.parseInt(id.trim());
+            } catch (NumberFormatException e) {
+                // a malformed list exports nothing (see prepareRulesPostImportRuleSetRuleContainer)
+                return;
+            }
+            if (!scope.containsRuleSetRule(currentStudy, ruleSetRuleId)) {
+                refuseRecordOutsideCurrentStudy();
+            }
+        }
     }
 
     /**

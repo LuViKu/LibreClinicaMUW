@@ -286,6 +286,15 @@ public abstract class SecureController extends HttpServlet {
 
     protected abstract void mayProceed() throws InsufficientPermissionException;
 
+    /**
+     * Refuses a request that names a record outside the current study: the
+     * "not a valid entity for the current study" message and the main menu.
+     */
+    protected void refuseRecordOutsideCurrentStudy() throws InsufficientPermissionException {
+        addPageMessage(resexception.getString("not_select_valid_entity_current_study"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
+    }
+
     public static final String USER_BEAN_NAME = "userBean";
 
     public void passwdTimeOut() {

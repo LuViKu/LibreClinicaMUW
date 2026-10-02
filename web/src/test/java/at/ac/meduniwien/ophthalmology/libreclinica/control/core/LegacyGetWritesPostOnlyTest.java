@@ -15,6 +15,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,6 +23,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
@@ -399,6 +403,15 @@ class LegacyGetWritesPostOnlyTest {
 
     @Test
     void aPostRemovesARule() throws Exception {
+        // The rule set rule and rule set are the session study's (study 1).
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        ResultSet owner = mock(ResultSet.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString())).thenReturn(statement);
+        when(statement.executeQuery()).thenReturn(owner);
+        when(owner.next()).thenReturn(true);
+        when(owner.getInt(1)).thenReturn(LegacyServletHarness.STUDY_ID);
         RuleSetRuleBean rule = new RuleSetRuleBean();
         rule.setStatus(Status.AVAILABLE);
         when(ruleSetRuleDao.findById(7)).thenReturn(rule);

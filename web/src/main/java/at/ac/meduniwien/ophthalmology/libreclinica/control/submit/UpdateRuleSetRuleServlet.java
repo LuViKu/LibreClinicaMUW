@@ -25,6 +25,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 
 /**
  * @author Krikor Krumlian
@@ -45,17 +46,29 @@ public class UpdateRuleSetRuleServlet extends SecureController {
 
     @Override
     public void mayProceed() throws InsufficientPermissionException {
-        if (ub.isSysAdmin()) {
-            return;
+        if (!ub.isSysAdmin() && !currentRole.getRole().equals(Role.STUDYDIRECTOR) && !currentRole.getRole().equals(Role.COORDINATOR)) {
+            addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+            throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
         }
 
-        if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)) {
-            return;
+        // The rule set and rule set rule are named by id: they must be the current study's.
+        StudyTreeScope scope = new StudyTreeScope(sm.getDataSource());
+        String ruleSetRuleId = request.getParameter(RULESETRULE_ID);
+        String ruleSetId = request.getParameter(RULESET_ID);
+        if (ruleSetRuleId != null && !scope.containsRuleSetRule(currentStudy, parseId(ruleSetRuleId))) {
+            refuseRecordOutsideCurrentStudy();
         }
+        if (ruleSetId != null && !scope.containsRuleSet(currentStudy, parseId(ruleSetId))) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
 
-        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
-
+    private static int parseId(String id) {
+        try {
+            return Integer.parseInt(id.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** Removes or restores rules: POST only. */
