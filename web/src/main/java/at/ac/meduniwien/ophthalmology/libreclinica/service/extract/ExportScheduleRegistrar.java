@@ -36,8 +36,17 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.stereotype.Component;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DatasetsApiController;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
 /**
  * Phase E.6 — Data Export Phase 4.
@@ -297,6 +306,12 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
          * still wins, and a deleted or paused schedule queues nothing even
          * if a trigger outlived the change.
          *
+         * <p>The creator is authorised again on every tick, as a request of
+         * theirs would be: an account that was removed, locked or disabled,
+         * or that no longer holds a role allowed to export in the dataset's
+         * study, queues nothing. The schedule itself is left as it is, so it
+         * runs again if the access comes back.
+         *
          * @return the queued {@code export_job} id, or {@code -1} when the
          *         schedule no longer runs or the insert failed
          */
@@ -312,6 +327,12 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
                         scheduleId, row.active ? "paused" : "inactive");
                 return -1L;
             }
+            String refusal = creatorMayNotExport(dataSource, row);
+            if (refusal != null) {
+                LOG.warn("ScheduleFireJob: schedule_id={} skipped: its creator (user_id={}) {}",
+                        scheduleId, row.createdBy, refusal);
+                return -1L;
+            }
             // Enqueue as if the creator had hit POST /export, tagged with the
             // schedule so the worker can mail its contact address.
             long jobId = new ExportJobDAO(dataSource)
@@ -322,6 +343,39 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
             LOG.info("ScheduleFireJob: schedule_id={} fired -> queued export_job id={}",
                     scheduleId, jobId);
             return jobId;
+        }
+
+        /**
+         * Why the schedule's creator may not export its dataset now, or
+         * {@code null} if they may: the account is usable, and they are a
+         * sysadmin or hold an active export role on the dataset's study or
+         * on the study it is a site of. The same predicate the export
+         * endpoints apply to a request.
+         */
+        private static String creatorMayNotExport(DataSource dataSource, ExportScheduleDAO.Row row) {
+            UserAccountDAO users = new UserAccountDAO(dataSource);
+            UserAccountBean creator = users.findByPK(row.createdBy);
+            if (creator == null || creator.getId() == 0) return "no longer exists";
+            Status status = creator.getStatus();
+            if (status == null || status.isDeleted() || status.isLocked()) return "is removed or locked";
+            if (Boolean.FALSE.equals(creator.getEnabled())
+                    || Boolean.FALSE.equals(creator.getAccountNonLocked())) {
+                return "is disabled or locked";
+            }
+            if (creator.isSysAdmin()) return null;
+
+            DatasetBean ds = (DatasetBean) new DatasetDAO(dataSource).findByPK(row.datasetId);
+            if (ds == null || ds.getId() == 0) return "has no dataset to export";
+            StudyBean study = (StudyBean) new StudyDAO(dataSource).findByPK(ds.getStudyId());
+            int parentId = study == null ? 0 : study.getParentStudyId();
+            for (StudyUserRoleBean grant : users.findAllRolesByUserName(creator.getName())) {
+                if (grant == null || grant.getStatus() == null
+                        || grant.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                boolean onStudy = grant.getStudyId() == ds.getStudyId()
+                        || (parentId > 0 && grant.getStudyId() == parentId);
+                if (onStudy && DatasetsApiController.roleMayExportData(creator, grant)) return null;
+            }
+            return "no longer holds a role that may export in the dataset's study";
         }
     }
 }

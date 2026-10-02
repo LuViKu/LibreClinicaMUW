@@ -22,11 +22,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -34,6 +37,8 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
@@ -46,6 +51,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import org.quartz.CronTrigger;
 import org.quartz.JobDataMap;
@@ -111,6 +118,17 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final String SCHEDULE_GROUP = "exportSchedule";
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
+    /** A Monitor of the study, not a sysadmin: owns the jobs of the cancel tests. */
+    private static final int OWNER_ID = 20501;
+    private static final String OWNER_NAME = "export-owner";
+    /** A Monitor of the study whose grants a test changes under its schedule. */
+    private static final int CREATOR_ID = 20502;
+    private static final String CREATOR_NAME = "schedule-creator";
+    /** Two sites of the study. */
+    private static final String SITE_A_OID = "S_EXPSITE_A";
+    private static final String SITE_B_OID = "S_EXPSITE_B";
+    private static int SITE_A_ID;
+
     private static Scheduler SCHEDULER;
 
     @TempDir
@@ -125,6 +143,61 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         Properties live = (Properties) f.get(null);
         assertNotNull(live, "DATAINFO must be set by AbstractApiControllerDatabaseIT");
         live.setProperty("filePath", FILE_ROOT.toString() + File.separator);
+    }
+
+    @BeforeAll
+    static void seedUsersAndSites() throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             Statement st = c.createStatement()) {
+            for (Object[] u : new Object[][] {{OWNER_ID, OWNER_NAME}, {CREATOR_ID, CREATOR_NAME}}) {
+                st.execute("INSERT INTO user_account (user_id, user_name, passwd, first_name, last_name, "
+                        + "email, active_study, institutional_affiliation, status_id, owner_id, "
+                        + "date_created, user_type_id, enabled, account_non_locked, lock_counter, "
+                        + "run_webservices, authtype, enable_api_key) "
+                        + "VALUES (" + u[0] + ", '" + u[1] + "', 'x', 'Export', 'Tester', "
+                        + "'" + u[1] + "@example.invalid', 1, 'MUW (test)', 1, 1, "
+                        + "current_timestamp, 2, true, true, 0, false, 'STANDARD', false)");
+                st.execute("INSERT INTO study_user_role "
+                        + "(role_name, study_id, status_id, owner_id, date_created, user_name) "
+                        + "VALUES ('monitor', " + STUDY_ID + ", 1, 1, current_timestamp, '" + u[1] + "')");
+            }
+            SITE_A_ID = insertSite(c, "exp-site-a", SITE_A_OID);
+            insertSite(c, "exp-site-b", SITE_B_OID);
+        }
+    }
+
+    /** A site of {@link #STUDY_ID}. */
+    private static int insertSite(Connection c, String uniqueId, String ocOid) throws Exception {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO study (parent_study_id, unique_identifier, secondary_identifier, "
+                        + "name, summary, date_planned_start, date_planned_end, date_created, "
+                        + "owner_id, type_id, status_id, principal_investigator, facility_name, "
+                        + "facility_city, facility_state, facility_zip, facility_country, "
+                        + "facility_recruitment_status, facility_contact_name, facility_contact_degree, "
+                        + "facility_contact_phone, facility_contact_email, protocol_type, "
+                        + "protocol_description, protocol_date_verification, phase, "
+                        + "expected_total_enrollment, sponsor, collaborators, medline_identifier, "
+                        + "url, url_description, conditions, keywords, eligibility, gender, "
+                        + "age_max, age_min, healthy_volunteer_accepted, purpose, allocation, "
+                        + "masking, control, assignment, endpoint, interventions, duration, "
+                        + "selection, timing, official_title, results_reference, oc_oid) "
+                        + "VALUES (?, ?, ?, ?, '', NOW(), NOW(), NOW(), 1, 1, 1, 'default', "
+                        + "'', '', '', '', '', '', '', '', '', '', 'observational', '', NOW(), "
+                        + "'default', 0, 'default', '', '', '', '', '', '', '', 'both', '', '', "
+                        + "false, 'Natural History', '', '', '', '', '', '', 'longitudinal', "
+                        + "'Convenience Sample', 'Retrospective', '', false, ?)",
+                Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, STUDY_ID);
+            ps.setString(2, uniqueId);
+            ps.setString(3, uniqueId);
+            ps.setString(4, uniqueId);
+            ps.setString(5, ocOid);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                assertTrue(keys.next(), "the site should persist");
+                return keys.getInt(1);
+            }
+        }
     }
 
     @BeforeAll
@@ -220,6 +293,10 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private MockHttpSession dataManagerIn(int studyId, int userId, String userName) {
+        return sessionIn(studyId, userId, userName, Role.COORDINATOR);
+    }
+
+    private MockHttpSession sessionIn(int studyId, int userId, String userName, Role legacyRole) {
         ResourceBundleProvider.updateLocale(Locale.ENGLISH);
         MockHttpSession s = new MockHttpSession();
         UserAccountBean ub = new UserAccountBean();
@@ -231,7 +308,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         study.setOid(studyId == STUDY_ID ? STUDY_OID : "S_OTHER");
         s.setAttribute("study", study);
         StudyUserRoleBean role = new StudyUserRoleBean();
-        role.setRole(Role.COORDINATOR);
+        role.setRole(legacyRole);
         role.setStudyId(studyId);
         role.setUserName(userName);
         role.setUserAccountId(userId);
@@ -239,8 +316,9 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         return s;
     }
 
+    /** A sysadmin who submitted none of the jobs the tests insert. */
     private MockHttpSession sysadminIn(int studyId) {
-        MockHttpSession s = dataManagerIn(studyId, 1, "root");
+        MockHttpSession s = dataManagerIn(studyId, 9, "an-admin");
         ((UserAccountBean) s.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
         return s;
     }
@@ -634,12 +712,21 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void onlyTheSubmitterOrASysadminCancels() throws Exception {
         DatasetBean ds = persistDataset();
-        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+        ExportJobDAO jobs = new ExportJobDAO(DATA_SOURCE);
+        long jobId = jobs.insertQueued(ds.getId(), "odm", OWNER_ID);
 
         cancel(jobId, dataManagerIn(STUDY_ID, 2, "colleague")).andExpect(status().isForbidden());
-        assertEquals(ExportJobDAO.STATUS_QUEUED, new ExportJobDAO(DATA_SOURCE).findById(jobId).status);
+        assertEquals(ExportJobDAO.STATUS_QUEUED, jobs.findById(jobId).status);
 
+        // a sysadmin who did not submit it
         cancel(jobId, sysadminIn(STUDY_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("cancelled"))
+                .andExpect(jsonPath("$.errorMessage").value("Cancelled by an-admin"));
+
+        // the submitter, whatever their role now: cancelling only stops their own export
+        long own = jobs.insertQueued(ds.getId(), "odm", OWNER_ID);
+        cancel(own, sessionIn(STUDY_ID, OWNER_ID, OWNER_NAME, Role.RESEARCHASSISTANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("cancelled"));
     }
@@ -678,17 +765,297 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
      * or any other than the production one) leaves the registration to the
      * worker, which must name an export format that exists.
      */
-    @Test
-    void theWorkerRegistersAFileTheMaterializerDidNot() throws Exception {
+    @ParameterizedTest(name = "{0} is registered as export_format {1}")
+    @CsvSource({"odm, 4", "csv, 2", "tsv, 1", "excel, 3", "pdf, 5", "bundle, 6"})
+    void theWorkerRegistersAFileTheMaterializerDidNot(String format, int exportFormatId) throws Exception {
         DatasetBean ds = persistDataset();
-        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), format, 1);
 
         assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer()));
 
         ExportJobDAO.Row job = new ExportJobDAO(DATA_SOURCE).findById(jobId);
         assertEquals(ExportJobDAO.STATUS_DONE, job.status, job.errorMessage);
-        assertEquals(4, count("SELECT export_format_id FROM archived_dataset_file "
+        assertEquals(exportFormatId, count("SELECT export_format_id FROM archived_dataset_file "
                 + " WHERE archived_dataset_file_id = " + job.archivedDatasetFileId),
-                "an ODM export is registered as the XML format");
+                "registered under the format the production extract uses for " + format);
+        assertEquals(1, count("SELECT count(*) FROM export_format WHERE export_format_id = " + exportFormatId),
+                "a format that exists");
+    }
+
+    /* ---------------- review follow-ups ---------------- */
+
+    /**
+     * The ODM extract appends section by section and registers its file only
+     * once the document is closed. A cancel in between leaves nothing behind:
+     * no registered file, and no unterminated document with subject data on
+     * disk.
+     */
+    @Test
+    void aCancelledOdmExtractLeavesNoFileBehind() throws Exception {
+        DatasetBean ds = persistDataset();
+        Path datasetDir = FILE_ROOT.resolve("datasets").resolve(String.valueOf(ds.getId()));
+        RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt())).thenReturn(new ArrayList<>());
+        // The cancel arrives once the first section is on disk: the next
+        // database call after that asks this thread's job to stop, as
+        // ExportJobRunner.requestCancel would, and the next checkpoint throws.
+        JobTerminationMonitor monitor = JobTerminationMonitor.createInstance("cancelled odm");
+        AtomicBoolean sectionWritten = new AtomicBoolean();
+        DataSource cancelAfterTheFirstSection = (DataSource) Proxy.newProxyInstance(
+                DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+                    if ("getConnection".equals(method.getName()) && xmlFilesUnder(datasetDir) > 0) {
+                        sectionWritten.set(true);
+                        monitor.terminate();
+                    }
+                    return invoke(method, DATA_SOURCE, args);
+                });
+        SynchronousExportMaterializer materializer = new SynchronousExportMaterializer(
+                cancelAfterTheFirstSection, Mockito.mock(CoreResources.class), rules);
+
+        try {
+            assertThrows(JobInterruptedException.class, () -> materializer.materialize(ds, "odm", 1),
+                    "the extract stops at its next checkpoint");
+        } finally {
+            // the next test runs on this thread
+            JobTerminationMonitor.createInstance("idle");
+        }
+
+        assertTrue(sectionWritten.get(), "the extract had written part of its file when it was cancelled");
+        assertEquals(0, archivedFilesOf(ds));
+        assertEquals(0, xmlFilesUnder(datasetDir), "no partial ODM file is left on disk");
+    }
+
+    private static long xmlFilesUnder(Path dir) throws Exception {
+        if (!Files.exists(dir)) return 0;
+        try (Stream<Path> files = Files.walk(dir)) {
+            return files.filter(p -> p.getFileName().toString().endsWith(".xml")).count();
+        }
+    }
+
+    /**
+     * A cancel that arrives the moment the worker has claimed a job finds
+     * the job's monitor: the job is visible as running only once a cancel can
+     * reach it. The cancel is sent right after the claim commits, before the
+     * worker does anything else.
+     */
+    @Test
+    void aCancelRightAfterTheClaimReachesTheWorker() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
+        AtomicInteger answer = new AtomicInteger();
+        DataSource claimed = afterTheClaimCommits(() -> answer.set(
+                cancel(jobId, dataManagerIn(STUDY_ID)).andReturn().getResponse().getStatus()));
+
+        assertTrue(ExportJobRunner.runOnce(claimed, new PlaceholderExportFileMaterializer()));
+
+        assertEquals(202, answer.get(), "the running job's worker is on this server and was asked to stop");
+    }
+
+    /**
+     * A running export without a checkpoint (the tabular formats) finishes
+     * despite a cancel request: done, with its file, and without the note
+     * the request left.
+     */
+    @Test
+    void aCancelledExportWithoutACheckpointFinishesDoneWithoutTheCancelNote() throws Exception {
+        DatasetBean ds = persistDataset();
+        long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "csv", 1);
+        CountDownLatch running = new CountDownLatch(1);
+        CountDownLatch proceed = new CountDownLatch(1);
+        ExportFileMaterializer noCheckpoint = (dataset, format, userId) -> {
+            running.countDown();
+            proceed.await(30, TimeUnit.SECONDS);
+            return new ExportFileMaterializer.Result("finished.csv", "/placeholder/finished.csv", 0L);
+        };
+        Thread worker = new Thread(() -> ExportJobRunner.runOnce(DATA_SOURCE, noCheckpoint));
+        worker.start();
+        assertTrue(running.await(30, TimeUnit.SECONDS), "the worker should have claimed the job");
+
+        try {
+            cancel(jobId, dataManagerIn(STUDY_ID))
+                    .andExpect(status().isAccepted())
+                    .andExpect(jsonPath("$.status").value("running"))
+                    .andExpect(jsonPath("$.cancelRequested").value(true))
+                    .andExpect(jsonPath("$.errorMessage").value("Cancelled by root"));
+        } finally {
+            proceed.countDown();
+            worker.join(30_000);
+        }
+        assertFalse(worker.isAlive());
+
+        mockMvc().perform(get("/api/v1/exports/" + jobId).session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("done"))
+                .andExpect(jsonPath("$.errorMessage").value(Matchers.nullValue()))
+                .andExpect(jsonPath("$.cancelRequested").value(false))
+                .andExpect(jsonPath("$.archivedDatasetFileId").isNumber());
+        assertEquals(1, archivedFilesOf(ds), "the finished export's file is registered");
+    }
+
+    @Test
+    void aDeletedScheduleQueuesNothingFromATriggerThatOutlivedIt() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createViaApi(ds);
+        mockMvc().perform(delete("/api/v1/schedules/" + id).session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isNoContent());
+
+        assertEquals(-1L, tick(staleJobData(id, ds.getId(), "odm"), ds.getId()));
+        assertEquals(-1L, tick(staleJobData(987_654_321L, ds.getId(), "odm"), ds.getId()),
+                "nor does a trigger of a schedule that does not exist");
+        assertEquals(0, count("SELECT count(*) FROM export_job WHERE dataset_id = " + ds.getId()));
+    }
+
+    /**
+     * A schedule runs as its creator, so a tick queues an export only while
+     * the creator could still ask for one: an active account with an export
+     * role on the dataset's study. Otherwise the tick queues nothing and
+     * leaves the schedule as it is.
+     */
+    @Test
+    void aScheduleQueuesOnlyWhileItsCreatorMayExport() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = new ExportScheduleDAO(DATA_SOURCE).create(ds.getId(), "odm", CRON, CREATOR_ID, null);
+        String role = "UPDATE study_user_role SET role_name = '%s', status_id = %d WHERE user_name = '"
+                + CREATOR_NAME + "'";
+        String account = "UPDATE user_account SET status_id = %d, account_non_locked = %s WHERE user_id = "
+                + CREATOR_ID;
+        try {
+            assertTrue(tick(staleJobData(id, ds.getId(), "odm"), ds.getId()) > 0, "a Monitor of the study");
+
+            exec(String.format(role, "ra", 1));
+            assertEquals(-1L, tick(staleJobData(id, ds.getId(), "odm"), ds.getId()),
+                    "demoted to a role that may not export");
+
+            exec(String.format(role, "monitor", 5));
+            assertEquals(-1L, tick(staleJobData(id, ds.getId(), "odm"), ds.getId()),
+                    "removed from the study");
+
+            exec(String.format(role, "monitor", 1));
+            exec(String.format(account, 6, "false"));
+            assertEquals(-1L, tick(staleJobData(id, ds.getId(), "odm"), ds.getId()), "account locked");
+
+            exec(String.format(account, 5, "true"));
+            assertEquals(-1L, tick(staleJobData(id, ds.getId(), "odm"), ds.getId()), "account removed");
+
+            exec(String.format(account, 1, "true"));
+            assertTrue(tick(staleJobData(id, ds.getId(), "odm"), ds.getId()) > 0, "access restored");
+        } finally {
+            exec(String.format(role, "monitor", 1));
+            exec(String.format(account, 1, "true"));
+        }
+        assertEquals(2, count("SELECT count(*) FROM export_job WHERE dataset_id = " + ds.getId()));
+        ExportScheduleDAO.Row row = new ExportScheduleDAO(DATA_SOURCE).findById(id);
+        assertTrue(row.active && row.enabled, "a refused tick leaves the schedule as it is");
+    }
+
+    /**
+     * A run already queued when its schedule is paused or deleted still
+     * runs (its file is listed with the dataset's files, and it can be
+     * cancelled), but it is not mailed: whoever stopped the schedule stopped
+     * its mail.
+     */
+    @Test
+    void aRunOfASchedulePausedOrDeletedMeanwhileFinishesUnmailed() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createWithContact(ds);
+        Outbox outbox = new Outbox();
+        ExportCompletionNotifier notifier = new ExportCompletionNotifier(outbox, DATA_SOURCE);
+        ExportJobDAO jobs = new ExportJobDAO(DATA_SOURCE);
+
+        long beforePause = tick(jobDataOf(id), ds.getId());
+        patchSchedule(id, "{\"enabled\":false}", STUDY_ID).andExpect(status().isOk());
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer(), notifier));
+        assertEquals(ExportJobDAO.STATUS_DONE, jobs.findById(beforePause).status);
+        assertTrue(outbox.sent.isEmpty(), "a paused schedule's run is not mailed");
+
+        patchSchedule(id, "{\"enabled\":true}", STUDY_ID).andExpect(status().isOk());
+        long beforeDelete = tick(jobDataOf(id), ds.getId());
+        mockMvc().perform(delete("/api/v1/schedules/" + id).session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isNoContent());
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, new PlaceholderExportFileMaterializer(), notifier));
+        assertEquals(ExportJobDAO.STATUS_DONE, jobs.findById(beforeDelete).status);
+        assertTrue(outbox.sent.isEmpty(), "a deleted schedule's run is not mailed");
+    }
+
+    @Test
+    void aCancelledScheduledRunIsNotMailed() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createWithContact(ds);
+        Outbox outbox = new Outbox();
+        ExportCompletionNotifier notifier = new ExportCompletionNotifier(outbox, DATA_SOURCE);
+
+        long jobId = tick(jobDataOf(id), ds.getId());
+        ExportFileMaterializer stopped = (dataset, format, userId) -> {
+            assertTrue(ExportJobRunner.requestCancel(jobId));
+            JobTerminationMonitor.check(); // as the ODM extract and the bundle writer do
+            return new ExportFileMaterializer.Result("never.xml", "/placeholder/never.xml", 0L);
+        };
+        assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, stopped, notifier));
+
+        assertEquals(ExportJobDAO.STATUS_CANCELLED, new ExportJobDAO(DATA_SOURCE).findById(jobId).status);
+        assertTrue(outbox.sent.isEmpty(), "someone chose to stop it; it is not reported");
+    }
+
+    /**
+     * The study's export jobs are listed in the study and in the parent
+     * study of a site, as DatasetsApiController's study-scoped endpoints
+     * allow; a site does not see its parent's or a sibling's.
+     */
+    @Test
+    void aSitesExportJobsAreListedInItsParentButNotFromAnotherSite() throws Exception {
+        mockMvc().perform(get("/api/v1/studies/" + SITE_A_OID + "/export-jobs").session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isOk());
+        mockMvc().perform(get("/api/v1/studies/" + SITE_A_OID + "/export-jobs").session(dataManagerIn(SITE_A_ID)))
+                .andExpect(status().isOk());
+
+        mockMvc().perform(get("/api/v1/studies/" + STUDY_OID + "/export-jobs").session(dataManagerIn(SITE_A_ID)))
+                .andExpect(status().isForbidden());
+        mockMvc().perform(get("/api/v1/studies/" + SITE_B_OID + "/export-jobs").session(dataManagerIn(SITE_A_ID)))
+                .andExpect(status().isForbidden());
+    }
+
+    private long createWithContact(DatasetBean ds) throws Exception {
+        String json = mockMvc().perform(post("/api/v1/datasets/" + ds.getId() + "/schedules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"odm\",\"cronExpression\":\"" + CRON + "\","
+                                + "\"notifyEmail\":\"dm-team@example.org\"}")
+                        .session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JSON.readTree(json).get("id").asLong();
+    }
+
+    private interface Step {
+        void run() throws Exception;
+    }
+
+    /**
+     * The test database, with {@code step} run once, right after the first
+     * commit of a transaction (the worker's claim, the only one ExportJobDAO
+     * runs outside auto-commit), on the committing thread.
+     */
+    private static DataSource afterTheClaimCommits(Step step) {
+        AtomicBoolean done = new AtomicBoolean();
+        return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+                new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+                    Object result = invoke(method, DATA_SOURCE, args);
+                    if (!(result instanceof Connection connection)) return result;
+                    return Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                            new Class<?>[] {Connection.class}, (cp, cm, cargs) -> {
+                                boolean manual = "commit".equals(cm.getName()) && !connection.getAutoCommit();
+                                Object r = invoke(cm, connection, cargs);
+                                if (manual && done.compareAndSet(false, true)) step.run();
+                                return r;
+                            });
+                });
+    }
+
+    private static Object invoke(java.lang.reflect.Method method, Object target, Object[] args)
+            throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 }

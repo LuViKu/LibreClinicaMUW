@@ -72,7 +72,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
  * the dataset bundle check it at their checkpoints and throw
  * {@link JobInterruptedException}, and the job ends {@code cancelled}.
  * No file is registered for it, as a file is registered only once the
- * export is complete. The tabular formats have no checkpoint and finish.
+ * export is complete, and the part the ODM extract or the bundle had
+ * written is removed from disk. The tabular formats have no checkpoint and
+ * finish.
  *
  * <h2>What this is NOT</h2>
  *
@@ -147,11 +149,21 @@ public class ExportJobRunner implements Job {
     public static boolean runOnce(DataSource dataSource, ExportFileMaterializer materializer,
                                   ExportCompletionNotifier notifier) {
         ExportJobDAO jobDao = new ExportJobDAO(dataSource);
-        ExportJobDAO.Row claimed = jobDao.claimNextQueued();
-        if (claimed == null) return false;
         // The extract's checkpoints read this thread's monitor;
-        // requestCancel reaches the same one through RUNNING.
-        RUNNING.put(claimed.id, JobTerminationMonitor.createInstance("export_job " + claimed.id));
+        // requestCancel reaches the same one through RUNNING. It is in
+        // RUNNING before the claim commits: a cancel that sees the job
+        // running must find the monitor, not answer that no worker of this
+        // server runs it.
+        long[] registered = {-1L};
+        ExportJobDAO.Row claimed = jobDao.claimNextQueued(id -> {
+            RUNNING.put(id, JobTerminationMonitor.createInstance("export_job " + id));
+            registered[0] = id;
+        });
+        if (claimed == null) {
+            if (registered[0] >= 0) RUNNING.remove(registered[0]);
+            JobTerminationMonitor.clear();
+            return false;
+        }
         try {
             process(dataSource, materializer, jobDao, claimed);
         } finally {
@@ -276,7 +288,9 @@ public class ExportJobRunner implements Job {
     private static int formatIdFor(String format) {
         if (format == null) return ExportFormatBean.TXTFILE.getId();
         switch (format.toLowerCase()) {
-            case "csv":
+            // as SynchronousExportMaterializer registers its CSV file
+            case "csv": return ExportFormatBean.CSVFILE.getId();
+            case "tsv":
             case "tab":
             case "txt": return ExportFormatBean.TXTFILE.getId();
             case "excel":

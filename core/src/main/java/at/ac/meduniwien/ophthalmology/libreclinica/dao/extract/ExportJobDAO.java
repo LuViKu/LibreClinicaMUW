@@ -18,6 +18,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongConsumer;
 
 import javax.sql.DataSource;
 
@@ -113,6 +114,17 @@ public class ExportJobDAO {
      * {@code runExport} and gets recorded as {@code failed}.
      */
     public Row claimNextQueued() {
+        return claimNextQueued(null);
+    }
+
+    /**
+     * As {@link #claimNextQueued()}, calling {@code beforeCommit} with the
+     * claimed id while the row is still locked and not yet visible as
+     * {@code running}. Whatever it registers is in place before anyone can
+     * see the job running. If the claim then fails to commit, this returns
+     * {@code null} and the caller undoes the registration.
+     */
+    public Row claimNextQueued(LongConsumer beforeCommit) {
         String select = "SELECT id, dataset_id, format, submitted_by, schedule_id "
                 + "FROM export_job WHERE status = '" + STATUS_QUEUED + "' "
                 + "ORDER BY submitted_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED";
@@ -144,9 +156,11 @@ public class ExportJobDAO {
                     ps.setLong(1, picked.id);
                     ps.executeUpdate();
                 }
+                if (beforeCommit != null) beforeCommit.accept(picked.id);
                 c.commit();
                 return picked;
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
+                // Restoring auto-commit below would commit the claim.
                 c.rollback();
                 throw e;
             } finally {

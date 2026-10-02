@@ -38,7 +38,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemEx
  *
  * <p>Only runs that came from a schedule with an address are mailed. An
  * export someone started by hand is followed in the SPA by whoever started
- * it, and a cancelled run is not mailed: someone chose to stop it.
+ * it, and a cancelled run is not mailed: someone chose to stop it. Nor is a
+ * run of a schedule that was paused or deleted while the run was queued or
+ * running: whoever stopped the schedule stopped its mail with it. The run
+ * itself still finishes, and its file is listed with the dataset's files.
  *
  * <p>Never throws. The run's outcome is already recorded, and a mail server
  * that is down must not turn a finished export into a failed one. A failed
@@ -62,8 +65,8 @@ public class ExportCompletionNotifier {
 
     /**
      * Mail the contact address of the schedule {@code jobId} came from, if
-     * the job came from a schedule, the schedule names an address, and the
-     * job is done or failed.
+     * the job came from a schedule that still runs (neither deleted nor
+     * paused), the schedule names an address, and the job is done or failed.
      */
     public void notifyFinished(long jobId) {
         try {
@@ -72,7 +75,8 @@ public class ExportCompletionNotifier {
             boolean done = ExportJobDAO.STATUS_DONE.equals(job.status);
             if (!done && !ExportJobDAO.STATUS_FAILED.equals(job.status)) return;
             ExportScheduleDAO.Row schedule = new ExportScheduleDAO(dataSource).findById(job.scheduleId);
-            if (schedule == null || schedule.notifyEmail == null || schedule.notifyEmail.isBlank()) return;
+            if (schedule == null || !schedule.active || !schedule.enabled) return;
+            if (schedule.notifyEmail == null || schedule.notifyEmail.isBlank()) return;
 
             DatasetBean dataset = (DatasetBean) new DatasetDAO(dataSource).findByPK(job.datasetId);
             String datasetName = dataset == null || dataset.getId() == 0
