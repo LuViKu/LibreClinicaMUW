@@ -33,7 +33,7 @@ final class NoteFixtures {
     /** A parent note on an {@code item_data} row, mapped the way legacy maps it. */
     static int insertItemNote(DataSource dataSource, int typeId, int statusId, Instant created,
                               int itemDataId, String description) throws SQLException {
-        int noteId = insertNote(dataSource, 0, typeId, statusId, created, description);
+        int noteId = insertNote(dataSource, 0, typeId, statusId, created, "itemData", description);
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO dn_item_data_map (item_data_id, discrepancy_note_id, column_name, "
@@ -49,11 +49,44 @@ final class NoteFixtures {
         return noteId;
     }
 
+    /**
+     * A parent note on a field of the event CRF itself, such as its interview
+     * date ({@code column} {@code date_interviewed}), mapped as legacy maps it.
+     */
+    static int insertEventCrfNote(DataSource dataSource, int typeId, int statusId, Instant created,
+                                  int eventCrfId, String column, String description) throws SQLException {
+        return insertFieldNote(dataSource, typeId, statusId, created, "eventCrf",
+                "dn_event_crf_map", "event_crf_id", eventCrfId, column, description);
+    }
+
+    /** A parent note on a field of a visit, such as its start date. */
+    static int insertStudyEventNote(DataSource dataSource, int typeId, int statusId, Instant created,
+                                    int studyEventId, String column, String description) throws SQLException {
+        return insertFieldNote(dataSource, typeId, statusId, created, "studyEvent",
+                "dn_study_event_map", "study_event_id", studyEventId, column, description);
+    }
+
+    private static int insertFieldNote(DataSource dataSource, int typeId, int statusId, Instant created,
+                                       String entityType, String mapTable, String idColumn, int entityId,
+                                       String column, String description) throws SQLException {
+        int noteId = insertNote(dataSource, 0, typeId, statusId, created, entityType, description);
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO " + mapTable + " (" + idColumn + ", discrepancy_note_id, column_name) "
+                             + "VALUES (?, ?, ?)")) {
+            ps.setInt(1, entityId);
+            ps.setInt(2, noteId);
+            ps.setString(3, column);
+            ps.executeUpdate();
+        }
+        return noteId;
+    }
+
     /** A child note in the thread of {@code parentId}, as a reply is stored. */
     static int insertChild(DataSource dataSource, int parentId, int statusId, Instant created,
                            String description) throws SQLException {
         return insertNote(dataSource, parentId, typeOf(dataSource, parentId), statusId, created,
-                description);
+                "itemData", description);
     }
 
     /** The mapping tables, one per entity type a note can be on. */
@@ -95,6 +128,12 @@ final class NoteFixtures {
                 noteId);
     }
 
+    /** The visit an event CRF belongs to. */
+    static int studyEventOf(DataSource dataSource, int eventCrfId) throws SQLException {
+        return intColumn(dataSource,
+                "SELECT study_event_id FROM event_crf WHERE event_crf_id = ?", eventCrfId);
+    }
+
     static int typeOf(DataSource dataSource, int noteId) throws SQLException {
         return intColumn(dataSource,
                 "SELECT discrepancy_note_type_id FROM discrepancy_note WHERE discrepancy_note_id = ?",
@@ -115,13 +154,14 @@ final class NoteFixtures {
     }
 
     private static int insertNote(DataSource dataSource, int parentId, int typeId, int statusId,
-                                  Instant created, String description) throws SQLException {
+                                  Instant created, String entityType, String description)
+            throws SQLException {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO discrepancy_note (description, discrepancy_note_type_id, "
                              + "resolution_status_id, date_created, owner_id, parent_dn_id, "
                              + "entity_type, study_id) "
-                             + "VALUES (?, ?, ?, ?, 1, ?, 'itemData', 1) RETURNING discrepancy_note_id")) {
+                             + "VALUES (?, ?, ?, ?, 1, ?, ?, 1) RETURNING discrepancy_note_id")) {
             ps.setString(1, description);
             ps.setInt(2, typeId);
             ps.setInt(3, statusId);
@@ -131,6 +171,7 @@ final class NoteFixtures {
             } else {
                 ps.setNull(5, java.sql.Types.INTEGER);
             }
+            ps.setString(6, entityType);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getInt(1);

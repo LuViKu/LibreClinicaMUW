@@ -72,6 +72,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDA
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
@@ -1298,7 +1299,7 @@ public class EventCrfsApiController {
         for (DiscrepancyNoteBean n : notes) {
             if (n == null || n.getId() == 0) continue;
             totalCount++;
-            boolean isOpen = isOpenStatus(n.getResolutionStatusId());
+            boolean isOpen = isOpenQuery(n);
             if (isOpen) openCount++;
             String itemOid = resolveItemOidForParentNote(n, idDAO, itemDAO, oidByItemId);
             if (itemOid == null || itemOid.isBlank()) continue;
@@ -1398,7 +1399,7 @@ public class EventCrfsApiController {
                 secId = (ifm != null ? ifm.getSectionId() : -1);
                 sectionIdByItemDataId.put(idbId, secId);
             }
-            openByNoteId.put(n.getId(), isOpenStatus(n.getResolutionStatusId()));
+            openByNoteId.put(n.getId(), isOpenQuery(n));
         }
 
         List<SectionStatusDto> out = new ArrayList<>();
@@ -1481,7 +1482,17 @@ public class EventCrfsApiController {
         return null;
     }
 
-    private static boolean isOpenStatus(int resolutionStatusId) {
+    /**
+     * An open query or failed validation check, as the SDV page counts
+     * them. An annotation or a reason for change asks nobody anything, even
+     * one the SPA stored as New before it stored them Not Applicable.
+     */
+    private static boolean isOpenQuery(DiscrepancyNoteBean n) {
+        int type = n.getDiscrepancyNoteTypeId();
+        if (type != DiscrepancyNoteType.QUERY.getId() && type != DiscrepancyNoteType.FAILEDVAL.getId()) {
+            return false;
+        }
+        int resolutionStatusId = n.getResolutionStatusId();
         // 1=new, 2=updated, 3=resolution-proposed are "open"; 4=closed,
         // 5=not-applicable are "resolved" (per the SPA's
         // resolutionStatus union).

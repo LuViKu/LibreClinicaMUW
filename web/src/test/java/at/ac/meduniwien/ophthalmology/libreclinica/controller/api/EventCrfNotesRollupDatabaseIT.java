@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
@@ -75,6 +77,48 @@ class EventCrfNotesRollupDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.sectionOid=='S_IDENT')].openQueries").value(containsInAnyOrder(1)))
                 .andExpect(jsonPath("$[?(@.sectionOid=='S_VITALS')].openQueries").value(containsInAnyOrder(2)));
+    }
+
+    /**
+     * An annotation the SPA stored as New before annotations were stored
+     * Not Applicable asks nobody anything: the CRF view does not count it as
+     * an open query, as the SDV page does not. Event CRF 4 (item data 11)
+     * has no other note.
+     */
+    @Test
+    void anAnnotationLeftNewIsNotAnOpenQueryInTheCrfView() throws Exception {
+        int note = NoteFixtures.insertItemNote(DATA_SOURCE, 2, 1,
+                Instant.now().minus(Duration.ofDays(2)), 11, "Measured with shoes on");
+        try {
+            mvc().perform(get("/api/v1/eventCrfs/4/notes").session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalCount").value(1))
+                    .andExpect(jsonPath("$.openCount").value(0))
+                    .andExpect(jsonPath("$.byItemOid.*.status").value(containsInAnyOrder("resolved")));
+            mvc().perform(get("/api/v1/eventCrfs/4/section-status").session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.openQueries > 0)]").isEmpty());
+        } finally {
+            NoteFixtures.delete(DATA_SOURCE, note);
+        }
+    }
+
+    /** A failed validation check is still an open discrepancy in the CRF view. */
+    @Test
+    void aFailedValidationCheckIsAnOpenQueryInTheCrfView() throws Exception {
+        int note = NoteFixtures.insertItemNote(DATA_SOURCE, 1, 1,
+                Instant.now().minus(Duration.ofDays(2)), 11, "Value out of range");
+        try {
+            mvc().perform(get("/api/v1/eventCrfs/4/notes").session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.openCount").value(1))
+                    .andExpect(jsonPath("$.byItemOid.*.status").value(containsInAnyOrder("open")));
+            mvc().perform(get("/api/v1/eventCrfs/4/section-status").session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.openQueries == 1)]").isNotEmpty());
+        } finally {
+            NoteFixtures.delete(DATA_SOURCE, note);
+        }
     }
 
     private static MockHttpSession monitor() {
