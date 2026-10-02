@@ -1766,9 +1766,12 @@ public class EventCrfsApiController {
      * Phase E.6 restore-quickwins — restore a soft-deleted event_crf.
      * Inverse of the legacy {@code RemoveEventCRFServlet} +
      * {@code RestoreEventCRFServlet}: flips the event_crf status from
-     * {@link Status#AUTO_DELETED} (or {@link Status#DELETED}) back to
-     * {@link Status#AVAILABLE}, and cascades any AUTO_DELETED item_data
-     * rows back to AVAILABLE.
+     * {@link Status#AUTO_DELETED} (or {@link Status#DELETED}) back, and
+     * cascades its AUTO_DELETED item_data rows back. A CRF whose removal
+     * recorded its status, and which nothing has changed since, gets that
+     * status back, and its values theirs ({@link EventDataStatusCascade});
+     * otherwise the CRF and its values become {@link Status#AVAILABLE}, as
+     * the legacy servlet makes them.
      *
      * <p>Guards (order matters):
      * <ol>
@@ -1864,34 +1867,62 @@ public class EventCrfsApiController {
                             + version.getName() + "' is removed (restoring the version brings it back)"));
         }
 
-        ecb.setStatus(Status.AVAILABLE);
+        // The status the CRF's removal recorded, while nothing has changed
+        // the CRF since (a completed CRF comes back completed); otherwise
+        // available, as legacy RestoreEventCRFServlet makes it.
+        Status removedAs = ecb.getStatus();
+        Integer recorded;
+        try (Connection c = dataSource.getConnection()) {
+            recorded = EventDataStatusCascade.recordedStatus(c, ecb.getId());
+        } catch (SQLException e) {
+            LOG.error("event_crf restore: id={} could not read its removal record: {}",
+                    ecb.getId(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "The CRF could not be restored; nothing was changed. See the server log."));
+        }
+        Status restoredAs = recorded == null ? Status.AVAILABLE : Status.get(recorded);
+        ecb.setStatus(restoredAs);
         ecb.setUpdater(currentUser);
         ecb.setUpdatedDate(new Date());
         ecDao.update(ecb);
 
-        // Cascade AUTO_DELETED item_data rows back to AVAILABLE. Hard
-        // DELETED rows stay put (legacy semantics — they're operator
-        // delete, not parent cascade).
-        ItemDataDAO idDao = new ItemDataDAO(dataSource);
-        java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ecb.getId());
-        for (ItemDataBean it : items) {
-            if (it.getStatus() == null || !it.getStatus().equals(Status.AUTO_DELETED)) continue;
-            it.setStatus(Status.AVAILABLE);
-            it.setUpdater(currentUser);
-            it.setUpdatedDate(new Date());
-            // Not update(): that clears the value's provenance.
-            idDao.updateStatusOnly(it);
+        // Cascade AUTO_DELETED item_data rows back. Hard DELETED rows stay
+        // put (legacy semantics — they're operator delete, not parent
+        // cascade). Only the status changes: a value keeps its provenance,
+        // which ItemDataDAO.update would clear.
+        try (Connection c = dataSource.getConnection()) {
+            ItemDataStatusCascade.restore(c, ecb.getId(), currentUser.getId(), recorded != null);
+            EventDataStatusCascade.forget(c, List.of(ecb.getId()));
+        } catch (SQLException e) {
+            LOG.error("event_crf restore: id={} is restored but its values are not: {}",
+                    ecb.getId(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "The CRF was restored but its values were not; see the server log."));
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
         writeAuditEvent(auditDao, AuditTypeIds.EVENT_CRF_RESTORED,
                 currentUser, currentStudy, ss,
                 "event_crf_restore", "event_crf", ecb.getId(),
-                "status_id", "AUTO_DELETED", "AVAILABLE");
+                "status_id", statusConstant(removedAs), statusConstant(restoredAs));
 
         LOG.info("event_crf restore: id={} subject={} by user={} role={}",
                 ecb.getId(), ss.getLabel(), currentUser.getName(), roleId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** A status as the restore's audit row names it: the {@link Status} constant's name. */
+    private static String statusConstant(Status status) {
+        return switch (status.getId()) {
+            case 1 -> "AVAILABLE";
+            case 2 -> "UNAVAILABLE";
+            case 4 -> "PENDING";
+            case 5 -> "DELETED";
+            case 6 -> "LOCKED";
+            case 7 -> "AUTO_DELETED";
+            case 8 -> "SIGNED";
+            default -> status.getName();
+        };
     }
 
     /**

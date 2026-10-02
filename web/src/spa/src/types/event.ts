@@ -139,10 +139,10 @@ export type EventCrfRowStatus =
   | 'stopped'
   | 'signed'
   /**
-   * Phase E.6 restore-quickwins — soft-deleted via
-   * {@code DELETE /api/v1/eventCrfs/{id}} (AUTO_DELETED in the DB).
-   * The EventDetailView surfaces a Restore action for this state;
-   * the row's data is preserved server-side.
+   * Removed, on its own ({@code POST /api/v1/eventCrfs/{id}/remove} or
+   * the legacy RemoveEventCRF page; DELETED in the DB) or with its visit
+   * (AUTO_DELETED). The EventDetailView surfaces a Restore action for
+   * this state; the row's data is preserved server-side.
    */
   | 'removed'
 
@@ -172,6 +172,20 @@ export interface EventDetailDto {
   ordinal: number
   repeating: boolean
   crfs: EventCrfRowDto[]
+}
+
+/** GET /pages/api/v1/eventCrfs/{id}/removal-impact — what removing the CRF takes out. */
+export interface EventCrfRemovalImpact {
+  /** Values entered on the CRF; the removal marks them removed with it. */
+  values: number
+  /** Open discrepancy-note threads on those values; the removal closes them. */
+  openNoteThreads: number
+}
+
+/** Body of POST /pages/api/v1/eventCrfs/{id}/remove. */
+export interface RemoveEventCrfRequest {
+  /** Why the CRF is removed; required, at most 1000 characters. */
+  reason: string
 }
 
 /*

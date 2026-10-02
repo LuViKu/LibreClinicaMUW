@@ -802,7 +802,17 @@
       "allActors": "Alle Akteur/-innen",
       "variant": "Ereignistyp",
       "subject": "Teilnehmer",
-      "allSubjects": "Alle Teilnehmer"
+      "allSubjects": "Alle Teilnehmer",
+      "item": "Item",
+      "itemPlaceholder": "Item-OID, z. B. I_HEIGHT_CM",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "pager": {
+      "label": "Seiten des Audit-Logs",
+      "previous": "← Neuere",
+      "next": "Ältere →",
+      "position": "Seite {page} von {pages}"
     },
     "variant": {
       "all": "Alle Ereignistypen",
@@ -1133,7 +1143,8 @@
     "disable": "Entfernen",
     "restore": "Wiederherstellen",
     "statusRemoved": "Entfernt",
-    "disableConfirm": "Gruppenklasse »{name}« entfernen? Bereits zugeordnete Teilnehmer/innen bleiben im Audit Trail; neue Zuordnungen verwenden die verbleibenden Klassen. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Gruppenklasse »{name}« entfernen? Die Zuordnungen von Teilnehmer/innen zu ihren Gruppen werden mit entfernt; beim Wiederherstellen der Klasse kommen sie zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableImpact": "Mit entfernt werden: {subjectAssignments} Zuordnung(en) von Teilnehmer/innen zu {groups} Gruppe(n).",
     "field": {
       "name": "Name der Gruppenklasse",
       "type": "Typ",
@@ -2274,7 +2285,8 @@
       "saveError": "Inferenz-Task-Auswahl konnte nicht gespeichert werden."
     },
     "disable": "Entfernen",
-    "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Visite »{name}« entfernen? Ihre CRF-Zuordnungen und alle danach geplanten Termine werden mit entfernt, samt den dort erfassten CRFs und Werten. Beim Wiederherstellen der Visite kommt das mit Entfernte zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableImpact": "Mit entfernt werden: {crfAssignments} CRF-Zuordnung(en), {visits} Termin(e) von {subjects} Teilnehmer/innen, {eventCrfs} CRF(s) und {itemValues} erfasste(r) Wert(e).",
     "restore": "Wiederherstellen",
     "restoreConfirm": "Visite »{name}« wiederherstellen? Automatisch entfernte CRFs und Item-Daten werden reaktiviert; manuell entfernte Zeilen bleiben entfernt. Die Aktion wird im Audit Trail dokumentiert.",
     "lock": "Sperren",
@@ -2737,7 +2749,8 @@
       "tokenExpired": "Vorschau abgelaufen",
       "reupload": "XML neu hochladen",
       "startOver": "Neu beginnen",
-      "failedHeading": "Commit fehlgeschlagen"
+      "failedHeading": "Commit fehlgeschlagen",
+      "ruleWarningsHeading": "Die Regeln der Studie meldeten"
     }
   },
   "signSubject": {
@@ -3117,7 +3130,26 @@
     },
     "crf": {
       "restore": "CRF wiederherstellen",
-      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen."
+      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen.",
+      "remove": "Entfernen",
+      "removeDialog": {
+        "title": "CRF entfernen",
+        "subtitle": "{crf} {version} · {event} · {subject}",
+        "intro": "{crf} wird aus den Daten von Proband {subject} zur Visite {event} entfernt.",
+        "values": "Mit ihm entfernte erfasste Werte: {n}",
+        "notes": "Offene Rückfragen zu diesen Werten, die geschlossen werden: {n}",
+        "nothing": "Auf diesem CRF wurden keine Werte erfasst.",
+        "restoreHint": "Es wird nichts gelöscht. Wird das CRF wiederhergestellt, kommen seine Werte zurück; geschlossene Rückfragen bleiben geschlossen.",
+        "loading": "Es wird geprüft, was entfernt wird …",
+        "reasonLabel": "Grund für das Entfernen",
+        "reasonPlaceholder": "z. B. beim falschen Probanden erfasst",
+        "reasonRequired": "Bitte den Grund für das Entfernen angeben.",
+        "confirm": "CRF entfernen",
+        "removing": "Wird entfernt …",
+        "cancel": "Abbrechen",
+        "errorGeneric": "Das CRF konnte nicht entfernt werden.",
+        "errorNetwork": "Der Server ist nicht erreichbar."
+      }
     },
     "table": {
       "crfName": "CRF",

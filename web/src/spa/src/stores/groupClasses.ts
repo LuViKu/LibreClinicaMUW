@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client
 import type {
   CreateGroupClassInput,
   GroupClass,
+  GroupClassRemovalImpact,
   UpdateGroupClassInput,
 } from '@/types/groupClass'
 
@@ -79,6 +80,21 @@ export const useGroupClassesStore = defineStore('groupClasses', () => {
     }
   }
 
+  /**
+   * What a disable would remove with the class, for the confirm dialog.
+   * Null when it could not be counted; the dialog then names the cascade
+   * without numbers.
+   */
+  async function removalImpact(studyOid: string, groupClassId: number): Promise<GroupClassRemovalImpact | null> {
+    try {
+      return await apiGet<GroupClassRemovalImpact>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/group-classes/${groupClassId}/removal-impact`,
+      )
+    } catch {
+      return null
+    }
+  }
+
   async function restore(studyOid: string, groupClassId: number): Promise<boolean> {
     try {
       const updated = await apiPost<GroupClass>(
@@ -150,7 +166,7 @@ export const useGroupClassesStore = defineStore('groupClasses', () => {
     )
   }
 
-  return { rows, isLoading, error, load, create, update, disable, restore, randomize }
+  return { rows, isLoading, error, load, create, update, disable, removalImpact, restore, randomize }
 })
 
 /**

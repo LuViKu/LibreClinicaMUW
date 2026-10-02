@@ -39,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
@@ -51,7 +50,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -2094,8 +2092,9 @@ public class SubjectsApiController {
     /**
      * Phase E A3 — inverse of {@link #remove}. Restores a previously
      * soft-deleted subject and its cascade. Status flips back to
-     * {@link Status#AVAILABLE}; child rows in
-     * {@link Status#AUTO_DELETED} flip back to {@link Status#AVAILABLE}.
+     * {@link Status#AVAILABLE}; the child rows the removal auto-removed
+     * come back, event CRFs and values with the status they had
+     * ({@link #cascadeChildren}).
      *
      * <p>409 if subject is not currently in {@code DELETED} — restore
      * is the inverse of remove and not a generic "reset to available".
@@ -2492,11 +2491,9 @@ public class SubjectsApiController {
 
         // Flip the parent, then cascade. The legacy
         // RemoveSubjectServlet walks the chain inline; we do the
-        // same here. Each DAO.update() is its own auto-committed
-        // statement — there's no service-layer transaction wrapping
-        // them, mirroring legacy behaviour (failures partway through
-        // leave the system in a mixed state, which is consistent
-        // with what BUR-* error codes already produce).
+        // same here. A removal or restore flips the parent in the
+        // cascade's transaction, so a failure changes nothing; a lock
+        // or unlock has no cascade.
         // Read before anything changes: on restore, the event CRFs a removal
         // of their CRF or version holds stay removed; that restore brings
         // them back, at the status they had (CrfLifecycleCascade).
@@ -2508,10 +2505,10 @@ public class SubjectsApiController {
         ss.setStatus(newSubjectStatus);
         ss.setUpdater(currentUser);
         ss.setUpdatedDate(new java.util.Date());
-        studySubjectDAO.update(ss);
-
         if (cascadeChildStatus != null) {
             cascadeChildren(ss, currentUser, cascadeChildStatus, held);
+        } else {
+            studySubjectDAO.update(ss);
         }
 
         LOG.info("Subject lifecycle {}: study_subject {} (label={}) by user={} role={}; "
@@ -2537,48 +2534,93 @@ public class SubjectsApiController {
     }
 
     /**
-     * Cascade the StudySubject's status change to its child rows
-     * (study_events → event_crfs → item_data). Mirrors the legacy
-     * {@code RemoveSubjectServlet.processRequest} loop verbatim:
-     * skip rows already in {@code DELETED} (those were removed
-     * outside this cascade and shouldn't be touched), and the event CRFs
-     * in {@code held}.
+     * Cascade the study subject's removal or restore to its visits, event
+     * CRFs and item data, as legacy {@code RemoveStudySubjectServlet} and
+     * {@code RestoreStudySubjectServlet} do: a removal auto-removes each
+     * one not removed on its own, and a restore brings back what a removal
+     * auto-removed.
+     *
+     * <p>Where it differs from those servlets:
+     * <ul>
+     *   <li>An event CRF or value records the status it had and gets it
+     *       back, as the legacy site removal and restore do
+     *       ({@link EventDataStatusCascade}). The subject servlets bring it
+     *       back as available, which unlocks a locked CRF and unsigns a
+     *       signed one. A row already auto-removed records that, so the
+     *       restore leaves it removed. A CRF the legacy servlet removed, or
+     *       one a legacy path changed since, has no record that holds and
+     *       comes back available, as with the servlet.</li>
+     *   <li>Only auto-removed rows come back, and a visit only when its
+     *       event definition is not removed. This cascade used to make
+     *       every row that was not removed available.</li>
+     *   <li>A restore leaves removed the event CRFs in {@code held}, which
+     *       a removal of their CRF or CRF version holds; that restore
+     *       brings them back ({@link CrfLifecycleCascade}).</li>
+     *   <li>Status-only SQL in one transaction, the subject's own status
+     *       included: {@code ItemDataDAO.update} clears a value's
+     *       provenance, and {@code StudyEventDAO.update} fails on a visit
+     *       without a start date.</li>
+     * </ul>
      */
     private void cascadeChildren(StudySubjectBean ss, UserAccountBean currentUser,
                                  Status cascadeChildStatus, Set<Integer> held) {
-        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
-        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDAO = new ItemDataDAO(dataSource);
-        java.util.Date now = new java.util.Date();
-
-        java.util.ArrayList<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
-        for (StudyEventBean event : events) {
-            if (event.getStatus() != null && event.getStatus().equals(Status.DELETED)) continue;
-            event.setStatus(cascadeChildStatus);
-            event.setUpdater(currentUser);
-            event.setUpdatedDate(now);
-            studyEventDAO.update(event);
-
-            java.util.ArrayList<EventCRFBean> eventCrfs = eventCRFDAO.findAllByStudyEvent(event);
-            for (EventCRFBean ec : eventCrfs) {
-                if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
-                if (held.contains(ec.getId())) continue;
-                ec.setStatus(cascadeChildStatus);
-                ec.setUpdater(currentUser);
-                ec.setUpdatedDate(now);
-                eventCRFDAO.update(ec);
-
-                java.util.ArrayList<ItemDataBean> items = itemDataDAO.findAllByEventCRFId(ec.getId());
-                for (ItemDataBean it : items) {
-                    if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
-                    it.setStatus(cascadeChildStatus);
-                    it.setUpdater(currentUser);
-                    it.setUpdatedDate(now);
-                    // Not update(): that clears the value's provenance.
-                    itemDataDAO.updateStatusOnly(it);
+        boolean remove = Status.AUTO_DELETED.equals(cascadeChildStatus);
+        try (Connection c = dataSource.getConnection()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                setSubjectStatus(c, ss, currentUser);
+                if (remove) {
+                    autoRemoveChildren(c, ss.getId(), currentUser.getId());
+                } else {
+                    restoreChildren(c, ss.getId(), currentUser.getId(), held);
                 }
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
             }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not " + (remove ? "remove" : "restore")
+                    + " the visits and data of study subject " + ss.getId(), e);
         }
+    }
+
+    private static void autoRemoveChildren(Connection c, int studySubjectId, int userId) throws SQLException {
+        List<Integer> visits = EventDataStatusCascade.ids(c,
+                "UPDATE study_event SET status_id = 7, date_updated = now(), update_id = ? "
+                        + "WHERE study_subject_id = ? AND " + EventDataStatusCascade.LIVE
+                        + " RETURNING study_event_id",
+                userId, studySubjectId);
+        EventDataStatusCascade.autoRemove(c, visits,
+                EventDataStatusCascade.Remover.STUDY_SUBJECT, studySubjectId, userId);
+    }
+
+    /** The subject's status, updater and update date, on the cascade's connection. */
+    private static void setSubjectStatus(Connection c, StudySubjectBean ss, UserAccountBean currentUser)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("UPDATE study_subject SET status_id = ?, "
+                + "update_id = ?, date_updated = now() WHERE study_subject_id = ?")) {
+            ps.setInt(1, ss.getStatus().getId());
+            ps.setInt(2, currentUser.getId());
+            ps.setInt(3, ss.getId());
+            ps.executeUpdate();
+        }
+    }
+
+    private static void restoreChildren(Connection c, int studySubjectId, int userId, Set<Integer> held)
+            throws SQLException {
+        // A visit of an event definition removed on its own stays with the definition.
+        List<Integer> visits = EventDataStatusCascade.ids(c,
+                "UPDATE study_event SET status_id = 1, date_updated = now(), update_id = ? "
+                        + "WHERE study_subject_id = ? AND status_id = 7 AND study_event_definition_id IN "
+                        + "(SELECT study_event_definition_id FROM study_event_definition WHERE "
+                        + EventDataStatusCascade.LIVE + ") RETURNING study_event_id",
+                userId, studySubjectId);
+        EventDataStatusCascade.restore(c, visits,
+                EventDataStatusCascade.Remover.STUDY_SUBJECT, studySubjectId, userId, held);
     }
 
     /**

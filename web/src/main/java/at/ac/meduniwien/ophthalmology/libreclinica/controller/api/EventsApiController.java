@@ -285,22 +285,13 @@ public class EventsApiController {
 
         // Map crf_version_id -> matching event_crf for fast lookup.
         //
-        // Phase E.6 restore-quickwins: surface AUTO_DELETED rows so the
-        // Restore action can render against them. Hard-DELETED rows
-        // (operator-issued, distinct from the parent-cascade
-        // AUTO_DELETED) stay hidden; restore is only the inverse of
-        // RemoveEventCRFServlet's soft-delete (status flip), not a
-        // resurrection from a hard delete.
-        Map<Integer, EventCRFBean> existingByVersion = new HashMap<>();
+        // A removed CRF keeps its slot, shown as removed, so the Restore
+        // action can render against it: removed on its own (DELETED, by
+        // legacy RemoveEventCRFServlet or POST /eventCrfs/{id}/remove) or
+        // with its visit (AUTO_DELETED). Neither is a hard delete; both
+        // keep their values. A live row of the same version wins.
         ArrayList<EventCRFBean> existing = ecDao.findAllByStudyEvent(ev);
-        if (existing != null) {
-            for (EventCRFBean ec : existing) {
-                if (ec == null || ec.getId() == 0) continue;
-                if (ec.getStatus() != null
-                        && ec.getStatus().equals(Status.DELETED)) continue;
-                existingByVersion.put(ec.getCRFVersionId(), ec);
-            }
-        }
+        Map<Integer, EventCRFBean> existingByVersion = indexByVersion(existing);
 
         List<EventCrfRowDto> crfRows = new ArrayList<>(orderedEdcs.size());
         for (EventDefinitionCRFBean edc : orderedEdcs) {
@@ -318,22 +309,10 @@ public class EventsApiController {
             // referencing a non-default version of the same CRF
             // (operators can swap versions per row in the legacy
             // EnterDataForStudyEvent flow — we still want to surface
-            // started entries here). Restore-quickwins keeps the
-            // AUTO_DELETED branch reachable so the restore button can
-            // render on parent-cascade-removed rows.
+            // started entries here). A removed row stays reachable so
+            // the restore button can render on it.
             EventCRFBean ec = (cv != null) ? existingByVersion.get(cv.getId()) : null;
-            if (ec == null && existing != null) {
-                for (EventCRFBean candidate : existing) {
-                    if (candidate == null || candidate.getId() == 0) continue;
-                    if (candidate.getStatus() != null
-                            && candidate.getStatus().equals(Status.DELETED)) continue;
-                    CRFVersionBean cvCand = (CRFVersionBean) crfvDao.findByPK(candidate.getCRFVersionId());
-                    if (cvCand != null && cvCand.getCrfId() == edc.getCrfId()) {
-                        ec = candidate;
-                        break;
-                    }
-                }
-            }
+            if (ec == null) ec = anyRowOfCrf(existing, edc.getCrfId(), crfvDao);
 
             Integer eventCrfId = (ec != null && ec.getId() > 0) ? ec.getId() : null;
             String eventCrfOid = (eventCrfId == null) ? null : String.valueOf(eventCrfId);
@@ -1840,12 +1819,11 @@ public class EventsApiController {
      */
     private static String statusForEventCrf(EventCRFBean ec) {
         if (ec == null || ec.getId() == 0) return "not-started";
-        // Phase E.6 restore-quickwins: a parent-cascaded soft-delete
-        // (AUTO_DELETED) leaves the event_crf row present in the
-        // EventDetail surface so the Restore action can render against
-        // it. We surface a dedicated 'removed' status so the SPA can
-        // distinguish "restorable" from "in progress".
-        if (ec.getStatus() != null && ec.getStatus().equals(Status.AUTO_DELETED)) {
+        // A removed CRF, on its own or with its visit, stays present in
+        // the EventDetail surface so the Restore action can render
+        // against it. We surface a dedicated 'removed' status so the SPA
+        // can distinguish "restorable" from "in progress".
+        if (isRemoved(ec)) {
             return "removed";
         }
         if (ec.getStatus() != null && ec.getStatus().equals(Status.UNAVAILABLE)) {
@@ -1871,6 +1849,46 @@ public class EventsApiController {
         };
     }
 
+    /** Removed on its own (DELETED) or with its visit or subject (AUTO_DELETED). */
+    private static boolean isRemoved(EventCRFBean ec) {
+        return Status.DELETED.equals(ec.getStatus()) || Status.AUTO_DELETED.equals(ec.getStatus());
+    }
+
+    /**
+     * The visit's CRF rows by CRF version. A removed row keeps its slot, but
+     * a live row of the same version wins over it; between rows alike, the
+     * later one wins.
+     */
+    private static Map<Integer, EventCRFBean> indexByVersion(List<EventCRFBean> rows) {
+        Map<Integer, EventCRFBean> byVersion = new HashMap<>();
+        if (rows == null) return byVersion;
+        for (EventCRFBean ec : rows) {
+            if (ec == null || ec.getId() == 0) continue;
+            byVersion.merge(ec.getCRFVersionId(), ec,
+                    (kept, next) -> isRemoved(next) && !isRemoved(kept) ? kept : next);
+        }
+        return byVersion;
+    }
+
+    /**
+     * A row of the slot's CRF on any version, for a slot with no row on its
+     * default version: the first live one, else the first removed one;
+     * {@code null} if there is none.
+     */
+    private static EventCRFBean anyRowOfCrf(List<EventCRFBean> rows, int crfId, CRFVersionDAO crfvDao) {
+        if (rows == null) return null;
+        EventCRFBean removed = null;
+        for (EventCRFBean candidate : rows) {
+            if (candidate == null || candidate.getId() == 0) continue;
+            if (removed != null && isRemoved(candidate)) continue;
+            CRFVersionBean cv = (CRFVersionBean) crfvDao.findByPK(candidate.getCRFVersionId());
+            if (cv == null || cv.getCrfId() != crfId) continue;
+            if (!isRemoved(candidate)) return candidate;
+            removed = candidate;
+        }
+        return removed;
+    }
+
     /**
      * Required-CRF completion check for the manual "Visite abschließen"
      * gate. Mirrors the roster-matching in {@link #getEventDetail} +
@@ -1894,15 +1912,8 @@ public class EventsApiController {
         List<EventDefinitionCRFBean> edcs = edcDao.findAllByEventDefinitionId(owningStudy, def.getId());
         if (edcs == null) edcs = List.of();
 
-        Map<Integer, EventCRFBean> existingByVersion = new HashMap<>();
         ArrayList<EventCRFBean> existing = ecDao.findAllByStudyEvent(ev);
-        if (existing != null) {
-            for (EventCRFBean ec : existing) {
-                if (ec == null || ec.getId() == 0) continue;
-                if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
-                existingByVersion.put(ec.getCRFVersionId(), ec);
-            }
-        }
+        Map<Integer, EventCRFBean> existingByVersion = indexByVersion(existing);
 
         List<String> incomplete = new ArrayList<>();
         for (EventDefinitionCRFBean edc : edcs) {
@@ -1914,14 +1925,7 @@ public class EventsApiController {
             // same CRF (operators can swap versions per row). Same fallback
             // getEventDetail uses so the check matches the rendered roster.
             EventCRFBean ec = (cv != null) ? existingByVersion.get(cv.getId()) : null;
-            if (ec == null && existing != null) {
-                for (EventCRFBean candidate : existing) {
-                    if (candidate == null || candidate.getId() == 0) continue;
-                    if (candidate.getStatus() != null && candidate.getStatus().equals(Status.DELETED)) continue;
-                    CRFVersionBean cvCand = (CRFVersionBean) crfvDao.findByPK(candidate.getCRFVersionId());
-                    if (cvCand != null && cvCand.getCrfId() == edc.getCrfId()) { ec = candidate; break; }
-                }
-            }
+            if (ec == null) ec = anyRowOfCrf(existing, edc.getCrfId(), crfvDao);
             String status = statusForEventCrf(ec);
             if (!("completed".equals(status) || "signed".equals(status))) {
                 String name = (edc.getCrfName() == null || edc.getCrfName().isBlank())

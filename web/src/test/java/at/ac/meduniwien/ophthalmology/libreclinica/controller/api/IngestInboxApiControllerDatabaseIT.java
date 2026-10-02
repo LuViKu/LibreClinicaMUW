@@ -505,13 +505,13 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 .build()
                 .perform(get("/api/v1/audit/system").session(sysadmin))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == '" + dismissRow + "')].title").value(
+                .andExpect(jsonPath("$.events[?(@.id == '" + dismissRow + "')].title").value(
                         org.hamcrest.Matchers.hasItem("Ingested file dismissed")))
-                .andExpect(jsonPath("$[?(@.id == '" + dismissRow + "')].reason").value(
+                .andExpect(jsonPath("$.events[?(@.id == '" + dismissRow + "')].reason").value(
                         org.hamcrest.Matchers.hasItem("test exposure")))
-                .andExpect(jsonPath("$[?(@.id == '" + dismissRow + "' && @.details =~ /^file #" + id + " .*/)]")
+                .andExpect(jsonPath("$.events[?(@.id == '" + dismissRow + "' && @.details =~ /^file #" + id + " .*/)]")
                         .exists())
-                .andExpect(jsonPath("$[?(@.id == '" + restoreRow + "')].title").value(
+                .andExpect(jsonPath("$.events[?(@.id == '" + restoreRow + "')].title").value(
                         org.hamcrest.Matchers.hasItem("Ingested file restored")));
     }
 
@@ -553,9 +553,9 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 .build()
                 .perform(get("/api/v1/audit").session(studyLog))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(bindRow))))
-                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(unbindRow))))
-                .andExpect(jsonPath("$[*].id",
+                .andExpect(jsonPath("$.events[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(bindRow))))
+                .andExpect(jsonPath("$.events[*].id", org.hamcrest.Matchers.hasItem(String.valueOf(unbindRow))))
+                .andExpect(jsonPath("$.events[*].id",
                         org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(String.valueOf(dismissRow)))));
     }
 

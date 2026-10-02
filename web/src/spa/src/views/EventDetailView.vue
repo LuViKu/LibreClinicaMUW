@@ -23,6 +23,7 @@ import type { DiscrepancyNote, NoteField } from '@/types/note'
 import { fieldNoteSummary, notesOnField } from '@/lib/fieldNotes'
 import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
 import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
+import RemoveEventCrfDialog from '@/components/RemoveEventCrfDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -309,6 +310,34 @@ async function restoreCrfRow(eventCrfId: number | null): Promise<void> {
   }
 }
 
+/*
+ * "Remove" on a started CRF — the inverse of Restore above. Offered to the
+ * roles legacy RemoveEventCRF admits (system administrator, study director,
+ * coordinator: Administrator, Data Manager, CRC here), and not on a signed
+ * or locked visit; the server re-checks both. RemoveEventCrfDialog asks for
+ * the reason and says what goes with the CRF.
+ */
+const canRemoveCrf = computed(() => {
+  const role = auth.user?.role
+  return (role === 'Administrator' || role === 'Data Manager' || role === 'CRC') && !visitSealed.value
+})
+const removeCrfTarget = ref<EventCrfRowDto | null>(null)
+const removeCrfOpen = ref(false)
+const visitLabel = computed(() => {
+  const ev = event.value
+  if (!ev) return ''
+  return ev.repeating && ev.ordinal > 1 ? `${ev.eventDefinitionName} #${ev.ordinal}` : ev.eventDefinitionName
+})
+function openRemoveCrf(crf: EventCrfRowDto): void {
+  removeCrfTarget.value = crf
+  removeCrfOpen.value = true
+}
+/** Close the dialog first: reloading empties the page, which would unmount it while open. */
+async function onCrfRemoved(): Promise<void> {
+  removeCrfTarget.value = null
+  await store.load(eventId.value)
+}
+
 /**
  * Phase E.7 Wave 4 — flatten the event's CRF list down to the numeric
  * event_crf_id values that have a row in {@code retinal_inference_job}.
@@ -508,14 +537,24 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                     }}
                   </button>
                 </template>
-                <RouterLink
-                  v-else-if="crf.eventCrfOid"
-                  :to="crfLink(crf.eventCrfOid)"
-                  class="text-muw-blue hover:underline"
-                  data-test="event-detail-open-crf"
-                >
-                  {{ t('eventDetail.action.open') }}
-                </RouterLink>
+                <template v-else-if="crf.eventCrfOid">
+                  <RouterLink
+                    :to="crfLink(crf.eventCrfOid)"
+                    class="text-muw-blue hover:underline"
+                    data-test="event-detail-open-crf"
+                  >
+                    {{ t('eventDetail.action.open') }}
+                  </RouterLink>
+                  <button
+                    v-if="canRemoveCrf"
+                    type="button"
+                    class="ml-3 text-slate-500 hover:text-rose-700 hover:underline"
+                    data-test="event-detail-remove-crf"
+                    @click="openRemoveCrf(crf)"
+                  >
+                    {{ t('eventDetail.crf.remove') }}
+                  </button>
+                </template>
                 <template v-else>
                   <button
                     v-if="mayEnterData"
@@ -700,6 +739,16 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           :item-label="t('notes.field.start_date')"
           @close="visitDateThread = null"
           @updated="onVisitNotesChanged"
+        />
+
+        <RemoveEventCrfDialog
+          v-if="removeCrfTarget"
+          v-model:open="removeCrfOpen"
+          :crf="removeCrfTarget"
+          :subject-label="event.subjectLabel"
+          :event-label="visitLabel"
+          @removed="onCrfRemoved"
+          @close="removeCrfTarget = null"
         />
 
         <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.

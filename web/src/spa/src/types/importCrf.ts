@@ -95,7 +95,8 @@ export interface ImportCrfRowsPage {
  *
  * {@code committedAt} is server-side ISO-8601; {@code auditLogStudyId}
  * is the active study id at commit time (helper for the audit-trail
- * link).
+ * link). {@code ruleWarnings} carries what the study's rules reported on
+ * the imported data, as the legacy import page shows it.
  */
 export interface ImportCrfCommitResult {
   rowsInserted: number
@@ -104,6 +105,7 @@ export interface ImportCrfCommitResult {
   discrepancyNotes: number
   committedAt: string
   auditLogStudyId: number
+  ruleWarnings?: string[]
 }
 
 /** Operator-chosen mode for the commit step. */

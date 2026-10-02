@@ -861,7 +861,75 @@ public class EventDefinitionsApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* GET /{sedOid}/removal-impact                                      */
+    /*   What a disable would remove with the definition, for the SPA's  */
+    /*   confirm dialog. Counts the rows removeDependents flips.         */
+    /* ----------------------------------------------------------------- */
+
+    @GetMapping("/{sedOid}/removal-impact")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventDefinitionRemovalImpactDto.class)))
+    public ResponseEntity<?> removalImpact(@PathVariable("studyOid") String studyOid,
+                                           @PathVariable("sedOid") String sedOid,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
+        StudyEventDefinitionBean target = new StudyEventDefinitionDAO(dataSource)
+                .findByOidAndStudy(sedOid, study.getId(), 0);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+
+        // The same rows removeDependents takes: the definition's own CRF
+        // assignments (parent_id IS NULL, as EventDefinitionCRFDAO
+        // .findAllByDefinition reads them) that are not removed, the
+        // visits no removal took yet, and the event CRFs and values under
+        // them that are neither removed nor auto-removed. Status 5 is
+        // Status.DELETED, 7 Status.AUTO_DELETED.
+        String sql = """
+                SELECT
+                  (SELECT COUNT(*) FROM event_definition_crf edc
+                    WHERE edc.study_event_definition_id = ? AND edc.parent_id IS NULL
+                      AND edc.status_id IS DISTINCT FROM 5),
+                  (SELECT COUNT(*) FROM study_event se
+                    WHERE se.study_event_definition_id = ? AND se.status_id NOT IN (5, 7)),
+                  (SELECT COUNT(DISTINCT se.study_subject_id) FROM study_event se
+                    WHERE se.study_event_definition_id = ? AND se.status_id NOT IN (5, 7)),
+                  (SELECT COUNT(*) FROM event_crf ec
+                     JOIN study_event se ON se.study_event_id = ec.study_event_id
+                    WHERE se.study_event_definition_id = ? AND se.status_id NOT IN (5, 7)
+                      AND ec.status_id NOT IN (5, 7)),
+                  (SELECT COUNT(*) FROM item_data id
+                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
+                     JOIN study_event se ON se.study_event_id = ec.study_event_id
+                    WHERE se.study_event_definition_id = ? AND se.status_id NOT IN (5, 7)
+                      AND ec.status_id NOT IN (5, 7) AND id.status_id NOT IN (5, 7))
+                """;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            for (int i = 1; i <= 5; i++) ps.setInt(i, target.getId());
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return ResponseEntity.ok(new EventDefinitionRemovalImpactDto(
+                        rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5)));
+            }
+        } catch (SQLException e) {
+            LOG.error("Failed to count the removal impact of event definition oid={}: {}",
+                    sedOid, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to count what removing the event definition would remove — see server log."));
+        }
+    }
+
+    /* ----------------------------------------------------------------- */
     /* POST /{sedOid}/disable                                            */
+    /*   Removes the definition and marks everything under it            */
+    /*   auto-removed, as legacy RemoveEventDefinitionServlet does, so    */
+    /*   that /restore (which brings back the auto-removed rows) is its   */
+    /*   inverse.                                                         */
     /* ----------------------------------------------------------------- */
 
     @PostMapping("/{sedOid}/disable")
@@ -891,12 +959,16 @@ public class EventDefinitionsApiController {
         target.setStatus(Status.DELETED);
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
-        sedDao.update(target);
+        // The definition's own status changes with the cascade, in one
+        // transaction: a failure leaves the definition and everything under
+        // it as it was.
+        int[] removed = removeDependents(target, me);
 
-        // Single lifecycle row capturing the status flip. Downstream
-        // event_crf / item_data cascade is owned by the existing DB
-        // trigger pattern; A8.3 will revisit if assignment cleanup is
-        // needed at controller level.
+        // Single lifecycle row capturing the status flip. The dependent
+        // rows' changes to auto-removed get no rows of their own: the
+        // study_event trigger records a visit's own removal and restore
+        // only, and the event_crf and item_data triggers no status change
+        // of this kind; the legacy removal records none either.
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -914,10 +986,125 @@ public class EventDefinitionsApiController {
                     sedOid, e.getMessage());
         }
 
-        LOG.info("Disable event definition: oid={} study={} by admin={}",
-                sedOid, studyOid, me.getName());
+        LOG.info("Disable event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
+                sedOid, studyOid, me.getName(), removed[0], removed[1], removed[2], removed[3]);
 
         return ResponseEntity.ok(toDto(target));
+    }
+
+    /**
+     * The cascade of legacy {@code RemoveEventDefinitionServlet}: the
+     * definition's CRF assignments, and its visits with their event CRFs and
+     * values, become auto-removed, unless removed on their own.
+     *
+     * <p>Where it differs from the servlet: a visit another removal took
+     * already (its subject's, say) is left to that removal, and each event
+     * CRF and value records the status it had and gets it back on
+     * {@link #restore} ({@link EventDataStatusCascade}). The servlet's
+     * restore makes them available, which unsigns a signed CRF and unlocks a
+     * locked one. Status-only SQL in one transaction, which marks the
+     * definition itself removed first.
+     *
+     * @return rows marked auto-removed: CRF assignments, visits, event CRFs,
+     *         values
+     */
+    private int[] removeDependents(StudyEventDefinitionBean target, UserAccountBean me) {
+        return inTransaction(target, c -> {
+            setDefinitionStatus(c, target, Status.DELETED, me);
+            int assignments = EventDataStatusCascade.ids(c,
+                    "UPDATE event_definition_crf SET status_id = 7, date_updated = now(), update_id = ? "
+                            + "WHERE study_event_definition_id = ? AND parent_id IS NULL "
+                            + "AND status_id IS DISTINCT FROM 5 RETURNING event_definition_crf_id",
+                    me.getId(), target.getId()).size();
+            List<Integer> visits = EventDataStatusCascade.ids(c,
+                    "UPDATE study_event SET status_id = 7, date_updated = now(), update_id = ? "
+                            + "WHERE study_event_definition_id = ? AND " + EventDataStatusCascade.LIVE
+                            + " RETURNING study_event_id",
+                    me.getId(), target.getId());
+            EventDataStatusCascade.Counts data = EventDataStatusCascade.autoRemove(c, visits,
+                    EventDataStatusCascade.Remover.EVENT_DEFINITION, target.getId(), me.getId());
+            return new int[] {assignments, visits.size(), data.eventCrfs(), data.values()};
+        });
+    }
+
+    /**
+     * The inverse of {@link #removeDependents}: the auto-removed CRF
+     * assignments, and the auto-removed visits of subjects that are not
+     * removed, with the event CRFs and values the removal took, each with
+     * the status it had. The visit of a removed subject stays removed with
+     * the subject. In one transaction with the definition's own restore.
+     * The assignments of a CRF in {@code removedCrfs} and the event CRFs in
+     * {@code held} stay removed: their CRF's restore brings them back
+     * ({@link CrfLifecycleCascade}).
+     *
+     * @return rows restored: CRF assignments, visits, event CRFs, values
+     */
+    private int[] restoreDependents(StudyEventDefinitionBean target, UserAccountBean me,
+                                    Set<Integer> removedCrfs, Set<Integer> held) {
+        return inTransaction(target, c -> {
+            setDefinitionStatus(c, target, Status.AVAILABLE, me);
+            int assignments;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE event_definition_crf SET status_id = 1, date_updated = now(), update_id = ? "
+                            + "WHERE study_event_definition_id = ? AND parent_id IS NULL AND status_id = 7 "
+                            + "AND NOT (crf_id = ANY(?))")) {
+                ps.setInt(1, me.getId());
+                ps.setInt(2, target.getId());
+                ps.setArray(3, c.createArrayOf("integer", removedCrfs.toArray()));
+                assignments = ps.executeUpdate();
+            }
+            List<Integer> visits = EventDataStatusCascade.ids(c,
+                    "UPDATE study_event SET status_id = 1, date_updated = now(), update_id = ? "
+                            + "WHERE study_event_definition_id = ? AND status_id = 7 AND study_subject_id IN "
+                            + "(SELECT study_subject_id FROM study_subject WHERE "
+                            + EventDataStatusCascade.LIVE + ") RETURNING study_event_id",
+                    me.getId(), target.getId());
+            EventDataStatusCascade.Counts data = EventDataStatusCascade.restore(c, visits,
+                    EventDataStatusCascade.Remover.EVENT_DEFINITION, target.getId(), me.getId(), held);
+            return new int[] {assignments, visits.size(), data.eventCrfs(), data.values()};
+        });
+    }
+
+    /**
+     * The definition's status, updater and update date, on the cascade's
+     * connection. {@code StudyEventDefinitionDAO.update} would commit on a
+     * connection of its own.
+     */
+    private static void setDefinitionStatus(Connection c, StudyEventDefinitionBean target, Status status,
+                                            UserAccountBean me) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("UPDATE study_event_definition SET status_id = ?, "
+                + "update_id = ?, date_updated = now() WHERE study_event_definition_id = ?")) {
+            ps.setInt(1, status.getId());
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target.getId());
+            ps.executeUpdate();
+        }
+    }
+
+    /** One step of the cascade under a definition, on the transaction's connection. */
+    private interface CascadeStep {
+        int[] run(Connection c) throws SQLException;
+    }
+
+    /** Runs {@code step} in one transaction; any failure rolls all of it back. */
+    private int[] inTransaction(StudyEventDefinitionBean target, CascadeStep step) {
+        try (Connection c = dataSource.getConnection()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                int[] counts = step.run(c);
+                c.commit();
+                return counts;
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not change the rows under event definition "
+                    + target.getId(), e);
+        }
     }
 
     /* ----------------------------------------------------------------- */
@@ -957,7 +1144,6 @@ public class EventDefinitionsApiController {
         EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
         StudyEventDAO eventDao = new StudyEventDAO(dataSource);
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
 
         // Read before anything changes: the assignments of a removed CRF, and
         // the event CRFs a removal of their CRF or version holds, stay
@@ -978,67 +1164,20 @@ public class EventDefinitionsApiController {
         target.setStatus(Status.AVAILABLE);
         target.setUpdater(me);
         target.setUpdatedDate(now);
-        sedDao.update(target);
 
-        // Cascade restore: only AUTO_DELETED children flip back. Rows
-        // that were explicitly REMOVED by an operator stay removed —
-        // matches RestoreEventDefinitionServlet:130/154/163.
-        int restoredEdcCount = 0;
-        int restoredEventCount = 0;
-        int restoredEventCrfCount = 0;
-        int restoredItemDataCount = 0;
-
-        for (EventDefinitionCRFBean edc : edcs) {
-            if (removedCrfs.contains(edc.getCrfId())) continue;
-            if (edc.getStatus() != null && edc.getStatus().equals(Status.AUTO_DELETED)) {
-                edc.setStatus(Status.AVAILABLE);
-                edc.setUpdater(me);
-                edc.setUpdatedDate(now);
-                edcDao.update(edc);
-                restoredEdcCount++;
-            }
-        }
-
-        for (StudyEventBean event : events) {
-            if (event.getStatus() != null && event.getStatus().equals(Status.AUTO_DELETED)) {
-                event.setStatus(Status.AVAILABLE);
-                event.setUpdater(me);
-                event.setUpdatedDate(now);
-                eventDao.update(event);
-                restoredEventCount++;
-
-                ArrayList<EventCRFBean> eventCrfs = eventCrfDao.findAllByStudyEvent(event);
-                for (EventCRFBean eventCrf : eventCrfs) {
-                    if (held.contains(eventCrf.getId())) continue;
-                    if (eventCrf.getStatus() != null && eventCrf.getStatus().equals(Status.AUTO_DELETED)) {
-                        eventCrf.setStatus(Status.AVAILABLE);
-                        eventCrf.setUpdater(me);
-                        eventCrf.setUpdatedDate(now);
-                        eventCrfDao.update(eventCrf);
-                        restoredEventCrfCount++;
-
-                        ArrayList<ItemDataBean> itemDatas = itemDataDao.findAllByEventCRFId(eventCrf.getId());
-                        for (ItemDataBean item : itemDatas) {
-                            if (item.getStatus() != null && item.getStatus().equals(Status.AUTO_DELETED)) {
-                                item.setStatus(Status.AVAILABLE);
-                                item.setUpdater(me);
-                                item.setUpdatedDate(now);
-                                // Not update(): that clears the value's provenance.
-                                itemDataDao.updateStatusOnly(item);
-                                restoredItemDataCount++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // The definition's restore and the cascade, in one transaction.
+        // Cascade restore: only rows the removal auto-removed come back,
+        // with the status they had; rows removed on their own stay removed
+        // (RestoreEventDefinitionServlet:130/154/163), and so does the
+        // visit of a removed subject (restoreDependents), and the assignments
+        // and event CRFs a CRF removal holds (read above).
+        int[] restored = restoreDependents(target, me, removedCrfs, held);
 
         writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
                 oldStatus, Status.AVAILABLE, "study_event_definition_restore");
 
         LOG.info("Restore event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
-                sedOid, studyOid, me.getName(),
-                restoredEdcCount, restoredEventCount, restoredEventCrfCount, restoredItemDataCount);
+                sedOid, studyOid, me.getName(), restored[0], restored[1], restored[2], restored[3]);
 
         return ResponseEntity.ok(toDto(target));
     }
