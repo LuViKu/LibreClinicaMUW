@@ -476,6 +476,10 @@ public class EventCrfsApiController {
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
         }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
+        }
         if (body == null
                 || ((body.values() == null || body.values().isEmpty())
                         && (body.groups() == null || body.groups().isEmpty()))) {
@@ -805,6 +809,10 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session."
             ));
+        }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
         }
 
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);

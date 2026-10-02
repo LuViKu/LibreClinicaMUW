@@ -417,6 +417,10 @@ public class EventsApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
+        }
 
         StudyEventDAO seDao = new StudyEventDAO(dataSource);
         StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
@@ -695,6 +699,10 @@ public class EventsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
         }
         if (body == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Empty request body"));
