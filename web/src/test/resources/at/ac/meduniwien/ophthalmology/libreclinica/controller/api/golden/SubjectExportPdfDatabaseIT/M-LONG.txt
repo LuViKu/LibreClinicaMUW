@@ -1,0 +1,177 @@
+pages: 5
+--- page 1 ---
+D efault Study
+Subject: M-LONG
+ 
+Secondary ID —
+Gender F
+Year of birth 1962
+Enrolled on 2020-10-06
+Study OID S_DEFAULTS1
+Generated <today>
+ 
+ 
+V 1 Inclusion (SE_V1_INCLUSION)
+Status: completed · Started 2020-10-06
+ 
+D emographics
+Item Value Units
+Date of informed consent VA  20/40 and CST  300 µm
+Date of informed consent Subretinal fluid resolved after the third injection;
+a small pigment epithelial detachment persists
+nasally, unchanged against the previous visit,
+with no new haemorrhage and no intraretinal
+cysts on any of the twenty-five B-scans
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+--- page 2 ---
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Date of informed consent 2020-10-05
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Consent signed? Y
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+--- page 3 ---
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Height (cm) 162 cm
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+--- page 4 ---
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Weight (kg) 68.0 kg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+--- page 5 ---
+Systolic BP (mmHg) 138 mmHg
+Systolic BP (mmHg) 138 mmHg
+Data entry completed on 2020-10-06
