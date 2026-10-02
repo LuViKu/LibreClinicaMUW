@@ -14,7 +14,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 |-------|-----|----|
 | Java | **25** (build + runtime, per Dockerfile; 21→25 bump 2026-07) | (achieved — exceeds the original Java 21 target) |
 | Framework | Spring Boot 3.5.16 + Java config (Spring 6.2.19 + Security 6.5.11; residual security XML) | (achieved — Phase C) |
-| Web | JSP + SiteMesh + Spring MVC + ~295 legacy servlets; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
+| Web | JSP + Spring MVC + 214 servlet registrations; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
 | Persistence | Hibernate 6.4 (jakarta) + Liquibase 3.6.3 + PostgreSQL 14 | Liquibase 4 (Phase D-Libs, deferred — heritage `modifyColumn` blocker) + PostgreSQL 14+ |
 | Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
@@ -104,7 +104,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | Path | Contents |
 |------|----------|
 | [`core/`](core/) | Domain entities, services, DAOs, Hibernate mappings, Liquibase migrations (`core/src/main/resources/migration/`) |
-| [`web/`](web/) | Spring MVC controllers, 295 legacy servlets, 413 JSPs, static assets — produces `LibreClinica-web.war` |
+| [`web/`](web/) | Spring MVC controllers, 214 servlet registrations, 413 JSPs, static assets — produces `LibreClinica-web.war` |
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |
