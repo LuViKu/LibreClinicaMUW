@@ -1887,7 +1887,9 @@ public class SubjectsApiController {
 
         boolean subjectChanged = false;
         String oldGender = storedGender(subj.getGender() == '\0' ? null : String.valueOf(subj.getGender()).trim());
-        String newGender = storedGender(body.gender());
+        // gender: null leaves it unchanged, as for secondaryId; an empty
+        // string clears it, where the study does not require it.
+        String newGender = body.gender() == null ? oldGender : storedGender(body.gender());
         if (!java.util.Objects.equals(oldGender, newGender)) {
             writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
                     "gender", oldGender == null ? "" : oldGender, newGender == null ? "" : newGender);

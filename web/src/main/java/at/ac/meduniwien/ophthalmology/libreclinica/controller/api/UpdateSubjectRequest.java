@@ -28,7 +28,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                    current value; empty string explicitly clears it.
  * @param gender      one of {@code F | M | O | U} (case-insensitive);
  *                    required unless the study sets
- *                    {@code genderRequired=false}, where blank clears it.
+ *                    {@code genderRequired=false}, where an empty
+ *                    string clears it and {@code null} leaves it as
+ *                    it is.
  * @param yearOfBirth optional. {@code null} preserves the current
  *                    value. Must be 1900..currentYear when present.
  *                    Changes the stored year only where the study

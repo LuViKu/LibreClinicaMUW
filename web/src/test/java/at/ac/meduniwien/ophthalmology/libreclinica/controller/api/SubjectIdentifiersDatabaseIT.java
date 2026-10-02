@@ -165,6 +165,8 @@ class SubjectIdentifiersDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dateOfBirth").value("1966-09-21"));
         assertEquals("P-ID-6|1966-09-21|true|f", subjectRow("ID-6"));
+        assertEquals(java.util.List.of("1966-01-01 -> 1966-09-21"), demographicsAudits("ID-6", "date_of_birth"),
+                "the correction is audited with the value it replaced");
 
         // Where the full date is collected, a bare year does not replace it.
         mvc().perform(json(put("/api/v1/subjects/ID-6"), "{\"gender\":\"F\",\"yearOfBirth\":1967}")
@@ -200,6 +202,26 @@ class SubjectIdentifiersDatabaseIT extends AbstractApiControllerDatabaseIT {
         mvc().perform(json(put("/api/v1/subjects/ID-8"), "{\"gender\":\"U\"}").session(investigator()))
                 .andExpect(status().isOk());
         assertEquals("P-ID-8|1972-03-03|true|u", subjectRow("ID-8"));
+    }
+
+    @Test
+    void anEditThatLeavesOutTheSexKeepsIt() throws Exception {
+        setParameter("genderRequired", "false");
+        try {
+            createSubject("ID-9", "f", "P-ID-9", "1973-04-04");
+
+            mvc().perform(json(put("/api/v1/subjects/ID-9"), "{\"secondaryId\":\"SEC-9\"}").session(investigator()))
+                    .andExpect(status().isOk());
+            assertEquals("P-ID-9|1973-04-04|true|f", subjectRow("ID-9"), "a sex not sent is left as it is");
+            assertEquals(java.util.List.of(), demographicsAudits("ID-9", "gender"));
+
+            mvc().perform(json(put("/api/v1/subjects/ID-9"), "{\"gender\":\"\"}").session(investigator()))
+                    .andExpect(status().isOk());
+            assertEquals("P-ID-9|1973-04-04|true|null", subjectRow("ID-9"), "an empty sex clears it");
+            assertEquals(java.util.List.of("f -> "), demographicsAudits("ID-9", "gender"));
+        } finally {
+            setParameter("genderRequired", "true");
+        }
     }
 
     /* ------------------------------------------------------------------ */
@@ -251,6 +273,25 @@ class SubjectIdentifiersDatabaseIT extends AbstractApiControllerDatabaseIT {
                         + (gender == null || gender.isBlank() ? "null" : gender.trim());
             }
         }
+    }
+
+    /** {@code old -> new} of the demographics audit rows of the label's subject for {@code column}. */
+    private static java.util.List<String> demographicsAudits(String label, String column) throws SQLException {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT a.old_value, a.new_value FROM audit_log_event a "
+                             + "JOIN study_subject ss ON ss.subject_id = a.entity_id "
+                             + "WHERE a.audit_table = 'subject' AND a.audit_log_event_type_id = ? "
+                             + "AND a.entity_name = ? AND ss.label = ? ORDER BY a.audit_id")) {
+            ps.setInt(1, AuditTypeIds.SUBJECT_DEMOGRAPHICS_UPDATED);
+            ps.setString(2, column);
+            ps.setString(3, label);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1) + " -> " + rs.getString(2));
+            }
+        }
+        return out;
     }
 
     private static String secondaryLabel(String label) throws SQLException {
