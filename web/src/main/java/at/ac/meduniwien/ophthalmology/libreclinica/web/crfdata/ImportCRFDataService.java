@@ -110,6 +110,16 @@ public class ImportCRFDataService {
         String studyOID = odmContainer.getCrfDataPostImportContainer().getStudyOID();
         StudyBean studyBean = studyDAO.findByOid(studyOID);
         ArrayList<SubjectDataBean> subjectDataBeans = odmContainer.getCrfDataPostImportContainer().getSubjectData();
+        // validateStudyMetadata reports a key that is not a number; don't guess
+        // a visit. Checked for the whole file before the loop below creates
+        // event CRFs for the visits ahead of it.
+        for (SubjectDataBean subjectDataBean : subjectDataBeans) {
+            for (StudyEventDataBean studyEventDataBean : subjectDataBean.getStudyEventData()) {
+                if (studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey()) == null) {
+                    return null;
+                }
+            }
+        }
         for (SubjectDataBean subjectDataBean : subjectDataBeans) {
             ArrayList<StudyEventDataBean> studyEventDataBeans = subjectDataBean.getStudyEventData();
 
@@ -118,10 +128,6 @@ public class ImportCRFDataService {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
                 Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
-                if (sampleOrdinal == null) {
-                    // validateStudyMetadata reports the key; don't guess a visit.
-                    return null;
-                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
@@ -1134,7 +1140,7 @@ public class ImportCRFDataService {
      * The visit ordinal a StudyEventRepeatKey names: 1 when the file leaves
      * the key out, null when the key is not a whole number.
      */
-    static Integer studyEventOrdinal(String studyEventRepeatKey) {
+    public static Integer studyEventOrdinal(String studyEventRepeatKey) {
         if (studyEventRepeatKey == null) {
             return 1;
         }
