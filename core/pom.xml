@@ -430,6 +430,17 @@
 		</plugins>
 	</build>
 	<repositories>
+		<!-- Central first: JitPack serves its own com.github.librepdf:openpdf
+		     2.0.5 POM, which names com.github.librepdf.openpdf artifacts that
+		     exist nowhere, so a build from an empty local repository fails.
+		     JitPack is needed only for pdfbox2-layout. -->
+		<repository>
+			<id>central</id>
+			<url>https://repo.maven.apache.org/maven2</url>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
 		<repository>
 			<id>jitpack.io</id>
 			<url>https://jitpack.io</url>
