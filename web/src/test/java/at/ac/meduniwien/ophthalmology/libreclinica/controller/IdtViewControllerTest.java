@@ -15,6 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -28,9 +32,20 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
  * <p>It compared the requested study's id with its parent's as boxed
  * {@code Integer}s, so a parent study above id 127 was treated as a site and
  * its site subjects dropped out; and it listed any study's item data to any
- * API key.
+ * API key. Its POST, which wrote the IDT flag rows for any API key without a
+ * role check or a user, had no caller and is gone.
  */
 class IdtViewControllerTest {
+
+    @Test
+    void theFlagWritingPostIsGone() throws Exception {
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new IdtViewController()).build();
+
+        int status = mvc.perform(MockMvcRequestBuilders.post("/auth/api/itemdata/")
+                .contentType(MediaType.APPLICATION_JSON).content("[]")).andReturn().getResponse().getStatus();
+
+        assertTrue(status == 404 || status == 405, "no handler takes the POST: " + status);
+    }
 
     private static UserAccountBean user(int id) {
         UserAccountBean u = new UserAccountBean();
