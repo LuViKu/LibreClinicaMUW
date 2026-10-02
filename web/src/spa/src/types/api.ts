@@ -5070,6 +5070,9 @@ export interface components {
             lastRunAt?: string;
             /** Format: int64 */
             lastRunJobId?: number;
+            /** Format: int32 */
+            createdBy?: number;
+            mayChange?: boolean;
         };
         EnqueueExportRequest: {
             format?: string;

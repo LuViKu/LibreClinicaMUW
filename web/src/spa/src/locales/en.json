@@ -3265,6 +3265,7 @@
     "schedules": {
       "button": "Schedules",
       "title": "Export schedules",
+      "creatorOnly": "Only the creator of this schedule or a system administrator can change it.",
       "add": "Add schedule",
       "empty": "No schedules for this dataset.",
       "column": {

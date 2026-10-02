@@ -3265,6 +3265,7 @@
     "schedules": {
       "button": "Zeitpläne",
       "title": "Export-Zeitpläne",
+      "creatorOnly": "Nur die Ersteller:in dieses Zeitplans oder ein Systemadministrator kann ihn ändern.",
       "add": "Zeitplan hinzufügen",
       "empty": "Keine Zeitpläne für diesen Datensatz.",
       "column": {

@@ -23,7 +23,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * to refresh the UI. {@code enabled=false} is a pause: the schedule is
  * listed but does not run, and {@code nextRunAt} is null.
  * {@code notifyEmail} is the contact address mailed when a run finishes,
- * or null.
+ * or null. {@code createdBy} is the user id of the creator, whose account
+ * the scheduled runs execute as; {@code mayChange} says whether the caller
+ * may edit, pause or delete the schedule (its creator or a sysadmin).
  */
 public record ExportScheduleDto(
         long id,
@@ -36,5 +38,7 @@ public record ExportScheduleDto(
         String createdAt,
         String nextRunAt,
         String lastRunAt,
-        Long lastRunJobId) {
+        Long lastRunJobId,
+        int createdBy,
+        boolean mayChange) {
 }

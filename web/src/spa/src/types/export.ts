@@ -115,6 +115,10 @@ export interface ExportScheduleDto {
   nextRunAt: string | null
   lastRunAt: string | null
   lastRunJobId: number | null
+  /** User id of the creator, whose account the scheduled runs execute as. */
+  createdBy: number
+  /** True for the creator and for a system administrator; others may only look. */
+  mayChange: boolean
 }
 
 /** Body of {@code POST /datasets/{id}/schedules}. */

@@ -480,6 +480,56 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void onlyTheCreatorOrASysadminChangesOrDeletesASchedule() throws Exception {
+        DatasetBean ds = persistDataset();
+        long id = createViaApi(ds); // created by user 1
+        ExportScheduleDAO dao = new ExportScheduleDAO(DATA_SOURCE);
+        MockHttpSession colleague = dataManagerIn(STUDY_ID, 2, "colleague");
+
+        mockMvc().perform(patch("/api/v1/schedules/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cronExpression\":\"0 30 4 * * ?\",\"enabled\":false}")
+                        .session(colleague))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").exists());
+        mockMvc().perform(delete("/api/v1/schedules/" + id).session(colleague))
+                .andExpect(status().isForbidden());
+        ExportScheduleDAO.Row row = dao.findById(id);
+        assertEquals(CRON, row.cronExpression, "a refused edit changes nothing");
+        assertTrue(row.enabled && row.active, "a refused pause or delete changes nothing");
+        assertEquals(1, row.createdBy);
+        assertEquals(CRON, ((CronTrigger) triggerOf(id)).getCronExpression());
+
+        // the listing stays open to the colleague, and says what they may not do
+        mockMvc().perform(get("/api/v1/datasets/" + ds.getId() + "/schedules").session(colleague))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].createdBy").value(1))
+                .andExpect(jsonPath("$[0].mayChange").value(false));
+
+        // a sysadmin who did not create it
+        mockMvc().perform(patch("/api/v1/schedules/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cronExpression\":\"0 30 4 * * ?\"}")
+                        .session(sysadminIn(STUDY_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mayChange").value(true));
+        assertEquals("0 30 4 * * ?", dao.findById(id).cronExpression);
+        assertEquals(1, dao.findById(id).createdBy, "the creator stays the account the runs use");
+
+        // the creator
+        patchSchedule(id, "{\"enabled\":false}", STUDY_ID)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mayChange").value(true));
+        mockMvc().perform(delete("/api/v1/schedules/" + id).session(sysadminIn(STUDY_ID)))
+                .andExpect(status().isNoContent());
+        assertTrue(!dao.findById(id).active);
+
+        long own = createViaApi(ds);
+        mockMvc().perform(delete("/api/v1/schedules/" + own).session(dataManagerIn(STUDY_ID)))
+                .andExpect(status().isNoContent());
+    }
+
     /* ---------------- edit, pause, resume ---------------- */
 
     @Test

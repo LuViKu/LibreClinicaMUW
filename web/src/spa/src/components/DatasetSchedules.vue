@@ -194,7 +194,8 @@ function formatLabel(format: string): string {
           <td class="px-2 py-1.5 text-slate-700">{{ formatDate(s.lastRunAt) }}</td>
           <td class="px-2 py-1.5 text-slate-700 break-all">{{ s.notifyEmail ?? '—' }}</td>
           <td class="px-2 py-1.5 text-right">
-            <div class="inline-flex items-center gap-1.5">
+            <span v-if="!s.mayChange" class="text-slate-400" data-testid="schedule-readonly" :title="t('dataExport.schedules.creatorOnly')">—</span>
+            <div v-else class="inline-flex items-center gap-1.5">
               <button
                 type="button"
                 class="px-2 py-0.5 border border-slate-200 rounded bg-white hover:bg-slate-100 text-slate-700"

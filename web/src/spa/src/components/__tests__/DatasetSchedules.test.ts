@@ -42,6 +42,7 @@ const RUNNING: ExportScheduleDto = {
   id: 5, datasetId: 11, format: 'odm', cronExpression: '0 0 3 ? * MON', active: true, enabled: true,
   notifyEmail: 'dm-team@example.org', createdAt: '2026-09-01T08:00:00Z',
   nextRunAt: '2026-10-05T03:00:00Z', lastRunAt: null, lastRunJobId: null,
+  createdBy: 1, mayChange: true,
 }
 const PAUSED: ExportScheduleDto = {
   ...RUNNING, id: 6, format: 'csv', cronExpression: '0 0 2 * * ?', enabled: false, notifyEmail: null, nextRunAt: null,
@@ -162,5 +163,22 @@ describe('DatasetSchedules', () => {
 
     expect(w.find('[role="dialog"]').exists()).toBe(true)
     expect(w.get('[data-testid="schedule-error"]').text()).toContain('Invalid cron expression')
+  })
+
+  it("shows another user's schedule read-only: no edit, pause, resume or delete", async () => {
+    const mine = { ...RUNNING, id: 5 }
+    const theirs = { ...RUNNING, id: 7, createdBy: 2, mayChange: false }
+    const theirsPaused = { ...PAUSED, id: 8, createdBy: 2, mayChange: false }
+    const w = await mountPanel([mine, theirs, theirsPaused])
+
+    expect(w.get('[data-testid="schedule-5"]').find('[data-testid="schedule-edit"]').exists()).toBe(true)
+    for (const id of [7, 8]) {
+      const row = w.get(`[data-testid="schedule-${id}"]`)
+      expect(row.text()).toContain(id === 7 ? '0 0 3 ? * MON' : '0 0 2 * * ?')
+      expect(row.find('[data-testid="schedule-readonly"]').exists()).toBe(true)
+      for (const control of ['edit', 'pause', 'resume', 'delete']) {
+        expect(row.find(`[data-testid="schedule-${control}"]`).exists()).toBe(false)
+      }
+    }
   })
 })

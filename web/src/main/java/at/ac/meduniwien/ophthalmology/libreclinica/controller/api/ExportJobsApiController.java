@@ -98,9 +98,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       (paused ones included).</li>
  *   <li>{@code PATCH  /api/v1/schedules/{id}} — change format, cron or
  *       {@code enabled}; {@code enabled=false} pauses, {@code true}
- *       resumes. Rescheduled before the response.</li>
+ *       resumes. Rescheduled before the response. Only the schedule's
+ *       creator or a sysadmin (403 otherwise): its runs execute as the
+ *       creator.</li>
  *   <li>{@code DELETE /api/v1/schedules/{id}} — soft-delete
- *       ({@code active=false}).</li>
+ *       ({@code active=false}); same creator-or-sysadmin rule.</li>
  * </ul>
  *
  * <h2>Authorization</h2>
@@ -475,7 +477,7 @@ public class ExportJobsApiController {
         ExportScheduleDAO.Row row = scheduleDao.findById(id);
         LOG.info("Create schedule: dataset_id={} format={} cron='{}' id={} by user={}",
                 datasetId, format, cron, id, me.getName());
-        return ResponseEntity.status(201).body(toScheduleDto(row));
+        return ResponseEntity.status(201).body(toScheduleDto(row, me));
     }
 
     @GetMapping("/datasets/{id}/schedules")
@@ -504,7 +506,7 @@ public class ExportJobsApiController {
         List<ExportScheduleDAO.Row> rows =
                 new ExportScheduleDAO(dataSource).findByDataset(datasetId, /* includeInactive */ false);
         List<ExportScheduleDto> out = new ArrayList<>(rows.size());
-        for (ExportScheduleDAO.Row r : rows) out.add(toScheduleDto(r));
+        for (ExportScheduleDAO.Row r : rows) out.add(toScheduleDto(r, me));
         return ResponseEntity.ok(out);
     }
 
@@ -566,6 +568,7 @@ public class ExportJobsApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No schedule with id " + scheduleId + " in the active study"));
         }
+        if (!mayChange(me, existing)) return notScheduleOwner();
         if (format == null) format = existing.format;
         if (cron == null) cron = existing.cronExpression;
         boolean enabled = body.enabled() == null ? existing.enabled : body.enabled();
@@ -596,7 +599,7 @@ public class ExportJobsApiController {
         }
         LOG.info("Update schedule: id={} format={} cron='{}' enabled={} by user={}",
                 scheduleId, format, cron, enabled, me.getName());
-        return ResponseEntity.ok(toScheduleDto(dao.findById(scheduleId)));
+        return ResponseEntity.ok(toScheduleDto(dao.findById(scheduleId), me));
     }
 
     @DeleteMapping("/schedules/{id}")
@@ -618,6 +621,7 @@ public class ExportJobsApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No schedule with id " + scheduleId + " in the active study"));
         }
+        if (!mayChange(me, existing)) return notScheduleOwner();
         dao.deactivate(scheduleId);
         registrar.unregisterSchedule(scheduleId);
         LOG.info("Soft-delete schedule: id={} by user={}", scheduleId, me.getName());
@@ -668,6 +672,20 @@ public class ExportJobsApiController {
                 "Dataset " + datasetId + " does not belong to the active study"));
     }
 
+    /**
+     * A schedule's runs execute as its creator, so only the creator or a
+     * sysadmin may change or delete it; another user with the export role
+     * in the study may list it but not alter what runs under that account.
+     */
+    private static boolean mayChange(UserAccountBean me, ExportScheduleDAO.Row schedule) {
+        return me.isSysAdmin() || schedule.createdBy == me.getId();
+    }
+
+    private static ResponseEntity<?> notScheduleOwner() {
+        return ResponseEntity.status(403).body(Map.of("message",
+                "Only the creator of this schedule or a system administrator may change it."));
+    }
+
     /** Sysadmin sees every job; everybody else only their own. */
     private static boolean canSeeJob(UserAccountBean me, ExportJobDAO.Row row) {
         if (me.isSysAdmin()) return true;
@@ -714,7 +732,7 @@ public class ExportJobsApiController {
         };
     }
 
-    static ExportScheduleDto toScheduleDto(ExportScheduleDAO.Row r) {
+    static ExportScheduleDto toScheduleDto(ExportScheduleDAO.Row r, UserAccountBean me) {
         if (r == null) return null;
         return new ExportScheduleDto(
                 r.id,
@@ -727,7 +745,9 @@ public class ExportJobsApiController {
                 toIso(r.createdAt),
                 toIso(r.nextRunAt),
                 toIso(r.lastRunAt),
-                r.lastRunJobId);
+                r.lastRunJobId,
+                r.createdBy,
+                mayChange(me, r));
     }
 
     private static String toIso(Instant t) {
