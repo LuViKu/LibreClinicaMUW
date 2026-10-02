@@ -157,6 +157,53 @@ class AuditDiscrepancyExportDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "audit_log_event type 56 (discrepancy-log exported) row expected after export");
     }
 
+    /**
+     * A note description starting with a formula character must reach the CSV
+     * as text (leading apostrophe), or a spreadsheet evaluates it.
+     */
+    @Test
+    void discrepancyExportCsvKeepsFormulaLikeDescriptionsAsText() throws Exception {
+        java.util.Map<Integer, String> original = new java.util.LinkedHashMap<>();
+        try (Connection conn = DATA_SOURCE.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT discrepancy_note_id, description FROM discrepancy_note "
+                     + "ORDER BY discrepancy_note_id");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) original.put(rs.getInt(1), rs.getString(2));
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(original.size() >= 1, "seed has notes");
+        java.util.List<Integer> ids = new java.util.ArrayList<>(original.keySet());
+        setDescription(ids.get(0), "=HYPERLINK(\"http://example.invalid\")");
+        if (ids.size() > 1) setDescription(ids.get(1), "-2+3");
+        String body;
+        try {
+            body = discrepancyMockMvc().perform(get("/api/v1/discrepancies/export.csv")
+                    .session(authenticatedRootSession()))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        } finally {
+            for (java.util.Map.Entry<Integer, String> e : original.entrySet()) {
+                setDescription(e.getKey(), e.getValue());
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(
+                body.contains("\"'=HYPERLINK(\"\"http://example.invalid\"\")\""), body);
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains(",=HYPERLINK("), body);
+        if (ids.size() > 1) {
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains(",'-2+3,"), body);
+        }
+    }
+
+    private void setDescription(int id, String description) throws Exception {
+        try (Connection conn = DATA_SOURCE.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE discrepancy_note SET description = ? WHERE discrepancy_note_id = ?")) {
+            ps.setString(1, description);
+            ps.setInt(2, id);
+            ps.executeUpdate();
+        }
+    }
+
     private int countAuditRowsOfType(int typeId) throws Exception {
         try (Connection conn = DATA_SOURCE.getConnection();
              PreparedStatement ps = conn.prepareStatement(

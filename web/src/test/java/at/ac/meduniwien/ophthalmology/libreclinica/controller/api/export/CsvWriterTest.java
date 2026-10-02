@@ -74,4 +74,23 @@ class CsvWriterTest {
         // Header + 2 rows + trailing CRLF on each.
         assertEquals(3, body.split("\r\n").length);
     }
+
+    @Test
+    void neutralisingWriterPrefixesFormulaLikeText() throws Exception {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        try (CsvWriter w = new CsvWriter(buf, true)) {
+            w.writeRow("=HYPERLINK(\"http://x\")", "-2+3", "+1", "@SUM(A1)", "\tx", "\rx", "plain", "1.5");
+        }
+        assertEquals("\"'=HYPERLINK(\"\"http://x\"\")\",'-2+3,'+1,'@SUM(A1),'\tx,\"'\rx\",plain,1.5\r\n",
+                buf.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void defaultWriterLeavesFormulaLikeValuesUntouched() throws Exception {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        try (CsvWriter w = new CsvWriter(buf)) {
+            w.writeRow("-1.25", "=1+1");
+        }
+        assertEquals("-1.25,=1+1\r\n", buf.toString(StandardCharsets.UTF_8));
+    }
 }

@@ -228,7 +228,8 @@ public class DiscrepancyApiController {
         byte[] csv;
         try {
             ByteArrayOutputStream buf = new ByteArrayOutputStream();
-            try (CsvWriter w = new CsvWriter(buf)) {
+            // Notes carry free text; keep formula-like text as text in a spreadsheet.
+            try (CsvWriter w = new CsvWriter(buf, true)) {
                 w.writeHeader();
                 w.writeRow("ID", "Type", "Status", "Subject", "Item OID",
                         "Description", "Assigned to", "Days open", "Last activity (UTC)");
