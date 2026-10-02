@@ -2206,8 +2206,8 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     }//
 
     /**
-     * Return directly the HashMap with the key It shouldn't be NULL !! TODO - throw an error if any of the fields is
-     * null!
+     * Return directly the HashMap with the key. A NULL column is mapped to the empty string
+     * in the key, so a row with a NULL field still yields a key.
      *
      * @param rs result set
      */

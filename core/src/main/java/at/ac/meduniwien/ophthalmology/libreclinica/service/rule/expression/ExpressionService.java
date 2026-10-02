@@ -404,17 +404,6 @@ public class ExpressionService {
                             "OCRERR_0017", new Object[] { fullExpression, expressionWrapper.getRuleSet().getTarget().getValue() }
                         );
                     }
-                    /*
-                     * if (valueFromForm != null) { // TODO: Do this if type a
-                     * date String dateFormat =
-                     * ResourceBundleProvider.getFormatBundle
-                     * ().getString("date_format_string"); String dateRegexp =
-                     * ResourceBundleProvider
-                     * .getFormatBundle().getString("date_regexp");
-                     * valueFromForm =
-                     * ExpressionTreeHelper.isValidDate(valueFromForm,
-                     * dateFormat, dateRegexp); }
-                     */
                     value = valueFromForm == null ? valueFromDb : valueFromForm;
                 }
             } else {
