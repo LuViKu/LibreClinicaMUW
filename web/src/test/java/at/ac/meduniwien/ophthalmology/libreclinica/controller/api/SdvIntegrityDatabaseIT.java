@@ -265,6 +265,15 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
         // Event CRF 11 with both passes complete.
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "UPDATE event_crf SET date_validate_completed = now() WHERE event_crf_id = 11");
+        // Completing again refuses a CRF with an empty required item, and the
+        // seeded CRF 11 holds only some of Demographics' values: give it the rest.
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "INSERT INTO item_data (item_id, event_crf_id, status_id, value, date_created, owner_id, "
+                        + "ordinal, deleted) "
+                        + "SELECT v.item_id, 11, 1, v.value, '2001-01-01', 1, 1, false "
+                        + "  FROM (VALUES (1, '2024-01-01'), (2, 'Y'), (3, '170'), (4, '70')) AS v(item_id, value) "
+                        + " WHERE NOT EXISTS (SELECT 1 FROM item_data d WHERE d.event_crf_id = 11 "
+                        + "                    AND d.item_id = v.item_id AND COALESCE(d.deleted, false) = false)");
         try {
             assertTrue(listedEventCrfs().contains("11"));
 
@@ -279,6 +288,8 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.pass").value("2"));
         } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "DELETE FROM item_data WHERE event_crf_id = 11 AND date_created = '2001-01-01'");
             ClinicalWriteFixtures.execute(DATA_SOURCE,
                     "UPDATE event_definition_crf SET double_entry = false WHERE event_definition_crf_id = 2");
             ClinicalWriteFixtures.execute(DATA_SOURCE,

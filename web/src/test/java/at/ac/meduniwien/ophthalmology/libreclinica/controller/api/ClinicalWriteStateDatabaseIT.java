@@ -107,7 +107,8 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
             String body = result.getResponse().getContentAsString();
             String call = result.getRequest().getMethod() + " " + result.getRequest().getRequestURI();
             assertEquals(409, result.getResponse().getStatus(), call + ": " + body);
-            assertTrue(body.contains(code), body);
+            assertTrue(body.contains("\"code\":\"" + code + "\""), body);
+            assertTrue(body.contains("\"message\""), body);
             assertEquals(before, state(eventCrfId), call + " changed the CRF");
         }
     }
@@ -167,7 +168,8 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
             mvc().perform(json(post("/api/v1/eventCrfs/9/items"), "{\"values\":{\"I_WEIGHT_KG\":\"72.0\"}}")
                             .session(investigator()))
                     .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.code").value("EVENT_CRF_REMOVED"));
+                    .andExpect(jsonPath("$.code").value("EVENT_REMOVED"))
+                    .andExpect(jsonPath("$.message").isString());
         } finally {
             ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_event SET status_id = 1 WHERE study_event_id = 10");
         }
@@ -180,7 +182,8 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
             mvc().perform(json(post("/api/v1/eventCrfs/11/items"), "{\"values\":{\"I_WEIGHT_KG\":\"73.0\"}}")
                             .session(investigator()))
                     .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.code").value("EVENT_CRF_REMOVED"));
+                    .andExpect(jsonPath("$.code").value("SUBJECT_REMOVED"))
+                    .andExpect(jsonPath("$.message").isString());
         } finally {
             ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_subject SET status_id = 1 WHERE study_subject_id = 5");
         }
@@ -212,7 +215,7 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
     void aCrfOfALockedSubjectTakesNoWrite() throws Exception {
         ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_subject SET status_id = 6 WHERE study_subject_id = 2");
         try {
-            assertEveryWriteRefused(5, "EVENT_CRF_LOCKED");
+            assertEveryWriteRefused(5, "SUBJECT_LOCKED");
         } finally {
             ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study_subject SET status_id = 1 WHERE study_subject_id = 2");
         }

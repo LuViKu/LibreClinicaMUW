@@ -1023,11 +1023,11 @@ public class DiscrepancyApiController {
     /**
      * The candidate item that is on the event CRF's version, when the caller
      * may start a row for it there: a role that enters data, and an event
-     * CRF whose values may change ({@link ClinicalWriteState}). Null otherwise.
+     * CRF whose values may change ({@link ClinicalRecordGuard}). Null otherwise.
      */
     private ItemBean itemAwaitingRow(List<ItemBean> candidates, int eventCrfId, HttpSession session) {
         if (!ClinicalWriteAuthorization.roleMayEnterData(ClinicalWriteAuthorization.roleIdOf(session))
-                || ClinicalWriteState.refuseUnlessWritable(dataSource, eventCrfId, "starting a row") != null) {
+                || ClinicalRecordGuard.refuseUnlessWritable(dataSource, eventCrfId, "starting a row") != null) {
             return null;
         }
         try (Connection c = dataSource.getConnection();
