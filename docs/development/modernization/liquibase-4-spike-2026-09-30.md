@@ -68,7 +68,7 @@ Without LAX, every DB IT fails at `AbstractApiControllerDatabaseIT`'s Liquibase 
 
 Starting 3.6.3 again on a database that 4.x has touched is **not** clean. 3.6.3 does not recognise `9:` checksums, resets them all, and then treats the 25 applicable `runOnChange` changesets as changed and re-runs them.
 
-On the dev copy this inserted 11 `measurement_unit` rows through the `2009-05-15-3624-3` backfill. It also re-created one trigger function, identical apart from whitespace. On production data other `runOnChange` bodies would run again too. So a rollback of this upgrade means restoring the pre-upgrade backup, or at least the `databasechangelog.md5sum` column. The deploy runbook should say so.
+On the dev copy this inserted 11 `measurement_unit` rows through the `2009-05-15-3624-3` backfill. It also re-created one trigger function, identical apart from whitespace. On production data other `runOnChange` bodies would run again too. So a rollback of this upgrade means restoring the pre-upgrade backup. The deploy runbook should say so. (This report first also offered restoring only the `databasechangelog.md5sum` column. That was never tested, and any `9:` checksum it leaves behind sets off the same re-runs, so the runbook offers only the full restore.)
 
 ## 5. Method (reproducible)
 

@@ -318,9 +318,18 @@ appeared during the smoke, treat as a deploy regression and go to §5.
 > checksums: it resets them all and then treats every applicable `runOnChange`
 > changeset (25) as changed and runs it again — on the dev copy that inserted
 > 11 duplicate `measurement_unit` rows and re-created a trigger function.
-> Rolling that release back means **restoring the §1 dump** (at the very least
-> the `databasechangelog.md5sum` column), never starting the old image on the
-> upgraded database. Evidence:
+> Rolling that release back means **restoring the whole §1 dump** with step (c)
+> below, never starting the old image on the upgraded database. Do not try to
+> restore or edit only `databasechangelog.md5sum`: that path is untested, and
+> any `9:` checksum left behind sets off the same re-runs.
+>
+> A full restore puts the database back to the moment of the dump, so
+> **everything written after it is lost**: CRF data, signatures, the database
+> rows of uploaded files, audit entries. Decide on a rollback in the deploy
+> window, before §4's smoke hands the system back to users. Once clinical data
+> has been entered on the new release, fix forward with a hotfix release
+> instead.
+> Evidence:
 > [liquibase-4-spike-2026-09-30.md §4](../development/modernization/liquibase-4-spike-2026-09-30.md).
 >
 > **The second is the one
