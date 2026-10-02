@@ -62,6 +62,33 @@ export const useSdvStore = defineStore('sdv', () => {
     return verifiableInView.value.every((oid) => selected.value.has(oid))
   })
 
+  /**
+   * The view by subject, as legacy's "View By Study Subject ID": per subject,
+   * how many complete CRFs there are, how many are verified, how many carry
+   * an open query, and which ones verifying the subject would verify. Legacy
+   * (`SDVUtil.setSDVStatusForStudySubjects`) verifies a subject's complete
+   * CRFs that need SDV, 100% or partial; here also only those this page
+   * would let you tick, so a CRF with an open query is left for later, as it
+   * is row by row. The search box narrows by subject.
+   */
+  const subjects = computed<SdvSubjectSummary[]>(() => {
+    const q = query.value.trim().toLowerCase()
+    const bySubject = new Map<string, SdvSubjectSummary>()
+    for (const row of rows.value) {
+      if (q && !row.subjectId.toLowerCase().includes(q)) continue
+      let s = bySubject.get(row.subjectId)
+      if (!s) {
+        s = { subjectId: row.subjectId, siteLabel: row.siteLabel, complete: 0, verified: 0, withQueries: 0, verifiable: [] }
+        bySubject.set(row.subjectId, s)
+      }
+      s.complete += 1
+      if (row.status === 'verified') s.verified += 1
+      if (row.status === 'query') s.withQueries += 1
+      if (row.status === 'pending' && row.requirement !== 'not-required') s.verifiable.push(row.eventCrfOid)
+    }
+    return [...bySubject.values()].sort((a, b) => a.subjectId.localeCompare(b.subjectId))
+  })
+
   async function load(_siteOid?: string): Promise<void> {
     isLoading.value = true
     error.value = null
@@ -121,7 +148,23 @@ export const useSdvStore = defineStore('sdv', () => {
    * state so the user can retry.
    */
   async function verifySelected(): Promise<number> {
-    const targets = [...selected.value]
+    return verify([...selected.value], true)
+  }
+
+  /**
+   * Verify a subject: every CRF of theirs that {@link subjects} lists as
+   * verifiable. Returns the count the server verified.
+   */
+  async function verifySubject(subjectId: string): Promise<number> {
+    const summary = subjects.value.find((s) => s.subjectId === subjectId)
+    return summary ? verify([...summary.verifiable], false) : 0
+  }
+
+  /**
+   * @param clearAll clear the whole selection afterwards (bulk verify);
+   *        otherwise only the verified CRFs leave it
+   */
+  async function verify(targets: string[], clearAll: boolean): Promise<number> {
     if (targets.length === 0) return 0
     isVerifying.value = true
     error.value = null
@@ -142,7 +185,11 @@ export const useSdvStore = defineStore('sdv', () => {
       if (response.rejected && response.rejected.length > 0) {
         error.value = `${response.rejected.length} Eintrag/Einträge konnten nicht verifiziert werden.`
       }
-      clearSelection()
+      if (clearAll) {
+        clearSelection()
+      } else {
+        selected.value = new Set([...selected.value].filter((oid) => !flipped.has(oid)))
+      }
       return flipped.size
     } catch (e) {
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
@@ -251,16 +298,31 @@ export const useSdvStore = defineStore('sdv', () => {
     verifiableInView,
     selectedCount,
     allVerifiableSelected,
+    subjects,
     load,
     toggle,
     toggleAllInView,
     clearSelection,
     clearFilters,
     verifySelected,
+    verifySubject,
     unverifyRow,
     reset,
   }
 })
+
+/** One row of the view by subject ({@link useSdvStore} `subjects`). */
+export interface SdvSubjectSummary {
+  subjectId: string
+  siteLabel: string
+  /** Complete CRFs, the ones the SDV list shows. */
+  complete: number
+  verified: number
+  /** Complete CRFs held back by an open query or failed check. */
+  withQueries: number
+  /** The CRFs verifying the subject verifies: pending and SDV required. */
+  verifiable: string[]
+}
 
 /** Wire shape of POST /pages/api/v1/sdv/verify. */
 interface VerifyResponse {

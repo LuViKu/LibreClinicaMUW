@@ -50,3 +50,21 @@ export type AuditEvent =
     title: string
     actorRole?: 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator'
   }
+
+/**
+ * One page of an audit log (`AuditPageDto`): the rows matching the
+ * filters, newest first, and how many match across every page.
+ */
+export interface AuditPage {
+  totalCount: number
+  /** 0-based. */
+  page: number
+  pageSize: number
+  events: AuditEvent[]
+}
+
+/** The actor and subject choices of an audit log's filters, from the whole log (`AuditFacetsDto`). */
+export interface AuditFacets {
+  actors: string[]
+  subjects: string[]
+}

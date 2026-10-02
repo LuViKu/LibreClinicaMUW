@@ -32,6 +32,10 @@ import java.sql.SQLException;
  * written here carries {@code source_kind} and the id of whatever produced it,
  * in that source's own column. A row with no {@code source_kind} is a person's.
  *
+ * <p>The rules every writer keeps apply here too ({@link EventCrfWriteRules}):
+ * nothing is written into a removed, locked or signed event CRF, and a value
+ * that changes withdraws the CRF's source data verification.
+ *
  * <p>What this deliberately does not own is the audit row. The two callers
  * audit differently — one records every populate pass, the other only real
  * changes — and folding that in would have made this refactor change behaviour
@@ -86,7 +90,12 @@ public final class SourcedItemDataWriter {
         /** A person's value is there and stands. */
         OPERATOR_VALUE_KEPT,
         /** Another machine's value is there and stands. */
-        OTHER_SOURCE_KEPT
+        OTHER_SOURCE_KEPT,
+        /**
+         * The event CRF, its visit, subject or study is removed, locked or
+         * signed; nothing was written ({@link EventCrfWriteRules#refusal}).
+         */
+        REFUSED
     }
 
     /**
@@ -122,8 +131,16 @@ public final class SourcedItemDataWriter {
                                 Ref ref, int actorUserId) throws SQLException {
         Existing existing = findExisting(c, eventCrfId, itemId);
 
+        if (EventCrfWriteRules.refusal(c, eventCrfId) != null) {
+            return new Result(Outcome.REFUSED,
+                    existing == null ? null : existing.itemDataId(),
+                    existing == null ? null : existing.value());
+        }
         if (existing == null) {
             int id = insert(c, eventCrfId, itemId, value, ref, actorUserId);
+            if (value != null && !value.isEmpty()) {
+                EventCrfWriteRules.withdrawVerification(c, eventCrfId, actorUserId);
+            }
             return new Result(Outcome.WRITTEN, id, null);
         }
         if (existing.sourceKind() == null || existing.sourceKind().isBlank()) {
@@ -136,6 +153,7 @@ public final class SourcedItemDataWriter {
             return new Result(Outcome.UNCHANGED, existing.itemDataId(), existing.value());
         }
         update(c, existing.itemDataId(), value, ref, actorUserId);
+        EventCrfWriteRules.withdrawVerification(c, eventCrfId, actorUserId);
         return new Result(Outcome.WRITTEN, existing.itemDataId(), existing.value());
     }
 

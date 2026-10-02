@@ -226,6 +226,11 @@ public class RetinalInferenceApiController {
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "uploading scans to a CRF");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
 
         // ---- request-shape gates ------------------------------------------------
         if (file == null || file.isEmpty()) {
@@ -261,6 +266,11 @@ public class RetinalInferenceApiController {
         if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "uploading a scan");
+        if (closed != null) {
+            return closed;
         }
 
         // ---- persist the upload to disk ----------------------------------------

@@ -61,11 +61,26 @@ public final class CsvWriter implements AutoCloseable {
 
     private final OutputStream out;
     private final Writer writer;
+    private final boolean neutraliseFormulas;
     private boolean headerEmitted;
 
     public CsvWriter(OutputStream out) {
+        this(out, false);
+    }
+
+    /**
+     * @param neutraliseFormulas when true, a cell starting with {@code =},
+     *        {@code +}, {@code -}, {@code @}, a tab or a carriage return gets a
+     *        leading apostrophe, so a spreadsheet shows it as text instead of
+     *        evaluating it as a formula (quoting alone does not stop that). Only
+     *        for exports whose cells are free text; the default is off because
+     *        the clinical data exports carry values such as {@code -1.25} that
+     *        must stay as they are.
+     */
+    public CsvWriter(OutputStream out, boolean neutraliseFormulas) {
         this.out = out;
         this.writer = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+        this.neutraliseFormulas = neutraliseFormulas;
     }
 
     /**
@@ -109,7 +124,7 @@ public final class CsvWriter implements AutoCloseable {
         for (String raw : cells) {
             if (!first) writer.write(',');
             first = false;
-            writer.write(encode(raw));
+            writer.write(encode(neutraliseFormulas ? neutralise(raw) : raw));
         }
         writer.write(CRLF);
     }
@@ -171,6 +186,14 @@ public final class CsvWriter implements AutoCloseable {
         }
         sb.append('"');
         return sb.toString();
+    }
+
+    /** Prefix a cell that a spreadsheet would read as a formula with an apostrophe. */
+    static String neutralise(String raw) {
+        if (raw == null || raw.isEmpty()) return raw;
+        char c = raw.charAt(0);
+        return (c == '=' || c == '+' || c == '-' || c == '@' || c == '\t' || c == '\r')
+                ? "'" + raw : raw;
     }
 
     private static List<String> nullSafe(String[] cells) {

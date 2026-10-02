@@ -12,10 +12,11 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asArrayList;
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asHashMap;
 
-import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -69,6 +70,13 @@ public class UpdateSubStudyServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.STUDY_LIST, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form; saving the site (action=confirm) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override
@@ -310,7 +318,7 @@ public class UpdateSubStudyServlet extends SecureController {
 
     }
 
-    private void submitSiteEventDefinitions(StudyBean site) throws MalformedURLException {
+    private void submitSiteEventDefinitions(StudyBean site) {
         FormProcessor fp = new FormProcessor(request);
         Validator v = new Validator(request);
         HashMap<String, Boolean> changes = new HashMap<String, Boolean>();
@@ -337,7 +345,6 @@ public class UpdateSubStudyServlet extends SecureController {
 
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
         String participateFormStatus = spvdao.findByHandleAndStudy(parentStudyBean.getId(), "participantPortal").getValue();
-        if (participateFormStatus.equals("enabled")) 	baseUrl();
       request.setAttribute("participateFormStatus",participateFormStatus );
 
         
@@ -519,9 +526,8 @@ public class UpdateSubStudyServlet extends SecureController {
 
     /**
      * Inserts the new study into databa * 
-     * @throws MalformedURLException *
      */
-    private void submitStudy() throws MalformedURLException {
+    private void submitStudy() {
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
         StudyBean study = (StudyBean) session.getAttribute("newStudy");
         ArrayList<StudyParamsConfig> parameters = study.getStudyParameters();

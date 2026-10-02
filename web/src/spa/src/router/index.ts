@@ -114,11 +114,28 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
+    /* R1.1 (2026-09-30) — login history over audit_user_login, the SPA
+       replacement for the legacy /AuditUserActivity page. */
+    {
+      path: '/admin/login-history',
+      name: 'admin-login-history',
+      component: () => import('@/views/AdminLoginHistoryView.vue'),
+      meta: { title: 'Login History', role: 'Administrator' as const },
+    },
     {
       path: '/admin/system-status',
       name: 'admin-system-status',
       component: () => import('@/views/AdminSystemStatusView.vue'),
       meta: { title: 'System Status', role: 'Administrator' as const },
+    },
+    /* Every study on the platform, with remove / restore and the ODM
+       metadata download: the legacy /ListStudy. The API admits system
+       administrators only; the view shows its refusal to anyone else. */
+    {
+      path: '/admin/studies',
+      name: 'admin-studies',
+      component: () => import('@/views/AdminStudiesView.vue'),
+      meta: { title: 'Studies', role: 'Administrator' as const },
     },
     {
       path: '/admin/password-policy',
@@ -181,6 +198,23 @@ const router = createRouter({
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
       meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
+    },
+    /* One CRF: versions, item table with the integrity check, studies using
+       it (the legacy ViewCRF page). */
+    {
+      path: '/crf-library/:crfOid',
+      name: 'crf-detail',
+      component: () => import('@/views/CrfDetailView.vue'),
+      meta: { title: 'CRF', role: ['Data Manager', 'Administrator'] as const },
+    },
+    /* Version migration of one CRF: move existing event CRFs to another
+       version (the legacy batch CRF version migration), and change the
+       default version for new event CRFs. */
+    {
+      path: '/crf-library/:crfOid/migrate',
+      name: 'crf-migration',
+      component: () => import('@/views/CrfMigrationView.vue'),
+      meta: { title: 'CRF version migration', role: ['Data Manager', 'Administrator'] as const },
     },
     /* App-feedback Wave 2 (2026-06-19) — full drag-and-drop CRF builder canvas.
        Now the sole CRF authoring surface; the legacy side-rail wizard
@@ -258,10 +292,13 @@ const router = createRouter({
       meta: { title: 'Sign Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
+      // A Monitor views the subject read-only, as legacy View Subject lets a
+      // monitor; the page hides every change the role cannot make, and the
+      // API refuses them.
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: ['Investigator', 'Administrator'] as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used

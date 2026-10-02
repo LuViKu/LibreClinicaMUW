@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        R1-export (2026-09-30) — a scheduled export can e-mail a contact
+        address when it finishes.
+
+        The legacy scheduled export (/CreateJobExport) required a contact
+        address and mailed it when a run succeeded or failed. An SPA schedule
+        runs unattended as well, and without a mail a failing nightly export
+        goes unnoticed until someone opens the export page.
+
+        export_schedule.notify_email — the optional contact address. NULL
+            means no mail, which is what every existing schedule keeps.
+        export_job.schedule_id — the schedule a queued export came from, so
+            the worker knows whom to tell when it finishes. NULL for an
+            export someone started by hand. A schedule is only ever soft
+            deleted, but should a row go, its jobs keep their history.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-09-30-export-schedule-notify-email">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="export_schedule" columnName="notify_email"/></not>
+        </preConditions>
+        <addColumn tableName="export_schedule">
+            <column name="notify_email" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="export_schedule" columnName="notify_email"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-09-30-export-job-schedule-id">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="export_job" columnName="schedule_id"/></not>
+        </preConditions>
+        <addColumn tableName="export_job">
+            <column name="schedule_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="export_job" baseColumnNames="schedule_id"
+                                 constraintName="fk_export_job_schedule"
+                                 referencedTableName="export_schedule" referencedColumnNames="id"
+                                 onDelete="SET NULL" onUpdate="RESTRICT"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="export_job" constraintName="fk_export_job_schedule"/>
+            <dropColumn tableName="export_job" columnName="schedule_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -36,21 +36,38 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  *   -----------------------------------------------------------------
  *   new      → updated                   Investigator, CRC (coord),
  *                                        Data Manager (director),
- *                                        Administrator
+ *                                        Administrator, Monitor
  *   new      → not-applicable            Data Manager, Administrator
+ *   new      → closed                    Monitor
  *   updated  → updated                   any USER role on the study
  *   updated  → resolution-proposed       Investigator, CRC
  *   updated  → not-applicable            Data Manager, Administrator
+ *   updated  → closed                    Monitor
  *   resolved → closed                    Monitor, Data Manager,
  *                                        Administrator
- *   resolved → updated  (reopen)         Monitor, Data Manager,
+ *   resolved → updated  (re-query)       Monitor, Data Manager,
  *                                        Administrator
- *   closed   → (terminal — only legacy
- *               admin path can reopen)   —
+ *   closed   → updated  (re-open)        Monitor, Data Manager,
+ *                                        Administrator
+ *   not-applicable → (terminal)          —
  * </pre>
  *
  * Where "resolved" above is shorthand for the {@code
  * 'resolution-proposed'} SPA status (id 3).
+ *
+ * <p>The Monitor's rows follow {@code ViewDiscrepancyNoteServlet}, which
+ * offers a Monitor <em>Update Note</em> and <em>Close Note</em> on every
+ * thread that is not Not Applicable: a Monitor may re-query, reply to,
+ * close and re-open any query. Legacy also lets a Monitor add a note to a
+ * closed thread that keeps it closed; the SPA does not offer that, so
+ * closed → closed stays illegal here.
+ *
+ * <p>Re-opening follows the same servlet: a reply to a closed thread by
+ * any role but the Investigator (and ra, ra2) is stored Updated, so the
+ * Data Manager and the Administrator re-open as the Monitor does. Legacy's
+ * coordinator would too, but the SPA's CRC holds the Investigator's rows
+ * throughout this table (it proposes resolutions and closes nothing), so
+ * it does not re-open either.
  *
  * <p>The matrix is consulted before any DB write — the controller
  * throws {@code IllegalStateException} (handled by
@@ -101,12 +118,15 @@ final class NoteTransitionMatrix {
         // OPEN ('new') -> ...
         if (currentStatusId == ResolutionStatus.OPEN.getId()) {
             if (newStatusId == ResolutionStatus.UPDATED.getId()) {
-                return rolesInvestigatorCrcDmAdmin(roleId)
+                return rolesInvestigatorCrcDmAdmin(roleId) || isMonitor(roleId)
                         ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
             }
             if (newStatusId == ResolutionStatus.NOT_APPLICABLE.getId()) {
                 return rolesDmAdmin(roleId)
                         ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
+            }
+            if (newStatusId == ResolutionStatus.CLOSED.getId()) {
+                return isMonitor(roleId) ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
             }
             return Decision.ILLEGAL_TRANSITION;
         }
@@ -121,6 +141,9 @@ final class NoteTransitionMatrix {
                 return rolesDmAdmin(roleId)
                         ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
             }
+            if (newStatusId == ResolutionStatus.CLOSED.getId()) {
+                return isMonitor(roleId) ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
+            }
             return Decision.ILLEGAL_TRANSITION;
         }
 
@@ -134,7 +157,15 @@ final class NoteTransitionMatrix {
             return Decision.ILLEGAL_TRANSITION;
         }
 
-        // CLOSED / NOT_APPLICABLE are terminal for this endpoint.
+        // CLOSED -> updated re-opens the thread.
+        if (currentStatusId == ResolutionStatus.CLOSED.getId()) {
+            if (newStatusId == ResolutionStatus.UPDATED.getId()) {
+                return rolesMonitorDmAdmin(roleId) ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
+            }
+            return Decision.ILLEGAL_TRANSITION;
+        }
+
+        // NOT_APPLICABLE is terminal for this endpoint.
         return Decision.ILLEGAL_TRANSITION;
     }
 
@@ -215,6 +246,10 @@ final class NoteTransitionMatrix {
         return roleId == Role.MONITOR.getId()
                 || roleId == Role.STUDYDIRECTOR.getId()
                 || roleId == Role.ADMIN.getId();
+    }
+
+    private static boolean isMonitor(int roleId) {
+        return roleId == Role.MONITOR.getId();
     }
 
     private static boolean anyUserRole(int roleId) {

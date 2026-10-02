@@ -8,6 +8,9 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -202,6 +205,53 @@ class AdminApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[?(@.field=='expirationDays')]")
                         .value(Matchers.not(Matchers.empty())));
+    }
+
+    /**
+     * The 2012 seed stores {@code pwd.chars.max = -1}, which PasswordValidator
+     * reads as no maximum. The page must show and accept that, or it cannot be
+     * saved at all on a database that still holds the seed.
+     */
+    @Test
+    void passwordPolicyShowsTheSeededNoMaximumAsZero() throws Exception {
+        PasswordRequirementsDao passDao = stubPasswordDao();
+        when(passDao.maxLength()).thenReturn(-1);
+        mockMvcWith(mockDataSource(), Mockito.mock(DatabaseChangeLogDao.class),
+                Mockito.mock(ConfigurationDao.class), passDao)
+                .perform(get("/api/v1/admin/password-policy")
+                        .session((MockHttpSession)
+                                authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxLength").value(0));
+    }
+
+    @Test
+    void passwordPolicyPutAcceptsZeroAsNoMaximumAndKeepsTheStoredMinusOne() throws Exception {
+        PasswordRequirementsDao passDao = stubPasswordDao();
+        when(passDao.maxLength()).thenReturn(-1);
+        mockMvcWith(mockDataSource(), Mockito.mock(DatabaseChangeLogDao.class),
+                Mockito.mock(ConfigurationDao.class), passDao)
+                .perform(put("/api/v1/admin/password-policy")
+                        .session((MockHttpSession)
+                                authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study"))
+                        .contentType("application/json")
+                        .content("{\"minLength\":8,\"maxLength\":0}"))
+                .andExpect(status().isOk());
+        verify(passDao, never()).setMaxLength(anyInt());
+    }
+
+    @Test
+    void passwordPolicyPutStoresZeroOverARealMaximum() throws Exception {
+        PasswordRequirementsDao passDao = stubPasswordDao();
+        mockMvcWith(mockDataSource(), Mockito.mock(DatabaseChangeLogDao.class),
+                Mockito.mock(ConfigurationDao.class), passDao)
+                .perform(put("/api/v1/admin/password-policy")
+                        .session((MockHttpSession)
+                                authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study"))
+                        .contentType("application/json")
+                        .content("{\"minLength\":40,\"maxLength\":0}"))
+                .andExpect(status().isOk());
+        verify(passDao).setMaxLength(0);
     }
 
     @Test

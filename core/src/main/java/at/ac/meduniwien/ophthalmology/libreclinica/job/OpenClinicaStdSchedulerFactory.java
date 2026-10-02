@@ -11,7 +11,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.job;
 
 import java.util.Properties;
 
-import org.quartz.SchedulerException;
 import org.quartz.SchedulerFactory;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.spi.ThreadPool;
@@ -25,8 +24,10 @@ import org.quartz.spi.ThreadPool;
 @SuppressWarnings("all")
 public class OpenClinicaStdSchedulerFactory extends StdSchedulerFactory {
 
+    // Quartz 2.5 dropped SchedulerException from initialize(Properties), so
+    // the override may not declare it either.
     @Override
-    public void initialize(Properties props) throws SchedulerException {
+    public void initialize(Properties props) {
         String threadCount = props.getProperty("org.quartz.threadPool.threadCount");
         if (threadCount.trim().equals("0")) {
             // Replaces the thread pool class used

@@ -3,8 +3,8 @@
  * {@code /pages/api/v1/studies/{oid}/parameters} endpoint pair.
  *
  * Mirrors the backend {@code StudyParametersDto} (19 fields) and
- * {@code UpdateStudyParametersRequest} (18 fields, every field
- * nullable). Values are persisted as strings in
+ * {@code UpdateStudyParametersRequest} (17 fields, every field
+ * nullable; participantPortal is read-only). Values are persisted as strings in
  * {@code study_parameter_value.value} ({@code varchar(50)}) and we
  * pass them through verbatim so the SPA settings panel can render
  * them via the i18n enum keys without a typed-union proliferation.
@@ -59,7 +59,7 @@ export interface StudyParameters {
  * — pass {@code null} to no-op a handle.
  */
 export type UpdateStudyParametersInput = Partial<
-  Omit<StudyParameters, 'studyOid'>
+  Omit<StudyParameters, 'studyOid' | 'participantPortal'>
 >
 
 /** Allow-list constants — exported so views can build dropdowns. */

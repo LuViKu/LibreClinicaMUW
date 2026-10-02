@@ -1,6 +1,8 @@
 # Retinal-job admin view — follow-up plan
 
-> **Status:** scoping doc, no implementation yet. Authored 2026-06-19 after
+> **Status:** superseded (2026-09-30). The ingest inbox ([DR-026](decision-record.md)) replaced this plan; the old `/retinal/parked` route now redirects there. Kept for history.
+>
+> *Original status:* scoping doc, no implementation yet. Authored 2026-06-19 after
 > [feature/muw-portal-followup-fixes](https://github.com/LuViKu/LibreClinicaMUW/compare/lc-develop...feature/muw-portal-followup-fixes)
 > diagnosed a P0 gap left by PR #211 (Wave 2B retinal followups).
 

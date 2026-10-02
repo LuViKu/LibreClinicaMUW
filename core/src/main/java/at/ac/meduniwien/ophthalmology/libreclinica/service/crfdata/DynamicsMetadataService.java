@@ -572,7 +572,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 }
             }
             // If A is not repeating group & B is a repeating group with index selected
-            if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty()) {
+            if (!isGroupARepeating && isGroupBRepeating && !itemGroupBOrdinal.isEmpty() && !itemGroupBOrdinal.equals("END")) {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupBOrdinal));

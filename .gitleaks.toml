@@ -52,6 +52,10 @@ paths = [
   # Allowlist the entire JSP tree per the rationale at the top of this
   # file; specific-format secret rules (AWS, Stripe, etc.) still apply.
   '''^web/src/main/webapp/WEB-INF/jsp/.*\.jsp$''',
+  # A copy of a Liquibase 3.6.3 `databasechangelog` table, the fixture of
+  # the Liquibase 4 upgrade-path IT. Its MD5SUM column holds changeset
+  # checksums, which the generic-api-key rule flags by entropy.
+  '''^web/src/test/data/databasechangelog-liquibase-3\.6\.3\.tsv$''',
   # Two binaries that travelled in from the 2009 OpenClinica drop and
   # gitleaks flags as high-entropy. Either retired in Phase B or kept
   # as opaque artefacts.

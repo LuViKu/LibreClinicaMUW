@@ -484,6 +484,18 @@ public abstract class CoreSecureController extends HttpServlet {
     }
 
     /**
+     * Whether this servlet serves the given GET; by default it does. The same
+     * rule as {@link SecureController#acceptsGet}: a servlet whose request would
+     * save data answers false for that request, so the save takes a POST.
+     *
+     * @param request the GET, before any session set-up
+     * @return false to answer 405 Method Not Allowed without processing the request
+     */
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return true;
+    }
+
+    /**
      * Handles the HTTP <code>GET</code> method.
      *
      * @param request
@@ -492,7 +504,13 @@ public abstract class CoreSecureController extends HttpServlet {
      * @throws java.io.IOException
      */
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
+        if (!acceptsGet(request)) {
+            LOGGER.warn("{} accepts POST only for this request; refused a GET", getClass().getSimpleName());
+            response.setHeader("Allow", "POST");
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            return;
+        }
         try {
             LOGGER.debug("GET Request");
             process(request, response);

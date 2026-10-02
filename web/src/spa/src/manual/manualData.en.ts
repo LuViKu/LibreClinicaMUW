@@ -257,9 +257,12 @@ export const manualEn: Manual = {
             'For a quick dump, click **Schnell-ODM-Export**. For a tailored extract, click **Neuer Datensatz** and complete the dataset wizard.',
             'In the dataset table, expand **View files**, **Open wizard** to edit a dataset (disabled once it has been run), or **Remove** / **Restore** to manage its lifecycle.',
             'Click **Export now** and pick a format — *odm*, *csv*, *tsv*, *excel*, *sas* or *spss* — then download the generated file.',
+            'Click **Schedules** to set up recurring exports: a format, a time (a Quartz cron expression, with presets for daily, weekly and monthly runs) and an optional contact e-mail that is mailed when a run finishes or fails. A schedule can be edited, paused, resumed or deleted; a change applies at once.',
+            'An export running in the background (the bundle, or a scheduled run) shows its progress under its dataset; **Cancel export** stops it. A waiting export does not run; a running one stops at its next checkpoint and leaves no file.',
           ],
           notes: [
             'Open to Administrator, Data Manager and Monitor. Tick **Entfernte einschließen** to show soft-deleted datasets. A dataset that has already run cannot be edited — clone or create a new one instead.',
+            'Schedules replace the legacy *Create Scheduled Job: Export Dataset* screen; a schedule\u2019s exports run as the user who created it.',
           ],
         },
         {
@@ -342,8 +345,9 @@ export const manualEn: Manual = {
             'Open **Geplante Jobs** from the **System** rail (`/admin/jobs`).',
             'Review the scheduler status bar (name, started/standby) and the jobs table: name, group, state, previous and next fire times, description.',
             'Click **Aktualisieren** to re-poll.',
+            'A scheduled export made with the legacy *Create Scheduled Job* screen carries a **Legacy export** badge with its dataset, period, format and contact e-mail, and keeps running until it is deleted. Recreate it as a schedule of the dataset (**Datenexport** → **Schedules**), then click **Delete** here.',
           ],
-          notes: ['Administrator-only and read-only. The state pill is colour-coded (NORMAL green, PAUSED amber, ERROR/BLOCKED red). An empty list shows *Keine Jobs*.'],
+          notes: ['Administrator-only. Only legacy scheduled exports can be deleted; every other trigger belongs to the platform and is read-only. New export schedules are set up per dataset under **Datenexport**. The state pill is colour-coded (NORMAL green, PAUSED amber, ERROR/BLOCKED red). An empty list shows *Keine Jobs*.'],
         },
         {
           id: 'ad-subject', num: '17', title: 'Subject Detail, Study Identity & Parameters', deutsch: 'Probandendetail · Studien-Identität', route: '/subjects/<id>',
@@ -548,9 +552,12 @@ export const manualEn: Manual = {
             'For a saved dataset, **Export now** opens a format picker — **ODM**, **CSV**, **TSV**, **Excel**, **SAS**, or **SPSS** — and downloads the result.',
             '**View files** expands a sub-row listing every generated file with size, timestamp, and a **download** link.',
             '**Remove** soft-deletes a dataset; tick **show removed** to **restore** it.',
+            '**Schedules** sets up recurring exports: a format, a time (a Quartz cron expression, with presets) and an optional contact e-mail that is mailed when a run finishes or fails. Edit, pause, resume or delete a schedule there; a change applies at once.',
+            'An export running in the background shows its progress under its dataset; **Cancel export** stops it and leaves no file.',
           ],
           notes: [
             'Editing a dataset is blocked once it has been run (to preserve a reproducible extract); create a new one instead.',
+            'A schedule\u2019s exports run as the user who created it.',
           ],
         },
         {

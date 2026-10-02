@@ -18,6 +18,8 @@ import java.util.List;
 
 import javax.sql.DataSource;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
@@ -330,6 +332,14 @@ public class TableOfContentsServlet extends SecureController {
             fp.addPresetValue(INPUT_INTERVIEW_DATE, "");
         }
         setPresetValues(fp.getPresetValues());
+    }
+
+    /** GET shows the event CRF; starting it (action=ide_s) or saving the interview (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        FormProcessor form = new FormProcessor(request);
+        return !ACTION_START_INITIAL_DATA_ENTRY.equals(form.getString(INPUT_ACTION, true))
+                && !(form.isSubmitted() && request.getAttribute(DataEntryServlet.INPUT_IGNORE_PARAMETERS) == null);
     }
 
     /*

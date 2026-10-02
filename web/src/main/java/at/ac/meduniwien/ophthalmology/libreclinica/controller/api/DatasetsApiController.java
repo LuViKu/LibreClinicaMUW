@@ -602,7 +602,7 @@ public class DatasetsApiController {
      * roles per {@code ExportDatasetServlet.mayProceed()}. RA / RA2
      * (read-only researcher) are denied.
      */
-    static boolean roleMayExportData(UserAccountBean me, StudyUserRoleBean currentRole) {
+    public static boolean roleMayExportData(UserAccountBean me, StudyUserRoleBean currentRole) {
         if (me != null && me.isSysAdmin()) return true;
         if (currentRole == null || currentRole.getRole() == null) return false;
         Role r = currentRole.getRole();

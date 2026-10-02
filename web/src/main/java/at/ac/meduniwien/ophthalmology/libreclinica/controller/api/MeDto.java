@@ -58,6 +58,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * always serialise {@code mustChangePassword=false} — their
  * upstream identity provider owns the credential lifecycle per
  * DR-014.
+ *
+ * <p>{@code userType} is the account type, {@code USER}, {@code SYSADMIN}
+ * (business administrator) or {@code TECHADMIN} (technical
+ * administrator), in the vocabulary {@code POST /api/v1/users} and
+ * {@code PUT /api/v1/users/{username}} take. The SPA's
+ * {@code Administrator} role does not tell a system administrator from
+ * someone holding the study-level {@code admin} role; screens that only
+ * a system administrator can use, and the one choice only a technical
+ * administrator may make (creating another technical administrator),
+ * read this instead.
  */
 @Schema(name = "MeDto")
 public record MeDto(
@@ -74,7 +84,8 @@ public record MeDto(
         String timezone,
         boolean mustChangePassword,
         String passwordChangeReason,
-        ActiveStudyDto activeStudy
+        ActiveStudyDto activeStudy,
+        String userType
 ) {
 
     /** Allowed values of the {@code passwordChangeReason} field. */
@@ -153,5 +164,30 @@ public record MeDto(
              * untouched study behaves like the platform default, not like a
              * study with everything switched off.
              */
-            Map<String, String> settings) {}
+            Map<String, String> settings,
+            /**
+             * What the session's binding on this study may write, by the
+             * rules the write endpoints apply ({@link PermissionsDto}).
+             */
+            PermissionsDto permissions) {}
+
+    /**
+     * What the session's binding on the active study may write, computed
+     * with the rules the write endpoints apply
+     * ({@code ClinicalWriteAuthorization}). The SPA's roles cannot say
+     * this: ra and ra2 share the SPA role "Investigator" with the
+     * investigator, and a system administrator projects as
+     * "Administrator" whatever the binding. The SPA reads these flags to
+     * offer only the actions the server admits.
+     *
+     * @param enterData   enter or change CRF data, including re-running a
+     *                    retinal analysis, whose result goes into a CRF
+     * @param editSubject edit a subject or move an eye to another cohort
+     * @param signSubject sign a subject
+     */
+    @Schema(name = "PermissionsDto")
+    public record PermissionsDto(
+            boolean enterData,
+            boolean editSubject,
+            boolean signSubject) {}
 }

@@ -428,6 +428,10 @@ public class RuleSetService implements RuleSetServiceInterface {
     public RuleSetBean getRuleSetById(StudyBean study, String id) {
         logger.debug(" Study Id {} ", study.getId());
         RuleSetBean ruleSetBean = getRuleSetDao().findById(Integer.valueOf(id));
+        if (ruleSetBean != null && !isRuleSetOfStudy(ruleSetBean, study)) {
+            logger.debug("Rule set {} belongs to study {}, not to study {}", ruleSetBean.getId(), ruleSetBean.getStudyId(), study.getId());
+            ruleSetBean = null;
+        }
         if (ruleSetBean != null) {
             getObjects(ruleSetBean);
         }
@@ -435,16 +439,18 @@ public class RuleSetService implements RuleSetServiceInterface {
 
     }
 
-    /*
-     * (non-Javadoc)
-     * @see at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface#getRuleSetById(at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean, java.lang.String,
-     * at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean)
+    /**
+     * A rule set is defined on a study and runs for the study's sites as well:
+     * data entry on a site looks up the parent's rule sets. So it is in
+     * {@code study} when it belongs to that study or, if {@code study} is a
+     * site, to its parent.
      */
-    @Override
-    public List<RuleSetRuleBean> getRuleSetById(StudyBean study, String id, RuleBean ruleBean) {
-        logger.debug(" Study Id {} ", study.getId());
-        RuleSetBean ruleSetBean = getRuleSetDao().findById(Integer.valueOf(id));
-        return getRuleSetRuleDao().findByRuleSetBeanAndRuleBean(ruleSetBean, ruleBean);
+    private static boolean isRuleSetOfStudy(RuleSetBean ruleSet, StudyBean study) {
+        if (ruleSet.getStudyId() == null) {
+            return false;
+        }
+        int owner = ruleSet.getStudyId();
+        return owner == study.getId() || (study.getParentStudyId() > 0 && owner == study.getParentStudyId());
     }
 
     /*

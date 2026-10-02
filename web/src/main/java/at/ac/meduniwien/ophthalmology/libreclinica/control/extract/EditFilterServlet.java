@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.extract;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.TermType;
@@ -47,6 +49,12 @@ public class EditFilterServlet extends SecureController {
 
 	public static String getLink(int filterId) {
         return "EditFilter?filterId=" + filterId;
+    }
+
+    /** GET shows the filter; saving it (action=validate) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"validate".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override

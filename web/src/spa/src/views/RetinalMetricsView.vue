@@ -74,6 +74,21 @@ const canCorrectLayers = computed<boolean>(
     || auth.hasRole('Administrator'),
 )
 
+/**
+ * Gate for Retry and "Re-run as". A run writes its results into the
+ * visit's CRF, so the server allows both only to a binding that enters
+ * data (ClinicalWriteAuthorization.roleMayEnterData) and refuses a
+ * Monitor. /me says whether the session's binding does; without that,
+ * the roles that enter data.
+ */
+const canRerun = computed<boolean>(
+  () => auth.permits('enterData') ?? (
+    auth.hasRole('Investigator')
+    || auth.hasRole('CRC')
+    || auth.hasRole('Data Manager')
+    || auth.hasRole('Administrator')),
+)
+
 /** Layer-correction fullscreen open state + KI-Maske mirror. */
 const correctionFsOpen = ref<boolean>(false)
 const correctionFsMask = ref<boolean>(true)
@@ -1118,6 +1133,7 @@ onBeforeUnmount(stopInflightPoll)
             </div>
             <div class="flex items-center gap-2.5 shrink-0">
               <button
+                v-if="canRerun"
                 type="button"
                 class="px-3.5 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="retrying"
@@ -1135,7 +1151,7 @@ onBeforeUnmount(stopInflightPoll)
                    posts to /rerun-as and routes the operator to the
                    new job's metrics view. Closes on outside-click via
                    the document-level handler in onMounted. -->
-              <div class="relative" data-testid="retinal-view-rerun-as">
+              <div v-if="canRerun" class="relative" data-testid="retinal-view-rerun-as">
                 <button
                   type="button"
                   class="px-3.5 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

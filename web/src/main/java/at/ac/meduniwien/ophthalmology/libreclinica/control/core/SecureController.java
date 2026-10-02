@@ -18,9 +18,6 @@ import java.io.FileInputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -85,8 +82,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.Authorization;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanel;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanelLine;
@@ -285,6 +280,15 @@ public abstract class SecureController extends HttpServlet {
     protected abstract void processRequest() throws Exception;
 
     protected abstract void mayProceed() throws InsufficientPermissionException;
+
+    /**
+     * Refuses a request that names a record outside the current study: the
+     * "not a valid entity for the current study" message and the main menu.
+     */
+    protected void refuseRecordOutsideCurrentStudy() throws InsufficientPermissionException {
+        addPageMessage(resexception.getString("not_select_valid_entity_current_study"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
+    }
 
     public static final String USER_BEAN_NAME = "userBean";
 
@@ -642,6 +646,21 @@ public abstract class SecureController extends HttpServlet {
     }
 
     /**
+     * Whether this servlet serves the given GET; by default it does. A servlet
+     * whose request changes state (removes a user, pauses a job, sends a mail)
+     * answers false, so the change takes a POST: a link, a prefetch or an image
+     * elsewhere cannot trigger it, and a cross-site POST is refused by
+     * {@code CrossSiteRequestFilter}. A servlet whose GET only renders a page, a
+     * confirmation for instance, can decide per request.
+     *
+     * @param request the GET, before any session set-up
+     * @return false to answer 405 Method Not Allowed without processing the request
+     */
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return true;
+    }
+
+    /**
      * Handles the HTTP <code>GET</code> method.
      *
      * @param request
@@ -651,6 +670,12 @@ public abstract class SecureController extends HttpServlet {
      */
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
+        if (!acceptsGet(request)) {
+            logger.warn("{} accepts POST only for this request; refused a GET", getClass().getSimpleName());
+            response.setHeader("Allow", "POST");
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            return;
+        }
         try {
             logger.debug("GET Request");
             process(request, response);
@@ -1174,28 +1199,6 @@ public abstract class SecureController extends HttpServlet {
             forwardPage(Page.MENU_SERVLET);
             return;
         }
-    }
-
-    protected void baseUrl() throws MalformedURLException {
-        String portalURL = CoreResources.getField("portalURL");
-        URL pManageUrl;
-        try {
-            pManageUrl = URI.create(portalURL).toURL();
-        } catch (IllegalArgumentException e) {
-            throw new MalformedURLException(e.getMessage());
-        }
-
-        ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
-        Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());
-        String url = "";
-
-        if (pManageAuthorization != null) {
-            url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
-                    + ((pManageUrl.getPort() > 0) ? ":" + pManageUrl.getPort() : "");
-        }
-        
-        logger.debug("the url: " + url);
-        request.setAttribute("participantUrl",url + "/");
     }
 
     /**

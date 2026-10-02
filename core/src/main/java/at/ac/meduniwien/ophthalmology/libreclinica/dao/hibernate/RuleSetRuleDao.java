@@ -9,7 +9,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -27,18 +26,6 @@ import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.hibernate.stat.Statistics;
 import org.springframework.transaction.annotation.Transactional;
-
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
 
 public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 
@@ -112,7 +99,6 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         return ruleSetRules;
     }
 
-    @SuppressWarnings("rawtypes")
 	public int getCountWithFilter(final ViewRuleAssignmentFilter filter) {
 
         // Using a sql query because we are referencing objects not managed by hibernate
@@ -125,12 +111,12 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
                 + " join rule_expression rer on r.rule_expression_id = rer.id " + " join rule_action ra on ra.rule_set_rule_id = rsr.id " + " where ";
 
         query += filter.execute("");
-        NativeQuery q = getCurrentSession().createNativeQuery(query);
+        // PostgreSQL's COUNT is a bigint.
+        NativeQuery<Long> q = getCurrentSession().createNativeQuery(query, Long.class);
 
-        return ((Number) q.getSingleResultOrNull()).intValue();
+        return q.getSingleResultOrNull().intValue();
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
 	public ArrayList<RuleSetRuleBean> getWithFilterAndSort(final ViewRuleAssignmentFilter filter, final ViewRuleAssignmentSort sort, final int rowStart,
             final int rowEnd) {
 
@@ -147,7 +133,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 
         query += filter.execute("");
         query += sort.execute("");
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
+        NativeQuery<RuleSetRuleBean> q = getCurrentSession().createNativeQuery(query, domainClass());
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
         return new ArrayList<RuleSetRuleBean>(q.getResultList());

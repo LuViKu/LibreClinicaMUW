@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import StatusPill from '@/components/StatusPill.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useAdminStudiesStore } from '@/stores/adminStudies'
 import type { StudyOption } from '@/types/auth'
 
 /**
@@ -17,17 +18,32 @@ import type { StudyOption } from '@/types/auth'
  * Calls `loadStudies()` on mount, lets the user pick a row, and
  * POSTs the choice via `pickStudy(oid)`. On success, redirect to
  * the requested-after-login target or `/home` by default.
+ *
+ * A system administrator may open any study that is not removed, so for
+ * them the list is every such study and site (the admin study list),
+ * not only their own bindings; without that, an administrator who holds
+ * no study role would find nothing to pick.
  */
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
+const adminStudies = useAdminStudiesStore()
 
 const submitting = ref<string | null>(null)
 const localError = ref<string | null>(null)
 
 onMounted(async () => {
   await auth.loadStudies()
+  if (auth.isSysAdmin) await adminStudies.load()
 })
+
+const options = computed<StudyOption[]>(() => {
+  if (!auth.isSysAdmin || adminStudies.error) return auth.availableStudies
+  const activeOid = auth.user?.activeStudy?.oid ?? null
+  return adminStudies.openable.map((o) => ({ ...o, isActive: o.oid === activeOid }))
+})
+
+const loading = computed(() => auth.isLoading || adminStudies.isLoading)
 
 async function choose(option: StudyOption): Promise<void> {
   submitting.value = option.oid
@@ -64,18 +80,18 @@ function roleVariant(role: string): 'investigator' | 'monitor' | 'data-manager' 
         </p>
       </div>
 
-      <div v-if="auth.isLoading && auth.availableStudies.length === 0"
+      <div v-if="loading && options.length === 0"
            class="text-slate-500 italic text-center py-8">
         {{ t('common.loading') }}
       </div>
 
-      <div v-else-if="auth.availableStudies.length === 0"
+      <div v-else-if="options.length === 0"
            class="rounded-muw border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center">
         {{ t('studyPicker.empty') }}
       </div>
 
       <ul v-else class="space-y-2">
-        <li v-for="option in auth.availableStudies" :key="option.oid">
+        <li v-for="option in options" :key="option.oid">
           <button
             type="button"
             class="w-full bg-white border border-slate-200 rounded-muw px-5 py-4 cursor-pointer hover:bg-slate-50 hover:border-muw-blue transition-colors text-left flex items-center justify-between gap-4 disabled:opacity-50 disabled:cursor-not-allowed"

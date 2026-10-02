@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import { apiDownload } from '@/api/download'
-import type { DiscrepancyNote, NoteStatus, NoteType, ThreadEntry } from '@/types/note'
+import { useAuthStore } from './auth'
+import type { DiscrepancyNote, NoteField, NoteStatus, NoteType, ThreadEntry } from '@/types/note'
 
 /**
  * Phase E.6 + E.4 M7 — Discrepancy-notes store.
@@ -35,8 +36,16 @@ export const useNotesStore = defineStore('notes', () => {
   const typeFilter = ref<'all' | NoteType>('all')
   const onlyAssignedToMe = ref(false)
 
-  /** Username of the current user — wired from auth store in E.8. */
-  const me = ref<string>('monitor_demo')
+  /**
+   * The signed-in user's name. "Assigned to me" and the CSV download's
+   * `assignedTo` filter match it against the assignee's user name.
+   */
+  const me = computed<string>(() => useAuthStore().user?.username ?? '')
+
+  /** Whether the note is assigned to the signed-in user; the server compares case-insensitively too. */
+  function isMine(n: DiscrepancyNote): boolean {
+    return !!me.value && !!n.assignedTo && n.assignedTo.toLowerCase() === me.value.toLowerCase()
+  }
 
   const filtered = computed<DiscrepancyNote[]>(() => {
     const q = query.value.trim().toLowerCase()
@@ -51,7 +60,7 @@ export const useNotesStore = defineStore('notes', () => {
         return false
       }
       if (typeFilter.value !== 'all' && n.type !== typeFilter.value) return false
-      if (onlyAssignedToMe.value && n.assignedTo !== me.value) return false
+      if (onlyAssignedToMe.value && !isMine(n)) return false
       return true
     })
   })
@@ -118,6 +127,22 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  /**
+   * One subject's notes, for the subject and visit pages' field indicators.
+   * The list's own `rows` stay as they are; a failure reads as no notes.
+   */
+  async function notesForSubject(subjectId: string): Promise<DiscrepancyNote[]> {
+    try {
+      const found = await apiGet<DiscrepancyNote[]>(
+        `/pages/api/v1/discrepancies?subjectId=${encodeURIComponent(subjectId)}`,
+      )
+      return Array.isArray(found) ? found : []
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      return []
+    }
+  }
+
   async function add(input: {
     subjectId: string
     itemOid: string
@@ -140,6 +165,11 @@ export const useNotesStore = defineStore('notes', () => {
      * the option for non-permitted roles before the request fires.
      */
     type?: NoteType
+    /**
+     * A field of the subject, a visit or a CRF header instead of an item;
+     * `itemOid` is then empty. See {@link NoteField}.
+     */
+    field?: NoteField | null
   }): Promise<DiscrepancyNote | null> {
     isSubmitting.value = true
     error.value = null
@@ -147,10 +177,13 @@ export const useNotesStore = defineStore('notes', () => {
       const created = await apiPost<DiscrepancyNote>('/pages/api/v1/discrepancies', {
         subjectId: input.subjectId,
         itemOid: input.itemOid,
-        eventCrfOid: input.eventCrfOid ?? null,
+        eventCrfOid: input.field?.eventCrfOid ?? input.eventCrfOid ?? null,
         description: input.description,
         assignedTo: input.assignedTo ?? null,
         type: input.type ?? 'query',
+        ...(input.field
+          ? { entityType: input.field.entityType, column: input.field.column, eventId: input.field.eventId ?? null }
+          : {}),
       })
       rows.value = [created, ...rows.value]
       return created
@@ -203,6 +236,7 @@ export const useNotesStore = defineStore('notes', () => {
           assignedTo: input.assignedTo ?? null,
         },
       )
+      threadParents.value = { ...threadParents.value, [parentId]: refreshed }
       const idx = rows.value.findIndex((n) => n.id === parentId)
       if (idx >= 0) {
         rows.value = [
@@ -248,10 +282,21 @@ export const useNotesStore = defineStore('notes', () => {
    */
   const threadCache = ref<Record<string, ThreadEntry[]>>({})
   const loadingThreadId = ref<string | null>(null)
+  /**
+   * The parent note of each thread loaded or answered here, by id. A thread
+   * opened from a CRF item may not be in `rows`: the list is loaded only
+   * where it is shown.
+   */
+  const threadParents = ref<Record<string, DiscrepancyNote>>({})
+
+  /** The parent note by id, from the list or from a thread loaded here. */
+  function parentById(parentId: string): DiscrepancyNote | undefined {
+    return rows.value.find((n) => n.id === parentId) ?? threadParents.value[parentId]
+  }
 
   async function loadThread(parentId: string): Promise<DiscrepancyNote | null> {
     if (threadCache.value[parentId]) {
-      const cached = rows.value.find((n) => n.id === parentId)
+      const cached = parentById(parentId)
       if (cached) return { ...cached, thread: threadCache.value[parentId] }
     }
     loadingThreadId.value = parentId
@@ -261,6 +306,7 @@ export const useNotesStore = defineStore('notes', () => {
         `/pages/api/v1/discrepancies/${parentId}/thread`,
       )
       threadCache.value = { ...threadCache.value, [parentId]: hydrated.thread ?? [] }
+      threadParents.value = { ...threadParents.value, [parentId]: hydrated }
       // Refresh the in-memory row so reactive bindings see the new
       // status / lastActivityAt drawn from the hydrated payload.
       const idx = rows.value.findIndex((n) => n.id === parentId)
@@ -392,6 +438,7 @@ export const useNotesStore = defineStore('notes', () => {
     typeFilter.value = 'all'
     onlyAssignedToMe.value = false
     threadCache.value = {}
+    threadParents.value = {}
     loadingThreadId.value = null
   }
 
@@ -413,9 +460,12 @@ export const useNotesStore = defineStore('notes', () => {
     openCount,
     openTypeTotals,
     threadCache,
+    threadParents,
+    parentById,
     loadingThreadId,
     clearFilters,
     load,
+    notesForSubject,
     add,
     // Phase E.6 DN — alias for `add` used by the new dialog/wiring slices
     // (NewNoteDialog, CrfEntryView). Keeps the legacy `add` callsites

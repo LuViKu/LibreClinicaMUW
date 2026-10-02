@@ -196,10 +196,24 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
         return executeFindAllQuery(queryName, variables);
     }
 
+    /**
+     * The parent notes on the event CRF's item data. With
+     * {@link #setFetchMapping(boolean) fetchMapping} set, each note carries
+     * its {@code item_data} id as entity id, which the query itself does not
+     * return; without it a caller cannot tell which item a note is on.
+     */
     public ArrayList<DiscrepancyNoteBean> findAllParentItemNotesByEventCRF(int eventCRFId) {
     	String queryName = "findAllParentItemNotesByEventCRF";
         HashMap<Integer, Object> variables = variables(eventCRFId);
-        return executeFindAllQuery(queryName, variables);
+        ArrayList<DiscrepancyNoteBean> notes = executeFindAllQuery(queryName, variables);
+
+        if (fetchMapping) {
+            for (int i = 0; i < notes.size(); i++) {
+                notes.set(i, findSingleMapping(notes.get(i)));
+            }
+        }
+
+        return notes;
     }
 
     public ArrayList<DiscrepancyNoteBean> findAllParentItemNotesByEventCRFWithConstraints(int eventCRFId, StringBuffer constraints) {

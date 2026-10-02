@@ -443,12 +443,12 @@ public class NewCRFBean extends Object implements java.io.Serializable {
         } catch (SQLException se) {
             se.printStackTrace();
             try {
-                con.rollback();
+                if (con != null) con.rollback();
                 logger.debug("Error detected, rollback " + se.getMessage());
                 String msg2 = "The following error was returned from the database: " + se.getMessage() + " using the following query: " + queries.get(count);
                 error.add(msg2);
                 this.setErrors(error);
-                con.setAutoCommit(true);
+                if (con != null) con.setAutoCommit(true);
                 throw new OpenClinicaException("", "");
             } catch (SQLException seq) {
                 seq.printStackTrace();
@@ -461,12 +461,12 @@ public class NewCRFBean extends Object implements java.io.Serializable {
         } catch (OpenClinicaException pe) {
             pe.printStackTrace();
             try {
-                con.rollback();
+                if (con != null) con.rollback();
                 logger.debug("LibreClinica Error detected, rollback " + pe.getMessage());
                 String msg2 = "The following error was returned from the application: " + pe.getMessage();
                 error.add(msg2);
                 this.setErrors(error);
-                con.setAutoCommit(true);
+                if (con != null) con.setAutoCommit(true);
                 throw new OpenClinicaException("", "");
             } catch (SQLException seq) {
                 seq.printStackTrace();
@@ -548,13 +548,13 @@ public class NewCRFBean extends Object implements java.io.Serializable {
         } catch (SQLException se) {
             se.printStackTrace();
             try {
-                con.rollback();
+                if (con != null) con.rollback();
                 logger.debug("Error detected, rollback " + se.getMessage());
                 String msg2 = "The following error was returned from the database: " + se.getMessage() + " using the following query: "
                         + deleteQueries.get(count);
                 error.add(msg2);
                 this.setDeleteErrors(error);
-                con.setAutoCommit(true);
+                if (con != null) con.setAutoCommit(true);
                 throw new OpenClinicaException("", "");
             } catch (SQLException seq) {
                 seq.printStackTrace();
@@ -567,12 +567,12 @@ public class NewCRFBean extends Object implements java.io.Serializable {
         } catch (OpenClinicaException pe) {
             pe.printStackTrace();
             try {
-                con.rollback();
+                if (con != null) con.rollback();
                 logger.debug("LibreClinica Error detected, rollback " + pe.getMessage());
                 String msg2 = "The following error was returned from the application: " + pe.getMessage();
                 error.add(msg2);
                 this.setDeleteErrors(error);
-                con.setAutoCommit(true);
+                if (con != null) con.setAutoCommit(true);
                 throw new OpenClinicaException("", "");
             } catch (SQLException seq) {
                 seq.printStackTrace();
@@ -695,7 +695,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
         } catch (SQLException se) {
             logger.error(se.getMessage());
             try {
-                con.rollback();
+                if (con != null) con.rollback();
                 logger.error("Error detected, rollback " + se.getMessage());
                 String msg2 = "The following error was returned from the database: " + se.getMessage() + " using the following query: " + cur_query;
                 error.add(msg2);
@@ -710,7 +710,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             pe.printStackTrace();
             try {
                 error.add("The following error was returned from the application: " + pe.getMessage());
-                con.rollback();
+                if (con != null) con.rollback();
                 logger.error("LibreClinica Error detected, rollback " + pe.getMessage());
                 throw new OpenClinicaException("", "");
             } catch (SQLException seq) {
@@ -724,7 +724,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
 
             try {
                 if (con != null) {
-                    con.setAutoCommit(true);
+                    if (con != null) con.setAutoCommit(true);
                 }
             } catch (SQLException sac) {
                 ;

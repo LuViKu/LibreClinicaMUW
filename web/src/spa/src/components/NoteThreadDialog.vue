@@ -9,7 +9,7 @@ import UserAutocomplete from '@/components/UserAutocomplete.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
 import type { DiscrepancyNote, NoteStatus } from '@/types/note'
-import { canRespondToNote, canResolveNote, canCloseNote } from '@/types/note'
+import { canRespondToNote, canResolveNote, canCloseNote, canReopenNote } from '@/types/note'
 import type { UserRole } from '@/types/auth'
 
 /**
@@ -44,7 +44,8 @@ const { t } = useI18n()
 const notes = useNotesStore()
 const auth = useAuthStore()
 
-type ComposerMode = 'updated' | 'resolution-proposed' | 'closed'
+/** 'reopen' answers a closed thread and leaves it Updated. */
+type ComposerMode = 'updated' | 'resolution-proposed' | 'closed' | 'reopen'
 
 const selectedId = ref<string>(props.parentNoteIds[0] ?? '')
 const composerMode = ref<ComposerMode | null>(null)
@@ -54,8 +55,10 @@ const composerError = ref<string | null>(null)
 
 const headingId = 'note-thread-dialog-heading'
 
+// Opened from a CRF item, the notes list may not be loaded; the store then
+// knows the parent from loading its thread.
 const selectedParent = computed<DiscrepancyNote | undefined>(() =>
-  notes.rows.find((n) => n.id === selectedId.value),
+  notes.parentById(selectedId.value),
 )
 
 const role = computed<UserRole>(() => auth.user?.role ?? 'Investigator')
@@ -70,6 +73,9 @@ const canResolve = computed(() =>
 )
 const canClose = computed(() =>
   status.value ? canCloseNote(role.value, status.value) : false,
+)
+const canReopen = computed(() =>
+  status.value ? canReopenNote(role.value, status.value) : false,
 )
 
 function ensureThreadLoaded(id: string) {
@@ -110,7 +116,7 @@ function cancelComposer() {
 }
 
 function previewFor(parentId: string): string {
-  const row = notes.rows.find((n) => n.id === parentId)
+  const row = notes.parentById(parentId)
   if (!row) return parentId
   const txt = row.description ?? ''
   if (txt.length <= 80) return txt
@@ -118,7 +124,7 @@ function previewFor(parentId: string): string {
 }
 
 function badgeFor(parentId: string): NoteStatus | null {
-  return notes.rows.find((n) => n.id === parentId)?.status ?? null
+  return notes.parentById(parentId)?.status ?? null
 }
 
 async function submitComposer() {
@@ -132,13 +138,11 @@ async function submitComposer() {
   }
   composerError.value = null
 
+  const reassigns = mode === 'updated' || mode === 'reopen'
   const result = await notes.appendThread(selectedId.value, {
-    newStatus: mode,
+    newStatus: mode === 'reopen' ? 'updated' : mode,
     description: description || undefined,
-    assignedTo:
-      mode === 'updated' && composerAssignedTo.value
-        ? composerAssignedTo.value
-        : null,
+    assignedTo: reassigns && composerAssignedTo.value ? composerAssignedTo.value : null,
   })
   if (result) {
     emit('updated', selectedId.value)
@@ -236,7 +240,7 @@ function statusLabel(s: NoteStatus | null): string {
             : t('notes.composer.placeholder')"
           data-testid="note-thread-composer-text"
         />
-        <div v-if="composerMode === 'updated'" class="flex flex-col gap-1">
+        <div v-if="composerMode === 'updated' || composerMode === 'reopen'" class="flex flex-col gap-1">
           <label class="text-xs text-slate-600">
             {{ t('crfEntry.threadDialog.reassignLabel') }}
           </label>
@@ -295,6 +299,14 @@ function statusLabel(s: NoteStatus | null): string {
           data-testid="note-thread-action-close"
           @click="openComposer('closed')"
         >{{ t('crfEntry.threadDialog.close') }}</button>
+        <button
+          v-if="canReopen"
+          type="button"
+          class="px-3 py-1.5 text-xs border border-slate-300 rounded-md hover:bg-slate-50"
+          :disabled="notes.isSubmitting"
+          data-testid="note-thread-action-reopen"
+          @click="openComposer('reopen')"
+        >{{ t('crfEntry.threadDialog.reopen') }}</button>
       </div>
     </template>
   </Modal>

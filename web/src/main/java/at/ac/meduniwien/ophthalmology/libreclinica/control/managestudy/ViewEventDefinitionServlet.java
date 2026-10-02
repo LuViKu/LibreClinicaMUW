@@ -112,7 +112,6 @@ EventDefinitionCrfTagService eventDefinitionCrfTagService = null;
             StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();       
             request.setAttribute("participateFormStatus",participateFormStatus );       
-            if (participateFormStatus.equals("enabled")) baseUrl();
 
             request.setAttribute("participateFormStatus",participateFormStatus );
 

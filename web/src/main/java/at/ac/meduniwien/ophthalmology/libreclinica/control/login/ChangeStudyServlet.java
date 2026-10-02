@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.login;
 import java.util.ArrayList;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -80,6 +82,13 @@ public class ChangeStudyServlet extends SecureController {
         // < restext =
         // ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes",locale);
 
+    }
+
+    /** GET lists the studies; confirming and switching the active study take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override

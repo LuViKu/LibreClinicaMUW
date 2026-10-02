@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
 import java.util.ArrayList;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -50,6 +52,13 @@ public class UnlockCRFVersionServlet extends SecureController {
 
    }
    
+   /** GET shows the confirmation; restoring the archived CRF version takes a POST. */
+   @Override
+   protected boolean acceptsGet(HttpServletRequest request) {
+       String action = request.getParameter("action");
+       return action == null || action.trim().isEmpty();
+   }
+
    @Override
    public void processRequest() throws Exception {
        FormProcessor fp = new FormProcessor(request);

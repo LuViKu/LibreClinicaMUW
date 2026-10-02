@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import { forkContentsToDraft, type AuthoringDraft, type ForkContentsWire } from '@/stores/crfAuthoring'
 import type {
   Crf,
   CreateCrfInput,
+  CrfDetail,
   CrfVersion,
+  UpdateCrfInput,
   EventCrfAssignment,
   EventCrfAssignmentInput,
   MigrateVersionRequest,
@@ -57,6 +60,73 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     }
   }
 
+  /**
+   * The CRF view: versions, item table with the integrity check, and the
+   * studies using the CRF. Not cached; the view loads it on open.
+   */
+  async function fetchCrfDetail(
+    crfOid: string,
+  ): Promise<{ ok: true; detail: CrfDetail } | { ok: false; message: string }> {
+    try {
+      const detail = await apiGet<CrfDetail>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}`)
+      return { ok: true, detail }
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      return { ok: false, message: humanError(e, 'load') }
+    }
+  }
+
+  /**
+   * A published version as a draft for the read-only preview: its contents
+   * (`GET .../versions/{v}/contents`, the fork endpoint) converted the way the
+   * authoring canvas converts them, so the preview renders the version as the
+   * canvas's preview would. Nothing is forked, and nothing is saved.
+   */
+  async function loadVersionPreview(
+    crfOid: string,
+    versionOid: string,
+  ): Promise<{ ok: true; draft: AuthoringDraft } | { ok: false; message: string }> {
+    try {
+      const wire = await apiGet<ForkContentsWire>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/contents`,
+      )
+      return { ok: true, draft: forkContentsToDraft(wire) }
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      return { ok: false, message: humanError(e, 'preview') }
+    }
+  }
+
+  /**
+   * Changes a CRF's name and description. The server allows the CRF's owner
+   * as Data Manager (or study administrator) and a system administrator, so
+   * a refusal (403) is an answer to show in the form, not a lost session:
+   * only 401 is rethrown. Field errors (blank, too long, name taken) come
+   * back per field.
+   */
+  async function updateCrf(crfOid: string, input: UpdateCrfInput): Promise<CrfMutation> {
+    try {
+      const crf = await apiPut<Crf>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}`, input)
+      const idx = crfs.value.findIndex((c) => c.oid === crfOid)
+      if (idx >= 0) crfs.value[idx] = crf
+      return { ok: true, crf }
+    } catch (e) {
+      if (e instanceof ApiError && e.isUnauthorized) throw e
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string; errors?: Array<{ field: string; message: string }> } | null
+        const fieldErrors: Record<string, string> = {}
+        if (body?.errors) for (const fe of body.errors) fieldErrors[fe.field] = fe.message
+        return { ok: false, fieldErrors, message: body?.errors ? undefined : body?.message ?? humanError(e, 'update') }
+      }
+      return { ok: false, fieldErrors: {}, message: humanError(e, 'update') }
+    }
+  }
+
+  /**
+   * Removes a CRF. The server removes its versions, event-definition
+   * assignments and event CRFs with it (legacy RemoveCRFServlet parity), so
+   * the returned row, versions included, replaces the cached one.
+   */
   async function disableCrf(crfOid: string): Promise<boolean> {
     try {
       const updated = await apiPost<Crf>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/disable`, {})
@@ -65,6 +135,23 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return true
     } catch (e) {
       error.value = humanError(e, 'disable')
+      return false
+    }
+  }
+
+  /**
+   * Restores a removed CRF and what its removal took with it; the inverse of
+   * {@link disableCrf}. The returned row, versions included, replaces the
+   * cached one.
+   */
+  async function restoreCrf(crfOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<Crf>(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/restore`, {})
+      const idx = crfs.value.findIndex((c) => c.oid === crfOid)
+      if (idx >= 0) crfs.value[idx] = updated
+      return true
+    } catch (e) {
+      error.value = humanError(e, 'restore')
       return false
     }
   }
@@ -201,7 +288,8 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
    *   CRF row's versions list is patched to drop the removed entry.
    * - `{ ok: false, blocker }` — the row is referenced; the blocker
    *   carries the VersionUsageReport the SPA renders in the dialog.
-   * - `{ ok: false, message }` — any other failure (auth, network, 500).
+   * - `{ ok: false, message }` — any other failure (a 409 without a
+   *   report, network, 500).
    *
    * Importantly: 409 + the structured report is NOT a thrown error path
    * — the SPA treats it as a normal "no action taken" outcome and shows
@@ -224,9 +312,10 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       }
       return { ok: true }
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        const blocker = e.body as VersionUsageReport
-        return { ok: false, blocker }
+      // A 409 carries the usage report, or, for a version that still
+      // holds values of event CRFs moved off it, only a message.
+      if (e instanceof ApiError && e.status === 409 && isUsageReport(e.body)) {
+        return { ok: false, blocker: e.body }
       }
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
         error.value = humanError(e, 'hard-remove-version')
@@ -407,6 +496,11 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : `Unbekannter Fehler beim Zuordnung-${op}.` }
   }
 
+  function isUsageReport(body: unknown): body is VersionUsageReport {
+    return typeof body === 'object' && body !== null
+      && Array.isArray((body as VersionUsageReport).blockingEventDefinitions)
+  }
+
   function humanError(e: unknown, op: string): string {
     if (e instanceof ApiNetworkError) return `Backend nicht erreichbar — ${op} fehlgeschlagen.`
     if (e instanceof ApiError) {
@@ -436,8 +530,12 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     isLoading,
     error,
     loadCrfs,
+    fetchCrfDetail,
+    loadVersionPreview,
     createCrf,
+    updateCrf,
     disableCrf,
+    restoreCrf,
     uploadVersion,
     disableVersion,
     lockVersion,

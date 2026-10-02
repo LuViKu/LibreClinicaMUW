@@ -56,7 +56,19 @@ public class JobTerminationMonitor implements Serializable {
         return instance.get();
     }
 
-    private boolean running = true;
+    /**
+     * Drop this thread's monitor, so a later job on the same pooled thread
+     * does not inherit it (in particular a terminated one).
+     */
+    public static void clear() {
+        instance.remove();
+    }
+
+    /**
+     * Written by the thread that asks for the termination and read by the
+     * job's thread at its checkpoints, so it must be volatile.
+     */
+    private volatile boolean running = true;
 
     /**
      * Verifies if the termination of a job was requested, in which case this method throws a
@@ -77,6 +89,11 @@ public class JobTerminationMonitor implements Serializable {
      */
     public void terminate() {
         running = false;
+    }
+
+    /** True once {@link #terminate()} was called. */
+    public boolean isTerminated() {
+        return !running;
     }
 
     public String getJobName() {

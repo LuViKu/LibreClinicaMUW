@@ -31,6 +31,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -48,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportJobRunner;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
 
 import io.swagger.v3.oas.annotations.media.Content;
@@ -74,6 +76,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *   <li>{@code GET    /api/v1/exports/{jobId}} — current status of an
  *       async export. {@code downloadUrl} is non-null only when
  *       {@code status='done'}.</li>
+ *   <li>{@code POST   /api/v1/exports/{jobId}/cancel} — cancel: a
+ *       queued job at once (200), a running one at its next checkpoint
+ *       (202, {@code cancelRequested=true}); 409 once finished.</li>
  *   <li>{@code GET    /api/v1/exports/{jobId}/download} — convenience
  *       redirect-style stream of the finished file. {@code 410 Gone}
  *       if the {@code archived_dataset_file} or the underlying file on
@@ -86,18 +91,30 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       user filter.</li>
  *   <li>{@code POST   /api/v1/datasets/{id}/schedules} — create a
  *       recurring schedule. Cron validated by
- *       {@link org.quartz.CronExpression}.</li>
- *   <li>{@code GET    /api/v1/datasets/{id}/schedules} — list active.</li>
+ *       {@link org.quartz.CronExpression}; an optional
+ *       {@code notifyEmail} is mailed when each run finishes
+ *       ({@link at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportCompletionNotifier}).</li>
+ *   <li>{@code GET    /api/v1/datasets/{id}/schedules} — list active
+ *       (paused ones included).</li>
+ *   <li>{@code PATCH  /api/v1/schedules/{id}} — change format, cron or
+ *       {@code enabled}; {@code enabled=false} pauses, {@code true}
+ *       resumes. Rescheduled before the response. Only the schedule's
+ *       creator or a sysadmin (403 otherwise): its runs execute as the
+ *       creator.</li>
  *   <li>{@code DELETE /api/v1/schedules/{id}} — soft-delete
- *       ({@code active=false}).</li>
+ *       ({@code active=false}); same creator-or-sysadmin rule.</li>
  * </ul>
  *
  * <h2>Authorization</h2>
  *
  * <p>Session-bound {@code userBean} required (401 anonymous). The
- * dataset / study scope checks delegate to the same legacy
- * predicate Phase 1's synchronous endpoint uses
- * ({@link DatasetsApiController#roleMayExportData(UserAccountBean, StudyUserRoleBean)}).
+ * role check delegates to the same legacy predicate Phase 1's
+ * synchronous endpoint uses
+ * ({@link DatasetsApiController#roleMayExportData(UserAccountBean, StudyUserRoleBean)}),
+ * and every dataset-scoped endpoint (exports, schedules) also requires
+ * the dataset to belong to the active study, as that endpoint does: a
+ * dataset of another study answers 404. Jobs are visible to their
+ * submitter and to a sysadmin.
  *
  * <h2>Path naming</h2>
  *
@@ -118,6 +135,15 @@ public class ExportJobsApiController {
     /** Accepted format strings — kept in lock-step with the SPA dropdown + DatasetsApiController.ExportFormatKey. */
     private static final Set<String> SUPPORTED_FORMATS =
             Set.of("odm", "csv", "tsv", "tab", "excel", "xls", "xlsx", "sas", "spss", "bundle");
+
+    /**
+     * One plain address, as the column holds one: no display name, no list.
+     * The legacy scheduled-export form checked its contact field the same
+     * way.
+     */
+    private static final java.util.regex.Pattern EMAIL =
+            java.util.regex.Pattern.compile("^[^\\s@,;<>\"]+@[^\\s@,;<>\"]+\\.[^\\s@,;<>\"]+$");
+    private static final int EMAIL_MAX = 255;
 
     private static final int DEFAULT_PAGE_SIZE = 25;
     private static final int MAX_PAGE_SIZE = 100;
@@ -171,6 +197,9 @@ public class ExportJobsApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
         }
+        if (!inActiveStudy(ds, session)) {
+            return notInActiveStudy(datasetId);
+        }
         // P3.8 — the bundle is off unless the study turns it on. Handing a
         // study's imaging out of the platform is the study's decision, not
         // whoever happens to be signed in; the same gate the per-subject
@@ -212,6 +241,57 @@ public class ExportJobsApiController {
                     "Not authorized to view this export job"));
         }
         return ResponseEntity.ok(toJobDto(row));
+    }
+
+    /**
+     * Cancel an export job. A queued job is cancelled at once and never runs
+     * (200). A running one is asked to stop at the extract's next checkpoint
+     * (202 with {@code cancelRequested=true}; it turns {@code cancelled} when
+     * it gets there): the ODM extract and the dataset bundle have
+     * checkpoints, the tabular formats finish anyway. A cancelled job
+     * registers no file, since a file is registered only once the export is
+     * complete. A finished job answers 409.
+     *
+     * <p>The submitter or a sysadmin may cancel, as they may see the job.
+     */
+    @PostMapping("/exports/{jobId}/cancel")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = ExportJobDto.class)))
+    public ResponseEntity<?> cancelJob(@PathVariable("jobId") long jobId,
+                                       HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        ExportJobDAO dao = new ExportJobDAO(dataSource);
+        ExportJobDAO.Row row = dao.findById(jobId);
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No export job with id " + jobId));
+        }
+        if (!canSeeJob(me, row)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Not authorized to cancel this export job"));
+        }
+        String reason = "Cancelled by " + me.getName();
+        if (dao.cancelIfQueued(jobId, reason)) {
+            LOG.info("Cancel export: job_id={} before it ran, by user={}", jobId, me.getName());
+            return ResponseEntity.ok(toJobDto(dao.findById(jobId)));
+        }
+        // Not queued any more: a worker may have claimed it meanwhile.
+        row = dao.findById(jobId);
+        if (row != null && ExportJobDAO.STATUS_RUNNING.equals(row.status)) {
+            if (ExportJobRunner.requestCancel(jobId)) {
+                dao.noteCancelRequest(jobId, reason);
+                LOG.info("Cancel export: job_id={} asked to stop, by user={}", jobId, me.getName());
+                return ResponseEntity.status(202).body(toJobDto(dao.findById(jobId)));
+            }
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "This export is running on a worker this server cannot reach, "
+                            + "so it cannot be cancelled here."));
+        }
+        return ResponseEntity.status(409).body(Map.of("message",
+                "This export has already finished."));
     }
 
     /**
@@ -309,10 +389,24 @@ public class ExportJobsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit accessing data exports."));
+        }
         StudyBean study = new StudyDAO(dataSource).findByOid(studyOid);
         if (study == null || study.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
+        }
+        // The active study or one of its sites, as DatasetsApiController's
+        // study-scoped endpoints allow.
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0
+                || (study.getId() != currentStudy.getId()
+                        && study.getParentStudyId() != currentStudy.getId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Study '" + studyOid + "' is not the currently active study."));
         }
         List<ExportJobDAO.Row> rows = new ExportJobDAO(dataSource).findRecentByStudy(study.getId());
         List<ExportJobDto> out = new ArrayList<>(rows.size());
@@ -352,15 +446,22 @@ public class ExportJobsApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "Invalid cron expression: '" + cron + "'"));
         }
+        String notifyEmail = blankToNull(body.notifyEmail());
+        if (notifyEmail != null && !isEmailAddress(notifyEmail)) {
+            return invalidEmail();
+        }
         DatasetBean ds = loadDataset(datasetId);
         if (ds == null) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
         }
+        if (!inActiveStudy(ds, session)) {
+            return notInActiveStudy(datasetId);
+        }
 
         Instant nextRun = registrar.computeNextFireTime(cron);
         ExportScheduleDAO scheduleDao = new ExportScheduleDAO(dataSource);
-        long id = scheduleDao.create(datasetId, format, cron, me.getId(), nextRun);
+        long id = scheduleDao.create(datasetId, format, cron, me.getId(), nextRun, notifyEmail);
         if (id <= 0) {
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist schedule"));
@@ -376,7 +477,7 @@ public class ExportJobsApiController {
         ExportScheduleDAO.Row row = scheduleDao.findById(id);
         LOG.info("Create schedule: dataset_id={} format={} cron='{}' id={} by user={}",
                 datasetId, format, cron, id, me.getName());
-        return ResponseEntity.status(201).body(toScheduleDto(row));
+        return ResponseEntity.status(201).body(toScheduleDto(row, me));
     }
 
     @GetMapping("/datasets/{id}/schedules")
@@ -389,16 +490,116 @@ public class ExportJobsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit exporting data."));
+        }
         DatasetBean ds = loadDataset(datasetId);
         if (ds == null) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
         }
+        if (!inActiveStudy(ds, session)) {
+            return notInActiveStudy(datasetId);
+        }
         List<ExportScheduleDAO.Row> rows =
                 new ExportScheduleDAO(dataSource).findByDataset(datasetId, /* includeInactive */ false);
         List<ExportScheduleDto> out = new ArrayList<>(rows.size());
-        for (ExportScheduleDAO.Row r : rows) out.add(toScheduleDto(r));
+        for (ExportScheduleDAO.Row r : rows) out.add(toScheduleDto(r, me));
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Change a schedule: its format, its cron, whether it runs, or the
+     * address mailed when a run finishes. A field left out of the body keeps
+     * its value, so {@code {"enabled":false}} pauses a schedule and
+     * {@code {"enabled":true}} resumes it; a blank {@code notifyEmail}
+     * removes the address.
+     *
+     * <p>The change reaches Quartz before the response, as create and
+     * delete do: an enabled schedule is registered again with its new cron
+     * and format, a paused one loses its trigger. The schedule keeps its
+     * creator, whose account the exports run as.
+     */
+    @PatchMapping("/schedules/{id}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = ExportScheduleDto.class)))
+    public ResponseEntity<?> updateSchedule(@PathVariable("id") long scheduleId,
+                                            @RequestBody(required = false) UpdateScheduleRequest body,
+                                            HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit exporting data."));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Request body is required"));
+        }
+        String format = null;
+        if (body.format() != null) {
+            format = body.format().trim().toLowerCase();
+            if (!SUPPORTED_FORMATS.contains(format)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Unsupported format '" + format + "' — accepted: " + SUPPORTED_FORMATS));
+            }
+        }
+        String cron = null;
+        if (body.cronExpression() != null) {
+            cron = body.cronExpression().trim();
+            if (!registrar.isValidCron(cron)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Invalid cron expression: '" + cron + "'"));
+            }
+        }
+        // null keeps the address, a blank one removes it
+        String notifyEmail = blankToNull(body.notifyEmail());
+        if (notifyEmail != null && !isEmailAddress(notifyEmail)) {
+            return invalidEmail();
+        }
+
+        ExportScheduleDAO dao = new ExportScheduleDAO(dataSource);
+        ExportScheduleDAO.Row existing = dao.findById(scheduleId);
+        if (existing == null || !existing.active || !scheduleInActiveStudy(existing, session)) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No schedule with id " + scheduleId + " in the active study"));
+        }
+        if (!mayChange(me, existing)) return notScheduleOwner();
+        if (format == null) format = existing.format;
+        if (cron == null) cron = existing.cronExpression;
+        boolean enabled = body.enabled() == null ? existing.enabled : body.enabled();
+        if (body.notifyEmail() == null) notifyEmail = existing.notifyEmail;
+
+        Instant nextRun = enabled ? registrar.computeNextFireTime(cron) : null;
+        if (!dao.update(scheduleId, format, cron, enabled, nextRun, notifyEmail)) {
+            ExportScheduleDAO.Row now = dao.findById(scheduleId);
+            if (now == null || !now.active) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No schedule with id " + scheduleId + " in the active study"));
+            }
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to update schedule"));
+        }
+        try {
+            if (enabled) {
+                registrar.registerSchedule(scheduleId, existing.datasetId, format, cron);
+            } else {
+                registrar.unregisterSchedule(scheduleId);
+            }
+        } catch (Exception e) {
+            // The row is saved and is what a tick reads, so a stale trigger
+            // cannot run a paused schedule or the old format; the boot pass
+            // re-registers the cron on the next restart.
+            LOG.warn("Schedule id={} updated but Quartz rescheduling failed: {}",
+                    scheduleId, e.getMessage());
+        }
+        LOG.info("Update schedule: id={} format={} cron='{}' enabled={} by user={}",
+                scheduleId, format, cron, enabled, me.getName());
+        return ResponseEntity.ok(toScheduleDto(dao.findById(scheduleId), me));
     }
 
     @DeleteMapping("/schedules/{id}")
@@ -409,12 +610,18 @@ public class ExportJobsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit exporting data."));
+        }
         ExportScheduleDAO dao = new ExportScheduleDAO(dataSource);
         ExportScheduleDAO.Row existing = dao.findById(scheduleId);
-        if (existing == null) {
+        if (existing == null || !scheduleInActiveStudy(existing, session)) {
             return ResponseEntity.status(404).body(Map.of("message",
-                    "No schedule with id " + scheduleId));
+                    "No schedule with id " + scheduleId + " in the active study"));
         }
+        if (!mayChange(me, existing)) return notScheduleOwner();
         dao.deactivate(scheduleId);
         registrar.unregisterSchedule(scheduleId);
         LOG.info("Soft-delete schedule: id={} by user={}", scheduleId, me.getName());
@@ -428,6 +635,55 @@ public class ExportJobsApiController {
     private DatasetBean loadDataset(int datasetId) {
         DatasetBean ds = (DatasetBean) new DatasetDAO(dataSource).findByPK(datasetId);
         return (ds == null || ds.getId() == 0) ? null : ds;
+    }
+
+    /**
+     * A dataset is acted on only from the study it belongs to, the rule
+     * DatasetsApiController applies to its own dataset endpoints. The role
+     * check alone says the caller may export in the active study, not in
+     * the study the dataset id happens to name.
+     */
+    private static boolean inActiveStudy(DatasetBean ds, HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        return currentStudy != null && currentStudy.getId() != 0
+                && ds.getStudyId() == currentStudy.getId();
+    }
+
+    private boolean scheduleInActiveStudy(ExportScheduleDAO.Row schedule, HttpSession session) {
+        DatasetBean ds = loadDataset(schedule.datasetId);
+        return ds != null && inActiveStudy(ds, session);
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    private static boolean isEmailAddress(String s) {
+        return s.length() <= EMAIL_MAX && EMAIL.matcher(s).matches();
+    }
+
+    private static ResponseEntity<?> invalidEmail() {
+        return ResponseEntity.badRequest().body(Map.of("message",
+                "'notifyEmail' must be a single e-mail address"));
+    }
+
+    private static ResponseEntity<?> notInActiveStudy(int datasetId) {
+        return ResponseEntity.status(404).body(Map.of("message",
+                "Dataset " + datasetId + " does not belong to the active study"));
+    }
+
+    /**
+     * A schedule's runs execute as its creator, so only the creator or a
+     * sysadmin may change or delete it; another user with the export role
+     * in the study may list it but not alter what runs under that account.
+     */
+    private static boolean mayChange(UserAccountBean me, ExportScheduleDAO.Row schedule) {
+        return me.isSysAdmin() || schedule.createdBy == me.getId();
+    }
+
+    private static ResponseEntity<?> notScheduleOwner() {
+        return ResponseEntity.status(403).body(Map.of("message",
+                "Only the creator of this schedule or a system administrator may change it."));
     }
 
     /** Sysadmin sees every job; everybody else only their own. */
@@ -456,7 +712,8 @@ public class ExportJobsApiController {
                 toIso(r.finishedAt),
                 r.archivedDatasetFileId,
                 r.errorMessage,
-                downloadUrl);
+                downloadUrl,
+                ExportJobDAO.STATUS_RUNNING.equals(r.status) && ExportJobRunner.isCancelRequested(r.id));
     }
 
     /**
@@ -470,11 +727,12 @@ public class ExportJobsApiController {
             case ExportJobDAO.STATUS_RUNNING -> 50;
             case ExportJobDAO.STATUS_DONE -> 100;
             case ExportJobDAO.STATUS_FAILED -> 100;
+            case ExportJobDAO.STATUS_CANCELLED -> 100;
             default -> 0;
         };
     }
 
-    static ExportScheduleDto toScheduleDto(ExportScheduleDAO.Row r) {
+    static ExportScheduleDto toScheduleDto(ExportScheduleDAO.Row r, UserAccountBean me) {
         if (r == null) return null;
         return new ExportScheduleDto(
                 r.id,
@@ -482,10 +740,14 @@ public class ExportJobsApiController {
                 r.format,
                 r.cronExpression,
                 r.active,
+                r.enabled,
+                r.notifyEmail,
                 toIso(r.createdAt),
                 toIso(r.nextRunAt),
                 toIso(r.lastRunAt),
-                r.lastRunJobId);
+                r.lastRunJobId,
+                r.createdBy,
+                mayChange(me, r));
     }
 
     private static String toIso(Instant t) {
@@ -505,7 +767,12 @@ public class ExportJobsApiController {
 
     public record EnqueueExportRequest(String format) {}
 
-    public record CreateScheduleRequest(String format, String cronExpression) {}
+    /** {@code notifyEmail} is optional: the address mailed when a run finishes. */
+    public record CreateScheduleRequest(String format, String cronExpression, String notifyEmail) {}
+
+    /** Body of {@code PATCH /schedules/{id}}: a null field keeps its value. */
+    public record UpdateScheduleRequest(String format, String cronExpression, Boolean enabled,
+                                        String notifyEmail) {}
 
     /** Wire shape of {@code GET /exports?...}. */
     public record ExportJobListResponse(

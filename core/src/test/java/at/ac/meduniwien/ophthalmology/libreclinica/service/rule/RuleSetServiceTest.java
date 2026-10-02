@@ -42,6 +42,25 @@ public class RuleSetServiceTest extends HibernateOcDbTestCase {
         assertEquals("There should not be any RuleSetRules in this RuleSet", 0, ruleSets.get(2).getRuleSetRules().size());
     }
 
+    /*
+     * Rule set 1 belongs to study 1. The lookup by id answers for study 1 and
+     * for a site of it, and not for another study.
+     */
+    public void testGetRuleSetByIdIsLimitedToTheStudyAndItsSites() {
+        RuleSetServiceInterface instance = (RuleSetServiceInterface) getContext().getBean("ruleSetService");
+        StudyBean study = new StudyBean();
+        study.setId(1);
+        StudyBean site = new StudyBean();
+        site.setId(2);
+        site.setParentStudyId(1);
+        StudyBean otherStudy = new StudyBean();
+        otherStudy.setId(2);
+
+        assertNotNull(instance.getRuleSetById(study, "1"));
+        assertNotNull(instance.getRuleSetById(site, "1"));
+        assertNull(instance.getRuleSetById(otherStudy, "1"));
+    }
+
     // @pgawade 08-NOV-2010 Commented out the test
     // "testFilterRuleSetsByStudyEventOrdinal" temporarily. Krikor will look
     // into this.

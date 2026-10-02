@@ -18,13 +18,14 @@ import en from '@/locales/en.json'
 
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
-  return { ...actual, apiGet: vi.fn() }
+  return { ...actual, apiGet: vi.fn(), apiPost: vi.fn() }
 })
 
-import { apiGet } from '@/api/client'
+import { apiGet, apiPost, ApiError } from '@/api/client'
 import AdminSystemStatusView from '../AdminSystemStatusView.vue'
 
 const apiGetMock = vi.mocked(apiGet)
+const apiPostMock = vi.mocked(apiPost)
 
 const SYSTEM = {
   jvm: { javaVersion: '25', vmName: 'OpenJDK', heapMaxMb: 1024, heapUsedMb: 300, heapFreeMb: 724, threadCount: 40, availableProcessors: 2 },
@@ -152,5 +153,79 @@ describe('AdminSystemStatusView — retinal cluster panel', () => {
     expect(w.text()).toContain('Failed to load cluster status.')
     expect(w.text()).toContain('PostgreSQL')
     expect(w.find('tbody').exists()).toBe(false)
+  })
+})
+
+describe('AdminSystemStatusView — test e-mail (R1.2)', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+    routeBy(CLUSTER)
+  })
+
+  it("posts to the test-e-mail endpoint with no recipient and names the address the server used", async () => {
+    apiPostMock.mockResolvedValue({ sent: true, recipient: 'admin@example.invalid', message: null })
+    const w = mountView()
+    await flushPromises()
+
+    await w.get('[data-testid="send-test-email"]').trigger('click')
+    await flushPromises()
+
+    expect(apiPostMock).toHaveBeenCalledTimes(1)
+    expect(apiPostMock).toHaveBeenCalledWith('/pages/api/v1/admin/test-email', undefined)
+    expect(w.get('[data-testid="test-email-result"]').text())
+      .toBe('Test e-mail sent to admin@example.invalid. Check that it arrives.')
+  })
+
+  it('disables the button while the mail is on its way, so one click sends one mail', async () => {
+    let finish: (value: unknown) => void = () => {}
+    apiPostMock.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const w = mountView()
+    await flushPromises()
+
+    const button = w.get('[data-testid="send-test-email"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.text()).toBe('Sending…')
+    await button.trigger('click')
+    expect(apiPostMock).toHaveBeenCalledTimes(1)
+
+    finish({ sent: true, recipient: 'admin@example.invalid', message: null })
+    await flushPromises()
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(button.text()).toBe('Send test e-mail')
+  })
+
+  it("shows the mail server's error when the send fails", async () => {
+    apiPostMock.mockRejectedValue(new ApiError(502, 'Mail server connection failed; Connection refused', {
+      sent: false,
+      recipient: 'admin@example.invalid',
+      message: 'Mail server connection failed; Connection refused',
+    }))
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid="send-test-email"]').trigger('click')
+    await flushPromises()
+
+    const result = w.get('[data-testid="test-email-result"]')
+    expect(result.attributes('role')).toBe('alert')
+    expect(result.text()).toBe('Sending to admin@example.invalid failed: Mail server connection failed; Connection refused')
+  })
+
+  it('says when the server asks to wait, and when the account has no address', async () => {
+    apiPostMock.mockRejectedValueOnce(new ApiError(429, 'A test e-mail was sent less than 30 seconds ago.', {
+      message: 'A test e-mail was sent less than 30 seconds ago.',
+    }))
+    apiPostMock.mockRejectedValueOnce(new ApiError(409, 'no address', { message: 'no address' }))
+    const w = mountView()
+    await flushPromises()
+
+    await w.get('[data-testid="send-test-email"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="test-email-result"]').text()).toContain('less than half a minute ago')
+
+    await w.get('[data-testid="send-test-email"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="test-email-result"]').text()).toContain('Your account has no e-mail address')
   })
 })

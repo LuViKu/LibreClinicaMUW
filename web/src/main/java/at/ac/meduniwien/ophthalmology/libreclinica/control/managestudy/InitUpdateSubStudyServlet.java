@@ -9,7 +9,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
-import java.net.MalformedURLException;
 import java.util.ArrayList;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
@@ -73,7 +72,6 @@ public class InitUpdateSubStudyServlet extends SecureController {
 	public void processRequest() throws Exception {
 		StudyDAO sdao = new StudyDAO(sm.getDataSource());
 		String idString = request.getParameter("id");
-		logger.info("study id:" + idString);
 		// A non-numeric ?id= is as unusable as a missing one, so it takes the
 		// same branch (page message + back to the study list) instead of
 		// letting a NumberFormatException escape into the container's 500 page.
@@ -120,8 +118,6 @@ public class InitUpdateSubStudyServlet extends SecureController {
 							// scg.getValue().getValue());
 							StudyParameterValueBean spvb = spvdao.findByHandleAndStudy(study.getId(),
 									scg.getParameter().getHandle());
-							if (spvb.getValue().equals("enabled"))
-								baseUrl();
 							if (spvb.getId() > 0) {
 								// the sub study itself has the parameter
 								scg.setValue(spvb);
@@ -159,7 +155,7 @@ public class InitUpdateSubStudyServlet extends SecureController {
 
 	}
 
-	private void createEventDefinitions(StudyBean parentStudy) throws MalformedURLException {
+	private void createEventDefinitions(StudyBean parentStudy) {
 		StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());
 
 		int siteId = Integer.valueOf(request.getParameter("id").trim());
@@ -172,8 +168,6 @@ public class InitUpdateSubStudyServlet extends SecureController {
 		for (StudyEventDefinitionBean sed : seds) {
 			String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal")
 					.getValue();
-			if (participateFormStatus.equals("enabled"))
-				baseUrl();
 			request.setAttribute("participateFormStatus", participateFormStatus);
 
 			int defId = sed.getId();

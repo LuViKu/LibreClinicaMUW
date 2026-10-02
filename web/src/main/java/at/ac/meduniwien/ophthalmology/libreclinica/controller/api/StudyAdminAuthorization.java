@@ -160,6 +160,46 @@ public final class StudyAdminAuthorization {
     }
 
     /**
+     * @return {@code true} when {@code me} may change the name and
+     *         description of a CRF owned by {@code crfOwnerId}. Legacy
+     *         parity: {@code InitUpdateCRFServlet} + {@code UpdateCRFServlet}
+     *         — a sysadmin always; anyone else only for a CRF they own, and
+     *         only while holding an AVAILABLE {@link Role#STUDYDIRECTOR} or
+     *         {@link Role#ADMIN} binding. A coordinator may not, as in the
+     *         legacy screens. The legacy check read the role of the session's
+     *         current study; like {@link #userMayManageCrfLibrary} this walks
+     *         every binding, since a CRF is not scoped to one study.
+     */
+    static boolean userMayEditCrf(UserAccountBean me, int crfOwnerId,
+                                  List<StudyUserRoleBean> myBindings) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (me.getId() == 0 || me.getId() != crfOwnerId) return false;
+        if (myBindings == null) return false;
+        for (StudyUserRoleBean b : myBindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null
+                    || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            Role r = b.getRole();
+            if (r == Role.STUDYDIRECTOR || r == Role.ADMIN) return true;
+        }
+        return false;
+    }
+
+    /** DAO-aware overload of {@link #userMayEditCrf(UserAccountBean, int, List)}; fails closed. */
+    static boolean userMayEditCrf(UserAccountBean me, int crfOwnerId, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (dataSource == null) return false;
+        try {
+            return userMayEditCrf(me, crfOwnerId,
+                    new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName()));
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
      * DAO-aware overload — loads the caller's full binding set via
      * {@link UserAccountDAO#findAllRolesByUserName(String)} and
      * delegates to {@link #userMayEditStudy(UserAccountBean, List, StudyBean)}.
@@ -186,6 +226,42 @@ public final class StudyAdminAuthorization {
             return false;
         }
         return userMayEditStudy(me, bindings, target);
+    }
+
+    /** The roles {@code SubmitDataServlet.mayViewData} lets see a study's data. */
+    private static final List<Role> STUDY_DATA_VIEWERS = List.of(
+            Role.COORDINATOR, Role.STUDYDIRECTOR, Role.INVESTIGATOR,
+            Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2, Role.MONITOR);
+
+    /**
+     * @return {@code true} when {@code me} may read {@code target}'s
+     *         design (its ODM metadata). A system administrator, or a
+     *         user with an active binding on the study, or on its parent
+     *         when the study is a site, in one of the roles that may view
+     *         the study's data. That is the gate of
+     *         {@code DownloadStudyMetadataServlet}, whose session role on a
+     *         site is the higher of the site and parent bindings.
+     */
+    static boolean userMayViewStudyDesign(UserAccountBean me, StudyBean target, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (target == null || dataSource == null) return false;
+        ArrayList<StudyUserRoleBean> bindings;
+        try {
+            bindings = new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName());
+        } catch (RuntimeException e) {
+            // Fail closed, as userMayEditStudy does.
+            return false;
+        }
+        if (bindings == null) return false;
+        for (StudyUserRoleBean b : bindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            boolean onTarget = b.getStudyId() == target.getId()
+                    || (target.getParentStudyId() > 0 && b.getStudyId() == target.getParentStudyId());
+            if (onTarget && STUDY_DATA_VIEWERS.contains(b.getRole())) return true;
+        }
+        return false;
     }
 
     /**

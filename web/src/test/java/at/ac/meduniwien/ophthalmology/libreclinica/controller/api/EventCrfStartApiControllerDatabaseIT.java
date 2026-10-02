@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -89,7 +91,7 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/events/11/crfs/2:start")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-                .session(authenticatedSession()))
+                .session(dataEntrySession()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.eventCrfId").value(greaterThan(0)))
                 .andExpect(jsonPath("$.eventCrfOid").exists())
@@ -108,7 +110,7 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/events/999999/crfs/1:start")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-                .session(authenticatedSession()))
+                .session(dataEntrySession()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("No study_event with id 999999")));
@@ -123,7 +125,7 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/events/1/crfs/999999:start")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-                .session(authenticatedSession()))
+                .session(dataEntrySession()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("No event_definition_crf with id 999999")));
@@ -142,7 +144,7 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/events/15/crfs/1:start")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-                .session(authenticatedSession()))
+                .session(dataEntrySession()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("not wired into this event's definition")));
@@ -179,13 +181,13 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
         mvc.perform(post("/api/v1/events/12/crfs/3:start")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-                .session(authenticatedSession()))
+                .session(dataEntrySession()))
                 .andExpect(status().isCreated());
 
         mvc.perform(post("/api/v1/events/12/crfs/3:start")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-                .session(authenticatedSession()))
+                .session(dataEntrySession()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("already exists for this slot")))
@@ -198,9 +200,20 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
     /* ====================================================================== */
 
     /**
+     * {@link #authenticatedSession()} with a role that may enter data. The
+     * endpoint checks the role before it reads the event.
+     */
+    private MockHttpSession dataEntrySession() {
+        MockHttpSession session = authenticatedSession();
+        session.setAttribute("userRole", investigatorOn(1));
+        return session;
+    }
+
+    /**
      * Session attached to a study_id the seed does not populate. The
      * visibility filter returns {@code {studyId}}; events in study 1
-     * fall outside that set ⇒ 403.
+     * fall outside that set ⇒ 403. The role may enter data, so the
+     * refusal is the visibility filter's and not the role check's.
      */
     private MockHttpSession sessionBoundToStudyId(int studyId) {
         MockHttpSession session = new MockHttpSession();
@@ -213,6 +226,14 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
         study.setOid("synthetic-study-" + studyId);
         study.setName("synthetic-study-" + studyId);
         session.setAttribute("study", study);
+        session.setAttribute("userRole", investigatorOn(studyId));
         return session;
+    }
+
+    private static StudyUserRoleBean investigatorOn(int studyId) {
+        StudyUserRoleBean role = new StudyUserRoleBean();
+        role.setRole(Role.INVESTIGATOR);
+        role.setStudyId(studyId);
+        return role;
     }
 }

@@ -13,7 +13,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeCommitRespo
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeConflictsDto;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DdeReconcileRequest;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.EventCrfsApiController;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.SdvRevocation;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
@@ -172,10 +172,11 @@ public class DdeService {
         // 0 mismatches → DDE complete via markCompleteDDE on the DAO.
         if (mismatch == 0) {
             EventCRFDAO ecDAO = new EventCRFDAO(dataSource);
+            // A touch, not update: update writes every column from the
+            // bean, whose second-pass date is still empty, and cleared the
+            // date markComplete sets.
+            ecDAO.touch(ecb.getId(), ddeClerk.getId());
             ecDAO.markComplete(ecb, /* ide */ false);
-            ecb.setUpdater(ddeClerk);
-            ecb.setUpdatedDate(new Date());
-            ecDAO.update(ecb);
 
             EventCrfsApiController.writeAuditEvent(auditDAO,
                     AuditTypeIds.DDE_PASS2_COMMITTED,
@@ -312,6 +313,9 @@ public class DdeService {
         idb.setStatus(Status.AVAILABLE);
         idb.setOldStatus(Status.AVAILABLE);
         idDAO.update(idb);
+        if (!oldValue.equals(newValue)) {
+            SdvRevocation.revokeIfVerified(ecb, dmUser, new EventCRFDAO(dataSource));
+        }
 
         // Close the FAILEDVAL note.
         note.setResolutionStatusId(ResolutionStatus.CLOSED.getId());

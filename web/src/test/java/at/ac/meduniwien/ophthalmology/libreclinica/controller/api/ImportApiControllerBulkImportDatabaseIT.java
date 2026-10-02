@@ -40,9 +40,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * projection paths execute and produce the documented response shape
  * (issues / errorCount are part of that shape).
  *
- * <p>Persistence (commit) is intentionally deferred — the controller
- * docstring already documents {@code 501 Not Implemented} on the
- * commit path until the persistence harmoniser lands.
+ * <p>The commit, and the preview's insert / overwrite / skip split, are
+ * covered by {@link ImportApiControllerCommitDatabaseIT}.
  */
 class ImportApiControllerBulkImportDatabaseIT extends AbstractApiControllerDatabaseIT {
 

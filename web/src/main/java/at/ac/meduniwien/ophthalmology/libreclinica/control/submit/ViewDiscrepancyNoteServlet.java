@@ -416,7 +416,11 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
         }
         if (boxDNMap.containsKey(0)) {
             int dnTypeId0 = boxDNMap.get(0).getDiscrepancyNoteTypeId();
-            if (dnTypeId0 == 2 || dnTypeId0 == 4) {
+            // The new-thread box rebuilds its status choices from this type when
+            // the page loads. A failed validation check needs it as well: without
+            // it a coordinator re-shown the box after a failed save is offered
+            // the query's statuses, which DiscrepancyNoteStatusRule refuses.
+            if (dnTypeId0 == 1 || dnTypeId0 == 2 || dnTypeId0 == 4) {
                 request.setAttribute("typeID0", dnTypeId0 + "");
             }
         }

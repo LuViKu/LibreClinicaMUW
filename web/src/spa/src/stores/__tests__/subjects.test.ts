@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import {
   AddSubjectValidationError,
+  subjectIdentifierRules,
   useSubjectsStore,
   validateAddSubject,
   type AddSubjectInput,
@@ -364,6 +365,37 @@ describe('validateAddSubject', () => {
     const future = validateAddSubject({ ...baseInput, yearOfBirth: 2099 }, [], { today: '2026-05-30' })
     expect(tooOld).toContainEqual(expect.objectContaining({ field: 'yearOfBirth' }))
     expect(future).toContainEqual(expect.objectContaining({ field: 'yearOfBirth' }))
+  })
+
+  it('requires the Person ID and the full date of birth where the study does', () => {
+    const rules = subjectIdentifierRules({ subjectPersonIdRequired: 'required', collectDob: '1', genderRequired: 'true' })
+    const errors = validateAddSubject(baseInput, [], { today: '2026-05-30', rules })
+    expect(errors.map((e) => e.field).sort()).toEqual(['dateOfBirth', 'personId'])
+    const complete = validateAddSubject(
+      { ...baseInput, personId: 'P-1', dateOfBirth: '1962-04-17' }, [], { today: '2026-05-30', rules })
+    expect(complete).toEqual([])
+  })
+
+  it('requires only the year where the study collects the year of birth', () => {
+    const rules = subjectIdentifierRules({ subjectPersonIdRequired: 'optional', collectDob: '2', genderRequired: 'false' })
+    const noSex = { ...baseInput, gender: '' as 'F' }
+    expect(validateAddSubject({ ...noSex, yearOfBirth: null }, [], { today: '2026-05-30', rules })
+      .map((e) => e.field)).toEqual(['yearOfBirth'])
+    expect(validateAddSubject(noSex, [], { today: '2026-05-30', rules })).toEqual([])
+  })
+})
+
+describe('subjectIdentifierRules', () => {
+  it('reads the study parameters as the server does', () => {
+    expect(subjectIdentifierRules({ subjectPersonIdRequired: 'not_used', collectDob: '3', genderRequired: 'false' }))
+      .toEqual({ personId: 'not_used', dateOfBirth: 'none', genderRequired: false })
+    expect(subjectIdentifierRules({ subjectPersonIdRequired: 'optional', collectDob: '2', genderRequired: 'true' }))
+      .toEqual({ personId: 'optional', dateOfBirth: 'year', genderRequired: true })
+    // A study without its own collectDob reports the table default, which
+    // the server reads as the full date.
+    expect(subjectIdentifierRules({ subjectPersonIdRequired: 'required', collectDob: 'required', genderRequired: 'required' }))
+      .toEqual({ personId: 'required', dateOfBirth: 'full', genderRequired: true })
+    expect(subjectIdentifierRules(null)).toEqual({ personId: 'required', dateOfBirth: 'full', genderRequired: true })
   })
 })
 

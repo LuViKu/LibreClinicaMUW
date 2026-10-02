@@ -13,6 +13,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,8 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersion;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item;
 import jakarta.persistence.EntityManager;
 import org.hibernate.Session;
 import org.hibernate.query.NativeQuery;
@@ -27,9 +30,8 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * The XForm CRF-version upload looks up versions and items by the names it
- * was given. The names are bound as query parameters, never spliced into
- * the SQL text.
+ * Look-ups of CRF versions and items by name bind the name as a query
+ * parameter; it is never spliced into the SQL text.
  */
 public class NameLookupBindingTest {
 
@@ -42,7 +44,7 @@ public class NameLookupBindingTest {
         session = mock(Session.class);
         query = mock(NativeQuery.class, RETURNS_SELF);
         when(query.getSingleResultOrNull()).thenReturn(null);
-        when(session.createNativeQuery(anyString())).thenReturn((NativeQuery) query);
+        when(session.createNativeQuery(anyString(), any(Class.class))).thenReturn((NativeQuery) query);
         EntityManager em = mock(EntityManager.class);
         when(em.unwrap(Session.class)).thenReturn(session);
         Field f = AbstractDomainDao.class.getDeclaredField("entityManager");
@@ -51,9 +53,10 @@ public class NameLookupBindingTest {
         return dao;
     }
 
-    private String executedSql() {
+    /** The SQL the DAO ran, which it must have mapped onto {@code resultClass}. */
+    private String executedSql(Class<?> resultClass) {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(session).createNativeQuery(sql.capture());
+        verify(session).createNativeQuery(sql.capture(), eq(resultClass));
         return sql.getValue();
     }
 
@@ -63,7 +66,7 @@ public class NameLookupBindingTest {
 
         assertNull(dao.findByNameCrfId(HOSTILE, 7));
 
-        String sql = executedSql();
+        String sql = executedSql(CrfVersion.class);
         assertFalse(sql, sql.contains(HOSTILE));
         assertTrue(sql, sql.contains(":name") && sql.contains(":crfId"));
         verify(query).setParameter("name", HOSTILE, String.class);
@@ -76,7 +79,7 @@ public class NameLookupBindingTest {
 
         assertNull(dao.findByNameCrfId(HOSTILE, 7));
 
-        String sql = executedSql();
+        String sql = executedSql(Item.class);
         assertFalse(sql, sql.contains(HOSTILE));
         assertTrue(sql, sql.contains(":name") && sql.contains(":crfId"));
         verify(query).setParameter("name", HOSTILE, String.class);

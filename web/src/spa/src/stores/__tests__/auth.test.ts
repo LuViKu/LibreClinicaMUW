@@ -133,8 +133,20 @@ describe('useAuthStore', () => {
   })
 
   describe('localLogin()', () => {
-    it('POSTs URL-encoded credentials to j_spring_security_check, then re-hydrates', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({ url: 'http://localhost/LibreClinica/MainMenu' }))
+    /** The login filter's answer to an SPA login it refused. */
+    function refused(error: string | null): Response {
+      return fetchResponse({
+        status: 401,
+        url: 'http://localhost/LibreClinica/j_spring_security_check',
+        bodyJson: error === null ? null : { error, message: 'from the server' },
+      })
+    }
+
+    it('POSTs URL-encoded credentials asking for JSON, then re-hydrates on 204', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({
+        status: 204,
+        url: 'http://localhost/LibreClinica/j_spring_security_check',
+      }))
       vi.stubGlobal('fetch', fetchMock)
       vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_USER)
 
@@ -146,8 +158,11 @@ describe('useAuthStore', () => {
       expect(url).toBe('/LibreClinica/j_spring_security_check')
       expect(init?.method).toBe('POST')
       expect(init?.credentials).toBe('include')
-      expect((init?.headers as Record<string, string>)['Content-Type'])
-        .toBe('application/x-www-form-urlencoded')
+      const headers = init?.headers as Record<string, string>
+      // Accept: application/json selects the 204/401 answer; without it
+      // the filter redirects to the legacy /MainMenu.
+      expect(headers.Accept).toBe('application/json')
+      expect(headers['Content-Type']).toBe('application/x-www-form-urlencoded')
       expect(init?.body).toContain('j_username=root')
       expect(init?.body).toContain('j_password=12345678')
       expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/me')
@@ -155,11 +170,8 @@ describe('useAuthStore', () => {
       expect(store.state).toBe('authenticated')
     })
 
-    it('flags invalid credentials on the errorLogin redirect', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({
-        url: 'http://localhost/LibreClinica/pages/login/login?errorLogin=true',
-      }))
-      vi.stubGlobal('fetch', fetchMock)
+    it('flags invalid credentials on a 401 bad_credentials', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(refused('bad_credentials')))
 
       const store = useAuthStore()
       await store.localLogin('root', 'badpw')
@@ -168,26 +180,30 @@ describe('useAuthStore', () => {
       expect(apiGet).not.toHaveBeenCalled()
     })
 
-    it('flags locked accounts on the errorLocked redirect', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({
-        url: 'http://localhost/LibreClinica/pages/login/login?errorLocked=true',
-      }))
-      vi.stubGlobal('fetch', fetchMock)
+    it('flags locked accounts on a 401 locked', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(refused('locked')))
 
       const store = useAuthStore()
       await store.localLogin('root', '12345678')
       expect(store.error).toBe('Account locked. Contact your administrator.')
+      expect(apiGet).not.toHaveBeenCalled()
     })
 
-    it('flags 2FA-outdated on the 2faOutdated redirect', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({
-        url: 'http://localhost/LibreClinica/pages/login/login?action=2faOutdated',
-      }))
-      vi.stubGlobal('fetch', fetchMock)
+    it('flags 2FA-outdated on a 401 2fa_outdated', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(refused('2fa_outdated')))
 
       const store = useAuthStore()
       await store.localLogin('root', '12345678')
       expect(store.error).toContain('2FA')
+    })
+
+    it('reads a 401 without a readable reason as invalid credentials', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(refused(null)))
+
+      const store = useAuthStore()
+      await store.localLogin('root', 'badpw')
+      expect(store.error).toBe('Invalid username or password.')
+      expect(store.state).toBe('anonymous')
     })
 
     it('rejects empty username/password without hitting the network', async () => {
@@ -348,8 +364,8 @@ describe('useAuthStore', () => {
   })
 
   describe('logout()', () => {
-    it('fetches /Logout + clears local state', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({}))
+    it('POSTs the SPA sign-out endpoint + clears local state', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(fetchResponse({ status: 204 }))
       vi.stubGlobal('fetch', fetchMock)
       vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_USER)
 
@@ -358,8 +374,9 @@ describe('useAuthStore', () => {
       expect(store.state).toBe('authenticated')
 
       await store.logout()
-      expect(fetchMock).toHaveBeenCalledWith('/LibreClinica/Logout', expect.objectContaining({
-        method: 'GET',
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(fetchMock).toHaveBeenCalledWith('/LibreClinica/pages/api/v1/auth/logout', expect.objectContaining({
+        method: 'POST',
         credentials: 'include',
       }))
       expect(store.user).toBeNull()

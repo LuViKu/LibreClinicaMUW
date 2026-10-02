@@ -20,22 +20,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.StudyParameterValueBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.EmailEngine;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterValueDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.ExecutionMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.RuleRunner.RuleRunnerMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.BulkEmailSenderService;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,58 +48,28 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 	EmailEngine emailEngine;
 	JavaMailSenderImpl mailSender;
 	RuleSetRuleBean ruleSetRule;
-	StudySubjectDAO ssdao;
-	UserAccountDAO udao;
-	StudyParameterValueDAO spvdao;
 	RuleSetService ruleSetService;
 	RuleSetDao ruleSetDao;
 	ParticipantDTO pDTO;
 	RuleActionBean ruleActionBean;
-	ParticipantPortalRegistrar participantPortalRegistrar;
 	String email;
 	String[] listOfEmails;
 	StudySubjectBean ssBean;
-	UserAccountBean uBean;
-	StudyBean studyBean;
 	String message;
 	String url;
 	String emailSubject;
-	String participateStatus;
 
-	public NotificationActionProcessor(DataSource ds, JavaMailSenderImpl mailSender, RuleActionBean ruleActionBean, ParticipantDTO pDTO, ParticipantPortalRegistrar participantPortalRegistrar,
-			String email) {
-		this.ds = ds;
-		this.mailSender = mailSender;
-		this.ruleActionBean = ruleActionBean;
-		this.pDTO = pDTO;
-		this.participantPortalRegistrar = participantPortalRegistrar;
-		this.email = email;
-
-	}
-
-	public NotificationActionProcessor(String[] listOfEmails, UserAccountBean uBean, StudyBean studyBean, String message, String emailSubject, ParticipantPortalRegistrar participantPortalRegistrar,
-			JavaMailSenderImpl mailSender , String participateStatus) {
+	public NotificationActionProcessor(String[] listOfEmails, String message, String emailSubject, JavaMailSenderImpl mailSender) {
 		this.listOfEmails = listOfEmails;
 		this.message = message;
 		this.emailSubject = emailSubject;
-		this.uBean = uBean;
-		this.participantPortalRegistrar = participantPortalRegistrar;
 		this.mailSender = mailSender;
-		this.studyBean = studyBean;
-		this.participateStatus=participateStatus;
-
 	}
 
 	public NotificationActionProcessor(DataSource ds, JavaMailSenderImpl mailSender, RuleSetRuleBean ruleSetRule) {
 		this.ds = ds;
 		this.mailSender = mailSender;
 		this.ruleSetRule = ruleSetRule;
-		ssdao = new StudySubjectDAO(ds);
-		udao = new UserAccountDAO(ds);
-  	   spvdao = new StudyParameterValueDAO(ds);
-
-
-
 	}
 
 	public RuleActionBean execute(ExecutionMode executionMode, RuleActionBean ruleActionBean, ParticipantDTO pDTO , String email  ) {
@@ -162,107 +128,37 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 		emailSubject = emailSubject.replaceAll("\\$\\{event.name}", eventName);
 		emailSubject = emailSubject.replaceAll("\\$\\{study.name}", studyName);
 
-		StudyBean studyBean = getStudyBean(studyId);
 		String[] listOfEmails = emailList.split(",");
-		StudySubjectBean ssBean = (StudySubjectBean) ssdao.findByPK(studySubjectBeanId);
-		StudyBean parentStudyBean = getParentStudy(ds, studyBean);
-		String pUserName = parentStudyBean.getOid() + "." + ssBean.getOid();
-		UserAccountBean uBean = (UserAccountBean) udao.findByUserName(pUserName);
 
-		StudyParameterValueBean pStatus = spvdao.findByHandleAndStudy(studyBean.getId(), "participantPortal");
-		String participateStatus = pStatus.getValue().toString(); // enabled , disabled
-
-		Thread thread = new Thread(new NotificationActionProcessor(listOfEmails, uBean, studyBean, message, emailSubject, participantPortalRegistrar, mailSender,participateStatus));
+		Thread thread = new Thread(new NotificationActionProcessor(listOfEmails, message, emailSubject, mailSender));
 		thread.start();
 
 	}
 
 	@Override
 	public void run() {
+		// The participant placeholders and the "${participant}" recipient
+		// belonged to OpenClinica's hosted participant portal, which this
+		// build does not include: the placeholders resolve to nothing and a
+		// "${participant}" recipient is skipped. Every other recipient gets
+		// the message through the local mail server.
+		message = message.replaceAll("\\$\\{participant.url}", "");
+		emailSubject = emailSubject.replaceAll("\\$\\{participant.url}", "");
 
-		String hostname = "";
-		String url = "";
-		participantPortalRegistrar = new ParticipantPortalRegistrar();
+		pDTO = buildNewPDTO();
+		message = message.replaceAll("\\\\n", "\n");
+		emailSubject = emailSubject.replaceAll("\\\\n", "\n");
+		pDTO.setOrigMessage(message);
+		pDTO.setOrigEmailSubject(emailSubject);
 
-		try {
-			hostname = participantPortalRegistrar.getStudyHost(studyBean.getOid());
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-	    url = hostname.substring(0,hostname.indexOf("/app/oauth2")) + "/#/plogin";
-
-		message = message.replaceAll("\\$\\{participant.url}", url);
-		emailSubject = emailSubject.replaceAll("\\$\\{participant.url}", url);
-
-		pDTO = getParticipantInfo(uBean);
-		if (pDTO != null) {
-			String msg = null;
-			String eSubject = null;
-			msg = message.replaceAll("\\$\\{participant.accessCode}", pDTO.getAccessCode());
-			msg = msg.replaceAll("\\$\\{participant.firstname}", pDTO.getfName());
-			eSubject = emailSubject.replaceAll("\\$\\{participant.accessCode}", pDTO.getAccessCode());
-			eSubject = eSubject.replaceAll("\\$\\{participant.firstname}", pDTO.getfName());
-
-			String loginUrl = url + "?access_code=" + pDTO.getAccessCode() + "&auto_login=true";
-			msg = msg.replaceAll("\\$\\{participant.loginurl}", loginUrl);
-			eSubject = eSubject.replaceAll("\\$\\{participant.loginurl}", loginUrl);
-
-			msg = msg.replaceAll("\\\\n", "\n");
-			eSubject = eSubject.replaceAll("\\\\n", "\n");
-			message = message.replaceAll("\\\\n", "\n");
-			emailSubject = emailSubject.replaceAll("\\\\n", "\n");
-			pDTO.setMessage(msg);
-			pDTO.setEmailSubject(eSubject);
-			pDTO.setUrl(url);
-			pDTO.setOrigMessage(message);
-			pDTO.setOrigEmailSubject(emailSubject);
-			pDTO.setParticipantEmailAccount(pDTO.getEmailAccount());
-
-
-		} else {
-			pDTO = buildNewPDTO();
-            message = message.replaceAll("\\\\n", "\n");
-            emailSubject = emailSubject.replaceAll("\\\\n", "\n");
-            pDTO.setOrigMessage(message);
-            pDTO.setOrigEmailSubject(emailSubject);
-		}
-
-		
-		
 		for (String email : listOfEmails) {
-
-			if (email.trim().equals("${participant}") || participateStatus.equals("enabled")) {
-			    if (email.trim().equals("${participant}")){ 
-				pDTO.setEmailAccount(pDTO.getParticipantEmailAccount());
-			    pDTO.setEncryptedEmailAccount(Boolean.TRUE);
-			    }else{
-				pDTO.setEmailAccount(email.trim());
-				pDTO.setPhone(null);
-			    pDTO.setEncryptedEmailAccount(Boolean.FALSE);
-			    }
-				// Send Email thru Mandrill Mail Server
-				try {
-					participantPortalRegistrar.sendEmailThruMandrillViaOcui(pDTO,hostname);
-				} catch (Exception e) {
-					// 2026-06-28 — heritage-debt audit (PR #262): the heritage call
-					// to `e.getStackTrace()` discarded its result silently. Promote
-					// to ERROR so a failed participant-email send is auditable.
-					logger.error("Failed to send participant email via Mandrill (account={})", pDTO.getEmailAccount(), e);
-				}
-				// 2026-06-28 — heritage-debt audit (PR #262): participant-email
-				// confirmations were going to stdout. Route through SLF4J INFO
-				// with structured fields so the audit trail includes the outcome.
-				logger.info("Sent participant email via Mandrill: account={}, outcome=sent", pDTO.getEmailAccount());
-
-			} else {
-				pDTO.setEmailAccount(email.trim());
-				// Send Email thru Local Mail Server
-				execute(ExecutionMode.SAVE, ruleActionBean, pDTO , email.trim());
-				// 2026-06-28 — heritage-debt audit (PR #262): see comment above.
-				logger.info("Sent participant email via local mail server: account={}, outcome=sent", pDTO.getEmailAccount());
-
+			if (email.trim().equals("${participant}")) {
+				continue;
 			}
+			pDTO.setEmailAccount(email.trim());
+			// Send Email thru Local Mail Server
+			execute(ExecutionMode.SAVE, ruleActionBean, pDTO , email.trim());
+			logger.info("Queued rule notification email for the local mail server: account={}", pDTO.getEmailAccount());
 		}
 	}
 
@@ -284,23 +180,6 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 		return pDTO;
 	}
 
-	public ParticipantDTO getParticipantInfo(UserAccountBean uBean) {
-		ParticipantDTO pDTO = null;
-		if (uBean != null && uBean.isActive()) {
-			if (uBean.getEmail() == null)
-				return null;
-			pDTO = new ParticipantDTO();
-			pDTO.setAccessCode(uBean.getAccessCode());
-			pDTO.setfName(uBean.getFirstName());
-			pDTO.setEmailAccount(uBean.getEmail());
-			pDTO.setPhone(uBean.getPhone());
-		} else {
-			return null;
-		}
-
-		return pDTO;
-	}
-
 	public ArrayList<StudySubjectBean> getAllParticipantStudySubjectsPerStudy(int studyId, DataSource ds) {
 		StudySubjectDAO ssdao = new StudySubjectDAO(ds);
 		ArrayList<StudySubjectBean> ssBeans = ssdao.findAllByStudyId(studyId);
@@ -311,17 +190,6 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 		StudyEventDAO studyEventDao = new StudyEventDAO(ds);
 		StudyEventBean seBean = (StudyEventBean) studyEventDao.getNextScheduledEvent(ssBean.getOid());
 		return seBean;
-	}
-
-	private StudyBean getParentStudy(DataSource ds, StudyBean study) {
-		StudyDAO sdao = new StudyDAO(ds);
-		if (study.getParentStudyId() == 0) {
-			return study;
-		} else {
-			StudyBean parentStudy = (StudyBean) sdao.findByPK(study.getParentStudyId());
-			return parentStudy;
-		}
-
 	}
 
 	public StudyEventDefinitionBean getStudyEventDefnBean(int sed_Id) {

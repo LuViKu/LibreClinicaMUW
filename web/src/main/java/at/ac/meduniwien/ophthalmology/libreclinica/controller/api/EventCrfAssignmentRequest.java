@@ -37,8 +37,5 @@ public record EventCrfAssignmentRequest(
         Boolean electronicSignature,
         Boolean hideCrf,
         String sourceDataVerification,
-        Boolean participantForm,
-        Boolean allowAnonymousSubmission,
-        String submissionUrl,
         Boolean offline
 ) {}

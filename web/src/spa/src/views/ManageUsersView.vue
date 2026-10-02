@@ -10,12 +10,14 @@ import SelectInput from '@/components/SelectInput.vue'
 import InviteUserDialog from '@/components/InviteUserDialog.vue'
 import EditUserDialog from '@/components/EditUserDialog.vue'
 import UserRolesDialog from '@/components/UserRolesDialog.vue'
+import UserDetailsDialog from '@/components/UserDetailsDialog.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
 import type { StudyUser, UserAuth, UserRole } from '@/types/user'
 import { formatDate } from '@/lib/dateFormat'
+import { userRoleLabelKey } from '@/lib/userRoleLabel'
 
 const { t } = useI18n()
 const users = useUsersStore()
@@ -98,6 +100,18 @@ async function onUnlock(u: StudyUser) {
     const result = await users.unlock(u.username)
     if (result.ok) restoredPanel.value = { username: u.username, password: result.generatedPassword, kind: 'unlock' }
   } finally { isLifecycleBusy.value = null }
+}
+
+/* Access review: the account's details, read-only. */
+const detailsOpen = ref(false)
+const detailsTarget = ref<StudyUser | null>(null)
+function openDetails(u: StudyUser) {
+  detailsTarget.value = u
+  detailsOpen.value = true
+}
+
+function isAdministratorAccount(u: StudyUser): boolean {
+  return u.userType === 'SYSADMIN' || u.userType === 'TECHADMIN'
 }
 
 /* Phase E A7.5 — role-assignments dialog state. */
@@ -257,11 +271,21 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
 
         <tr v-for="u in users.filtered" :key="u.id">
           <td class="px-3 py-2">
-            <div class="font-medium text-slate-900">{{ u.displayName }}</div>
+            <div class="font-medium text-slate-900 flex items-center gap-1.5">
+              <span>{{ u.displayName }}</span>
+              <StatusPill
+                v-if="isAdministratorAccount(u)"
+                compact
+                variant="info"
+                :data-testid="`user-type-${u.username}`"
+              >
+                {{ t(`manageUsers.userType.${u.userType}`) }}
+              </StatusPill>
+            </div>
             <div class="text-xs text-slate-500 font-mono">{{ u.username }}<span v-if="u.email"> · {{ u.email }}</span></div>
           </td>
           <td class="px-3 py-2">
-            <StatusPill :variant="roleVariant(u.role)">{{ t(`manageUsers.role.${u.role}`) }}</StatusPill>
+            <StatusPill :variant="u.legacyRole ? 'neutral' : roleVariant(u.role)">{{ t(userRoleLabelKey(u)) }}</StatusPill>
           </td>
           <td class="px-3 py-2 text-slate-600">{{ u.siteLabel ?? t('manageUsers.studyWide') }}</td>
           <td class="px-3 py-2">
@@ -284,6 +308,14 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
           </td>
           <td class="px-3 py-2 text-right">
             <div v-if="canInvite" class="inline-flex items-center gap-2 text-xs">
+              <button
+                class="text-muw-blue hover:underline"
+                :data-testid="`details-${u.username}`"
+                @click="openDetails(u)"
+              >
+                {{ t('manageUsers.details.action') }}
+              </button>
+              <span class="text-slate-500">·</span>
               <button
                 class="text-muw-blue hover:underline disabled:opacity-50"
                 :disabled="isLifecycleBusy === u.username"
@@ -386,6 +418,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
 
     <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
     <EditUserDialog v-model:open="editOpen" :user="editTarget" />
+    <UserDetailsDialog v-model:open="detailsOpen" :user="detailsTarget" />
     <UserRolesDialog v-model:open="rolesOpen" :user="rolesTarget" @close="users.load()" />
   </div>
 </template>

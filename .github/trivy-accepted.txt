@@ -1,0 +1,8 @@
+# Trivy findings that are triaged and accepted on the Security tab, where
+# they are dismissed with the same reason. The blocking step in
+# .github/workflows/security.yml ignores exactly these; any other HIGH or
+# CRITICAL finding with a fix fails the job. Each entry carries an expiry:
+# when it passes, the gate fails again and the entry must be re-examined.
+
+# (No accepted findings. The last one, CVE-2022-0839 in liquibase-core 3.6.3,
+# went with the move to Liquibase 4.31.1.)

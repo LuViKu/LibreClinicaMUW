@@ -35,6 +35,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 /**
  * Reset expired password
  *
@@ -48,6 +50,12 @@ public class ResetPasswordServlet extends SecureController {
 	@Override
     public void mayProceed() throws InsufficientPermissionException {
 	    // NOOP
+    }
+
+    /** Changes the password: POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     /**

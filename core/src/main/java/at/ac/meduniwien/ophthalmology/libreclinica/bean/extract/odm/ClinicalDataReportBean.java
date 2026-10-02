@@ -310,7 +310,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
             ArrayList<AuditLogBean> audits = auditLogs.getAuditLogs();
             if (audits != null && audits.size() > 0) {
                 for (AuditLogBean audit : audits) {
-               		if (entity=="item" && audit.getOldValue().isEmpty() && audit.getNewValue().isEmpty()){
+               		if ("item".equals(entity) && audit.getOldValue().isEmpty() && audit.getNewValue().isEmpty()){
                		count++;
                		}
                 }
@@ -322,7 +322,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
                 xml.append(currentIndent + "<OpenClinica:AuditLogs EntityID=\"" + auditLogs.getEntityID() + "\">");
                 xml.append(nls);
                 for (AuditLogBean audit : audits) {
-               		if (!(entity=="item" && audit.getOldValue().isEmpty() && audit.getNewValue().isEmpty())){
+               		if (!("item".equals(entity) && audit.getOldValue().isEmpty() && audit.getNewValue().isEmpty())){
                 	this.addOneAuditLog(audit, currentIndent + indent);
                		}
                 }
@@ -479,21 +479,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
                         xml.append("DateCreated=\"" + new SimpleDateFormat("yyyy-MM-dd").format(d) + "\" ");
                     }
                 }
-                if(cn.getOwnerUserName()!=""){
-                	String ownerUserName = cn.getOwnerUserName();
-                	if(ownerUserName.length()>0){
-                		xml.append("UserName=\"" + ownerUserName + "\" ");
-                	}
-                	
-                }
-                if(cn.getOwnerFirstName()!="" || cn.getOwnerLastName()!=""){
-                	String ownerLastName = cn.getOwnerLastName();
-                	String ownerFirstName = cn.getOwnerFirstName();
-                	if(ownerLastName.length()>0 || ownerFirstName.length()>0){
-                		xml.append("Name=\"" + ownerFirstName+" "+ownerLastName + "\"");
-                	}
-                	
-                }
+                xml.append(ownerAttributes(cn));
                 xml.append(">");
                 xml.append(nls);
                 if (cn.getDescription() != null) {
@@ -547,6 +533,24 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
 
     public OdmClinicalDataBean getClinicalData() {
         return this.clinicalData;
+    }
+
+    /** The UserName and Name attributes of a child note's owner. */
+    static String ownerAttributes(ChildNoteBean cn) {
+        // user_account.user_name, first_name and last_name are nullable; a
+        // missing part is left out instead of failing the whole export.
+        StringBuilder xml = new StringBuilder();
+        String ownerUserName = cn.getOwnerUserName();
+        if (ownerUserName != null && !ownerUserName.isEmpty()) {
+            xml.append("UserName=\"" + ownerUserName + "\" ");
+        }
+        String ownerFirstName = cn.getOwnerFirstName() == null ? "" : cn.getOwnerFirstName();
+        String ownerLastName = cn.getOwnerLastName() == null ? "" : cn.getOwnerLastName();
+        String ownerName = (ownerFirstName + " " + ownerLastName).trim();
+        if (!ownerName.isEmpty()) {
+            xml.append("Name=\"" + ownerName + "\"");
+        }
+        return xml.toString();
     }
 
 	private void sortImportItemGroupDataBeanList(ArrayList<ImportItemGroupDataBean> igs) {

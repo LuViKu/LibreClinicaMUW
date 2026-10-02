@@ -39,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
@@ -51,7 +50,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -532,6 +530,19 @@ public class SubjectsApiController {
     }
 
     /**
+     * May the session's binding sign a subject? Investigator and study
+     * director: the preflight's {@code user-role-can-sign} check, which
+     * blocks the sign endpoint for every other binding. {@code GET /me}
+     * reports it as {@code activeStudy.permissions.signSubject}.
+     *
+     * @param roleId legacy {@link Role} id; 0 for no role (refused)
+     */
+    static boolean roleMaySignSubject(int roleId) {
+        return roleId == Role.INVESTIGATOR.getId()
+                || roleId == Role.STUDYDIRECTOR.getId();
+    }
+
+    /**
      * Phase E.4 M3 + M8 — shared preflight computation.
      *
      * <p>Extracted so both the {@code GET /preflightForSign} endpoint
@@ -764,10 +775,7 @@ public class SubjectsApiController {
         if (currentRole != null && currentRole.getRole() != null) {
             Role r = currentRole.getRole();
             legacyRoleName = r.getName();
-            // Investigator (id=4) or Study Director (id=3) can sign;
-            // ra / ra2 / coordinator / monitor cannot.
-            canSign = (r.getId() == Role.INVESTIGATOR.getId()
-                    || r.getId() == Role.STUDYDIRECTOR.getId());
+            canSign = roleMaySignSubject(r.getId());
         }
         SignPreflightDto.CheckRow roleCheck;
         if (canSign) {
@@ -828,12 +836,10 @@ public class SubjectsApiController {
      * pure-JSON response shape suitable for the SPA's
      * {@code AddSubjectView}.
      *
-     * <p><strong>Authorization:</strong> chain-level
-     * {@code .anyRequest().hasRole("USER")} gates the endpoint. The
-     * legacy servlet additionally checks for Investigator / CRC /
-     * Coordinator on the bound study before allowing the action — that
-     * compliance slice is deferred until per-role authorization lands
-     * uniformly across the SPA endpoints (out of M4 scope).
+     * <p><strong>Authorization:</strong> the caller's role on the active
+     * study must permit entering data
+     * ({@link ClinicalWriteAuthorization#roleMayEnterData}), as the legacy
+     * servlet's {@code maySubmitData} gate requires; a Monitor gets 403.
      *
      * <p><strong>Validation:</strong> all rules are enforced server-side
      * and the controller returns ALL failing rules in a single 400
@@ -862,6 +868,7 @@ public class SubjectsApiController {
      *         400 if no study is bound;
      *         401 if no userBean (defence-in-depth — SecurityConfig
      *         should have blocked already);
+     *         403 if the caller's role may not enter data;
      *         500 if persistence fails after validation passes.
      */
     @PostMapping
@@ -879,6 +886,15 @@ public class SubjectsApiController {
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "adding subjects");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
         if (body == null) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
@@ -888,8 +904,11 @@ public class SubjectsApiController {
 
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
 
+        // The study's parameters decide which identifiers are required
+        // (Person ID, date or year of birth, sex), as in AddNewSubjectServlet.
+        SubjectIdentifierRules identifiers = SubjectIdentifierRules.forStudy(dataSource, currentStudy);
         List<ValidationErrorBody.FieldError> errors =
-                validateAddSubject(body, currentStudy, studySubjectDAO);
+                validateAddSubject(body, currentStudy, studySubjectDAO, identifiers);
 
         // Phase E.6 subject-lifecycle — Person-ID re-enrol validation +
         // group-assignment validation gate fold into the same errors
@@ -980,7 +999,8 @@ public class SubjectsApiController {
         String trimmedId = body.id().trim();
         String trimmedSecondary = body.secondaryId() == null ? null : body.secondaryId().trim();
         if (trimmedSecondary != null && trimmedSecondary.isEmpty()) trimmedSecondary = null;
-        char genderChar = Character.toLowerCase(body.gender().charAt(0));
+        // Blank only where the study does not require the sex (validated).
+        String genderCode = storedGender(body.gender());
 
         // Phase E.6 retrospective-backfill — prefer the new ISO
         // dateOfBirth field when present, fall back to the legacy
@@ -1019,7 +1039,7 @@ public class SubjectsApiController {
             // Phase A1 — rethrow so FailureAuditTemplate writes the
             // OPERATION_FAILED row. The outer create() catches Exception
             // and surfaces the legacy 500 envelope.
-            newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
+            newSubjectId = insertSubjectRow(genderCode, dob, dobCollected, currentUser.getId(),
                     personId == null || personId.isEmpty() ? null : personId,
                     trimmedFirstName, trimmedLastName);
         }
@@ -1088,8 +1108,8 @@ public class SubjectsApiController {
                 currentStudy.getName(),
                 currentStudy.getOid(),
                 currentStudy.getName(),
-                mapGender(genderChar),
-                body.yearOfBirth(),
+                mapGender(genderCode == null ? ' ' : genderCode.charAt(0)),
+                dob == null ? null : dob.toLocalDate().getYear(),
                 /* groupLabel */ null,
                 body.enrolledOn(),
                 Collections.emptyList(),
@@ -1101,7 +1121,8 @@ public class SubjectsApiController {
                 mapStudySubjectStatus(ssb.getStatus()),
                 initialAssignments,
                 /* eyeTransitions — fresh subject, none yet */ null,
-                /* studySubjectId — Wave 2A */ ssb.getId()
+                /* studySubjectId — Wave 2A */ ssb.getId(),
+                dobCollected && dob != null ? dob.toLocalDate().toString() : null
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -1574,7 +1595,8 @@ public class SubjectsApiController {
      * @return 200 + updated {@link SubjectDetailDto} on success;
      *         400 if attestation is false or body fields are missing;
      *         401 if password doesn't match;
-     *         403 if the subject isn't in the user's current study;
+     *         403 if the caller's role may not sign, or the subject
+     *         isn't in the user's current study;
      *         404 if the subject doesn't exist anywhere;
      *         409 if the subject is already signed;
      *         412 + failed checks if preflight has any non-subject-not-signed
@@ -1597,6 +1619,14 @@ public class SubjectsApiController {
         }
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        // Signing is an attest action: the rule that governs signing a
+        // visit, narrowed further by the preflight (roleMaySignSubject).
+        // No system-administrator short-circuit, unlike the legacy
+        // SignStudySubjectServlet: the signature attests as the binding
+        // (see ClinicalWriteAuthorization).
+        if (!EventEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("signing subjects");
         }
 
         // Never log the password / attestation fields.
@@ -1720,8 +1750,11 @@ public class SubjectsApiController {
     /**
      * Phase E A2 — edit a study subject's demographics.
      *
-     * <p>Editable fields: {@code secondaryId}, {@code gender},
-     * {@code yearOfBirth}. The subject's identifier ({@code id} /
+     * <p>Editable fields: {@code secondaryId} (the study subject's
+     * secondary label), {@code gender}, and the date of birth as the
+     * study collects it: {@code dateOfBirth} where it collects the full
+     * date, {@code yearOfBirth} where it collects the year only
+     * ({@link SubjectIdentifierRules}). The subject's identifier ({@code id} /
      * {@code label}) and {@code enrolledOn} are intentionally NOT
      * editable here — both are foreign-key anchors for event_crfs +
      * audit_log_event rows and changing them would invalidate study
@@ -1776,7 +1809,8 @@ public class SubjectsApiController {
                     "Your role does not permit editing study-subject demographics"));
         }
 
-        List<ValidationErrorBody.FieldError> errors = validateUpdateSubject(body);
+        SubjectIdentifierRules identifiers = SubjectIdentifierRules.forStudy(dataSource, currentStudy);
+        List<ValidationErrorBody.FieldError> errors = validateUpdateSubject(body, identifiers);
         if (!errors.isEmpty()) {
             ValidationErrorBody errResponse = new ValidationErrorBody(
                     "Validation failed", errors);
@@ -1829,45 +1863,81 @@ public class SubjectsApiController {
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
         java.util.Date now = new java.util.Date();
 
-        // secondaryId — null leaves unchanged; empty clears.
+        // The date of birth as the study collects it: a change the study
+        // does not record in that form is refused, not stored.
+        Integer oldYob = extractYear(subj);
+        String oldDob = fullDateOfBirth(subj);
+        String newDob = body.dateOfBirth() == null ? null : body.dateOfBirth().trim();
+        List<ValidationErrorBody.FieldError> dobErrors = new ArrayList<>();
+        if (newDob != null && !newDob.isEmpty() && !newDob.equals(oldDob) && !identifiers.fullDateOfBirth()) {
+            dobErrors.add(new ValidationErrorBody.FieldError("dateOfBirth", identifiers.yearOfBirthOnly()
+                    ? "This study records the year of birth only."
+                    : "This study does not collect the date of birth."));
+        }
+        if (body.yearOfBirth() != null && !body.yearOfBirth().equals(oldYob) && !identifiers.yearOfBirthOnly()
+                && (newDob == null || newDob.isEmpty())) {
+            dobErrors.add(new ValidationErrorBody.FieldError("yearOfBirth", identifiers.fullDateOfBirth()
+                    ? "This study records the full date of birth; correct the date instead."
+                    : "This study does not collect the year of birth."));
+        }
+        if (!dobErrors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody("Validation failed", dobErrors));
+        }
+
+        // secondaryId — the study subject's secondary label, as on the
+        // create path. null leaves unchanged; empty clears. (This used to
+        // be written into subject.unique_identifier, the Person ID.)
         if (body.secondaryId() != null) {
-            String oldSec = subj.getUniqueIdentifier() == null ? "" : subj.getUniqueIdentifier();
+            String oldSec = ss.getSecondaryLabel() == null ? "" : ss.getSecondaryLabel();
             String newSec = body.secondaryId().trim();
             if (!oldSec.equals(newSec)) {
-                subj.setUniqueIdentifier(newSec);
+                ss.setSecondaryLabel(newSec);
+                ss.setUpdater(currentUser);
+                ss.setUpdatedDate(now);
+                studySubjectDAO.update(ss);
                 writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
-                        "secondary_id", oldSec, newSec);
+                        "secondary_label", oldSec, newSec);
             }
         }
 
-        char newGenderChar = Character.toLowerCase(body.gender().charAt(0));
-        char oldGenderChar = subj.getGender();
-        if (oldGenderChar != newGenderChar) {
-            subj.setGender(newGenderChar);
+        boolean subjectChanged = false;
+        String oldGender = storedGender(subj.getGender() == '\0' ? null : String.valueOf(subj.getGender()).trim());
+        // gender: null leaves it unchanged, as for secondaryId; an empty
+        // string clears it, where the study does not require it.
+        String newGender = body.gender() == null ? oldGender : storedGender(body.gender());
+        if (!java.util.Objects.equals(oldGender, newGender)) {
             writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
-                    "gender", String.valueOf(oldGenderChar), String.valueOf(newGenderChar));
+                    "gender", oldGender == null ? "" : oldGender, newGender == null ? "" : newGender);
+            subjectChanged = true;
         }
 
-        // yearOfBirth: stored on subject.date_of_birth as Jan-1.
-        if (body.yearOfBirth() != null) {
+        java.sql.Date dateOfBirth = subj.getDateOfBirth() == null ? null
+                : new java.sql.Date(subj.getDateOfBirth().getTime());
+        boolean dobCollected = subj.isDobCollected();
+        if (identifiers.fullDateOfBirth() && newDob != null && !newDob.isEmpty() && !newDob.equals(oldDob)) {
+            dateOfBirth = java.sql.Date.valueOf(LocalDate.parse(newDob));
+            dobCollected = true;
+            writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                    "date_of_birth", oldDob == null ? "" : oldDob, newDob);
+            subjectChanged = true;
+        } else if (identifiers.yearOfBirthOnly() && body.yearOfBirth() != null
+                && !body.yearOfBirth().equals(oldYob)) {
+            // yearOfBirth: stored on subject.date_of_birth as Jan-1, which
+            // records no full date (dob_collected false, as legacy).
             int newYob = body.yearOfBirth();
-            int oldYob = subj.getDateOfBirth() != null
-                    ? new java.util.Date(subj.getDateOfBirth().getTime()).toInstant()
-                            .atZone(java.time.ZoneId.systemDefault()).getYear()
-                    : 0;
-            if (oldYob != newYob) {
-                subj.setDateOfBirth(java.sql.Date.valueOf(java.time.LocalDate.of(newYob, 1, 1)));
-                subj.setDobCollected(true);
-                writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
-                        "year_of_birth", String.valueOf(oldYob), String.valueOf(newYob));
-            }
+            dateOfBirth = java.sql.Date.valueOf(LocalDate.of(newYob, 1, 1));
+            dobCollected = false;
+            writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                    "year_of_birth", oldYob == null ? "" : String.valueOf(oldYob), String.valueOf(newYob));
+            subjectChanged = true;
         }
 
-        // Persist the subject row (single update covering all three
-        // editable columns; idempotent if no field changed).
-        subj.setUpdater(currentUser);
-        subj.setUpdatedDate(now);
-        subjectDAO.update(subj);
+        // Persist the subject row by SQL, like the create path: SubjectDAO
+        // writes NULL for any sex but m and f, which lost O and U on every
+        // edit.
+        if (subjectChanged) {
+            updateSubjectRow(subj.getId(), newGender, dateOfBirth, dobCollected, currentUser.getId());
+        }
 
         // ---- studyEye (Phase E.6 Tier 1) — lives on study_subject ----
         // 2026-06-10 — diverges from the secondaryId / yearOfBirth
@@ -1911,7 +1981,7 @@ public class SubjectsApiController {
     }
 
     private static List<ValidationErrorBody.FieldError> validateUpdateSubject(
-            UpdateSubjectRequest body) {
+            UpdateSubjectRequest body, SubjectIdentifierRules identifiers) {
         List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
         if (body == null) {
             errors.add(new ValidationErrorBody.FieldError("body", "Request body is required."));
@@ -1924,13 +1994,14 @@ public class SubjectsApiController {
                     "Secondary ID is too long (max 30 characters)."));
         }
 
-        // ---- gender: required, in {F, M, O, U} (case-insensitive) ----
-        String gender = body.gender() == null ? "" : body.gender().trim().toUpperCase();
-        if (gender.isEmpty()) {
-            errors.add(new ValidationErrorBody.FieldError("gender", "Gender is required."));
-        } else if (!gender.equals("F") && !gender.equals("M") && !gender.equals("O") && !gender.equals("U")) {
-            errors.add(new ValidationErrorBody.FieldError("gender",
-                    "'" + body.gender() + "' is not a valid gender code."));
+        // ---- gender: in {F, M, O, U} (case-insensitive); required unless
+        //      the study sets genderRequired=false ----
+        errors.addAll(validateGender(body.gender(), identifiers));
+
+        // ---- dateOfBirth: an ISO date, not in the future, when present ----
+        if (body.dateOfBirth() != null && !body.dateOfBirth().trim().isEmpty()) {
+            errors.addAll(SubjectIdentifierRules.validateDateOfBirth(body.dateOfBirth().trim(),
+                    ClinicZone.today()));
         }
 
         // ---- yearOfBirth: optional; 1900..currentYear when present ----
@@ -2021,8 +2092,9 @@ public class SubjectsApiController {
     /**
      * Phase E A3 — inverse of {@link #remove}. Restores a previously
      * soft-deleted subject and its cascade. Status flips back to
-     * {@link Status#AVAILABLE}; child rows in
-     * {@link Status#AUTO_DELETED} flip back to {@link Status#AVAILABLE}.
+     * {@link Status#AVAILABLE}; the child rows the removal auto-removed
+     * come back, event CRFs and values with the status they had
+     * ({@link #cascadeChildren}).
      *
      * <p>409 if subject is not currently in {@code DELETED} — restore
      * is the inverse of remove and not a generic "reset to available".
@@ -2054,14 +2126,13 @@ public class SubjectsApiController {
      *       via {@link #restore}.</li>
      * </ul>
      *
-     * <p><strong>Downstream enforcement deferred:</strong> the SPA's
-     * other write endpoints (subject-edit, event-edit/cancel, CRF
-     * save, query-thread, SDV verify) don't yet check
-     * {@code ss.getStatus() == LOCKED}. The lock marker is recorded
-     * here so the audit trail captures intent; a follow-up slice
-     * adds the {@code refuse-if-locked} guard to each. The SPA
-     * surfaces a locked badge so the UI nudges users away from
-     * locked subjects in the meantime.
+     * <p><strong>Downstream enforcement:</strong> subject edit, visit
+     * edit, cancel and sign refuse a locked subject
+     * ({@link SubjectLockGuard}), and so do the data-entry endpoints
+     * (CRF save, completion, reopening, rows, files, double data entry,
+     * starting a CRF, scheduling a visit, clinical flags, scan upload;
+     * {@link ClinicalRecordGuard}). SDV and query threads do not check
+     * the lock yet.
      *
      * <p>Role: DM / Admin only (same as remove).
      */
@@ -2420,18 +2491,24 @@ public class SubjectsApiController {
 
         // Flip the parent, then cascade. The legacy
         // RemoveSubjectServlet walks the chain inline; we do the
-        // same here. Each DAO.update() is its own auto-committed
-        // statement — there's no service-layer transaction wrapping
-        // them, mirroring legacy behaviour (failures partway through
-        // leave the system in a mixed state, which is consistent
-        // with what BUR-* error codes already produce).
+        // same here. A removal or restore flips the parent in the
+        // cascade's transaction, so a failure changes nothing; a lock
+        // or unlock has no cascade.
+        // Read before anything changes: on restore, the event CRFs a removal
+        // of their CRF or version holds stay removed; that restore brings
+        // them back, at the status they had (CrfLifecycleCascade).
+        Set<Integer> held = Status.AVAILABLE.equals(cascadeChildStatus)
+                ? CrfLifecycleCascade.heldByRemoval(dataSource, new EventCRFDAO(dataSource)
+                        .findAllByStudySubject(ss.getId()).stream().map(EventCRFBean::getId).toList())
+                : Set.of();
+
         ss.setStatus(newSubjectStatus);
         ss.setUpdater(currentUser);
         ss.setUpdatedDate(new java.util.Date());
-        studySubjectDAO.update(ss);
-
         if (cascadeChildStatus != null) {
-            cascadeChildren(ss, currentUser, cascadeChildStatus);
+            cascadeChildren(ss, currentUser, cascadeChildStatus, held);
+        } else {
+            studySubjectDAO.update(ss);
         }
 
         LOG.info("Subject lifecycle {}: study_subject {} (label={}) by user={} role={}; "
@@ -2457,45 +2534,93 @@ public class SubjectsApiController {
     }
 
     /**
-     * Cascade the StudySubject's status change to its child rows
-     * (study_events → event_crfs → item_data). Mirrors the legacy
-     * {@code RemoveSubjectServlet.processRequest} loop verbatim:
-     * skip rows already in {@code DELETED} (those were removed
-     * outside this cascade and shouldn't be touched).
+     * Cascade the study subject's removal or restore to its visits, event
+     * CRFs and item data, as legacy {@code RemoveStudySubjectServlet} and
+     * {@code RestoreStudySubjectServlet} do: a removal auto-removes each
+     * one not removed on its own, and a restore brings back what a removal
+     * auto-removed.
+     *
+     * <p>Where it differs from those servlets:
+     * <ul>
+     *   <li>An event CRF or value records the status it had and gets it
+     *       back, as the legacy site removal and restore do
+     *       ({@link EventDataStatusCascade}). The subject servlets bring it
+     *       back as available, which unlocks a locked CRF and unsigns a
+     *       signed one. A row already auto-removed records that, so the
+     *       restore leaves it removed. A CRF the legacy servlet removed, or
+     *       one a legacy path changed since, has no record that holds and
+     *       comes back available, as with the servlet.</li>
+     *   <li>Only auto-removed rows come back, and a visit only when its
+     *       event definition is not removed. This cascade used to make
+     *       every row that was not removed available.</li>
+     *   <li>A restore leaves removed the event CRFs in {@code held}, which
+     *       a removal of their CRF or CRF version holds; that restore
+     *       brings them back ({@link CrfLifecycleCascade}).</li>
+     *   <li>Status-only SQL in one transaction, the subject's own status
+     *       included: {@code ItemDataDAO.update} clears a value's
+     *       provenance, and {@code StudyEventDAO.update} fails on a visit
+     *       without a start date.</li>
+     * </ul>
      */
     private void cascadeChildren(StudySubjectBean ss, UserAccountBean currentUser,
-                                 Status cascadeChildStatus) {
-        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
-        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDAO = new ItemDataDAO(dataSource);
-        java.util.Date now = new java.util.Date();
-
-        java.util.ArrayList<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
-        for (StudyEventBean event : events) {
-            if (event.getStatus() != null && event.getStatus().equals(Status.DELETED)) continue;
-            event.setStatus(cascadeChildStatus);
-            event.setUpdater(currentUser);
-            event.setUpdatedDate(now);
-            studyEventDAO.update(event);
-
-            java.util.ArrayList<EventCRFBean> eventCrfs = eventCRFDAO.findAllByStudyEvent(event);
-            for (EventCRFBean ec : eventCrfs) {
-                if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
-                ec.setStatus(cascadeChildStatus);
-                ec.setUpdater(currentUser);
-                ec.setUpdatedDate(now);
-                eventCRFDAO.update(ec);
-
-                java.util.ArrayList<ItemDataBean> items = itemDataDAO.findAllByEventCRFId(ec.getId());
-                for (ItemDataBean it : items) {
-                    if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
-                    it.setStatus(cascadeChildStatus);
-                    it.setUpdater(currentUser);
-                    it.setUpdatedDate(now);
-                    itemDataDAO.update(it);
+                                 Status cascadeChildStatus, Set<Integer> held) {
+        boolean remove = Status.AUTO_DELETED.equals(cascadeChildStatus);
+        try (Connection c = dataSource.getConnection()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                setSubjectStatus(c, ss, currentUser);
+                if (remove) {
+                    autoRemoveChildren(c, ss.getId(), currentUser.getId());
+                } else {
+                    restoreChildren(c, ss.getId(), currentUser.getId(), held);
                 }
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
             }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not " + (remove ? "remove" : "restore")
+                    + " the visits and data of study subject " + ss.getId(), e);
         }
+    }
+
+    private static void autoRemoveChildren(Connection c, int studySubjectId, int userId) throws SQLException {
+        List<Integer> visits = EventDataStatusCascade.ids(c,
+                "UPDATE study_event SET status_id = 7, date_updated = now(), update_id = ? "
+                        + "WHERE study_subject_id = ? AND " + EventDataStatusCascade.LIVE
+                        + " RETURNING study_event_id",
+                userId, studySubjectId);
+        EventDataStatusCascade.autoRemove(c, visits,
+                EventDataStatusCascade.Remover.STUDY_SUBJECT, studySubjectId, userId);
+    }
+
+    /** The subject's status, updater and update date, on the cascade's connection. */
+    private static void setSubjectStatus(Connection c, StudySubjectBean ss, UserAccountBean currentUser)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("UPDATE study_subject SET status_id = ?, "
+                + "update_id = ?, date_updated = now() WHERE study_subject_id = ?")) {
+            ps.setInt(1, ss.getStatus().getId());
+            ps.setInt(2, currentUser.getId());
+            ps.setInt(3, ss.getId());
+            ps.executeUpdate();
+        }
+    }
+
+    private static void restoreChildren(Connection c, int studySubjectId, int userId, Set<Integer> held)
+            throws SQLException {
+        // A visit of an event definition removed on its own stays with the definition.
+        List<Integer> visits = EventDataStatusCascade.ids(c,
+                "UPDATE study_event SET status_id = 1, date_updated = now(), update_id = ? "
+                        + "WHERE study_subject_id = ? AND status_id = 7 AND study_event_definition_id IN "
+                        + "(SELECT study_event_definition_id FROM study_event_definition WHERE "
+                        + EventDataStatusCascade.LIVE + ") RETURNING study_event_id",
+                userId, studySubjectId);
+        EventDataStatusCascade.restore(c, visits,
+                EventDataStatusCascade.Remover.STUDY_SUBJECT, studySubjectId, userId, held);
     }
 
     /**
@@ -2556,6 +2681,8 @@ public class SubjectsApiController {
 
                 // ---- (2) event_crf — flip every CRF row for the subject ----
                 // Path: study_event.study_subject_id → event_crf.study_event_id.
+                // Removed and locked CRFs keep their status, as when a visit
+                // is signed: a removed CRF signed here was no longer removed.
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE event_crf "
                                 + "   SET status_id = ?, "
@@ -2566,7 +2693,8 @@ public class SubjectsApiController {
                                 + "       update_id = ? "
                                 + " WHERE study_event_id IN ("
                                 + "         SELECT study_event_id FROM study_event WHERE study_subject_id = ?"
-                                + "       )")) {
+                                + "       )"
+                                + "   AND status_id NOT IN (5, 6, 7)")) { // skip deleted / locked / auto-deleted
                     ps.setInt(1, Status.SIGNED.getId());
                     ps.setInt(2, userId);
                     ps.setInt(3, userId);
@@ -2627,14 +2755,44 @@ public class SubjectsApiController {
     }
 
     /**
+     * The sex: one of {@code F | M | O | U} (case-insensitive); blank only
+     * where the study does not require it ({@code genderRequired=false}).
+     */
+    private static List<ValidationErrorBody.FieldError> validateGender(String value,
+                                                                       SubjectIdentifierRules identifiers) {
+        String gender = value == null ? "" : value.trim().toUpperCase();
+        if (gender.isEmpty()) {
+            return identifiers.genderRequired()
+                    ? List.of(new ValidationErrorBody.FieldError("gender", "Gender is required."))
+                    : List.of();
+        }
+        if (!gender.equals("F") && !gender.equals("M") && !gender.equals("O") && !gender.equals("U")) {
+            return List.of(new ValidationErrorBody.FieldError("gender",
+                    "'" + value + "' is not a valid gender code."));
+        }
+        return List.of();
+    }
+
+    /** The {@code subject.gender} code of a validated value: lower case, or null when blank. */
+    private static String storedGender(String value) {
+        String gender = value == null ? "" : value.trim();
+        return gender.isEmpty() ? null : String.valueOf(Character.toLowerCase(gender.charAt(0)));
+    }
+
+    /**
      * Server-side validation for {@link AddSubjectRequest}.
      *
      * <p>Returns ALL failing rules at once (not first-fail) so the SPA
      * can surface every issue in a single submit cycle. Order in the
      * returned list mirrors the request body for predictable rendering.
+     *
+     * <p>The Person ID, the date or year of birth and the sex are required,
+     * accepted or refused as the study's parameters say
+     * ({@link SubjectIdentifierRules}).
      */
     private static List<ValidationErrorBody.FieldError> validateAddSubject(
-            AddSubjectRequest body, StudyBean currentStudy, StudySubjectDAO studySubjectDAO) {
+            AddSubjectRequest body, StudyBean currentStudy, StudySubjectDAO studySubjectDAO,
+            SubjectIdentifierRules identifiers) {
         List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
 
         // ---- id: required, trimmed, ≤30 chars, unique within study ----
@@ -2662,16 +2820,15 @@ public class SubjectsApiController {
             // No PHI server-side check — SPA's soft check remains.
         }
 
-        // ---- gender: required, in {F, M, O, U} (case-insensitive) ----
-        String gender = body.gender() == null ? "" : body.gender().trim().toUpperCase();
-        if (gender.isEmpty()) {
-            errors.add(new ValidationErrorBody.FieldError("gender", "Gender is required."));
-        } else if (!gender.equals("F") && !gender.equals("M") && !gender.equals("O") && !gender.equals("U")) {
-            errors.add(new ValidationErrorBody.FieldError("gender",
-                    "'" + body.gender() + "' is not a valid gender code."));
-        }
+        // ---- gender: in {F, M, O, U} (case-insensitive); required unless
+        //      the study sets genderRequired=false ----
+        errors.addAll(validateGender(body.gender(), identifiers));
 
-        // ---- yearOfBirth: optional; if present 1900..currentYear ----
+        // ---- personId, dateOfBirth / yearOfBirth: per the study parameters ----
+        errors.addAll(identifiers.validateNewSubject(body.personId(), body.dateOfBirth(),
+                body.yearOfBirth(), ClinicZone.today()));
+
+        // ---- yearOfBirth: if present 1900..currentYear ----
         if (body.yearOfBirth() != null) {
             int yob = body.yearOfBirth();
             int thisYear = ClinicZone.today().getYear();
@@ -2729,6 +2886,37 @@ public class SubjectsApiController {
     }
 
     /**
+     * Update the demographic columns of a {@code subject} row by SQL, for
+     * the same reason {@link #insertSubjectRow} inserts by SQL:
+     * {@link SubjectDAO#update} writes NULL for any sex but {@code m} and
+     * {@code f}. The Person ID and the status are left as they are.
+     */
+    private void updateSubjectRow(int subjectId, String gender, java.sql.Date dob, boolean dobCollected,
+                                  int updaterId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE subject SET gender = ?, date_of_birth = ?, dob_collected = ?, "
+                             + "date_updated = NOW(), update_id = ? WHERE subject_id = ?")) {
+            if (gender == null) {
+                ps.setNull(1, Types.CHAR);
+            } else {
+                ps.setString(1, gender);
+            }
+            if (dob == null) {
+                ps.setNull(2, Types.DATE);
+            } else {
+                ps.setDate(2, dob);
+            }
+            ps.setBoolean(3, dobCollected);
+            ps.setInt(4, updaterId);
+            ps.setInt(5, subjectId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not update subject " + subjectId, e);
+        }
+    }
+
+    /**
      * Insert a {@code subject} row via direct SQL.
      *
      * <p>{@link SubjectDAO#create} is unsuitable here because its
@@ -2742,7 +2930,7 @@ public class SubjectsApiController {
      * auto-incremented PK, matching the {@code SubjectDAO.create}
      * convention of {@code getLatestPK} after the insert.
      */
-    private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId,
+    private int insertSubjectRow(String gender, java.sql.Date dob, boolean dobCollected, int ownerId,
                                  String personId, String firstName, String lastName)
             throws SQLException {
         String sql = "INSERT INTO subject (status_id, date_of_birth, gender, unique_identifier, "
@@ -2756,7 +2944,12 @@ public class SubjectsApiController {
             } else {
                 ps.setDate(2, dob);
             }
-            ps.setString(3, String.valueOf(gender));
+            // Null only where the study does not require the sex.
+            if (gender == null) {
+                ps.setNull(3, Types.CHAR);
+            } else {
+                ps.setString(3, gender);
+            }
             // Phase E.6 subject-lifecycle — Person-ID stored in
             // subject.unique_identifier when provided. The legacy
             // FindSubjectsServlet keys re-enrol lookups off this
@@ -2950,8 +3143,17 @@ public class SubjectsApiController {
                 mapStudySubjectStatus(ss.getStatus()),
                 groupAssignments,
                 eyeTransitions,
-                /* studySubjectId — Wave 2A */ ss.getId()
+                /* studySubjectId — Wave 2A */ ss.getId(),
+                fullDateOfBirth(subj)
         );
+    }
+
+    /** The recorded full date of birth as ISO, or null when only the year (or nothing) was recorded. */
+    private static String fullDateOfBirth(SubjectBean subj) {
+        if (subj == null || !subj.isDobCollected() || subj.getDateOfBirth() == null) {
+            return null;
+        }
+        return new java.sql.Date(subj.getDateOfBirth().getTime()).toLocalDate().toString();
     }
 
     /**
@@ -3566,7 +3768,9 @@ public class SubjectsApiController {
 
     /** Extract YoB if the study collects DoB and the subject has one. */
     private static Integer extractYear(SubjectBean subj) {
-        if (subj == null || !subj.isDobCollected() || subj.getDateOfBirth() == null) return null;
+        // A stored date carries the year whether the full date was recorded
+        // (dob_collected) or only the year, which legacy stores as 1 January.
+        if (subj == null || subj.getDateOfBirth() == null) return null;
         // SubjectDAO returns java.sql.Date for the date_of_birth column, and
         // java.sql.Date#toInstant() throws UnsupportedOperationException by
         // design (the sql Date has no time component). Convert via epoch ms.

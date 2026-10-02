@@ -17,6 +17,7 @@ import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -869,9 +870,11 @@ public class XsltTransformJob extends QuartzJobBean {
     }
 
     // Utility method to format upto 3 decimals.
-    private double setFormat(double number) {
+    // Package-private so XsltTransformJobRunTimeTest can run it under another locale.
+    double setFormat(double number) {
         if(number <1) number=1.0;
-        DecimalFormat df = new DecimalFormat("#.#");
+        // The text is parsed back below, so it must not use the default locale's decimal comma.
+        DecimalFormat df = new DecimalFormat("#.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
         logger.info("Number is" + Double.parseDouble(df.format(number)));
         logger.info("Number is" + (float) Double.parseDouble(df.format(number)));
         return  Double.valueOf(df.format(number));

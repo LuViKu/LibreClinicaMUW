@@ -124,7 +124,8 @@ def pg_container():
         pytest.skip("testcontainers or docker socket unavailable")
     from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:14-alpine") as pg:
+    # The major version the dev stack's db service runs (compose.yaml).
+    with PostgresContainer("postgres:17-alpine") as pg:
         yield pg
 
 

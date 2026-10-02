@@ -15,10 +15,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  * {@code POST /pages/api/v1/sdv/unverify} endpoint.
  *
  * <p>Un-verification rolls back a previously-stamped Monitor SDV.
- * In legacy {@code handleSDVRemove} the role guard was DM /
- * Monitor / Admin only — Investigators and CRC roles cannot undo
- * a Monitor's verification stamp without escalating to a DM (per
- * GCP separation of duties).
+ * Legacy {@code handleSDVRemove} admits the director, coordinator and
+ * monitor ({@code SDVController.mayProceed}). This gate is deliberately
+ * narrower: Investigators and CRC roles cannot undo a Monitor's
+ * verification stamp without escalating to a DM (per GCP separation
+ * of duties). See {@link ClinicalWriteAuthorization} for the matrix.
  *
  * <p>Permitted:
  * <ul>

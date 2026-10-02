@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.TermType;
@@ -48,6 +50,12 @@ public class CreateFiltersThreeServlet extends SecureController {
 	Locale locale;
 
     // < ResourceBundlerestext,resword,respage,resexception;
+
+    /** Saving the new filter (action=validate) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"validate".equalsIgnoreCase(request.getParameter("action"));
+    }
 
     @Override
     public void processRequest() throws Exception {

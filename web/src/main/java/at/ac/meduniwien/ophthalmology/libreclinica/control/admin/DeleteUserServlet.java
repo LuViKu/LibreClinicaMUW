@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityAction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
@@ -34,13 +36,8 @@ public class DeleteUserServlet extends SecureController {
     // < ResourceBundle restext;
     Locale locale;
 
-    public static final String PATH = "DeleteUser";
     public static final String ARG_USERID = "userId";
     public static final String ARG_ACTION = "action";
-
-    public static String getLink(UserAccountBean u, EntityAction action) {
-        return PATH + "?" + ARG_USERID + "=" + u.getId() + "&" + "&" + ARG_ACTION + "=" + action.getId();
-    }
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
@@ -53,6 +50,12 @@ public class DeleteUserServlet extends SecureController {
             addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
             throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("you_may_not_perform_administrative_functions"), "1");
         }
+    }
+
+    /** Removes or restores a user (a restore sets a new password): POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     @Override

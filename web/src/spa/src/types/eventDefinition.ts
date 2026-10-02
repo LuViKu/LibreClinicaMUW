@@ -41,6 +41,19 @@ export interface UpdateEventDefinitionInput {
 }
 
 /**
+ * What removing an event definition would remove with it
+ * (`GET …/event-definitions/{oid}/removal-impact`). Every row counted is
+ * marked auto-removed and comes back when the definition is restored.
+ */
+export interface EventDefinitionRemovalImpact {
+  crfAssignments: number
+  visits: number
+  subjects: number
+  eventCrfs: number
+  itemValues: number
+}
+
+/**
  * DR-034 — one row of a visit definition's imaging plan: a catalogue modality
  * this visit expects, whether it is required, which eye(s), and the inference
  * tasks a file of that modality is fanned out to once filed.

@@ -10,9 +10,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 
@@ -24,19 +21,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfFlagDao;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfFlagWorkflowDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.IdtViewDao;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataFlagDao;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataFlagWorkflowDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlag;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlagWorkflow;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.IdtView;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlag;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlagWorkflow;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.slf4j.Logger;
@@ -48,7 +36,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -70,18 +57,6 @@ public class IdtViewController {
 
     @Autowired
     IdtViewDao idtViewDao;
-
-    @Autowired
-    ItemDataFlagDao itemDataFlagDao;
-
-    @Autowired
-    EventCrfFlagWorkflowDao eventCrfFlagWorkflowDao;
-
-    @Autowired
-    ItemDataFlagWorkflowDao itemDataFlagWorkflowDao;
-
-    @Autowired
-    EventCrfFlagDao eventCrfFlagDao;
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     StudyDAO sdao;
@@ -178,106 +153,6 @@ public class IdtViewController {
         return false;
     }
 
-    @RequestMapping(value = "/", method = RequestMethod.POST)
-    public ResponseEntity<?> postSDVedItemDataAndEventCrfWorkflow(@RequestBody ArrayList<HashMap<String, String>> maps) throws Exception {
-        int tagId = 1;
-        UserAccount userAccount = null;
-        HashSet<String> listOfEventCrfPaths = new HashSet<>();
-        for (HashMap<String, String> map : maps) {
-            String eventCrfPath = map.get("ssOid") + "." + map.get("sedOid") + "." + map.get("eventOrdinal") + "." + map.get("crfOid");
-
-            String itemDataPath = eventCrfPath + "." + map.get("groupOid") + "." + map.get("groupOrdinal") + "." + map.get("itemOid");
-            String workflowStatus = (String) map.get("itemDataWorkflowStatus");
-            listOfEventCrfPaths.add(eventCrfPath);
-            saveOrUpdateItemDataFlag(tagId, itemDataPath, workflowStatus);
-        }
-
-        for (String eventCrfPath : listOfEventCrfPaths) {
-            saveOrUpdateEventCrfFlag(tagId, eventCrfPath, userAccount);
-        }
-
-        return new ResponseEntity<>(HttpStatus.OK);
-    }
-
-    public void saveOrUpdateItemDataFlag(int tagId, String itemDataPath, String workflowStatus) {
-        ItemDataFlag itemDataFlag = null;
-        ItemDataFlagWorkflow itemDataFlagWorkflow = null;
-        itemDataFlag = getItemDataFlagDao().findByItemDataPath(tagId, itemDataPath);
-
-        if (itemDataFlag != null) {
-            itemDataFlagWorkflow = getItemDataFlagWorkflowDao().findById(itemDataFlag.getItemDataFlagWorkflow().getId());
-            itemDataFlagWorkflow.setDateUpdated(new Date());
-            itemDataFlagWorkflow.setWorkflowStatus(workflowStatus);
-            // itemDataFlagWorkflow.setUpdateId(updateId);
-
-            getItemDataFlagWorkflowDao().saveOrUpdate(itemDataFlagWorkflow);
-
-            itemDataFlag.setDateUpdated(new Date());
-            // itemDataFlag.setUpdateId(updateId);; // add user account
-            getItemDataFlagDao().saveOrUpdate(itemDataFlag);
-
-        } else {
-            itemDataFlagWorkflow = new ItemDataFlagWorkflow();
-            itemDataFlagWorkflow.setDateCreated(new Date());
-            // itemDataFlagWorkflow.setUserAccount(userAccount);
-            itemDataFlagWorkflow.setWorkflowId("abcd");
-            itemDataFlagWorkflow.setWorkflowStatus(workflowStatus);
-            ItemDataFlagWorkflow idfw = getItemDataFlagWorkflowDao().saveOrUpdate(itemDataFlagWorkflow);
-
-            itemDataFlag = new ItemDataFlag();
-            itemDataFlag.setPath(itemDataPath);
-            itemDataFlag.setDateCreated(new Date());
-            itemDataFlag.setUserAccount(null); // add user account
-            itemDataFlag.setTagId(tagId);
-            itemDataFlag.setItemDataFlagWorkflow(idfw);
-            getItemDataFlagDao().saveOrUpdate(itemDataFlag);
-
-        }
-
-    }
-
-    public void saveOrUpdateEventCrfFlag(int tagId, String eventCrfPath, UserAccount ua) {
-        EventCrfFlag eventCrfFlag = null;
-        EventCrfFlagWorkflow eventCrfFlagWorkflow = null;
-        ArrayList<ItemDataFlag> itemDataFlags = (ArrayList<ItemDataFlag>) getItemDataFlagDao().findAllByEventCrfPath(tagId, eventCrfPath);
-        eventCrfFlag = getEventCrfFlagDao().findByEventCrfPath(tagId, eventCrfPath);
-
-        if (itemDataFlags.size() != 0) {
-
-            if (eventCrfFlag != null) {
-                eventCrfFlagWorkflow = getEventCrfFlagWorkflowDao().findById(eventCrfFlag.getEventCrfFlagWorkflow().getId());
-                eventCrfFlagWorkflow.setDateUpdated(new Date());
-
-                // itemDataFlagWorkflow.setUpdateId(updateId);
-
-                getEventCrfFlagWorkflowDao().saveOrUpdate(eventCrfFlagWorkflow);
-
-                // eventCrfFlag.setUpdateId(ua.getUpdateId());
-                eventCrfFlag.setDateUpdated(new Date());
-                getEventCrfFlagDao().saveOrUpdate(eventCrfFlag);
-
-            } else {
-
-                eventCrfFlagWorkflow = new EventCrfFlagWorkflow();
-                eventCrfFlagWorkflow.setDateCreated(new Date());
-                // eventCrfFlagWorkflow.setUserAccount(userAccount);
-                eventCrfFlagWorkflow.setWorkflowId("abcd");
-                EventCrfFlagWorkflow ecfw = getEventCrfFlagWorkflowDao().saveOrUpdate(eventCrfFlagWorkflow);
-
-                EventCrfFlag eventCrfFg = new EventCrfFlag();
-                eventCrfFg.setPath(eventCrfPath);
-                eventCrfFg.setTagId(1);
-                eventCrfFg.setDateCreated(new Date());
-                eventCrfFg.setUserAccount(ua);
-                eventCrfFg.setEventCrfFlagWorkflow(ecfw);
-
-                getEventCrfFlagDao().saveOrUpdate(eventCrfFg);
-            }
-
-        }
-
-    }
-
     private StudyBean getStudy(String oid) {
         sdao = new StudyDAO(dataSource);
         StudyBean studyBean = (StudyBean) sdao.findByOid(oid);
@@ -294,22 +169,6 @@ public class IdtViewController {
 
     public IdtViewDao getIdtViewDao() {
         return idtViewDao;
-    }
-
-    public ItemDataFlagDao getItemDataFlagDao() {
-        return itemDataFlagDao;
-    }
-
-    public EventCrfFlagDao getEventCrfFlagDao() {
-        return eventCrfFlagDao;
-    }
-
-    public EventCrfFlagWorkflowDao getEventCrfFlagWorkflowDao() {
-        return eventCrfFlagWorkflowDao;
-    }
-
-    public ItemDataFlagWorkflowDao getItemDataFlagWorkflowDao() {
-        return itemDataFlagWorkflowDao;
     }
 
 }

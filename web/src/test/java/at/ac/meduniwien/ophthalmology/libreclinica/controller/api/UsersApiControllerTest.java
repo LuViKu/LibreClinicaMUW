@@ -10,7 +10,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -681,24 +680,5 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
                 // shape.
                 .andExpect(jsonPath("$.errors[?(@.field == 'role' && @.message == 'Role is required')]")
                         .doesNotExist());
-    }
-
-    @Test
-    void revokeRoleReturns401WhenAnonymous() throws Exception {
-        mockMvcWith().perform(delete("/api/v1/users/somebody/roles/S_DEFAULTS1")
-                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void revokeRoleReturns403WhenNonSysadminAttempts() throws Exception {
-        mockMvcWith().perform(delete("/api/v1/users/somebody/roles/S_DEFAULTS1")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
-                                "Default Study",
-                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message")
-                        .value(containsString("sysadmin only")));
     }
 }

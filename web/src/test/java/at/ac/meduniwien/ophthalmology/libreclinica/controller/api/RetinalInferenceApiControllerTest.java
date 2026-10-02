@@ -53,6 +53,16 @@ class RetinalInferenceApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(RetinalJobStatusBroadcaster.class)));
     }
 
+    /**
+     * A session whose role may enter data (Investigator). The role check
+     * runs before the request is validated, so a validation test needs one.
+     */
+    private org.springframework.mock.web.MockHttpSession dataEntrySession() {
+        return (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithRole(
+                2, "physician", 1, "S_DEFAULTS1", "Default Study",
+                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1);
+    }
+
     private static MockMultipartFile sampleE2e() {
         return new MockMultipartFile("file", "scan.e2e",
                 "application/octet-stream", new byte[]{0x01, 0x02, 0x03});
@@ -86,8 +96,7 @@ class RetinalInferenceApiControllerTest extends AbstractApiControllerTest {
                 .file(sampleE2e())
                 .param("task", "not-a-task")
                 .param("laterality", "OD")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("Unsupported task")));
     }
@@ -98,8 +107,7 @@ class RetinalInferenceApiControllerTest extends AbstractApiControllerTest {
                 .file(sampleE2e())
                 .param("task", "fluid")
                 .param("laterality", "OU")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("laterality")));
     }
@@ -111,8 +119,7 @@ class RetinalInferenceApiControllerTest extends AbstractApiControllerTest {
                 .param("task", "fluid")
                 .param("laterality", "OD")
                 .param("scanIndex", "-1")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("scanIndex")));
     }

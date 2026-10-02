@@ -34,10 +34,12 @@ import java.util.Map;
  *   <li>{@code values} — single-row items keyed by item OID. Required (controller
  *       returns 400 when null). Arrays land for {@code select-multi} items; the
  *       controller comma-joins them at write time.</li>
- *   <li>{@code reasons} — optional pre-completion (no DN written). After a CRF's
- *       {@code date_completed} is set every changed item OID in {@code values}
- *       MUST appear in {@code reasons} or the controller returns 400 with
- *       {@code missingReasonItemOids: [oid…]} so the SPA can re-arm the
+ *   <li>{@code reasons} — ignored until the CRF has been completed once (no DN
+ *       written). From then on, reopened or not, and when the study sets
+ *       {@code adminForcedReasonForChange}, every changed value MUST appear in
+ *       {@code reasons} — keyed by item OID, or by {@code OID[row]} for a value
+ *       in a row of {@code groups} — or the controller returns 400 with
+ *       {@code missingReasonItemOids: [key…]} so the SPA can re-arm the
  *       {@code ReasonForChangeModal}. Each entry drives one {@code discrepancy_note}
  *       row of {@code type_id = 4} ({@code REASON_FOR_CHANGE}) threaded under any
  *       prior RFC parent for the same {@code item_data} (see
@@ -57,8 +59,9 @@ public record SaveItemsRequest(
         @Schema(description = "Item OID → new value. Required.",
                 example = "{\"I_HEIGHT_CM\": 172, \"I_WEIGHT_KG\": 70.5}")
         Map<String, Object> values,
-        @Schema(description = "Item OID → reason-for-change text. "
-                + "Required for every changed item once the CRF is complete.",
+        @Schema(description = "Item OID, or OID[row] for a repeating-group value, → "
+                + "reason-for-change text. Required for every changed value once the CRF "
+                + "has been completed, when the study forces a reason for change.",
                 example = "{\"I_HEIGHT_CM\": \"Correcting transcription error\"}")
         Map<String, String> reasons,
         @Schema(description = "Repeating-group row payloads (E.6 crf-data-types).")

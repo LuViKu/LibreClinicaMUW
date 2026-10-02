@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
 import java.util.ArrayList;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.NewCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
@@ -58,6 +60,12 @@ public class DeleteCRFVersionServlet extends SecureController {
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.CRF_LIST_SERVLET, "not admin", "1");
+    }
+
+    /** GET shows the confirmation; deleting the CRF version takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override

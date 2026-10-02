@@ -52,6 +52,7 @@
 
 			jQuery.ajax({
 				'url' : 'SendTestEmail',
+				'type' : 'POST', // it sends a mail, so the servlet refuses GET
 			})
 			.done(function(data) {
 				alert(

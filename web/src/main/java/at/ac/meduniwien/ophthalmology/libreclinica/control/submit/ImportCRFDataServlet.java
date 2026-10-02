@@ -114,6 +114,7 @@ public class ImportCRFDataServlet extends SecureController {
                 logger.info("The filePath in datainfo.properties is invalid " + dir);
                 addPageMessage(respage.getString("filepath_you_defined_not_seem_valid"));
                 forwardPage(Page.IMPORT_CRF_DATA);
+                return;
             }
             // All the uploaded files will be saved in filePath/crf/original/
             String theDir = dir + "crf" + File.separator + "original" + File.separator;
@@ -132,6 +133,7 @@ public class ImportCRFDataServlet extends SecureController {
             }
             if (f == null) {
                 forwardPage(Page.IMPORT_CRF_DATA);
+                return;
             }
 
             // validation steps
@@ -230,6 +232,7 @@ public class ImportCRFDataServlet extends SecureController {
                     // you can't really wait to forward because then you throw
                     // NPEs
                     // in the next few parts of the code
+                    return;
                 }
             }
             // 2.a. is the study the same one that the user is in right now?
@@ -252,6 +255,7 @@ public class ImportCRFDataServlet extends SecureController {
                 if (errors.size() > 0) {
                     // fail = true;
                     forwardPage(Page.IMPORT_CRF_DATA);
+                    return;
                 } else {
                     addPageMessage(respage.getString("passed_study_check"));
                     addPageMessage(respage.getString("passed_oid_metadata_check"));

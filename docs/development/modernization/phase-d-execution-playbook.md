@@ -468,7 +468,7 @@ Status as of 2026-05-30 evening closure (lc-develop @ `63ebc5009`):
 | **D.5** | ✅ shipped | `27478b01f` | audit_user_login row code 6 on success, code 7 on reject (verified via psql) |
 | **D.6** | ✅ shipped | `dbef21441` + `b786c68c0` | Login JSP renders SSO button when flag on. **Side-fix**: retired pre-existing GET /pages/login/login HTTP 500 (duplicate MappingJackson2HttpMessageConverter from Phase C.15 / WebMvcAutoConfiguration) |
 | **D.7** | ✅ shipped | `eaaa9bcd3` | Apache + mod_shib sidecar scaffold + SAMLtest.id default config + cookbook. Operator runs the SP-metadata upload step. |
-| **D.8** | 🟡 partial | (folded into D.7 README) | 6 reverse-proxy patterns sketched in [docker/sso/README.md](../../../docker/sso/README.md); a dedicated full-config cookbook in `docs/development/sso-deployment-guide.md` remains open |
+| **D.8** | ✅ done | `bc3914fc8` | Full cookbook in [sso-deployment-guide.md](../sso-deployment-guide.md) (Shibboleth, OIDC, oauth2-proxy, AWS ALB, Cloudflare Access, no-SSO). Status corrected 2026-09-30. |
 | **D.9** | ✅ shipped | `4f7fbb52d` | 2FA delegated to IdP for SSO-bound users; ssoProperties bean ID stabilised for XML refs |
 | **D.10** | ✅ shipped | `63ebc5009` | /sso/reauth controller emits 302 to configurable proxy re-challenge URL; flag-default-off keeps Sign Subject on local password |
 | **D.11** | ✅ shipped (this commit) | TBD | This closure block |

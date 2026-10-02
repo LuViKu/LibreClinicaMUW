@@ -110,7 +110,6 @@ public class InitUpdateEventDefinitionServlet extends SecureController {
 
         StudyEventDefinitionDAO sdao = new StudyEventDefinitionDAO(sm.getDataSource());
         String idString = request.getParameter("id");
-        logger.info("definition id: " + idString);
         // A non-numeric id is as unusable as a missing one, so it takes the
         // same branch instead of raising a NumberFormatException.
         int defId = 0;
@@ -130,7 +129,6 @@ public class InitUpdateEventDefinitionServlet extends SecureController {
             StudyEventDefinitionBean sed = (StudyEventDefinitionBean) sdao.findByPK(defId);
             StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-              if (participateFormStatus.equals("enabled")) 	baseUrl();
             request.setAttribute("participateFormStatus",participateFormStatus );
 
             if (currentStudy.getId() != sed.getStudyId()) {

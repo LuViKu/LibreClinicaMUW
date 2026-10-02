@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        R1.1 (2026-09-30): the login history reads audit_user_login newest
+        first, one page at a time, optionally narrowed to a date range
+        (LoginHistoryApiController).
+
+        The table has had no index beyond its primary key since 2009. Every
+        login, logout and failed login adds a row, including failed logins
+        under names that are no account, so it grows with login traffic
+        rather than with the user list. Without an index every page sorts
+        the whole table.
+
+        (login_attempt_date DESC, id DESC) is the page order itself, so a
+        page is a range scan of this index, and a date range narrows the
+        same scan. The user-name filter is a contains-match, which no b-tree
+        serves; it filters the rows the date order already bounds.
+    -->
+    <changeSet id="2026-09-30-audit-user-login-attempt-date-idx"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM pg_indexes
+                WHERE schemaname = current_schema()
+                  AND indexname = 'audit_user_login_attempt_date_idx';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Index audit_user_login in the login history's page order: newest
+            attempt first, the id breaking ties.
+        </comment>
+        <sql>
+            CREATE INDEX IF NOT EXISTS audit_user_login_attempt_date_idx
+                ON audit_user_login (login_attempt_date DESC, id DESC)
+        </sql>
+        <rollback>
+            <sql>
+                DROP INDEX IF EXISTS audit_user_login_attempt_date_idx
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

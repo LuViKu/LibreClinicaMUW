@@ -4,6 +4,7 @@ import { apiDelete as _apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkE
 import type {
   CreateEventDefinitionInput,
   EventDefinition,
+  EventDefinitionRemovalImpact,
   ImagingPlanCatchUp,
   ImagingPlanEntry,
   ImagingPlanEntryWrite,
@@ -100,6 +101,21 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     } catch (e) {
       handleNonValidationError(e, 'disable')
       return false
+    }
+  }
+
+  /**
+   * What a disable would remove with the definition, for the confirm
+   * dialog. Null when it could not be counted; the dialog then names the
+   * cascade without numbers.
+   */
+  async function removalImpact(studyOid: string, sedOid: string): Promise<EventDefinitionRemovalImpact | null> {
+    try {
+      return await apiGet<EventDefinitionRemovalImpact>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${encodeURIComponent(sedOid)}/removal-impact`,
+      )
+    } catch {
+      return null
     }
   }
 
@@ -372,6 +388,7 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     create,
     update,
     disable,
+    removalImpact,
     restore,
     lock,
     unlock,

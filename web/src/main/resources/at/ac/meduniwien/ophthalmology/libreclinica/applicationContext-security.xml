@@ -70,23 +70,46 @@
         <property name="ssoProperties" ref="ssoProperties"/>
     </bean>
     
-    <bean id="successHandler" class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >
-        <property name="defaultTargetUrl" value="/MainMenu" /> <!-- which is the default value -->
+    <!-- The SPA's login (Accept: application/json) is answered here: 204 on
+         success, 401 with the reason as JSON on failure. Every other login
+         is passed to the legacy handler inside, which redirects as before. -->
+    <bean id="successHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SpaLoginSuccessHandler">
+        <constructor-arg>
+            <bean class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >
+                <property name="defaultTargetUrl" value="/MainMenu" /> <!-- which is the default value -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="dataSource"/>
     </bean>
     
-    <bean id="failureHandler" class="org.springframework.security.web.authentication.ExceptionMappingAuthenticationFailureHandler" >
-        <property name="defaultFailureUrl" value="/pages/login/login?action=errorLogin" />
-        <property name="exceptionMappings">
-            <props>
-                <prop key="org.springframework.security.authentication.LockedException">/pages/login/login?action=errorLocked</prop>
-                <prop key="at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException">/pages/login/login?action=2faOutdated</prop>
-            </props>
-        </property>
+    <bean id="failureHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SpaLoginFailureHandler">
+        <constructor-arg>
+            <bean class="org.springframework.security.web.authentication.ExceptionMappingAuthenticationFailureHandler" >
+                <property name="defaultFailureUrl" value="/pages/login/login?action=errorLogin" />
+                <property name="exceptionMappings">
+                    <props>
+                        <prop key="org.springframework.security.authentication.LockedException">/pages/login/login?action=errorLocked</prop>
+                        <prop key="at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException">/pages/login/login?action=2faOutdated</prop>
+                    </props>
+                </property>
+            </bean>
+        </constructor-arg>
     </bean>
     
+     <!-- A second login of the same account expires the first session
+          (maximumSessions=1 below); that session's next request goes to
+          /MainMenu, which sends it on to the login page. The strategy is
+          given explicitly: the ConcurrentSessionFilter(SessionRegistry,
+          String expiredUrl) constructor redirects through a RedirectStrategy
+          that Spring Security 6 leaves null, so an expired session answered
+          HTTP 500. -->
      <bean id="concurrencyFilter" class="org.springframework.security.web.session.ConcurrentSessionFilter">
      	<constructor-arg name="sessionRegistry" ref="sessionRegistry" />
-        <constructor-arg name="expiredUrl" value="/MainMenu" />
+        <constructor-arg name="sessionInformationExpiredStrategy">
+            <bean class="org.springframework.security.web.session.SimpleRedirectSessionInformationExpiredStrategy">
+                <constructor-arg value="/MainMenu" />
+            </bean>
+        </constructor-arg>
         <property name="logoutHandlers">
             <list>
                <ref bean="openClinicaLogoutHandler"/>
@@ -124,9 +147,13 @@
 		</constructor-arg>
 	</bean>
     
+    <!-- Writes the logout audit row once per session: through the registry
+         for a session it holds, which it removes before the session ends,
+         and itself for any other (an SSO login). -->
     <bean id="openClinicaLogoutHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurityContextLogoutHandler">
         <property name="auditUserLoginDao" ref="auditUserLoginDao"/>
         <property name="dataSource" ref="dataSource"/>
+        <property name="sessionRegistry" ref="sessionRegistry"/>
     </bean>
     
     <!--
@@ -157,20 +184,6 @@
 	<property name="metadataCollectorResource" ref="metadataCollectorResource"/>
     <property name="dataSource" ref="dataSource"/>
 </bean>
-<bean id="openRosaServices" class="at.ac.meduniwien.ophthalmology.libreclinica.web.pform.OpenRosaServices">
-    <property name="dataSource" ref="dataSource"></property>
-    <property name="coreResources" ref="coreResources"/>
-    <property name="ruleActionPropertyDao" ref="ruleActionPropertyDao"/>
-    <property name="openRosaSubmissionController" ref="openRosaSubmissionController" />
-    <property name="odmJaxbContext" ref="odmJaxbContext"/>
-</bean>
-
-<!-- Phase C.6 (2026-05-30): openRosaSubmissionController bean retired
-     here. The class is @Controller and gets component-scanned into the
-     ROOT context by <context:component-scan base-package=".controller.openrosa"/>
-     in applicationContext-core-service.xml — the ref="openRosaSubmissionController"
-     in openRosaServices above resolves to that scan-registered bean. -->
-
 
 
 </beans>

@@ -84,9 +84,10 @@
 			<groupId>commons-lang</groupId>
 			<artifactId>commons-lang</artifactId>
 		</dependency>
+		<!-- DR-007: DownloadDiscrepancyNote writes the discrepancy-note PDF. -->
 		<dependency>
-			<groupId>com.lowagie</groupId>
-			<artifactId>itext</artifactId>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
 		</dependency>
 		<!-- end servlet tests -->
 		<dependency>
@@ -127,7 +128,7 @@
 		</dependency>
       -->
 		<!-- fileupload2 core types (DiskFileItem, DiskFileItemFactory) are used
-		     directly under web/ and core/ — declare the core artifact alongside
+		     directly under core/ — declare the core artifact alongside
 		     the jakarta.servlet6 entry-point artifact, since maven-dependency
 		     -plugin analyze-only requires every directly-used artifact to be
 		     explicit. -->
@@ -236,10 +237,6 @@
 		<dependency>
 			<groupId>org.glassfish.jaxb</groupId>
 			<artifactId>jaxb-runtime</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>xml-apis</groupId>
-			<artifactId>xml-apis</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.hibernate.orm</groupId>
@@ -353,10 +350,6 @@
 	<build>
 		<plugins>
 			<plugin>
-				<groupId>org.liquibase</groupId>
-				<artifactId>liquibase-plugin</artifactId>
-			</plugin>
-			<plugin>
 				<groupId>org.zeroturnaround</groupId>
 				<artifactId>jrebel-maven-plugin</artifactId>
 			</plugin>
@@ -437,6 +430,17 @@
 		</plugins>
 	</build>
 	<repositories>
+		<!-- Central first: JitPack serves its own com.github.librepdf:openpdf
+		     2.0.5 POM, which names com.github.librepdf.openpdf artifacts that
+		     exist nowhere, so a build from an empty local repository fails.
+		     JitPack is needed only for pdfbox2-layout. -->
+		<repository>
+			<id>central</id>
+			<url>https://repo.maven.apache.org/maven2</url>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
 		<repository>
 			<id>jitpack.io</id>
 			<url>https://jitpack.io</url>

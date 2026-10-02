@@ -10,7 +10,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
-import java.util.Map;
 import org.springframework.http.ResponseEntity;
 
 /**
@@ -48,9 +47,8 @@ public final class SubjectLockGuard {
             return null;
         }
         if (ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED)) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Subject is locked; " + operation
-                            + " is refused until the Data Manager unlocks the subject."));
+            return ClinicalRecordGuard.conflict("SUBJECT_LOCKED", "Subject is locked; " + operation
+                    + " is refused until the Data Manager unlocks the subject.");
         }
         return null;
     }

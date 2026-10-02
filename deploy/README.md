@@ -321,6 +321,18 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
    a new feature flag reads as "off" with nothing in the log to explain it.
    The release notes call out when a release adds keys.
 
+### PostgreSQL major version
+
+Production's PostgreSQL version is pinned in `deploy/compose.production.yaml`,
+independently of the dev `compose.yaml`: `LIBRECLINICA_POSTGRES_IMAGE_TAG` in
+`/etc/libreclinica/env`, `14-alpine` when unset. A major version cannot open
+another's data directory, so moving it is a dump and restore, done by
+`deploy/pg-major-upgrade.sh` and described in
+[docs/operations/postgresql-17-upgrade.md](../docs/operations/postgresql-17-upgrade.md).
+Its last step sets that variable. Do not edit the pin in the checkout instead:
+the next setup run resets `/opt/libreclinica`, and the restart after it would
+start the old version on the new data.
+
 ### Retinal cluster monitor
 
 `setup-ubuntu-host.sh` writes `/etc/cron.d/libreclinica-retinal-monitor`: one

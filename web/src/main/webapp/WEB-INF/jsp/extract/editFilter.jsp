@@ -56,7 +56,7 @@
 <h1><span class="title_manage"><fmt:message key="edit_filter" bundle="${restext}"/>: <c:out value="${filter.name}"/></span></h1>
 <P><jsp:include page="../include/showPageMessages.jsp"/></P>
 
-<form action="EditFilter">
+<form action="EditFilter" method="post">
 <input type="hidden" name="action" value="validate"/>
 <input type="hidden" name="filterId" value="<c:out value='${filter.id}'/>"/>
 <table>

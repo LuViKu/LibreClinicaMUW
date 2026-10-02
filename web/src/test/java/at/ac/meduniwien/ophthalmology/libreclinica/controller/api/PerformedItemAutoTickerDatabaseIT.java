@@ -21,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDataWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker.Outcome;
 
@@ -314,6 +315,76 @@ class PerformedItemAutoTickerDatabaseIT extends AbstractApiControllerDatabaseIT 
         assertEquals(Outcome.WRITTEN,
                 tick(EVENT_CRF_ID, "DICOM", DEVICE.toUpperCase(java.util.Locale.ROOT)));
         assertEquals(1, readItemData().count());
+    }
+
+    /* ---------------- removed, locked or signed data ---------------- */
+
+    @Test
+    void nothingIsTickedIntoALockedCrf() throws Exception {
+        exec("UPDATE event_crf SET status_id = 6 WHERE event_crf_id = " + EVENT_CRF_ID);
+        try {
+            assertEquals(Outcome.REFUSED, tick(EVENT_CRF_ID, "dicom", DEVICE));
+            assertEquals(0, readItemData().count());
+            assertEquals(0, auditRows());
+        } finally {
+            exec("UPDATE event_crf SET status_id = 1 WHERE event_crf_id = " + EVENT_CRF_ID);
+        }
+    }
+
+    @Test
+    void anUnbindLeavesTheTickOnASignedCrf() throws Exception {
+        assertEquals(Outcome.WRITTEN, tick(EVENT_CRF_ID, "dicom", DEVICE));
+        exec("UPDATE study_subject SET status_id = 8 WHERE study_subject_id = 1");
+        try {
+            assertEquals(PerformedItemAutoTicker.ClearOutcome.REFUSED,
+                    ticker().clearPerformed(imageId, ACTOR));
+            assertEquals("1", readItemData().value(), "a signed CRF keeps its value");
+        } finally {
+            exec("UPDATE study_subject SET status_id = 1 WHERE study_subject_id = 1");
+        }
+    }
+
+    @Test
+    void anUnbindThatClearsTheTickWithdrawsTheVerification() throws Exception {
+        assertEquals(Outcome.WRITTEN, tick(EVENT_CRF_ID, "dicom", DEVICE));
+        ClinicalWriteFixtures.setSdvStatus(DATA_SOURCE, EVENT_CRF_ID, true);
+        try {
+            assertEquals(PerformedItemAutoTicker.ClearOutcome.CLEARED,
+                    ticker().clearPerformed(imageId, ACTOR));
+            assertEquals(0, readItemData().count());
+            assertEquals(false, ClinicalWriteFixtures.sdvStatus(DATA_SOURCE, EVENT_CRF_ID));
+        } finally {
+            ClinicalWriteFixtures.setSdvStatus(DATA_SOURCE, EVENT_CRF_ID, false);
+        }
+    }
+
+    @Test
+    void theSharedWriterRefusesALockedCrfAndOnlyAValueEndsTheVerification() throws Exception {
+        SourcedItemDataWriter.Ref ref = new SourcedItemDataWriter.Ref(SourcedItemDataWriter.Source.INGEST, imageId);
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            exec("UPDATE event_crf SET status_id = 6 WHERE event_crf_id = " + EVENT_CRF_ID);
+            try {
+                assertEquals(SourcedItemDataWriter.Outcome.REFUSED,
+                        SourcedItemDataWriter.upsert(c, EVENT_CRF_ID, ITEM_ID, "1", ref, ACTOR).outcome());
+                assertEquals(0, readItemData().count());
+            } finally {
+                exec("UPDATE event_crf SET status_id = 1 WHERE event_crf_id = " + EVENT_CRF_ID);
+            }
+
+            ClinicalWriteFixtures.setSdvStatus(DATA_SOURCE, EVENT_CRF_ID, true);
+            try {
+                assertEquals(SourcedItemDataWriter.Outcome.WRITTEN,
+                        SourcedItemDataWriter.upsert(c, EVENT_CRF_ID, ITEM_ID, "", ref, ACTOR).outcome());
+                assertTrue(ClinicalWriteFixtures.sdvStatus(DATA_SOURCE, EVENT_CRF_ID),
+                        "an empty row records nothing to verify");
+
+                assertEquals(SourcedItemDataWriter.Outcome.WRITTEN,
+                        SourcedItemDataWriter.upsert(c, EVENT_CRF_ID, ITEM_ID, "1", ref, ACTOR).outcome());
+                assertEquals(false, ClinicalWriteFixtures.sdvStatus(DATA_SOURCE, EVENT_CRF_ID));
+            } finally {
+                ClinicalWriteFixtures.setSdvStatus(DATA_SOURCE, EVENT_CRF_ID, false);
+            }
+        }
     }
 
     /* ---------------- the system actor ---------------- */
