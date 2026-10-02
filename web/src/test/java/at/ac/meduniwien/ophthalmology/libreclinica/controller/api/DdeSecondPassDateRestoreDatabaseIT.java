@@ -24,6 +24,7 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.config.LaxParsingSpringLiquibase;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -100,7 +101,7 @@ class DdeSecondPassDateRestoreDatabaseIT extends AbstractApiControllerDatabaseIT
     private static void runTheDeploymentChangelog() throws Exception {
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "DELETE FROM databasechangelog WHERE id = '" + RESTORE_CHANGESET + "'");
-        SpringLiquibase liquibase = new SpringLiquibase();
+        SpringLiquibase liquibase = new LaxParsingSpringLiquibase();
         liquibase.setDataSource(DATA_SOURCE);
         liquibase.setChangeLog("classpath:migration/master.xml");
         liquibase.setResourceLoader(new DefaultResourceLoader());
