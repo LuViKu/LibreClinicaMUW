@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -156,8 +157,8 @@ class SpaLoginHandlersTest {
         success().onAuthenticationSuccess(request, response, SIGNED_IN);
 
         assertEquals(204, response.getStatus(), "the login stands");
-        assertEquals(0, ((StudyBean) session.getAttribute("study")).getId(), "no study is bound");
-        assertEquals(0, ((StudyUserRoleBean) session.getAttribute("userRole")).getId(), "no role is bound");
+        assertEquals(0, ((StudyBean) Objects.requireNonNull(session.getAttribute("study"))).getId(), "no study is bound");
+        assertEquals(0, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getId(), "no role is bound");
     }
 
     @Test
@@ -172,7 +173,7 @@ class SpaLoginHandlersTest {
 
             assertEquals(401, response.getStatus(), c[1].toString());
             assertNull(response.getRedirectedUrl());
-            assertTrue(response.getContentType().startsWith("application/json"));
+            assertTrue(Objects.requireNonNull(response.getContentType()).startsWith("application/json"));
             assertEquals(c[1], new ObjectMapper().readTree(response.getContentAsString()).get("error").asText());
         }
     }

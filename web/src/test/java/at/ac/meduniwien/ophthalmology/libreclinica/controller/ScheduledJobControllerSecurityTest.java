@@ -16,6 +16,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Objects;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
@@ -71,7 +73,7 @@ class ScheduledJobControllerSecurityTest {
                 "listCurrentScheduledJobs");
 
         verifyNoInteractions(scheduler);
-        assertTrue(resp.getRedirectedUrl().contains("/MainMenu"));
+        assertTrue(Objects.requireNonNull(resp.getRedirectedUrl()).contains("/MainMenu"));
     }
 
     @Test

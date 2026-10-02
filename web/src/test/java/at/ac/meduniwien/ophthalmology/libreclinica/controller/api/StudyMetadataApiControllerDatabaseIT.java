@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Locale;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -205,7 +206,7 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
 
     private static MockHttpSession sysadmin() {
         MockHttpSession session = user("root");
-        ((UserAccountBean) session.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).addUserType(UserType.SYSADMIN);
         return session;
     }
 

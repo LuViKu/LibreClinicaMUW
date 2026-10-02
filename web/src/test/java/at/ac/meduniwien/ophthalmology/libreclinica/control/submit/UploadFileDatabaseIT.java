@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Date;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -81,7 +82,7 @@ class UploadFileDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void nothingIsUploadedIntoAFrozenStudy() throws Exception {
         MockHttpServletRequest req = request(user("manual_crc"));
-        ((StudyBean) req.getSession().getAttribute("study")).setStatus(Status.FROZEN);
+        ((StudyBean) Objects.requireNonNull(req.getSession()).getAttribute("study")).setStatus(Status.FROZEN);
 
         upload(req);
 

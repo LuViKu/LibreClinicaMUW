@@ -25,6 +25,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -297,8 +298,8 @@ class LoginHistoryApiControllerDatabaseIT extends AbstractApiControllerDatabaseI
                 .andExpect(status().isOk())
                 .andReturn().getResponse();
 
-        assertTrue(res.getContentType().startsWith("text/csv"), res.getContentType());
-        assertTrue(res.getHeader("Content-Disposition").startsWith("attachment; filename=\"login-history_"));
+        assertTrue(Objects.requireNonNull(res.getContentType()).startsWith("text/csv"), res.getContentType());
+        assertTrue(Objects.requireNonNull(res.getHeader("Content-Disposition")).startsWith("attachment; filename=\"login-history_"));
         String[] lines = res.getContentAsString().split("\r\n");
         assertEquals(CSV_HEADER, lines[0]);
         assertEquals(TOTAL + 1, lines.length, "every filtered row, not one page of 50");

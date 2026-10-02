@@ -21,6 +21,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Locale;
+import java.util.Objects;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
@@ -83,7 +84,7 @@ class UnboundAdministratorDataEntryDatabaseIT extends AbstractApiControllerDatab
                 .perform(post("/api/v1/me/activeStudy").contentType("application/json")
                         .content("{\"oid\":\"S_DEFAULTS1\"}").session(session))
                 .andExpect(status().isOk());
-        assertEquals(Role.INVALID, ((StudyUserRoleBean) session.getAttribute("userRole")).getRole());
+        assertEquals(Role.INVALID, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getRole());
     }
 
     @Test

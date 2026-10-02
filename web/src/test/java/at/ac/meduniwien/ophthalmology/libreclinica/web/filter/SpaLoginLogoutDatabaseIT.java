@@ -30,6 +30,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 
 import javax.sql.DataSource;
@@ -557,7 +558,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         StudyBean study = (StudyBean) session.getAttribute("study");
         assertNotNull(study, "the session is bound to the active study");
         assertEquals(1, study.getId());
-        assertEquals(Role.STUDYDIRECTOR, ((StudyUserRoleBean) session.getAttribute("userRole")).getRole());
+        assertEquals(Role.STUDYDIRECTOR, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getRole());
         me(session)
                 .andExpect(jsonPath("$.activeStudy.id").value(1))
                 .andExpect(jsonPath("$.activeStudy.oid").value("S_DEFAULTS1"))
@@ -615,7 +616,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         assertEquals(401, response.getStatus());
         assertNull(response.getRedirectedUrl());
-        assertTrue(response.getContentType().startsWith(JSON));
+        assertTrue(Objects.requireNonNull(response.getContentType()).startsWith(JSON));
         assertEquals("bad_credentials", reason(response));
         assertEquals(1, column("lock_counter", WRONG));
         assertEquals(List.of(LoginStatus.FAILED_LOGIN), audited());
@@ -756,7 +757,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(204, login("spa-browser-second", PASSWORD, JSON, session()).getStatus());
 
         MockHttpSession session = session();
-        assertEquals("spa-browser-second", ((UserAccountBean) session.getAttribute("userBean")).getName());
+        assertEquals("spa-browser-second", ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).getName());
         assertEquals(DEFAULT_STUDY, study(session).getId());
         assertEquals(Role.INVESTIGATOR, role(session).getRole(), "the second account's role");
     }
@@ -769,7 +770,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(204, login("spa-no-study", PASSWORD, JSON, session()).getStatus());
 
         MockHttpSession session = session();
-        assertEquals("spa-no-study", ((UserAccountBean) session.getAttribute("userBean")).getName());
+        assertEquals("spa-no-study", ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).getName());
         assertEquals(0, study(session).getId(), "no study is bound");
         assertEquals(0, role(session).getId(), "no role is bound");
     }
@@ -821,7 +822,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(204, login("spa-sys-admin", PASSWORD, JSON).getStatus());
 
         MockHttpSession session = session();
-        assertTrue(((UserAccountBean) session.getAttribute("userBean")).isSysAdmin());
+        assertTrue(((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).isSysAdmin());
         assertEquals(DEFAULT_STUDY, study(session).getId());
         assertEquals(0, role(session).getId());
     }

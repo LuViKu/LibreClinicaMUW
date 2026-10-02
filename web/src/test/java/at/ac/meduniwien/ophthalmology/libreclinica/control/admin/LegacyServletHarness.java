@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
 import java.util.Date;
 import java.util.Locale;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -76,8 +77,8 @@ public final class LegacyServletHarness {
         StudyBean study = new StudyBean();
         study.setId(STUDY_ID);
         study.setStatus(Status.AVAILABLE);
-        request.getSession().setAttribute(SecureController.USER_BEAN_NAME, user);
-        request.getSession().setAttribute("study", study);
+        Objects.requireNonNull(request.getSession()).setAttribute(SecureController.USER_BEAN_NAME, user);
+        Objects.requireNonNull(request.getSession()).setAttribute("study", study);
         return request;
     }
 

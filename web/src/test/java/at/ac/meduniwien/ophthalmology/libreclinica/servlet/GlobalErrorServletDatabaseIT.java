@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -227,7 +228,7 @@ class GlobalErrorServletDatabaseIT extends AbstractApiControllerDatabaseIT {
         Assertions.assertEquals(500, resp.getStatus(),
                 "Expected HTTP 500");
         Assertions.assertTrue(resp.getContentType() != null
-                        && resp.getContentType().startsWith("text/html"),
+                        && Objects.requireNonNull(resp.getContentType()).startsWith("text/html"),
                 "Expected text/html Content-Type; got " + resp.getContentType());
 
         // MockServletContext doesn't render JSPs; we assert on the

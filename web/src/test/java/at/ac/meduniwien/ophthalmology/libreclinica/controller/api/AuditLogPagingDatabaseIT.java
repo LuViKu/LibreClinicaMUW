@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -286,7 +287,7 @@ class AuditLogPagingDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static MockHttpSession sysadminSession() {
         MockHttpSession session = studySession();
-        ((UserAccountBean) session.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).addUserType(UserType.SYSADMIN);
         return session;
     }
 

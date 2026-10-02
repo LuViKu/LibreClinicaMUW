@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.Objects;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -72,7 +73,7 @@ class CrossSiteRequestFilterTest {
         MockHttpServletResponse resp = run(req, chain);
 
         assertEquals(403, resp.getStatus());
-        assertTrue(resp.getContentType().startsWith("application/json"));
+        assertTrue(Objects.requireNonNull(resp.getContentType()).startsWith("application/json"));
         assertNull(chain.getRequest());
     }
 

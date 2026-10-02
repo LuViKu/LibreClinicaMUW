@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 import jakarta.servlet.http.HttpServlet;
 
@@ -497,7 +498,7 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
         if (servlet instanceof AdministrativeEditingServlet) {
             // Without a forced reason for change, an edit saves with the form alone.
-            ((StudyBean) req.getSession().getAttribute("study")).getStudyParameterConfig().setAdminForcedReasonForChange("false");
+            ((StudyBean) Objects.requireNonNull(req.getSession()).getAttribute("study")).getStudyParameterConfig().setAdminForcedReasonForChange("false");
         }
         MockHttpServletResponse resp = harness.run(servlet, req);
         Object messages = req.getAttribute("pageMessages");
