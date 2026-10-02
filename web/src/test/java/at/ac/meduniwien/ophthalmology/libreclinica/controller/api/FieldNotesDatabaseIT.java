@@ -20,6 +20,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -144,10 +145,82 @@ class FieldNotesDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    @Test
+    void aFieldQueryLeavesTheFieldAsItWas() throws Exception {
+        // A Monitor's query asks about the value; it never changes it.
+        String[] fields = {
+            "SELECT date_of_birth::text FROM subject WHERE subject_id = 1",
+            "SELECT enrollment_date::text FROM study_subject WHERE study_subject_id = 1",
+            "SELECT date_start::text FROM study_event WHERE study_event_id = 1",
+            "SELECT COALESCE(interviewer_name, '') || '|' || COALESCE(date_interviewed::text, '') "
+                    + "FROM event_crf WHERE event_crf_id = 1",
+        };
+        String[] before = new String[fields.length];
+        for (int i = 0; i < fields.length; i++) before[i] = text(fields[i]);
+        int[] notes = {
+            created("\"entityType\":\"subject\",\"column\":\"date_of_birth\""),
+            created("\"entityType\":\"studySub\",\"column\":\"enrollment_date\""),
+            created("\"entityType\":\"studyEvent\",\"column\":\"start_date\",\"eventId\":\"1\""),
+            created("\"entityType\":\"eventCrf\",\"column\":\"interviewer_name\",\"eventCrfOid\":\"1\""),
+        };
+        try {
+            for (int i = 0; i < fields.length; i++) assertEquals(before[i], text(fields[i]), fields[i]);
+        } finally {
+            for (int note : notes) NoteFixtures.delete(DATA_SOURCE, note);
+        }
+    }
+
+    @Test
+    void aCrfOfAnotherSubjectIsRefused() throws Exception {
+        int otherCrf = Integer.parseInt(text(
+                "SELECT min(event_crf_id)::text FROM event_crf WHERE study_subject_id <> 1"));
+        int notesBefore = noteCount();
+        raise("\"entityType\":\"eventCrf\",\"column\":\"date_interviewed\",\"eventCrfOid\":\"" + otherCrf + "\"")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value(containsString("of subject 'M-001'")));
+        assertEquals(notesBefore, noteCount(), "no note is written");
+    }
+
+    @Test
+    void aVisitNoteNeedsAVisit() throws Exception {
+        raise("\"entityType\":\"studyEvent\",\"column\":\"start_date\"")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("'eventId'")));
+        raise("\"entityType\":\"studyEvent\",\"column\":\"start_date\",\"eventId\":\"first\"")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("'eventId'")));
+    }
+
+    @Test
+    void aUserOfAnotherSiteCannotNoteTheSubjectsFields() throws Exception {
+        // Bound to a site of Default Study that holds none of its subjects,
+        // the user sees no M-001 and notes none of its fields.
+        StudyBean site = new StudyBean();
+        site.setId(9001);
+        site.setParentStudyId(1);
+        site.setOid("S_OTHER_SITE");
+        MockHttpSession atSite = monitor();
+        atSite.setAttribute("study", site);
+        int notesBefore = noteCount();
+        for (String target : new String[] {
+            "\"entityType\":\"subject\",\"column\":\"date_of_birth\"",
+            "\"entityType\":\"studySub\",\"column\":\"enrollment_date\"",
+            "\"entityType\":\"studyEvent\",\"column\":\"start_date\",\"eventId\":\"1\"",
+            "\"entityType\":\"eventCrf\",\"column\":\"interviewer_name\",\"eventCrfOid\":\"1\"",
+        }) {
+            raise(target, atSite).andExpect(status().isNotFound());
+        }
+        assertEquals(notesBefore, noteCount(), "no note is written");
+    }
+
     /* ------------------------------------------------------------------ */
 
     private ResultActions raise(String target) throws Exception {
-        return mvc().perform(post("/api/v1/discrepancies").session(monitor())
+        return raise(target, monitor());
+    }
+
+    private ResultActions raise(String target, MockHttpSession session) throws Exception {
+        return mvc().perform(post("/api/v1/discrepancies").session(session)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"subjectId\":\"M-001\"," + target
                         + ",\"type\":\"query\",\"description\":\"Please confirm against the source\"}"));
@@ -185,6 +258,19 @@ class FieldNotesDatabaseIT extends AbstractApiControllerDatabaseIT {
                 return rs.getInt(1);
             }
         }
+    }
+
+    private static String text(String sql) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            rs.next();
+            return rs.getString(1);
+        }
+    }
+
+    private static int noteCount() throws SQLException {
+        return Integer.parseInt(text("SELECT count(*)::text FROM discrepancy_note"));
     }
 
     private static MockHttpSession monitor() {
