@@ -229,7 +229,6 @@ public class UsersApiController {
                     ? studyCache.computeIfAbsent(sur.getStudyId(),
                         id -> (StudyBean) studyDao.findByPK(id))
                     : null;
-            boolean isSite = roleStudy != null && roleStudy.getParentStudyId() > 0;
 
             String spaRole = sur.getRole() != null
                     ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
@@ -241,7 +240,7 @@ public class UsersApiController {
                 spaRole = "Administrator";
                 legacyRole = null;
             }
-            String siteLabel = isSite && roleStudy != null ? roleStudy.getName() : null;
+            String siteLabel = roleStudy != null && roleStudy.getParentStudyId() > 0 ? roleStudy.getName() : null;
             String auth = authForUser(ua);
             String lastLogin = ua.getLastVisitDate() == null ? null
                     : java.time.Instant.ofEpochMilli(ua.getLastVisitDate().getTime())
@@ -1488,7 +1487,6 @@ public class UsersApiController {
     private static RoleBindingDto toRoleBindingDto(StudyUserRoleBean sur, StudyDAO studyDao) {
         StudyBean study = sur.getStudyId() > 0
                 ? (StudyBean) studyDao.findByPK(sur.getStudyId()) : null;
-        boolean isSite = study != null && study.getParentStudyId() > 0;
         String spaRole = sur.getRole() != null
                 ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
         boolean active = sur.getStatus() != null
@@ -1498,7 +1496,7 @@ public class UsersApiController {
                 sur.getStudyId(),
                 study == null ? null : study.getOid(),
                 study == null ? null : study.getName(),
-                isSite && study != null ? study.getName() : null,
+                study != null && study.getParentStudyId() > 0 ? study.getName() : null,
                 spaRole,
                 active,
                 legacyRole);

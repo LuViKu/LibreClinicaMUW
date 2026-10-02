@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDef
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.crfdata.ImportCRFDataService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,14 +77,18 @@ public class ImportCRFInfoContainer {
             Map<String, Map<String, String>> eventMap = new HashMap<String, Map<String, String>>();
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = ImportCRFDataService.studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (sampleOrdinal == null) {
+                    // validateStudyMetadata reports the key; don't guess a visit.
+                    continue;
+                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
                 // @pgawade 16-March-2011 Do not allow the data import
                 // if event status is one of the - stopped, signed,
                 // locked
