@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   AuthState, AuthenticatedUser, PasswordChangeFieldError, PasswordChangeRequest,
-  ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption, UserRole,
+  ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption, StudyWritePermissions, UserRole,
 } from '@/types/auth'
 import { useSubjectsStore } from './subjects'
 import { useEventsStore } from './events'
@@ -362,6 +362,19 @@ export const useAuthStore = defineStore('auth', () => {
     return u.role === role
   }
 
+  /**
+   * What the server says the session's binding may write
+   * ({@link ActiveStudySummary.permissions}), or `null` when /me did not
+   * say, so that the caller falls back to its role check. Prefer this to
+   * a role check for a write the roles cannot decide: ra and ra2 are
+   * "Investigator", a system administrator is "Administrator" whatever
+   * the binding.
+   */
+  function permits(permission: keyof StudyWritePermissions): boolean | null {
+    const permissions = user.value?.activeStudy?.permissions
+    return permissions ? permissions[permission] : null
+  }
+
   async function logout(): Promise<void> {
     try {
       await fetch('/LibreClinica/Logout', { method: 'GET', credentials: 'include' })
@@ -442,6 +455,7 @@ export const useAuthStore = defineStore('auth', () => {
     completeProfile,
     changePassword,
     hasRole,
+    permits,
     logout,
     clearForUnauthorized,
   }

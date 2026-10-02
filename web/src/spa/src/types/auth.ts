@@ -143,7 +143,25 @@ export type ActiveStudySummary =
      * compatibility with M1-era /me responses that don't yet emit it.
      */
     protocolType?: string | null
+    /**
+     * What the session's binding on this study may write, computed by
+     * the server with the rules its write endpoints apply. The roles
+     * cannot say this: ra and ra2 are "Investigator" here, and a system
+     * administrator is "Administrator" whatever the binding. Absent from
+     * an older /me response, where callers fall back to the roles.
+     */
+    permissions?: StudyWritePermissions
   }
+
+/** See {@link ActiveStudySummary.permissions}; the backend's {@code MeDto.PermissionsDto}. */
+export interface StudyWritePermissions {
+  /** Enter or change CRF data, including re-running a retinal analysis. */
+  enterData: boolean
+  /** Edit a subject, or move an eye to another cohort. */
+  editSubject: boolean
+  /** Sign a subject. */
+  signSubject: boolean
+}
 
 /**
  * Phase E.4 M1 — one row in the user's available-studies list,

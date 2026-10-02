@@ -120,4 +120,14 @@ final class ClinicalWriteFixtures {
             ps.executeUpdate();
         }
     }
+
+    /** Run an INSERT … RETURNING of one int column, and return it. */
+    static int insert(DataSource dataSource, String sql) throws SQLException {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
 }

@@ -21,6 +21,11 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfWriteRules;
@@ -474,6 +479,13 @@ public class NamdClinicalApiController {
             ResponseEntity<?> visGuard = access.guardStudyVisibilityAllowingDeepLink(studyId, session,
                     "study_event " + studyEventId + " is outside your site visibility");
             if (visGuard != null) return visGuard;
+            StudyEventBean event = (StudyEventBean) new StudyEventDAO(dataSource).findByPK(studyEventId);
+            StudySubjectBean subject = (StudySubjectBean) new StudySubjectDAO(dataSource)
+                    .findByPK(event.getStudySubjectId());
+            ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource,
+                    (StudyBean) session.getAttribute("study"), subject, event, null,
+                    "saving clinical flags");
+            if (closed != null) return closed;
 
             // The visit CRF this study records flags on. P3.5: asked of the
             // study rather than assumed, falling back to the OID the nAMD

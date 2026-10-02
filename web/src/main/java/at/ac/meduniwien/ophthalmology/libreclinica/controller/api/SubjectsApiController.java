@@ -532,6 +532,19 @@ public class SubjectsApiController {
     }
 
     /**
+     * May the session's binding sign a subject? Investigator and study
+     * director: the preflight's {@code user-role-can-sign} check, which
+     * blocks the sign endpoint for every other binding. {@code GET /me}
+     * reports it as {@code activeStudy.permissions.signSubject}.
+     *
+     * @param roleId legacy {@link Role} id; 0 for no role (refused)
+     */
+    static boolean roleMaySignSubject(int roleId) {
+        return roleId == Role.INVESTIGATOR.getId()
+                || roleId == Role.STUDYDIRECTOR.getId();
+    }
+
+    /**
      * Phase E.4 M3 + M8 — shared preflight computation.
      *
      * <p>Extracted so both the {@code GET /preflightForSign} endpoint
@@ -764,10 +777,7 @@ public class SubjectsApiController {
         if (currentRole != null && currentRole.getRole() != null) {
             Role r = currentRole.getRole();
             legacyRoleName = r.getName();
-            // Investigator (id=4) or Study Director (id=3) can sign;
-            // ra / ra2 / coordinator / monitor cannot.
-            canSign = (r.getId() == Role.INVESTIGATOR.getId()
-                    || r.getId() == Role.STUDYDIRECTOR.getId());
+            canSign = roleMaySignSubject(r.getId());
         }
         SignPreflightDto.CheckRow roleCheck;
         if (canSign) {
@@ -1609,7 +1619,10 @@ public class SubjectsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         // Signing is an attest action: the rule that governs signing a
-        // visit, which is the legacy SignStudySubjectServlet's role set.
+        // visit, narrowed further by the preflight (roleMaySignSubject).
+        // No system-administrator short-circuit, unlike the legacy
+        // SignStudySubjectServlet: the signature attests as the binding
+        // (see ClinicalWriteAuthorization).
         if (!EventEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
             return ClinicalWriteAuthorization.forbidden("signing subjects");
         }
@@ -2110,14 +2123,13 @@ public class SubjectsApiController {
      *       via {@link #restore}.</li>
      * </ul>
      *
-     * <p><strong>Downstream enforcement deferred:</strong> the SPA's
-     * other write endpoints (subject-edit, event-edit/cancel, CRF
-     * save, query-thread, SDV verify) don't yet check
-     * {@code ss.getStatus() == LOCKED}. The lock marker is recorded
-     * here so the audit trail captures intent; a follow-up slice
-     * adds the {@code refuse-if-locked} guard to each. The SPA
-     * surfaces a locked badge so the UI nudges users away from
-     * locked subjects in the meantime.
+     * <p><strong>Downstream enforcement:</strong> subject edit, visit
+     * edit, cancel and sign refuse a locked subject
+     * ({@link SubjectLockGuard}), and so do the data-entry endpoints
+     * (CRF save, completion, reopening, rows, files, double data entry,
+     * starting a CRF, scheduling a visit, clinical flags, scan upload;
+     * {@link ClinicalRecordGuard}). SDV and query threads do not check
+     * the lock yet.
      *
      * <p>Role: DM / Admin only (same as remove).
      */
@@ -2612,6 +2624,8 @@ public class SubjectsApiController {
 
                 // ---- (2) event_crf — flip every CRF row for the subject ----
                 // Path: study_event.study_subject_id → event_crf.study_event_id.
+                // Removed and locked CRFs keep their status, as when a visit
+                // is signed: a removed CRF signed here was no longer removed.
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE event_crf "
                                 + "   SET status_id = ?, "
@@ -2622,7 +2636,8 @@ public class SubjectsApiController {
                                 + "       update_id = ? "
                                 + " WHERE study_event_id IN ("
                                 + "         SELECT study_event_id FROM study_event WHERE study_subject_id = ?"
-                                + "       )")) {
+                                + "       )"
+                                + "   AND status_id NOT IN (5, 6, 7)")) { // skip deleted / locked / auto-deleted
                     ps.setInt(1, Status.SIGNED.getId());
                     ps.setInt(2, userId);
                     ps.setInt(3, userId);

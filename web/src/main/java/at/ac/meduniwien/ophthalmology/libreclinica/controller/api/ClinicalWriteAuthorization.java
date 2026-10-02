@@ -9,13 +9,20 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.util.Map;
+import java.util.function.IntPredicate;
+
+import javax.sql.DataSource;
 
 import jakarta.servlet.http.HttpSession;
 
 import org.springframework.http.ResponseEntity;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 
 /**
  * The role matrix for the SPA's clinical-data write APIs, in one place.
@@ -25,7 +32,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  * study. The role is the session's {@code userRole}:
  * {@code POST /me/activeStudy} binds it together with the study, from the
  * caller's own active bindings on that study, and refuses a study the
- * caller holds no role on. Neither the chain-level
+ * caller holds no role on. The SDV rules also count the caller's other
+ * roles on that study ({@link #anyRoleOnTheStudyMay}). Neither the chain-level
  * {@code hasRole("USER")} rule nor site visibility says what a user may
  * change: the first says the caller is logged in, the second which
  * subjects the caller may see. Without the per-endpoint check a Monitor,
@@ -37,7 +45,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  * <h2>Roles</h2>
  *
  * <pre>
- *   ADM  admin (1)         SPA "Administrator"; the binding a system administrator gets
+ *   ADM  admin (1)         SPA "Administrator"; a study role row like the others,
+ *                          the usual binding of a system administrator
  *   CRC  coordinator (2)   SPA "CRC"
  *   DM   director (3)      SPA "Data Manager"
  *   INV  Investigator (4)  SPA "Investigator"
@@ -59,13 +68,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  *   Restore a removed CRF        x   x   x   x   .   .   .   .   {@link EventCrfRestoreAuthorization}
  *   Edit, cancel, restore or
  *     sign a visit               .   x   x   x   x   .   .   .   {@link EventEditAuthorization}
- *   Sign a subject               .   x   x   x   x   .   .   .   {@link EventEditAuthorization#roleMayEdit}
+ *   Sign a subject               .   .   .   x   x   .   .   .   SubjectsApiController.roleMaySignSubject
  *   Edit a subject               .   x   x   x   x   .   .   .   {@link SubjectEditAuthorization}
  *   Remove, restore, lock or
  *     unlock a subject; link
  *     a patient                  .   x   .   x   .   .   .   .   {@link SubjectLifecycleAuthorization}
- *   Verify SDV                   .   x   x   x   .   .   .   x   {@link #roleMayVerifySdv}
- *   Un-verify SDV                .   x   .   x   .   .   .   x   {@link SdvUnverifyAuthorization}
+ *   Verify SDV (any binding)     .   x   x   x   .   .   .   x   {@link #roleMayVerifySdv}
+ *   Un-verify SDV (any binding)  .   x   .   x   .   .   .   x   {@link SdvUnverifyAuthorization}
  *   Raise a query, annotation
  *     or failed check            .   x   x   x   x   .   .   x   {@link NoteTransitionMatrix#canCreateType}
  *   Reason-for-change note       .   x   .   x   .   .   .   .   {@link NoteTransitionMatrix#canCreateType}
@@ -123,22 +132,33 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  *       carry commented out: coordinator, director, investigator, ra and ra2.</li>
  *   <li>SDV follows {@code SDVController.mayProceed}: director, coordinator
  *       and monitor.</li>
- *   <li>Signing a subject follows {@code SignStudySubjectServlet}: director,
- *       coordinator and investigator. It shares the visit-signing rule.</li>
+ *   <li>Signing a subject is narrower than {@code SignStudySubjectServlet}
+ *       (director, coordinator, investigator and any system administrator):
+ *       the endpoint refuses with 403 what the visit-signing rule refuses,
+ *       and its preflight check {@code user-role-can-sign} then blocks with
+ *       412 every binding but director and investigator. A signature attests
+ *       as the role held on the study.</li>
  * </ul>
  *
- * <p>System administrators: every helper here admits the {@code admin}
- * binding, which is how the SPA binds a system administrator to a study,
- * and the rules in this class do the same. A helper short-circuits on
- * {@code isSysAdmin()} only where its legacy servlet does, which is the
- * restore and import gates. {@code maySubmitData} and
- * {@code SDVController} have no such short-circuit, so neither rule here
- * has one.
+ * <p>System administrators: every rule goes by the binding on the active
+ * study, which {@code POST /me/activeStudy} takes from the caller's own
+ * role rows; a system administrator is usually bound as {@code admin}, and
+ * every helper here admits that binding. Only the restore and import gates
+ * also admit a system administrator whatever the binding
+ * ({@code isSysAdmin()}). {@code maySubmitData} and {@code SDVController}
+ * have no such short-circuit either. {@code SignStudySubjectServlet},
+ * {@code UpdateStudySubjectServlet}, {@code RemoveStudySubjectServlet} and
+ * {@code RestoreStudySubjectServlet} do; their rules here deliberately do
+ * not, so a system administrator bound as, say, monitor neither signs nor
+ * edits, removes or restores a subject through the SPA.
  *
  * <p>Some older helpers are deliberately narrower than their legacy
  * servlet, and stay so: editing a subject or a visit refuses ra and ra2,
+ * signing a subject refuses the coordinator and the admin binding (above),
  * and un-verifying SDV refuses the coordinator, whom {@code SDVController}
- * admits.
+ * admits. {@code GET /me} reports what the session's binding may do
+ * ({@code activeStudy.permissions}), so that the SPA offers only what
+ * these rules admit; ra and ra2 share the SPA role "Investigator".
  *
  * <h2>Order of checks</h2>
  *
@@ -191,6 +211,48 @@ final class ClinicalWriteAuthorization {
                 || roleId == Role.COORDINATOR.getId()
                 || roleId == Role.STUDYDIRECTOR.getId()
                 || roleId == Role.MONITOR.getId();
+    }
+
+    /**
+     * Does {@code rule} admit the session's role, or another role the
+     * caller holds on the active study?
+     *
+     * <p>{@code POST /me/activeStudy} binds one role, the caller's
+     * highest-ranked, and ranks the Monitor below every other role, while
+     * the SPA offers a page for any role the caller holds on the study. A
+     * caller who holds Monitor beside Investigator is bound as Investigator,
+     * and the SDV page offered to the Monitor would refuse every request. The
+     * SDV rules therefore count every active binding on the study, as
+     * multi-role authorization does elsewhere
+     * ({@link StudyAdminAuthorization#userMayEditStudy}). The bindings are
+     * read only when the session's role is refused, and a failed read
+     * refuses.
+     *
+     * @param rule takes a legacy {@link Role} id
+     */
+    static boolean anyRoleOnTheStudyMay(HttpSession session, DataSource dataSource,
+                                        IntPredicate rule) {
+        if (rule.test(roleIdOf(session))) {
+            return true;
+        }
+        if (!(session.getAttribute("userBean") instanceof UserAccountBean user)
+                || !(session.getAttribute("study") instanceof StudyBean study)) {
+            return false;
+        }
+        try {
+            for (StudyUserRoleBean binding
+                    : new UserAccountDAO(dataSource).findAllRolesByUserName(user.getName())) {
+                if (binding != null && binding.getRole() != null
+                        && binding.getStudyId() == study.getId()
+                        && Status.AVAILABLE.equals(binding.getStatus())
+                        && rule.test(binding.getRole().getId())) {
+                    return true;
+                }
+            }
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return false;
     }
 
     /**

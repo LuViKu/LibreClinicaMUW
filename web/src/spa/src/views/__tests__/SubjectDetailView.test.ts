@@ -53,7 +53,7 @@ import { useAuthStore } from '@/stores/auth'
 // eslint-disable-next-line import/first
 import type { SubjectDetail, EyeTransitionDto, StudyEye } from '@/types/subject'
 // eslint-disable-next-line import/first
-import type { UserRole } from '@/types/auth'
+import type { StudyWritePermissions, UserRole } from '@/types/auth'
 // eslint-disable-next-line import/first
 import enMessages from '@/locales/en.json'
 
@@ -156,6 +156,8 @@ interface MountOptions {
   detail?: SubjectDetail
   activeStudyOid?: string
   activeStudyName?: string
+  /** `activeStudy.permissions` as /me reports it; absent when undefined. */
+  permissions?: StudyWritePermissions
 }
 
 async function mountAt(options: MountOptions = {}) {
@@ -181,6 +183,7 @@ async function mountAt(options: MountOptions = {}) {
         name: options.activeStudyName ?? 'iAMD',
         isSite: false,
         roles: options.activeStudyRoles,
+        permissions: options.permissions,
       },
     } as unknown as ReturnType<typeof useAuthStore>['user']['value']
   }
@@ -242,6 +245,16 @@ describe('SubjectDetailView — per-eye Transition button gating', () => {
     expect(w.find('[data-testid="transition-OS"]').exists()).toBe(false)
   })
 
+  it('hides the Transition button from an ra binding, which the SPA calls Investigator', async () => {
+    const w = await mountAt({
+      role: 'Investigator',
+      permissions: { enterData: true, editSubject: false, signSubject: false },
+      detail: makeDetail({ studyEye: 'OU' }),
+    })
+    expect(w.find('[data-testid="transition-OD"]').exists()).toBe(false)
+    expect(w.find('[data-testid="transition-OS"]').exists()).toBe(false)
+  })
+
   it('hides both Transition buttons when studyEye is null (no enrolled eye)', async () => {
     const w = await mountAt({
       role: 'Investigator',
@@ -249,6 +262,41 @@ describe('SubjectDetailView — per-eye Transition button gating', () => {
     })
     expect(w.find('[data-testid="transition-OD"]').exists()).toBe(false)
     expect(w.find('[data-testid="transition-OS"]').exists()).toBe(false)
+  })
+})
+
+/** Whether the page links to the sign-subject page. */
+function signLinkShown(w: Awaited<ReturnType<typeof mountAt>>): boolean {
+  return w.findAll('a').some((a) => (a.attributes('href') ?? '').endsWith('/sign'))
+}
+
+describe('SubjectDetailView — sign-subject link', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+  })
+
+  it('offers signing to a binding that may sign', async () => {
+    const w = await mountAt({
+      role: 'Investigator',
+      permissions: { enterData: true, editSubject: true, signSubject: true },
+    })
+    expect(signLinkShown(w)).toBe(true)
+  })
+
+  it('does not offer signing to an ra binding, which the SPA calls Investigator', async () => {
+    const w = await mountAt({
+      role: 'Investigator',
+      permissions: { enterData: true, editSubject: false, signSubject: false },
+    })
+    expect(signLinkShown(w)).toBe(false)
+  })
+
+  it('does not offer signing to a system administrator bound as Monitor', async () => {
+    const w = await mountAt({
+      role: 'Administrator',
+      permissions: { enterData: false, editSubject: false, signSubject: false },
+    })
+    expect(signLinkShown(w)).toBe(false)
   })
 })
 

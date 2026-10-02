@@ -20,14 +20,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.sql.DataSource;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
@@ -38,9 +48,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -75,6 +89,11 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
     static Path attachments;
 
     private MockMvc mvc() {
+        return mvcOn(DATA_SOURCE);
+    }
+
+    /** The controllers, reading and writing through {@code dataSource}. */
+    private MockMvc mvcOn(DataSource dataSource) {
         SiteVisibilityFilter filter = new SiteVisibilityFilter(DATA_SOURCE);
         CrfFileStorageService storage = new CrfFileStorageService() {
             @Override
@@ -83,10 +102,10 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
             }
         };
         return MockMvcBuilders.standaloneSetup(
-                        new EventCrfsApiController(DATA_SOURCE, filter, storage,
+                        new EventCrfsApiController(dataSource, filter, storage,
                                 new EventCrfPresenceRegistry(),
-                                new RetinalResultItemDataPopulator(DATA_SOURCE)),
-                        new SdvApiController(DATA_SOURCE, filter))
+                                new RetinalResultItemDataPopulator(dataSource)),
+                        new SdvApiController(dataSource, filter))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -135,8 +154,48 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
+    void aRemovedCrfIsNeitherListedNorVerified() throws Exception {
+        // Event CRF 15 is complete; removing it keeps its completion date.
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET status_id = 7 WHERE event_crf_id = 15");
+        try {
+            assertFalse(listedEventCrfs().contains("15"));
+            mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"15\"]}")
+                            .session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.rejected").value(hasItem("15")));
+            assertFalse(sdvStatus(15));
+
+            setSdvStatus(15, true);
+            assertFalse(listedEventCrfs().contains("15"), "not even when it is verified");
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET status_id = 1, sdv_status = false WHERE event_crf_id = 15");
+        }
+    }
+
+    @Test
+    void aLockedCrfIsVerifiedWithoutACompletionDate() throws Exception {
+        // Legacy locks every CRF of a definition, finished or not; event CRF
+        // 16 has no completion date.
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET status_id = 6 WHERE event_crf_id = 16");
+        try {
+            assertTrue(listedEventCrfs().contains("16"));
+            mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"16\"]}")
+                            .session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.verified").value(hasItem("16")));
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET status_id = 1, sdv_status = false WHERE event_crf_id = 16");
+        }
+    }
+
+    @Test
     void aCrfCompletedInTheLegacyUiIsVerified() throws Exception {
-        // Legacy completes a CRF by status (2), without the SPA's date.
+        // Outside the SPA a CRF is complete by status (2), whether or not it
+        // has the SPA's date: a participant's anonymous submission has none.
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "UPDATE event_crf SET status_id = 2 WHERE event_crf_id = 16");
         try {
@@ -149,6 +208,155 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
             ClinicalWriteFixtures.execute(DATA_SOURCE,
                     "UPDATE event_crf SET status_id = 1, sdv_status = false WHERE event_crf_id = 16");
         }
+    }
+
+    @Test
+    void aVerifiedCrfThatIsNotCompleteStaysListedUntilItIsUnverified() throws Exception {
+        // Verified while still in data entry, as before only complete CRFs
+        // could be.
+        setSdvStatus(3, true);
+        try {
+            assertEquals("verified", listedStatuses().get("3"));
+
+            mvc().perform(json(post("/api/v1/sdv/unverify"),
+                            "{\"eventCrfOids\":[\"3\"],\"reason\":\"verified before completion\"}")
+                            .session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.unverified").value(hasItem("3")));
+
+            assertFalse(listedEventCrfs().contains("3"), "unverified, it is in data entry like the others");
+        } finally {
+            setSdvStatus(3, false);
+        }
+    }
+
+    @Test
+    void aReopenedCrfIsBackInDataEntry() throws Exception {
+        // Completed in the legacy UI: status 2 and both dates.
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET status_id = 2, date_completed = now(), "
+                        + "date_validate_completed = now() WHERE event_crf_id = 16");
+        try {
+            assertTrue(listedEventCrfs().contains("16"));
+
+            mvc().perform(post("/api/v1/eventCrfs/16/markIncomplete").session(investigatorSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("in-progress"));
+
+            assertFalse(listedEventCrfs().contains("16"), "the reopened CRF is in data entry");
+            mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"16\"]}")
+                            .session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.rejected").value(hasItem("16")));
+            assertFalse(sdvStatus(16));
+            assertEquals(1, intColumn("SELECT status_id FROM event_crf WHERE event_crf_id = ?", 16),
+                    "legacy screens read the status: it is available again");
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET status_id = 1, date_completed = NULL, "
+                            + "date_validate_completed = NULL, sdv_status = false WHERE event_crf_id = 16");
+        }
+    }
+
+    @Test
+    void aReopenedDoubleEntryCrfNeedsItsSecondPassAgain() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_definition_crf SET double_entry = true WHERE event_definition_crf_id = 2");
+        // Event CRF 11 with both passes complete.
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET date_validate_completed = now() WHERE event_crf_id = 11");
+        try {
+            assertTrue(listedEventCrfs().contains("11"));
+
+            mvc().perform(post("/api/v1/eventCrfs/11/markIncomplete").session(investigatorSession()))
+                    .andExpect(status().isOk());
+            assertFalse(listedEventCrfs().contains("11"), "the first pass is in data entry again");
+
+            mvc().perform(post("/api/v1/eventCrfs/11/markComplete").session(investigatorSession()))
+                    .andExpect(status().isOk());
+            assertFalse(listedEventCrfs().contains("11"), "the second pass has to be made again");
+            mvc().perform(get("/api/v1/eventCrfs/11/dde-pass").session(investigatorSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pass").value("2"));
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_definition_crf SET double_entry = false WHERE event_definition_crf_id = 2");
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET date_completed = '2020-12-12 09:00:00', "
+                            + "date_validate_completed = NULL, sdv_status = false WHERE event_crf_id = 11");
+            // The reopen took its visit back from completed to data entry started.
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE study_event SET subject_event_status_id = 4 WHERE study_event_id = 14");
+        }
+    }
+
+    @Test
+    void aDoubleEntryCrfSignedDuringItsFirstPassIsNotVerified() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_definition_crf SET double_entry = true WHERE event_definition_crf_id = 2");
+        // Event CRF 16 is in its first pass. Signing the visit stamps it as
+        // the sign endpoints do: signed, with a second-pass date.
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET status_id = 8, date_validate_completed = now() "
+                        + "WHERE event_crf_id = 16");
+        try {
+            assertFalse(listedEventCrfs().contains("16"));
+            mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"16\"]}")
+                            .session(monitor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.rejected").value(hasItem("16")));
+            assertFalse(sdvStatus(16));
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_definition_crf SET double_entry = false WHERE event_definition_crf_id = 2");
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET status_id = 1, date_validate_completed = NULL, "
+                            + "sdv_status = false WHERE event_crf_id = 16");
+        }
+    }
+
+    @Test
+    void signingASubjectLeavesItsRemovedCrfsRemoved() throws Exception {
+        int subject = newSubject("IT-SIGN");
+        int kept = completedVisit(subject, 1, 1, 1);
+        // The V2 visit was cancelled, which removed its CRF.
+        int cancelled = completedVisit(subject, 2, 5, 7);
+
+        SecurityManager passwords = Mockito.mock(SecurityManager.class);
+        Mockito.when(passwords.verifyPassword(Mockito.anyString(), Mockito.any())).thenReturn(true);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                User.withUsername("manual_investigator").password("x").authorities("ROLE_USER").build(),
+                null, List.of()));
+        try {
+            MockMvcBuilders.standaloneSetup(new SubjectsApiController(DATA_SOURCE, passwords,
+                            new SiteVisibilityFilter(DATA_SOURCE)))
+                    .setControllerAdvice(new ApiExceptionHandler())
+                    .build()
+                    .perform(json(post("/api/v1/subjects/SS_ITSIGN/sign"),
+                            "{\"password\":\"x\",\"attestation\":true}")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        assertEquals(8, eventCrfStatus(kept), "the subject's CRFs are signed");
+        assertEquals(7, eventCrfStatus(cancelled), "but not the removed one");
+        assertFalse(listedEventCrfs().contains(String.valueOf(cancelled)));
+    }
+
+    @Test
+    void aCrfOfARemovedVisitIsNotOffered() throws Exception {
+        // Signed with its subject before signing left removed CRFs alone:
+        // the CRF reads signed, its visit is still removed.
+        int subject = newSubject("IT-FLIPPED");
+        String flipped = String.valueOf(completedVisit(subject, 2, 5, 8));
+
+        assertFalse(listedEventCrfs().contains(flipped));
+        mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"" + flipped + "\"]}")
+                        .session(monitor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rejected").value(hasItem(flipped)));
     }
 
     @Test
@@ -267,15 +475,8 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void deletingARepeatingRowWithdrawsTheVerification() throws Exception {
-        // A repeating group holding the systolic reading on CRF version 1,
-        // and a second row of it on event CRF 15.
-        ClinicalWriteFixtures.execute(DATA_SOURCE,
-                "INSERT INTO item_group (item_group_id, name, crf_id, status_id, date_created, "
-                        + "owner_id, oc_oid) VALUES (9901, 'IG_SDV_ROWS', 1, 1, now(), 1, 'IG_SDV_ROWS')");
-        ClinicalWriteFixtures.execute(DATA_SOURCE,
-                "INSERT INTO item_group_metadata (item_group_metadata_id, item_group_id, "
-                        + "crf_version_id, item_id, ordinal, repeat_max, repeating_group, show_group) "
-                        + "VALUES (9901, 9901, 1, 5, 1, 10, true, true)");
+        // A second row of the systolic reading on event CRF 15.
+        repeatingGroupOnVersion1();
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "INSERT INTO item_data (item_id, event_crf_id, status_id, value, date_created, "
                         + "owner_id, ordinal, deleted) VALUES (5, 15, 1, '130', now(), 1, 2, false)");
@@ -287,6 +488,45 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
                     .andExpect(jsonPath("$.itemDataRowsDeleted").value(1));
 
             assertFalse(sdvStatus(15));
+        } finally {
+            setSdvStatus(15, false);
+        }
+    }
+
+    @Test
+    void deletingARowThatIsAlreadyDeletedKeepsTheVerification() throws Exception {
+        // A third row on event CRF 10, deleted before the CRF was verified.
+        repeatingGroupOnVersion1();
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "INSERT INTO item_data (item_id, event_crf_id, status_id, value, date_created, "
+                        + "owner_id, ordinal, deleted) VALUES (5, 10, 5, '128', now(), 1, 3, false)");
+        setSdvStatus(10, true);
+        int deletionsBefore = auditRows(13, "item_data");
+        try {
+            mvc().perform(delete("/api/v1/eventCrfs/10/groups/IG_SDV_ROWS/rows/3")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.itemDataRowsDeleted").value(0));
+
+            assertTrue(sdvStatus(10), "nothing changed, so the verification stands");
+            assertEquals(deletionsBefore, auditRows(13, "item_data"), "and nothing is recorded as deleted");
+        } finally {
+            setSdvStatus(10, false);
+        }
+    }
+
+    @Test
+    void deletingARowThatHoldsNoDataKeepsTheVerification() throws Exception {
+        // Row 7 of the group was added and never filled in.
+        repeatingGroupOnVersion1();
+        setSdvStatus(15, true);
+        try {
+            mvc().perform(delete("/api/v1/eventCrfs/15/groups/IG_SDV_ROWS/rows/7")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.itemDataRowsDeleted").value(0));
+
+            assertTrue(sdvStatus(15), "nothing changed, so the verification stands");
         } finally {
             setSdvStatus(15, false);
         }
@@ -324,6 +564,58 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
+    void deletingAFileThatIsAlreadyGoneKeepsTheVerification() throws Exception {
+        mvc().perform(multipart("/api/v1/eventCrfs/4/items/I_CONSENT_SIGNED/file").file(pdf())
+                        .session(investigatorSession()))
+                .andExpect(status().isOk());
+        mvc().perform(delete("/api/v1/eventCrfs/4/items/I_CONSENT_SIGNED/file")
+                        .session(investigatorSession()))
+                .andExpect(status().isNoContent());
+        setSdvStatus(4, true);
+        try {
+            // The item's row is still there, with no file in it.
+            mvc().perform(delete("/api/v1/eventCrfs/4/items/I_CONSENT_SIGNED/file")
+                            .session(investigatorSession()))
+                    .andExpect(status().isNoContent());
+
+            assertTrue(sdvStatus(4), "nothing changed, so the verification stands");
+        } finally {
+            setSdvStatus(4, false);
+        }
+    }
+
+    @Test
+    void resolvingADoubleEntryConflictToTheFirstPassKeepsTheVerification() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_definition_crf SET double_entry = true WHERE event_definition_crf_id = 2");
+        try {
+            String firstPass = ClinicalWriteFixtures.storedValue(DATA_SOURCE, 2, "I_HEIGHT_CM", 1);
+            // A second clerk keys a height into event CRF 2 that differs from the first.
+            mvc().perform(json(post("/api/v1/eventCrfs/2/dde-commit"),
+                            "{\"values\":{\"I_HEIGHT_CM\":\"" + firstPass + "1\"}}")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.mismatchCount").value(1));
+            setSdvStatus(2, true);
+
+            // The first pass was right: the stored value stays.
+            mvc().perform(json(post("/api/v1/eventCrfs/2/dde-conflicts/I_HEIGHT_CM/resolve"),
+                            "{\"winner\":\"ide\",\"reasonForChange\":\"the source says so\"}")
+                            .session(ClinicalWriteFixtures.sessionAs(DATA_SOURCE, "manual_dm")))
+                    .andExpect(status().isOk());
+
+            assertEquals(firstPass, ClinicalWriteFixtures.storedValue(DATA_SOURCE, 2, "I_HEIGHT_CM", 1));
+            assertTrue(sdvStatus(2), "nothing changed, so the verification stands");
+        } finally {
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_definition_crf SET double_entry = false WHERE event_definition_crf_id = 2");
+            ClinicalWriteFixtures.execute(DATA_SOURCE,
+                    "UPDATE event_crf SET date_validate_completed = NULL, sdv_status = false "
+                            + "WHERE event_crf_id = 2");
+        }
+    }
+
+    @Test
     void resolvingADoubleEntryConflictWithdrawsTheVerification() throws Exception {
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "UPDATE event_definition_crf SET double_entry = true WHERE event_definition_crf_id = 2");
@@ -349,6 +641,53 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
             ClinicalWriteFixtures.execute(DATA_SOURCE,
                     "UPDATE event_crf SET date_validate_completed = NULL, sdv_status = false "
                             + "WHERE event_crf_id = 2");
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* A save does not write back an SDV change made while it runs        */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void aWithdrawalMadeWhileASaveRunsStands() throws Exception {
+        String weight = ClinicalWriteFixtures.storedValue(DATA_SOURCE, 4, "I_WEIGHT_KG", 1);
+        int director = userId("manual_dm");
+        setSdvStatus(4, true);
+        try {
+            // The director withdraws the verification after the save has
+            // loaded event CRF 4 and before it is done.
+            mvcOn(whileTheRequestReadsItemData(() -> ClinicalWriteFixtures.execute(DATA_SOURCE,
+                            "UPDATE event_crf SET sdv_status = false, sdv_update_id = " + director
+                                    + " WHERE event_crf_id = 4")))
+                    .perform(json(post("/api/v1/eventCrfs/4/items"),
+                            "{\"values\":{\"I_WEIGHT_KG\":\"" + weight + "\"}}")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk());
+
+            assertFalse(sdvStatus(4), "the save does not put the verification back");
+            assertEquals(director, sdvUpdateId(4));
+        } finally {
+            setSdvStatus(4, false);
+        }
+    }
+
+    @Test
+    void aVerificationMadeWhileASaveRunsStands() throws Exception {
+        String weight = ClinicalWriteFixtures.storedValue(DATA_SOURCE, 4, "I_WEIGHT_KG", 1);
+        int monitor = userId("manual_monitor");
+        try {
+            mvcOn(whileTheRequestReadsItemData(() -> ClinicalWriteFixtures.execute(DATA_SOURCE,
+                            "UPDATE event_crf SET sdv_status = true, sdv_update_id = " + monitor
+                                    + " WHERE event_crf_id = 4")))
+                    .perform(json(post("/api/v1/eventCrfs/4/items"),
+                            "{\"values\":{\"I_WEIGHT_KG\":\"" + weight + "\"}}")
+                            .session(investigatorSession()))
+                    .andExpect(status().isOk());
+
+            assertTrue(sdvStatus(4), "the save does not undo the verification");
+            assertEquals(monitor, sdvUpdateId(4));
+        } finally {
+            setSdvStatus(4, false);
         }
     }
 
@@ -423,6 +762,48 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
     /* Helpers                                                            */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * A subject of Default Study of its own, for a test that changes it as
+     * a whole; its OID is {@code SS_} and the label without hyphens.
+     */
+    private static int newSubject(String label) throws SQLException {
+        int person = ClinicalWriteFixtures.insert(DATA_SOURCE,
+                "INSERT INTO subject (status_id, gender, unique_identifier, date_created, owner_id, "
+                        + "dob_collected) VALUES (1, 'f', '" + label + "', now(), 1, false) "
+                        + "RETURNING subject_id");
+        return ClinicalWriteFixtures.insert(DATA_SOURCE,
+                "INSERT INTO study_subject (label, subject_id, study_id, status_id, enrollment_date, "
+                        + "date_created, owner_id, oc_oid) VALUES ('" + label + "', " + person + ", 1, 1, "
+                        + "now(), now(), 1, 'SS_" + label.replace("-", "") + "') "
+                        + "RETURNING study_subject_id");
+    }
+
+    /**
+     * A completed visit of the subject at event definition
+     * {@code definition}, with its CRF (version 1) complete.
+     *
+     * @return the event CRF id
+     */
+    private static int completedVisit(int subject, int definition, int visitStatus, int eventCrfStatus)
+            throws SQLException {
+        int visit = ClinicalWriteFixtures.insert(DATA_SOURCE,
+                "INSERT INTO study_event (study_event_definition_id, study_subject_id, sample_ordinal, "
+                        + "date_start, owner_id, status_id, date_created, subject_event_status_id, "
+                        + "start_time_flag, end_time_flag) VALUES (" + definition + ", " + subject
+                        + ", 1, now(), 1, " + visitStatus + ", now(), 4, false, false) "
+                        + "RETURNING study_event_id");
+        return ClinicalWriteFixtures.insert(DATA_SOURCE,
+                "INSERT INTO event_crf (study_event_id, crf_version_id, date_interviewed, "
+                        + "completion_status_id, status_id, date_completed, owner_id, date_created, "
+                        + "study_subject_id, electronic_signature_status, sdv_status) VALUES (" + visit
+                        + ", 1, now(), 1, " + eventCrfStatus + ", now(), 1, now(), " + subject
+                        + ", false, false) RETURNING event_crf_id");
+    }
+
+    private static int eventCrfStatus(int eventCrfId) throws SQLException {
+        return intColumn("SELECT status_id FROM event_crf WHERE event_crf_id = ?", eventCrfId);
+    }
+
     private static MockHttpSession monitor() {
         return ClinicalWriteFixtures.sessionAs(DATA_SOURCE, "manual_monitor");
     }
@@ -436,12 +817,17 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private List<String> listedEventCrfs() throws Exception {
+        return new ArrayList<>(listedStatuses().keySet());
+    }
+
+    /** The SDV list, as event CRF id to row status. */
+    private Map<String, String> listedStatuses() throws Exception {
         String body = mvc().perform(get("/api/v1/sdv").session(monitor()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        List<String> listed = new ArrayList<>();
+        Map<String, String> listed = new LinkedHashMap<>();
         for (JsonNode row : new ObjectMapper().readTree(body)) {
-            listed.add(row.get("eventCrfOid").asText());
+            listed.put(row.get("eventCrfOid").asText(), row.get("status").asText());
         }
         return listed;
     }
@@ -492,6 +878,78 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
             ps.setInt(1, AuditTypeIds.EVENT_CRF_SDV_UNVERIFIED);
             ps.setInt(2, eventCrfId);
             ps.setString(3, reason);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    /**
+     * The test database, except that the first time a request reads item
+     * data, and so after it has loaded the event CRF, {@code meanwhile} runs
+     * on a connection of its own: another request's change, landing while
+     * this one runs.
+     */
+    private static DataSource whileTheRequestReadsItemData(SqlAction meanwhile) {
+        AtomicBoolean ran = new AtomicBoolean();
+        ClassLoader loader = SdvIntegrityDatabaseIT.class.getClassLoader();
+        return (DataSource) Proxy.newProxyInstance(loader, new Class<?>[] {DataSource.class},
+                (proxy, method, args) -> {
+                    Object result = invoke(method, DATA_SOURCE, args);
+                    if (!(result instanceof Connection connection)) {
+                        return result;
+                    }
+                    return Proxy.newProxyInstance(loader, new Class<?>[] {Connection.class},
+                            (p, m, a) -> {
+                                if ("prepareStatement".equals(m.getName()) && a != null
+                                        && a[0] instanceof String sql
+                                        && sql.toLowerCase(Locale.ROOT).contains("item_data")
+                                        && ran.compareAndSet(false, true)) {
+                                    meanwhile.run();
+                                }
+                                return invoke(m, connection, a);
+                            });
+                });
+    }
+
+    private static Object invoke(Method method, Object target, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    @FunctionalInterface
+    private interface SqlAction {
+        void run() throws SQLException;
+    }
+
+    /**
+     * A repeating group, IG_SDV_ROWS, holding the systolic reading (item 5)
+     * on CRF version 1. Created once; later calls find it there.
+     */
+    private static void repeatingGroupOnVersion1() throws SQLException {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "INSERT INTO item_group (item_group_id, name, crf_id, status_id, date_created, "
+                        + "owner_id, oc_oid) SELECT 9901, 'IG_SDV_ROWS', 1, 1, now(), 1, 'IG_SDV_ROWS' "
+                        + "WHERE NOT EXISTS (SELECT 1 FROM item_group WHERE item_group_id = 9901)");
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "INSERT INTO item_group_metadata (item_group_metadata_id, item_group_id, "
+                        + "crf_version_id, item_id, ordinal, repeat_max, repeating_group, show_group) "
+                        + "SELECT 9901, 9901, 1, 5, 1, 10, true, true "
+                        + "WHERE NOT EXISTS (SELECT 1 FROM item_group_metadata "
+                        + "WHERE item_group_metadata_id = 9901)");
+    }
+
+    private static int auditRows(int auditTypeId, String auditTable) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT COUNT(*) FROM audit_log_event WHERE audit_log_event_type_id = ? "
+                             + "AND audit_table = ?")) {
+            ps.setInt(1, auditTypeId);
+            ps.setString(2, auditTable);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getInt(1);
