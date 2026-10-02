@@ -484,7 +484,7 @@ The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each 
 - **Clinical data-integrity gaps in the SPA data-entry path** (reason for change after reopen, required items at completion, subject identifiers, rules on save) — #391.
 - **The monitor's SPA gaps** — #390.
 - **The data manager's SPA gaps** (import commit, audit paging, cascades) — #392.
-- **Item-data provenance** survives status cascades (`ItemDataDAO.updateStatusOnly`) — #377.
+- **Item-data provenance** survives status cascades (`ItemDataDAO.updateStatusOnly`) — #377 for the SPA paths; the legacy remove, restore, lock and unlock servlets use `updateStatusOnly` (or `updateStatusAndOldStatusOnly` where a restore reads `old_status_id`) — branch `fix/muw-legacy-status-provenance`.
 - **Dependabot:** 20 open alerts on the SPA lockfile; 3 fixed, 17 dismissed with the reason on each alert — #366.
 
 ### 14.4 Deferred, with the reason
@@ -503,4 +503,3 @@ The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each 
 | Spring Boot 4 | DR-037; see the spike result | Per the spike |
 | commons-lang/collections, Phase C finish | Most affected files are legacy (§9) | After R3 |
 | Production checks (§13) | No production access in this pass | Lukas runs the queries |
-| Legacy servlets still clear item-data provenance on status changes | Retiring; the SPA paths are fixed | A small follow-up switching them to `updateStatusOnly`, or their closure |

@@ -167,7 +167,7 @@ public class RemoveEventCRFServlet extends SecureController {
                         item.setStatus(Status.AUTO_DELETED);
                         item.setUpdater(ub);
                         item.setUpdatedDate(new Date());
-                        iddao.update(item);
+                        iddao.updateStatusOnly(item);
                         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(sm.getDataSource());
                         ArrayList<DiscrepancyNoteBean> dnNotesOfRemovedItem = dnDao.findExistingNotesForItemData(item.getId());
                         if (!dnNotesOfRemovedItem.isEmpty()) {

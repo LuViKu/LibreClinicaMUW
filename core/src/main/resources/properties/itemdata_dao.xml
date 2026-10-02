@@ -262,6 +262,15 @@
 		<sql>UPDATE item_data SET status_id=?, date_updated=NOW(), update_id=? WHERE item_data_id=?</sql>
 	</query>
 	<query>
+		<name>updateStatusAndOldStatusOnly</name>
+		<!--
+		  As `updateStatusOnly`, and it also records old_status_id: the remove
+		  cascades that a later restore reads back (study, site, event
+		  definition) need the status the row had before it was removed.
+		-->
+		<sql>UPDATE item_data SET status_id=?, old_status_id=?, date_updated=NOW(), update_id=? WHERE item_data_id=?</sql>
+	</query>
+	<query>
 		<name>findAllByEventCRFIdAndItemGroupId</name>
 		<sql>select id.* 
 			from item_data id 
