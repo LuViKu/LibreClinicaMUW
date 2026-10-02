@@ -502,6 +502,17 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
         Boolean b = (Boolean) request.getAttribute(INPUT_IGNORE_PARAMETERS);
         isSubmitted = fp.isSubmitted() && b == null;
+        if (isSubmitted && isInClosedRecord(ecb, currentStudy)) {
+            // Nothing is saved into a removed, locked, signed or frozen record.
+            if (getCrfLocker().isLocked(ecb.getId()) && getCrfLocker().getLockOwner(ecb.getId()) == ub.getId()) {
+                getCrfLocker().unlock(ecb.getId());
+            }
+            addPageMessage(respage.getString("you_may_not_perform_data_entry_on_a_CRF") + " " + respage.getString("data_entry_record_closed"), request);
+            request.setAttribute("id", Integer.valueOf(ecb.getStudySubjectId()).toString());
+            session.removeAttribute(instantAtt);
+            forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET, request, response);
+            return;
+        }
         // variable is used for fetching any null values like "not applicable"
         int eventDefinitionCRFId = 0;
         if (fp != null) {
@@ -5607,6 +5618,39 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
                     + respage.getString("change_study_contact_study_coordinator"), request);
             throw new InsufficientPermissionException(Page.MENU, resexception.getString("no_permission_to_perform_data_entry"), "1");
         }
+    }
+
+    /**
+     * Whether the event CRF, its event, study subject or subject is removed, the
+     * study subject is locked or signed, or the study (or, for a site, its
+     * parent) is locked or frozen: a record data may no longer be saved into.
+     */
+    private boolean isInClosedRecord(EventCRFBean ecb, StudyBean currentStudy) {
+        if (ecb.getStatus().isDeleted()) {
+            return true;
+        }
+        StudyEventBean event = (StudyEventBean) new StudyEventDAO(getDataSource()).findByPK(ecb.getStudyEventId());
+        if (event.getStatus().isDeleted()) {
+            return true;
+        }
+        StudySubjectBean studySubject = (StudySubjectBean) new StudySubjectDAO(getDataSource()).findByPK(ecb.getStudySubjectId());
+        Status ssStatus = studySubject.getStatus();
+        if (ssStatus.isDeleted() || ssStatus.isLocked() || ssStatus.isSigned()) {
+            return true;
+        }
+        if (new SubjectDAO(getDataSource()).findByPK(studySubject.getSubjectId()).getStatus().isDeleted()) {
+            return true;
+        }
+        StudyDAO studyDao = new StudyDAO(getDataSource());
+        StudyBean study = (StudyBean) studyDao.findByPK(currentStudy.getId());
+        if (study.getStatus().isLocked() || study.getStatus().isFrozen()) {
+            return true;
+        }
+        if (study.getParentStudyId() > 0) {
+            StudyBean parent = (StudyBean) studyDao.findByPK(study.getParentStudyId());
+            return parent.getStatus().isLocked() || parent.getStatus().isFrozen();
+        }
+        return false;
     }
 
     /**
