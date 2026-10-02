@@ -57,6 +57,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
@@ -3092,7 +3093,8 @@ public class EventCrfsApiController {
 
     /**
      * Resolve the DDE block for an EventCRF or {@code null} when
-     * the parent EDC has {@code double_entry=false}. Heuristics:
+     * its event definition CRF has {@code double_entry=false}
+     * ({@link #isDoubleEntryEnabled}). Heuristics:
      * <ul>
      *   <li>{@code date_completed=null} ⇒ pass=1</li>
      *   <li>{@code date_completed!=null, date_validate_completed=null}
@@ -3123,25 +3125,24 @@ public class EventCrfsApiController {
         }
     }
 
-    /** True when the parent event_definition_crf has double_entry=true. */
+    /**
+     * True when the event CRF's event definition CRF has
+     * {@code double_entry=true}: for a subject at a site, the site's own
+     * row where the site overrides the definition, else the study's. This
+     * is the row legacy data entry reads, and SDV (whose completeness test
+     * needs the second pass where this says so).
+     */
     private boolean isDoubleEntryEnabled(EventCRFBean ecb) {
         try {
-            StudyEventDAO seDAO = new StudyEventDAO(dataSource);
-            StudyEventBean ev = (StudyEventBean) seDAO.findByPK(ecb.getStudyEventId());
-            if (ev == null || ev.getId() == 0) return false;
-            CRFVersionDAO cvDAO = new CRFVersionDAO(dataSource);
-            CRFVersionBean cv = (CRFVersionBean) cvDAO.findByPK(ecb.getCRFVersionId());
-            if (cv == null || cv.getId() == 0) return false;
-            EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
-            List<EventDefinitionCRFBean> edcs =
-                    edcDAO.findAllParentsByEventDefinitionId(ev.getStudyEventDefinitionId());
-            if (edcs == null) return false;
-            for (EventDefinitionCRFBean edc : edcs) {
-                if (edc != null && edc.getCrfId() == cv.getCrfId()) {
-                    return edc.isDoubleEntry();
-                }
-            }
-            return false;
+            StudySubjectBean ss = (StudySubjectBean) new StudySubjectDAO(dataSource)
+                    .findByPK(ecb.getStudySubjectId());
+            if (ss == null || ss.getId() == 0) return false;
+            StudyBean subjectStudy = (StudyBean) new StudyDAO(dataSource).findByPK(ss.getStudyId());
+            if (subjectStudy == null || subjectStudy.getId() == 0) return false;
+            EventDefinitionCRFBean edc = new EventDefinitionCRFDAO(dataSource)
+                    .findByStudyEventIdAndCRFVersionId(subjectStudy,
+                            ecb.getStudyEventId(), ecb.getCRFVersionId());
+            return edc != null && edc.getId() > 0 && edc.isDoubleEntry();
         } catch (Exception e) {
             LOG.warn("isDoubleEntryEnabled lookup failed for event_crf {} ({})",
                     ecb.getId(), e.getMessage());
