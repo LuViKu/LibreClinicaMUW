@@ -35,11 +35,11 @@ const SITES: PrimaryNavItem = { id: 'sites', to: '/sites', labelKey: 'nav.sites'
 
 /**
  * Per role, in the order the role reaches for them. Mirrors the router's
- * role meta: CRC has no due-visits or inbox route, so it gets neither link.
+ * role meta: CRC has no due-visits or inbox route, so it gets neither link; it builds a study and exports, as the backend lets it.
  */
 export const PRIMARY_NAV: Record<UserRole, PrimaryNavItem[]> = {
   Investigator: [SUBJECTS, NOTES, DUE_VISITS, INBOX],
-  CRC: [SUBJECTS, NOTES],
+  CRC: [SUBJECTS, NOTES, BUILD, EXPORT],
   Monitor: [SUBJECTS, SDV, NOTES, AUDIT],
   'Data Manager': [BUILD, INBOX, EXPORT, NOTES],
   Administrator: [USERS, SITES, EXPORT, AUDIT],

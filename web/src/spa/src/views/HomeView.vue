@@ -247,7 +247,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'build-study' },
     titleKey: 'buildStudy.title',
     descKey: 'home.dataManager.buildStudyDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     group: 'study',
   },
   {
@@ -255,7 +255,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'import-crf-data' },
     titleKey: 'importCrf.title',
     descKey: 'home.dataManager.importCrfDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     group: 'study',
   },
   {
@@ -263,7 +263,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'rules' },
     titleKey: 'rules.title',
     descKey: 'home.dataManager.rulesDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     badge: () => activeRuleSetsCount.value,
     group: 'study',
   },
@@ -272,7 +272,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'data-export' },
     titleKey: 'home.dataManager.dataExportTitle',
     descKey: 'home.dataManager.dataExportDesc',
-    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    allowedRoles: ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -280,7 +280,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'audit-log' },
     titleKey: 'auditLog.title',
     descKey: 'home.administrator.auditLogDesc',
-    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    allowedRoles: ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -288,7 +288,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'sites' },
     titleKey: 'home.administrator.sitesTitle',
     descKey: 'home.administrator.sitesDesc',
-    allowedRoles: ['Data Manager', 'Administrator'],
+    allowedRoles: ['Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -452,6 +452,8 @@ onMounted(() => {
   }
   if (has('Monitor') || has('Data Manager')) {
     inflight.push(sdv.load())
+  }
+  if (has('Monitor') || has('Data Manager') || has('CRC')) {
     inflight.push(rules.load())
   }
   if (rs.length > 0) {

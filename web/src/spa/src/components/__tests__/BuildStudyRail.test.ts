@@ -60,6 +60,13 @@ describe('BuildStudyRail', () => {
     expect(w.find('[data-testid="rail-parameters"]').exists()).toBe(false)
   })
 
+  it('lists the build pages for a CRC, as the backend lets a coordinator build', async () => {
+    const w = await mountAt('/crf-library', ['CRC'])
+    for (const id of ['tracker', 'crf-library', 'event-definitions', 'group-classes', 'rules', 'sites']) {
+      expect(w.find(`[data-testid="rail-${id}"]`).exists(), id).toBe(true)
+    }
+  })
+
   it('hides pages the role cannot open', async () => {
     const w = await mountAt('/manage-users', ['Investigator'])
     expect(w.find('[data-testid="rail-crf-library"]').exists()).toBe(false)
