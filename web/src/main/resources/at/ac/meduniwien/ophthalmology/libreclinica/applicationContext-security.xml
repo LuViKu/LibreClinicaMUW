@@ -147,9 +147,13 @@
 		</constructor-arg>
 	</bean>
     
+    <!-- Writes the logout audit row once per session: through the registry
+         for a session it holds, which it removes before the session ends,
+         and itself for any other (an SSO login). -->
     <bean id="openClinicaLogoutHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurityContextLogoutHandler">
         <property name="auditUserLoginDao" ref="auditUserLoginDao"/>
         <property name="dataSource" ref="dataSource"/>
+        <property name="sessionRegistry" ref="sessionRegistry"/>
     </bean>
     
     <!--

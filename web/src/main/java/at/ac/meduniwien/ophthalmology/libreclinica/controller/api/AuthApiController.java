@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurityContextLogoutHandler;
 
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,8 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.session.SessionRegistry;
-import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,12 +35,12 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code LogoutServlet} does:
  * <ul>
  *   <li>releases the CRFs the user holds open for data entry;</li>
- *   <li>writes the {@code audit_user_login} row "successful logout". The
- *       session registry writes it when it forgets a session: for
- *       {@code LogoutServlet} and for a session timeout, when the session
- *       dies. This endpoint ends the registry entry itself, before the
- *       session, so the row is written once and during the request;</li>
- *   <li>invalidates the session and clears the security context.</li>
+ *   <li>writes the {@code audit_user_login} row "successful logout", once
+ *       and during the request, and invalidates the session and clears the
+ *       security context, through the handler that ends a legacy screen's
+ *       session ({@link OpenClinicaSecurityContextLogoutHandler}). That also
+ *       covers a session the session registry does not hold, such as an SSO
+ *       login, and a failed audit write does not keep the session alive.</li>
  * </ul>
  * POST only, like every handler here that changes state: a GET can be
  * triggered from another site's page, and the {@code SameSite=Lax} session
@@ -54,13 +53,14 @@ public class AuthApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuthApiController.class);
 
-    private final SessionRegistry sessionRegistry;
+    private final OpenClinicaSecurityContextLogoutHandler logoutHandler;
     private final CRFLocker crfLocker;
 
     @Autowired
-    public AuthApiController(@Qualifier("sessionRegistry") SessionRegistry sessionRegistry,
-                             CRFLocker crfLocker) {
-        this.sessionRegistry = sessionRegistry;
+    public AuthApiController(
+            @Qualifier("openClinicaLogoutHandler") OpenClinicaSecurityContextLogoutHandler logoutHandler,
+            CRFLocker crfLocker) {
+        this.logoutHandler = logoutHandler;
         this.crfLocker = crfLocker;
     }
 
@@ -74,16 +74,8 @@ public class AuthApiController {
                 crfLocker.unlockAllForUser(ub.getId());
                 LOG.info("User {} logged out", ub.getName());
             }
-            try {
-                sessionRegistry.removeSessionInformation(session.getId());
-            } catch (RuntimeException e) {
-                // As when the row is written for a dying session: a failed
-                // audit write does not keep the session alive.
-                LOG.warn("Logout audit row for the session was not written", e);
-            }
         }
-        new SecurityContextLogoutHandler().logout(request, response,
-                SecurityContextHolder.getContext().getAuthentication());
+        logoutHandler.logout(request, response, SecurityContextHolder.getContext().getAuthentication());
         return ResponseEntity.noContent().build();
     }
 }

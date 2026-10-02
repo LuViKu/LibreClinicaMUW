@@ -16,7 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.util.LinkedHashMap;
-import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -30,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.JitProvisioningS
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LookupOnlyProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurityContextLogoutHandler;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
@@ -259,7 +259,7 @@ public class SecurityConfig {
             @Qualifier("myFilter") OpenClinicaUsernamePasswordAuthenticationFilter myFilter,
             @Qualifier("concurrencyFilter") ConcurrentSessionFilter concurrencyFilter,
             @Qualifier("sas") SessionAuthenticationStrategy sas,
-            @Qualifier("openClinicaLogoutHandler") LogoutSuccessHandler logoutSuccessHandler,
+            @Qualifier("openClinicaLogoutHandler") OpenClinicaSecurityContextLogoutHandler logoutHandler,
             // Phase D.3 (DR-014): SSO pre-auth wiring. The filter is
             // only attached when libreclinica.sso.enabled=true;
             // otherwise the auth flow is identical to D.2 closure.
@@ -318,7 +318,10 @@ public class SecurityConfig {
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
             .logout(logout -> logout
                 .logoutUrl("/j_spring_security_logout")
-                .logoutSuccessHandler(logoutSuccessHandler)
+                // Runs ahead of the filter's own handler, which invalidates
+                // the session: the logout audit row is written once.
+                .addLogoutHandler(logoutHandler)
+                .logoutSuccessHandler(logoutHandler)
             );
 
         // Phase D.3 (DR-014): institution-agnostic SSO pre-auth.

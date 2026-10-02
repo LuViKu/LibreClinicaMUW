@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,20 +43,33 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
+import org.springframework.context.annotation.AnnotatedBeanDefinitionReader;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockServletContext;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.session.ConcurrentSessionFilter;
+import org.springframework.security.web.session.HttpSessionDestroyedEvent;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.support.GenericWebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -65,7 +78,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SecurityConfig;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AbstractApiControllerDatabaseIT;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuthApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.MeApiController;
@@ -73,6 +88,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
@@ -80,6 +96,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditServi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -95,6 +112,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  * up what the SPA used to get from following the redirect to
  * {@code /MainMenu}; a browser form login still gets that redirect. The
  * SPA's sign-out writes the logout audit row and ends the session.
+ *
+ * <p>Every way a session is signed out writes that row once: the SPA's
+ * sign-out, the legacy screens' {@code /j_spring_security_logout} through the
+ * logout filter {@link SecurityConfig} builds, and the next request of a
+ * session a second login displaced. The sessions here tell the session
+ * registry when they end, as Tomcat's do, so a row the registry writes for a
+ * dying session is counted too.
  */
 class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
 
@@ -118,15 +142,25 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int LEGACY = 30108;
     private static final int LEGACY_LOCKED = 30109;
     private static final int LOGOUT = 30110;
+    private static final int NAVBAR = 30111;
+    private static final int SSO_NAVBAR = 30112;
+    private static final int NAVBAR_FAIL = 30113;
+    private static final int DISPLACED = 30114;
+    private static final int SSO_SPA = 30115;
+    private static final int LOGOUT_FAIL = 30116;
+    private static final int LOGOUT_GET = 30117;
 
     private static Properties savedSqlInitParams;
 
     private final List<AuditUserLoginBean> audit = new ArrayList<>();
+    /** The audit DAO fails every logout row, as with the database unreachable. */
+    private boolean refuseLogoutRows;
     private DefaultListableBeanFactory beans;
     private OpenClinicaUsernamePasswordAuthenticationFilter filter;
     private TwoFactorService twoFactor;
     private MockHttpServletRequest lastRequest;
     private DataSource savedStaticDataSource;
+    private GenericWebApplicationContext securityConfig;
 
     @BeforeAll
     static void seedAccountsAndSettings() throws Exception {
@@ -140,6 +174,13 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         seedUser(LEGACY, "spa-legacy", "Investigator", "current_date");
         seedUser(LEGACY_LOCKED, "spa-legacy-locked", "Investigator", "current_date");
         seedUser(LOGOUT, "spa-logout", "Investigator", "current_date");
+        seedUser(NAVBAR, "spa-navbar", "Investigator", "current_date");
+        seedUser(SSO_NAVBAR, "spa-sso-navbar", "Investigator", "current_date");
+        seedUser(NAVBAR_FAIL, "spa-navbar-fail", "Investigator", "current_date");
+        seedUser(DISPLACED, "spa-displaced", "Investigator", "current_date");
+        seedUser(SSO_SPA, "spa-sso", "Investigator", "current_date");
+        seedUser(LOGOUT_FAIL, "spa-logout-fail", "Investigator", "current_date");
+        seedUser(LOGOUT_GET, "spa-logout-get", "Investigator", "current_date");
         sql("UPDATE user_account SET status_id = " + Status.LOCKED.getId()
                 + ", account_non_locked = false WHERE user_id = " + LEGACY_LOCKED);
         // Lock after three consecutive failures (off by default).
@@ -201,6 +242,9 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         AuditUserLoginDao auditDao = new AuditUserLoginDao() {
             @Override
             public AuditUserLoginBean saveOrUpdate(AuditUserLoginBean row) {
+                if (refuseLogoutRows && row.getLoginStatus() == LoginStatus.SUCCESSFUL_LOGOUT) {
+                    throw new DataAccessResourceFailureException("audit_user_login cannot be reached");
+                }
                 audit.add(row);
                 return row;
             }
@@ -227,6 +271,9 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     void clearThreadAndStatics() {
         SecurityContextHolder.clearContext();
         SessionManager.setStaticDataSource(savedStaticDataSource);
+        if (securityConfig != null) {
+            securityConfig.close();
+        }
     }
 
     /** ConfigurationDao reading the configuration table directly instead of through Hibernate. */
@@ -257,7 +304,15 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockHttpServletResponse login(String username, String password, String accept) throws Exception {
         MockHttpServletRequest request =
-                new MockHttpServletRequest("POST", "/LibreClinica/j_spring_security_check");
+                new MockHttpServletRequest("POST", "/LibreClinica/j_spring_security_check") {
+                    @Override
+                    public HttpSession getSession(boolean create) {
+                        if (create && super.getSession(false) == null) {
+                            setSession(new PublishedSession());
+                        }
+                        return super.getSession(create);
+                    }
+                };
         request.setContextPath("/LibreClinica");
         request.setServletPath("/j_spring_security_check");
         request.addParameter("j_username", username);
@@ -271,6 +326,98 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockHttpSession session() {
         return (MockHttpSession) lastRequest.getSession(false);
+    }
+
+    private OpenClinicaSessionRegistryImpl registry() {
+        return beans.getBean("sessionRegistry", OpenClinicaSessionRegistryImpl.class);
+    }
+
+    /**
+     * A session that tells the session registry when it ends, as
+     * HttpSessionEventPublisher does for Tomcat's sessions: before the session
+     * is invalidated, and a listener that fails is logged, not thrown. A plain
+     * MockHttpSession tells no one, so a logout row the registry writes for a
+     * dying session would go unseen.
+     */
+    private final class PublishedSession extends MockHttpSession {
+        @Override
+        public void invalidate() {
+            try {
+                registry().onApplicationEvent(new HttpSessionDestroyedEvent(this));
+            } catch (RuntimeException listenerFailure) {
+                // Tomcat logs it and invalidates the session all the same.
+            }
+            super.invalidate();
+        }
+    }
+
+    /**
+     * A session as the SSO filter (libreclinica.sso.enabled) leaves it: the
+     * pre-authenticated login in its security context, and the user bean the
+     * screens put beside it. That filter saves the context without the session
+     * strategy, so the session registry does not hold the session.
+     */
+    private MockHttpSession ssoSession(String username) {
+        User principal = new User(username, "", AuthorityUtils.createAuthorityList("ROLE_USER"));
+        MockHttpSession session = new PublishedSession();
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, new SecurityContextImpl(
+                new PreAuthenticatedAuthenticationToken(principal, "N/A", principal.getAuthorities())));
+        session.setAttribute(SecureController.USER_BEAN_NAME, new UserAccountDAO(DATA_SOURCE).findByUserName(username));
+        return session;
+    }
+
+    /** A request of {@code session}, with the security context the filter chain loads for it. */
+    private static MockHttpServletRequest requestOf(MockHttpSession session, String method, String servletPath,
+            String pathInfo) {
+        MockHttpServletRequest request = new MockHttpServletRequest(method,
+                "/LibreClinica" + servletPath + (pathInfo == null ? "" : pathInfo));
+        request.setContextPath("/LibreClinica");
+        request.setServletPath(servletPath);
+        request.setPathInfo(pathInfo);
+        request.setSession(session);
+        SecurityContextHolder.setContext((SecurityContext)
+                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY));
+        return request;
+    }
+
+    /**
+     * The logout filter of the chain {@link SecurityConfig} builds, over the
+     * beans the security XML defines here.
+     */
+    private LogoutFilter logoutFilter() {
+        if (securityConfig == null) {
+            securityConfig = new GenericWebApplicationContext(new MockServletContext());
+            securityConfig.getDefaultListableBeanFactory().setParentBeanFactory(beans);
+            new AnnotatedBeanDefinitionReader(securityConfig).register(SecurityConfig.class);
+            securityConfig.registerBean(UserAccountDAO.class, () -> new UserAccountDAO(DATA_SOURCE));
+            securityConfig.registerBean(PublicOctUploadRateLimitFilter.class);
+            securityConfig.refresh();
+        }
+        return securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
+                .filter(LogoutFilter.class::isInstance).map(LogoutFilter.class::cast)
+                .findFirst().orElseThrow();
+    }
+
+    /** The legacy screens' sign-out link, {@code GET /j_spring_security_logout}. */
+    private MockHttpServletResponse legacySignOut(MockHttpSession session) throws Exception {
+        MockHttpServletRequest request = requestOf(session, "GET", "/j_spring_security_logout", null);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        logoutFilter().doFilter(request, response, chain);
+        assertNull(chain.getRequest(), "the logout filter answers the request itself");
+        return response;
+    }
+
+    /** The SPA's sign-out of {@code session}, sent with {@code method}. */
+    private ResultActions spaSignOut(MockHttpSession session, HttpMethod method) throws Exception {
+        // What the security filter chain loads for the request.
+        SecurityContextHolder.setContext((SecurityContext)
+                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY));
+        AuthApiController api = new AuthApiController(
+                beans.getBean("openClinicaLogoutHandler", OpenClinicaSecurityContextLogoutHandler.class),
+                beans.getBean("crfLocker", CRFLocker.class));
+        return MockMvcBuilders.standaloneSetup(api).build()
+                .perform(request(method, "/api/v1/auth/logout").session(session));
     }
 
     private static ResultActions me(MockHttpSession session) throws Exception {
@@ -451,13 +598,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         CRFLocker locker = beans.getBean("crfLocker", CRFLocker.class);
         locker.lock(4711, LOGOUT);
         audit.clear();
-        // What the security filter chain loads for the request.
-        SecurityContextHolder.setContext((SecurityContext)
-                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY));
 
-        MockMvcBuilders.standaloneSetup(new AuthApiController(registry, locker)).build()
-                .perform(post("/api/v1/auth/logout").session(session))
-                .andExpect(status().isNoContent());
+        spaSignOut(session, HttpMethod.POST).andExpect(status().isNoContent());
 
         assertTrue(session.isInvalid(), "the session is invalidated");
         assertNull(SecurityContextHolder.getContext().getAuthentication(), "the security context is cleared");
@@ -466,5 +608,116 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(List.of(LoginStatus.SUCCESSFUL_LOGOUT), audited(), "one logout row");
         assertEquals("spa-logout", audit.get(0).getUserName());
         assertEquals(LOGOUT, audit.get(0).getUserAccountId());
+    }
+
+    @Test
+    void theSpaLogoutOfAnSsoSessionWritesTheLogoutRowAndReleasesItsLocks() throws Exception {
+        MockHttpSession session = ssoSession("spa-sso");
+        assertNull(registry().getSessionInformation(session.getId()), "the registry does not hold an SSO session");
+        CRFLocker locker = beans.getBean("crfLocker", CRFLocker.class);
+        locker.lock(4712, SSO_SPA);
+
+        spaSignOut(session, HttpMethod.POST).andExpect(status().isNoContent());
+
+        assertTrue(session.isInvalid(), "the session is invalidated");
+        assertNull(SecurityContextHolder.getContext().getAuthentication(), "the security context is cleared");
+        assertFalse(locker.isLocked(4712), "the user's CRF locks are released");
+        assertEquals(List.of(LoginStatus.SUCCESSFUL_LOGOUT), audited(), "one logout row");
+        assertEquals("spa-sso", audit.get(0).getUserName());
+        assertEquals(SSO_SPA, audit.get(0).getUserAccountId());
+    }
+
+    @Test
+    void aFailedLogoutAuditWriteStillEndsTheSpaSession() throws Exception {
+        assertEquals(204, login("spa-logout-fail", PASSWORD, JSON).getStatus());
+        MockHttpSession session = session();
+        refuseLogoutRows = true;
+
+        spaSignOut(session, HttpMethod.POST).andExpect(status().isNoContent());
+
+        assertTrue(session.isInvalid(), "the session is invalidated");
+        assertNull(SecurityContextHolder.getContext().getAuthentication(), "the security context is cleared");
+    }
+
+    @Test
+    void aGetDoesNotSignTheSpaOut() throws Exception {
+        assertEquals(204, login("spa-logout-get", PASSWORD, JSON).getStatus());
+        MockHttpSession session = session();
+        CRFLocker locker = beans.getBean("crfLocker", CRFLocker.class);
+        locker.lock(4713, LOGOUT_GET);
+        audit.clear();
+
+        spaSignOut(session, HttpMethod.GET).andExpect(status().isMethodNotAllowed());
+
+        assertFalse(session.isInvalid(), "the session stays");
+        assertNotNull(registry().getSessionInformation(session.getId()), "the session stays registered");
+        assertTrue(locker.isLocked(4713), "the user's CRF locks stay");
+        assertEquals(List.of(), audited(), "no logout row");
+    }
+
+    // --- the legacy sign-outs ------------------------------------------------
+
+    @Test
+    void theLegacySignOutWritesOneLogoutRow() throws Exception {
+        assertEquals(302, login("spa-navbar", PASSWORD, BROWSER).getStatus());
+        MockHttpSession session = session();
+        assertNotNull(registry().getSessionInformation(session.getId()), "the login registered the session");
+        audit.clear();
+
+        MockHttpServletResponse response = legacySignOut(session);
+
+        assertEquals("/LibreClinica/MainMenu", response.getRedirectedUrl());
+        assertTrue(session.isInvalid(), "the session is invalidated");
+        assertNull(registry().getSessionInformation(session.getId()));
+        assertEquals(List.of(LoginStatus.SUCCESSFUL_LOGOUT), audited(), "one logout row");
+        assertEquals(NAVBAR, audit.get(0).getUserAccountId());
+    }
+
+    @Test
+    void theLegacySignOutWritesTheLogoutRowOfAnSsoSession() throws Exception {
+        MockHttpSession session = ssoSession("spa-sso-navbar");
+        assertNull(registry().getSessionInformation(session.getId()), "the registry does not hold an SSO session");
+
+        MockHttpServletResponse response = legacySignOut(session);
+
+        assertEquals("/LibreClinica/MainMenu", response.getRedirectedUrl());
+        assertTrue(session.isInvalid(), "the session is invalidated");
+        assertEquals(List.of(LoginStatus.SUCCESSFUL_LOGOUT), audited(), "one logout row");
+        assertEquals("spa-sso-navbar", audit.get(0).getUserName());
+        assertEquals(SSO_NAVBAR, audit.get(0).getUserAccountId());
+    }
+
+    @Test
+    void aFailedLogoutAuditWriteStillEndsTheLegacySession() throws Exception {
+        assertEquals(302, login("spa-navbar-fail", PASSWORD, BROWSER).getStatus());
+        MockHttpSession session = session();
+        refuseLogoutRows = true;
+
+        MockHttpServletResponse response = legacySignOut(session);
+
+        assertEquals("/LibreClinica/MainMenu", response.getRedirectedUrl());
+        assertTrue(session.isInvalid(), "the session is invalidated");
+        assertNull(SecurityContextHolder.getContext().getAuthentication(), "the security context is cleared");
+    }
+
+    @Test
+    void aDisplacedSessionWritesOneLogoutRowOnItsNextRequest() throws Exception {
+        assertEquals(204, login("spa-displaced", PASSWORD, JSON).getStatus());
+        MockHttpSession displaced = session();
+        // The same account signs in again, in another browser.
+        assertEquals(204, login("spa-displaced", PASSWORD, JSON).getStatus());
+        assertTrue(registry().getSessionInformation(displaced.getId()).isExpired(), "the first session is expired");
+        audit.clear();
+
+        MockHttpServletRequest request = requestOf(displaced, "POST", "/pages", "/api/v1/auth/logout");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        beans.getBean("concurrencyFilter", ConcurrentSessionFilter.class).doFilter(request, response, chain);
+
+        assertEquals("/LibreClinica/MainMenu", response.getRedirectedUrl());
+        assertNull(chain.getRequest(), "the request goes no further");
+        assertTrue(displaced.isInvalid(), "the session is invalidated");
+        assertEquals(List.of(LoginStatus.SUCCESSFUL_LOGOUT), audited(), "one logout row");
+        assertEquals(DISPLACED, audit.get(0).getUserAccountId());
     }
 }
