@@ -906,7 +906,7 @@ public class EventDefinitionsApiController {
                      JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
                      JOIN study_event se ON se.study_event_id = ec.study_event_id
                     WHERE se.study_event_definition_id = ? AND se.status_id NOT IN (5, 7)
-                      AND ec.status_id <> 5 AND id.status_id NOT IN (5, 7))
+                      AND ec.status_id NOT IN (5, 7) AND id.status_id NOT IN (5, 7))
                 """;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -1021,7 +1021,8 @@ public class EventDefinitionsApiController {
                             + "WHERE study_event_definition_id = ? AND " + EventDataStatusCascade.LIVE
                             + " RETURNING study_event_id",
                     me.getId(), target.getId());
-            EventDataStatusCascade.Counts data = EventDataStatusCascade.autoRemove(c, visits, me.getId());
+            EventDataStatusCascade.Counts data = EventDataStatusCascade.autoRemove(c, visits,
+                    EventDataStatusCascade.Remover.EVENT_DEFINITION, target.getId(), me.getId());
             return new int[] {assignments, visits.size(), data.eventCrfs(), data.values()};
         });
     }
@@ -1049,7 +1050,8 @@ public class EventDefinitionsApiController {
                             + "(SELECT study_subject_id FROM study_subject WHERE "
                             + EventDataStatusCascade.LIVE + ") RETURNING study_event_id",
                     me.getId(), target.getId());
-            EventDataStatusCascade.Counts data = EventDataStatusCascade.restore(c, visits, me.getId());
+            EventDataStatusCascade.Counts data = EventDataStatusCascade.restore(c, visits,
+                    EventDataStatusCascade.Remover.EVENT_DEFINITION, target.getId(), me.getId());
             return new int[] {assignments, visits.size(), data.eventCrfs(), data.values()};
         });
     }

@@ -35,13 +35,14 @@ final class ItemDataStatusCascade {
 
     /**
      * Marks the CRF's values auto-removed, except those removed on their
-     * own, as legacy {@code RemoveEventCRFServlet} does.
+     * own, as legacy {@code RemoveEventCRFServlet} does, each recording its
+     * status in {@code old_status_id} for {@link #restore}.
      *
      * @return the ids of the values marked
      */
     static List<Integer> autoRemove(Connection c, int eventCrfId, int userId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "UPDATE item_data SET status_id = 7, update_id = ?, date_updated = now() "
+                "UPDATE item_data SET old_status_id = status_id, status_id = 7, update_id = ?, date_updated = now() "
                         + "WHERE event_crf_id = ? AND status_id IS DISTINCT FROM 5 "
                         + "RETURNING item_data_id")) {
             ps.setInt(1, userId);
@@ -55,14 +56,23 @@ final class ItemDataStatusCascade {
     }
 
     /**
-     * Makes the CRF's auto-removed values available again. A value removed
-     * on its own stays removed.
+     * Brings back the CRF's auto-removed values. A value removed on its own
+     * stays removed.
      *
+     * @param asRecorded each value gets back the status {@link #autoRemove}
+     *        recorded, and one that was auto-removed already stays removed;
+     *        only when the CRF's own removal record still holds
+     *        ({@link EventDataStatusCascade#recordedStatus}). Otherwise every
+     *        auto-removed value becomes available, as legacy
+     *        {@code RestoreEventCRFServlet} makes them.
      * @return the number of values restored
      */
-    static int restore(Connection c, int eventCrfId, int userId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "UPDATE item_data SET status_id = 1, update_id = ?, date_updated = now() "
+    static int restore(Connection c, int eventCrfId, int userId, boolean asRecorded) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(asRecorded
+                ? "UPDATE item_data SET status_id = COALESCE(NULLIF(old_status_id, 0), 1), update_id = ?, "
+                        + "date_updated = now() WHERE event_crf_id = ? AND status_id = 7 "
+                        + "AND (old_status_id IS NULL OR old_status_id NOT IN (5, 7))"
+                : "UPDATE item_data SET status_id = 1, update_id = ?, date_updated = now() "
                         + "WHERE event_crf_id = ? AND status_id = 7")) {
             ps.setInt(1, userId);
             ps.setInt(2, eventCrfId);

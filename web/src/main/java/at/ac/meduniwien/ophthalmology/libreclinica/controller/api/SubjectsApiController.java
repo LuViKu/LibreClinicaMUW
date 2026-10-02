@@ -2462,12 +2462,14 @@ public class SubjectsApiController {
      *
      * <p>Where it differs from those servlets:
      * <ul>
-     *   <li>An event CRF or value records the status it had
-     *       ({@code old_status_id}) and gets it back, as the legacy site
-     *       removal and restore do. The subject servlets bring it back as
-     *       available, which unlocks a locked CRF and unsigns a signed one.
-     *       A row already auto-removed records that, so the restore leaves
-     *       it removed.</li>
+     *   <li>An event CRF or value records the status it had and gets it
+     *       back, as the legacy site removal and restore do
+     *       ({@link EventDataStatusCascade}). The subject servlets bring it
+     *       back as available, which unlocks a locked CRF and unsigns a
+     *       signed one. A row already auto-removed records that, so the
+     *       restore leaves it removed. A CRF the legacy servlet removed, or
+     *       one a legacy path changed since, has no record that holds and
+     *       comes back available, as with the servlet.</li>
      *   <li>Only auto-removed rows come back, and a visit only when its
      *       event definition is not removed. This cascade used to make
      *       every row that was not removed available.</li>
@@ -2509,7 +2511,8 @@ public class SubjectsApiController {
                         + "WHERE study_subject_id = ? AND " + EventDataStatusCascade.LIVE
                         + " RETURNING study_event_id",
                 userId, studySubjectId);
-        EventDataStatusCascade.autoRemove(c, visits, userId);
+        EventDataStatusCascade.autoRemove(c, visits,
+                EventDataStatusCascade.Remover.STUDY_SUBJECT, studySubjectId, userId);
     }
 
     /** The subject's status, updater and update date, on the cascade's connection. */
@@ -2532,7 +2535,8 @@ public class SubjectsApiController {
                         + "(SELECT study_event_definition_id FROM study_event_definition WHERE "
                         + EventDataStatusCascade.LIVE + ") RETURNING study_event_id",
                 userId, studySubjectId);
-        EventDataStatusCascade.restore(c, visits, userId);
+        EventDataStatusCascade.restore(c, visits,
+                EventDataStatusCascade.Remover.STUDY_SUBJECT, studySubjectId, userId);
     }
 
     /**

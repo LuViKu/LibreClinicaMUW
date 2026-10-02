@@ -218,20 +218,16 @@ public class EventCrfRemovalApiController {
     }
 
     /**
-     * Marks the CRF removed, unless it is removed, locked or signed by now.
+     * Marks the CRF removed, unless it is removed, locked or signed by now,
+     * recording the status it had, so that the restore gives back a
+     * completed CRF completed ({@link EventDataStatusCascade#removeEventCrf}).
      * Removed, not auto-removed: it was removed on its own, so restoring its
      * visit or subject, which brings back what was auto-removed with them,
      * leaves it removed. {@code EventCRFDAO.update} is not used: it rewrites
      * every column of the row.
      */
     private static boolean markRemoved(Connection c, int eventCrfId, int userId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "UPDATE event_crf SET status_id = 5, update_id = ?, date_updated = now() "
-                        + "WHERE event_crf_id = ? AND status_id NOT IN (5, 6, 7, 8)")) {
-            ps.setInt(1, userId);
-            ps.setInt(2, eventCrfId);
-            return ps.executeUpdate() == 1;
-        }
+        return EventDataStatusCascade.removeEventCrf(c, eventCrfId, userId);
     }
 
     /**

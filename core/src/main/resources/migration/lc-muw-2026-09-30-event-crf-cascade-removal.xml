@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      What an SPA removal took from an event CRF, so that its restore can
+      give it back as it was (a locked CRF locked, a completed one
+      completed).
+
+      event_crf.old_status_id cannot say it alone. The legacy removals and
+      restores, which stay reachable, write the column back unchanged through
+      EventCRFDAO.update, so a value recorded by one removal survives into
+      later ones it says nothing about. A row here names the removal that
+      took the CRF (the study subject, the event definition, or the event CRF
+      itself) and the status it took, and holds the CRF's date_updated as
+      that removal left it. Every later write through EventCRFDAO.update sets
+      date_updated to now(), so a row whose removed_at no longer equals the
+      CRF's date_updated describes a removal that has since been undone or
+      overtaken, and the restore does not trust it.
+    -->
+    <changeSet id="2026-09-30-event-crf-cascade-removal" author="muw-ophthalmology" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="event_crf_cascade_removal"/></not>
+        </preConditions>
+        <comment>event_crf_cascade_removal: the removal that took an event CRF, and the status it took.</comment>
+        <sql>
+            CREATE TABLE event_crf_cascade_removal (
+                event_crf_id    integer PRIMARY KEY
+                                REFERENCES event_crf (event_crf_id) ON DELETE CASCADE,
+                removed_with    varchar(32) NOT NULL,
+                removed_with_id integer NOT NULL,
+                prior_status_id integer NOT NULL,
+                removed_at      timestamp with time zone NOT NULL
+            );
+            CREATE INDEX i_event_crf_cascade_removal_with
+                ON event_crf_cascade_removal (removed_with, removed_with_id);
+        </sql>
+        <rollback>
+            <sql>DROP TABLE IF EXISTS event_crf_cascade_removal;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

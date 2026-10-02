@@ -150,6 +150,93 @@ class EventCrfRemovalDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "the restore lost the value's provenance");
     }
 
+    /**
+     * A CRF removed while complete comes back complete, its values with the
+     * status they had, and the audit row says what the restore did.
+     */
+    @Test
+    void aCompletedCrfComesBackCompleted() throws Exception {
+        MockHttpSession dm = session("manual_dm", Role.STUDYDIRECTOR);
+        exec("UPDATE event_crf SET status_id = 2 WHERE event_crf_id = 2");
+        exec("UPDATE item_data SET status_id = 2 WHERE event_crf_id = 2");
+
+        remove(2, "Entered on the wrong visit", dm).andExpect(status().isNoContent());
+        assertEquals(5, statusOf("event_crf", 2));
+        for (int value : new int[] {6, 7}) assertEquals(7, statusOf("item_data", value));
+
+        mockMvc().perform(post("/api/v1/eventCrfs/2/restore").session(dm))
+                .andExpect(status().isNoContent());
+        assertEquals(2, statusOf("event_crf", 2), "the completed CRF came back in data entry");
+        for (int value : new int[] {6, 7}) assertEquals(2, statusOf("item_data", value), "value " + value);
+        assertEquals(List.of("DELETED", "UNAVAILABLE"), row("SELECT old_value, new_value FROM audit_log_event "
+                + "WHERE audit_table = 'event_crf' AND audit_log_event_type_id = " + AuditTypeIds.EVENT_CRF_RESTORED
+                + " AND entity_id = ?", 2));
+    }
+
+    /**
+     * What the removal recorded holds only while nothing else changes the
+     * CRF: once a legacy write has touched it, the restore makes it
+     * available, as legacy {@code RestoreEventCRFServlet} does.
+     */
+    @Test
+    void aCrfChangedSinceItsRemovalComesBackAvailable() throws Exception {
+        MockHttpSession dm = session("manual_dm", Role.STUDYDIRECTOR);
+        exec("UPDATE event_crf SET status_id = 2 WHERE event_crf_id = 5");
+        remove(5, "Entered on the wrong visit", dm).andExpect(status().isNoContent());
+        // EventCRFDAO.update, as every legacy write to the row does, sets date_updated.
+        exec("UPDATE event_crf SET date_updated = now() + interval '1 second' WHERE event_crf_id = 5");
+
+        mockMvc().perform(post("/api/v1/eventCrfs/5/restore").session(dm))
+                .andExpect(status().isNoContent());
+        assertEquals(1, statusOf("event_crf", 5));
+        for (int value : new int[] {13, 14}) assertEquals(1, statusOf("item_data", value), "value " + value);
+    }
+
+    /**
+     * A CRF is not removed while its study is locked or frozen, its subject
+     * or visit is locked, or it is locked itself; each refusal changes
+     * nothing.
+     */
+    @Test
+    void aLockedStudySubjectVisitOrCrfIsRefused() throws Exception {
+        MockHttpSession dm = session("manual_dm", Role.STUDYDIRECTOR);
+        String[][] locks = {
+                {"UPDATE study SET status_id = 6 WHERE study_id = 1", "UPDATE study SET status_id = 1 WHERE study_id = 1"},
+                {"UPDATE study SET status_id = 9 WHERE study_id = 1", "UPDATE study SET status_id = 1 WHERE study_id = 1"},
+                {"UPDATE study_subject SET status_id = 6 WHERE study_subject_id = 1",
+                        "UPDATE study_subject SET status_id = 1 WHERE study_subject_id = 1"},
+                {"UPDATE study_event SET subject_event_status_id = 7 WHERE study_event_id = 3",
+                        "UPDATE study_event SET subject_event_status_id = 3 WHERE study_event_id = 3"},
+                {"UPDATE event_crf SET status_id = 6 WHERE event_crf_id = 3",
+                        "UPDATE event_crf SET status_id = 1 WHERE event_crf_id = 3"},
+        };
+        for (String[] lock : locks) {
+            exec(lock[0]);
+            int crfBefore = statusOf("event_crf", 3);
+            try {
+                remove(3, "Locked", dm).andExpect(status().isConflict());
+                assertEquals(crfBefore, statusOf("event_crf", 3), lock[0]);
+                assertEquals(1, statusOf("item_data", 8), lock[0]);
+            } finally {
+                exec(lock[1]);
+            }
+        }
+        assertEquals(0, intOf("SELECT COUNT(*) FROM audit_log_event WHERE audit_log_event_type_id = 155 "
+                + "AND entity_id = ?", 3));
+    }
+
+    /** A CRF of a subject in a study the caller cannot see is refused. */
+    @Test
+    void aCrfOutsideTheCallersStudiesIsRefused() throws Exception {
+        exec("UPDATE study_subject SET study_id = 102 WHERE study_subject_id = 2");
+        try {
+            remove(4, "Not visible", session("manual_dm", Role.STUDYDIRECTOR)).andExpect(status().isForbidden());
+        } finally {
+            exec("UPDATE study_subject SET study_id = 1 WHERE study_subject_id = 2");
+        }
+        assertEquals(1, statusOf("event_crf", 4));
+    }
+
     /** Legacy lets only a data manager, a coordinator or a system administrator remove a CRF. */
     @Test
     void monitorsAndInvestigatorsMayNotRemove() throws Exception {
