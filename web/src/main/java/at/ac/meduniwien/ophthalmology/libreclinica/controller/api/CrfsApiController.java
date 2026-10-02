@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -1901,10 +1902,14 @@ public class CrfsApiController {
      * blast radius (sysadmin only) and adds structured 409 reporting
      * so the SPA can suggest the migrate dialog as a remediation.
      *
-     * <p>The actual deletion uses {@code CRFVersionDAO.delete} +
-     * {@code generateDeleteQueries} which the legacy delete path also
-     * calls; we don't reimplement the cascade — the legacy DAO already
-     * tears down items + sections + response sets in one transaction.
+     * <p>The deletion runs the statements of
+     * {@code CRFVersionDAO.generateDeleteQueries}, which the legacy delete
+     * path also runs, in one transaction: the version's layout rows, the
+     * items no other version uses, its response sets and the version row.
+     * A version whose event CRFs were moved to another version can still
+     * hold their values on items only it has; it is refused (409, with a
+     * message) rather than deleted with them. The legacy servlet refused
+     * any version with item values on its items.
      */
     @DeleteMapping("/{crfOid}/versions/{versionOid}")
     @ApiResponse(responseCode = "204")
@@ -1949,17 +1954,34 @@ public class CrfsApiController {
             return ResponseEntity.status(409).body(report);
         }
 
-        // Safe to drop. Cascade through the legacy DAO helper.
-        try {
-            // The legacy path runs the prepared delete queries one by
-            // one (generateDeleteQueries lists them); delete() alone
-            // hits only the crf_version row and leaves orphan rows.
-            // For the modernized API we run the full cascade.
-            var items = versionDao.findItemFromMap(target.getId());
-            java.util.ArrayList<String> sqls = versionDao.generateDeleteQueries(target.getId(), items);
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement()) {
-                for (String sql : sqls) stmt.executeUpdate(sql);
+        // Cascade through the legacy DAO helper, as DeleteCRFVersionServlet
+        // does: generateDeleteQueries lists the version's layout rows, then
+        // its items, then the version row; delete() alone hits only the
+        // crf_version row and leaves orphan rows. Only the items no other
+        // version uses are deleted; a shared item stays for the versions
+        // that still have it.
+        java.util.ArrayList<ItemBean> items = versionDao.findNotSharedItemsByVersion(target.getId());
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                // Values on those items outlive a move of their event CRFs
+                // to another version (the items it does not have). Deleting
+                // the items would fail on them, and the values would go too.
+                int values = countItemData(c, items);
+                if (values > 0) {
+                    c.rollback();
+                    return ResponseEntity.status(409).body(Map.of("message",
+                            "Version '" + target.getName() + "' cannot be hard-removed: " + values
+                                    + " item value(s) are stored on items only this version has, for event CRFs"
+                                    + " moved to another version. Remove the version instead; nothing was changed."));
+                }
+                try (Statement stmt = c.createStatement()) {
+                    for (String sql : versionDao.generateDeleteQueries(target.getId(), items)) stmt.executeUpdate(sql);
+                }
+                c.commit();
+            } catch (SQLException | RuntimeException e) {
+                c.rollback();
+                throw e;
             }
         } catch (Exception e) {
             LOG.warn("Hard-remove failed for crfOid={} versionOid={}: {}",
@@ -1978,6 +2000,18 @@ public class CrfsApiController {
         return ResponseEntity.noContent().build();
     }
 
+    /** How many item values, of any event CRF and status, are stored on {@code items}. */
+    private static int countItemData(Connection c, List<ItemBean> items) throws SQLException {
+        if (items.isEmpty()) return 0;
+        Integer[] ids = new Integer[items.size()];
+        for (int i = 0; i < ids.length; i++) ids[i] = items.get(i).getId();
+        try (PreparedStatement ps = c.prepareStatement("SELECT count(*) FROM item_data WHERE item_id = ANY (?)")) {
+            ps.setArray(1, c.createArrayOf("integer", ids));
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
 
     /* ----------------------------------------------------------------- */
     /* GET /api/v1/crfs/{crfOid}/versions/{versionOid}/xls                 */

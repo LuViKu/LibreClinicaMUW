@@ -312,6 +312,19 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
       expect(store.crfs[0]!.versions.length).toBe(2)
     })
 
+    it('returns the message of a 409 that carries no report', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiDelete).mockRejectedValue(new ApiError(409, 'Conflict', {
+        message: 'Version \'v1.0\' cannot be hard-removed: 3 item value(s) are stored on items only this version has',
+      }))
+
+      const result = await store.hardRemoveVersion('F_DEMOS', 'F_DEMOS_V1')
+
+      expect(result).toEqual({ ok: false, message: expect.stringContaining('3 item value(s)') })
+      expect(store.crfs[0]!.versions.length).toBe(2)
+    })
+
     it('rethrows 403 (auth failure) instead of swallowing', async () => {
       const store = useCrfLibraryStore()
       seed(store, DEMOS)

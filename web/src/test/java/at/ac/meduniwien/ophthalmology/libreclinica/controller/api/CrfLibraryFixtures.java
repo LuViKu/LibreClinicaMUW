@@ -76,6 +76,11 @@ final class CrfLibraryFixtures {
                 itemId, versionId, sectionId, ordinal);
     }
 
+    /** Puts {@code itemId} in {@code versionId}'s item list (versioning_map), as an upload does. */
+    void map(int itemId, int versionId) throws SQLException {
+        execute("INSERT INTO versioning_map (crf_version_id, item_id) VALUES (?, ?)", versionId, itemId);
+    }
+
     int group(int crfId, String name) throws SQLException {
         return insert("item_group_id", "INSERT INTO item_group (name, crf_id, status_id, date_created, owner_id, oc_oid)"
                 + " VALUES (?, ?, 1, now(), 1, ?)", name, crfId, "IG_" + name);

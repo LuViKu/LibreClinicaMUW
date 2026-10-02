@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -775,6 +776,56 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         mvc().perform(post("/api/v1/crfs/F_" + t + "_OTHER/versions/F_" + t + "_V1/disable").session(dm()))
                 .andExpect(status().isNotFound());
         assertThat(fx.status("crf_version", v1)).isEqualTo(1);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Hard remove                                                        */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void aHardRemoveDeletesOnlyTheVersionsOwnItemsAndNotWhileTheyHoldValues() throws Exception {
+        String t = tag();
+        String url = "/api/v1/crfs/F_" + t + "/versions/F_" + t + "_V1";
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 5);
+        int v2 = fx.version(crf, "v2", "F_" + t + "_V2", 1);
+        int s1 = fx.section(v1, "S1", 1);
+        int s2 = fx.section(v2, "S2", 1);
+        int shared = fx.item(t + "_A", 5);
+        int own = fx.item(t + "_B", 5);
+        fx.map(shared, v1);
+        fx.place(shared, v1, s1, 1);
+        fx.map(own, v1);
+        fx.place(own, v1, s1, 2);
+        fx.map(shared, v2);
+        fx.place(shared, v2, s2, 1);
+        int subj = fx.subject(t + "-A", STUDY, 1);
+        int ec = fx.eventCrf(fx.event(subj, SED, 4, 1), subj, v1, 1, false, true, false);
+        int idShared = fx.itemData(ec, shared, "a", 1);
+        int idOwn = fx.itemData(ec, own, "b", 1);
+        // Moved to v2 as the migration moves it: the value on the item v2
+        // does not have stays where it was.
+        fx.execute("UPDATE event_crf SET crf_version_id = ? WHERE event_crf_id = ?", v2, ec);
+
+        mvc().perform(delete(url).session(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("1 item value(s)")));
+        assertThat(fx.intValue("SELECT count(*) FROM crf_version WHERE crf_version_id = ?", v1)).isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM versioning_map WHERE crf_version_id = ?", v1))
+                .as("nothing was changed").isEqualTo(2);
+        assertThat(fx.intValue("SELECT count(*) FROM item_form_metadata WHERE crf_version_id = ?", v1)).isEqualTo(2);
+        assertThat(fx.status("section", s1)).isEqualTo(1);
+
+        fx.execute("DELETE FROM item_data WHERE item_data_id = ?", idOwn);
+        mvc().perform(delete(url).session(admin())).andExpect(status().isNoContent());
+
+        assertThat(fx.intValue("SELECT count(*) FROM crf_version WHERE crf_version_id = ?", v1)).isZero();
+        assertThat(fx.intValue("SELECT count(*) FROM section WHERE section_id = ?", s1)).isZero();
+        assertThat(fx.intValue("SELECT count(*) FROM item WHERE item_id = ?", own)).isZero();
+        assertThat(fx.intValue("SELECT count(*) FROM item WHERE item_id = ?", shared)).as("v2 has it").isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM versioning_map WHERE crf_version_id = ?", v2)).isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM item_form_metadata WHERE crf_version_id = ?", v2)).isEqualTo(1);
+        assertThat(fx.status("item_data", idShared)).isEqualTo(1);
     }
 
     /* ------------------------------------------------------------------ */

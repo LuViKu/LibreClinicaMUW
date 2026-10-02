@@ -288,7 +288,8 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
    *   CRF row's versions list is patched to drop the removed entry.
    * - `{ ok: false, blocker }` — the row is referenced; the blocker
    *   carries the VersionUsageReport the SPA renders in the dialog.
-   * - `{ ok: false, message }` — any other failure (auth, network, 500).
+   * - `{ ok: false, message }` — any other failure (a 409 without a
+   *   report, network, 500).
    *
    * Importantly: 409 + the structured report is NOT a thrown error path
    * — the SPA treats it as a normal "no action taken" outcome and shows
@@ -311,9 +312,10 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       }
       return { ok: true }
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        const blocker = e.body as VersionUsageReport
-        return { ok: false, blocker }
+      // A 409 carries the usage report, or, for a version that still
+      // holds values of event CRFs moved off it, only a message.
+      if (e instanceof ApiError && e.status === 409 && isUsageReport(e.body)) {
+        return { ok: false, blocker: e.body }
       }
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
         error.value = humanError(e, 'hard-remove-version')
@@ -492,6 +494,11 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return { ok: false, fieldErrors: {}, message: `Backend nicht erreichbar — Zuordnung ${op} fehlgeschlagen.` }
     }
     return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : `Unbekannter Fehler beim Zuordnung-${op}.` }
+  }
+
+  function isUsageReport(body: unknown): body is VersionUsageReport {
+    return typeof body === 'object' && body !== null
+      && Array.isArray((body as VersionUsageReport).blockingEventDefinitions)
   }
 
   function humanError(e: unknown, op: string): string {
