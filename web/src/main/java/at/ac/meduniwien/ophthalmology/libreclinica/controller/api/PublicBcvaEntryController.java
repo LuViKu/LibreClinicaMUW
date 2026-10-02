@@ -434,8 +434,11 @@ public class PublicBcvaEntryController {
                             "message", "No supplied field matched any item the target CRF exposes — nothing written"));
                 }
                 // A changed value ends the form's source data verification.
+                // The portal's operator is no user account: the trigger's
+                // audit row names nobody, not the stand-in owner account,
+                // and the portal's audit row below names the operator.
                 if (changed) {
-                    EventCrfWriteRules.withdrawVerification(c, eventCrfId, resolvePortalOwnerId(c));
+                    EventCrfWriteRules.withdrawVerification(c, eventCrfId, null);
                 }
 
                 // 5. Audit row. user_id NULL (trust-the-reverse-proxy).

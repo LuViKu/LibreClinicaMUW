@@ -165,6 +165,14 @@ class ClinicalValueWritersDatabaseIT extends AbstractApiControllerDatabaseIT {
 
             assertEquals("bcva_portal", sourceKind(row), "the portal's value carries the portal's provenance");
             assertFalse(ClinicalWriteFixtures.sdvStatus(DATA_SOURCE, eventCrfId), "the changed value ends the verification");
+            assertEquals(1, count("SELECT count(*) FROM audit_log_event WHERE audit_table = 'event_crf' "
+                            + "AND audit_log_event_type_id = 32 AND new_value = 'FALSE' AND user_id IS NULL "
+                            + "AND entity_id = " + eventCrfId),
+                    "the withdrawal names no account: the portal's operator has none");
+            assertEquals(0, count("SELECT count(*) FROM audit_log_event WHERE audit_table = 'event_crf' "
+                            + "AND audit_log_event_type_id = 32 AND new_value = 'FALSE' AND user_id IS NOT NULL "
+                            + "AND entity_id = " + eventCrfId),
+                    "nor a stand-in account");
         } finally {
             ClinicalWriteFixtures.execute(DATA_SOURCE,
                     "DELETE FROM event_definition_crf WHERE event_definition_crf_id = 9931");

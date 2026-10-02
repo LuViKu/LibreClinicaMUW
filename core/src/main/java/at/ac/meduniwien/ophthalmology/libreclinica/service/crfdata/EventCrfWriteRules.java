@@ -12,6 +12,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 
 /**
  * What every writer of an event CRF's values keeps to, in one place: when
@@ -123,15 +124,22 @@ public final class EventCrfWriteRules {
      * changed, if it was verified.
      *
      * @param actorUserId who changed the values; recorded as
-     *                    {@code sdv_update_id}, the trigger's audit author
+     *                    {@code sdv_update_id}, the trigger's audit author.
+     *                    {@code null} for a writer that is no user account,
+     *                    such as the public BCVA portal: the audit row then
+     *                    names nobody rather than a stand-in account
      * @return {@code true} when the CRF was verified and no longer is
      */
-    public static boolean withdrawVerification(Connection c, int eventCrfId, int actorUserId)
+    public static boolean withdrawVerification(Connection c, int eventCrfId, Integer actorUserId)
             throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "UPDATE event_crf SET sdv_status = false, sdv_update_id = ? "
                         + " WHERE event_crf_id = ? AND sdv_status = true")) {
-            ps.setInt(1, actorUserId);
+            if (actorUserId == null) {
+                ps.setNull(1, Types.INTEGER);
+            } else {
+                ps.setInt(1, actorUserId);
+            }
             ps.setInt(2, eventCrfId);
             return ps.executeUpdate() > 0;
         }
