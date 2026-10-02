@@ -83,6 +83,17 @@ class LegacyServletDeprecationCatalogTest {
     }
 
     @Test
+    void heritageApiIsOneKeyCoveringEverythingBelowIt() {
+        assertEquals("/pages/auth",
+                catalog.lookup("/pages", "/auth/api/v1/system/systemstatus").orElseThrow().legacyPath());
+        assertEquals("/pages/auth",
+                catalog.lookup("/pages", "/auth/api/itemdata").orElseThrow().legacyPath());
+        assertFalse(catalog.lookup("/pages", "/authx/api").isPresent());
+        // the SPA's own API stays outside it, including anything named auth
+        assertFalse(catalog.lookup("/pages", "/api/v1/auth/logout").isPresent());
+    }
+
+    @Test
     void spaApiAndOtherRequestsMiss() {
         assertFalse(catalog.lookup("/pages", "/api/v1/subjects").isPresent());
         assertFalse(catalog.lookup("/pages", "/login/login").isPresent());

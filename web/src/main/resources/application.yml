@@ -179,8 +179,25 @@ libreclinica:
   #
   # The earlier servletsEnabled (all-or-nothing), banner and sunsetDate
   # keys are gone; they never took effect.
+  #
+  # The default below is the set of waves closed so far, so the retirement
+  # state is versioned and reviewed with the code (and recorded in
+  # docs/development/modernization/phase-e-retirement-log.md). Setting the
+  # environment variable replaces it; setting it to an empty value reopens
+  # everything, which is the emergency lever.
+  #
+  # Wave 0 (2026-09-30): screens recorded as not needed, with no SPA
+  # replacement planned — the OpenClinica Enterprise page, the admin and
+  # technical-admin home pages, the schema change log, the heritage global
+  # subject registry (replaced by the patient model), scheduled ODM imports
+  # and their log (dropped), the two-factor letter printout (dropped), the
+  # hard delete of an event CRF's data, and the password-requirements page
+  # (covered by /admin/password-policy).
+  # Also closed in wave 0: the OpenClinica 3.x REST API under /pages/auth/api
+  # (API-key callers only). Nothing in the app, the SPA or the deployment
+  # calls it; any external caller shows up in the legacy-access log.
   legacy:
-    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:}
+    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:/Enterprise,/TechAdmin,/AdminSystem,/AuditDatabase,/ListSubject,/ListSubjectData,/ViewSubject,/UpdateSubject,/RemoveSubject,/RestoreSubject,/CreateJobImport,/UpdateJobImport,/ViewImportJob,/ViewLogMessage,/PrintoutCertificate,/DeleteEventCRF,/ConfigurePasswordRequirements,/pages/auth}
 
 # Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
 # left at default (api-docs.path = /v3/api-docs). The OpenApiResource

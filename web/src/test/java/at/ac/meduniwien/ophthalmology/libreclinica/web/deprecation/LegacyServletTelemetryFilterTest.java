@@ -257,6 +257,25 @@ class LegacyServletTelemetryFilterTest {
     }
 
     @Test
+    void closedHeritageApiAnswersGoneToAnApiKeyCallerAndLeavesTheSpaApiAlone() throws Exception {
+        LegacyServletTelemetryFilter filter = filter("/pages/auth");
+
+        MockHttpServletRequest apiCall = request("GET", "/pages", "/auth/api/v1/system/config");
+        apiCall.addHeader("Authorization", "Basic " + java.util.Base64.getEncoder()
+                .encodeToString("api-key:unused".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        MockHttpServletResponse gone = new MockHttpServletResponse();
+        FilterChain apiChain = Mockito.mock(FilterChain.class);
+        filter.doFilter(apiCall, gone, apiChain);
+        assertEquals(HttpServletResponse.SC_GONE, gone.getStatus());
+        Mockito.verifyNoInteractions(apiChain);
+
+        MockHttpServletResponse spa = new MockHttpServletResponse();
+        FilterChain spaChain = Mockito.mock(FilterChain.class);
+        filter.doFilter(request("GET", "/pages", "/api/v1/me"), spa, spaChain);
+        Mockito.verify(spaChain).doFilter(Mockito.any(), Mockito.any());
+    }
+
+    @Test
     void closingOneScreenLeavesTheOthersOpen() throws Exception {
         FilterChain chain = Mockito.mock(FilterChain.class);
         MockHttpServletResponse resp = new MockHttpServletResponse();
