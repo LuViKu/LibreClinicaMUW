@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -26,6 +28,7 @@ import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
@@ -38,6 +41,11 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
 
@@ -121,6 +129,35 @@ class SpaLoginHandlersTest {
 
         assertEquals(204, response.getStatus());
         assertNull(response.getRedirectedUrl());
+    }
+
+    @Test
+    void aStudyBindingThatFailsLeavesNoneFromAPreviousLogin() throws Exception {
+        when(beans.getBean("dataSource", DataSource.class).getConnection())
+                .thenThrow(new SQLException("the database cannot be reached"));
+        // What an earlier login in this browser left, carried into the new
+        // session beside the account now signing in.
+        StudyBean previousStudy = new StudyBean();
+        previousStudy.setId(1);
+        StudyUserRoleBean previousRole = new StudyUserRoleBean();
+        previousRole.setRole(Role.STUDYDIRECTOR);
+        UserAccountBean next = new UserAccountBean();
+        next.setId(42);
+        next.setName("someone");
+        next.setActiveStudyId(1);
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("study", previousStudy);
+        session.setAttribute("userRole", previousRole);
+        session.setAttribute(SecureController.USER_BEAN_NAME, next);
+        MockHttpServletRequest request = login("application/json");
+        request.setSession(session);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        success().onAuthenticationSuccess(request, response, SIGNED_IN);
+
+        assertEquals(204, response.getStatus(), "the login stands");
+        assertEquals(0, ((StudyBean) session.getAttribute("study")).getId(), "no study is bound");
+        assertEquals(0, ((StudyUserRoleBean) session.getAttribute("userRole")).getId(), "no role is bound");
     }
 
     @Test

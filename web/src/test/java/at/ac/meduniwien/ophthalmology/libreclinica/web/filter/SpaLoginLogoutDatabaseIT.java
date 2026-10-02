@@ -89,6 +89,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
@@ -149,6 +150,18 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int SSO_SPA = 30115;
     private static final int LOGOUT_FAIL = 30116;
     private static final int LOGOUT_GET = 30117;
+    private static final int BROWSER_FIRST = 30118;
+    private static final int BROWSER_SECOND = 30119;
+    private static final int NO_STUDY = 30120;
+    private static final int ON_SITE = 30121;
+    private static final int IN_REMOVED = 30122;
+    private static final int IN_AUTO_REMOVED = 30123;
+
+    /** S_DEFAULTS1, the study every other account here is bound to. */
+    private static final int DEFAULT_STUDY = 1;
+    private static final int SITE = 30201;
+    private static final int REMOVED_STUDY = 30202;
+    private static final int AUTO_REMOVED_STUDY = 30203;
 
     private static Properties savedSqlInitParams;
 
@@ -181,6 +194,19 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         seedUser(SSO_SPA, "spa-sso", "Investigator", "current_date");
         seedUser(LOGOUT_FAIL, "spa-logout-fail", "Investigator", "current_date");
         seedUser(LOGOUT_GET, "spa-logout-get", "Investigator", "current_date");
+        seedUser(BROWSER_FIRST, "spa-browser-first", "director", "current_date");
+        seedUser(BROWSER_SECOND, "spa-browser-second", "Investigator", "current_date");
+        seedAccount(NO_STUDY, "spa-no-study", "NULL");
+        seedStudy(SITE, DEFAULT_STUDY, Status.AVAILABLE);
+        seedAccount(ON_SITE, "spa-on-site", String.valueOf(SITE));
+        grant("spa-on-site", "Investigator", SITE);
+        grant("spa-on-site", "director", DEFAULT_STUDY);
+        seedStudy(REMOVED_STUDY, null, Status.DELETED);
+        seedAccount(IN_REMOVED, "spa-in-removed", String.valueOf(REMOVED_STUDY));
+        grant("spa-in-removed", "director", REMOVED_STUDY);
+        seedStudy(AUTO_REMOVED_STUDY, null, Status.AUTO_DELETED);
+        seedAccount(IN_AUTO_REMOVED, "spa-in-auto-removed", String.valueOf(AUTO_REMOVED_STUDY));
+        grant("spa-in-auto-removed", "director", AUTO_REMOVED_STUDY);
         sql("UPDATE user_account SET status_id = " + Status.LOCKED.getId()
                 + ", account_non_locked = false WHERE user_id = " + LEGACY_LOCKED);
         // Lock after three consecutive failures (off by default).
@@ -208,15 +234,50 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private static void seedUser(int id, String name, String role, String passwdTimestamp) throws SQLException {
+        seedAccount(id, name, String.valueOf(DEFAULT_STUDY), passwdTimestamp);
+        grant(name, role, DEFAULT_STUDY);
+    }
+
+    private static void seedAccount(int id, String name, String activeStudy) throws SQLException {
+        seedAccount(id, name, activeStudy, "current_date");
+    }
+
+    private static void seedAccount(int id, String name, String activeStudy, String passwdTimestamp)
+            throws SQLException {
         sql("INSERT INTO user_account (user_id, user_name, passwd, first_name, last_name, email, active_study, "
                 + "institutional_affiliation, status_id, owner_id, date_created, passwd_timestamp, user_type_id, "
                 + "enabled, account_non_locked, lock_counter, run_webservices, authtype, enable_api_key) "
                 + "VALUES (" + id + ", '" + name + "', '" + HASH + "', 'Spa', 'Login', '" + name
-                + "@example.invalid', 1, 'MUW (test)', 1, 1, current_date, " + passwdTimestamp
+                + "@example.invalid', " + activeStudy + ", 'MUW (test)', 1, 1, current_date, " + passwdTimestamp
                 + ", 2, true, true, 0, false, 'STANDARD', false)");
         sql("INSERT INTO authorities (username, authority, version) VALUES ('" + name + "', 'ROLE_USER', 1)");
+    }
+
+    private static void grant(String name, String role, int studyId) throws SQLException {
         sql("INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, user_name) "
-                + "VALUES ('" + role + "', 1, 1, 1, current_date, '" + name + "')");
+                + "VALUES ('" + role + "', " + studyId + ", 1, 1, current_date, '" + name + "')");
+    }
+
+    /** A study, or a site of {@code parent}, in {@code status}. */
+    private static void seedStudy(int id, Integer parent, Status status) throws SQLException {
+        sql("INSERT INTO study (study_id, parent_study_id, unique_identifier, secondary_identifier, "
+                + "name, summary, date_planned_start, date_planned_end, date_created, "
+                + "owner_id, type_id, status_id, principal_investigator, facility_name, "
+                + "facility_city, facility_state, facility_zip, facility_country, "
+                + "facility_recruitment_status, facility_contact_name, facility_contact_degree, "
+                + "facility_contact_phone, facility_contact_email, protocol_type, "
+                + "protocol_description, protocol_date_verification, phase, "
+                + "expected_total_enrollment, sponsor, collaborators, medline_identifier, "
+                + "url, url_description, conditions, keywords, eligibility, gender, "
+                + "age_max, age_min, healthy_volunteer_accepted, purpose, allocation, "
+                + "masking, control, assignment, endpoint, interventions, duration, "
+                + "selection, timing, official_title, results_reference, oc_oid) "
+                + "VALUES (" + id + ", " + parent + ", 'spa-" + id + "', '', 'Study " + id + "', '', "
+                + "NOW(), NOW(), NOW(), 1, 1, " + status.getId() + ", 'default', "
+                + "'', '', '', '', '', '', '', '', '', '', 'observational', '', NOW(), "
+                + "'default', 0, 'default', '', '', '', '', '', '', '', 'both', '', '', "
+                + "false, 'Natural History', '', '', '', '', '', '', 'longitudinal', "
+                + "'Convenience Sample', 'Retrospective', '', false, 'S_SPA" + id + "')");
     }
 
     private static void sql(String statement) throws SQLException {
@@ -303,6 +364,12 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     // --- requests --------------------------------------------------------
 
     private MockHttpServletResponse login(String username, String password, String accept) throws Exception {
+        return login(username, password, accept, null);
+    }
+
+    /** A login from a browser that still has {@code session}, or none when it is null. */
+    private MockHttpServletResponse login(String username, String password, String accept, MockHttpSession session)
+            throws Exception {
         MockHttpServletRequest request =
                 new MockHttpServletRequest("POST", "/LibreClinica/j_spring_security_check") {
                     @Override
@@ -315,6 +382,9 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
                 };
         request.setContextPath("/LibreClinica");
         request.setServletPath("/j_spring_security_check");
+        if (session != null) {
+            request.setSession(session);
+        }
         request.addParameter("j_username", username);
         request.addParameter("j_password", password);
         request.addHeader("Accept", accept);
@@ -418,6 +488,14 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
                 beans.getBean("crfLocker", CRFLocker.class));
         return MockMvcBuilders.standaloneSetup(api).build()
                 .perform(request(method, "/api/v1/auth/logout").session(session));
+    }
+
+    private static StudyUserRoleBean role(HttpSession session) {
+        return (StudyUserRoleBean) session.getAttribute("userRole");
+    }
+
+    private static StudyBean study(HttpSession session) {
+        return (StudyBean) session.getAttribute("study");
     }
 
     private static ResultActions me(MockHttpSession session) throws Exception {
@@ -653,6 +731,56 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertNotNull(registry().getSessionInformation(session.getId()), "the session stays registered");
         assertTrue(locker.isLocked(4713), "the user's CRF locks stay");
         assertEquals(List.of(), audited(), "no logout row");
+    }
+
+    // --- the study binding of the SPA's login ------------------------------
+
+    @Test
+    void aSecondSpaLoginInTheSameBrowserSessionReplacesTheStudyAndRole() throws Exception {
+        assertEquals(204, login("spa-browser-first", PASSWORD, JSON).getStatus());
+        assertEquals(Role.STUDYDIRECTOR, role(session()).getRole());
+
+        assertEquals(204, login("spa-browser-second", PASSWORD, JSON, session()).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals("spa-browser-second", ((UserAccountBean) session.getAttribute("userBean")).getName());
+        assertEquals(DEFAULT_STUDY, study(session).getId());
+        assertEquals(Role.INVESTIGATOR, role(session).getRole(), "the second account's role");
+    }
+
+    @Test
+    void aSecondSpaLoginWithoutAnActiveStudyClearsThePreviousBinding() throws Exception {
+        assertEquals(204, login("spa-browser-first", PASSWORD, JSON).getStatus());
+        assertEquals(DEFAULT_STUDY, study(session()).getId());
+
+        assertEquals(204, login("spa-no-study", PASSWORD, JSON, session()).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals("spa-no-study", ((UserAccountBean) session.getAttribute("userBean")).getName());
+        assertEquals(0, study(session).getId(), "no study is bound");
+        assertEquals(0, role(session).getId(), "no role is bound");
+    }
+
+    @Test
+    void anSpaLoginOnASiteTakesTheHigherRoleOfItsParentStudy() throws Exception {
+        assertEquals(204, login("spa-on-site", PASSWORD, JSON).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals(SITE, study(session).getId());
+        assertEquals(new StudyDAO(DATA_SOURCE).findByPK(DEFAULT_STUDY).getName(),
+                study(session).getParentStudyName());
+        assertEquals(Role.STUDYDIRECTOR, role(session).getRole(), "the parent study's role, not the site's");
+    }
+
+    @Test
+    void anSpaLoginGivesNoRoleInARemovedActiveStudy() throws Exception {
+        for (String account : List.of("spa-in-removed", "spa-in-auto-removed")) {
+            assertEquals(204, login(account, PASSWORD, JSON).getStatus(), account);
+
+            MockHttpSession session = session();
+            assertTrue(study(session).getId() > 0, account + ": the study is bound");
+            assertEquals(0, role(session).getId(), account + ": no role in it");
+        }
     }
 
     // --- the legacy sign-outs ------------------------------------------------

@@ -112,7 +112,11 @@ public class SpaLoginSuccessHandler implements AuthenticationSuccessHandler {
         if (ub != null && ub.getId() > 0) {
             // The account is signed in by now. A failure here costs the SPA
             // its study binding (it offers the study picker) or the visit
-            // date, not the login.
+            // date, not the login. A previous login's binding, which the
+            // session strategy carried into this session, goes first, so a
+            // failure cannot leave it beside this account.
+            session.setAttribute("study", new StudyBean());
+            session.setAttribute("userRole", new StudyUserRoleBean());
             try {
                 bindActiveStudy(session, ub);
                 new UserAccountDAO(dataSource).updateLastVisitDate(ub.getId());
