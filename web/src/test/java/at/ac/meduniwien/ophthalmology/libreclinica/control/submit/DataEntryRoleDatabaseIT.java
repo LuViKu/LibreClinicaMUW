@@ -80,6 +80,8 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
     /** Initial data entry complete: the stage double data entry works on. */
     private static final int PENDING = 4;
     private static final int NOT_SCHEDULED = 2;
+    /** An event CRF whose entry is complete: the stage administrative editing works on. */
+    private static final int UNAVAILABLE = 2;
     private static final int DATA_ENTRY_STARTED = 3;
 
     private static final String REFUSAL = "/WEB-INF/jsp/menu.jsp";
@@ -273,6 +275,68 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    @Test
+    void initialDataEntryRefusesAnEventCrfOfAnotherStudyTheUserIsMonitorIn() throws Exception {
+        // manual_crc is coordinator in study 1, the session's study, and only
+        // monitor in study 102, whose event CRF this is.
+        int[] other = otherStudyEventCrf(AVAILABLE);
+        update("INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, user_name)"
+                + " VALUES ('monitor', 102, 1, 1, now(), 'manual_crc')");
+        try {
+            Outcome out = run(new InitialDataEntryServlet(), "POST", "/InitialDataEntry", user("manual_crc"),
+                    saveVitals(other[1]));
+
+            assertEquals(0, itemDataRows(other[1]), "nothing was saved");
+            assertEquals("/MainMenu", out.forwardedUrl());
+            assertTrue(out.pageMessages().contains("Required Event CRF does not belong to your Studies."),
+                    String.valueOf(out.pageMessages()));
+        } finally {
+            update("DELETE FROM study_user_role WHERE user_name = 'manual_crc' AND study_id = 102");
+            removeOtherStudyEventCrf(other);
+        }
+    }
+
+    @Test
+    void initialDataEntryChecksTheEventCrfItSavesInto() throws Exception {
+        // "ecId" names an event CRF of the user's; "eventCRFId", the one the
+        // servlet loads and saves into, is study 102's.
+        int own = addEventCrf(AVAILABLE);
+        int[] other = otherStudyEventCrf(AVAILABLE);
+        try {
+            String[] params = saveVitals(other[1]);
+            String[] withOwn = java.util.Arrays.copyOf(params, params.length + 2);
+            withOwn[params.length] = "ecId";
+            withOwn[params.length + 1] = String.valueOf(own);
+            Outcome out = run(new InitialDataEntryServlet(), "POST", "/InitialDataEntry", user("manual_crc"), withOwn);
+
+            assertEquals(0, itemDataRows(other[1]), "nothing was saved");
+            assertEquals(0, itemDataRows(own), "nor into the user's own");
+            assertEquals("/MainMenu", out.forwardedUrl());
+        } finally {
+            removeOtherStudyEventCrf(other);
+            removeEventCrf(own);
+        }
+    }
+
+    @Test
+    void administrativeEditingRefusesAnEventCrfOfAnotherStudyTheUserIsMonitorIn() throws Exception {
+        int[] other = otherStudyEventCrf(UNAVAILABLE);
+        update("INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, user_name)"
+                + " VALUES ('monitor', 102, 1, 1, now(), 'manual_crc')");
+        try {
+            Outcome out = run(new AdministrativeEditingServlet(), "POST", "/AdministrativeEditing", user("manual_crc"),
+                    saveVitals(other[1]));
+
+            assertEquals(0, itemDataRows(other[1]), "nothing was saved");
+            assertEquals("/MainMenu", out.forwardedUrl());
+            assertTrue(out.pageMessages().contains("Required Event CRF does not belong to your Studies."),
+                    String.valueOf(out.pageMessages()));
+        } finally {
+            update("DELETE FROM study_user_role WHERE user_name = 'manual_crc' AND study_id = 102");
+            removeOtherStudyEventCrf(other);
+        }
+    }
+
     /** Guards the fixture: the rows the tests rely on exist and are as described. */
     @Test
     void theFixtureRowsExist() throws Exception {
@@ -337,6 +401,25 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
                 + " date_created, study_subject_id, electronic_signature_status, sdv_status)"
                 + " VALUES (" + EVENT + ", " + VERSION + ", 1, " + status + ", 1, now(), " + SUBJECT + ", false, false)"
                 + " RETURNING event_crf_id");
+    }
+
+    /** @return {study event, event CRF}: a new visit of EIAMD139, in study 102, with a Demographics CRF */
+    private static int[] otherStudyEventCrf(int status) throws SQLException {
+        int event = queryInt("INSERT INTO study_event (study_event_definition_id, study_subject_id, sample_ordinal,"
+                + " date_start, owner_id, status_id, date_created, subject_event_status_id, start_time_flag, end_time_flag)"
+                + " VALUES (" + OTHER_STUDY_DEFINITION + ", " + OTHER_STUDY_SUBJECT + ", 99, now(), 1, 1, now(), "
+                + DATA_ENTRY_STARTED + ", false, false) RETURNING study_event_id");
+        int ec = queryInt("INSERT INTO event_crf (study_event_id, crf_version_id, completion_status_id, status_id, owner_id,"
+                + " date_created, study_subject_id, electronic_signature_status, sdv_status)"
+                + " VALUES (" + event + ", " + VERSION + ", 1, " + status + ", 1, now(), " + OTHER_STUDY_SUBJECT
+                + ", false, false) RETURNING event_crf_id");
+        return new int[] { event, ec };
+    }
+
+    private static void removeOtherStudyEventCrf(int[] other) throws SQLException {
+        update("DELETE FROM item_data WHERE event_crf_id = " + other[1]);
+        update("DELETE FROM event_crf WHERE event_crf_id = " + other[1]);
+        update("DELETE FROM study_event WHERE study_event_id = " + other[0]);
     }
 
     private static void removeEventCrf(int eventCrfId) throws SQLException {
