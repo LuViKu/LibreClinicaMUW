@@ -60,6 +60,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNoteUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 
 /**
  * Performs updating study event action
@@ -92,12 +93,31 @@ public class UpdateStudyEventServlet extends SecureController {
     @Override
     public void mayProceed() throws InsufficientPermissionException {
 
-        if (SubmitDataServlet.maySubmitData(ub, currentRole)) {
+        if (SubmitDataServlet.maySubmitData(ub, currentRole) && mayUseEventOfCurrentStudy()) {
             return;
         }
+        refuse();
+    }
 
+    private void refuse() throws InsufficientPermissionException {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + " " + respage.getString("change_active_study_or_contact"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
+    }
+
+    /**
+     * The subject must be one of the current study's (or its sites'), and the
+     * event that subject's: the role checked is the role held in that study.
+     */
+    private boolean mayUseEventOfCurrentStudy() {
+        FormProcessor fp = new FormProcessor(request);
+        int studyEventId = fp.getInt(EVENT_ID, true);
+        int studySubjectId = fp.getInt(STUDY_SUBJECT_ID, true);
+        if (studyEventId == 0 || studySubjectId == 0) {
+            // processRequest sends the user back to the subject without a change.
+            return true;
+        }
+        return new StudyTreeScope(sm.getDataSource()).containsStudySubject(currentStudy, studySubjectId)
+                && new StudyEventDAO(sm.getDataSource()).findByPK(studyEventId).getStudySubjectId() == studySubjectId;
     }
 
     /** GET shows the form; saving the event (action=submit) or its signature (action=confirm) takes a POST. */
@@ -310,6 +330,13 @@ public class UpdateStudyEventServlet extends SecureController {
             discNotes = (FormDiscrepancyNotes) session.getAttribute(AddNewSubjectServlet.FORM_DISCREPANCY_NOTES_NAME);
             DiscrepancyValidator v = new DiscrepancyValidator(request, discNotes);
             SubjectEventStatus ses = SubjectEventStatus.get(fp.getInt(SUBJECT_EVENT_STATUS_ID));
+            // The status must be one the form offers this role for this event:
+            // signing is the investigator's, locking a manager's, and neither
+            // completing nor locking leaves a required CRF open.
+            if (!statuses.contains(ses)) {
+                logger.warn("event {} status {} refused for user {}: not offered", studyEventId, ses.getId(), ub.getId());
+                refuse();
+            }
             studyEvent.setSubjectEventStatus(ses);
             EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
             ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(studyEvent);
@@ -498,6 +525,13 @@ public class UpdateStudyEventServlet extends SecureController {
             SecurityManager securityManager = ((SecurityManager) SpringServletAccess.getApplicationContext(context).getBean("securityManager"));
             UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
             StudyEventBean seb = (StudyEventBean) session.getAttribute("eventSigned");
+            // The signature is for the event the form names, by a role the form
+            // offers signing: the session's event may have been put there
+            // under another study's role.
+            if (seb == null || seb.getId() != studyEventId || !statuses.contains(SubjectEventStatus.SIGNED)) {
+                logger.warn("signature of event {} refused for user {}", studyEventId, ub.getId());
+                refuse();
+            }
             if (securityManager.verifyPassword(password, getUserDetails()) && ub.getName().equals(username)) {
                 seb.setUpdater(ub);
                 seb.setUpdatedDate(new Date());
