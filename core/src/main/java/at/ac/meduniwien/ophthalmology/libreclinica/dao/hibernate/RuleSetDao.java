@@ -20,6 +20,7 @@ import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
     @Override

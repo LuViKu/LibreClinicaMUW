@@ -104,7 +104,6 @@ public class PublicOctUploadController {
     private static final Logger LOG = LoggerFactory.getLogger(PublicOctUploadController.class);
 
     /** Default task when the portal commits — see class-Javadoc on v1 task selection. */
-    private static final String DEFAULT_TASK = VisitImagingPlan.DEFAULT_TASK;
 
     /** Laterality field gate. OU is rejected — the .e2e parser only ever emits OD/OS. */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
@@ -706,33 +705,6 @@ public class PublicOctUploadController {
             LOG.warn("Failed to persist the acquisition date for job {}: {}",
                     primaryJobId, sqlEx.getMessage());
         }
-    }
-
-    /**
-     * 2026-06-19 — runs the slow part of the upload commit (preprocess
-     * sidecar + remote GPU inference dispatch) on a background thread
-     * so the request thread can return immediately. Both steps are
-     * fire-and-continue: a sidecar failure or a remote outage logs +
-     * leaves the row in the appropriate fallback state ({@code queued}
-     * for local-worker drain, or {@code remote_pending} for a later
-     * retry), so the operator's upload is never lost.
-     *
-     * <p>Re-reads the .e2e bytes from disk rather than holding them in
-     * memory across the async boundary — the request thread no longer
-     * needs to keep 200 MB resident per concurrent upload.
-     */
-    private void runPostCommitPipeline(long jobId, Path savedPath,
-                                       String originalFilename, String laterality,
-                                       int scanIndex, Integer eventCrfId,
-                                       boolean dispatchToRemote) {
-        // Single-task convenience wrapper for callers that haven't been
-        // migrated to the multi-task shape (kept to minimise churn in
-        // any future callers; currently the legacy code path is gone).
-        Map<String, Object> info = new LinkedHashMap<>();
-        info.put("jobId", jobId);
-        info.put("task", DEFAULT_TASK);
-        runPostCommitPipelineMulti(List.of(info), savedPath, originalFilename,
-                laterality, scanIndex, eventCrfId, dispatchToRemote);
     }
 
     /**
@@ -1356,31 +1328,6 @@ public class PublicOctUploadController {
                 if (keys.next()) return keys.getLong(1);
                 throw new SQLException("retinal_inference_job INSERT returned no PK");
             }
-        }
-    }
-
-    /**
-     * 2026-06-19 — hex SHA-256 of the uploaded .e2e bytes. Backs the
-     * upload-dedup gate: a unique index on {@code e2e_sha256} rejects
-     * re-uploads of byte-identical files at INSERT time, and the
-     * {@link #commit} handler catches the constraint violation to
-     * surface a soft 409 with a pointer to the existing job.
-     */
-    private static String sha256Hex(byte[] bytes) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(bytes);
-            StringBuilder hex = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                hex.append(String.format("%02x", b));
-            }
-            return hex.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            // SHA-256 is required by every JRE — this is unreachable in
-            // practice. Log + return null so the upload still proceeds
-            // (without dedup) rather than failing the whole flow.
-            LOG.warn("SHA-256 unavailable on this JRE — dedup hash will be null: {}", e.getMessage());
-            return null;
         }
     }
 

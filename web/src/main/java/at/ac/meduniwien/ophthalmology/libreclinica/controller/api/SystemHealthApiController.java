@@ -302,8 +302,8 @@ public class SystemHealthApiController {
             stores.add(m);
 
             if (s.fsKey() != null && s.fsTotal() != null) {
-                storesByFs.computeIfAbsent(s.fsKey(), k -> new ArrayList<>()).add(s.key());
-                filesystems.computeIfAbsent(s.fsKey(), k -> filesystem(s, b));
+                storesByFs.computeIfAbsent(s.fsKey(), _ -> new ArrayList<>()).add(s.key());
+                filesystems.computeIfAbsent(s.fsKey(), _ -> filesystem(s, b));
             }
         }
         for (Map.Entry<String, Map<String, Object>> e : filesystems.entrySet()) {

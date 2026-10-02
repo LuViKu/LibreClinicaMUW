@@ -101,6 +101,8 @@ final class StudyLifecycleCascade {
      * caller's transaction must roll back.
      */
     static final class StatusChangedException extends IllegalStateException {
+        private static final long serialVersionUID = 1L;
+
         StatusChangedException(String message) {
             super(message);
         }

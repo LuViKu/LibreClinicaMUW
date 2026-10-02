@@ -60,7 +60,6 @@ public class RetinalResultItemDataPopulator {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultItemDataPopulator.class);
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final String SOURCE_KIND = SourcedItemDataWriter.Source.RETINAL_INFERENCE.kind();
 
     /**
      * Mapping from the fluid runner's output_payload key to the binding role

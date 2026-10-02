@@ -59,6 +59,7 @@ import org.springframework.context.support.GenericApplicationContext;
  * 20). Each test leaves the subjects and the definition as it found them.
  * Status ids: 1 available, 2 completed, 5 removed, 6 locked, 7 auto-removed.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class RemovalRestoreAcrossPathsDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int STUDY_ID = 1;

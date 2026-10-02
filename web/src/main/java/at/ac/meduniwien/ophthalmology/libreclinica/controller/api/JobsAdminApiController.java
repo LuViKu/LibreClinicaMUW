@@ -9,7 +9,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +63,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * same posture as the L3 admin tooling. Non-sysadmin → 403.
  *
  * <p>The response shape is JSON keys + ISO instants so the SPA can
- * render dates without re-parsing Java's {@link Date#toString()}.
+ * render dates without re-parsing Java's {@link java.util.Date#toString()}.
  */
 @RestController
 @RequestMapping("/api/v1/admin")

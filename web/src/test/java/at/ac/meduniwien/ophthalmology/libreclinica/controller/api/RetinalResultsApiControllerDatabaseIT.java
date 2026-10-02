@@ -43,6 +43,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -147,9 +148,8 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         }
         if (tmpRoot != null) {
             // Recursive delete — fine for test fixtures.
-            try {
-                Files.walk(tmpRoot)
-                        .sorted(java.util.Comparator.reverseOrder())
+            try (var walk = Files.walk(tmpRoot)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
                         .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) { } });
             } catch (IOException ignored) { /* best-effort */ }
         }
@@ -246,7 +246,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remoteClient.isConfigured()).thenReturn(false);
         SiteVisibilityFilter emptyFilter = Mockito.mock(SiteVisibilityFilter.class);
-        Mockito.when(emptyFilter.visibleStudyIds(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(emptyFilter.visibleStudyIds(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(java.util.Set.of());
         return MockMvcBuilders.standaloneSetup(
                 new RetinalResultsApiController(

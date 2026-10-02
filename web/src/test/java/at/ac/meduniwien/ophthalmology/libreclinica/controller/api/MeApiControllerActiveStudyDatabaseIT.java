@@ -22,6 +22,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Locale;
+import java.util.Objects;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -86,8 +87,8 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
                 .andExpect(jsonPath("$.role").value("Administrator"))
                 .andExpect(jsonPath("$.userType").value("SYSADMIN"));
 
-        assertEquals(study, ((StudyBean) session.getAttribute("study")).getId());
-        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        assertEquals(study, ((StudyBean) Objects.requireNonNull(session.getAttribute("study"))).getId());
+        StudyUserRoleBean role = (StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"));
         assertEquals(Role.INVALID, role.getRole(), "no binding, so no study role: the legacy 'invalid'");
         assertEquals(study, activeStudyOf("pick_admin"));
     }
@@ -99,8 +100,8 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
                         .content("{\"oid\":\"S_PICK_IT_A\"}").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeStudy.oid").value("S_PICK_IT_A"));
-        assertEquals(site, ((StudyBean) session.getAttribute("study")).getId());
-        assertEquals(Role.STUDYDIRECTOR, ((StudyUserRoleBean) session.getAttribute("userRole")).getRole());
+        assertEquals(site, ((StudyBean) Objects.requireNonNull(session.getAttribute("study"))).getId());
+        assertEquals(Role.STUDYDIRECTOR, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getRole());
     }
 
     @Test
@@ -109,7 +110,7 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
                         .content("{\"oid\":\"S_PICK_IT_A\"}").session(session))
                 .andExpect(status().isOk());
-        assertEquals(Role.INVALID, ((StudyUserRoleBean) session.getAttribute("userRole")).getRole());
+        assertEquals(Role.INVALID, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getRole());
     }
 
     @Test

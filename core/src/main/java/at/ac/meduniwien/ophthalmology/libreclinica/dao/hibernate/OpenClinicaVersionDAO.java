@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author pgawade
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class OpenClinicaVersionDAO extends AbstractDomainDao<OpenClinicaVersionBean> {
 
     private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass().getName());

@@ -48,6 +48,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
@@ -334,7 +335,7 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
         int cancelled = completedVisit(subject, 2, 5, 7);
 
         SecurityManager passwords = Mockito.mock(SecurityManager.class);
-        Mockito.when(passwords.verifyPassword(Mockito.anyString(), Mockito.any())).thenReturn(true);
+        Mockito.when(passwords.verifyPassword(ArgumentMatchers.anyString(), ArgumentMatchers.any())).thenReturn(true);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 User.withUsername("manual_investigator").password("x").authorities("ROLE_USER").build(),
                 null, List.of()));
@@ -906,13 +907,13 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
         AtomicBoolean ran = new AtomicBoolean();
         ClassLoader loader = SdvIntegrityDatabaseIT.class.getClassLoader();
         return (DataSource) Proxy.newProxyInstance(loader, new Class<?>[] {DataSource.class},
-                (proxy, method, args) -> {
+                (_, method, args) -> {
                     Object result = invoke(method, DATA_SOURCE, args);
                     if (!(result instanceof Connection connection)) {
                         return result;
                     }
                     return Proxy.newProxyInstance(loader, new Class<?>[] {Connection.class},
-                            (p, m, a) -> {
+                            (_, m, a) -> {
                                 if ("prepareStatement".equals(m.getName()) && a != null
                                         && a[0] instanceof String sql
                                         && sql.toLowerCase(Locale.ROOT).contains("item_data")

@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Locale;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -118,7 +119,7 @@ class ChangeCRFVersionControllerSecurityTest {
         MockHttpServletResponse resp = change(Role.MONITOR, OWN_EVENT_CRF, SAME_CRF_VERSION);
 
         verifyNoInteractions(dataSource);
-        assertTrue(resp.getRedirectedUrl().contains("/MainMenu"));
+        assertTrue(Objects.requireNonNull(resp.getRedirectedUrl()).contains("/MainMenu"));
     }
 
     @Test
@@ -126,7 +127,7 @@ class ChangeCRFVersionControllerSecurityTest {
         MockHttpServletResponse resp = change(Role.COORDINATOR, FOREIGN_EVENT_CRF, SAME_CRF_VERSION);
 
         verifyNoInteractions(dataSource);
-        assertTrue(resp.getRedirectedUrl().contains("/MainMenu"));
+        assertTrue(Objects.requireNonNull(resp.getRedirectedUrl()).contains("/MainMenu"));
     }
 
     @Test
@@ -134,7 +135,7 @@ class ChangeCRFVersionControllerSecurityTest {
         MockHttpServletResponse resp = change(Role.STUDYDIRECTOR, OWN_EVENT_CRF, OTHER_CRF_VERSION);
 
         verifyNoInteractions(dataSource);
-        assertTrue(resp.getRedirectedUrl().contains("/MainMenu"));
+        assertTrue(Objects.requireNonNull(resp.getRedirectedUrl()).contains("/MainMenu"));
     }
 
     @Test
@@ -148,7 +149,8 @@ class ChangeCRFVersionControllerSecurityTest {
                 OWN_EVENT_CRF, 7, SAME_CRF_VERSION);
 
         verify(scope).crfIdOfVersion(SAME_CRF_VERSION);
-        assertFalse(resp.getRedirectedUrl() != null && resp.getRedirectedUrl().contains("authentication_failed"));
+        String url = resp.getRedirectedUrl();
+        assertFalse(url != null && url.contains("authentication_failed"));
     }
 
     @Test
@@ -157,14 +159,14 @@ class ChangeCRFVersionControllerSecurityTest {
         req.setSession(sessionOf(Role.COORDINATOR));
         MockHttpServletResponse resp = new MockHttpServletResponse();
         controller.chooseCRFVersion(req, resp, CRF_ID, "CRF", 32, "v1", "SS_1", 5, FOREIGN_EVENT_CRF, 7);
-        assertTrue(resp.getRedirectedUrl().contains("/MainMenu"));
+        assertTrue(Objects.requireNonNull(resp.getRedirectedUrl()).contains("/MainMenu"));
 
         MockHttpServletRequest req2 = new MockHttpServletRequest("POST", "/pages/managestudy/confirmCRFVersionChange");
         req2.setSession(sessionOf(Role.COORDINATOR));
         MockHttpServletResponse resp2 = new MockHttpServletResponse();
         controller.confirmCRFVersionChange(req2, resp2, CRF_ID, "CRF", 32, "v1", "SS_1", 5, FOREIGN_EVENT_CRF, 7,
                 SAME_CRF_VERSION, "v2", "Visit", "01-Jan-2026", "1", "Confirm");
-        assertTrue(resp2.getRedirectedUrl().contains("/MainMenu"));
+        assertTrue(Objects.requireNonNull(resp2.getRedirectedUrl()).contains("/MainMenu"));
 
         verifyNoInteractions(dataSource);
     }

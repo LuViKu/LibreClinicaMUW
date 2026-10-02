@@ -307,7 +307,7 @@ public class SecurityConfig {
             //   3. Handlers that change data accept POST only, so a Lax cookie
             //      riding a cross-site GET navigation cannot trigger them.
             .csrf(csrf -> csrf.disable())
-            .anonymous(anon -> {})
+            .anonymous(_ -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(antPaths(PUBLIC_PATHS)).permitAll()

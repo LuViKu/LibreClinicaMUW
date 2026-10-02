@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersion;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class CrfVersionDao extends AbstractDomainDao<CrfVersion> {
 
     @Override

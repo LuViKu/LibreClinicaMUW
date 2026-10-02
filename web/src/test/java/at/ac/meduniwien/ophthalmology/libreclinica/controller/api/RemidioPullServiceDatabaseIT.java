@@ -107,14 +107,14 @@ class RemidioPullServiceDatabaseIT extends AbstractApiControllerDatabaseIT {
         final List<URI> downloads = new CopyOnWriteArrayList<>();
 
         RemidioGatewayClient client() {
-            RemidioGatewayClient.Transport wire = (method, uri, headers, body, timeout) -> {
+            RemidioGatewayClient.Transport wire = (method, uri, _, _, _) -> {
                 String p = uri.getPath();
                 if (p.endsWith("/api/user/loginUser")) return new RemidioGatewayClient.Response(200, ok("\"bearer\""));
                 if (p.endsWith("/api/gateway/getAuthToken")) return new RemidioGatewayClient.Response(200, ok("\"cat\""));
                 if (p.contains("/api/gateway/getExamsByDate/")) return new RemidioGatewayClient.Response(200, ok(listing));
                 throw new IllegalStateException("unexpected call " + method + " " + p);
             };
-            RemidioGatewayClient.Downloader files = (uri, timeout) -> {
+            RemidioGatewayClient.Downloader files = (uri, _) -> {
                 downloads.add(uri);
                 return new RemidioGatewayClient.Download(200, new ByteArrayInputStream(jpeg(uri.getPath())));
             };

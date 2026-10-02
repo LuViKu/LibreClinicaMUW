@@ -48,6 +48,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * Status ids: 1 available, 5 removed, 6 locked, 7 auto-removed, 8 signed;
  * subject-event status 8 is signed.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class SubjectRemovalCascadeDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int STUDY_ID = 1;

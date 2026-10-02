@@ -221,7 +221,7 @@ class SitesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabas
     @Order(3)
     void aRemovalThatFailsPartWayChangesNothing() throws Exception {
         // The datasets are the cascade's last step.
-        try (AutoCloseable failing = failUpdatesOf("dataset", "dataset_id", datasetLive)) {
+        try (AutoCloseable _ = failUpdatesOf("dataset", "dataset_id", datasetLive)) {
             mockMvc().perform(post("/api/v1/studies/" + PARENT + "/sites/" + SITE + "/disable")
                             .session(sysadminSession()))
                     .andExpect(status().isInternalServerError());

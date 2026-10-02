@@ -9,7 +9,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.service.ingest;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;

@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import javax.sql.DataSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -74,10 +73,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifa
 public class CrtComputeService {
 
     private static final Logger LOG = LoggerFactory.getLogger(CrtComputeService.class);
-
-    /** Statuses where the per-eye computation is allowed. Matches the
-     *  same set the SPA's nAMD module + the listSubjectJobs endpoint use. */
-    private static final Set<String> DONE_STATUSES = Set.of("done", "succeeded");
 
     /** Filename glob for the IOWA ILM CSV inside the GA artifact dir.
      *  IOWA OCTLayerSeg emits "001-ILM (ILM).csv"; this match is

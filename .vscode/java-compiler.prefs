@@ -1,0 +1,13 @@
+# Eclipse JDT compiler options for VS Code (redhat.java), applied to every
+# project via "java.settings.url" in .vscode/settings.json. Only options that
+# are deliberately different from the defaults belong here.
+#
+# The workspace runs annotation-based null analysis in "automatic" mode, which
+# picks up Spring's org.springframework.lang.NonNull/Nullable/NonNullApi. Spring
+# marks its whole API non-null by default, so every call from this codebase
+# (which has no null annotations of its own) into Spring was reported as
+# "Null type safety ... needs unchecked conversion to conform to @NonNull":
+# about 1,000 warnings, 80% of them in test code, none of them actionable.
+# Real null-specification violations (passing null, dropping @NonNull on an
+# override) are still reported.
+org.eclipse.jdt.core.compiler.problem.nullUncheckedConversion=ignore

@@ -58,6 +58,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  * <p>
  * The notes are on an item of M-001's first visit (event CRF 1).
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class CreateDiscrepancyNoteDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int NEW = ResolutionStatus.OPEN.getId();

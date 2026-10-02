@@ -37,6 +37,7 @@ import org.mockito.Mockito;
  * <p>A site of Default Study (study 1), and a parameter of this test's own,
  * are added. Each case removes the values it stores.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class StudyParametersResolutionDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final String HANDLE = "lcMuwResolutionIt";

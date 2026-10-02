@@ -21,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Date;
+import java.util.Objects;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +56,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  * The event is M-007's "V3 Day 90" (event 21): not scheduled, with no CRF,
  * so the form never offers "completed" or "locked" for it.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class UpdateStudyEventStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int SUBJECT = 7;
@@ -123,7 +125,7 @@ class UpdateStudyEventStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
         harness.run(new UpdateStudyEventServlet(), submit);
         MockHttpServletRequest confirm = request(ra, "action", "confirm", "event_id", "" + EVENT, "ss_id", "" + SUBJECT,
                 "j_user", ra.getName(), "j_pass", "any");
-        confirm.setSession(submit.getSession());
+        confirm.setSession(Objects.requireNonNull(submit.getSession()));
         MockHttpServletResponse resp = harness.run(new UpdateStudyEventServlet(), confirm);
 
         assertEquals(NOT_SCHEDULED, eventStatus(), "the event is not signed");
@@ -157,7 +159,7 @@ class UpdateStudyEventStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
         harness.run(new UpdateStudyEventServlet(), submit);
         MockHttpServletRequest confirm = request(investigator, "action", "confirm", "event_id", "" + EVENT,
                 "ss_id", "" + SUBJECT, "j_user", investigator.getName(), "j_pass", "any");
-        confirm.setSession(submit.getSession());
+        confirm.setSession(Objects.requireNonNull(submit.getSession()));
         harness.run(new UpdateStudyEventServlet(), confirm);
 
         assertEquals(SubjectEventStatus.SIGNED.getId(), eventStatus());

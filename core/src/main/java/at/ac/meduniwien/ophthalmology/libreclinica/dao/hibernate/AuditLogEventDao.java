@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEvent;
 // overload infers the type from the value, so the explicit Type argument is
 // no longer needed.
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
 
     @Override

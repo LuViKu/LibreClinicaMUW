@@ -46,7 +46,7 @@ final class CrfItemTable {
     static List<CrfDetailDto.Item> build(List<Row> rows) {
         Map<String, List<Row>> byItem = new LinkedHashMap<>();
         for (Row row : rows) {
-            byItem.computeIfAbsent(row.itemName(), k -> new ArrayList<>()).add(row);
+            byItem.computeIfAbsent(row.itemName(), _ -> new ArrayList<>()).add(row);
         }
         List<CrfDetailDto.Item> out = new ArrayList<>(byItem.size());
         for (List<Row> placements : byItem.values()) {

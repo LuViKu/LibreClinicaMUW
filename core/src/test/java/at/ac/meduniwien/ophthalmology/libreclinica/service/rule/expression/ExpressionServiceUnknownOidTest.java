@@ -32,8 +32,8 @@ public class ExpressionServiceUnknownOidTest {
     @Test
     public void unknownItemGroupOid_inCrfScopedRuleSet_isReportedNotThrown() {
         DataSource ds = mock(DataSource.class);
-        try (MockedConstruction<ItemGroupDAO> groups = mockConstruction(ItemGroupDAO.class,
-                (m, c) -> when(m.findByOid(anyString())).thenReturn(null))) {
+        try (MockedConstruction<ItemGroupDAO> _ = mockConstruction(ItemGroupDAO.class,
+                (m, _) -> when(m.findByOid(anyString())).thenReturn(null))) {
 
             ExpressionService service = new ExpressionService(ds);
             RuleSetBean ruleSet = new RuleSetBean();

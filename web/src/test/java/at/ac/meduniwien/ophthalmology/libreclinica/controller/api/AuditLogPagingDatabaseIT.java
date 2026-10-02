@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -192,7 +193,7 @@ class AuditLogPagingDatabaseIT extends AbstractApiControllerDatabaseIT {
         JsonNode all = page("/api/v1/audit", studySession(), "from", "2031-01-01", "to", "2031-01-01");
         Map<String, Set<String>> byVariant = new HashMap<>();
         for (JsonNode e : all.get("events")) {
-            byVariant.computeIfAbsent(e.get("variant").asText(), v -> new HashSet<>()).add(e.get("id").asText());
+            byVariant.computeIfAbsent(e.get("variant").asText(), _ -> new HashSet<>()).add(e.get("id").asText());
         }
         assertEquals(12, all.get("totalCount").asInt());
         assertEquals(4, byVariant.get("data").size(), byVariant.toString());
@@ -286,7 +287,7 @@ class AuditLogPagingDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static MockHttpSession sysadminSession() {
         MockHttpSession session = studySession();
-        ((UserAccountBean) session.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).addUserType(UserType.SYSADMIN);
         return session;
     }
 

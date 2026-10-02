@@ -14,12 +14,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -30,26 +24,12 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -83,7 +63,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRender
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.CrfSnapshot;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.EventSnapshot;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.CasebookRenderer.ItemSnapshot;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.FileItemValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
@@ -373,9 +352,9 @@ public class SubjectExportApiController {
         BundleExportWriter.Policy policy = new BundleExportWriter.Policy(maskAi);
 
         if (dryRun) {
-            try {
+            try (OutputStream sink = OutputStream.nullOutputStream()) {
                 BundleExportWriter.Result r = BundleExportWriter.write(
-                        OutputStream.nullOutputStream(), dataSource, ss.getId(), ss.getLabel(),
+                        sink, dataSource, ss.getId(), ss.getLabel(),
                         pathStudy.getOid(), odm, csv, policy, currentUser.getName(), true);
                 return ResponseEntity.ok(r.manifest());
             } catch (IOException e) {
@@ -442,6 +421,7 @@ public class SubjectExportApiController {
      *       italicised at the bottom of each form.</li>
      * </ul>
      */
+    @SuppressWarnings("resource") // in-memory Document/PdfWriter over a ByteArrayOutputStream; no OS resource is held
     private byte[] renderPdf(CasebookSnapshot snap) throws DocumentException, IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         Document doc = new Document(PageSize.A4, 48f, 48f, 48f, 48f);

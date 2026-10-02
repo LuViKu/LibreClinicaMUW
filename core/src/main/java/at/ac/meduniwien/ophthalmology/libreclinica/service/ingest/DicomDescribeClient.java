@@ -72,6 +72,8 @@ public class DicomDescribeClient {
 
     /** Why a description could not be had, so the caller can pick a status code. */
     public static class DescribeException extends Exception {
+        private static final long serialVersionUID = 1L;
+
         public enum Reason {
             /** No sidecar URL or token is configured. */
             UNCONFIGURED,

@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifa
  * from a treating role and changes nothing for anyone else — the data manager
  * who is allowed to see AI output still does.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class RetinalJobAccessTest {
 
     private static RetinalJobAccess withBrokenDatabase() throws SQLException {

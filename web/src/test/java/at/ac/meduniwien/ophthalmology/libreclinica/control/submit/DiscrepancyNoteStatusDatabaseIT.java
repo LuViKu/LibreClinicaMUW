@@ -18,6 +18,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Date;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -292,7 +293,7 @@ class DiscrepancyNoteStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(String.valueOf(resp.getForwardedUrl()).contains("fromBox=1"), String.valueOf(resp.getForwardedUrl()));
 
         MockHttpServletRequest page = harness.request("GET", "/ViewDiscrepancyNote", director);
-        page.setSession(failed.getSession());
+        page.setSession(Objects.requireNonNull(failed.getSession()));
         for (String[] p : new String[][] { {"name", "itemData"}, {"id", itemData}, {"field", "input1"},
                 {"column", "value"}, {"fromBox", "1"} }) {
             page.addParameter(p[0], p[1]);

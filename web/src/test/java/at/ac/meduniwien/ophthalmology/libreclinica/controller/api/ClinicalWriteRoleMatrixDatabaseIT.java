@@ -26,6 +26,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -554,7 +555,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
 
     /** The session, its user made a system administrator. */
     private static MockHttpSession asSystemAdministrator(MockHttpSession session) {
-        ((UserAccountBean) session.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).addUserType(UserType.SYSADMIN);
         return session;
     }
 

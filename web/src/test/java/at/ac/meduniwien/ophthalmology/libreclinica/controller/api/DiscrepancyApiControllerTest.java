@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *       refs.</li>
  * </ul>
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {

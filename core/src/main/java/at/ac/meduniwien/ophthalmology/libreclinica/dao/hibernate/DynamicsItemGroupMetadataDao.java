@@ -17,6 +17,7 @@ import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItemGroupMetadataBean>{
 
     @Override 

@@ -28,6 +28,7 @@ import org.junit.rules.TemporaryFolder;
  * DOCTYPE — and with it every entity declaration — is refused, while a plain
  * rules document still validates against rules.xsd.
  */
+@SuppressWarnings("resource") // in-memory streams and objects only; nothing here holds an OS resource
 public class XmlSchemaValidationHelperXxeTest {
 
     private static final String SECRET = "TOP-SECRET-MARKER-5f1c";

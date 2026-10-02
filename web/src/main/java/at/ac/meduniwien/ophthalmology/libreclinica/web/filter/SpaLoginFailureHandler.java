@@ -47,6 +47,7 @@ public class SpaLoginFailureHandler implements AuthenticationFailureHandler {
         this.legacy = legacy;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
             AuthenticationException exception) throws IOException, ServletException {

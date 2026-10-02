@@ -363,6 +363,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @SuppressWarnings("resource") // PdfWriter wraps the servlet stream and pdfDoc.close() closes both; on failure the document is deliberately left unclosed so no PDF trailer is written to a half-built response
     private void serializeToPDF(EntityBean bean, OutputStream stream) {
 
         ServletOutputStream servletStream = (ServletOutputStream) stream;
@@ -387,6 +388,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @SuppressWarnings("resource") // PdfWriter wraps the servlet stream and pdfDoc.close() closes both; on failure the document is deliberately left unclosed so no PDF trailer is written to a half-built response
     public void serializeListToPDF(String content, OutputStream stream) {
 
         ServletOutputStream servletStream = (ServletOutputStream) stream;
@@ -407,6 +409,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @SuppressWarnings("resource") // PdfWriter wraps the servlet stream and pdfDoc.close() closes both; on failure the document is deliberately left unclosed so no PDF trailer is written to a half-built response
     public void serializeListToPDF(List<DiscrepancyNoteBean> listOfBeans,
                                    OutputStream stream, String studyIdentifier) {
 
@@ -443,6 +446,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @SuppressWarnings("resource") // PdfWriter wraps the servlet stream and pdfDoc.close() closes both; on failure the document is deliberately left unclosed so no PDF trailer is written to a half-built response
     public void serializeThreadsToPDF(List<DiscrepancyNoteThread> listOfThreads,
                                       OutputStream stream, String studyIdentifier) {
 
@@ -539,6 +543,7 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
 
     }
 
+    @SuppressWarnings("resource") // the servlet stream obtained from response.getOutputStream() is closed in the finally block
     public void downLoadThreadedDiscBeans(List<DiscrepancyNoteThread> listOfThreadedBeans,
                                           String format,
                                           HttpServletResponse response, String studyIdentifier) throws Exception {

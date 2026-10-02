@@ -15,6 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRole;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import org.hibernate.query.Query;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole> {
 
     @Override

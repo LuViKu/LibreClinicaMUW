@@ -118,7 +118,7 @@ final class OptomedWorklistFormat {
         // query is ordered, so the first seen is the earlier).
         Map<String, List<ScheduledVisitQuery.ScheduledVisit>> bySubject = new LinkedHashMap<>();
         for (ScheduledVisitQuery.ScheduledVisit v : visits) {
-            bySubject.computeIfAbsent(ascii(v.subjectLabel(), "UNKNOWN"), k -> new ArrayList<>()).add(v);
+            bySubject.computeIfAbsent(ascii(v.subjectLabel(), "UNKNOWN"), _ -> new ArrayList<>()).add(v);
         }
         StringBuilder sb = new StringBuilder(bySubject.size() * 80 + 8);
         boolean first = true;

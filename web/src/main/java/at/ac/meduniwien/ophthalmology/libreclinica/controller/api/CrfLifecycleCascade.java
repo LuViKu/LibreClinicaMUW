@@ -547,7 +547,7 @@ final class CrfLifecycleCascade {
                     } else {
                         continue; // the other removal took it
                     }
-                    byStatus.computeIfAbsent(status, k -> new ArrayList<>()).add(id);
+                    byStatus.computeIfAbsent(status, _ -> new ArrayList<>()).add(id);
                 }
             }
         }

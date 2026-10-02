@@ -33,6 +33,7 @@ import org.mockito.ArgumentCaptor;
  * Look-ups of CRF versions and items by name bind the name as a query
  * parameter; it is never spliced into the SQL text.
  */
+@SuppressWarnings("resource") // Session and EntityManager are Mockito mocks; there is nothing to close
 public class NameLookupBindingTest {
 
     private static final String HOSTILE = "v1' or '1'='1";
@@ -40,6 +41,7 @@ public class NameLookupBindingTest {
     private Session session;
     private NativeQuery<?> query;
 
+    @SuppressWarnings({"unchecked", "rawtypes"}) // Mockito stubs generic Hibernate query methods through a raw NativeQuery mock
     private <D extends AbstractDomainDao<?>> D wire(D dao) throws Exception {
         session = mock(Session.class);
         query = mock(NativeQuery.class, RETURNS_SELF);

@@ -85,6 +85,7 @@ public class JpaConfig {
         return emf;
     }
 
+    @SuppressWarnings("resource") // the EntityManagerFactory is owned and closed by Spring
     @Bean
     public JpaTransactionManager transactionManager(LocalContainerEntityManagerFactoryBean entityManagerFactory) {
         JpaTransactionManager tm = new JpaTransactionManager();

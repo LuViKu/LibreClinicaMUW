@@ -96,7 +96,7 @@ class AdminMailApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     /** A mail sender whose {@code send} records the message instead of reaching a server. */
     private static JavaMailSenderImpl recording() {
         JavaMailSenderImpl spy = Mockito.spy(new JavaMailSenderImpl());
-        Mockito.doAnswer(inv -> new MimeMessage(Session.getInstance(new Properties())))
+        Mockito.doAnswer(_ -> new MimeMessage(Session.getInstance(new Properties())))
                 .when(spy).createMimeMessage();
         Mockito.doNothing().when(spy).send(any(MimeMessage.class));
         return spy;

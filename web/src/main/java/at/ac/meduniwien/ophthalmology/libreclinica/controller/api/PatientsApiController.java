@@ -515,7 +515,7 @@ public class PatientsApiController {
                             rs.getString("study_eye"),
                             enrDate == null ? null : enrDate.toLocalDate().toString(),
                             lastVisit == null ? null : lastVisit.toInstant().toString());
-                    out.computeIfAbsent(sid, k -> new ArrayList<>()).add(e);
+                    out.computeIfAbsent(sid, _ -> new ArrayList<>()).add(e);
                 }
             }
         }

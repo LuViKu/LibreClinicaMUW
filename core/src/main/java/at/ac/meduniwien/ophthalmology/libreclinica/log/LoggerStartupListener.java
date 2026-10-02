@@ -193,8 +193,9 @@ public class LoggerStartupListener extends ContextAwareBase implements
 		if (!file.exists())
 			return null;
 
-		InputStream inputStream = new FileInputStream(propFileName);
-		prop.load(inputStream);
+		try (InputStream inputStream = new FileInputStream(propFileName)) {
+			prop.load(inputStream);
+		}
 
 		return prop;
 	}

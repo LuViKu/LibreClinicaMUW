@@ -230,6 +230,7 @@ public class RuleController {
         return rpic;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @RequestMapping(value = "/studies/{study}/metadata", method = RequestMethod.GET)
     public ModelAndView studyMetadata(Model model, HttpSession session, @PathVariable("study") String studyOid, HttpServletResponse response) throws Exception {
         ResourceBundleProvider.updateLocale(Locale.US);

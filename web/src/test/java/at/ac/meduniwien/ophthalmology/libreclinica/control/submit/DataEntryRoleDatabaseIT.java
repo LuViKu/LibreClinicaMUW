@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 import jakarta.servlet.http.HttpServlet;
 
@@ -64,6 +65,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.StudyEventBeanLi
  * M-007's third visit (event 21, not scheduled, no CRF yet) in study 1, or one
  * at a new visit of subject EIAMD139 in study 102.
  */
+@SuppressWarnings("resource") // the context is only a bean-lookup holder for the legacy DAOs and lives as long as the test JVM
 class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** M-007's "V3 Day 90": not scheduled, no event CRF. */
@@ -497,7 +499,7 @@ class DataEntryRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
         if (servlet instanceof AdministrativeEditingServlet) {
             // Without a forced reason for change, an edit saves with the form alone.
-            ((StudyBean) req.getSession().getAttribute("study")).getStudyParameterConfig().setAdminForcedReasonForChange("false");
+            ((StudyBean) Objects.requireNonNull(req.getSession()).getAttribute("study")).getStudyParameterConfig().setAdminForcedReasonForChange("false");
         }
         MockHttpServletResponse resp = harness.run(servlet, req);
         Object messages = req.getAttribute("pageMessages");

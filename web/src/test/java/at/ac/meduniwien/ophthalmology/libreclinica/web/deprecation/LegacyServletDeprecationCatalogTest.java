@@ -206,7 +206,7 @@ class LegacyServletDeprecationCatalogTest {
         ServletRegistration.Dynamic registration = (ServletRegistration.Dynamic) Proxy.newProxyInstance(
                 LegacyServletDeprecationCatalogTest.class.getClassLoader(),
                 new Class<?>[] {ServletRegistration.Dynamic.class},
-                (proxy, method, args) -> {
+                (_, method, args) -> {
                     if ("addMapping".equals(method.getName())) {
                         paths.addAll(List.of((String[]) args[0]));
                         return Set.of();
@@ -216,7 +216,7 @@ class LegacyServletDeprecationCatalogTest {
         ServletContext context = (ServletContext) Proxy.newProxyInstance(
                 LegacyServletDeprecationCatalogTest.class.getClassLoader(),
                 new Class<?>[] {ServletContext.class},
-                (proxy, method, args) -> "addServlet".equals(method.getName()) ? registration : null);
+                (_, method, _) -> "addServlet".equals(method.getName()) ? registration : null);
         new LegacyServletRegistry().legacyServletsInitializer().onStartup(context);
         return paths;
     }

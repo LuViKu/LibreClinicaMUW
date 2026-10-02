@@ -53,6 +53,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.quartz.CronTrigger;
 import org.quartz.JobDataMap;
@@ -658,7 +659,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         // a scheduled run that fails: mailed, without the error text
         long failed = tick(jobDataOf(id), ds.getId());
-        ExportFileMaterializer failing = (dataset, format, userId) -> {
+        ExportFileMaterializer failing = (_, _, _) -> {
             throw new IllegalStateException("value 'M-001 hba1c 7.9' is not a number");
         };
         assertTrue(ExportJobRunner.runOnce(DATA_SOURCE, failing, notifier));
@@ -723,7 +724,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "odm", 1);
         CountDownLatch running = new CountDownLatch(1);
         CountDownLatch proceed = new CountDownLatch(1);
-        ExportFileMaterializer withACheckpoint = (dataset, format, userId) -> {
+        ExportFileMaterializer withACheckpoint = (_, _, _) -> {
             running.countDown();
             proceed.await(30, TimeUnit.SECONDS);
             JobTerminationMonitor.check(); // as the ODM extract and the bundle writer do
@@ -787,7 +788,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .put(STUDY_ID, StudySettingService.EXPORT_BUNDLE_ENABLED, "true", 1);
         DatasetBean ds = persistDataset();
         RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
-        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt())).thenReturn(new ArrayList<>());
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(ArgumentMatchers.anyInt())).thenReturn(new ArrayList<>());
         SynchronousExportMaterializer materializer =
                 new SynchronousExportMaterializer(DATA_SOURCE, Mockito.mock(CoreResources.class), rules);
 
@@ -845,14 +846,14 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         DatasetBean ds = persistDataset();
         Path datasetDir = FILE_ROOT.resolve("datasets").resolve(String.valueOf(ds.getId()));
         RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
-        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt())).thenReturn(new ArrayList<>());
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(ArgumentMatchers.anyInt())).thenReturn(new ArrayList<>());
         // The cancel arrives once the first section is on disk: the next
         // database call after that asks this thread's job to stop, as
         // ExportJobRunner.requestCancel would, and the next checkpoint throws.
         JobTerminationMonitor monitor = JobTerminationMonitor.createInstance("cancelled odm");
         AtomicBoolean sectionWritten = new AtomicBoolean();
         DataSource cancelAfterTheFirstSection = (DataSource) Proxy.newProxyInstance(
-                DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+                DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class}, (_, method, args) -> {
                     if ("getConnection".equals(method.getName()) && xmlFilesUnder(datasetDir) > 0) {
                         sectionWritten.set(true);
                         monitor.terminate();
@@ -912,7 +913,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         long jobId = new ExportJobDAO(DATA_SOURCE).insertQueued(ds.getId(), "csv", 1);
         CountDownLatch running = new CountDownLatch(1);
         CountDownLatch proceed = new CountDownLatch(1);
-        ExportFileMaterializer noCheckpoint = (dataset, format, userId) -> {
+        ExportFileMaterializer noCheckpoint = (_, _, _) -> {
             running.countDown();
             proceed.await(30, TimeUnit.SECONDS);
             return new ExportFileMaterializer.Result("finished.csv", "/placeholder/finished.csv", 0L);
@@ -1035,7 +1036,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         ExportCompletionNotifier notifier = new ExportCompletionNotifier(outbox, DATA_SOURCE);
 
         long jobId = tick(jobDataOf(id), ds.getId());
-        ExportFileMaterializer stopped = (dataset, format, userId) -> {
+        ExportFileMaterializer stopped = (_, _, _) -> {
             assertTrue(ExportJobRunner.requestCancel(jobId));
             JobTerminationMonitor.check(); // as the ODM extract and the bundle writer do
             return new ExportFileMaterializer.Result("never.xml", "/placeholder/never.xml", 0L);
@@ -1087,11 +1088,11 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static DataSource afterTheClaimCommits(Step step) {
         AtomicBoolean done = new AtomicBoolean();
         return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
-                new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+                new Class<?>[] {DataSource.class}, (_, method, args) -> {
                     Object result = invoke(method, DATA_SOURCE, args);
                     if (!(result instanceof Connection connection)) return result;
                     return Proxy.newProxyInstance(Connection.class.getClassLoader(),
-                            new Class<?>[] {Connection.class}, (cp, cm, cargs) -> {
+                            new Class<?>[] {Connection.class}, (_, cm, cargs) -> {
                                 boolean manual = "commit".equals(cm.getName()) && !connection.getAutoCommit();
                                 Object r = invoke(cm, connection, cargs);
                                 if (manual && done.compareAndSet(false, true)) step.run();

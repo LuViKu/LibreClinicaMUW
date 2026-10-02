@@ -126,7 +126,7 @@ final class RequiredItemsCheck {
             Map<Integer, TreeSet<Integer>> rowsByGroup = new HashMap<>();
             for (ItemMeta item : items) {
                 if (!item.repeating()) continue;
-                TreeSet<Integer> rows = rowsByGroup.computeIfAbsent(item.groupId(), k -> new TreeSet<>());
+                TreeSet<Integer> rows = rowsByGroup.computeIfAbsent(item.groupId(), _ -> new TreeSet<>());
                 rows.addAll(values.getOrDefault(item.itemId(), Map.of()).keySet());
             }
 
@@ -228,7 +228,7 @@ final class RequiredItemsCheck {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     int ordinal = Math.max(1, rs.getInt(2));
-                    out.computeIfAbsent(rs.getInt(1), k -> new LinkedHashMap<>())
+                    out.computeIfAbsent(rs.getInt(1), _ -> new LinkedHashMap<>())
                             .put(ordinal, rs.getString(3));
                     if (rs.getBoolean(4)) {
                         noted.add(rs.getInt(1) + ":" + ordinal);
@@ -275,7 +275,7 @@ final class RequiredItemsCheck {
                     }
                     // A control item that is not on the form: the condition can never hold.
                     String control = controlItemId == null ? "-1" : String.valueOf(controlItemId);
-                    out.computeIfAbsent(rs.getInt(1), k -> new ArrayList<>())
+                    out.computeIfAbsent(rs.getInt(1), _ -> new ArrayList<>())
                             .add(new String[] {control, rs.getString(4)});
                 }
             }

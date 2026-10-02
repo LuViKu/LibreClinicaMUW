@@ -72,6 +72,7 @@ class ImportCRFDataServletDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Runs the servlet with its request state wired by hand. */
     private static final class Probe extends ImportCRFDataServlet {
+        private static final long serialVersionUID = 1L;
         private final File upload;
         private final List<Page> forwards = new ArrayList<>();
 

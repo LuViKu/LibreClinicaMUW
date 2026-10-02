@@ -126,8 +126,6 @@ public class StudyParametersApiController {
     private static final Set<String> BOOL_VALUES = Set.of("true", "false");
     private static final Set<String> REQUIRED_OPTIONAL_NOTUSED =
             Set.of("required", "optional", "not_used");
-    private static final Set<String> REQUIRED_OPTIONAL =
-            Set.of("required", "optional");
     private static final Set<String> BLANK_PREPOPULATED =
             Set.of("blank", "pre-populated");
     private static final Set<String> SUBJECT_ID_GEN =

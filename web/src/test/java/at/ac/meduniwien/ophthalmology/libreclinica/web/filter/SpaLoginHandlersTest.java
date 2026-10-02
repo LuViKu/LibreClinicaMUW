@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -56,6 +57,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
  * accepts anything, gets the legacy redirects. {@code SpaLoginLogoutDatabaseIT}
  * drives the whole login filter against a database.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class SpaLoginHandlersTest {
 
     private static final String BROWSER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
@@ -156,8 +158,8 @@ class SpaLoginHandlersTest {
         success().onAuthenticationSuccess(request, response, SIGNED_IN);
 
         assertEquals(204, response.getStatus(), "the login stands");
-        assertEquals(0, ((StudyBean) session.getAttribute("study")).getId(), "no study is bound");
-        assertEquals(0, ((StudyUserRoleBean) session.getAttribute("userRole")).getId(), "no role is bound");
+        assertEquals(0, ((StudyBean) Objects.requireNonNull(session.getAttribute("study"))).getId(), "no study is bound");
+        assertEquals(0, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getId(), "no role is bound");
     }
 
     @Test
@@ -172,7 +174,7 @@ class SpaLoginHandlersTest {
 
             assertEquals(401, response.getStatus(), c[1].toString());
             assertNull(response.getRedirectedUrl());
-            assertTrue(response.getContentType().startsWith("application/json"));
+            assertTrue(Objects.requireNonNull(response.getContentType()).startsWith("application/json"));
             assertEquals(c[1], new ObjectMapper().readTree(response.getContentAsString()).get("error").asText());
         }
     }

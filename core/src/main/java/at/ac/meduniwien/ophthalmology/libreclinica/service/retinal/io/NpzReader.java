@@ -29,6 +29,7 @@ public final class NpzReader {
 
     private NpzReader() { }
 
+    @SuppressWarnings("resource") // the NonClosingInputStream wrapper must not close the shared zip stream; the try-with-resources closes it
     public static Map<String, LabelVolume> readAll(Path npz) throws IOException {
         Map<String, LabelVolume> out = new LinkedHashMap<>();
         try (ZipInputStream zin = open(npz)) {
@@ -47,6 +48,7 @@ public final class NpzReader {
         return out;
     }
 
+    @SuppressWarnings("resource") // the NonClosingInputStream wrapper must not close the shared zip stream; the try-with-resources closes it
     public static LabelVolume read(Path npz, String entryName) throws IOException {
         try (ZipInputStream zin = open(npz)) {
             ZipEntry e;
@@ -61,6 +63,7 @@ public final class NpzReader {
         throw new IOException("entry '" + entryName + "' not found in " + npz);
     }
 
+    @SuppressWarnings("resource") // the NonClosingInputStream wrapper must not close the shared zip stream; the try-with-resources closes it
     public static LabelVolume readFirst(Path npz) throws IOException {
         try (ZipInputStream zin = open(npz)) {
             ZipEntry e;

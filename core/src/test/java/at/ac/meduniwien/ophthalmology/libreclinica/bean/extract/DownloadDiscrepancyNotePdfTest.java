@@ -66,6 +66,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNoteThread
  * <p>A golden that is missing or differs fails the test, and the produced
  * text is written to {@code target/golden-capture/} for inspection.
  */
+@SuppressWarnings("resource") // in-memory streams and objects only; nothing here holds an OS resource
 public class DownloadDiscrepancyNotePdfTest {
 
     private static final String STUDY_IDENTIFIER = "S_DEFAULTS1";

@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.Base64;
+import java.util.Objects;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +77,7 @@ class ApiSecurityFilterDatabaseIT extends AbstractApiControllerDatabaseIT {
         filter().doFilter(req, new MockHttpServletResponse(), chain);
 
         assertNotNull(chain.getRequest(), "a valid key reaches the controller");
-        UserAccountBean ub = (UserAccountBean) req.getSession().getAttribute("userBean");
+        UserAccountBean ub = (UserAccountBean) Objects.requireNonNull(req.getSession()).getAttribute("userBean");
         assertEquals("root", ub.getName());
     }
 

@@ -324,6 +324,7 @@ public class RemoteRetinalInferenceClient {
         HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
         RestTemplate rest = restTemplate(remoteTimeout().toMillis());
         try {
+            @SuppressWarnings("rawtypes")
             ResponseEntity<Map> resp = rest.postForEntity(endpoint, req, Map.class);
             if (resp.getStatusCode().is2xxSuccessful()) {
                 Map<?, ?> rb = resp.getBody();

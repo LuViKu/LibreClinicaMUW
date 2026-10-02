@@ -10,7 +10,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.export;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -765,10 +764,12 @@ public final class BundleExportWriter {
     }
 
     private static String extensionOf(String storedPath, String kind) {
-        int dot = storedPath == null ? -1 : storedPath.lastIndexOf('.');
-        if (dot > 0 && dot < storedPath.length() - 1) {
-            String ext = storedPath.substring(dot).toLowerCase(Locale.ROOT);
-            if (ext.matches("\\.[a-z0-9]{1,8}")) return ext;
+        if (storedPath != null) {
+            int dot = storedPath.lastIndexOf('.');
+            if (dot > 0 && dot < storedPath.length() - 1) {
+                String ext = storedPath.substring(dot).toLowerCase(Locale.ROOT);
+                if (ext.matches("\\.[a-z0-9]{1,8}")) return ext;
+            }
         }
         return switch (kind == null ? "" : kind) {
             case "e2e" -> ".e2e";

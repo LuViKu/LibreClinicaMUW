@@ -12,6 +12,7 @@ import java.io.IOException;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -52,7 +53,7 @@ import org.springframework.web.servlet.resource.PathResourceResolver;
 public class SpaForwardingConfig implements WebMvcConfigurer {
 
     @Override
-    public void addViewControllers(ViewControllerRegistry registry) {
+    public void addViewControllers(@NonNull ViewControllerRegistry registry) {
         // /app and /app/ both forward to the SPA's index.html.
         // Without this, hitting the bare /app/ root URL 404s because
         // there's no default welcome-file mapping for the /app subtree
@@ -62,13 +63,13 @@ public class SpaForwardingConfig implements WebMvcConfigurer {
     }
 
     @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    public void addResourceHandlers(@NonNull ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/app/**")
                 .addResourceLocations("/app/")
                 .resourceChain(true)
                 .addResolver(new PathResourceResolver() {
                     @Override
-                    protected Resource getResource(String resourcePath, Resource location) throws IOException {
+                    protected Resource getResource(@NonNull String resourcePath, @NonNull Resource location) throws IOException {
                         Resource requested = location.createRelative(resourcePath);
                         if (requested.exists() && requested.isReadable()) {
                             return requested;

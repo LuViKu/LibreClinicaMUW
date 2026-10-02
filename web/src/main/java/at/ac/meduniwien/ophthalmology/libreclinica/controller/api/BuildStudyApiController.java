@@ -79,14 +79,6 @@ public class BuildStudyApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(BuildStudyApiController.class);
 
-    /** Count distinct users with any role on the study (or its sites). */
-    private static final String COUNT_USERS_SQL = """
-            SELECT COUNT(DISTINCT sur.user_id)
-            FROM study_user_role sur
-            WHERE sur.study_id = ?
-               OR sur.study_id IN (SELECT study_id FROM study WHERE parent_study_id = ?)
-            """;
-
     /** Count rules attached to the study. */
     private static final String COUNT_RULES_SQL = """
             SELECT COUNT(*) FROM rule WHERE study_id = ?

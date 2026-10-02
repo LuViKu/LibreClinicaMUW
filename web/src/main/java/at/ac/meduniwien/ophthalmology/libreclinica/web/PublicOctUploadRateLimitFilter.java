@@ -20,6 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -176,10 +177,11 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         return true;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain chain)
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain chain)
             throws ServletException, IOException {
         String uri = request.getRequestURI();
         String prefix = guardedPrefixFor(uri);
@@ -191,7 +193,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         boolean commit = isUploadCommit(prefix, request.getMethod(), uri);
         String key = clientIp(request) + "|" + prefix + (commit ? "|commit" : "");
         long now = nowMs();
-        Bucket bucket = buckets.computeIfAbsent(key, k -> commit
+        Bucket bucket = buckets.computeIfAbsent(key, _ -> commit
                 ? new Bucket(MAX_COMMITS_PER_HOUR, MAX_COMMITS_PER_HOUR, COMMIT_REFILL_INTERVAL_MS, now)
                 : HEARTBEAT_PREFIX.equals(prefix)
                         ? new Bucket(MAX_HEARTBEATS_PER_HOUR, MAX_HEARTBEATS_PER_HOUR, HEARTBEAT_REFILL_INTERVAL_MS, now)

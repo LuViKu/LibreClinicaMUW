@@ -33,7 +33,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -336,7 +335,7 @@ public class EventCrfsApiController {
                         && grp.getOid() != null) {
                     groupOid = grp.getOid();
                     itemOidsByItemGroupId
-                            .computeIfAbsent(grp.getId(), k -> new ArrayList<>())
+                            .computeIfAbsent(grp.getId(), _ -> new ArrayList<>())
                             .add(ib.getOid());
                 }
                 itemDtos.add(buildItemDto(ib, ifm, groupOid, showWhenByItemId.get(ib.getId()),
@@ -369,8 +368,8 @@ public class EventCrfsApiController {
             if (repeating) {
                 int ordinal = Math.max(1, idb.getOrdinal());
                 groupRowValues
-                        .computeIfAbsent(grp.getId(), k -> new LinkedHashMap<>())
-                        .computeIfAbsent(ordinal, k -> new LinkedHashMap<>())
+                        .computeIfAbsent(grp.getId(), _ -> new LinkedHashMap<>())
+                        .computeIfAbsent(ordinal, _ -> new LinkedHashMap<>())
                         .put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
             } else {
                 values.put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
@@ -475,7 +474,7 @@ public class EventCrfsApiController {
      * {@code missingReasonItemOids}). A reason given is recorded as a
      * Reason for Change note whether forced or not.
      *
-     * <p>Audit-log: one {@link AuditEventBean} row per changed item,
+     * <p>Audit-log: one {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean} row per changed item,
      * recording (auditTable="item_data", entityId, columnName="value",
      * oldValue, newValue). Creation-from-empty also writes one row with
      * an empty oldValue so the audit trail shows the initial entry.
@@ -1530,7 +1529,7 @@ public class EventCrfsApiController {
             if (isOpen) openByOid.merge(itemOid, 1, Integer::sum);
             Instant when = latestActivityInstant(n);
             latestByOid.merge(itemOid, when, (a, b) -> a.isAfter(b) ? a : b);
-            noteIdsByOid.computeIfAbsent(itemOid, k -> new ArrayList<>())
+            noteIdsByOid.computeIfAbsent(itemOid, _ -> new ArrayList<>())
                     .add(String.valueOf(n.getId()));
         }
 

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.SCDItemMetadataBean;
 import org.hibernate.query.NativeQuery;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class SCDItemMetadataDao extends AbstractDomainDao<SCDItemMetadataBean>{
 
     @Override

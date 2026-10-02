@@ -30,6 +30,7 @@ import java.util.Locale;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -86,7 +87,7 @@ class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT
     private MockMvc mockMvc() {
         SecurityManager securityManager = Mockito.mock(SecurityManager.class);
         Mockito.when(securityManager.genPassword()).thenReturn("Tmp-Unlock-9!");
-        Mockito.when(securityManager.encryptPassword(Mockito.anyString(), Mockito.anyBoolean()))
+        Mockito.when(securityManager.encryptPassword(ArgumentMatchers.anyString(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("{bcrypt}$2a$10$hashedplaceholder");
         UsersApiController controller = new UsersApiController(
                 DATA_SOURCE,

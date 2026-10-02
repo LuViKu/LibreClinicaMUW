@@ -8,12 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,51 +23,37 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.CacheControl;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-import java.time.Duration;
 
 /**
  * Phase E.7 / P3.6 — retinal inference jobs: reading them, and moving them
@@ -119,8 +100,6 @@ import java.time.Duration;
 public class RetinalResultsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultsApiController.class);
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
@@ -1047,7 +1026,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return BindContext.forbidden(
@@ -1240,7 +1218,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
@@ -1463,7 +1440,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
@@ -1812,7 +1788,6 @@ public class RetinalResultsApiController {
     /** Inline state-only row carrier — bridges JDBC ResultSet to DTO assembly. */
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
     private static final class ParkedJob {
-        long jobId;
         String status;
     }
 
@@ -1823,7 +1798,6 @@ public class RetinalResultsApiController {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 ParkedJob job = new ParkedJob();
-                job.jobId = rs.getLong("job_id");
                 job.status = rs.getString("status");
                 return job;
             }

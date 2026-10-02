@@ -12,6 +12,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
@@ -47,9 +48,9 @@ public class SsoConfigInterceptor implements HandlerInterceptor {
     }
 
     @Override
-    public boolean preHandle(HttpServletRequest request,
-                             HttpServletResponse response,
-                             Object handler) {
+    public boolean preHandle(@NonNull HttpServletRequest request,
+                             @NonNull HttpServletResponse response,
+                             @NonNull Object handler) {
         request.setAttribute("ssoProperties", ssoProperties);
         request.setAttribute("factorService", factorService);
         return true;

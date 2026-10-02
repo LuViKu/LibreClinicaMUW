@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import javax.sql.DataSource;
 
 import java.util.Locale;
+import java.util.Objects;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -179,7 +180,7 @@ abstract class AbstractApiControllerTest {
                                                              int studyId, String studyOid, String studyName) {
         MockHttpSession session = (MockHttpSession)
                 authenticatedSession(userId, userName, studyId, studyOid, studyName);
-        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        UserAccountBean ub = (UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"));
         ub.addUserType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType.SYSADMIN);
         return session;
     }

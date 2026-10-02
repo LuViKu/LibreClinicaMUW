@@ -91,7 +91,7 @@ class TypedDaoQueriesDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private static <T> T inTransaction(Supplier<T> work) {
-        return tx.execute(status -> work.get());
+        return tx.execute(_ -> work.get());
     }
 
     /* ---------------- study and site roles ---------------- */

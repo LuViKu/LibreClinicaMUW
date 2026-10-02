@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Locale;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -56,6 +57,7 @@ import org.springframework.web.context.support.StaticWebApplicationContext;
  * servlet's: a system administrator, or anyone whose active role on the
  * study (or, for a site, on its parent) lets them view the study's data.
  */
+@SuppressWarnings("resource") // the mock-servlet request and response hold nothing to close
 class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /** Both paths get the same collaborators, so any difference is in the generation. */
@@ -205,7 +207,7 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
 
     private static MockHttpSession sysadmin() {
         MockHttpSession session = user("root");
-        ((UserAccountBean) session.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        ((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).addUserType(UserType.SYSADMIN);
         return session;
     }
 

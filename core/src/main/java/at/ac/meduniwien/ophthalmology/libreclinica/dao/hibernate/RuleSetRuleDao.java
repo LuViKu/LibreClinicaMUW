@@ -27,6 +27,7 @@ import org.hibernate.query.Query;
 import org.hibernate.stat.Statistics;
 import org.springframework.transaction.annotation.Transactional;
 
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 
     private CoreResources coreResources;
