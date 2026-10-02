@@ -1748,6 +1748,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exports/{jobId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancelJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/events": {
         parameters: {
             query?: never;
@@ -2391,6 +2407,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteSchedule"];
+        options?: never;
+        head?: never;
+        patch: operations["updateSchedule"];
         trace?: never;
     };
     "/api/v1/retinal-jobs/{jobId}/bind": {
@@ -3835,22 +3867,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/schedules/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["deleteSchedule"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/retinal-jobs/{jobId}/segmentation/corrections/{layerIndex}": {
         parameters: {
             query?: never;
@@ -4007,6 +4023,22 @@ export interface paths {
         post?: never;
         /** Forget an uploader; it re-appears with its next heartbeat if it still runs */
         delete: operations["forgetUploader"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/legacy-exports/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteLegacyExportJob"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5115,6 +5147,24 @@ export interface components {
              */
             auditLogStudyId?: number;
         };
+        ExportJobDto: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int32 */
+            datasetId?: number;
+            format?: string;
+            status?: string;
+            /** Format: int32 */
+            progressPct?: number;
+            submittedAt?: string;
+            startedAt?: string;
+            finishedAt?: string;
+            /** Format: int32 */
+            archivedDatasetFileId?: number;
+            errorMessage?: string;
+            downloadUrl?: string;
+            cancelRequested?: boolean;
+        };
         ScheduleEventRequest: {
             subjectId?: string;
             eventDefinitionOid?: string;
@@ -5277,6 +5327,7 @@ export interface components {
         CreateScheduleRequest: {
             format?: string;
             cronExpression?: string;
+            notifyEmail?: string;
         };
         ExportScheduleDto: {
             /** Format: int64 */
@@ -5286,31 +5337,19 @@ export interface components {
             format?: string;
             cronExpression?: string;
             active?: boolean;
+            enabled?: boolean;
+            notifyEmail?: string;
             createdAt?: string;
             nextRunAt?: string;
             lastRunAt?: string;
             /** Format: int64 */
             lastRunJobId?: number;
+            /** Format: int32 */
+            createdBy?: number;
+            mayChange?: boolean;
         };
         EnqueueExportRequest: {
             format?: string;
-        };
-        ExportJobDto: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int32 */
-            datasetId?: number;
-            format?: string;
-            status?: string;
-            /** Format: int32 */
-            progressPct?: number;
-            submittedAt?: string;
-            startedAt?: string;
-            finishedAt?: string;
-            /** Format: int32 */
-            archivedDatasetFileId?: number;
-            errorMessage?: string;
-            downloadUrl?: string;
         };
         TestFilterRequest: {
             filters?: components["schemas"]["DatasetFilterDto"][];
@@ -5563,6 +5602,12 @@ export interface components {
         BugReportResponse: {
             delivered?: boolean;
             ticketId?: string;
+        };
+        UpdateScheduleRequest: {
+            format?: string;
+            cronExpression?: string;
+            enabled?: boolean;
+            notifyEmail?: string;
         };
         EventCellDto: {
             eventDefinitionOid?: string;
@@ -9548,6 +9593,28 @@ export interface operations {
             };
         };
     };
+    cancelJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportJobDto"];
+                };
+            };
+        };
+    };
     list_10: {
         parameters: {
             query?: {
@@ -10722,6 +10789,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    updateSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportScheduleDto"];
                 };
             };
         };
@@ -12772,28 +12887,6 @@ export interface operations {
             };
         };
     };
-    deleteSchedule: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
     deleteCorrection: {
         parameters: {
             query?: never;
@@ -13023,6 +13116,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteLegacyExportJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };

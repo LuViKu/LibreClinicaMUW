@@ -182,7 +182,7 @@
   },
   "adminJobs": {
     "title": "Geplante Jobs",
-    "subtitle": "Schreibgeschützte Übersicht aller Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind.",
+    "subtitle": "Alle Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind. Alte geplante Exporte lassen sich löschen; die Trigger der Plattform sind schreibgeschützt.",
     "refresh": "Aktualisieren",
     "refreshedAt": "Aktualisiert um {ts}",
     "loadFailed": "Job-Liste konnte nicht geladen werden.",
@@ -196,7 +196,16 @@
     "prevFire": "Letzter Lauf",
     "nextFire": "Nächster Lauf",
     "description": "Beschreibung",
-    "noJobs": "Keine geplanten Jobs."
+    "noJobs": "Keine geplanten Jobs.",
+    "legacy": {
+      "badge": "Alter Export-Job",
+      "note": "Geplante Exporte aus den klassischen Masken laufen weiter, bis sie hier gelöscht werden. Legen Sie einen solchen Export vor dem Löschen als Zeitplan seines Datensatzes neu an (Datenexport, Zeitpläne); dort entstehen auch neue Export-Zeitpläne.",
+      "dataset": "Datensatz {id}",
+      "unreadable": "gespeicherte Daten nicht lesbar",
+      "delete": "Löschen",
+      "confirmDelete": "Alten Export-Job „{name}“ löschen? Er läuft danach nicht mehr.",
+      "deleteFailed": "Der Job konnte nicht gelöscht werden."
+    }
   },
   "printableCrf": {
     "title": "Druckvorschau",
@@ -3404,7 +3413,7 @@
   "dataExport": {
     "title": "Datenexport",
     "subTrail": "Gespeicherte Datensätze der aktiven Studie",
-    "intro": "Bereits gespeicherte Datensätze als Export erneut ausführen und generierte Dateien herunterladen. Zum Anlegen neuer Datensätze bitte vorerst den klassischen /Extract Data-Assistenten verwenden — eine SPA-native Anlage folgt in einer späteren Phase.",
+    "intro": "Gespeicherte Datensätze exportieren und die erzeugten Dateien herunterladen. Neue Datensätze legen Sie mit „Neues Dataset“ an.",
     "sectionLabel": "Datenexport",
     "quickOdmButton": "Schnell-ODM-Export",
     "quickOdmRunning": "ODM wird generiert…",
@@ -3414,8 +3423,7 @@
     "hideFiles": "Dateien ausblenden",
     "noFilesYet": "Noch keine generierten Dateien — bitte einen Export ausführen.",
     "emptyTitle": "Für diese Studie sind noch keine Datensätze gespeichert.",
-    "emptyDescription": "Datensätze werden über den klassischen Extract-Data-Assistenten angelegt. Einmal gespeichert, erscheinen sie hier und können in der SPA erneut ausgeführt und heruntergeladen werden.",
-    "openLegacyWizard": "Klassischen Extract-Data-Assistenten öffnen",
+    "emptyDescription": "Ein Datensatz legt fest, welche Visiten, CRFs und Items ein Export enthält. Gespeicherte Datensätze erscheinen hier und können ausgeführt und heruntergeladen werden.",
     "column": {
       "name": "Datensatz",
       "owner": "Besitzer",
@@ -3443,11 +3451,53 @@
     },
     "job": {
       "label": "Komplettpaket",
+      "export": "Export als {format}",
       "queued": "In Warteschlange …",
       "running": "Wird erstellt …",
       "done": "Fertig.",
       "failed": "Fehlgeschlagen",
-      "download": "Herunterladen"
+      "download": "Herunterladen",
+      "cancel": "Export abbrechen",
+      "cancelling": "Wird angehalten …",
+      "cancelled": "Abgebrochen.",
+      "confirmCancel": "Diesen Export abbrechen? Wartet er noch, läuft er nicht mehr; läuft er schon, hält er am nächsten Prüfpunkt an und hinterlässt keine Datei."
+    },
+    "schedules": {
+      "button": "Zeitpläne",
+      "title": "Export-Zeitpläne",
+      "creatorOnly": "Ändern kann diesen Zeitplan nur, wer ihn angelegt hat, oder ein Systemadministrator.",
+      "add": "Zeitplan hinzufügen",
+      "empty": "Keine Zeitpläne für diesen Datensatz.",
+      "column": {
+        "when": "Wann",
+        "status": "Status",
+        "lastRun": "Letzter Lauf",
+        "contact": "Kontakt"
+      },
+      "status": {
+        "active": "Aktiv",
+        "paused": "Pausiert"
+      },
+      "nextRun": "nächster Lauf {date}",
+      "edit": "Bearbeiten",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "delete": "Löschen",
+      "confirmDelete": "Diesen Zeitplan löschen? Bereits exportierte Dateien bleiben erhalten.",
+      "createTitle": "Neuer Export-Zeitplan",
+      "editTitle": "Export-Zeitplan bearbeiten",
+      "subTitle": "Wiederkehrender Export von „{dataset}“.",
+      "cronLabel": "Wann (Quartz-Cron-Ausdruck)",
+      "cronHelp": "Sechs Felder: Sekunde, Minute, Stunde, Tag im Monat, Monat, Wochentag. In das offen gelassene Tagesfeld gehört ein ?.",
+      "cronRequired": "Bitte angeben, wann der Export laufen soll.",
+      "preset": {
+        "daily": "Täglich 02:00",
+        "weekly": "Montags 02:00",
+        "monthly": "Am 1. des Monats 02:00"
+      },
+      "emailLabel": "Kontakt-E-Mail (optional)",
+      "emailHelp": "Erhält eine Nachricht, wenn ein Lauf fertig ist oder fehlschlägt.",
+      "enabledLabel": "Nach diesem Zeitplan ausführen"
     },
     "modal": {
       "title": "Datensatz exportieren",

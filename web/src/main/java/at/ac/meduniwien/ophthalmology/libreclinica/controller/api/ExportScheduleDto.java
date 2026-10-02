@@ -15,11 +15,17 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * <ul>
  *   <li>{@code POST   /api/v1/datasets/{id}/schedules} (201 on create)</li>
  *   <li>{@code GET    /api/v1/datasets/{id}/schedules} (list, active first)</li>
+ *   <li>{@code PATCH  /api/v1/schedules/{id}} (200 on edit, pause, resume)</li>
  * </ul>
  *
  * <p>The {@code DELETE} endpoint returns 204 (no body) — it is a soft
  * delete that flips {@code active=false}, so callers re-fetch the list
- * to refresh the UI.
+ * to refresh the UI. {@code enabled=false} is a pause: the schedule is
+ * listed but does not run, and {@code nextRunAt} is null.
+ * {@code notifyEmail} is the contact address mailed when a run finishes,
+ * or null. {@code createdBy} is the user id of the creator, whose account
+ * the scheduled runs execute as; {@code mayChange} says whether the caller
+ * may edit, pause or delete the schedule (its creator or a sysadmin).
  */
 public record ExportScheduleDto(
         long id,
@@ -27,8 +33,12 @@ public record ExportScheduleDto(
         String format,
         String cronExpression,
         boolean active,
+        boolean enabled,
+        String notifyEmail,
         String createdAt,
         String nextRunAt,
         String lastRunAt,
-        Long lastRunJobId) {
+        Long lastRunJobId,
+        int createdBy,
+        boolean mayChange) {
 }

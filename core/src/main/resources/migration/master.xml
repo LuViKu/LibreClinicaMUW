@@ -121,5 +121,7 @@
   <include  file="migration/lc-muw-2026-09-30-audit-type-crf-field-updated.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-types-event-crf-migration.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-types-crf-lifecycle-cascade.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-export-schedule-enabled.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-export-completion-mail.xml"/>
 </databaseChangeLog>
 

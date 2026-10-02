@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        R1-export (2026-09-30) — an export schedule can be paused and resumed.
+
+        export_schedule.active is the soft-delete flag: DELETE /schedules/{id}
+        sets it to FALSE and the row leaves every list. A paused schedule is
+        still listed, keeps its format and cron, and can be resumed, so it needs
+        a flag of its own. While enabled is FALSE the schedule has no Quartz
+        trigger, and a tick that fires anyway queues nothing.
+
+        Every existing row keeps running: the column defaults to TRUE.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-09-30-export-schedule-enabled">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="export_schedule" columnName="enabled"/></not>
+        </preConditions>
+        <addColumn tableName="export_schedule">
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

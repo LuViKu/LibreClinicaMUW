@@ -182,7 +182,7 @@
   },
   "adminJobs": {
     "title": "Scheduled jobs",
-    "subtitle": "Read-only listing of every Quartz trigger registered against the application's shared scheduler.",
+    "subtitle": "Every Quartz trigger registered against the application's shared scheduler. Legacy scheduled exports can be deleted; the platform's own triggers are read-only.",
     "refresh": "Refresh",
     "refreshedAt": "Refreshed at {ts}",
     "loadFailed": "Failed to load scheduled jobs.",
@@ -196,7 +196,16 @@
     "prevFire": "Previous fire",
     "nextFire": "Next fire",
     "description": "Description",
-    "noJobs": "No scheduled jobs."
+    "noJobs": "No scheduled jobs.",
+    "legacy": {
+      "badge": "Legacy export",
+      "note": "Scheduled exports made with the legacy screens keep running until they are deleted here. Recreate one as a schedule of its dataset (Data Export, Schedules) before deleting it; new export schedules are set up there.",
+      "dataset": "dataset {id}",
+      "unreadable": "stored data unreadable",
+      "delete": "Delete",
+      "confirmDelete": "Delete the legacy export job \"{name}\"? It will not run again.",
+      "deleteFailed": "The job could not be deleted."
+    }
   },
   "printableCrf": {
     "title": "Print preview",
@@ -3404,7 +3413,7 @@
   "dataExport": {
     "title": "Data Export",
     "subTrail": "Saved datasets for the active study",
-    "intro": "Trigger export runs against previously-saved datasets and download generated files. Use the legacy /Extract Data wizard to create new datasets — a SPA-native create flow will land in a later sub-phase.",
+    "intro": "Run exports of saved datasets and download the generated files. To define a new dataset, click New dataset.",
     "sectionLabel": "Data export",
     "quickOdmButton": "Quick ODM export",
     "quickOdmRunning": "Generating ODM…",
@@ -3414,8 +3423,7 @@
     "hideFiles": "Hide files",
     "noFilesYet": "No generated files yet — trigger an export to populate this list.",
     "emptyTitle": "No saved datasets for this study yet.",
-    "emptyDescription": "Datasets are created via the legacy Extract Data wizard. Once saved, they appear here so you can re-run and download them from the SPA.",
-    "openLegacyWizard": "Open legacy Extract Data wizard",
+    "emptyDescription": "A dataset defines which visits, CRFs and items an export contains. Saved datasets appear here, where you can run and download them.",
     "column": {
       "name": "Dataset",
       "owner": "Owner",
@@ -3443,11 +3451,53 @@
     },
     "job": {
       "label": "Bundle",
+      "export": "Export as {format}",
       "queued": "Queued …",
       "running": "Building …",
       "done": "Done.",
       "failed": "Failed",
-      "download": "Download"
+      "download": "Download",
+      "cancel": "Cancel export",
+      "cancelling": "Stopping …",
+      "cancelled": "Cancelled.",
+      "confirmCancel": "Cancel this export? If it is waiting it will not run; if it is running it stops at its next checkpoint and leaves no file."
+    },
+    "schedules": {
+      "button": "Schedules",
+      "title": "Export schedules",
+      "creatorOnly": "Only the creator of this schedule or a system administrator can change it.",
+      "add": "Add schedule",
+      "empty": "No schedules for this dataset.",
+      "column": {
+        "when": "When",
+        "status": "Status",
+        "lastRun": "Last run",
+        "contact": "Contact"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused"
+      },
+      "nextRun": "next {date}",
+      "edit": "Edit",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete",
+      "confirmDelete": "Delete this schedule? Files it has already exported are kept.",
+      "createTitle": "New export schedule",
+      "editTitle": "Edit export schedule",
+      "subTitle": "Recurring export of \"{dataset}\".",
+      "cronLabel": "When (Quartz cron expression)",
+      "cronHelp": "Six fields: second, minute, hour, day of month, month, day of week. Put ? in whichever day field you leave open.",
+      "cronRequired": "Enter when the export should run.",
+      "preset": {
+        "daily": "Daily 02:00",
+        "weekly": "Mondays 02:00",
+        "monthly": "1st of the month 02:00"
+      },
+      "emailLabel": "Contact e-mail (optional)",
+      "emailHelp": "Receives a mail when a run finishes or fails.",
+      "enabledLabel": "Run on this schedule"
     },
     "modal": {
       "title": "Export dataset",

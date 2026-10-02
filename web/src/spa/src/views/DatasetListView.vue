@@ -9,14 +9,18 @@
  *   - Per-row "Export now" (opens a format-picker modal) + "View files"
  *     (expands a sub-row with download links).
  *
- * <p>The MVP does NOT replace the legacy /Extract Data UI — it only
- * surfaces datasets the operator created via that wizard. An empty
- * table links out to the legacy /Extract Data path with a note.
+ * <p>New datasets are defined in the SPA's own wizard
+ * ({@code /datasets/new}); an empty table offers it directly.
+ *
+ * <p>R1-export: "Schedules" opens a dataset's recurring exports
+ * ({@link DatasetSchedules}) in a sub-row, the SPA's replacement for the
+ * legacy scheduled-export screens.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import DatasetSchedules from '@/components/DatasetSchedules.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
 import { useConfirm } from '@/composables/useConfirm'
@@ -99,12 +103,19 @@ async function confirmRemove(datasetId: number, name: string) {
   }
 }
 
+/** Load the list, then the caller's jobs still in flight for it. */
+async function loadPage(oid: string) {
+  await datasets.load(oid)
+  await datasets.loadActiveJobs()
+  if (datasets.hasActiveJobs) ensurePolling()
+}
+
 onMounted(() => {
-  if (studyOid.value) datasets.load(studyOid.value)
+  if (studyOid.value) void loadPage(studyOid.value)
 })
 
 watch(studyOid, (next, prev) => {
-  if (next && next !== prev) datasets.load(next)
+  if (next && next !== prev) void loadPage(next)
 })
 
 const expanded = ref<Set<number>>(new Set())
@@ -120,6 +131,15 @@ function toggleExpanded(datasetId: number) {
     }
   }
   expanded.value = next
+}
+
+const schedulesOpen = ref<Set<number>>(new Set())
+
+function toggleSchedules(datasetId: number) {
+  const next = new Set(schedulesOpen.value)
+  if (next.has(datasetId)) next.delete(datasetId)
+  else next.add(datasetId)
+  schedulesOpen.value = next
 }
 
 interface ExportModalState {
@@ -190,6 +210,35 @@ function jobIsActive(datasetId: number): boolean {
   return !!j && (j.status === 'queued' || j.status === 'running')
 }
 
+/** "Bundle" for the multimodal bundle, else the export's format. */
+function jobLabel(datasetId: number): string {
+  const j = jobFor(datasetId)
+  if (!j || j.format === 'bundle') return t('dataExport.job.label')
+  const key = `dataExport.format.${j.format}`
+  const format = t(key)
+  return t('dataExport.job.export', { format: format === key ? j.format : format })
+}
+
+const cancelling = ref<number | null>(null)
+
+/**
+ * R1-export — cancel the row's job. Queued, it never runs; running, it
+ * stops at its next checkpoint and registers no file, so polling goes on
+ * until the job says it has ended.
+ */
+async function cancelExport(datasetId: number) {
+  const job = jobFor(datasetId)
+  if (!job) return
+  if (!(await confirm({ message: t('dataExport.job.confirmCancel'), danger: true }))) return
+  cancelling.value = datasetId
+  try {
+    const next = await datasets.cancelJob(job.id)
+    if (next && (next.status === 'queued' || next.status === 'running')) ensurePolling()
+  } finally {
+    cancelling.value = null
+  }
+}
+
 async function submitExport() {
   if (!exportModal.value || !studyOid.value) return
   exportModal.value.error = null
@@ -239,9 +288,6 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
   return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
-
-/** Hard link to the legacy /Extract Data wizard. */
-const legacyCreateLink = '/LibreClinica/CreateDataset'
 </script>
 
 <template>
@@ -300,16 +346,15 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
       >
         <p class="text-slate-700">{{ t('dataExport.emptyTitle') }}</p>
         <p class="text-xs text-slate-500 mt-2">{{ t('dataExport.emptyDescription') }}</p>
-        <a
-          :href="legacyCreateLink"
+        <button
+          v-if="canManage"
+          type="button"
           class="inline-flex items-center gap-1.5 mt-4 px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-muw-blue"
-          target="_self"
+          data-testid="dataset-empty-create"
+          @click="openWizardNew"
         >
-          {{ t('dataExport.openLegacyWizard') }}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-            <path d="M7 17L17 7M7 7h10v10" />
-          </svg>
-        </a>
+          {{ t('datasetList.emptyCta') }}
+        </button>
       </section>
 
       <!-- Table. -->
@@ -344,6 +389,16 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                       @click="toggleExpanded(row.id)"
                     >
                       {{ expanded.has(row.id) ? t('dataExport.hideFiles') : t('dataExport.viewFiles') }}
+                    </button>
+                    <button
+                      v-if="canManage"
+                      type="button"
+                      class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+                      data-testid="dataset-schedules-button"
+                      :aria-expanded="schedulesOpen.has(row.id)"
+                      @click="toggleSchedules(row.id)"
+                    >
+                      {{ t('dataExport.schedules.button') }}
                     </button>
                     <button
                       v-if="canManage"
@@ -392,7 +447,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
               <tr v-if="jobFor(row.id)" :data-testid="`bundle-job-${row.id}`">
                 <td colspan="6" class="px-4 py-2 bg-muw-blue-50/40 text-xs">
                   <div class="flex items-center gap-3">
-                    <span class="font-medium text-slate-700">{{ t('dataExport.job.label') }}</span>
+                    <span class="font-medium text-slate-700">{{ jobLabel(row.id) }}</span>
                     <template v-if="jobFor(row.id)!.status === 'done'">
                       <span class="text-muw-teal-700">{{ t('dataExport.job.done') }}</span>
                       <a
@@ -407,6 +462,11 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                     <span v-else-if="jobFor(row.id)!.status === 'failed'" class="text-rose-700" role="alert">
                       {{ t('dataExport.job.failed') }}<template v-if="jobFor(row.id)!.errorMessage">: {{ jobFor(row.id)!.errorMessage }}</template>
                     </span>
+                    <span
+                      v-else-if="jobFor(row.id)!.status === 'cancelled'"
+                      class="text-slate-600"
+                      data-testid="export-job-cancelled"
+                    >{{ t('dataExport.job.cancelled') }}</span>
                     <template v-else>
                       <span class="text-slate-600">
                         {{ jobFor(row.id)!.status === 'running' ? t('dataExport.job.running') : t('dataExport.job.queued') }}
@@ -421,8 +481,27 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                       >
                         <span class="block h-full bg-muw-blue" :style="{ width: `${jobFor(row.id)!.progressPct}%` }"></span>
                       </span>
+                      <span
+                        v-if="jobFor(row.id)!.cancelRequested"
+                        class="text-slate-500 italic"
+                        data-testid="export-job-cancelling"
+                      >{{ t('dataExport.job.cancelling') }}</span>
+                      <button
+                        v-else
+                        type="button"
+                        class="px-2 py-0.5 border border-rose-200 rounded bg-white hover:bg-rose-50 text-rose-700 disabled:opacity-50"
+                        data-testid="export-job-cancel"
+                        :disabled="cancelling === row.id"
+                        @click="cancelExport(row.id)"
+                      >{{ t('dataExport.job.cancel') }}</button>
                     </template>
                   </div>
+                </td>
+              </tr>
+              <!-- R1-export — the dataset's export schedules. -->
+              <tr v-if="schedulesOpen.has(row.id)">
+                <td colspan="6" class="px-4 py-3 bg-slate-50">
+                  <DatasetSchedules :dataset-id="row.id" :dataset-name="row.name" :formats="EXPORT_FORMATS" />
                 </td>
               </tr>
               <!-- Per-row expand sub-row. -->
