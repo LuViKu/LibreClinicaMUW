@@ -13,7 +13,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -173,12 +172,10 @@ public class DdeService {
         // 0 mismatches → DDE complete via markCompleteDDE on the DAO.
         if (mismatch == 0) {
             EventCRFDAO ecDAO = new EventCRFDAO(dataSource);
-            ecb.setUpdater(ddeClerk);
-            ecb.setUpdatedDate(new Date());
-            ecDAO.update(ecb);
-            // After the update, not before: update writes every column from
-            // the bean, whose second-pass date is still empty, and would
-            // clear the date markComplete sets.
+            // A touch, not update: update writes every column from the
+            // bean, whose second-pass date is still empty, and cleared the
+            // date markComplete sets.
+            ecDAO.touch(ecb.getId(), ddeClerk.getId());
             ecDAO.markComplete(ecb, /* ide */ false);
 
             EventCrfsApiController.writeAuditEvent(auditDAO,

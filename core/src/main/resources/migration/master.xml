@@ -116,5 +116,6 @@
   <include  file="migration/lc-muw-2026-12-08-audit-labels-and-context.xml"/>
   <include  file="migration/lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml"/>
   <include  file="migration/lc-muw-2026-09-30-dn-stats-unanswered-threads.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-dde-second-pass-date.xml"/>
 </databaseChangeLog>
 

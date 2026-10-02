@@ -441,6 +441,17 @@
         </sql>
     </query>
 
+    <!-- Stamp the event CRF as updated, and write nothing else
+         (EventCRFDAO.touch). -->
+    <query>
+        <name>touch</name>
+        <sql>
+            UPDATE EVENT_CRF
+            SET DATE_UPDATED=NOW()
+            , UPDATE_ID=?
+            WHERE EVENT_CRF_ID=?
+        </sql>
+    </query>
     <query>
         <name>markCompleteIDE</name>
         <sql>
@@ -457,16 +468,20 @@
             WHERE EVENT_CRF_ID=?
         </sql>
     </query>
-    <!-- Phase E A5 — inverse of markCompleteIDE: clears DATE_COMPLETED
-         so the CRF transitions from the legacy DataEntryStage
-         INITIAL_DATA_ENTRY_COMPLETE (3) back to INITIAL_DATA_ENTRY (2),
-         re-enabling the SPA's CRF-entry form. The status_id stays
-         AVAILABLE — locked/signed CRFs are blocked at the controller. -->
+    <!-- Phase E A5 — inverse of the completion markers: reopens the CRF
+         for data entry. Clears DATE_COMPLETED (the first pass) and
+         DATE_VALIDATE_COMPLETED (the second pass of double data entry,
+         which legacy completion stamps as well), and sets a legacy
+         completed status (2, or 4 after a first pass) back to available
+         (1), so that every reader sees the CRF in data entry again.
+         Locked/signed CRFs are blocked at the controller. -->
     <query>
-        <name>markIncompleteIDE</name>
+        <name>markIncomplete</name>
         <sql>
             UPDATE EVENT_CRF
             SET DATE_COMPLETED=NULL
+            , DATE_VALIDATE_COMPLETED=NULL
+            , STATUS_ID=CASE WHEN STATUS_ID IN (2, 4) THEN 1 ELSE STATUS_ID END
             WHERE EVENT_CRF_ID=?
         </sql>
     </query>

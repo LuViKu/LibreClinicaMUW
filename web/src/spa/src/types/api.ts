@@ -4252,6 +4252,7 @@ export interface components {
             settings?: {
                 [key: string]: string;
             };
+            permissions?: components["schemas"]["PermissionsDto"];
         };
         MeDto: {
             username?: string;
@@ -4268,6 +4269,11 @@ export interface components {
             mustChangePassword?: boolean;
             passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
+        };
+        PermissionsDto: {
+            enterData?: boolean;
+            editSubject?: boolean;
+            signSubject?: boolean;
         };
         UpdateEventRequest: {
             dateStarted?: string;
@@ -4559,6 +4565,7 @@ export interface components {
         VerifyRequest: {
             eventCrfOids?: string[];
             verified?: boolean;
+            reason?: string;
         };
         UnverifyRequest: {
             eventCrfOids?: string[];

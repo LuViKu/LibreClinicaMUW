@@ -153,5 +153,30 @@ public record MeDto(
              * untouched study behaves like the platform default, not like a
              * study with everything switched off.
              */
-            Map<String, String> settings) {}
+            Map<String, String> settings,
+            /**
+             * What the session's binding on this study may write, by the
+             * rules the write endpoints apply ({@link PermissionsDto}).
+             */
+            PermissionsDto permissions) {}
+
+    /**
+     * What the session's binding on the active study may write, computed
+     * with the rules the write endpoints apply
+     * ({@code ClinicalWriteAuthorization}). The SPA's roles cannot say
+     * this: ra and ra2 share the SPA role "Investigator" with the
+     * investigator, and a system administrator projects as
+     * "Administrator" whatever the binding. The SPA reads these flags to
+     * offer only the actions the server admits.
+     *
+     * @param enterData   enter or change CRF data, including re-running a
+     *                    retinal analysis, whose result goes into a CRF
+     * @param editSubject edit a subject or move an eye to another cohort
+     * @param signSubject sign a subject
+     */
+    @Schema(name = "PermissionsDto")
+    public record PermissionsDto(
+            boolean enterData,
+            boolean editSubject,
+            boolean signSubject) {}
 }

@@ -43,6 +43,10 @@ vi.mock('@/api/retinal', () => {
 // eslint-disable-next-line import/first
 import { getJob, fetchGeometry, retryRetinalJob } from '@/api/retinal'
 // eslint-disable-next-line import/first
+import { useAuthStore } from '@/stores/auth'
+// eslint-disable-next-line import/first
+import type { StudyWritePermissions, UserRole } from '@/types/auth'
+// eslint-disable-next-line import/first
 import RetinalMetricsView from '../RetinalMetricsView.vue'
 
 const getJobMock = getJob as unknown as ReturnType<typeof vi.fn>
@@ -167,8 +171,27 @@ function makeRouter(jobId: number): Router {
   return router
 }
 
-async function mountView(jobPayload: Record<string, unknown>) {
+async function mountView(
+  jobPayload: Record<string, unknown>,
+  role: UserRole = 'Investigator',
+  permissions?: StudyWritePermissions,
+) {
   setActivePinia(createPinia())
+  useAuthStore().user = {
+    username: 'demo',
+    displayName: 'Demo',
+    email: null,
+    role,
+    siteLabel: null,
+    source: 'local',
+    mfaSatisfied: true,
+    profileComplete: true,
+    mustChangePassword: false,
+    passwordChangeReason: null,
+    locale: null,
+    timezone: null,
+    activeStudy: { id: 1, oid: 'S_DEFAULTS1', name: 'iAMD', isSite: false, permissions },
+  } as unknown as ReturnType<typeof useAuthStore>['user']
   getJobMock.mockReset()
   fetchGeometryMock.mockReset()
   getJobMock.mockResolvedValue(jobPayload)
@@ -294,6 +317,26 @@ describe('RetinalMetricsView — task surfaces', () => {
     // the `queued`/`remote_pending` inflight branch which surfaces a
     // different copy) OR text changes; either way the failed copy is gone.
     expect(w.html()).not.toContain('fehlgeschlagen')
+  })
+
+  it('offers neither Retry nor Re-run to a Monitor: a run writes into the CRF', async () => {
+    const w = await mountView(
+      makeFluidJob({ status: 'failed', primaryMetric: null }),
+      'Monitor',
+    )
+    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(false)
+    expect(w.find('[data-testid="retinal-view-rerun-as"]').exists()).toBe(false)
+  })
+
+  it('offers neither to a system administrator bound as Monitor', async () => {
+    // /me says "Administrator"; the binding does not enter data.
+    const w = await mountView(
+      makeFluidJob({ status: 'failed', primaryMetric: null }),
+      'Administrator',
+      { enterData: false, editSubject: false, signSubject: false },
+    )
+    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(false)
+    expect(w.find('[data-testid="retinal-view-rerun-as"]').exists()).toBe(false)
   })
 
   it('renders the retry button always (design promotes it to the header)', async () => {
