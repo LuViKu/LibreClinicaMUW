@@ -9,8 +9,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -22,12 +20,8 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
