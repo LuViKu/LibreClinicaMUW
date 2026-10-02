@@ -566,6 +566,8 @@
       "enrolledOn": "Date of Enrolment",
       "gender": "Gender",
       "yearOfBirth": "Year of Birth",
+      "dateOfBirth": "Date of Birth",
+      "personId": "Person ID",
       "groupLabel": "Group assignment"
     },
     "placeholder": {
@@ -575,6 +577,7 @@
     },
     "helper": {
       "subjectId": "The identifier used in source documents. Cannot be edited after save.",
+      "personId": "The person's identifier across studies; a person already enrolled in another study is recognised by it.",
       "yearOfBirth": "Optional — depends on study configuration."
     },
     "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
@@ -860,6 +863,7 @@
       "confirm": "Confirm reasons",
       "cancel": "Cancel",
       "capturedChip": "Reason captured",
+      "rowLabel": "{label} (row {row})",
       "missingForItem": "A reason is required for this change.",
       "fromTo": {
         "from": "From",

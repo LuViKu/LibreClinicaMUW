@@ -363,7 +363,8 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         () -> delete("/api/v1/eventCrfs/9/items/I_CONSENT_SIGNED/file")),
                 permitted("commit a double-data-entry pass", "manual_investigator", 409,
                         () -> json(post("/api/v1/eventCrfs/9/dde-commit"), "{\"values\":{}}")),
-                permitted("complete a CRF", "manual_crc", 200,
+                // Event CRF 5 lacks its consent items, so the required check refuses it.
+                permitted("complete a CRF", "manual_crc", 400,
                         () -> post("/api/v1/eventCrfs/5/markComplete")),
                 permitted("auto-populate retinal values", "manual_investigator", 200,
                         () -> post("/api/v1/eventCrfs/9:autoPopulateRetinal")),
@@ -373,9 +374,11 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         () -> json(post("/api/v1/events"),
                                 "{\"subjectId\":\"M-001\",\"eventDefinitionOid\":\"SE_V1_INCLUSION\","
                                         + "\"dateStarted\":\"2026-01-05\"}")),
+                // Default Study requires the Person ID and the date of birth.
                 permitted("add a subject", "manual_crc", 201,
                         () -> json(post("/api/v1/subjects"),
-                                "{\"id\":\"IT-CRC-1\",\"gender\":\"F\",\"enrolledOn\":\"2025-01-01\"}")),
+                                "{\"id\":\"IT-CRC-1\",\"gender\":\"F\",\"enrolledOn\":\"2025-01-01\","
+                                        + "\"personId\":\"P-IT-CRC-1\",\"dateOfBirth\":\"1970-01-02\"}")),
                 permitted("sign a subject", "manual_investigator", 401,
                         () -> json(post("/api/v1/subjects/SS_M001/sign"),
                                 "{\"password\":\"wrong\",\"attestation\":true}")),

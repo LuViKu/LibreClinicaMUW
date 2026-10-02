@@ -36,7 +36,8 @@ import java.util.Map;
  * </ul>
  *
  * <p>Phase E.6 ({@code admin-rfc}) added {@code requiresReasonForChange}
- * — when true, the CRF is past {@code date_completed} and every
+ * — when true, the CRF has been completed at some point (reopening does
+ * not undo that) and the study forces a reason for change, so every
  * subsequent edit needs an RFC note; the SPA uses this to gate the
  * {@code ReasonForChangeModal}.
  *
@@ -56,7 +57,8 @@ import java.util.Map;
  * @param fileExtensions          comma-joined allowlist for upload items (E.6)
  * @param status                  CRF entry workflow status
  * @param lastSavedAt             ISO-8601 of last successful save, or null
- * @param requiresReasonForChange Phase E.6 admin-rfc — true post date_completed
+ * @param requiresReasonForChange Phase E.6 admin-rfc — true once ever completed,
+ *                                when the study forces a reason for change
  * @param dde                     Phase E.6 dde — DDE pass marker (or null)
  */
 @Schema(name = "CrfEntryDto")

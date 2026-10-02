@@ -352,6 +352,90 @@ describe('useCrfEntryStore', () => {
     expect(store.pendingReasons.I_HEIGHT_CM).toBe('will retry later')
   })
 
+  it('a changed value in a repeating row needs its reason, keyed OID[row]', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        requiresReasonForChange: true,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE', 'I_IOP'], rows: [{ ordinal: 2, values: { I_IOP: 16 } }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    store.setValueInRow('G_EYE_FINDINGS', 2, 'I_IOP', 18)
+
+    await store.save()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.missingReasonItemOids).toEqual(['I_IOP[2]'])
+
+    store.stageReason('I_IOP[2]', 're-measured')
+    await store.save()
+    const [, body] = vi.mocked(apiPost).mock.calls[0]
+    expect((body as { reasons?: Record<string, string> }).reasons).toEqual({ 'I_IOP[2]': 're-measured' })
+  })
+
+  it('keeps the per-item messages of a refused save until the item is edited', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    store.setValue('I_HEIGHT_CM', 400)
+    const { ApiError } = await import('@/api/client')
+    const message = 'Height (cm): Height must be between 100 and 250 cm.'
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(400, 'Bad Request', { message, errors: [{ field: 'I_HEIGHT_CM', message }] }),
+    )
+
+    expect(await store.save()).toBe(false)
+    expect(store.serverItemErrors.I_HEIGHT_CM).toBe(message)
+    expect(store.error).toBe(message)
+
+    store.setValue('I_HEIGHT_CM', 180)
+    expect(store.serverItemErrors.I_HEIGHT_CM).toBeUndefined()
+  })
+
+  it('shows the required items mark complete was refused for', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    store.setValue('I_CONSENT_DATE', '2026-05-01')
+    store.setValue('I_CONSENT_SIGNED', 'Y')
+    store.setValue('I_HEIGHT_CM', 172)
+    store.setValue('I_WEIGHT_KG', 70.5)
+    const { ApiError } = await import('@/api/client')
+    vi.mocked(apiPost).mockImplementation(async (path) => {
+      if (path.endsWith('/markComplete')) {
+        throw new ApiError(400, 'Bad Request', {
+          message: 'Required items are missing: Consent signed?',
+          errors: [{ field: 'I_CONSENT_SIGNED', message: 'Consent signed?: This field cannot be blank.' }],
+        })
+      }
+      return { status: 'in-progress', lastSavedAt: '2026-06-01T12:00:00.000Z' } as never
+    })
+
+    await store.markComplete()
+
+    expect(store.status).not.toBe('complete')
+    expect(store.serverItemErrors.I_CONSENT_SIGNED).toBe('Consent signed?: This field cannot be blank.')
+  })
+
+  it('markComplete stops when the save is held back for missing reasons', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_CONSENT_DATE', '2026-05-01')
+    store.setValue('I_CONSENT_SIGNED', 'Y')
+    store.setValue('I_HEIGHT_CM', 172)
+    store.setValue('I_WEIGHT_KG', 70.5)
+
+    await store.markComplete()
+
+    const completeCalls = vi.mocked(apiPost).mock.calls.filter(([path]) => path.endsWith('/markComplete'))
+    expect(completeCalls).toHaveLength(0)
+    expect(store.missingReasonItemOids.length).toBeGreaterThan(0)
+    expect(store.status).not.toBe('complete')
+  })
+
   /* ---------------------------------------------------------------- */
   /* Phase E.6 — repeating groups + select-multi + file               */
   /* ---------------------------------------------------------------- */

@@ -533,10 +533,9 @@ public class DiscrepancyApiController {
         }
 
         NoteTarget noteTarget = onItem
-                ? itemDataTarget(body, ss, parsedEventCrfId)
+                ? itemDataTarget(body, ss, parsedEventCrfId, session)
                 : fieldTarget(entityType, ss, parsedEventId, parsedEventCrfId, body);
         if (noteTarget.refusal() != null) return noteTarget.refusal();
-        final int entityId = noteTarget.id();
         final String column = onItem ? "value" : body.column().trim();
 
         // typeName + typeId resolved earlier; role gate runs here so
@@ -550,6 +549,13 @@ public class DiscrepancyApiController {
         }
         ResponseEntity<?> badAssignee = assigneeRefusal(body.assignedTo(), currentStudy.getId());
         if (badAssignee != null) return badAssignee;
+
+        // An item of the pinned event CRF that holds no value yet has no
+        // row to carry the note; the row is started only now, once the
+        // note type and the assignee have been accepted.
+        final int entityId = noteTarget.emptyRowItem() != null
+                ? startEmptyRow(noteTarget.emptyRowItem(), noteTarget.eventCrfId(), ub).getId()
+                : noteTarget.id();
 
         // Phase B2 (2026-06-10) — failure-audit wrap on the parent
         // discrepancy_note insert + mapping + (best-effort) email
@@ -1131,6 +1137,57 @@ public class DiscrepancyApiController {
     }
 
     /**
+     * The candidate item that is on the event CRF's version, when the caller
+     * may start a row for it there: a role that enters data, and an event
+     * CRF whose values may change ({@link ClinicalRecordGuard}). Null otherwise.
+     */
+    private ItemBean itemAwaitingRow(List<ItemBean> candidates, int eventCrfId, HttpSession session) {
+        if (!ClinicalWriteAuthorization.roleMayEnterData(ClinicalWriteAuthorization.roleIdOf(session))
+                || ClinicalRecordGuard.refuseUnlessWritable(dataSource, eventCrfId, "starting a row") != null) {
+            return null;
+        }
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT 1 FROM item_form_metadata ifm "
+                             + "  JOIN event_crf ec ON ec.crf_version_id = ifm.crf_version_id "
+                             + " WHERE ec.event_crf_id = ? AND ifm.item_id = ?")) {
+            for (ItemBean item : candidates) {
+                ps.setInt(1, eventCrfId);
+                ps.setInt(2, item.getId());
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return item;
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not read the items of event_crf " + eventCrfId, e);
+        }
+        return null;
+    }
+
+    /** An empty first row of {@code item} on the event CRF, owned by the caller. */
+    private ItemDataBean startEmptyRow(ItemBean item, int eventCrfId, UserAccountBean ub) {
+        ItemDataBean row = new ItemDataBean();
+        row.setEventCRFId(eventCrfId);
+        row.setItemId(item.getId());
+        row.setValue("");
+        row.setOrdinal(1);
+        row.setOwnerId(ub.getId());
+        row.setOwner(ub);
+        row.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE);
+        row.setOldStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE);
+        row.setDeleted(false);
+        ItemDataBean created = new ItemDataDAO(dataSource).create(row);
+        ItemDataBean out = created != null && created.getId() > 0 ? created : row;
+        if (out.getId() <= 0) {
+            throw new IllegalStateException("Could not start a row of item " + item.getId()
+                    + " on event_crf " + eventCrfId);
+        }
+        LOG.info("discrepancy add: started empty item_data {} (item {}, event_crf {}) to carry a note",
+                out.getId(), item.getId(), eventCrfId);
+        return out;
+    }
+
+    /**
      * Phase E.6 dn — event-CRF-scoped variant. When the SPA carries the
      * caller's chosen event_crf id (repeating events surface multiple
      * rows for the same item OID — V3 + V4 + V5 …), bypass the
@@ -1171,9 +1228,17 @@ public class DiscrepancyApiController {
             "eventCrf", Set.of("date_interviewed", "interviewer_name"));
 
     /** The row a new note is on, or the refusal when there is none. */
-    private record NoteTarget(int id, ResponseEntity<?> refusal) {
+    private record NoteTarget(int id, ResponseEntity<?> refusal,
+                              ItemBean emptyRowItem, int eventCrfId) {
+        NoteTarget(int id, ResponseEntity<?> refusal) {
+            this(id, refusal, null, 0);
+        }
         static NoteTarget notFound(String message) {
             return new NoteTarget(0, ResponseEntity.status(404).body(Map.of("message", message)));
+        }
+        /** No row yet: one of {@code item} is started on the event CRF once the note is accepted. */
+        static NoteTarget awaitingRow(ItemBean item, int eventCrfId) {
+            return new NoteTarget(0, null, item, eventCrfId);
         }
     }
 
@@ -1183,7 +1248,8 @@ public class DiscrepancyApiController {
      * (the same OID across V3, V4, V5 …) attach the note to the chosen
      * visit and not to the latest sibling.
      */
-    private NoteTarget itemDataTarget(AddQueryRequest body, StudySubjectBean ss, Integer parsedEventCrfId) {
+    private NoteTarget itemDataTarget(AddQueryRequest body, StudySubjectBean ss, Integer parsedEventCrfId,
+                                      HttpSession session) {
         ItemDAO itemDao = new ItemDAO(dataSource);
         ArrayList<ItemBean> items = itemDao.findByOid(body.itemOid());
         if (items == null || items.isEmpty()) {
@@ -1202,6 +1268,15 @@ public class DiscrepancyApiController {
                 ? locateItemData(items, ss.getId())
                 : locateItemData(items, ss.getId(), parsedEventCrfId);
         if (target == null || target.getId() == 0) {
+            // Legacy data entry takes a note on a field that holds no value
+            // yet and saves it with the value; here the row is started
+            // empty, so a value the CRF validation refuses can be saved once
+            // its note exists, and a required item can be left empty with a note.
+            ItemBean emptyRowItem = parsedEventCrfId == null
+                    ? null : itemAwaitingRow(items, parsedEventCrfId, session);
+            if (emptyRowItem != null) {
+                return NoteTarget.awaitingRow(emptyRowItem, parsedEventCrfId);
+            }
             return NoteTarget.notFound("No item_data row for subject '" + body.subjectId()
                     + "' and item '" + body.itemOid() + "'");
         }

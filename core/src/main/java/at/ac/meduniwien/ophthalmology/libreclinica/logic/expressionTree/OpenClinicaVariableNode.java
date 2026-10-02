@@ -29,8 +29,8 @@ public class OpenClinicaVariableNode extends ExpressionNode {
     ExpressionObjectWrapper expressionWrapper;
     private final String STARTDATE =".STARTDATE";
     private final String STATUS =".STATUS";
-    private final String REPEATING = ".*\\[(END|ALL|[1-9]\\d*)\\]$";
-    private final String REPEATING_NOALL = ".*\\[(END|[1-9]\\d*)\\]$";
+    private final String REPEATING = ".*\\[(END|ALL|[1-9]\\d{0,8})\\]$";
+    private final String REPEATING_NOALL = ".*\\[(END|[1-9]\\d{0,8})\\]$";
 
     OpenClinicaVariableNode(String val) {
         number = val;

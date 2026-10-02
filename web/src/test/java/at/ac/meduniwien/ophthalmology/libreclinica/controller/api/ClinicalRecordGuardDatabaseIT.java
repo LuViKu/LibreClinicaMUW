@@ -138,6 +138,7 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         mvc().perform(request.get().session(investigator()))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SUBJECT_LOCKED"))
                 .andExpect(jsonPath("$.message").value(startsWith("Subject is locked")));
     }
 
@@ -167,6 +168,7 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         mvc().perform(saveHeight().session(investigator()))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SUBJECT_REMOVED"))
                 .andExpect(jsonPath("$.message").value(startsWith("Subject is removed")));
     }
 
@@ -178,6 +180,7 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         mvc().perform(saveHeight().session(investigator()))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EVENT_CRF_REMOVED"))
                 .andExpect(jsonPath("$.message").value(startsWith("The CRF is removed")));
         assertEquals(before, storedHeight());
     }
@@ -191,9 +194,11 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         mvc().perform(saveHeight().session(session))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STUDY_FROZEN"))
                 .andExpect(jsonPath("$.message").value(startsWith("The study is frozen")));
         mvc().perform(json(post("/api/v1/events/12/crfs/3:start"), "{}").session(session))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STUDY_FROZEN"))
                 .andExpect(jsonPath("$.message").value(startsWith("The study is frozen")));
     }
 
@@ -204,7 +209,52 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         mvc().perform(saveHeight().session(session))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STUDY_LOCKED"))
                 .andExpect(jsonPath("$.message").value(startsWith("The study is locked")));
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* One refusal, one order: the widest closed scope is the one named   */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void aClosedStudyIsNamedBeforeALockedSubject() throws Exception {
+        MockHttpSession session = investigator();
+        ClinicalWriteFixtures.execute(DATA_SOURCE, "UPDATE study SET status_id = 6 WHERE study_id = 1");
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE study_subject SET status_id = 6 WHERE status_id = 1");
+
+        mvc().perform(saveHeight().session(session))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STUDY_LOCKED"));
+    }
+
+    @Test
+    void aLockedSubjectIsNamedBeforeARemovedCrf() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE study_subject SET status_id = 6 WHERE study_subject_id = "
+                        + "(SELECT study_subject_id FROM event_crf WHERE event_crf_id = 9)");
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET status_id = 5 WHERE event_crf_id = 9");
+
+        mvc().perform(saveHeight().session(investigator()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SUBJECT_LOCKED"));
+    }
+
+    @Test
+    void aRemovedCrfIsNamedBeforeALockedOne() throws Exception {
+        // Unlike the status, which a row holds once, the scopes combine: a
+        // removed event CRF on a visit that is also signed is "removed".
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE event_crf SET status_id = 5 WHERE event_crf_id = 9");
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "UPDATE study_event SET subject_event_status_id = 8 WHERE study_event_id = "
+                        + "(SELECT study_event_id FROM event_crf WHERE event_crf_id = 9)");
+
+        mvc().perform(saveHeight().session(investigator()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EVENT_CRF_REMOVED"));
     }
 
     @Test

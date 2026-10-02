@@ -79,7 +79,8 @@ public class ImportCRFInfoContainer {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
                 Integer sampleOrdinal = ImportCRFDataService.studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
                 if (sampleOrdinal == null) {
-                    // validateStudyMetadata reports the key; don't guess a visit.
+                    // Not a whole number: validateStudyMetadata reports it, and no visit
+                    // is guessed for it here.
                     continue;
                 }
 

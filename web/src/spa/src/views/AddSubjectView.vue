@@ -13,6 +13,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import {
   useSubjectsStore,
   validateAddSubject,
+  subjectIdentifierRules,
   AddSubjectValidationError,
   type AddSubjectError,
   type AddSubjectErrorField,
@@ -162,6 +163,24 @@ const form = reactive<AddSubjectInput>({
   // null keeps non-ophth studies free of forced eye scope.
   studyEye: null,
   screeningDate: '',
+  // Collected as the study's parameters say (identifierRules).
+  personId: '',
+  dateOfBirth: '',
+})
+
+/**
+ * The identifiers this study collects: Person ID required / optional /
+ * not used, the full date of birth, the year only or neither, and whether
+ * the sex is required — the rules the server enforces on create.
+ */
+const identifierRules = computed(() => subjectIdentifierRules(studyParams.current))
+
+/** The year-of-birth input's text; converted into form.yearOfBirth. */
+const yearOfBirthText = ref('')
+watch(yearOfBirthText, (text) => {
+  const trimmed = text.trim()
+  form.yearOfBirth = trimmed === '' ? null : Number(trimmed)
+  clearServerErrorFor('yearOfBirth')
 })
 
 const submitAttempted = ref(false)
@@ -172,7 +191,9 @@ const serverError = ref<string | null>(null)
 // or whenever the user edits any field.
 const serverFieldErrors = ref<AddSubjectError[] | null>(null)
 
-const liveErrors = computed(() => validateAddSubject(form, subjects.rows, { today: todayIso.value }))
+const liveErrors = computed(() =>
+  validateAddSubject(form, subjects.rows, { today: todayIso.value, rules: identifierRules.value }),
+)
 
 /* ----------------------------------------------------------------- */
 /* Phase E.6 — live Study-Subject-ID availability check (label-taken)*/
@@ -274,7 +295,15 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   if (labelTakenError.value) return
 
   try {
-    const subject = await subjects.add({ ...form })
+    // Only the identifiers the study collects go over the wire; the
+    // server refuses the others.
+    const rules = identifierRules.value
+    const subject = await subjects.add({
+      ...form,
+      personId: rules.personId === 'not_used' ? null : form.personId,
+      dateOfBirth: rules.dateOfBirth === 'full' ? form.dateOfBirth : null,
+      yearOfBirth: rules.dateOfBirth === 'year' ? form.yearOfBirth : null,
+    })
     if (redirect === 'matrix') {
       router.push({ name: 'subject-matrix' })
     } else if (redirect === 'addNext') {
@@ -285,6 +314,9 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
       form.secondaryId = ''
       form.gender = '' as Gender
       form.yearOfBirth = null
+      yearOfBirthText.value = ''
+      form.personId = ''
+      form.dateOfBirth = ''
       form.groupLabel = null
       form.enrolledOn = todayIso.value
       // Phase E.6 Tier 1 — reset ophth fields too.
@@ -369,6 +401,23 @@ const genderOptions: { code: Gender; label: () => string }[] = [
               </p>
               <ErrorText v-if="errorFor('secondaryId')">{{ errorFor('secondaryId') }}</ErrorText>
             </div>
+
+            <!-- Person ID: required, optional or not collected, as the
+                 study's subjectPersonIdRequired parameter says. -->
+            <div v-if="identifierRules.personId !== 'not_used'">
+              <FieldLabel for="person-id" :required="identifierRules.personId === 'required'">
+                {{ t('addSubject.field.personId') }}
+              </FieldLabel>
+              <TextInput
+                id="person-id"
+                v-model="form.personId"
+                :error="errorFor('personId') != null"
+                autocomplete="off"
+                @update:model-value="clearServerErrorFor('personId')"
+              />
+              <HelperText>{{ t('addSubject.helper.personId') }}</HelperText>
+              <ErrorText v-if="errorFor('personId')">{{ errorFor('personId') }}</ErrorText>
+            </div>
           </div>
         </section>
 
@@ -393,7 +442,7 @@ const genderOptions: { code: Gender; label: () => string }[] = [
             </div>
 
             <div>
-              <FieldLabel for="gender-group" required>{{ t('addSubject.field.gender') }}</FieldLabel>
+              <FieldLabel for="gender-group" :required="identifierRules.genderRequired">{{ t('addSubject.field.gender') }}</FieldLabel>
               <div
                 id="gender-group"
                 class="grid grid-cols-4 gap-2"
@@ -421,6 +470,33 @@ const genderOptions: { code: Gender; label: () => string }[] = [
                 </label>
               </div>
               <ErrorText v-if="errorFor('gender')">{{ errorFor('gender') }}</ErrorText>
+            </div>
+
+            <!-- Date of birth as the study's collectDob parameter says:
+                 the full date, the year only, or nothing. -->
+            <div v-if="identifierRules.dateOfBirth === 'full'">
+              <FieldLabel for="date-of-birth" required>{{ t('addSubject.field.dateOfBirth') }}</FieldLabel>
+              <DateInput
+                id="date-of-birth"
+                v-model="form.dateOfBirth"
+                required
+                :max="todayIso"
+                :error="errorFor('dateOfBirth') != null"
+                @update:model-value="clearServerErrorFor('dateOfBirth')"
+              />
+              <ErrorText v-if="errorFor('dateOfBirth')">{{ errorFor('dateOfBirth') }}</ErrorText>
+            </div>
+            <div v-else-if="identifierRules.dateOfBirth === 'year'">
+              <FieldLabel for="year-of-birth" required>{{ t('addSubject.field.yearOfBirth') }}</FieldLabel>
+              <TextInput
+                id="year-of-birth"
+                v-model="yearOfBirthText"
+                :placeholder="t('addSubject.placeholder.yearOfBirth')"
+                inputmode="numeric"
+                :error="errorFor('yearOfBirth') != null"
+                autocomplete="off"
+              />
+              <ErrorText v-if="errorFor('yearOfBirth')">{{ errorFor('yearOfBirth') }}</ErrorText>
             </div>
 
             <!-- 2026-07-02 — Arm-picker card. Surfaces only when the

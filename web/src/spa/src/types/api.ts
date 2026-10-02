@@ -4106,6 +4106,7 @@ export interface components {
             /** Format: int32 */
             yearOfBirth?: number;
             studyEye?: string;
+            dateOfBirth?: string;
         };
         EventCellDetailDto: {
             eventId?: string;
@@ -4163,6 +4164,7 @@ export interface components {
             eyeTransitions?: components["schemas"]["EyeTransitionSummary"][];
             /** Format: int32 */
             studySubjectId?: number;
+            dateOfBirth?: string;
         };
         Assignment: {
             /** Format: int32 */
@@ -5215,7 +5217,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
-             * @description Item OID → reason-for-change text. Required for every changed item once the CRF is complete.
+             * @description Item OID, or OID[row] for a repeating-group value, → reason-for-change text. Required for every changed value once the CRF has been completed, when the study forces a reason for change.
              * @example {
              *       "I_HEIGHT_CM": "Correcting transcription error"
              *     }

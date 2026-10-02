@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfWriteRules;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDataWriter;
 
 /**
@@ -97,6 +98,11 @@ public class PerformedItemAutoTicker {
         OTHER_SOURCE_KEPT,
         /** No binding for this device, or its item is on no CRF of this visit. */
         NOT_APPLICABLE,
+        /**
+         * The CRF, visit, subject or study is removed, locked or signed, so
+         * nothing was ticked (EventCrfWriteRules).
+         */
+        REFUSED,
         /** The write failed; the bind itself is unaffected. */
         FAILED
     }
@@ -170,6 +176,11 @@ public class PerformedItemAutoTicker {
                 case UNCHANGED -> {
                     return Outcome.ALREADY_SET;
                 }
+                case REFUSED -> {
+                    LOG.info("performed-tick skipped for file {}: event_crf {} is removed, locked or signed",
+                            ingestItemId, target.eventCrfId());
+                    return Outcome.REFUSED;
+                }
                 case WRITTEN -> { /* fall through to the audit row */ }
             }
             writeAudit(c, target.eventCrfId(), ingestItemId, binding.itemOid(),
@@ -197,6 +208,12 @@ public class PerformedItemAutoTicker {
         REPOINTED,
         /** This file never ticked anything. */
         NOTHING_TO_CLEAR,
+        /**
+         * The tick stands because its CRF, visit, subject or study is removed,
+         * locked or signed (EventCrfWriteRules); the unbind itself is
+         * unaffected.
+         */
+        REFUSED,
         /** The undo failed; the unbind itself is unaffected. */
         FAILED
     }
@@ -230,18 +247,26 @@ public class PerformedItemAutoTicker {
             if (ticked.isEmpty()) return ClearOutcome.NOTHING_TO_CLEAR;
 
             boolean repointedAny = false;
+            int refused = 0;
             for (Ticked t : ticked) {
                 Long replacement = anotherBoundFileFor(c, ingestItemId, t.eventCrfId());
                 if (replacement != null) {
+                    // Only the provenance moves; the value stays as it is.
                     repoint(c, t.itemDataId(), replacement);
                     writeUntickAudit(c, t, actorUserId, "repointed to file " + replacement);
                     repointedAny = true;
+                } else if (EventCrfWriteRules.refusal(c, t.eventCrfId()) != null) {
+                    LOG.warn("performed-untick: file {} leaves its tick on event_crf {}, which is removed, "
+                            + "locked or signed", ingestItemId, t.eventCrfId());
+                    refused++;
                 } else {
                     delete(c, t.itemDataId());
                     writeUntickAudit(c, t, actorUserId, null);
+                    EventCrfWriteRules.withdrawVerification(c, t.eventCrfId(), actorUserId);
                 }
             }
-            LOG.info("performed-untick: file {} released {} CRF value(s)", ingestItemId, ticked.size());
+            LOG.info("performed-untick: file {} released {} CRF value(s)", ingestItemId, ticked.size() - refused);
+            if (refused == ticked.size()) return ClearOutcome.REFUSED;
             return repointedAny ? ClearOutcome.REPOINTED : ClearOutcome.CLEARED;
         } catch (SQLException e) {
             // Never propagate: the unbind is the clinically meaningful outcome

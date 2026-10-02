@@ -47,6 +47,11 @@ public class EventActionValidatorOrdinalTest {
                 .thenReturn(repeating);
         when(expressionService.getStudyEventDefinitionFromExpressionForEventScheduling("SE_VISIT[2]", true))
                 .thenReturn(repeating);
+        StudyEventDefinitionBean once = new StudyEventDefinitionBean();
+        once.setOid("SE_ONCE");
+        once.setRepeating(false);
+        when(expressionService.getStudyEventDefinitionFromExpressionForEventScheduling("SE_ONCE[999999999]", true))
+                .thenReturn(once);
 
         wrapper = new AuditableBeanWrapper<>(new RuleSetBean());
         validator = new EventActionValidator(mock(DataSource.class));
@@ -63,6 +68,15 @@ public class EventActionValidatorOrdinalTest {
         assertEquals(1, wrapper.getImportErrors().size());
         String error = wrapper.getImportErrors().get(0);
         assertTrue(error, error.startsWith("OCRERR_0041"));
+    }
+
+    @Test
+    public void aNineDigitOrdinalOfAnEventThatDoesNotRepeat_isRejected() {
+        validator.validateOidInAction("SE_ONCE[999999999]", null);
+
+        assertEquals(1, wrapper.getImportErrors().size());
+        String error = wrapper.getImportErrors().get(0);
+        assertTrue(error, error.startsWith("OCRERR_0039"));
     }
 
     @Test

@@ -9,6 +9,7 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import DateInput from '@/components/DateInput.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import CameraWorklistStatus from '@/components/CameraWorklistStatus.vue'
 import CancelEventDialog from '@/components/CancelEventDialog.vue'
@@ -21,7 +22,8 @@ import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
 import SubjectUnboundItemsList from '@/components/ingest/SubjectUnboundItemsList.vue'
 import { listSubjectJobs } from '@/api/retinal'
 
-import { useSubjectsStore } from '@/stores/subjects'
+import { useSubjectsStore, subjectIdentifierRules } from '@/stores/subjects'
+import { useStudyParametersStore } from '@/stores/studyParameters'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
@@ -166,6 +168,8 @@ interface EditForm {
   secondaryId: string
   gender: Gender
   yearOfBirth: string
+  /** ISO YYYY-MM-DD; edited where the study collects the full date of birth. */
+  dateOfBirth: string
   /**
    * 2026-06-10 — null-aware study-eye field. Mirrors the AddSubjectView
    * pattern: native <select> with an empty-string option that projects
@@ -176,17 +180,31 @@ interface EditForm {
 }
 const editing = ref(false)
 const isSaving = ref(false)
-const form = ref<EditForm>({ secondaryId: '', gender: 'F', yearOfBirth: '', studyEye: null })
+const form = ref<EditForm>({ secondaryId: '', gender: 'F', yearOfBirth: '', dateOfBirth: '', studyEye: null })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 
+/**
+ * The date of birth is edited as the study collects it: the full date,
+ * the year only, or not at all (collectDob), as the server decides.
+ */
+const studyParams = useStudyParametersStore()
+const identifierRules = computed(() => subjectIdentifierRules(studyParams.current))
+
+function loadStudyParams() {
+  const oid = auth.user?.activeStudy?.oid
+  if (oid && studyParams.current?.studyOid !== oid) void studyParams.load(oid).catch(() => { /* soft-fail */ })
+}
+
 function startEdit() {
   if (!subject.value) return
+  loadStudyParams()
   form.value = {
     secondaryId: subject.value.secondaryId ?? '',
     gender: subject.value.gender as Gender,
     yearOfBirth:
       subject.value.yearOfBirth != null ? String(subject.value.yearOfBirth) : '',
+    dateOfBirth: subject.value.dateOfBirth ?? '',
     studyEye: subject.value.studyEye ?? null,
   }
   fieldErrors.value = {}
@@ -220,12 +238,16 @@ async function submitEdit() {
     fieldErrors.value.yearOfBirth = t('subjectDetail.edit.yearOfBirthInvalid')
     return
   }
+  const dob = form.value.dateOfBirth.trim()
   isSaving.value = true
   try {
     const result = await subjects.updateSubject(subject.value.id, {
       secondaryId: form.value.secondaryId.trim() === '' ? null : form.value.secondaryId.trim(),
       gender: form.value.gender,
-      yearOfBirth: parsedYob,
+      // The year is edited only where the study collects the year alone;
+      // null leaves it as it is.
+      yearOfBirth: identifierRules.value.dateOfBirth === 'year' ? parsedYob : null,
+      dateOfBirth: identifierRules.value.dateOfBirth === 'full' && dob !== '' ? dob : null,
       studyEye: form.value.studyEye,
     })
     if (result.ok) {
@@ -1021,7 +1043,8 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.subjectId') }}</dt><dd class="font-medium">{{ subject.id }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.secondaryId') }}</dt><dd class="font-medium">{{ subject.secondaryId ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.gender') }}</dt><dd class="font-medium">{{ genderLabel(subject.gender) }}<ItemNoteIndicator data-testid="field-note-gender" :summary="fieldSummary(SUBJECT_FIELDS.gender)" @create="openFieldNote(SUBJECT_FIELDS.gender, t('addSubject.field.gender'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.gender'))" /></dd></div>
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}<ItemNoteIndicator data-testid="field-note-date_of_birth" :summary="fieldSummary(SUBJECT_FIELDS.dateOfBirth)" @create="openFieldNote(SUBJECT_FIELDS.dateOfBirth, t('addSubject.field.yearOfBirth'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.yearOfBirth'))" /></dd></div>
+            <div v-if="identifierRules.dateOfBirth === 'full' && subject.dateOfBirth" class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.dateOfBirth') }}</dt><dd class="font-medium">{{ formatDate(subject.dateOfBirth) }}<ItemNoteIndicator data-testid="field-note-date_of_birth" :summary="fieldSummary(SUBJECT_FIELDS.dateOfBirth)" @create="openFieldNote(SUBJECT_FIELDS.dateOfBirth, t('addSubject.field.dateOfBirth'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.dateOfBirth'))" /></dd></div>
+            <div v-else class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}<ItemNoteIndicator data-testid="field-note-date_of_birth" :summary="fieldSummary(SUBJECT_FIELDS.dateOfBirth)" @create="openFieldNote(SUBJECT_FIELDS.dateOfBirth, t('addSubject.field.yearOfBirth'))" @open="(ids) => openFieldThread(ids, t('addSubject.field.yearOfBirth'))" /></dd></div>
             <div class="flex justify-between items-baseline gap-3">
               <dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt>
               <dd class="font-medium flex items-baseline gap-2">
@@ -1134,7 +1157,19 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               <ErrorText v-if="fieldErrors.gender">{{ fieldErrors.gender }}</ErrorText>
             </div>
 
-            <div>
+            <!-- The date of birth as the study collects it (collectDob):
+                 the full date, the year only, or not at all. -->
+            <div v-if="identifierRules.dateOfBirth === 'full'">
+              <FieldLabel for="edit-dob">{{ t('addSubject.field.dateOfBirth') }}</FieldLabel>
+              <DateInput
+                id="edit-dob"
+                v-model="form.dateOfBirth"
+                data-testid="edit-date-of-birth"
+                :error="!!fieldErrors.dateOfBirth"
+              />
+              <ErrorText v-if="fieldErrors.dateOfBirth">{{ fieldErrors.dateOfBirth }}</ErrorText>
+            </div>
+            <div v-else-if="identifierRules.dateOfBirth === 'year'">
               <FieldLabel for="edit-yob">{{ t('addSubject.field.yearOfBirth') }}</FieldLabel>
               <TextInput
                 id="edit-yob"
