@@ -16,7 +16,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.stream.Stream;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,10 +57,20 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new ExportJobsApiController(mockDataSource(), registrar));
     }
 
-    /** Signed in to the study with a role that may not export (Data Entry Person). */
-    private MockHttpSession dataEntrySession() {
-        return (MockHttpSession) authenticatedSessionWithRole(7, "entry", 1, "S_DEFAULTS1",
-                "Default Study", Role.RESEARCHASSISTANT, 1);
+    /** Signed in to the study with the given legacy role; not a sysadmin. */
+    private MockHttpSession sessionWith(Role role) {
+        return (MockHttpSession) authenticatedSessionWithRole(7, "someone", 1, "S_DEFAULTS1",
+                "Default Study", role, 1);
+    }
+
+    /** The roles DatasetsApiController.roleMayExportData refuses: both data entry roles, and none. */
+    static Stream<Role> rolesThatMayNotExport() {
+        return Stream.of(Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2, Role.INVALID);
+    }
+
+    /** The roles it lets through. */
+    static Stream<Role> rolesThatMayExport() {
+        return Stream.of(Role.STUDYDIRECTOR, Role.COORDINATOR, Role.INVESTIGATOR, Role.MONITOR);
     }
 
     /* ---------------------------------------------------------------- */
@@ -125,10 +139,11 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Test
-    void listJobsByStudyReturns403WithoutAnExportRole() throws Exception {
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void listJobsByStudyReturns403WithoutAnExportRole(Role role) throws Exception {
         mockMvcWith().perform(get("/api/v1/studies/S_DEFAULTS1/export-jobs")
-                .session(dataEntrySession()))
+                .session(sessionWith(role)))
                 .andExpect(status().isForbidden());
     }
 
@@ -194,10 +209,11 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Test
-    void listSchedulesReturns403WithoutAnExportRole() throws Exception {
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void listSchedulesReturns403WithoutAnExportRole(Role role) throws Exception {
         mockMvcWith().perform(get("/api/v1/datasets/1/schedules")
-                .session(dataEntrySession()))
+                .session(sessionWith(role)))
                 .andExpect(status().isForbidden());
     }
 
@@ -214,13 +230,27 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Test
-    void updateScheduleReturns403WithoutAnExportRole() throws Exception {
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void updateScheduleReturns403WithoutAnExportRole(Role role) throws Exception {
         mockMvcWith().perform(patch("/api/v1/schedules/7")
                 .contentType("application/json")
                 .content("{\"enabled\":false}")
-                .session(dataEntrySession()))
+                .session(sessionWith(role)))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Past the role check, the body is validated: an export role is not refused. */
+    @ParameterizedTest
+    @MethodSource("rolesThatMayExport")
+    void updateScheduleLetsEveryExportRolePastTheRoleCheck(Role role) throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"format\":\"pdf\"}")
+                .session(sessionWith(role)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Unsupported format 'pdf'")));
     }
 
     @Test
@@ -270,10 +300,11 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    @Test
-    void deleteScheduleReturns403WithoutAnExportRole() throws Exception {
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void deleteScheduleReturns403WithoutAnExportRole(Role role) throws Exception {
         mockMvcWith().perform(delete("/api/v1/schedules/7")
-                .session(dataEntrySession()))
+                .session(sessionWith(role)))
                 .andExpect(status().isForbidden());
     }
 }
