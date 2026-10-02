@@ -117,7 +117,8 @@ import type { UserRole } from './auth'
  *
  * The Monitor's rows follow legacy `ViewDiscrepancyNoteServlet`: a Monitor
  * may update (re-query, reply, reassign) and close any open thread, and
- * re-open a closed one.
+ * re-open a closed one. The Data Manager and Administrator re-open a closed
+ * thread too, as legacy stores their reply to one as Updated.
  */
 export function canTransitionNote(role: UserRole, from: NoteStatus, to: NoteStatus): boolean {
   const investigator = role === 'Investigator' || role === 'CRC'
@@ -139,7 +140,7 @@ export function canTransitionNote(role: UserRole, from: NoteStatus, to: NoteStat
     case 'resolution-proposed':
       return (to === 'closed' || to === 'updated') && (monitor || manager)
     case 'closed':
-      return to === 'updated' && monitor
+      return to === 'updated' && (monitor || manager)
     default:
       return false
   }

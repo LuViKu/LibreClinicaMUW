@@ -142,6 +142,21 @@ class MonitorQueryAuthorityDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    @Test
+    void aDataManagerReopensAClosedQuery() throws Exception {
+        // Legacy sets a Data Manager's reply to a closed thread to Updated.
+        int note = query(CLOSED);
+        try {
+            answer(note, ClinicalWriteFixtures.sessionAs(DATA_SOURCE, "manual_dm"),
+                    "{\"newStatus\":\"updated\",\"description\":\"Source differs after all\"}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("updated"));
+            assertEquals(UPDATED, NoteFixtures.statusOf(DATA_SOURCE, note));
+        } finally {
+            NoteFixtures.delete(DATA_SOURCE, note);
+        }
+    }
+
     /* ------------------------------------------------------------------ */
 
     private static int query(int statusId) throws Exception {

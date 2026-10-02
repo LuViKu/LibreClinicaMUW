@@ -47,7 +47,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  *                                        Administrator
  *   resolved → updated  (re-query)       Monitor, Data Manager,
  *                                        Administrator
- *   closed   → updated  (re-open)        Monitor
+ *   closed   → updated  (re-open)        Monitor, Data Manager,
+ *                                        Administrator
  *   not-applicable → (terminal)          —
  * </pre>
  *
@@ -60,6 +61,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  * close and re-open any query. Legacy also lets a Monitor add a note to a
  * closed thread that keeps it closed; the SPA does not offer that, so
  * closed → closed stays illegal here.
+ *
+ * <p>Re-opening follows the same servlet: a reply to a closed thread by
+ * any role but the Investigator (and ra, ra2) is stored Updated, so the
+ * Data Manager and the Administrator re-open as the Monitor does. Legacy's
+ * coordinator would too, but the SPA's CRC holds the Investigator's rows
+ * throughout this table (it proposes resolutions and closes nothing), so
+ * it does not re-open either.
  *
  * <p>The matrix is consulted before any DB write — the controller
  * throws {@code IllegalStateException} (handled by
@@ -152,7 +160,7 @@ final class NoteTransitionMatrix {
         // CLOSED -> updated re-opens the thread.
         if (currentStatusId == ResolutionStatus.CLOSED.getId()) {
             if (newStatusId == ResolutionStatus.UPDATED.getId()) {
-                return isMonitor(roleId) ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
+                return rolesMonitorDmAdmin(roleId) ? Decision.OK : Decision.FORBIDDEN_FOR_ROLE;
             }
             return Decision.ILLEGAL_TRANSITION;
         }

@@ -59,7 +59,14 @@ describe('note actions for the other roles follow the server as before', () => {
       expect(canCloseNote(role, 'resolution-proposed'), role).toBe(true)
       expect(canCloseNote(role, 'new'), role).toBe(false)
       expect(canCloseNote(role, 'updated'), role).toBe(false)
-      expect(canReopenNote(role, 'closed'), role).toBe(false)
     }
+  })
+
+  it('the Data Manager and Administrator re-open a closed thread, as in legacy', () => {
+    for (const role of ['Data Manager', 'Administrator'] as const) {
+      expect(canReopenNote(role, 'closed'), role).toBe(true)
+      expect(canRespondToNote(role, 'closed'), role).toBe(false)
+    }
+    expect(canReopenNote('CRC', 'closed')).toBe(false)
   })
 })

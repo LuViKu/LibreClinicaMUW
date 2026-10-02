@@ -233,18 +233,26 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
-    void transitionMatrix_OnlyTheMonitorReopensAClosedQuery() {
-        // current=CLOSED(4) → new=UPDATED(2) re-opens the thread: Monitor
-        // only, as legacy offers "Update Note" on a closed thread.
+    void transitionMatrix_TheMonitorDataManagerAndAdminReopenAClosedQuery() {
+        // current=CLOSED(4) → new=UPDATED(2) re-opens the thread. Legacy
+        // ViewDiscrepancyNoteServlet sets a reply to a closed thread to
+        // Updated for every role but the Investigator: Monitor(6),
+        // director(3) and admin(1) may; Investigator(4) and CRC(2) may not.
         org.junit.jupiter.api.Assertions.assertEquals(
                 NoteTransitionMatrix.Decision.OK,
                 NoteTransitionMatrix.check(4, 2, 6));
         org.junit.jupiter.api.Assertions.assertEquals(
-                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(4, 2, 3));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
                 NoteTransitionMatrix.check(4, 2, 1));
         org.junit.jupiter.api.Assertions.assertEquals(
                 NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
                 NoteTransitionMatrix.check(4, 2, 4));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(4, 2, 2));
         // Nothing else leaves CLOSED, and a closed thread stays closed.
         org.junit.jupiter.api.Assertions.assertEquals(
                 NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
