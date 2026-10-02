@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.DynamicsMetad
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InconsistentStateException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 
 /**
  * @author ssachs
@@ -263,10 +264,23 @@ public class MarkEventCRFCompleteServlet extends SecureController {
 
         fp = new FormProcessor(request);
 
-        /*
-         */
-        if (currentRole.equals(Role.COORDINATOR) || currentRole.equals(Role.STUDYDIRECTOR)) {
-            return;
+        // Marking a CRF complete is data entry: the roles of initial and double
+        // data entry, in a study open for it, on an event CRF of that study.
+        // The coordinator and the director pass the owner and validator checks
+        // below.
+        if (!SubmitDataServlet.maySubmitData(ub, currentRole)) {
+            addPageMessage(respage.getString("you_may_not_perform_data_entry_on_a_CRF") + " "
+                    + respage.getString("change_study_contact_study_coordinator"));
+            throw new InsufficientPermissionException(Page.MENU, resexception.getString("no_permission_to_perform_data_entry"), "1");
+        }
+        if (currentStudy.getStatus().isLocked() || currentStudy.getStatus().isFrozen()) {
+            String message = respage.getString(currentStudy.getStatus().isLocked() ? "current_study_locked" : "current_study_frozen");
+            addPageMessage(message);
+            throw new InsufficientPermissionException(Page.LIST_STUDY_SUBJECTS_SERVLET, message, "1");
+        }
+        if (!new StudyTreeScope(sm.getDataSource()).containsEventCrf(currentStudy, fp.getInt(INPUT_EVENT_CRF_ID))) {
+            addPageMessage(respage.getString("required_event_CRF_belong"));
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("event_CRF_not_belong_current_study"), "1");
         }
 
         getEventCRFBean();
