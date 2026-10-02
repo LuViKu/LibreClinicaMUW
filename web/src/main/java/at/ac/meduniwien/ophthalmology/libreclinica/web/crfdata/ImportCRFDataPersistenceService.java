@@ -173,7 +173,7 @@ public class ImportCRFDataPersistenceService {
                     }
                 }
                 // Reset the SDV status if item data has been changed or added
-                if (eventCrfBean != null && resetSDV)
+                if (resetSDV)
                     eventCrfDao.setSDVStatus(false, ub.getId(), eventCrfBean.getId());
             }
         }

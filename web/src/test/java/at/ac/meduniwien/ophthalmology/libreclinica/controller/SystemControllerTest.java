@@ -36,10 +36,11 @@ class SystemControllerTest {
 
     @Test
     void theSystemStatusDoesNotPrintTheEnvironment() throws Exception {
-        Map.Entry<String, String> variable = System.getenv().entrySet().stream()
+        var found = System.getenv().entrySet().stream()
                 .filter(e -> e.getValue() != null && e.getValue().length() > 3)
-                .findFirst().orElse(null);
-        assumeTrue(variable != null, "the test JVM has no environment variable to look for");
+                .findFirst();
+        assumeTrue(found.isPresent(), "the test JVM has no environment variable to look for");
+        Map.Entry<String, String> variable = found.get();
 
         Field datainfo = CoreResources.class.getDeclaredField("DATAINFO");
         datainfo.setAccessible(true);

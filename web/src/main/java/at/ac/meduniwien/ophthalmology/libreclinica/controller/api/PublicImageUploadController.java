@@ -216,7 +216,8 @@ public class PublicImageUploadController {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }
-        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        String declaredType = file.getContentType();
+        String contentType = declaredType == null ? "" : declaredType.toLowerCase();
         if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
             return ResponseEntity.badRequest().body(Map.of("message", "only JPEG or PNG images are accepted"));
         }

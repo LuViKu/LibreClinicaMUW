@@ -1027,7 +1027,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return BindContext.forbidden(
@@ -1220,7 +1219,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
@@ -1443,7 +1441,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
@@ -1792,7 +1789,6 @@ public class RetinalResultsApiController {
     /** Inline state-only row carrier — bridges JDBC ResultSet to DTO assembly. */
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
     private static final class ParkedJob {
-        long jobId;
         String status;
     }
 
@@ -1803,7 +1799,6 @@ public class RetinalResultsApiController {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 ParkedJob job = new ParkedJob();
-                job.jobId = rs.getLong("job_id");
                 job.status = rs.getString("status");
                 return job;
             }

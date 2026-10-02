@@ -94,12 +94,12 @@ public class RetinalInferenceClient {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, screenHeaders(sidecarToken()));
             @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = rest.postForEntity(url, request, Map.class);
-            if (response == null || response.getBody() == null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> b = (Map<String, Object>) response.getBody();
+            if (b == null) {
                 LOG.warn("Sidecar /screen returned empty body for job {} (task={})", jobId, task);
                 return null;
             }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> b = (Map<String, Object>) response.getBody();
 
             double approx = toDouble(b.get("approx_area_mm2"));
             double confidence = toDouble(b.get("confidence"));

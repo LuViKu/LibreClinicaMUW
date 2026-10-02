@@ -33,6 +33,7 @@ class CheckCRFLockedTest {
 
     /** Wires the servlet's request state by hand; no container needed. */
     private static final class Probe extends CheckCRFLocked {
+        private static final long serialVersionUID = 1L;
         private final CRFLocker locker = new CRFLocker();
 
         MockHttpServletResponse run(MockHttpServletRequest req, UserAccountBean user) throws Exception {

@@ -33,7 +33,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -475,7 +474,7 @@ public class EventCrfsApiController {
      * {@code missingReasonItemOids}). A reason given is recorded as a
      * Reason for Change note whether forced or not.
      *
-     * <p>Audit-log: one {@link AuditEventBean} row per changed item,
+     * <p>Audit-log: one {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean} row per changed item,
      * recording (auditTable="item_data", entityId, columnName="value",
      * oldValue, newValue). Creation-from-empty also writes one row with
      * an empty oldValue so the audit trail shows the initial entry.

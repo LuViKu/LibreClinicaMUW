@@ -104,7 +104,6 @@ public class PublicOctUploadController {
     private static final Logger LOG = LoggerFactory.getLogger(PublicOctUploadController.class);
 
     /** Default task when the portal commits — see class-Javadoc on v1 task selection. */
-    private static final String DEFAULT_TASK = VisitImagingPlan.DEFAULT_TASK;
 
     /** Laterality field gate. OU is rejected — the .e2e parser only ever emits OD/OS. */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
