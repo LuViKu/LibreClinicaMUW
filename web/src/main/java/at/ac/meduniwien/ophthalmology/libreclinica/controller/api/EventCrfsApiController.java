@@ -524,6 +524,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked — cannot save"));
         }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "saving CRF data");
+        if (stateRefusal != null) {
+            return stateRefusal;
+        }
 
         ItemDAO itemDAO = new ItemDAO(dataSource);
         ItemDataDAO idDAO = new ItemDataDAO(dataSource);
@@ -1033,6 +1038,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is already locked"));
         }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "completing the CRF");
+        if (stateRefusal != null) {
+            return stateRefusal;
+        }
 
         // Legacy data entry does not complete a CRF while a required item
         // that is shown is empty. A CRF that is complete already stays so.
@@ -1182,6 +1192,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked or signed — "
                             + "un-sign / unlock via the legacy admin path before reopening"));
+        }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "reopening the CRF");
+        if (stateRefusal != null) {
+            return stateRefusal;
         }
         if (ecb.getDateCompleted() == null) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -2516,6 +2531,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked — cannot add rows"));
         }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "adding a row");
+        if (stateRefusal != null) {
+            return stateRefusal;
+        }
 
         ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
         ItemGroupBean grp = igDAO.findByOid(groupOid);
@@ -2601,6 +2621,11 @@ public class EventCrfsApiController {
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked — cannot delete rows"));
+        }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "deleting a row");
+        if (stateRefusal != null) {
+            return stateRefusal;
         }
 
         ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
@@ -2775,6 +2800,11 @@ public class EventCrfsApiController {
         if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked -- cannot upload files"));
+        }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "uploading a file");
+        if (stateRefusal != null) {
+            return stateRefusal;
         }
 
         if (!fileStorageService.checkSize(file)) {
@@ -2980,6 +3010,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "event_crf " + eventCrfId + " is locked -- cannot delete files"));
         }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "deleting a file");
+        if (stateRefusal != null) {
+            return stateRefusal;
+        }
 
         ItemDAO itemDAO = new ItemDAO(dataSource);
         ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
@@ -3132,6 +3167,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "committing the second pass");
+        if (stateRefusal != null) {
+            return stateRefusal;
+        }
         if (!isDoubleEntryEnabled(ecb)) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "event_crf " + eventCrfId + " is not DDE-enabled"));
@@ -3264,6 +3304,11 @@ public class EventCrfsApiController {
         if (ss == null || !visible.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "resolving the conflict");
+        if (stateRefusal != null) {
+            return stateRefusal;
         }
         try {
             String uri = ddeService().resolveConflict(
@@ -3416,6 +3461,9 @@ public class EventCrfsApiController {
         // call must 404 too.
         ResponseEntity<?> visibility = guardEventCrfVisibility(eventCrfId, currentUser, session);
         if (visibility != null) return visibility;
+        ResponseEntity<?> stateRefusal = ClinicalWriteState.refuseUnlessWritable(
+                dataSource, eventCrfId, "populating retinal values");
+        if (stateRefusal != null) return stateRefusal;
 
         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.PopulateResult result;
         try {
