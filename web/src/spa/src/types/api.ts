@@ -1860,6 +1860,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eventCrfs/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["remove_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/eventCrfs/{id}/markIncomplete": {
         parameters: {
             query?: never;
@@ -2376,6 +2392,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/test-email": {
         parameters: {
             query?: never;
@@ -2713,6 +2745,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/group-classes/{groupClassId}/removal-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["removalImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/export-jobs": {
         parameters: {
             query?: never;
@@ -2737,6 +2785,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["eventTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/removal-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["removalImpact_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3449,6 +3513,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eventCrfs/{id}/removal-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["removalImpact_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/eventCrfs/{id}/previous-values": {
         parameters: {
             query?: never;
@@ -3665,6 +3745,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit/system/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["systemFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["facets"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5082,17 +5194,17 @@ export interface components {
             insertCount?: number;
             /**
              * Format: int32
-             * @description Rows that would overwrite an existing item_data value.
+             * @description Rows that would overwrite a different stored item_data value.
              */
             overwriteCount?: number;
             /**
              * Format: int32
-             * @description Rows the validator rejected; commit skips them.
+             * @description ERROR findings (unresolved OIDs, a closed or missing visit, an unknown item); the commit is refused while any exist.
              */
             errorCount?: number;
             /**
              * Format: int32
-             * @description Rows the validator flagged as soft warnings (out-of-range etc.); commit imports them and files a discrepancy.
+             * @description Rows the commit skips because their CRF is not open to the import (the file's UpsertOn, or the CRF's stage).
              */
             warningCount?: number;
             /** @description Inline first page of preview rows (up to 200). Page the rest via /import/{token}/rows. */
@@ -5128,26 +5240,28 @@ export interface components {
             rowsInserted?: number;
             /**
              * Format: int32
-             * @description Number of existing item_data rows overwritten (each carries reasonForChange in audit_log).
+             * @description Number of stored values replaced (each has a reason-for-change audit row).
              */
             rowsOverwritten?: number;
             /**
              * Format: int32
-             * @description Number of rows skipped — validator errors or operator opted into skip mode.
+             * @description Number of values not written — not open to the import, unchanged, or left out in skip mode.
              */
             rowsSkipped?: number;
             /**
              * Format: int32
-             * @description Number of soft-warning rows imported with an attached open discrepancy note.
+             * @description Number of Failed Validation Check discrepancy notes filed on imported values.
              */
             discrepancyNotes?: number;
-            /** @description ISO-8601 instant the commit transaction completed (server clock). */
+            /** @description ISO-8601 instant the commit completed (server clock). */
             committedAt?: string;
             /**
              * Format: int32
              * @description Active study id at commit time (helper for the SPA audit-trail link).
              */
             auditLogStudyId?: number;
+            /** @description Warnings the study's rules reported on the imported data; empty when none ran. */
+            ruleWarnings?: string[];
         };
         ExportJobDto: {
             /** Format: int64 */
@@ -5195,6 +5309,10 @@ export interface components {
             /** Format: int32 */
             crfVersionId?: number;
             status?: string;
+        };
+        RemoveEventCrfRequest: {
+            /** @description Why the CRF is removed; required, at most 1000 characters. */
+            reason?: string;
         };
         GroupRowSavePayload: {
             groupOid?: string;
@@ -5741,6 +5859,19 @@ export interface components {
             /** Format: int32 */
             datasets?: number;
         };
+        /** @description Rows that removing a subject group class would remove with it. */
+        GroupClassRemovalImpact: {
+            /**
+             * Format: int32
+             * @description Groups of the class (study_group).
+             */
+            groups?: number;
+            /**
+             * Format: int32
+             * @description Subject assignments to the class that are not removed (subject_group_map).
+             */
+            subjectAssignments?: number;
+        };
         EventTreeCrfNode: {
             crfOid?: string;
             crfName?: string;
@@ -5767,6 +5898,34 @@ export interface components {
             versionOid?: string;
             versionName?: string;
             items?: components["schemas"]["EventTreeItemNode"][];
+        };
+        /** @description Rows that removing an event definition would remove with it. */
+        EventDefinitionRemovalImpact: {
+            /**
+             * Format: int32
+             * @description CRF assignments of the definition (event_definition_crf).
+             */
+            crfAssignments?: number;
+            /**
+             * Format: int32
+             * @description Visits scheduled from the definition (study_event).
+             */
+            visits?: number;
+            /**
+             * Format: int32
+             * @description Distinct subjects those visits belong to.
+             */
+            subjects?: number;
+            /**
+             * Format: int32
+             * @description CRFs started or completed in those visits (event_crf).
+             */
+            eventCrfs?: number;
+            /**
+             * Format: int32
+             * @description Values entered in those CRFs (item_data).
+             */
+            itemValues?: number;
         };
         ArchivedFileDto: {
             /** Format: int32 */
@@ -6047,6 +6206,19 @@ export interface components {
             /** Format: int32 */
             openQueries?: number;
         };
+        /** @description What removing an event CRF would take out of the subject's data. */
+        EventCrfRemovalImpact: {
+            /**
+             * Format: int32
+             * @description Values entered on the CRF (item_data rows with a value, not removed on their own).
+             */
+            values?: number;
+            /**
+             * Format: int32
+             * @description Open discrepancy-note threads on those values; the removal closes them.
+             */
+            openNoteThreads?: number;
+        };
         EventCrfNotesRollupDto: {
             eventCrfOid?: string;
             /** Format: int32 */
@@ -6125,6 +6297,19 @@ export interface components {
             before?: string;
             after?: string;
             reason?: string;
+        };
+        AuditPageDto: {
+            /** Format: int64 */
+            totalCount?: number;
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            events?: components["schemas"]["AuditEventDto"][];
+        };
+        AuditFacetsDto: {
+            actors?: string[];
+            subjects?: string[];
         };
         AdminStudyDto: {
             oid?: string;
@@ -9528,7 +9713,9 @@ export interface operations {
     commitImport_1: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9782,6 +9969,32 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    remove_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RemoveEventCrfRequest"];
+            };
+        };
+        responses: {
+            /** @description The CRF is removed. */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10761,6 +10974,24 @@ export interface operations {
             };
         };
     };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out; the session is gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     sendTestEmail: {
         parameters: {
             query?: never;
@@ -11262,6 +11493,29 @@ export interface operations {
             };
         };
     };
+    removalImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                groupClassId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupClassRemovalImpact"];
+                };
+            };
+        };
+    };
     listJobsByStudy: {
         parameters: {
             query?: never;
@@ -11302,6 +11556,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EventTreeNode"];
+                };
+            };
+        };
+    };
+    removalImpact_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionRemovalImpact"];
                 };
             };
         };
@@ -12317,6 +12594,28 @@ export interface operations {
             };
         };
     };
+    removalImpact_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfRemovalImpact"];
+                };
+            };
+        };
+    };
     previousValues: {
         parameters: {
             query?: never;
@@ -12593,6 +12892,11 @@ export interface operations {
                 actor?: string;
                 variant?: string;
                 subjectId?: string;
+                item?: string;
+                from?: string;
+                to?: string;
+                page?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -12606,7 +12910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AuditEventDto"];
+                    "*/*": components["schemas"]["AuditPageDto"];
                 };
             };
         };
@@ -12617,6 +12921,11 @@ export interface operations {
                 actor?: string;
                 variant?: string;
                 subjectId?: string;
+                item?: string;
+                from?: string;
+                to?: string;
+                page?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -12630,7 +12939,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AuditEventDto"];
+                    "*/*": components["schemas"]["AuditPageDto"];
+                };
+            };
+        };
+    };
+    systemFacets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditFacetsDto"];
+                };
+            };
+        };
+    };
+    facets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditFacetsDto"];
                 };
             };
         };
@@ -12641,6 +12990,9 @@ export interface operations {
                 actor?: string;
                 variant?: string;
                 subjectId?: string;
+                item?: string;
+                from?: string;
+                to?: string;
             };
             header?: never;
             path?: never;
