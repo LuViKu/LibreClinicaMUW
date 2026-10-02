@@ -46,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.SubjectDa
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.internal.ImportPreviewSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
@@ -235,6 +236,8 @@ public class ImportApiController {
             return ResponseEntity.status(415).body(Map.of("message",
                     "Only .xml CRF data files are accepted"));
         }
+        ResponseEntity<?> closed = refuseIfStudyClosed(session);
+        if (closed != null) return closed;
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -412,8 +415,10 @@ public class ImportApiController {
      *       {@code replace} or {@code skip}, or without a reason when
      *       stored values will be overwritten. The token stays usable, so
      *       the operator can supply the reason.</li>
-     *   <li>{@code 410} for an unknown, expired or used token. From here on
-     *       the token is spent, whatever the outcome.</li>
+     *   <li>{@code 410} for an unknown, expired or used token.</li>
+     *   <li>{@code 409} when the study is locked or frozen, as legacy
+     *       refuses. The token stays usable. From here on the token is
+     *       spent, whatever the outcome.</li>
      *   <li>{@code 422} when the preview reported errors, or the file's
      *       OIDs no longer resolve in the active study.</li>
      *   <li>{@code 409} when the data changed since the preview (a value
@@ -476,6 +481,8 @@ public class ImportApiController {
                     "errors", List.of(Map.of("field", "reasonForChange",
                             "message", "reasonForChange is required when overwrites will be applied"))));
         }
+        ResponseEntity<?> closed = refuseIfStudyClosed(session);
+        if (closed != null) return closed;
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -666,6 +673,21 @@ public class ImportApiController {
                     "Your role does not permit importing CRF data — sysadmin or Director/Coordinator/Investigator/RA on the active study only"));
         }
         return null;
+    }
+
+    /**
+     * {@code 409} when the active study is locked or frozen (or removed):
+     * legacy {@code ImportCRFDataServlet.mayProceed} refuses those with
+     * {@code checkStudyLocked} and {@code checkStudyFrozen} before anything
+     * else. Read from the database, not the session, which holds the study
+     * as it was when it was chosen.
+     */
+    private ResponseEntity<?> refuseIfStudyClosed(HttpSession session) {
+        StudyBean active = (StudyBean) session.getAttribute("study");
+        StudyBean study = new StudyDAO(dataSource).findByPK(active.getId());
+        if (StudyAdminAuthorization.studyAcceptsWrites(study)) return null;
+        return ResponseEntity.status(409).body(Map.of("message",
+                "The study is locked or frozen; no CRF data can be imported into it."));
     }
 
     /**

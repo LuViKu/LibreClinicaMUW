@@ -210,9 +210,73 @@ class ImportApiControllerCommitDatabaseIT extends AbstractApiControllerDatabaseI
         assertEquals(1, count("SELECT COUNT(*) FROM item_data WHERE item_id = 5 AND event_crf_id = ?", 11));
     }
 
+    /** Skip mode leaves a stored value as it is and needs no reason; new values are still written. */
+    @Test
+    void skipModeLeavesStoredValuesAndWritesTheNewOnes() throws Exception {
+        MockHttpSession session = sysadminSession();
+        String token = upload(session, odm("SS_M001", "SE_V2_DAY30",
+                "I_HEIGHT_CM", "166", "I_BLOOD_PRESSURE_SYS", "119"))
+                .andExpect(jsonPath("$.insertCount").value(1))
+                .andExpect(jsonPath("$.overwriteCount").value(1))
+                .andReturn().getResponse().getContentAsString().transform(ImportApiControllerCommitDatabaseIT::token);
+
+        commit(session, token, null, "bogus")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("overwriteMode"));
+        assertEquals("162", valueOf(3, 2));
+
+        commit(session, token, null, "skip")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rowsInserted").value(1))
+                .andExpect(jsonPath("$.rowsOverwritten").value(0))
+                .andExpect(jsonPath("$.rowsSkipped").value(1));
+
+        assertEquals("162", valueOf(3, 2), "skip mode overwrote a stored value");
+        assertEquals("119", valueOf(5, 2));
+        assertEquals(0, count("SELECT COUNT(*) FROM audit_log_event WHERE audit_table = 'item_data' "
+                + "AND entity_id = ? AND (new_value = '166' OR audit_log_event_type_id = 140)", 6));
+    }
+
     /* ---------------------------------------------------------------- */
     /* Refusals: nothing written                                        */
     /* ---------------------------------------------------------------- */
+
+    /**
+     * A locked or frozen study takes no import, as legacy refuses it; the
+     * refusal does not spend the token. M-004's V2 (visit 11), scheduled
+     * here, has no CRF yet, so a commit would start one.
+     */
+    @Test
+    void aLockedOrFrozenStudyTakesNoImport() throws Exception {
+        MockHttpSession session = sysadminSession();
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE study_event SET subject_event_status_id = 1, date_start = COALESCE(date_start, now()) "
+                             + "WHERE study_event_id = 11")) {
+            ps.executeUpdate();
+        }
+        String odm = odm("SS_M004", "SE_V2_DAY30", "I_BLOOD_PRESSURE_SYS", "127");
+        String token = upload(session, odm)
+                .andExpect(jsonPath("$.insertCount").value(1))
+                .andReturn().getResponse().getContentAsString().transform(ImportApiControllerCommitDatabaseIT::token);
+        int statusBefore = count("SELECT status_id FROM study WHERE study_id = ?", STUDY_ID);
+        try {
+            for (int closed : new int[] {6, 9}) {
+                setStudyStatus(closed);
+                commit(session, token, null, null).andExpect(status().isConflict());
+                assertEquals(0, eventCrfOf(11), "an import into a study with status " + closed + " started a CRF");
+                MockMultipartFile file = new MockMultipartFile("file", "import.xml",
+                        MediaType.APPLICATION_XML_VALUE, odm.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                mockMvc().perform(multipart("/api/v1/import").file(file).session(session))
+                        .andExpect(status().isConflict());
+            }
+        } finally {
+            setStudyStatus(statusBefore);
+        }
+
+        commit(session, token, null, null).andExpect(status().isOk());
+        assertEquals("127", valueOf(5, eventCrfOf(11)));
+    }
 
     @Test
     void aSignedCrfIsNotWrittenInto() throws Exception {
@@ -348,6 +412,15 @@ class ImportApiControllerCommitDatabaseIT extends AbstractApiControllerDatabaseI
         study.setName("Default Study");
         session.setAttribute("study", study);
         return session;
+    }
+
+    private static void setStudyStatus(int statusId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("UPDATE study SET status_id = ? WHERE study_id = ?")) {
+            ps.setInt(1, statusId);
+            ps.setInt(2, STUDY_ID);
+            ps.executeUpdate();
+        }
     }
 
     private static int eventCrfOf(int studyEventId) throws SQLException {
