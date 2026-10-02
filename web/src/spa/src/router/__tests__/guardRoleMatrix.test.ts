@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import router from '../index'
+import router, { roleSatisfies } from '../index'
 
 const ROUTES_THAT_MUST_INCLUDE_ADMINISTRATOR = [
   'subject-new',
@@ -62,5 +62,59 @@ describe('router role gates — Administrator inclusion matrix', () => {
         `route '${String(route.name)}' has an invalid meta.role shape: ${JSON.stringify(role)}`,
       ).toBe(true)
     }
+  })
+})
+
+/**
+ * Decision D5 (JSP-retirement plan): the SPA gates follow the backend. The
+ * backend's study-build gate (StudyAdminAuthorization.userMayEditStudy /
+ * userMayManageCrfLibrary, ExportDatasetServlet / StudyAuditLogServlet /
+ * ImportCRFDataServlet parity) admits a coordinator, shown as CRC, so these
+ * routes must too.
+ */
+const ROUTES_THAT_MUST_ADMIT_CRC = [
+  'build-study',
+  'event-definitions',
+  'crf-library',
+  'crf-detail',
+  'crf-migration',
+  'crfAuthoringCanvas',
+  'sites',
+  'group-classes',
+  'rules',
+  'data-export',
+  'datasets',
+  'dataset-new',
+  'dataset-edit',
+  'audit-log',
+  'import-crf-data',
+] as const
+
+/**
+ * The backend refuses a coordinator here (sysadmin-only writes), so the route
+ * must keep refusing the role; widening it is a backend decision, not an SPA one.
+ */
+const ROUTES_THAT_MUST_REFUSE_CRC = [
+  'study-create',
+  'study-edit',
+  'study-parameters',
+  'manage-users',
+] as const
+
+function admits(routeName: string, role: 'CRC'): boolean {
+  const route = router.getRoutes().find((r) => r.name === routeName)
+  expect(route, `route '${routeName}' is not registered`).toBeDefined()
+  const required = route!.meta.role
+  const list = Array.isArray(required) ? required : [required]
+  return list.some((r) => r !== undefined && roleSatisfies(role, r as Parameters<typeof roleSatisfies>[1]))
+}
+
+describe('router role gates — CRC (coordinator) follows the backend, D5', () => {
+  it.each(ROUTES_THAT_MUST_ADMIT_CRC)('route %s admits CRC', (routeName) => {
+    expect(admits(routeName, 'CRC'), `route '${routeName}' bounces a CRC although the backend admits a coordinator`).toBe(true)
+  })
+
+  it.each(ROUTES_THAT_MUST_REFUSE_CRC)('route %s still refuses CRC', (routeName) => {
+    expect(admits(routeName, 'CRC'), `route '${routeName}' admits a CRC but the backend refuses a coordinator`).toBe(false)
   })
 })

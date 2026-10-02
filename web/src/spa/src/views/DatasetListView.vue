@@ -22,6 +22,7 @@ import { useRouter } from 'vue-router'
 
 import DatasetSchedules from '@/components/DatasetSchedules.vue'
 import { useAuthStore } from '@/stores/auth'
+import { mayEditExports } from '@/lib/studyBuildAccess'
 import { useDatasetsStore } from '@/stores/datasets'
 import { useConfirm } from '@/composables/useConfirm'
 import type { ExportFormat } from '@/types/export'
@@ -34,10 +35,7 @@ const confirm = useConfirm()
 const router = useRouter()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager' || role === 'Monitor'
-})
+const canManage = computed(() => mayEditExports(auth.user?.role))
 
 const removing = ref<number | null>(null)
 const removeError = ref<string | null>(null)

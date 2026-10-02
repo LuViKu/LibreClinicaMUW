@@ -223,7 +223,8 @@ const QUEUES: QueueEntry[] = [
 /**
  * Destinations. Every allowedRoles list mirrors the route's own role meta:
  * a card that opens a route the role cannot enter is a dead click that
- * bounces back here — the CRC's Patientenübersicht did exactly that.
+ * bounces back here. A role may enter a route through the CRC to Investigator
+ * inheritance (roleSatisfies) without the route listing it; the card then stays hidden.
  */
 const WORKSPACES = computed<WorkspaceEntry[]>(() => [
   {
@@ -247,7 +248,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'build-study' },
     titleKey: 'buildStudy.title',
     descKey: 'home.dataManager.buildStudyDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     group: 'study',
   },
   {
@@ -255,7 +256,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'import-crf-data' },
     titleKey: 'importCrf.title',
     descKey: 'home.dataManager.importCrfDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     group: 'study',
   },
   {
@@ -263,7 +264,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'rules' },
     titleKey: 'rules.title',
     descKey: 'home.dataManager.rulesDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     badge: () => activeRuleSetsCount.value,
     group: 'study',
   },
@@ -272,7 +273,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'data-export' },
     titleKey: 'home.dataManager.dataExportTitle',
     descKey: 'home.dataManager.dataExportDesc',
-    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    allowedRoles: ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -280,7 +281,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'audit-log' },
     titleKey: 'auditLog.title',
     descKey: 'home.administrator.auditLogDesc',
-    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    allowedRoles: ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -288,7 +289,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'sites' },
     titleKey: 'home.administrator.sitesTitle',
     descKey: 'home.administrator.sitesDesc',
-    allowedRoles: ['Data Manager', 'Administrator'],
+    allowedRoles: ['Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -306,7 +307,8 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'patients-overview' },
     titleKey: 'home.cards.patientsOverview.title',
     descKey: 'home.cards.patientsOverview.description',
-    // Not CRC: /patients does not admit the role, so the card was a dead click.
+    // Not CRC: the route admits it only through the Investigator inheritance in
+    // roleSatisfies, and the card is left to the roles that list the route.
     allowedRoles: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'],
     group: 'platform',
   },
@@ -452,6 +454,8 @@ onMounted(() => {
   }
   if (has('Monitor') || has('Data Manager')) {
     inflight.push(sdv.load())
+  }
+  if (has('Monitor') || has('Data Manager') || has('CRC')) {
     inflight.push(rules.load())
   }
   if (rs.length > 0) {
