@@ -158,7 +158,7 @@ public class UserAccountController {
 
 		// generate password
 		String password = ""; // generate
-		String passwordHash = UserAccountBean.LDAP_PASSWORD; // TODO: this will not work, LDAP password hash will be always overwritten
+		String passwordHash;
 		SecurityManager secm = (SecurityManager) SpringServletAccess.getApplicationContext(context).getBean("securityManager");
 		password = secm.genPassword();
 

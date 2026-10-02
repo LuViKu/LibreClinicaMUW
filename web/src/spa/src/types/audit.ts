@@ -10,7 +10,7 @@
  * already capture this, so the C-category addition listed in the
  * inventory is mostly a serialiser change in the controller.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): {@link AuditEvent} is
+ * Phase E.5 follow-up (2026-06-02): {@link AuditEvent} is
  * derived from the openapi-typescript-generated
  * {@code components['schemas']['AuditEventDto']} so SPA call sites
  * track the backend record shape. The narrow {@link AuditEventVariant}

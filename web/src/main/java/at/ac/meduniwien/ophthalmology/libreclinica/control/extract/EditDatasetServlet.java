@@ -105,33 +105,9 @@ public class EditDatasetServlet extends SecureController {
                 session.setAttribute("eventsForCreateDataset", events);
             }
         }
-        /*
-         * if ("validate".equalsIgnoreCase(action)) { //check name, description, status for right now Validator v = new Validator(request);
-         * v.addValidation("dsName", Validator.NO_BLANKS); v.addValidation("dsDesc", Validator.NO_BLANKS); v.addValidation("dsStatus", Validator.IS_VALID_TERM,
-         * TermType.STATUS); v.addValidation("dsName", Validator.LENGTH_NUMERIC_COMPARISON, NumericComparisonOperator.LESS_THAN_OR_EQUAL_TO, 255);
-         * v.addValidation("dsDesc", Validator.LENGTH_NUMERIC_COMPARISON, NumericComparisonOperator.LESS_THAN_OR_EQUAL_TO, 2000); //what else to validate?
-         * HashMap errors = v.validate(); if (!StringUtil.isBlank(fp.getString("dsName"))) { //logger.info("dsName" + fp.getString("dsName")); DatasetDAO dsdao
-         * = new DatasetDAO(sm.getDataSource()); DatasetBean dsBean = (DatasetBean) dsdao.findByNameAndStudy(fp.getString("dsName").trim(), currentStudy); if
-         * (dsBean.getId() > 0 && (dsBean.getId() != fp.getInt("dsId"))) { Validator.addError(errors, "dsName",
-         * restext.getString("dataset_name_used_by_another_choose_unique")); } } if (!errors.isEmpty()) { String fieldNames[] = { "dsName", "dsDesc" };
-         * fp.setCurrentStringValuesAsPreset(fieldNames); fp.addPresetValue("dsStatus", fp.getInt("dsStatus"));
-         * addPageMessage(restext.getString("errors_in_update_see_below")); setInputMessages(errors); setPresetValues(fp.getPresetValues()); //TODO determine if
-         * this is necessary //int dsId = fp.getInt("dsId"); //DatasetDAO dsDAO = new DatasetDAO(sm.getDataSource()); //DatasetBean showDataset = (DatasetBean)
-         * dsDAO.findByPK(dsId); request.setAttribute("dataset", dataset); //maybe just set the above to the session? request.setAttribute("statuses",
-         * getStatuses()); forwardPage(Page.EDIT_DATASET); } else { dataset.setName(fp.getString("dsName")); dataset.setDescription(fp.getString("dsDesc"));
-         * dataset.setStatus(Status.get(fp.getInt("dsStatus"))); dataset.setUpdater(ub); //dataset.setUpdaterId(ub.getId()); dsDAO.update(dataset);
-         * addPageMessage(restext.getString("dataset_properties_updated")); //forward to view all datasets ArrayList datasets = (ArrayList)
-         * dsDAO.findAllByStudyId(currentStudy.getId()); //changed from findAll() EntityBeanTable table = fp.getEntityBeanTable(); ArrayList datasetRows =
-         * DatasetRow.generateRowsFromBeans(datasets); String[] columns = {resword.getString("dataset_name"), resword.getString("description"),
-         * resword.getString("created_by"), resword.getString("created_date"), resword.getString("status"),resword.getString("actions")}; table.setColumns(new
-         * ArrayList(Arrays.asList(columns))); table.hideColumnLink(5); table.setQuery("ViewDatasets", new HashMap()); table.setRows(datasetRows);
-         * table.computeDisplay(); request.setAttribute("table", table); //request.setAttribute("datasets", datasets); forwardPage(Page.VIEW_DATASETS); } } else
-         * {
-         */
         request.setAttribute("dataset", dataset);
         request.setAttribute("statuses", getStatuses());
         forwardPage(Page.EDIT_DATASET);
-        // }
     }
 
     @Override

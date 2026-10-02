@@ -36,7 +36,7 @@ export type StudyEvent =
 /**
  * Body for POST /pages/api/v1/events.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): derived from the
+ * Phase E.5 follow-up (2026-06-02): derived from the
  * openapi-typescript-generated spec. The store's call site sets
  * `subjectId`/`eventDefinitionOid`/`dateStarted` from form inputs
  * before submitting, so they must be present at runtime —
