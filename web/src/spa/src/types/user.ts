@@ -4,7 +4,7 @@
  * Shape follows the planned `GET /pages/api/v1/users?siteOid=…&role=…`
  * adapter response per api-surface.md row 12.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): {@link StudyUser} is
+ * Phase E.5 follow-up (2026-06-02): {@link StudyUser} is
  * derived from the openapi-typescript-generated
  * {@code components['schemas']['StudyUserDto']}. Narrow {@link UserRole}
  * / {@link UserAuth} literal unions stay hand-typed.

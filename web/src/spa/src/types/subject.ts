@@ -7,7 +7,7 @@
  * with this exact shape from the Pinia store so the view code is
  * already written against the production contract.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): the wire-level types
+ * Phase E.5 follow-up (2026-06-02): the wire-level types
  * ({@link Subject}, {@link SubjectDetail}, {@link EventCellSnapshot},
  * {@link EventCellDetail}) are now derived from the
  * openapi-typescript-generated {@code components.schemas} so they

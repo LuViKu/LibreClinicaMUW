@@ -113,21 +113,17 @@ async function mountAt(oid: string) {
   const wrapper = mount(StudyParametersEditView, {
     global: {
       plugins: [router, i18n],
-      stubs: { BuildStudyRail: true },
+      stubs: { BuildStudyRail: true, StudyModuleEnrollmentPanel: true, StudySettingsPanel: true },
     },
   })
   await flushPromises()
   return { wrapper, router }
 }
 
-// 2026-06-25 — these specs reflect a pre-Phase-E.7 wire shape (the view
-// has since gained a second bootstrap GET, the 401 path now goes through
-// the global API-client auth-redirect hook instead of an in-view router
-// push, and the fieldErrors envelope format moved to the unified
-// {path,message} shape). Mark the suite obsolete so CI stays green; the
-// view's contract is exercised by the e2e route smoke. Track-as TODO for
-// the next StudyParameters refresh.
-describe.skip('StudyParametersEditView', () => {
+// The two panels at the foot of the page (study modules, study settings) fetch
+// their own data, so they are stubbed in mountAt: this suite pins the parameter
+// form's single GET and its PUT.
+describe('StudyParametersEditView', () => {
   beforeEach(() => {
     apiGetMock.mockReset()
     apiPutMock.mockReset()

@@ -8,7 +8,7 @@
  * adapter once E.0 is unblocked. Until then the store hydrates from
  * mock data with the production shape.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): {@link SdvRow} derived
+ * Phase E.5 follow-up (2026-06-02): {@link SdvRow} derived
  * from {@code components['schemas']['SdvRowDto']}; narrow literal
  * unions ({@link SdvStatus}, {@link SdvRequirement}) stay hand-typed.
  */
