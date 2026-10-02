@@ -20,17 +20,13 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -342,11 +338,13 @@ public class EventCrfRemovalApiController {
      *   <li>{@code 404} — no such event CRF.</li>
      *   <li>{@code 403} — its subject is in a study the caller cannot see.</li>
      *   <li>{@code 403} — the caller's role may not remove a CRF.</li>
-     *   <li>{@code 409} — the study is locked or frozen (legacy
-     *       {@code checkStudyLocked} and {@code checkStudyFrozen}), or the
-     *       subject is locked.</li>
-     *   <li>{@code 409} — the CRF is removed already, or signed or locked,
-     *       or its visit is signed or locked.</li>
+     *   <li>{@code 409} — the record is closed, as {@link ClinicalRecordGuard}
+     *       decides it for every clinical write, with its {@code code}: the
+     *       study (the subject's site or its parent included) is locked,
+     *       frozen or removed (legacy {@code checkStudyLocked} and
+     *       {@code checkStudyFrozen}); the subject is locked, removed or
+     *       signed; the visit is removed, signed or locked; or the CRF is
+     *       removed already, or signed or locked.</li>
      * </ol>
      */
     private Target resolve(int eventCrfId, HttpSession session) {
@@ -372,27 +370,9 @@ public class EventCrfRemovalApiController {
             return Target.refused(403, "Your role does not permit removing a CRF");
         }
 
-        StudyBean study = new StudyDAO(dataSource).findByPK(currentStudy.getId());
-        if (!StudyAdminAuthorization.studyAcceptsWrites(study)) {
-            return Target.refused(409, "The study is locked or frozen; no CRF can be removed");
-        }
-        ResponseEntity<?> subjectLocked = SubjectLockGuard.refuseIfLocked(subject, "removing a CRF");
-        if (subjectLocked != null) return new Target(subjectLocked, null, null, null);
-
-        Status status = eventCrf.getStatus();
-        if (Status.DELETED.equals(status) || Status.AUTO_DELETED.equals(status)) {
-            return Target.refused(409, "event_crf " + eventCrfId + " is already removed");
-        }
-        if (Status.SIGNED.equals(status) || Status.LOCKED.equals(status)) {
-            return Target.refused(409, "event_crf " + eventCrfId
-                    + " is signed or locked; unlock it before removing it");
-        }
-        StudyEventBean visit = new StudyEventDAO(dataSource).findByPK(eventCrf.getStudyEventId());
-        SubjectEventStatus visitStatus = visit == null ? null : visit.getSubjectEventStatus();
-        if (SubjectEventStatus.SIGNED.equals(visitStatus) || SubjectEventStatus.LOCKED.equals(visitStatus)) {
-            return Target.refused(409, "The visit is " + visitStatus.getName()
-                    + "; un-sign or unlock it before removing a CRF");
-        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource, currentStudy, subject,
+                null, eventCrf, "removing a CRF");
+        if (closed != null) return new Target(closed, null, null, null);
         return new Target(null, user, eventCrf, subject);
     }
 
