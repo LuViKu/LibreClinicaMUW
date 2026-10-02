@@ -44,8 +44,8 @@ public class EventActionValidator implements Validator {
     ResourceBundle respage;
     
     public static final String VALUE_EXPRESSION_DATE_FORMAT = "yyyy-MM-dd";
-    public static final String BRACKETS_AND_CONTENTS = ".*\\[(END|ALL|[1-9]\\d*)\\]";
-    private final String REPEATING = ".*\\[(END|ALL|[1-9]\\d*)\\]";
+    public static final String BRACKETS_AND_CONTENTS = ".*\\[(END|ALL|[1-9]\\d{0,8})\\]";
+    private final String REPEATING = ".*\\[(END|ALL|[1-9]\\d{0,8})\\]";
 
 	public EventActionValidator(DataSource dataSource) {
         this.dataSource = dataSource;

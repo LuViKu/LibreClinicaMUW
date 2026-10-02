@@ -72,14 +72,14 @@ public class ExpressionService {
     
     private final String SEPARATOR = ".";
     private final String ESCAPED_SEPARATOR = "\\.";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN = "[A-Z_0-9]+|[A-Z_0-9]+\\[(ALL|[1-9]\\d*)\\]$";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_NO_ALL = "[A-Z_0-9]+|[A-Z_0-9]+\\[[1-9]\\d*\\]$";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_ORDINAL = "[A-Z_0-9]+\\[(END|ALL|[1-9]\\d*)\\]$";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_END = "[A-Z_0-9]+|[A-Z_0-9]+\\[(END|ALL|[1-9]\\d*)\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN = "[A-Z_0-9]+|[A-Z_0-9]+\\[(ALL|[1-9]\\d{0,8})\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_NO_ALL = "[A-Z_0-9]+|[A-Z_0-9]+\\[[1-9]\\d{0,8}\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_ORDINAL = "[A-Z_0-9]+\\[(END|ALL|[1-9]\\d{0,8})\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_END = "[A-Z_0-9]+|[A-Z_0-9]+\\[(END|ALL|[1-9]\\d{0,8})\\]$";
     private final String PRE = "[A-Z_0-9]+\\[";
     private final String POST = "\\]";
     private final String CRF_OID_OR_ITEM_DATA_PATTERN = "[A-Z_0-9]+";
-    private final String BRACKETS_AND_CONTENTS = "\\[(END|ALL|[1-9]\\d*)\\]";
+    private final String BRACKETS_AND_CONTENTS = "\\[(END|ALL|[1-9]\\d{0,8})\\]";
     private final String ALL_IN_BRACKETS = "ALL";
     private final String OPENING_BRACKET = "[";
     private final String CLOSING_BRACKET = "]";
