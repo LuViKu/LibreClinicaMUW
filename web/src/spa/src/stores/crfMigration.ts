@@ -10,9 +10,9 @@ import type {
 
 /**
  * Moving existing event CRFs to another version of their CRF: options, then
- * a preview that writes nothing, then the run. The run sends the count its
- * preview showed, and the server refuses (409, nothing changed) when the
- * selection no longer matches it.
+ * a preview that writes nothing, then the run. The run sends the count and
+ * the selection digest its preview showed, and the server refuses (409,
+ * nothing changed) when the selection no longer matches them.
  *
  * <p>The server runs the move in one transaction and returns the log, so the
  * result and the log appear here (and in the audit trail); nothing is
@@ -56,9 +56,10 @@ export const useCrfMigrationStore = defineStore('crfMigration', () => {
     clearErrors()
     result.value = null
     try {
-      // A preview never carries the expected count; that belongs to the run.
+      // A preview never carries what it expects; that belongs to the run.
       const body: EventCrfMigrationRequest = { ...request }
       delete body.expectedEventCrfCount
+      delete body.expectedSelectionDigest
       preview.value = await apiPost<EventCrfMigrationPreview>(url(crfOid, '/preview'), body)
       return true
     } catch (e) {
@@ -79,6 +80,7 @@ export const useCrfMigrationStore = defineStore('crfMigration', () => {
       result.value = await apiPost<EventCrfMigrationResult>(url(crfOid), {
         ...request,
         expectedEventCrfCount: preview.value.eventCrfCount,
+        expectedSelectionDigest: preview.value.selectionDigest,
       })
       preview.value = null
       return true

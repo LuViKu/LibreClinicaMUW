@@ -12,7 +12,7 @@ import type { EventCrfMigrationPreview, EventCrfMigrationResult } from '@/types/
 
 /**
  * Moving existing event CRFs to another CRF version: the store's calls, and
- * that the run carries the count its preview showed.
+ * that the run carries the count and the selection its preview showed.
  */
 const REQUEST = {
   studyOid: 'S_DEFAULTS1',
@@ -57,6 +57,7 @@ const PREVIEW: EventCrfMigrationPreview = {
   notOffered: [],
   hiddenValueCount: 0,
   hiddenItems: [],
+  selectionDigest: '3f0c',
 }
 
 const RESULT: EventCrfMigrationResult = {
@@ -91,17 +92,17 @@ describe('useCrfMigrationStore', () => {
     expect(store.options?.crfOid).toBe('F_AE')
   })
 
-  it('previews without an expected count', async () => {
+  it('previews without an expected count or selection', async () => {
     const store = useCrfMigrationStore()
     vi.mocked(apiPost).mockResolvedValue(PREVIEW)
 
-    await store.runPreview('F_AE', { ...REQUEST, expectedEventCrfCount: 99 })
+    await store.runPreview('F_AE', { ...REQUEST, expectedEventCrfCount: 99, expectedSelectionDigest: 'stale' })
 
     expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/crfs/F_AE/event-crf-migration/preview', REQUEST)
     expect(store.preview?.eventCrfCount).toBe(12)
   })
 
-  it('runs with the count the preview showed, then drops the preview', async () => {
+  it('runs with the count and the selection the preview showed, then drops the preview', async () => {
     const store = useCrfMigrationStore()
     vi.mocked(apiPost).mockResolvedValueOnce(PREVIEW).mockResolvedValueOnce(RESULT)
     await store.runPreview('F_AE', REQUEST)
@@ -111,6 +112,7 @@ describe('useCrfMigrationStore', () => {
     expect(apiPost).toHaveBeenLastCalledWith('/pages/api/v1/crfs/F_AE/event-crf-migration', {
       ...REQUEST,
       expectedEventCrfCount: 12,
+      expectedSelectionDigest: '3f0c',
     })
     expect(store.result?.migratedEventCrfCount).toBe(1)
     expect(store.preview).toBeNull()

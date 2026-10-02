@@ -32,8 +32,9 @@ export interface EventCrfMigrationOptions {
 /**
  * Empty `siteOids` / `eventDefinitionOids` mean all available ones.
  * `studySubjectLabel` and `eventCrfIds` narrow the move to one subject or
- * to single event CRFs. The run needs `expectedEventCrfCount`: the count its
- * preview showed.
+ * to single event CRFs. The run needs `expectedEventCrfCount` and
+ * `expectedSelectionDigest`: the count and the `selectionDigest` its preview
+ * showed.
  */
 export interface EventCrfMigrationRequest {
   studyOid: string
@@ -44,6 +45,7 @@ export interface EventCrfMigrationRequest {
   studySubjectLabel?: string
   eventCrfIds?: number[]
   expectedEventCrfCount?: number
+  expectedSelectionDigest?: string
 }
 
 /** One event CRF. In a preview the flags say what the move will clear; in a result, what it cleared. */
@@ -103,6 +105,8 @@ export interface EventCrfMigrationPreview {
   notOffered: EventCrfMigrationNotOffered[]
   hiddenValueCount: number
   hiddenItems: EventCrfMigrationHiddenItem[]
+  /** Names the event CRFs counted here; the run sends it back, so it moves exactly these. */
+  selectionDigest: string
 }
 
 export interface EventCrfMigrationResult {

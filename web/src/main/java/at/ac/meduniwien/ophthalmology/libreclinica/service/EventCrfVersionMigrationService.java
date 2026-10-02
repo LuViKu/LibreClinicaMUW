@@ -37,6 +37,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -45,6 +48,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -88,8 +92,10 @@ import java.util.Set;
  *       session unclosed, and the only report was an e-mail. Here the
  *       response carries the result and the log, and a failure changes
  *       nothing.</li>
- *   <li><b>The run names the count its preview showed.</b> A selection that
- *       changed in between (new data, a concurrent run) is refused.</li>
+ *   <li><b>The run names the selection its preview showed</b>: its count
+ *       and a digest of its event CRF ids. A selection that changed in
+ *       between (new data, a lock, a concurrent run) is refused, also when
+ *       as many event CRFs left it as joined it.</li>
  *   <li><b>Locked data is not moved:</b> an event CRF that is locked, in a
  *       locked event, or of a locked subject. A lock freezes the record and
  *       its SDV state (see {@code SubjectLockGuard}); the preview lists
@@ -289,7 +295,8 @@ public class EventCrfVersionMigrationService {
                     versionRef(scope.source()), versionRef(scope.target()),
                     scope.siteRefs(), scope.eventRefs(), scope.subjectLabel(),
                     eligible.size(), subjects.size(), sdv, signedSubjects.size(), signedEvents.size(), signedCrfs,
-                    rows, eligible.size() > rows.size(), locked, notOffered, hiddenValues, hidden);
+                    rows, eligible.size() > rows.size(), locked, notOffered, hiddenValues, hidden,
+                    selectionDigest(eligible));
         } catch (SQLException e) {
             throw new IllegalStateException("Previewing the event CRF migration failed", e);
         }
@@ -301,14 +308,22 @@ public class EventCrfVersionMigrationService {
 
     /**
      * Moves the event CRFs the request selects, in one transaction. Refused
-     * (409, nothing written) when the number of event CRFs to move is not
-     * {@code expectedEventCrfCount}.
+     * (409, nothing written) when they are not the ones the preview showed:
+     * their number is not {@code expectedEventCrfCount}, or their
+     * {@link #selectionDigest} is not {@code expectedSelectionDigest}.
      */
     public Result run(CRFBean crf, Request request, UserAccountBean me) throws Refusal {
+        List<ValidationErrorBody.FieldError> missing = new ArrayList<>();
         if (request == null || request.expectedEventCrfCount() == null || request.expectedEventCrfCount() < 0) {
-            throw new Refusal(400, "Validation failed", List.of(new ValidationErrorBody.FieldError(
-                    "expectedEventCrfCount", "The number of event CRFs the preview showed is required")));
+            missing.add(new ValidationErrorBody.FieldError(
+                    "expectedEventCrfCount", "The number of event CRFs the preview showed is required"));
         }
+        if (request == null || request.expectedSelectionDigest() == null
+                || request.expectedSelectionDigest().isBlank()) {
+            missing.add(new ValidationErrorBody.FieldError(
+                    "expectedSelectionDigest", "The selection the preview showed is required"));
+        }
+        if (!missing.isEmpty()) throw new Refusal(400, "Validation failed", missing);
         try (Connection c = dataSource.getConnection()) {
             Scope scope = resolve(c, crf, request, me);
             c.setAutoCommit(false);
@@ -323,6 +338,12 @@ public class EventCrfVersionMigrationService {
                     throw new Refusal(409, "The selection changed since the preview: " + eligible.size()
                             + " event CRF(s) would move now, the preview showed " + expected
                             + ". Nothing was changed; preview again.");
+                }
+                if (!selectionDigest(eligible).equals(request.expectedSelectionDigest().trim())) {
+                    c.rollback();
+                    throw new Refusal(409, "The selection changed since the preview: " + expected
+                            + " event CRF(s) would move now as then, but not the same ones."
+                            + " Nothing was changed; preview again.");
                 }
                 Result result = apply(c, crf, scope, eligible, me);
                 c.commit();
@@ -872,6 +893,27 @@ public class EventCrfVersionMigrationService {
     /* ------------------------------------------------------------------ */
     /* Helpers                                                            */
     /* ------------------------------------------------------------------ */
+
+    /**
+     * Names the event CRFs a run would move: SHA-256 (hex) of their ids in
+     * ascending order, comma-separated, as the selection returns them. The
+     * preview shows it and the run has to name it, so a run moves exactly
+     * the event CRFs its preview listed and cleared nothing it did not
+     * count.
+     */
+    private static String selectionDigest(List<Candidate> eligible) {
+        StringBuilder ids = new StringBuilder();
+        for (Candidate cand : eligible) {
+            if (ids.length() > 0) ids.append(',');
+            ids.append(cand.eventCrfId());
+        }
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(ids.toString().getBytes(StandardCharsets.US_ASCII)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
 
     private static Ref versionRef(CRFVersionBean v) {
         return new Ref(v.getOid(), v.getName());

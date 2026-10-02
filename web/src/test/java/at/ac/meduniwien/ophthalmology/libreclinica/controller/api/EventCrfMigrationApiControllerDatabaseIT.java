@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.EventCrfVersionMigrationService;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
@@ -70,18 +71,35 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
     /** The CRF of one test and the rows around it. */
     private record World(String t, int crf, int v1, int v2, int itemA, int itemB, int site,
                          int s1, int ev1, int ec1, int s2, int ev2, int ec2,
-                         int ec3, int ev4, int ec4, int ec5) {
+                         int s3, int ec3, int ev4, int ec4, int ec5) {
 
         String url() {
             return "/api/v1/crfs/F_" + t + "/event-crf-migration";
         }
 
         String body(String extra, Integer expected) {
+            return body(extra, expected, null);
+        }
+
+        String body(String extra, Integer expected, String digest) {
             return "{\"studyOid\":\"" + CrfLibraryFixtures.STUDY_OID + "\","
                     + "\"sourceVersionOid\":\"F_" + t + "_V1\",\"targetVersionOid\":\"F_" + t + "_V2\""
                     + (extra == null ? "" : "," + extra)
-                    + (expected == null ? "" : ",\"expectedEventCrfCount\":" + expected) + "}";
+                    + (expected == null ? "" : ",\"expectedEventCrfCount\":" + expected)
+                    + (digest == null ? "" : ",\"expectedSelectionDigest\":\"" + digest + "\"") + "}";
         }
+    }
+
+    /** The selection digest a preview of {@code body} shows, as the SPA sends it with the run; null without one. */
+    private String digestOf(String url, String body) throws Exception {
+        String json = mvc().perform(post(url + "/preview").session(dm()).contentType("application/json").content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return new ObjectMapper().readTree(json).path("selectionDigest").asText(null);
+    }
+
+    private String digestOf(World w, String extra) throws Exception {
+        return digestOf(w.url(), w.body(extra, null));
     }
 
     /**
@@ -133,7 +151,7 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
 
         int s5 = fx.subject(t + "-5", site, 1);
         int ec5 = fx.eventCrf(fx.event(s5, CrfLibraryFixtures.SED_ID, 4, 1), s5, v1, 1, false, true, false);
-        return new World(t, crf, v1, v2, a, b, site, s1, ev1, ec1, s2, ev2, ec2, ec3, ev4, ec4, ec5);
+        return new World(t, crf, v1, v2, a, b, site, s1, ev1, ec1, s2, ev2, ec2, s3, ec3, ev4, ec4, ec5);
     }
 
     private int versionOf(int eventCrfId) throws Exception {
@@ -158,12 +176,12 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
             mvc().perform(post(w.url() + "/preview").session(s).contentType("application/json")
                             .content(w.body(null, null)))
                     .andExpect(status().isForbidden());
-            mvc().perform(post(w.url()).session(s).contentType("application/json").content(w.body(null, 2)))
+            mvc().perform(post(w.url()).session(s).contentType("application/json").content(w.body(null, 2, "x")))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.message").value(containsString("Data Manager or CRC")));
         }
         mvc().perform(post(w.url()).session(new MockHttpSession()).contentType("application/json")
-                        .content(w.body(null, 2)))
+                        .content(w.body(null, 2, "x")))
                 .andExpect(status().isUnauthorized());
         assertThat(versionOf(w.ec1())).isEqualTo(w.v1());
 
@@ -229,7 +247,8 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
     @Test
     void aRunMovesTheEventCrfsClearsSdvAndRemovesTheSignaturesOverThem() throws Exception {
         World w = world();
-        mvc().perform(post(w.url()).session(dm()).contentType("application/json").content(w.body(null, 2)))
+        mvc().perform(post(w.url()).session(dm()).contentType("application/json")
+                        .content(w.body(null, 2, digestOf(w, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.migratedEventCrfCount").value(2))
                 .andExpect(jsonPath("$.subjectCount").value(2))
@@ -267,7 +286,8 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
     @Test
     void aRunWhoseSelectionNoLongerMatchesItsPreviewChangesNothing() throws Exception {
         World w = world();
-        mvc().perform(post(w.url()).session(dm()).contentType("application/json").content(w.body(null, 3)))
+        String digest = digestOf(w, null);
+        mvc().perform(post(w.url()).session(dm()).contentType("application/json").content(w.body(null, 3, digest)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(containsString("changed since the preview")));
 
@@ -277,7 +297,31 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
 
         mvc().perform(post(w.url()).session(dm()).contentType("application/json").content(w.body(null, null)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0].field").value("expectedEventCrfCount"));
+                .andExpect(jsonPath("$.errors[0].field").value("expectedEventCrfCount"))
+                .andExpect(jsonPath("$.errors[1].field").value("expectedSelectionDigest"));
+    }
+
+    @Test
+    void aRunIsRefusedWhenAsManyEventCrfsLeftTheSelectionAsJoinedIt() throws Exception {
+        World w = world();
+        String digest = digestOf(w, null);    // ec1 and ec2
+        // Since the preview: ec1's subject was locked, ec3's unlocked. Still two.
+        fx.execute("UPDATE study_subject SET status_id = 6 WHERE study_subject_id = ?", w.s1());
+        fx.execute("UPDATE study_subject SET status_id = 1 WHERE study_subject_id = ?", w.s3());
+
+        mvc().perform(post(w.url()).session(dm()).contentType("application/json").content(w.body(null, 2, digest)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("not the same ones")));
+
+        assertThat(versionOf(w.ec2())).isEqualTo(w.v1());
+        assertThat(versionOf(w.ec3())).as("never previewed: not moved").isEqualTo(w.v1());
+        assertThat(fx.boolValue("SELECT sdv_status FROM event_crf WHERE event_crf_id = ?", w.ec2())).isTrue();
+        assertThat(fx.status("study_subject", w.s2())).isEqualTo(8);
+
+        mvc().perform(post(w.url()).session(dm()).contentType("application/json")
+                        .content(w.body(null, 2, digestOf(w, null))))
+                .andExpect(status().isOk());
+        assertThat(versionOf(w.ec3())).as("previewed again").isEqualTo(w.v2());
     }
 
     @Test
@@ -288,15 +332,17 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studySubjectLabel").value(w.t() + "-1"))
                 .andExpect(jsonPath("$.eventCrfCount").value(1));
+        String bySubject = "\"studySubjectLabel\":\"" + w.t() + "-1\"";
         mvc().perform(post(w.url()).session(dm()).contentType("application/json")
-                        .content(w.body("\"studySubjectLabel\":\"" + w.t() + "-1\"", 1)))
+                        .content(w.body(bySubject, 1, digestOf(w, bySubject))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.migratedEventCrfCount").value(1));
         assertThat(versionOf(w.ec1())).isEqualTo(w.v2());
         assertThat(versionOf(w.ec2())).isEqualTo(w.v1());
 
+        String byId = "\"eventCrfIds\":[" + w.ec2() + "]";
         mvc().perform(post(w.url()).session(dm()).contentType("application/json")
-                        .content(w.body("\"eventCrfIds\":[" + w.ec2() + "]", 1)))
+                        .content(w.body(byId, 1, digestOf(w, byId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.log[0].eventCrfId").value(w.ec2()));
         assertThat(versionOf(w.ec2())).isEqualTo(w.v2());
@@ -308,8 +354,9 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
         // ev1 was signed once and has since moved on; the trail says it was 3 before signing.
         fx.signedAudit("study_event", w.ev1(), "3");
 
+        String byId = "\"eventCrfIds\":[" + w.ec1() + "]";
         mvc().perform(post(w.url()).session(dm()).contentType("application/json")
-                        .content(w.body("\"eventCrfIds\":[" + w.ec1() + "]", 1)))
+                        .content(w.body(byId, 1, digestOf(w, byId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unsignedEventCount").value(0));
         assertThat(fx.intValue("SELECT subject_event_status_id FROM study_event WHERE study_event_id = ?", w.ev1()))
@@ -330,10 +377,12 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
         int started = fx.event(subj2, CrfLibraryFixtures.SED_ID, 8, 1);
         fx.eventCrf(started, subj2, v1, 8, false, false, true);
 
-        mvc().perform(post("/api/v1/crfs/F_" + t + "/event-crf-migration").session(dm())
-                        .contentType("application/json")
-                        .content("{\"studyOid\":\"" + CrfLibraryFixtures.STUDY_OID + "\",\"sourceVersionOid\":\"F_"
-                                + t + "_V1\",\"targetVersionOid\":\"F_" + t + "_V2\",\"expectedEventCrfCount\":2}"))
+        String url = "/api/v1/crfs/F_" + t + "/event-crf-migration";
+        String selection = "\"studyOid\":\"" + CrfLibraryFixtures.STUDY_OID + "\",\"sourceVersionOid\":\"F_"
+                + t + "_V1\",\"targetVersionOid\":\"F_" + t + "_V2\"";
+        mvc().perform(post(url).session(dm()).contentType("application/json")
+                        .content("{" + selection + ",\"expectedEventCrfCount\":2,\"expectedSelectionDigest\":\""
+                                + digestOf(url, "{" + selection + "}") + "\"}"))
                 .andExpect(status().isOk());
 
         assertThat(fx.status("study_subject", subj)).isEqualTo(1);

@@ -91,6 +91,7 @@ const PREVIEW: EventCrfMigrationPreview = {
   notOffered: [{ siteOid: 'S_SITE_A', siteName: 'Site A', eventDefinitionOid: 'SE_V1', eventName: 'V1 Inclusion', eventCrfCount: 4 }],
   hiddenValueCount: 5,
   hiddenItems: [{ name: 'AE_GRADE', oid: 'I_AE_GRADE', valueCount: 5 }],
+  selectionDigest: 'digest-of-1-2',
 }
 
 const RESULT: EventCrfMigrationResult = {
@@ -227,7 +228,12 @@ describe('CrfMigrationView', () => {
     await flushPromises()
 
     expect(apiPost).toHaveBeenLastCalledWith('/pages/api/v1/crfs/F_AE/event-crf-migration',
-      expect.objectContaining({ sourceVersionOid: 'F_AE_V1', targetVersionOid: 'F_AE_V2', expectedEventCrfCount: 2 }))
+      expect.objectContaining({
+        sourceVersionOid: 'F_AE_V1',
+        targetVersionOid: 'F_AE_V2',
+        expectedEventCrfCount: 2,
+        expectedSelectionDigest: 'digest-of-1-2',
+      }))
     const result = wrapper.find('[data-testid="mig-result"]').text()
     expect(result).toContain('Moved 2 event CRF(s) of 2 subject(s) from version "v1" to "v2"')
     expect(result).toContain('study audit log')

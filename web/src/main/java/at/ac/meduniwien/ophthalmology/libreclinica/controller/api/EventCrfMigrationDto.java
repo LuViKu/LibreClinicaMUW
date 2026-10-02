@@ -28,7 +28,8 @@ public final class EventCrfMigrationDto {
      * event definitions (legacy {@code BatchCRFMigrationController}
      * defaults). {@code studySubjectLabel} and {@code eventCrfIds} narrow the
      * selection down to one subject or to single event CRFs.
-     * {@code expectedEventCrfCount} is required by the run: the count the
+     * {@code expectedEventCrfCount} and {@code expectedSelectionDigest} are
+     * required by the run: the count and the {@code selectionDigest} the
      * preview showed, so a selection that changed in between is refused
      * instead of moved.
      */
@@ -41,7 +42,8 @@ public final class EventCrfMigrationDto {
             List<String> eventDefinitionOids,
             String studySubjectLabel,
             List<Integer> eventCrfIds,
-            Integer expectedEventCrfCount
+            Integer expectedEventCrfCount,
+            String expectedSelectionDigest
     ) {}
 
     @Schema(name = "EventCrfMigrationRef")
@@ -97,6 +99,11 @@ public final class EventCrfMigrationDto {
     @Schema(name = "EventCrfMigrationHiddenItem")
     public record HiddenItem(String name, String oid, int valueCount) {}
 
+    /**
+     * What a run with the same request would move and clear.
+     * {@code selectionDigest} names the event CRFs it counts; the run sends
+     * it back as {@code expectedSelectionDigest}.
+     */
     @Schema(name = "EventCrfMigrationPreview")
     public record Preview(
             String crfOid,
@@ -118,7 +125,8 @@ public final class EventCrfMigrationDto {
             List<Skipped> locked,
             List<NotOffered> notOffered,
             int hiddenValueCount,
-            List<HiddenItem> hiddenItems
+            List<HiddenItem> hiddenItems,
+            String selectionDigest
     ) {}
 
     @Schema(name = "EventCrfMigrationResult")
