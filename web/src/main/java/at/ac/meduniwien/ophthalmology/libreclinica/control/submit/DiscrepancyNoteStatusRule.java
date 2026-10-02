@@ -17,11 +17,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyN
 
 /**
  * The resolution statuses the legacy note page lets each role give a
- * discrepancy-note thread, so that {@link CreateOneDiscrepancyNoteServlet} can
- * refuse a request the page would not have produced. The page is
- * {@link ViewDiscrepancyNoteServlet}, which picks the status lists by role,
- * with {@code viewDiscrepancyNote.jsp} and {@code discrepancyNote.jsp}, which
- * show the boxes and the choices.
+ * discrepancy-note thread, so that {@link CreateOneDiscrepancyNoteServlet} and
+ * {@link CreateDiscrepancyNoteServlet} can refuse a request the page would not
+ * have produced. The page is {@link ViewDiscrepancyNoteServlet}, which picks
+ * the status lists by role, with {@code viewDiscrepancyNote.jsp} and
+ * {@code discrepancyNote.jsp}, which show the boxes and the choices. The
+ * single-note popup ({@code addDiscrepancyNote.jsp}) offers new threads the
+ * same choices and no reply box.
  *
  * <p>A reply sets its thread's status. Investigators and research assistants
  * may set "updated" or "resolution proposed", and cannot reply to a closed
@@ -44,6 +46,22 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyN
 final class DiscrepancyNoteStatusRule {
 
     private DiscrepancyNoteStatusRule() {
+    }
+
+    /**
+     * Whether a request names a status and type the page offers {@code role}:
+     * a reply when it names a thread, otherwise a new thread. A new thread
+     * without a type is left to the form's validation: a browser sends no type
+     * when the chosen one is disabled (an annotation in a frozen study).
+     *
+     * @param thread    the note named as the thread's parent, null for a new thread
+     * @param typeGiven whether the request carries a note type at all
+     */
+    static boolean offers(Role role, DiscrepancyNoteBean thread, boolean typeGiven, int typeId, int statusId) {
+        if (thread != null) {
+            return mayReply(role, thread, typeId, statusId);
+        }
+        return !typeGiven || mayStart(role, typeId, statusId);
     }
 
     /**

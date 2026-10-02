@@ -207,6 +207,59 @@ class DiscrepancyNoteStatusDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
+    void anAnnotationThatFailsValidationKeepsTheCrfVerified() throws Exception {
+        // The director may annotate; a blank description is the form's error,
+        // and nothing is saved, so nothing is reopened either.
+        update("UPDATE event_crf SET sdv_status = true, update_id = 1 WHERE event_crf_id = 1");
+        try {
+            start(user("manual_dm"), "", ANNOTATION, 0);
+
+            assertEquals(1, queryInt("SELECT CASE WHEN sdv_status THEN 1 ELSE 0 END FROM event_crf WHERE event_crf_id = 1"),
+                    "the CRF is still verified");
+        } finally {
+            update("UPDATE event_crf SET sdv_status = false, update_id = NULL WHERE event_crf_id = 1");
+        }
+    }
+
+    // ---- the study tree -----------------------------------------------------------------------
+
+    @Test
+    void aThreadOfAnotherStudyIsRefused() throws Exception {
+        // A query thread on a subject of study 102; the director's role is study 1's.
+        int thread = queryInt("INSERT INTO discrepancy_note (description, discrepancy_note_type_id, resolution_status_id,"
+                + " date_created, owner_id, entity_type, study_id) VALUES ('IT other study', " + QUERY + ", " + NEW
+                + ", now(), 1, 'studySub', 102) RETURNING discrepancy_note_id");
+        update("INSERT INTO dn_study_subject_map (study_subject_id, discrepancy_note_id, column_name) VALUES (102, "
+                + thread + ", 'enrollment_date')");
+        try {
+            MockHttpServletResponse resp = reply(user("manual_dm"), thread, QUERY, CLOSED);
+
+            assertEquals(NEW, status(thread), "the thread is as it was");
+            assertEquals(0, replies(thread), "no note was added");
+            assertEquals(REFUSAL, resp.getForwardedUrl());
+        } finally {
+            update("DELETE FROM dn_item_data_map WHERE discrepancy_note_id IN (SELECT discrepancy_note_id"
+                    + " FROM discrepancy_note WHERE parent_dn_id = " + thread + ")");
+            update("DELETE FROM dn_study_subject_map WHERE discrepancy_note_id = " + thread);
+            update("DELETE FROM discrepancy_note WHERE parent_dn_id = " + thread + " AND discrepancy_note_id <> " + thread);
+            update("DELETE FROM discrepancy_note WHERE discrepancy_note_id = " + thread);
+        }
+    }
+
+    @Test
+    void aNewThreadOnARecordOfAnotherStudyIsRefused() throws Exception {
+        String description = "IT query " + UUID.randomUUID();
+
+        MockHttpServletResponse resp = post(user("manual_dm"), "parentId", "0", "name", "studySub", "id", "102",
+                "field", "enrollmentDate", "column", "enrollment_date", "description0", description, "detailedDes0", "",
+                "typeId0", String.valueOf(QUERY), "resStatusId0", String.valueOf(NEW),
+                "viewDNLink0", "/ViewDiscrepancyNote?name=studySub&id=102");
+
+        assertEquals(0, notesDescribed(description), "no thread was started");
+        assertEquals(REFUSAL, resp.getForwardedUrl());
+    }
+
+    @Test
     void aNewThreadWithoutATypeGetsTheFormsErrorRatherThanARefusal() throws Exception {
         // A browser sends no type when the chosen one is disabled: an
         // annotation, the investigator's default, in a frozen study.

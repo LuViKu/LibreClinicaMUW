@@ -27,7 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 /**
  * The statuses the legacy note page offers each role, as
  * {@link DiscrepancyNoteStatusRule} states them for
- * {@code CreateOneDiscrepancyNoteServlet}. The lists are the page's:
+ * {@code CreateOneDiscrepancyNoteServlet} and {@code CreateDiscrepancyNoteServlet}. The lists are the page's:
  * {@code ViewDiscrepancyNoteServlet} (resolutionStatuses per role),
  * {@code viewDiscrepancyNote.jsp} (when a thread gets a reply box) and
  * {@code discrepancyNote.jsp} (the choices for a new thread).
@@ -202,5 +202,16 @@ class DiscrepancyNoteStatusRuleTest {
         assertFalse(DiscrepancyNoteStatusRule.mayStart(Role.STUDYDIRECTOR, QUERY, 0));
         assertFalse(DiscrepancyNoteStatusRule.mayStart(Role.INVESTIGATOR, FAILED_CHECK, 0));
         assertFalse(DiscrepancyNoteStatusRule.mayStart(Role.STUDYDIRECTOR, 0, NEW), "no type");
+    }
+
+    @Test
+    void aRequestIsJudgedAsAReplyWhenItNamesAThreadAndAsANewThreadOtherwise() {
+        DiscrepancyNoteBean closed = thread(QUERY, CLOSED);
+        assertFalse(DiscrepancyNoteStatusRule.offers(Role.INVESTIGATOR, closed, true, QUERY, UPDATED));
+        assertTrue(DiscrepancyNoteStatusRule.offers(Role.STUDYDIRECTOR, closed, true, QUERY, NEW));
+        assertFalse(DiscrepancyNoteStatusRule.offers(Role.MONITOR, null, true, ANNOTATION, 0));
+        assertTrue(DiscrepancyNoteStatusRule.offers(Role.MONITOR, null, true, QUERY, NEW));
+        assertTrue(DiscrepancyNoteStatusRule.offers(Role.MONITOR, null, false, 0, 0),
+                "a new thread without a type is the form's error");
     }
 }

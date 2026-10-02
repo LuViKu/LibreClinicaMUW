@@ -50,6 +50,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 /**
  * Create a discrepancy note
  *
@@ -107,23 +108,26 @@ public class CreateOneDiscrepancyNoteServlet extends SecureController {
     /**
      * The note page offers each role only some statuses for a thread, and no
      * reply at all to some threads ({@link DiscrepancyNoteStatusRule}). A request
-     * the page would not have produced is refused before anything is written.
+     * the page would not have produced is refused before anything is written,
+     * and so is a thread or a record outside the current study: the role the
+     * rule is given is the role held there.
      */
     private void mayGiveThreadStatus() throws InsufficientPermissionException {
         FormProcessor fp = new FormProcessor(request);
         int parentId = fp.getInt(PARENT_ID);
         int typeId = fp.getInt("typeId" + parentId);
         int statusId = fp.getInt(RES_STATUS_ID + parentId);
+        int entityId = fp.getInt(ENTITY_ID, true);
+        StudyTreeScope scope = new StudyTreeScope(sm.getDataSource());
         boolean offered;
-        if (parentId > 0) {
-            DiscrepancyNoteBean thread = (DiscrepancyNoteBean) new DiscrepancyNoteDAO(sm.getDataSource()).findByPK(parentId);
-            offered = DiscrepancyNoteStatusRule.mayReply(currentRole.getRole(), thread, typeId, statusId);
-        } else if (fp.getString("typeId" + parentId).isBlank()) {
-            // A browser sends no type when the chosen one is disabled (an
-            // annotation in a frozen study); the form's validation answers that.
-            offered = true;
+        if ((parentId > 0 && !scope.containsDiscrepancyNote(currentStudy, parentId))
+                || (entityId > 0 && !scope.containsNoteEntity(currentStudy, fp.getString(ENTITY_TYPE, true), entityId))) {
+            offered = false;
         } else {
-            offered = DiscrepancyNoteStatusRule.mayStart(currentRole.getRole(), typeId, statusId);
+            DiscrepancyNoteBean thread = parentId > 0
+                    ? (DiscrepancyNoteBean) new DiscrepancyNoteDAO(sm.getDataSource()).findByPK(parentId) : null;
+            offered = DiscrepancyNoteStatusRule.offers(currentRole.getRole(), thread,
+                    !fp.getString("typeId" + parentId).isBlank(), typeId, statusId);
         }
         if (!offered) {
             addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
@@ -190,10 +194,6 @@ public class CreateOneDiscrepancyNoteServlet extends SecureController {
         if (typeId != DiscrepancyNoteType.ANNOTATION.getId() && typeId != DiscrepancyNoteType.REASON_FOR_CHANGE.getId()) {
             dn.setAssignedUserId(assignedUserAccountId);
         }
-        if (DiscrepancyNoteType.ANNOTATION.getId() == dn.getDiscrepancyNoteTypeId()) {
-            updateStudyEvent(entityType, entityId);
-            updateStudySubjectStatus(entityType, entityId);
-        }
         if (DiscrepancyNoteType.ANNOTATION.getId() == dn.getDiscrepancyNoteTypeId()
             || DiscrepancyNoteType.REASON_FOR_CHANGE.getId() == dn.getDiscrepancyNoteTypeId()) {
             dn.setResStatus(ResolutionStatus.NOT_APPLICABLE);
@@ -209,6 +209,12 @@ public class CreateOneDiscrepancyNoteServlet extends SecureController {
 
 
         if (errors.isEmpty()) {
+            // An annotation reopens a signed event and subject, and clears the
+            // CRF's source data verification: only for a note that is saved.
+            if (DiscrepancyNoteType.ANNOTATION.getId() == dn.getDiscrepancyNoteTypeId()) {
+                updateStudyEvent(entityType, entityId);
+                updateStudySubjectStatus(entityType, entityId);
+            }
             HashMap<String, ArrayList<String>> results = new HashMap<String, ArrayList<String>>();
             ArrayList<String> mess = new ArrayList<String>();
 

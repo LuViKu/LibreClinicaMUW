@@ -160,6 +160,54 @@ class StudyTreeScopeDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
+    void noteRecordsBelongToTheStudyOfTheirSubject() throws Exception {
+        int[] ec = anyEventCrf();
+        int other = unrelatedTopLevelStudy(ec[2], ec[3]);
+        StudyBean owner = study(ec[2], ec[3]);
+        StudyBean foreign = other > 0 ? study(other, 0) : study(Integer.MAX_VALUE, 0);
+        StudyTreeScope scope = new StudyTreeScope(DATA_SOURCE);
+        int itemData = intOf("SELECT MIN(item_data_id) FROM item_data WHERE event_crf_id = " + ec[0]);
+        int event = intOf("SELECT study_event_id FROM event_crf WHERE event_crf_id = " + ec[0]);
+        int subject = intOf("SELECT subject_id FROM study_subject WHERE study_subject_id = " + ec[1]);
+
+        for (String[] record : new String[][] { {"itemData", "" + itemData}, {"eventCrf", "" + ec[0]},
+                {"studyEvent", "" + event}, {"studySub", "" + ec[1]}, {"subject", "" + subject} }) {
+            int id = Integer.parseInt(record[1]);
+            assertTrue(scope.containsNoteEntity(owner, record[0], id), record[0]);
+            assertFalse(scope.containsNoteEntity(foreign, record[0], id), record[0]);
+        }
+        assertFalse(scope.containsNoteEntity(owner, "somethingElse", ec[0]), "an unknown record type");
+        assertFalse(scope.containsNoteEntity(owner, "itemData", Integer.MAX_VALUE));
+    }
+
+    @Test
+    void aNoteBelongsToTheStudyOfTheRecordItIsOn() throws Exception {
+        // A seeded note on item data, read through its map table.
+        int note = intOf("SELECT MIN(discrepancy_note_id) FROM dn_item_data_map");
+        int studyId = intOf("SELECT ss.study_id FROM dn_item_data_map m"
+                + " JOIN item_data i ON i.item_data_id = m.item_data_id"
+                + " JOIN event_crf ec ON ec.event_crf_id = i.event_crf_id"
+                + " JOIN study_subject ss ON ss.study_subject_id = ec.study_subject_id"
+                + " WHERE m.discrepancy_note_id = " + note);
+        int parentId = intOf("SELECT COALESCE(parent_study_id, 0) FROM study WHERE study_id = " + studyId);
+        int other = unrelatedTopLevelStudy(studyId, parentId);
+        StudyTreeScope scope = new StudyTreeScope(DATA_SOURCE);
+
+        assertTrue(scope.containsDiscrepancyNote(study(studyId, parentId), note));
+        assertFalse(scope.containsDiscrepancyNote(other > 0 ? study(other, 0) : study(Integer.MAX_VALUE, 0), note));
+        assertFalse(scope.containsDiscrepancyNote(study(studyId, parentId), Integer.MAX_VALUE));
+    }
+
+    private static int intOf(String sql) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next(), "no row for " + sql);
+            return rs.getInt(1);
+        }
+    }
+
+    @Test
     void crfLookupsAgree() throws Exception {
         int[] ec = anyEventCrf();
         StudyTreeScope scope = new StudyTreeScope(DATA_SOURCE);

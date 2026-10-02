@@ -63,6 +63,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import org.apache.commons.lang.StringUtils;
 
 /**
@@ -125,12 +126,45 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
         checkStudyLocked(Page.MENU_SERVLET, respage.getString("current_study_locked"));
         locale = LocaleResolver.getLocale(request);
        
-        if (SubmitDataServlet.mayViewData(ub, currentRole)) {
+        if (SubmitDataServlet.mayViewData(ub, currentRole) && mayUseNoteRecords() && mayGiveThreadStatus()) {
             return;
         }
 
         addPageMessage(noAccessMessage);
         throw new InsufficientPermissionException(Page.MENU, exceptionName, "1");
+    }
+
+    /**
+     * The thread, the record and the event CRF the request names must be the
+     * current study's (or its sites'): the role checked is the role held there.
+     */
+    private boolean mayUseNoteRecords() {
+        FormProcessor fp = new FormProcessor(request);
+        int parentId = fp.getInt(PARENT_ID);
+        int entityId = fp.getInt(ENTITY_ID);
+        int eventCRFId = fp.getInt(EVENT_CRF_ID);
+        StudyTreeScope scope = new StudyTreeScope(sm.getDataSource());
+        return (parentId <= 0 || scope.containsDiscrepancyNote(currentStudy, parentId))
+                && (entityId <= 0 || scope.containsNoteEntity(currentStudy, fp.getString(ENTITY_TYPE), entityId))
+                && (eventCRFId <= 0 || scope.containsEventCrf(currentStudy, eventCRFId));
+    }
+
+    /**
+     * Saving a note takes a type and status the note page offers the role
+     * ({@link DiscrepancyNoteStatusRule}), as on {@link CreateOneDiscrepancyNoteServlet}.
+     * This page starts threads only; it shows no reply box, so a reply is
+     * judged by the reply rule.
+     */
+    private boolean mayGiveThreadStatus() {
+        FormProcessor fp = new FormProcessor(request);
+        if (!fp.isSubmitted()) {
+            return true;
+        }
+        int parentId = fp.getInt(PARENT_ID);
+        DiscrepancyNoteBean thread = parentId > 0
+                ? (DiscrepancyNoteBean) new DiscrepancyNoteDAO(sm.getDataSource()).findByPK(parentId) : null;
+        return DiscrepancyNoteStatusRule.offers(currentRole.getRole(), thread, !fp.getString("typeId").isBlank(),
+                fp.getInt("typeId"), fp.getInt(RES_STATUS_ID));
     }
 
     /** GET opens the note form; saving the note (submitted) takes a POST. */
@@ -618,10 +652,6 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
             }
 
             note.setField(field);
-            if (DiscrepancyNoteType.ANNOTATION.getId() == note.getDiscrepancyNoteTypeId()) {
-                updateStudyEvent(entityType, entityId);
-                updateStudySubjectStatus(entityType, entityId);
-            }
             if (DiscrepancyNoteType.ANNOTATION.getId() == note.getDiscrepancyNoteTypeId() ||
                 DiscrepancyNoteType.REASON_FOR_CHANGE.getId() == note.getDiscrepancyNoteTypeId()) {
                 note.setResStatus(ResolutionStatus.NOT_APPLICABLE);
@@ -676,6 +706,13 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
             request.setAttribute(USER_ACCOUNTS, userAccounts);
 
             if (errors.isEmpty()) {
+
+                // An annotation reopens a signed event and subject, and clears
+                // the CRF's source data verification: only for a valid note.
+                if (DiscrepancyNoteType.ANNOTATION.getId() == note.getDiscrepancyNoteTypeId()) {
+                    updateStudyEvent(entityType, entityId);
+                    updateStudySubjectStatus(entityType, entityId);
+                }
 
                 if (!writeToDB) {
                     noteTree.addNote(field, note);
