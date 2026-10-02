@@ -42,6 +42,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.LegacyServletHa
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveEventCRFServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveEventDefinitionServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveStudyEventServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveStudyServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreStudyServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveSiteServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RestoreSiteServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveStudySubjectServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RestoreEventCRFServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RestoreEventDefinitionServlet;
@@ -88,6 +92,7 @@ class LegacyStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatab
 
     @BeforeEach
     void setUp() throws Exception {
+        resetFixture();
         update("UPDATE study_event SET date_start = date_created WHERE date_start IS NULL");
         GenericApplicationContext rules = new GenericApplicationContext();
         rules.registerBean("ruleSetDao", RuleSetDao.class, () -> mock(RuleSetDao.class));
@@ -185,6 +190,65 @@ class LegacyStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatab
     }
 
     /**
+     * A site removed and restored through its servlets: each value returns to
+     * the status it had before (the removal records it in old_status_id) and
+     * keeps its provenance.
+     */
+    @Test
+    void removingAndRestoringASiteKeepsItsValuesProvenanceAndStatus() throws Exception {
+        int site = insertStudy(STUDY, "legacy-prov-site");
+        update("UPDATE study_subject SET study_id = " + site + " WHERE study_subject_id = " + SUBJECT);
+        String where = "event_crf_id IN (SELECT event_crf_id FROM event_crf WHERE study_subject_id = " + SUBJECT + ")";
+        int values = markProvenance(where);
+        update("UPDATE item_data SET status_id = 2 WHERE item_data_id = (SELECT MIN(item_data_id) FROM item_data WHERE " + where + ")");
+        String statusesBefore = statusesOf(where);
+        String valuesBefore = valuesOf(where);
+
+        run(new RemoveSiteServlet(), "/RemoveSite", "id", String.valueOf(site), "action", "submit");
+        assertEquals(REMOVED, queryInt("SELECT status_id FROM study WHERE study_id = " + site));
+        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND status_id = " + AUTO_REMOVED),
+                "values after the removal: " + rowsOf(where));
+        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
+                "the removal cleared the values' provenance");
+
+        run(new RestoreSiteServlet(), "/RestoreSite", "id", String.valueOf(site), "action", "submit");
+        assertEquals(AVAILABLE, queryInt("SELECT status_id FROM study WHERE study_id = " + site));
+        assertEquals(statusesBefore, statusesOf(where), "statuses after the restore: " + rowsOf(where));
+        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
+                "the restore cleared the values' provenance");
+        assertEquals(valuesBefore, valuesOf(where));
+    }
+
+    /** As the site, for a whole study removed and restored by a system administrator. */
+    @Test
+    void removingAndRestoringAStudyKeepsItsValuesProvenanceAndStatus() throws Exception {
+        int study = insertStudy(null, "legacy-prov-study");
+        update("UPDATE study_subject SET study_id = " + study + " WHERE study_subject_id = " + SUBJECT);
+        update("UPDATE study_event_definition SET study_id = " + study + " WHERE study_event_definition_id IN"
+                + " (SELECT study_event_definition_id FROM study_event WHERE study_subject_id = " + SUBJECT + ")");
+        String where = "event_crf_id IN (SELECT event_crf_id FROM event_crf WHERE study_subject_id = " + SUBJECT + ")";
+        int values = markProvenance(where);
+        update("UPDATE item_data SET status_id = 2 WHERE item_data_id = (SELECT MIN(item_data_id) FROM item_data WHERE " + where + ")");
+        String statusesBefore = statusesOf(where);
+        String valuesBefore = valuesOf(where);
+        UserAccountBean root = LegacyServletHarness.sysAdmin(1, "root");
+
+        run(new RemoveStudyServlet(), "/RemoveStudy", root, "id", String.valueOf(study), "action", "submit");
+        assertEquals(REMOVED, queryInt("SELECT status_id FROM study WHERE study_id = " + study));
+        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND status_id = " + AUTO_REMOVED),
+                "values after the removal: " + rowsOf(where));
+        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
+                "the removal cleared the values' provenance");
+
+        run(new RestoreStudyServlet(), "/RestoreStudy", root, "id", String.valueOf(study), "action", "submit");
+        assertEquals(AVAILABLE, queryInt("SELECT status_id FROM study WHERE study_id = " + study));
+        assertEquals(statusesBefore, statusesOf(where), "statuses after the restore: " + rowsOf(where));
+        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
+                "the restore cleared the values' provenance");
+        assertEquals(valuesBefore, valuesOf(where));
+    }
+
+    /**
      * The variant the removals of a study or a site use, whose restore reads
      * {@code old_status_id} back: it records that and leaves the provenance.
      */
@@ -208,13 +272,69 @@ class LegacyStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatab
 
     // ---- helpers ------------------------------------------------------------------------
 
+    /** Puts the subject, its visits, CRFs and definitions back as the seed has them, whatever an earlier test left. */
+    private static void resetFixture() throws SQLException {
+        update("UPDATE study_subject SET study_id = " + STUDY + ", status_id = " + AVAILABLE + " WHERE study_subject_id = " + SUBJECT);
+        update("UPDATE study_event SET status_id = " + AVAILABLE + " WHERE study_subject_id = " + SUBJECT);
+        update("UPDATE event_crf SET status_id = " + AVAILABLE + " WHERE study_subject_id = " + SUBJECT);
+        update("UPDATE study_event_definition SET study_id = " + STUDY + ", status_id = " + AVAILABLE
+                + " WHERE study_event_definition_id IN (SELECT study_event_definition_id FROM study_event"
+                + " WHERE study_subject_id = " + SUBJECT + ") OR study_event_definition_id = " + DEFINITION);
+    }
+
+    /** A study (a site when a parent is given) with the columns the schema requires. */
+    private static int insertStudy(Integer parent, String name) throws SQLException {
+        return queryInt("INSERT INTO study (parent_study_id, unique_identifier, secondary_identifier, "
+                + "name, summary, date_planned_start, date_planned_end, date_created, "
+                + "owner_id, type_id, status_id, principal_investigator, facility_name, "
+                + "facility_city, facility_state, facility_zip, facility_country, "
+                + "facility_recruitment_status, facility_contact_name, facility_contact_degree, "
+                + "facility_contact_phone, facility_contact_email, protocol_type, "
+                + "protocol_description, protocol_date_verification, phase, "
+                + "expected_total_enrollment, sponsor, collaborators, medline_identifier, "
+                + "url, url_description, conditions, keywords, eligibility, gender, "
+                + "age_max, age_min, healthy_volunteer_accepted, purpose, allocation, "
+                + "masking, control, assignment, endpoint, interventions, duration, "
+                + "selection, timing, official_title, results_reference, oc_oid) "
+                + "VALUES (" + (parent == null ? "NULL" : parent.toString()) + ", '" + name + "', '" + name + "', '" + name
+                + "', '', NOW(), NOW(), NOW(), 1, 1, 1, 'default', '', '', '', '', '', '', '', '', '', '', "
+                + "'observational', '', NOW(), 'default', 0, 'default', '', '', '', '', '', '', "
+                + "'', 'both', '', '', false, 'Natural History', '', '', '', '', '', '', "
+                + "'longitudinal', 'Convenience Sample', 'Retrospective', '', false, "
+                + "'S_" + name.replace("-", "").toUpperCase() + "') RETURNING study_id");
+    }
+
+    private static String statusesOf(String where) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT string_agg(item_data_id || ':' || status_id, ',' ORDER BY item_data_id)"
+                             + " FROM item_data WHERE " + where);
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next());
+            return rs.getString(1);
+        }
+    }
+
     /** Marks the values the condition selects as written by the platform; returns how many. */
     private static int markProvenance(String where) throws SQLException {
         update("UPDATE item_data SET source_kind = '" + KIND + "', status_id = " + AVAILABLE
-                + ", update_id = NULL, date_updated = " + LONG_AGO + " WHERE " + where);
+                + ", old_status_id = 0, update_id = NULL, date_updated = " + LONG_AGO + " WHERE " + where);
         int values = queryInt("SELECT COUNT(*) FROM item_data WHERE " + where);
         assertTrue(values > 0, "the fixture has values to mark");
         return values;
+    }
+
+    /** The rows the condition selects, for a failure message. */
+    private static String rowsOf(String where) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT string_agg(item_data_id || ':status=' || status_id || ',old=' || coalesce(old_status_id::text, '-')"
+                             + " || ',deleted=' || coalesce(deleted::text, '-') || ',value=' || coalesce(value, '<null>'), ' | ' ORDER BY item_data_id)"
+                             + " FROM item_data WHERE " + where);
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next());
+            return rs.getString(1);
+        }
     }
 
     private static String valuesOf(String where) throws SQLException {
@@ -232,7 +352,7 @@ class LegacyStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatab
     private static void assertCascade(String where, int values, int status, String valuesBefore) throws SQLException {
         int updater = user().getId();
         assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND status_id = " + status),
-                "status after the cascade");
+                "status after the cascade: " + rowsOf(where));
         assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
                 "the cascade cleared the values' provenance");
         assertEquals(valuesBefore, valuesOf(where), "the cascade changed a value");
@@ -251,7 +371,11 @@ class LegacyStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatab
     }
 
     private void run(HttpServlet servlet, String path, String... params) throws Exception {
-        MockHttpServletRequest req = harness.request("POST", path, user());
+        run(servlet, path, user(), params);
+    }
+
+    private void run(HttpServlet servlet, String path, UserAccountBean who, String... params) throws Exception {
+        MockHttpServletRequest req = harness.request("POST", path, who);
         for (int i = 0; i < params.length; i += 2) {
             req.addParameter(params[i], params[i + 1]);
         }

@@ -490,7 +490,8 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
         repeatingGroupOnVersion1();
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "INSERT INTO item_data (item_id, event_crf_id, status_id, value, date_created, "
-                        + "owner_id, ordinal, deleted) VALUES (5, 15, 1, '130', now(), 1, 2, false)");
+                        + "owner_id, ordinal, deleted, source_kind) VALUES (5, 15, 1, '130', now(), 1, 2, false, "
+                        + "'modality_baseline')");
         setSdvStatus(15, true);
         try {
             mvc().perform(delete("/api/v1/eventCrfs/15/groups/IG_SDV_ROWS/rows/2")
@@ -499,6 +500,12 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
                     .andExpect(jsonPath("$.itemDataRowsDeleted").value(1));
 
             assertFalse(sdvStatus(15));
+            // Removing a row hides a value, it does not author one: the value and what
+            // produced it stay (ItemDataDAO.updateStatusOnly, not update).
+            assertEquals(1, ClinicalWriteFixtures.insert(DATA_SOURCE, "SELECT COUNT(*) FROM item_data "
+                    + "WHERE event_crf_id = 15 AND item_id = 5 AND ordinal = 2 AND status_id = 5 AND value = '130' "
+                    + "AND source_kind = 'modality_baseline' AND update_id = " + userId("manual_investigator")),
+                    "the row deletion changed more than the status");
         } finally {
             setSdvStatus(15, false);
         }
