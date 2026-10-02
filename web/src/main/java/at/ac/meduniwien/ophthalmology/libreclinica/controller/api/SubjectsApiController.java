@@ -2566,6 +2566,8 @@ public class SubjectsApiController {
 
                 // ---- (2) event_crf — flip every CRF row for the subject ----
                 // Path: study_event.study_subject_id → event_crf.study_event_id.
+                // Removed and locked CRFs keep their status, as when a visit
+                // is signed: a removed CRF signed here was no longer removed.
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE event_crf "
                                 + "   SET status_id = ?, "
@@ -2576,7 +2578,8 @@ public class SubjectsApiController {
                                 + "       update_id = ? "
                                 + " WHERE study_event_id IN ("
                                 + "         SELECT study_event_id FROM study_event WHERE study_subject_id = ?"
-                                + "       )")) {
+                                + "       )"
+                                + "   AND status_id NOT IN (5, 6, 7)")) { // skip deleted / locked / auto-deleted
                     ps.setInt(1, Status.SIGNED.getId());
                     ps.setInt(2, userId);
                     ps.setInt(3, userId);

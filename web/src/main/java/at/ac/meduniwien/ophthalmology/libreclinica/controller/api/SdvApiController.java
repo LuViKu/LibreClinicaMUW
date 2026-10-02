@@ -91,7 +91,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p><strong>Completion:</strong> only a complete event CRF can be
  * verified ({@link #completeForVerification}). The list leaves the
- * others out and verify rejects them, as the legacy SDV table does.
+ * others out and verify rejects them, as the legacy SDV table does,
+ * with one exception: a verified CRF stays listed, as verified, until
+ * the verification is withdrawn ({@link #listed}).
  *
  * <p>Status mapping for the read endpoint:
  * <ul>
@@ -154,7 +156,8 @@ public class SdvApiController {
         // Its status test misses a CRF completed in the SPA, which keeps
         // status 1 and carries a completion date instead, so iterate by
         // study-subject and apply completeForVerification per row. Rows
-        // still in data entry are left out: nothing may verify them.
+        // still in data entry are left out: nothing may verify them. A
+        // verified row stays (listed).
         //
         // A4 — per-site visibility. Walk the visible study set
         // rather than the bare currentStudy.id so a Monitor with a
@@ -216,7 +219,7 @@ public class SdvApiController {
             EventDefinitionCRFBean edc = edcDao
                     .findByStudyEventIdAndCRFVersionId(ownerStudy != null ? ownerStudy : currentStudy,
                             evt.getId(), ec.getCRFVersionId());
-            if (!completeForVerification(ec, edc)) {
+            if (!listed(ec, evt, ss, edc)) {
                 continue;
             }
 
@@ -278,6 +281,7 @@ public class SdvApiController {
 
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
+        StudyEventDAO studyEventDao = new StudyEventDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
         EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
 
@@ -319,12 +323,14 @@ public class SdvApiController {
             }
 
             // Only a complete CRF can be verified; one still in data
-            // entry has nothing settled to check against the source.
+            // entry has nothing settled to check against the source. A
+            // removed one is not part of the casebook.
             StudyBean ownerStudy = (StudyBean) studyDao.findByPK(ss.getStudyId());
             EventDefinitionCRFBean edc = edcDao.findByStudyEventIdAndCRFVersionId(
                     ownerStudy != null && ownerStudy.getId() > 0 ? ownerStudy : currentStudy,
                     ec.getStudyEventId(), ec.getCRFVersionId());
-            if (!completeForVerification(ec, edc)) {
+            StudyEventBean evt = (StudyEventBean) studyEventDao.findByPK(ec.getStudyEventId());
+            if (removed(ec, evt, ss) || !completeForVerification(ec, edc)) {
                 rejected.add(oid);
                 continue;
             }
@@ -483,33 +489,69 @@ public class SdvApiController {
     /* ----------------------------------------------------------------- */
 
     /**
-     * Whether an event CRF is complete, and so may be source-data verified.
+     * Whether an event CRF that is not removed ({@link #removed}) is
+     * complete, and so may be source-data verified.
      *
      * <p>Legacy SDV lists and verifies only event CRFs whose status is
      * completed ({@link Status#UNAVAILABLE}, id 2) or locked (6): the
      * {@code /viewAllSubjectSdvData} filter and
      * {@code SDVUtil.setSDVStatusForStudySubjects}. The SPA completes a CRF
      * by date and leaves its status available: {@code date_completed} once
-     * initial data entry is complete, {@code date_validate_completed} once
-     * the second pass of double data entry is. Either marker counts, and
-     * double data entry needs its second pass. A removed CRF is never
-     * complete.
+     * initial data entry is complete and, where double data entry applies,
+     * {@code date_validate_completed} once the second pass is. Every other
+     * status, signed included, goes by those dates, and double data entry
+     * needs both: signing stamps {@code date_validate_completed} on each CRF
+     * of the visit or subject, whether or not its first pass is done.
+     * Reopening a CRF clears all of these markers
+     * ({@code EventCRFDAO.markIncomplete}).
      *
-     * @param edc the CRF's event definition CRF; {@code null} reads as
-     *            single data entry
+     * @param edc the CRF's event definition CRF, the site's own where the
+     *            subject's site has one, as double data entry reads it;
+     *            {@code null} reads as single data entry
      */
     static boolean completeForVerification(EventCRFBean ec, EventDefinitionCRFBean edc) {
         Status status = ec.getStatus();
-        if (Status.DELETED.equals(status) || Status.AUTO_DELETED.equals(status)) {
-            return false;
-        }
         if (Status.UNAVAILABLE.equals(status) || Status.LOCKED.equals(status)) {
             return true;
         }
+        if (ec.getDateCompleted() == null) {
+            return false;
+        }
         boolean doubleEntry = edc != null && edc.isDoubleEntry();
-        return doubleEntry
-                ? ec.getDateValidateCompleted() != null
-                : ec.getDateCompleted() != null;
+        return !doubleEntry || ec.getDateValidateCompleted() != null;
+    }
+
+    /**
+     * Whether the SDV list shows an event CRF: when it is complete for
+     * verification, and when it is verified although it is not, or no
+     * longer, complete. Such a verification was made before only complete
+     * CRFs could be verified, or the CRF was reopened after it; the list
+     * shows it so that it can be withdrawn, which the SDV page offers only
+     * for listed rows. A removed CRF is not listed at all ({@link #removed}).
+     */
+    static boolean listed(EventCRFBean ec, StudyEventBean evt, StudySubjectBean ss,
+                          EventDefinitionCRFBean edc) {
+        if (removed(ec, evt, ss)) {
+            return false;
+        }
+        return ec.isSdvStatus() || completeForVerification(ec, edc);
+    }
+
+    /**
+     * Whether an event CRF is removed: its own status says so, or that of
+     * its visit or subject. Removing a visit or a subject removes its CRFs
+     * too, but signing a subject used to set every CRF of the subject to
+     * signed, removed ones included; such a CRF is still known as removed
+     * by its visit. A removed CRF is neither listed nor verified.
+     */
+    static boolean removed(EventCRFBean ec, StudyEventBean evt, StudySubjectBean ss) {
+        return isRemoved(ec.getStatus())
+                || (evt != null && isRemoved(evt.getStatus()))
+                || (ss != null && isRemoved(ss.getStatus()));
+    }
+
+    private static boolean isRemoved(Status status) {
+        return Status.DELETED.equals(status) || Status.AUTO_DELETED.equals(status);
     }
 
     private static String statusForRow(EventCRFBean ec, int openQueries) {

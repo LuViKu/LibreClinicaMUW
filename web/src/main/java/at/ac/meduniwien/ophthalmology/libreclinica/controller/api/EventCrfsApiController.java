@@ -778,17 +778,16 @@ public class EventCrfsApiController {
                     "F_NAMD_VISIT", "", newVal.toString());
         }
 
-        // A verified CRF whose data changed is no longer verified. Done
-        // before the update below, which writes the bean's SDV fields.
+        // A verified CRF whose data changed is no longer verified.
         if (dataChanged) {
             SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
         }
 
         // Touch the EventCRF so {date_updated} reflects the save —
-        // drives the SPA's lastSavedAt header.
-        ecb.setUpdater(currentUser);
-        ecb.setUpdatedDate(new Date());
-        eventCrfDAO.update(ecb);
+        // drives the SPA's lastSavedAt header. Only that: the bean dates
+        // from the start of the request, and writing it back would undo
+        // an SDV change or a completion made meanwhile (EventCRFDAO.touch).
+        eventCrfDAO.touch(ecb.getId(), currentUser.getId());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("eventCrfOid", String.valueOf(ecb.getId()));
@@ -919,11 +918,12 @@ public class EventCrfsApiController {
 
     /**
      * Phase E A5 — reopen a completed CRF for editing. Inverse of
-     * {@link #markComplete} — clears {@code date_completed} so the
-     * legacy {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage}
-     * transitions from {@code INITIAL_DATA_ENTRY_COMPLETE} (3) back
-     * to {@code INITIAL_DATA_ENTRY} (2), re-enabling the SPA's CRF
-     * entry form.
+     * {@link #markComplete} — clears every completion marker the CRF
+     * carries ({@link EventCRFDAO#markIncomplete}): {@code date_completed},
+     * the second pass's {@code date_validate_completed}, and a legacy
+     * completed status. The SPA's CRF entry form, legacy screens and SDV
+     * then all read the CRF as in data entry: it is no longer offered for
+     * verification, and double data entry needs its second pass again.
      *
      * <p>Guards (order matters — failing earlier guards return earlier
      * status codes):
@@ -950,7 +950,8 @@ public class EventCrfsApiController {
      * endpoint trusts the click.
      *
      * <p>Writes one audit_event row with action_message
-     * {@code event_crf_reopen} so the M10 Audit Log view surfaces it.
+     * {@code event_crf_reopen} for each marker it clears, so the M10
+     * Audit Log view surfaces it.
      */
     @PostMapping("/{id:[0-9]+}/markIncomplete")
     public ResponseEntity<?> markIncomplete(@PathVariable("id") int eventCrfId,
@@ -1009,6 +1010,20 @@ public class EventCrfsApiController {
                 /* columnName */ "date_completed",
                 /* old */ previousCompletedAt,
                 /* new */ "");
+        // The bean still holds the markers markIncomplete cleared.
+        if (ecb.getDateValidateCompleted() != null) {
+            writeAuditEvent(auditDAO, AuditTypeIds.EVENT_CRF_REOPENED,
+                    currentUser, currentStudy, ss,
+                    "event_crf_reopen", "event_crf", ecb.getId(),
+                    "date_validate_completed", formatIsoInstant(ecb.getDateValidateCompleted()), "");
+        }
+        if (Status.UNAVAILABLE.equals(ecb.getStatus()) || Status.PENDING.equals(ecb.getStatus())) {
+            writeAuditEvent(auditDAO, AuditTypeIds.EVENT_CRF_REOPENED,
+                    currentUser, currentStudy, ss,
+                    "event_crf_reopen", "event_crf", ecb.getId(),
+                    "status_id", Status.UNAVAILABLE.equals(ecb.getStatus()) ? "UNAVAILABLE" : "PENDING",
+                    "AVAILABLE");
+        }
 
         // Inverse of the markComplete cascade: if the parent
         // study_event was COMPLETED because this was the last
@@ -2368,7 +2383,9 @@ public class EventCrfsApiController {
 
     /**
      * Delete every item_data row tied to (event_crf, item_group, ordinal).
-     * The SPA calls this when the user clicks the row's trash icon.
+     * The SPA calls this when the user clicks the row's trash icon. A row
+     * that is already deleted is left as it is: deleting it again changes
+     * no data, so it writes no audit row and keeps an SDV verification.
      */
     @org.springframework.web.bind.annotation.DeleteMapping("/{id:[0-9]+}/groups/{groupOid}/rows/{ordinal:[0-9]+}")
     public ResponseEntity<?> deleteGroupRow(@PathVariable("id") int eventCrfId,
@@ -2439,6 +2456,9 @@ public class EventCrfsApiController {
             ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
                     ifm.getItemId(), ecb.getId(), ordinal);
             if (idb == null || idb.getId() == 0) continue;
+            if (Status.DELETED.equals(idb.getStatus()) || Status.AUTO_DELETED.equals(idb.getStatus())) {
+                continue;
+            }
             String oldValue = idb.getValue() == null ? "" : idb.getValue();
             idb.setStatus(Status.DELETED);
             idb.setUpdater(currentUser);
@@ -2668,11 +2688,8 @@ public class EventCrfsApiController {
                 "item_data", existing.getId(),
                 itemOid + "[" + ordinal + "]", oldValue, absolutePath);
 
-        // Before the update below, which writes the bean's SDV fields.
         SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
-        ecb.setUpdater(currentUser);
-        ecb.setUpdatedDate(new Date());
-        eventCrfDAO.update(ecb);
+        eventCrfDAO.touch(ecb.getId(), currentUser.getId());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("itemOid", itemOid);
@@ -2817,13 +2834,10 @@ public class EventCrfsApiController {
                 "item_data_file_delete", "item_data", idb.getId(),
                 itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
 
-        // Before the update below, which writes the bean's SDV fields.
         if (!oldValue.isEmpty()) {
             SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
         }
-        ecb.setUpdater(currentUser);
-        ecb.setUpdatedDate(new Date());
-        eventCrfDAO.update(ecb);
+        eventCrfDAO.touch(ecb.getId(), currentUser.getId());
 
         return ResponseEntity.noContent().build();
     }

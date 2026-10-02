@@ -15,9 +15,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * <p>Mirrors the Vue SPA's {@code SdvRow} TS interface in
  * {@code web/src/spa/src/types/sdv.ts} byte-for-byte. One row per
- * event-CRF in the session-bound active study, regardless of
- * verification state — the SPA's status filter narrows
- * client-side.
+ * event-CRF in the session-bound active study that is complete for
+ * verification or verified ({@code SdvApiController.listed}) — the
+ * SPA's status filter narrows client-side.
  *
  * @param eventCrfOid    stringified event_crf_id — opaque to the SPA
  * @param subjectId      StudySubject.label, e.g. "M-001"
