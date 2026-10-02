@@ -9,13 +9,20 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.util.Map;
+import java.util.function.IntPredicate;
+
+import javax.sql.DataSource;
 
 import jakarta.servlet.http.HttpSession;
 
 import org.springframework.http.ResponseEntity;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 
 /**
  * The role matrix for the SPA's clinical-data write APIs, in one place.
@@ -25,7 +32,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  * study. The role is the session's {@code userRole}:
  * {@code POST /me/activeStudy} binds it together with the study, from the
  * caller's own active bindings on that study, and refuses a study the
- * caller holds no role on. Neither the chain-level
+ * caller holds no role on. The SDV rules also count the caller's other
+ * roles on that study ({@link #anyRoleOnTheStudyMay}). Neither the chain-level
  * {@code hasRole("USER")} rule nor site visibility says what a user may
  * change: the first says the caller is logged in, the second which
  * subjects the caller may see. Without the per-endpoint check a Monitor,
@@ -64,8 +72,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
  *   Remove, restore, lock or
  *     unlock a subject; link
  *     a patient                  .   x   .   x   .   .   .   .   {@link SubjectLifecycleAuthorization}
- *   Verify SDV                   .   x   x   x   .   .   .   x   {@link #roleMayVerifySdv}
- *   Un-verify SDV                .   x   .   x   .   .   .   x   {@link SdvUnverifyAuthorization}
+ *   Verify SDV (any binding)     .   x   x   x   .   .   .   x   {@link #roleMayVerifySdv}
+ *   Un-verify SDV (any binding)  .   x   .   x   .   .   .   x   {@link SdvUnverifyAuthorization}
  *   Raise a query, annotation
  *     or failed check            .   x   x   x   x   .   .   x   {@link NoteTransitionMatrix#canCreateType}
  *   Reason-for-change note       .   x   .   x   .   .   .   .   {@link NoteTransitionMatrix#canCreateType}
@@ -191,6 +199,48 @@ final class ClinicalWriteAuthorization {
                 || roleId == Role.COORDINATOR.getId()
                 || roleId == Role.STUDYDIRECTOR.getId()
                 || roleId == Role.MONITOR.getId();
+    }
+
+    /**
+     * Does {@code rule} admit the session's role, or another role the
+     * caller holds on the active study?
+     *
+     * <p>{@code POST /me/activeStudy} binds one role, the caller's
+     * highest-ranked, and ranks the Monitor below every other role, while
+     * the SPA offers a page for any role the caller holds on the study. A
+     * caller who holds Monitor beside Investigator is bound as Investigator,
+     * and the SDV page offered to the Monitor would refuse every request. The
+     * SDV rules therefore count every active binding on the study, as
+     * multi-role authorization does elsewhere
+     * ({@link StudyAdminAuthorization#userMayEditStudy}). The bindings are
+     * read only when the session's role is refused, and a failed read
+     * refuses.
+     *
+     * @param rule takes a legacy {@link Role} id
+     */
+    static boolean anyRoleOnTheStudyMay(HttpSession session, DataSource dataSource,
+                                        IntPredicate rule) {
+        if (rule.test(roleIdOf(session))) {
+            return true;
+        }
+        if (!(session.getAttribute("userBean") instanceof UserAccountBean user)
+                || !(session.getAttribute("study") instanceof StudyBean study)) {
+            return false;
+        }
+        try {
+            for (StudyUserRoleBean binding
+                    : new UserAccountDAO(dataSource).findAllRolesByUserName(user.getName())) {
+                if (binding != null && binding.getRole() != null
+                        && binding.getStudyId() == study.getId()
+                        && Status.AVAILABLE.equals(binding.getStatus())
+                        && rule.test(binding.getRole().getId())) {
+                    return true;
+                }
+            }
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return false;
     }
 
     /**

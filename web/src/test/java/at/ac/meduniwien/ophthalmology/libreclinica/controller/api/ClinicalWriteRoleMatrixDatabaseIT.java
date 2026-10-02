@@ -29,6 +29,8 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
@@ -69,7 +71,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  *
  * <p>For every write endpoint, a Monitor is refused with 403 and writes
  * nothing, and a role the matrix admits gets past the check. The SDV and
- * note rules, which admit the Monitor, are pinned both ways.
+ * note rules, which admit the Monitor, are pinned both ways, and so are the
+ * rules narrower than data entry, which refuse ra and ra2. The admin binding
+ * is admitted; a system administrator is not, by that alone. The role is
+ * checked before the row a request names is read: a Monitor naming a row
+ * that does not exist is refused, not told so.
  */
 class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT {
 
@@ -178,7 +184,24 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                                 + "\"itemOid\":\"I_HEIGHT_CM\",\"eventCrfOid\":\"1\","
                                 + "\"description\":\"corrected\"}")),
                 write("commit a CRF data import",
-                        () -> json(post("/api/v1/import/commit"), "{\"previewToken\":\"t\"}")));
+                        () -> json(post("/api/v1/import/commit"), "{\"previewToken\":\"t\"}")),
+                // The role is checked before the row is read.
+                write("save item values of a CRF that does not exist",
+                        () -> json(post("/api/v1/eventCrfs/999999/items"),
+                                "{\"values\":{\"I_HEIGHT_CM\":\"199\"}}")),
+                write("start a CRF of a visit that does not exist",
+                        () -> json(post("/api/v1/events/999999/crfs/1:start"), "{}")),
+                write("sign a subject that does not exist",
+                        () -> json(post("/api/v1/subjects/SS_NOPE/sign"),
+                                "{\"password\":\"x\",\"attestation\":true}")),
+                write("move an eye of a subject that does not exist",
+                        () -> json(post("/api/v1/subjects/NOPE/eyes/OD/transition"),
+                                "{\"targetStudyOid\":\"S_OTHER\",\"reason\":\"conversion\"}")),
+                write("save nAMD flags of a visit that does not exist",
+                        () -> json(post("/api/v1/study-events/999999/namd-clinical-flags"), "{}")),
+                write("upload a scan to a CRF that does not exist",
+                        () -> multipart("/api/v1/event-crfs/999999/oct-upload")
+                                .file(e2e()).param("task", "fluid").param("laterality", "OD")));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -194,6 +217,61 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
 
         assertEquals(auditRowsBefore, auditRowsBy(monitor),
                 "a refused request to " + label + " writes nothing");
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* ra and ra2 enter data, but do not sign, move eyes or bind scans    */
+    /* ------------------------------------------------------------------ */
+
+    static Stream<Arguments> writesTheResearchAssistantsMayNotMake() {
+        return Stream.of(Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2).flatMap(role -> Stream.of(
+                // Signing: EventEditAuthorization.roleMayEdit.
+                narrower("sign a subject", role, () -> json(post("/api/v1/subjects/SS_M001/sign"),
+                        "{\"password\":\"x\",\"attestation\":true}")),
+                // Editing a subject: SubjectEditAuthorization.
+                narrower("move an eye to another cohort", role,
+                        () -> json(post("/api/v1/subjects/M-001/eyes/OD/transition"),
+                                "{\"targetStudyOid\":\"S_OTHER\",\"reason\":\"conversion\"}")),
+                // Binding a scan to a visit: IngestBindAuthorization.
+                narrower("bind a parked scan", role,
+                        () -> json(patch("/api/v1/retinal-jobs/1/bind"), "{\"eventCrfId\":1}")),
+                narrower("bulk-bind parked scans", role,
+                        () -> json(post("/api/v1/retinal-jobs/bulk-bind"),
+                                "{\"jobIds\":[1],\"eventCrfId\":1}"))));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("writesTheResearchAssistantsMayNotMake")
+    void aResearchAssistantIsRefusedWhereTheRuleIsNarrower(
+            String label, MockHttpSession session, Supplier<MockHttpServletRequestBuilder> request)
+            throws Exception {
+        mvc().perform(request.get().session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* A system administrator is held to the binding                      */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void aSystemAdministratorBoundAsMonitorDoesNotEnterData() throws Exception {
+        MockHttpSession session = asSystemAdministrator(
+                ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_monitor", Role.MONITOR));
+
+        mvc().perform(json(post("/api/v1/eventCrfs/9/items"), "{\"values\":{\"I_HEIGHT_CM\":\"174\"}}")
+                        .session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+    }
+
+    @Test
+    void aSystemAdministratorBoundAsInvestigatorDoesNotVerify() throws Exception {
+        mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"2\"]}")
+                        .session(asSystemAdministrator(sessionAs("manual_investigator"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+        assertFalse(sdvStatus(2));
     }
 
     /* ------------------------------------------------------------------ */
@@ -214,6 +292,9 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 permitted("save item values as ra2", Role.RESEARCHASSISTANT2, 200,
                         () -> json(post("/api/v1/eventCrfs/9/items"),
                                 "{\"values\":{\"I_HEIGHT_CM\":\"172\"}}")),
+                permitted("save item values", "manual_admin", 200,
+                        () -> json(post("/api/v1/eventCrfs/9/items"),
+                                "{\"values\":{\"I_HEIGHT_CM\":\"173\"}}")),
                 permitted("add a repeating-group row", "manual_investigator", 404,
                         () -> post("/api/v1/eventCrfs/9/groups/IG_ABSENT/rows")),
                 permitted("delete a repeating-group row", "manual_investigator", 404,
@@ -287,7 +368,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     /* ------------------------------------------------------------------ */
 
     @ParameterizedTest
-    @ValueSource(strings = {"manual_monitor", "manual_crc", "manual_dm"})
+    @ValueSource(strings = {"manual_monitor", "manual_crc", "manual_dm", "manual_admin"})
     void anSdvRoleMayVerify(String userName) throws Exception {
         try {
             mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"2\"]}")
@@ -316,6 +397,28 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
         assertFalse(sdvStatus(2));
+    }
+
+    @Test
+    void aMonitorBindingBesideAnInvestigatorBindingMayVerifyAndUnverify() throws Exception {
+        // The Investigator also holds Monitor on Default Study. The session is
+        // bound as Investigator, whom /me/activeStudy ranks higher, while the
+        // SPA offers the SDV page for the Monitor binding.
+        grant("manual_investigator", "monitor");
+        try {
+            mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"2\"]}")
+                            .session(investigatorHolding(Role.INVESTIGATOR)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.verified").value(hasItem("2")));
+            mvc().perform(json(post("/api/v1/sdv/unverify"),
+                            "{\"eventCrfOids\":[\"2\"],\"reason\":\"compared with the wrong source\"}")
+                            .session(investigatorHolding(Role.INVESTIGATOR)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.unverified").value(hasItem("2")));
+        } finally {
+            revoke("manual_investigator", "monitor");
+            setSdvStatus(2, false);
+        }
     }
 
     @Test
@@ -377,6 +480,17 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
         return Arguments.of(label, investigatorHolding(role), expectedStatus, request);
     }
 
+    private static Arguments narrower(String label, Role role,
+                                      Supplier<MockHttpServletRequestBuilder> request) {
+        return Arguments.of(label + " as " + role.getName(), investigatorHolding(role), request);
+    }
+
+    /** The session, its user made a system administrator. */
+    private static MockHttpSession asSystemAdministrator(MockHttpSession session) {
+        ((UserAccountBean) session.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
+        return session;
+    }
+
     private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request,
                                                       String body) {
         return request.contentType(MediaType.APPLICATION_JSON).content(body);
@@ -400,6 +514,18 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
 
     private static int userId(String userName) {
         return ClinicalWriteFixtures.userId(DATA_SOURCE, userName);
+    }
+
+    private static void grant(String userName, String roleName) throws SQLException {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, "
+                        + "user_name) VALUES ('" + roleName + "', 1, 1, 1, now(), '" + userName + "')");
+    }
+
+    private static void revoke(String userName, String roleName) throws SQLException {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "DELETE FROM study_user_role WHERE study_id = 1 AND user_name = '" + userName
+                        + "' AND role_name = '" + roleName + "'");
     }
 
     private static int auditRowsBy(int userId) throws SQLException {

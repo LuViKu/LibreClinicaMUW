@@ -83,9 +83,11 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p><strong>Authorization:</strong> verifying needs an SDV role
  * ({@link ClinicalWriteAuthorization#roleMayVerifySdv}), un-verifying
- * {@link SdvUnverifyAuthorization}. Both need a session-bound active
- * study, and report an event CRF outside the caller's visible studies
- * as rejected.
+ * {@link SdvUnverifyAuthorization}: the session's role, or another role
+ * the caller holds on the active study
+ * ({@link ClinicalWriteAuthorization#anyRoleOnTheStudyMay}). Both need a
+ * session-bound active study, and report an event CRF outside the
+ * caller's visible studies as rejected.
  *
  * <p><strong>Completion:</strong> only a complete event CRF can be
  * verified ({@link #completeForVerification}). The list leaves the
@@ -269,7 +271,8 @@ public class SdvApiController {
         if (Boolean.FALSE.equals(body.verified())) {
             return unverify(new UnverifyRequest(body.eventCrfOids(), body.reason()), session);
         }
-        if (!ClinicalWriteAuthorization.roleMayVerifySdv(ClinicalWriteAuthorization.roleIdOf(session))) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                ClinicalWriteAuthorization::roleMayVerifySdv)) {
             return ClinicalWriteAuthorization.forbidden("source data verification");
         }
 
@@ -358,8 +361,8 @@ public class SdvApiController {
      *   <li>{@code 400} — no active study bound.</li>
      *   <li>{@code 400} — body missing {@code eventCrfOids} or
      *       {@code reason}.</li>
-     *   <li>{@code 403} — caller's role is not Monitor / DM / Admin
-     *       (per {@link SdvUnverifyAuthorization}).</li>
+     *   <li>{@code 403} — no role the caller holds on the active study is
+     *       Monitor / DM / Admin (per {@link SdvUnverifyAuthorization}).</li>
      *   <li>Per-row: {@code event_crf} outside the caller's
      *       site-visibility set → row rejected; otherwise the row's
      *       {@code sdv_status} is flipped to false.</li>
@@ -398,7 +401,8 @@ public class SdvApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!SdvUnverifyAuthorization.roleMayUnverify(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SdvUnverifyAuthorization::roleMayUnverify)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit un-verifying CRFs"));
         }
