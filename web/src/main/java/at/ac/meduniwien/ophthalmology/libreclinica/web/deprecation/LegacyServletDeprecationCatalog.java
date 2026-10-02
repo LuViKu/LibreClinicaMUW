@@ -319,8 +319,6 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/VerifyImportedCRFData", NONE, Bucket.DATA_ENTRY);
         put(m, "/UploadFile", NONE, Bucket.DATA_ENTRY);
         put(m, "/DownloadAttachedFile", NONE, Bucket.DATA_ENTRY);
-        put(m, "/ParticipantFormServlet", NONE, Bucket.DATA_ENTRY);
-        put(m, "/form", NONE, Bucket.DATA_ENTRY);
 
         put(m, "/FindStudyEvent", NONE, Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/FindSubjectsData", NONE, Bucket.SUBJECTS_AND_EVENTS);
@@ -342,7 +340,6 @@ public class LegacyServletDeprecationCatalog {
         // Admin catalogue §16.3: /UpdateCRF and /BatchCRFMigration are uncovered.
         put(m, "/UpdateCRF", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/BatchCRFMigration", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/CreateXformCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/LockCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/UnlockCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRFVersionPreview", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
