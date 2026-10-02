@@ -80,5 +80,5 @@ On the dev copy this inserted 11 `measurement_unit` rows through the `2009-05-15
 ## 6. Before merging
 
 - Update CLAUDE.md "Stack at a glance" (Persistence: Liquibase 4.31.1) and MIGRATION.md (Phase D-Libs: Liquibase 4 done), and add the release note.
-- Keep the explicit pin when Boot moves. Boot 4.1 manages Liquibase 5.0.3 (FSL). Re-check checksums before any move past 4.32.x.
+- Keep the explicit pin when Boot moves. Boot 4.1 manages Liquibase 5.0.3 (FSL). Re-check checksums before any move past 4.32.x. Done: `Liquibase363UpgradeDatabaseIT` restores the `8:` checksums of a frozen 3.6.3 build and fails on 4.33.0 (29 changesets); Dependabot ignores `liquibase-core` from 4.33.0.
 - Add the rollback note from §4 to the deploy runbook.

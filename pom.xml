@@ -721,6 +721,7 @@
 			       changeset that uses valueDate, so startup validation fails on
 			       every database 3.6.3 built (4 heritage changesets; 29 with the
 			       demo seeds). 4.32.0 validates like 4.31.1.
+			       Liquibase363UpgradeDatabaseIT (web) fails on such a bump.
 			     - not 5.x: licensed FSL-1.1-ALv2, not Apache 2.0 (Boot 4.1 manages 5.0.3).
 			     Liquibase 4 needs two shims in core's config package:
 			     LaxParsingSpringLiquibase (the seven heritage modifyColumn

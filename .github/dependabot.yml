@@ -31,6 +31,14 @@ updates:
         patterns:
           - "ch.qos.logback*"
           - "org.slf4j*"
+    ignore:
+      # liquibase-core is pinned at 4.31.1 (see the comment at the pin in
+      # pom.xml). 4.33.0 changes the checksum of every valueDate changeset and
+      # fails startup on every existing database; 5.x is licensed
+      # FSL-1.1-ALv2. A move past 4.32.x is a deliberate change, re-checked
+      # by Liquibase363UpgradeDatabaseIT, not a weekly bump.
+      - dependency-name: "org.liquibase:liquibase-core"
+        versions: [">= 4.33.0"]
 
   - package-ecosystem: github-actions
     directory: "/"
