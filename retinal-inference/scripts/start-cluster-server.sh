@@ -8,7 +8,7 @@
 #
 # WHY THIS EXISTS
 #   The env block used to live in an untracked ~/start_sidecar.sh with
-#   `BM_LD_LIBRARY_PATH` left as a TODO comment. Any restart therefore came up
+#   `BM_LD_LIBRARY_PATH` left as a placeholder comment. Any restart therefore came up
 #   silently missing the `bm` AND `layers` tasks (the BM venv python can't find
 #   libpython3.8.so without it). This script:
 #     * derives BM_LD_LIBRARY_PATH from the LMOD modules instead of hardcoding

@@ -77,7 +77,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Link;
  * <p>In the JSP, the table will be displayed by include/showTable.jsp,
  * which</p>
  * 
- * <p>TODO possible duplicate of {@code at.ac.meduniwien.ophthalmology.libreclinica.web.domain.EntityBeanTable}</p>
+ * <p>A near-copy exists as {@code at.ac.meduniwien.ophthalmology.libreclinica.web.domain.EntityBeanTable}; both are in use (this one by most
+ * list servlets and JSPs, the other by the rule-assignment pages), so neither can be removed until those JSPs retire.</p>
  * 
  * @author ssachs
  * @see EntityBeanRow
