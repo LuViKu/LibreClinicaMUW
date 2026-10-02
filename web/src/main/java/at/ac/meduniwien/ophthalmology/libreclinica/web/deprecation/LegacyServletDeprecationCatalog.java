@@ -186,9 +186,9 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ListCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RemoveCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        // Admin catalogue §16.3: no API or view restores or updates a CRF.
-        put(m, "/RestoreCRF", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/InitUpdateCRF", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
+        // CRF restore and edit: /crf-library (R1.2, #387).
+        put(m, "/RestoreCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
+        put(m, "/InitUpdateCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRFVersion", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/CreateCRFVersion", "/app/crf-authoring-canvas/:crfOid", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/DeleteCRFVersion", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
@@ -334,14 +334,14 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ChangeDefinitionOrdinal", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ChangeDefinitionCRFOrdinal", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RestoreCRFFromDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        // Admin catalogue §16.3: /UpdateCRF and /BatchCRFMigration are uncovered.
-        put(m, "/UpdateCRF", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/BatchCRFMigration", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
+        // CRF edit and the event-CRF version migration: /crf-library (#387).
+        put(m, "/UpdateCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
+        put(m, "/BatchCRFMigration", "/app/crf-library/:crfOid/migrate", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/LockCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/UnlockCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRFVersionPreview", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/SectionPreview", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/DownloadVersionSpreadSheet", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
+        put(m, "/DownloadVersionSpreadSheet", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
 
         put(m, "/AccessFile", NONE, Bucket.DATA_EXPORT);
         put(m, "/ShowFile", NONE, Bucket.DATA_EXPORT);

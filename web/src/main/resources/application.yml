@@ -204,12 +204,13 @@ libreclinica:
   # legacy export-job create/edit), the LDAP picker, and the permanent delete
   # of a CRF version. All were open to system administrators only, except
   # the metadata download, which the SPA home page now gives every role that
-  # had it. The CRF library servlets stay open: the legacy Data Manager
-  # (coordinator) uses them and the SPA's CRF library does not admit that
-  # role yet. /ViewStudy stays open: the legacy side bar links it for every
-  # role. See the retirement log for the per-screen parity record.
+  # had it. Also closed, once the SPA admitted the coordinator (D5): the CRF
+  # library servlets (all but /ViewCRF, whose "run all rules for this CRF"
+  # link has no SPA counterpart) and the study audit log. /ViewStudy stays
+  # open: the legacy side bar links it for every role. See the retirement
+  # log for the per-screen parity record.
   legacy:
-    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:/Enterprise,/TechAdmin,/AdminSystem,/AuditDatabase,/ListSubject,/ListSubjectData,/ViewSubject,/UpdateSubject,/RemoveSubject,/RestoreSubject,/CreateJobImport,/UpdateJobImport,/ViewImportJob,/ViewLogMessage,/PrintoutCertificate,/DeleteEventCRF,/ConfigurePasswordRequirements,/pages/auth,/ListUserAccounts,/CreateUserAccount,/ViewUserAccount,/EditUserAccount,/SetUserRole,/EditStudyUserRole,/DeleteStudyUserRole,/DeleteUser,/UnLockUser,/pages/admin/listLdapUsers,/pages/admin/selectLdapUser,/Configure,/SendTestEmail,/AuditUserActivity,/AuditUserActivityData,/AuditLogUser,/ListStudy,/RemoveStudy,/RestoreStudy,/DownloadStudyMetadata,/ViewAllJobs,/ViewJob,/ViewSingleJob,/PauseJob,/CreateJobExport,/UpdateJobExport,/pages/listCurrentScheduledJobs,/pages/listCurrentScheduledJobsData,/pages/cancelScheduledJob,/DeleteCRFVersion}
+    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:/Enterprise,/TechAdmin,/AdminSystem,/AuditDatabase,/ListSubject,/ListSubjectData,/ViewSubject,/UpdateSubject,/RemoveSubject,/RestoreSubject,/CreateJobImport,/UpdateJobImport,/ViewImportJob,/ViewLogMessage,/PrintoutCertificate,/DeleteEventCRF,/ConfigurePasswordRequirements,/pages/auth,/ListUserAccounts,/CreateUserAccount,/ViewUserAccount,/EditUserAccount,/SetUserRole,/EditStudyUserRole,/DeleteStudyUserRole,/DeleteUser,/UnLockUser,/pages/admin/listLdapUsers,/pages/admin/selectLdapUser,/Configure,/SendTestEmail,/AuditUserActivity,/AuditUserActivityData,/AuditLogUser,/ListStudy,/RemoveStudy,/RestoreStudy,/DownloadStudyMetadata,/ViewAllJobs,/ViewJob,/ViewSingleJob,/PauseJob,/CreateJobExport,/UpdateJobExport,/pages/listCurrentScheduledJobs,/pages/listCurrentScheduledJobsData,/pages/cancelScheduledJob,/DeleteCRFVersion,/ListCRF,/CreateCRF,/CreateCRFVersion,/InitCreateCRFVersion,/RemoveCRF,/RestoreCRF,/InitUpdateCRF,/UpdateCRF,/RemoveCRFVersion,/RestoreCRFVersion,/DownloadVersionSpreadSheet,/BatchCRFMigration,/AuditLogStudy}
 
 # Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
 # left at default (api-docs.path = /v3/api-docs). The OpenApiResource

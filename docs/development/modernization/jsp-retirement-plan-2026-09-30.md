@@ -469,7 +469,7 @@ These were delegated ("make the best educated choice") and are recorded here so 
 | R1.3 | SPA login answers JSON; SPA logout API | #384 |
 | R1.3 (DR-029) | old SPA upload pages deleted | #378 |
 | R2 W0 | 17 not-needed screens and the heritage REST API closed | #371 |
-| R2 W1 | Administration prepared in this branch: 30 paths added to the closed-paths default (users, lockout, test e-mail, login history, all-studies list, study metadata download, job pages, LDAP picker, permanent CRF-version delete). Held back: the CRF library servlets, `/ViewStudy`, `/AuditLogStudy`. Per-screen record in the [retirement log](phase-e-retirement-log.md#w1-parity-record) | branch `chore/muw-retire-w1-admin` |
+| R2 W1 | Administration prepared in this branch: 43 paths added to the closed-paths default: users, lockout, test e-mail, login history, all-studies list, study metadata download, job pages, LDAP picker, and, after D5, the CRF library servlets and `/AuditLogStudy`. Held back: `/ViewCRF`, `/ViewStudy`. Per-screen record in the [retirement log](phase-e-retirement-log.md#w1-parity-record) | branch `chore/muw-retire-w1-admin` |
 | R4 | PostgreSQL 17 for dev/test/CI + production runbook | #376 |
 | R4 | OpenPDF (DR-007), Hibernate 6.6, Quartz 2.5 | #385 |
 | R4 | Liquibase 4 | #388 |
@@ -493,7 +493,7 @@ The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each 
 | Item | Reason | Next step |
 |---|---|---|
 | R3 deletions | The six-month bake-in (DR-018, D4) | W0 deletion no earlier than six months after #371 reaches production |
-| W1 closure | Prepared in branch `chore/muw-retire-w1-admin` (30 paths). **Held back:** the CRF library servlets (they admit the coordinator, whom the SPA's CRF library does not, D5), `/ViewStudy` (linked for every role from the legacy side bar; no read-only SPA study view) and `/AuditLogStudy` (D5) | Merge the branch; announce, crawl-diff, check the log and start the clock per the retirement log; decide D5 to release the held-back screens |
+| W1 closure | Prepared in branch `chore/muw-retire-w1-admin` (43 paths). **Held back:** `/ViewCRF` (its "run all rules for this CRF" link has no SPA counterpart) and `/ViewStudy` (linked for every role from the legacy side bar; no read-only SPA study view) | Merge the branch; announce, crawl-diff, check the log and start the clock per the retirement log; decide whether `/ViewCRF` and `/ViewStudy` need an SPA feature first |
 | W2–W3 closure | Each wave closes only once its SPA gaps have landed and parity is recorded | Close per the retirement log once the packages above are merged |
 | W4 | Needs the E.10 usability panel on the SPA (DR-019), a human study | Schedule the panel |
 | W5 | Needs every other wave closed, and four couplings removed first: the expired-session redirect targets `/MainMenu` (also for SPA API calls); SSO logins land on `/MainMenu` and get their session set-up there; e-mail links use `sysURL`; the legacy logout's success target | A follow-up package before W5 |

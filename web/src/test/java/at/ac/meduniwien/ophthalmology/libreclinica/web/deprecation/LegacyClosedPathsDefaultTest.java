@@ -65,20 +65,22 @@ class LegacyClosedPathsDefaultTest {
             // jobs
             "/ViewAllJobs", "/ViewJob", "/ViewSingleJob", "/PauseJob", "/CreateJobExport", "/UpdateJobExport",
             "/pages/listCurrentScheduledJobs", "/pages/listCurrentScheduledJobsData", "/pages/cancelScheduledJob",
-            // CRF library: the one servlet only a system administrator may use
+            // CRF library (D5 implemented: the SPA admits Data Manager, CRC and Administrator)
+            "/ListCRF", "/CreateCRF", "/CreateCRFVersion", "/InitCreateCRFVersion", "/RemoveCRF", "/RestoreCRF",
+            "/InitUpdateCRF", "/UpdateCRF", "/RemoveCRFVersion", "/RestoreCRFVersion",
+            "/DownloadVersionSpreadSheet", "/BatchCRFMigration",
+            // study audit log (director, coordinator, sysadmin in legacy; the SPA adds the monitor)
+            "/AuditLogStudy",
             "/DeleteCRFVersion");
 
     /**
      * Administration screens wave 1 leaves open, each with its reason (see the
-     * retirement log). The CRF servlets admit the legacy Data Manager
-     * (coordinator) and the SPA's CRF library does not (D5); /ViewStudy and
-     * /AuditLogStudy are read by other roles from open pages.
+     * retirement log): /ViewCRF (its "run all rules for this CRF" link has no
+     * SPA counterpart), /ViewStudy (read by other roles from open pages) and
+     * the study-scoped user screens (W3).
      */
     private static final List<String> WAVE_1_HELD_OPEN = List.of(
-            "/ListCRF", "/CreateCRF", "/CreateCRFVersion", "/InitCreateCRFVersion", "/ViewCRF",
-            "/RemoveCRF", "/RestoreCRF", "/InitUpdateCRF", "/UpdateCRF", "/RemoveCRFVersion",
-            "/RestoreCRFVersion", "/DownloadVersionSpreadSheet", "/BatchCRFMigration",
-            "/ViewStudy", "/AuditLogStudy", "/ListStudyUser");
+            "/ViewCRF", "/ViewStudy", "/ListStudyUser");
 
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
