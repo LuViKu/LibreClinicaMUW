@@ -255,6 +255,21 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     }
 
     /**
+     * The CRF library's types: a CRF's name or description edited (142) and
+     * a batch move of event CRFs to another version (143) are admin rows; a
+     * signature removed by that move (144) is a signing row; an event CRF
+     * removed with its CRF or version (190, 191) is a data row.
+     */
+    @Test
+    void variantForTheCrfLibraryTypes() {
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.CRF_FIELD_UPDATED, null));
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_BATCH_MIGRATION, null));
+        assertEquals("signed", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_SIGNATURE_REMOVED, null));
+        assertEquals("data", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, null));
+        assertEquals("data", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION, null));
+    }
+
+    /**
      * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
      * the filter parameter and reaches the SQL try-block. With the mock
      * DataSource the query throws inside the try/catch and we get a 500;

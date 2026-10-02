@@ -954,6 +954,25 @@ public class EventDefinitionsApiController {
                     "Event definition '" + sedOid + "' is not in a removed state — cannot restore"));
         }
 
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        StudyEventDAO eventDao = new StudyEventDAO(dataSource);
+        EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+
+        // Read before anything changes: the assignments of a removed CRF, and
+        // the event CRFs a removal of their CRF or version holds, stay
+        // removed; that restore brings them back (CrfLifecycleCascade).
+        ArrayList<EventDefinitionCRFBean> edcs = edcDao.findAllByDefinition(target.getId());
+        Set<Integer> removedCrfs = CrfLifecycleCascade.removedCrfs(dataSource,
+                edcs.stream().map(EventDefinitionCRFBean::getCrfId).toList());
+        ArrayList<StudyEventBean> events = eventDao.findAllByDefinition(target.getId());
+        List<Integer> removedEventCrfIds = new ArrayList<>();
+        for (StudyEventBean event : events) {
+            if (event.getStatus() == null || !event.getStatus().equals(Status.AUTO_DELETED)) continue;
+            for (EventCRFBean eventCrf : eventCrfDao.findAllByStudyEvent(event)) removedEventCrfIds.add(eventCrf.getId());
+        }
+        Set<Integer> held = CrfLifecycleCascade.heldByRemoval(dataSource, removedEventCrfIds);
+
         Status oldStatus = target.getStatus();
         java.util.Date now = new java.util.Date();
         target.setStatus(Status.AVAILABLE);
@@ -968,13 +987,9 @@ public class EventDefinitionsApiController {
         int restoredEventCount = 0;
         int restoredEventCrfCount = 0;
         int restoredItemDataCount = 0;
-        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
-        StudyEventDAO eventDao = new StudyEventDAO(dataSource);
-        EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
-        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
 
-        ArrayList<EventDefinitionCRFBean> edcs = edcDao.findAllByDefinition(target.getId());
         for (EventDefinitionCRFBean edc : edcs) {
+            if (removedCrfs.contains(edc.getCrfId())) continue;
             if (edc.getStatus() != null && edc.getStatus().equals(Status.AUTO_DELETED)) {
                 edc.setStatus(Status.AVAILABLE);
                 edc.setUpdater(me);
@@ -984,7 +999,6 @@ public class EventDefinitionsApiController {
             }
         }
 
-        ArrayList<StudyEventBean> events = eventDao.findAllByDefinition(target.getId());
         for (StudyEventBean event : events) {
             if (event.getStatus() != null && event.getStatus().equals(Status.AUTO_DELETED)) {
                 event.setStatus(Status.AVAILABLE);
@@ -995,6 +1009,7 @@ public class EventDefinitionsApiController {
 
                 ArrayList<EventCRFBean> eventCrfs = eventCrfDao.findAllByStudyEvent(event);
                 for (EventCRFBean eventCrf : eventCrfs) {
+                    if (held.contains(eventCrf.getId())) continue;
                     if (eventCrf.getStatus() != null && eventCrf.getStatus().equals(Status.AUTO_DELETED)) {
                         eventCrf.setStatus(Status.AVAILABLE);
                         eventCrf.setUpdater(me);

@@ -1383,25 +1383,60 @@
     "includeRemoved": "Entfernte anzeigen",
     "statusRemoved": "Entfernt",
     "disable": "Entfernen",
-    "disableConfirm": "CRF »{name}« entfernen? Bestehende Zuweisungen bleiben für den Audit Trail erhalten, neue Dateneingabe wird gesperrt. Die Aktion wird im Audit Trail dokumentiert.",
-    "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Laufende Dateneingaben in dieser Version bleiben unverändert; neue Dateneingaben verwenden die verbleibenden Versionen.",
+    "disableConfirm": "CRF »{name}« entfernen? Seine Versionen, seine Zuordnungen zu Visiten-Definitionen und alle darauf erfassten Event-CRFs samt Werten werden mit entfernt. Wiederherstellen holt sie zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Die auf dieser Version erfassten Event-CRFs samt Werten werden mit entfernt, signierte nicht. Visiten-Definitionen mit dieser Standardversion wechseln auf die neueste verfügbare Version. Wiederherstellen holt die entfernten Event-CRFs zurück.",
+    "restoreCrfConfirm": "CRF »{name}« wiederherstellen? Die mit ihm entfernten Versionen, Zuordnungen und Event-CRFs kommen zurück, mit dem Status, den sie hatten; eine für sich entfernte Version bleibt entfernt. Event-CRFs, deren Teilnehmer/in, Visite oder Zuordnung entfernt ist, bleiben entfernt, und von den älteren Seiten entfernte Event-CRFs kommen als verfügbar zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "edit": "Bearbeiten",
+    "editHeading": "CRF »{name}« bearbeiten",
+    "editOidStays": "Die OID {oid} bleibt gleich. Den Namen dürfen nur der/die Eigentümer/in als Data Manager oder ein/e Systemadministrator/in ändern.",
+    "submitEdit": "Speichern",
+    "detail": {
+      "back": "CRF-Bibliothek",
+      "itemsHeading": "Items ({count})",
+      "integrityHint": "Integritätsprüfung: Ein Item muss in jeder Version des CRF in derselben Item-Gruppe bleiben. Ein Problem betrifft eine Version, die Daten aufnimmt; eine Warnung nur Versionen, die das nicht mehr tun.",
+      "integritySummary": "{count} Item(s) wechseln die Item-Gruppe zwischen Versionen",
+      "integrity": {
+        "ok": "OK",
+        "warning": "Warnung",
+        "problem": "Problem"
+      },
+      "placement": "Gruppe »{group}« in Version »{version}«",
+      "noItems": "Noch keine Items in einer Version.",
+      "studiesHeading": "Studien, die dieses CRF verwenden",
+      "noStudies": "Keine Visiten-Definition einer Studie verwendet dieses CRF.",
+      "siteOf": "Standort von {study}",
+      "col": {
+        "version": "Version",
+        "name": "Name",
+        "description": "Beschreibung",
+        "dataType": "Datentyp",
+        "integrity": "Integritätsprüfung",
+        "study": "Studie",
+        "protocolId": "Protokoll-ID",
+        "status": "Status"
+      }
+    },
+    "statusAutoRemoved": "Mit dem CRF entfernt",
     "empty": "Noch keine CRFs in der Bibliothek.",
     "lock": "Sperren",
     "lockConfirm": "Version »{version}« von »{name}« sperren? Laufende Dateneingaben bleiben unverändert; die Version wird schreibgeschützt und Event-Definitionen, die sie als Standard nutzten, zeigen die nächste verfügbare Version.",
     "unlock": "Entsperren",
     "unlockConfirm": "Version »{version}« von »{name}« entsperren? Schreibvorgänge sind wieder möglich.",
     "restore": "Wiederherstellen",
-    "restoreConfirm": "Version »{version}« von »{name}« wiederherstellen? Die Version wird wieder verfügbar. Für Section- und Item-Daten-Kaskade ggf. den Legacy-Pfad /RestoreCRFVersion verwenden.",
+    "restoreConfirm": "Version »{version}« von »{name}« wiederherstellen? Die Version und die mit ihr entfernten Event-CRFs samt Werten kommen mit dem Status zurück, den sie hatten; eine gesperrt entfernte Version kommt gesperrt zurück.",
     "hardRemove": "Endgültig löschen",
     "hardRemoveConfirm": "Version »{version}« von »{name}« endgültig löschen? Diese Aktion entfernt die Zeile sowie alle zugehörigen Items / Sektionen / Antwortsets. Nur für Systemadministratoren. Die Aktion kann nicht rückgängig gemacht werden.",
     "hardRemoveBlocked": "Endgültiges Löschen der Version »{version}« nicht möglich — es bestehen noch Referenzen:",
     "hardRemoveBlocker": {
       "eventDefs": "{count} Event-Definition(en) verwenden diese Version als Standard:",
       "eventCrfs": "{count} Event-CRF-Zeile(n) enthalten Daten zu dieser Version (Stichprobe: {sample}).",
-      "remediation": "Standardversionen über den Migrationsdialog neu zuweisen und dann erneut versuchen."
+      "remediation": "Unter Versionsmigration die Standardversion dieser Visiten-Definitionen ändern und die auf dieser Version erfassten Event-CRFs auf eine andere Version verschieben; dann erneut versuchen."
     },
     "downloadXls": ".xls herunterladen",
     "downloadXlsFailed": "Download fehlgeschlagen: {message}",
+    "preview": "Vorschau",
+    "previewFailed": "Die Version konnte für die Vorschau nicht geladen werden: {message}",
+    "migrationAction": "Versionsmigration",
     "migrate": {
       "action": "Standardversion neu zuweisen",
       "dialogHeading": "Event-Def-Standardversion von »{from}« auf »{to}« umstellen",
@@ -2065,6 +2100,73 @@
         "label": "Achsenlänge"
       },
       "reasonIfNotDone": "Grund (falls nicht durchgeführt)"
+    }
+  },
+  "crfMigration": {
+    "title": "Versionsmigration · {name}",
+    "intro": "Zwei verschiedene Vorgänge. Das Verschieben von Event-CRFs ändert die Version, auf der bestehende Daten angezeigt werden. Das Ändern der Standardversion legt nur fest, welche Version neue Event-CRFs bekommen; es verschiebt keine Daten.",
+    "noStudy": "Bitte zuerst eine Studie wählen: Event-CRFs werden innerhalb einer Studie verschoben.",
+    "move": {
+      "heading": "Bestehende Event-CRFs auf eine andere Version verschieben",
+      "intro": "Die Event-CRFs auf der aktuellen Version werden samt ihren Daten ab jetzt auf der neuen Version angezeigt. Werte von Items, die die neue Version nicht hat, bleiben in der Datenbank, werden aber nicht mehr angezeigt. Die SDV wird bei jedem verschobenen Event-CRF zurückgesetzt, und die Signaturen darüber werden entfernt. Gesperrte Daten werden nicht verschoben.",
+      "study": "Studie: {study}",
+      "source": "Aktuelle Version",
+      "target": "Neue Version",
+      "versionOption": "{name} ({count} Event-CRFs)",
+      "sites": "Standorte",
+      "allSites": "Die Studie und alle ihre Standorte",
+      "studyLevel": "{study} (auf Studienebene eingeschlossene Teilnehmer/innen)",
+      "events": "Visiten-Definitionen",
+      "allEvents": "Alle Visiten-Definitionen",
+      "subject": "Nur Teilnehmer/in (optional)",
+      "subjectHint": "Die Teilnehmer-ID, um die Event-CRFs einer Person zu verschieben, etwa eines, das auf der falschen Version erfasst wurde.",
+      "preview": "Vorschau",
+      "onlyThis": "Nur dieses",
+      "onlyEventCrf": "Nur Event-CRF #{id}",
+      "clearOnly": "Wieder alle zeigen",
+      "run": "{count} Event-CRF(s) verschieben"
+    },
+    "preview": {
+      "summary": "{count} Event-CRF(s) von {subjects} Teilnehmer/innen werden von Version »{from}« auf »{to}« verschoben.",
+      "warningHeading": "Bevor Sie verschieben",
+      "sdv": "Die Source Data Verification wird bei jedem verschobenen Event-CRF zurückgesetzt (derzeit {count} verifiziert).",
+      "signatures": "Signaturen über den verschobenen Event-CRFs werden entfernt: {subjects} signierte Teilnehmer/innen, {events} signierte Visite(n), {crfs} signierte Event-CRF(s).",
+      "hidden": "{count} erfasste(r) Wert(e) gehören zu Items, die Version »{to}« nicht hat; sie bleiben in der Datenbank, werden aber nicht mehr angezeigt:",
+      "locked": "{count} Event-CRF(s) sind gesperrt und werden nicht verschoben:",
+      "notOffered": "Nicht verschoben, weil die Visiten-Definition des Standorts nicht beide Versionen anbietet:",
+      "notOfferedRow": "{site} · {event}: {count} Event-CRF(s)",
+      "truncated": "Die ersten {shown} von {count} Event-CRFs sind aufgelistet.",
+      "confirm": "Mir ist bewusst, dass bei diesen {count} Event-CRF(s) die SDV zurückgesetzt und die Signaturen entfernt werden."
+    },
+    "skip": {
+      "subject-locked": "Teilnehmer/in gesperrt",
+      "event-locked": "Visite gesperrt",
+      "event-crf-locked": "Event-CRF gesperrt"
+    },
+    "flag": {
+      "sdv": "SDV",
+      "subject": "Signatur Teilnehmer/in",
+      "event": "Signatur Visite",
+      "crf": "Signatur CRF"
+    },
+    "col": {
+      "subject": "Teilnehmer/in",
+      "site": "Standort",
+      "event": "Visite",
+      "clears": "Setzt zurück"
+    },
+    "result": {
+      "summary": "{count} Event-CRF(s) von {subjects} Teilnehmer/innen von Version »{from}« auf »{to}« verschoben.",
+      "cleared": "SDV zurückgesetzt bei {sdv}; Signaturen entfernt: {subjects} Teilnehmer/innen, {events} Visite(n), {crfs} Event-CRF(s).",
+      "where": "Das Protokoll steht unten und lässt sich herunterladen; jede Änderung steht auch im",
+      "auditLog": "Audit Trail der Studie.",
+      "download": "Protokoll herunterladen (CSV)"
+    },
+    "defaults": {
+      "heading": "Standardversion für neue Event-CRFs ändern",
+      "intro": "Die Visiten-Definitionen mit dieser Standardversion bekommen eine andere. Nur ab jetzt angelegte Event-CRFs verwenden sie; bestehende Event-CRFs und ihre Daten bleiben auf ihrer Version.",
+      "from": "Aktuelle Standardversion",
+      "to": "Neue Standardversion"
     }
   },
   "crfPreview": {

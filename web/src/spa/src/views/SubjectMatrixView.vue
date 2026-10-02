@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/auth'
 import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
 import { formatDate } from '@/lib/dateFormat'
+import { csvCell } from '@/lib/csv'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
@@ -152,10 +153,6 @@ const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${s
  * active filter/search. (Per-subject ODM/CSV/PDF snapshots remain the row-level
  * SubjectExportButton.) Previously this button had no handler at all.
  */
-function csvCell(v: unknown): string {
-  const s = v == null ? '' : String(v)
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
 function exportCsv(): void {
   const rows = subjects.filtered
   if (rows.length === 0) return

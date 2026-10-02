@@ -33,6 +33,59 @@ export interface CreateCrfInput {
   description?: string
 }
 
+/**
+ * `GET /api/v1/crfs/{crfOid}`: the CRF view, as the legacy ViewCRF page
+ * showed it. `mayEdit` says whether the caller may change the name and
+ * description.
+ */
+export interface CrfDetail {
+  oid: string
+  name: string
+  description: string
+  status: string
+  mayEdit: boolean
+  versions: CrfVersion[]
+  items: CrfItemRow[]
+  studies: CrfStudyUse[]
+}
+
+/**
+ * One item across the CRF's versions. `integrity` is the legacy check that an
+ * item keeps one item group in every version: `problem` when a conflicting
+ * placement is in an available version, `warning` when only versions that no
+ * longer take data conflict. `placements` lists the groups it was found in.
+ */
+export interface CrfItemRow {
+  name: string
+  oid: string
+  description: string
+  dataType: string
+  versions: string[]
+  integrity: 'ok' | 'warning' | 'problem' | string
+  placements: CrfItemPlacement[]
+}
+
+export interface CrfItemPlacement {
+  groupLabel: string
+  versionName: string
+}
+
+/** A study or site whose event definitions use the CRF. */
+export interface CrfStudyUse {
+  oid: string
+  name: string
+  uniqueProtocolId: string
+  status: string
+  parentOid: string | null
+  parentName: string | null
+}
+
+/** Body of `PUT /api/v1/crfs/{crfOid}`: a CRF's name and description. The OID stays. */
+export interface UpdateCrfInput {
+  name: string
+  description: string
+}
+
 export type SdvRequirement = 'AllREQUIRED' | 'PARTIALREQUIRED' | 'NOTREQUIRED' | 'NOTAPPLICABLE'
 
 /**

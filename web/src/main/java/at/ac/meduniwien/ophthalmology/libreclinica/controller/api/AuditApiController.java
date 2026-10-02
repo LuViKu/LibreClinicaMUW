@@ -669,6 +669,8 @@ public class AuditApiController {
             // 2026-09-27); rows written before read as 140 too.
             case 140 -> "reason-for-change";
             case 31 -> "signed";
+            // A CRF signature removed when the CRF moved to another version (144).
+            case AuditTypeIds.EVENT_CRF_SIGNATURE_REMOVED -> "signed";
             case 32 -> "sdv";
             // Subject-group-map lifecycle (types 28 + 29 — "added to
             // group" + "moved between groups"). Phase E.5 #2 follow-up:
@@ -713,7 +715,10 @@ public class AuditApiController {
             // hidden) routes to admin for the sysadmin view.
                  106, 107, 108,
             // Password-policy and lockout settings (145, 2026-09-30).
-                 145 -> "admin";
+                 145,
+            // CRF name / description edit (142) and a batch move of event
+            // CRFs to another CRF version (143, one row per run).
+                 AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
@@ -722,6 +727,9 @@ public class AuditApiController {
             // CRF reopened (138) and restored (139), a dismissed file
             // restored (137) — 2026-09-27.
                  137, 138, 139,
+            // An event CRF removed with its CRF or with its CRF version
+            // (190-191); its restore is 139.
+                 AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION,
             // Eye-cohort transition (57) — per-subject clinical event,
             // not admin config. Discrepancy-note threading + create
             // (71-74) and the subject-demographics update (100) also

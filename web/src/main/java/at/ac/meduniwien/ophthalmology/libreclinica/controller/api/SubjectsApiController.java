@@ -2451,13 +2451,21 @@ public class SubjectsApiController {
         // them, mirroring legacy behaviour (failures partway through
         // leave the system in a mixed state, which is consistent
         // with what BUR-* error codes already produce).
+        // Read before anything changes: on restore, the event CRFs a removal
+        // of their CRF or version holds stay removed; that restore brings
+        // them back, at the status they had (CrfLifecycleCascade).
+        Set<Integer> held = Status.AVAILABLE.equals(cascadeChildStatus)
+                ? CrfLifecycleCascade.heldByRemoval(dataSource, new EventCRFDAO(dataSource)
+                        .findAllByStudySubject(ss.getId()).stream().map(EventCRFBean::getId).toList())
+                : Set.of();
+
         ss.setStatus(newSubjectStatus);
         ss.setUpdater(currentUser);
         ss.setUpdatedDate(new java.util.Date());
         studySubjectDAO.update(ss);
 
         if (cascadeChildStatus != null) {
-            cascadeChildren(ss, currentUser, cascadeChildStatus);
+            cascadeChildren(ss, currentUser, cascadeChildStatus, held);
         }
 
         LOG.info("Subject lifecycle {}: study_subject {} (label={}) by user={} role={}; "
@@ -2487,10 +2495,11 @@ public class SubjectsApiController {
      * (study_events → event_crfs → item_data). Mirrors the legacy
      * {@code RemoveSubjectServlet.processRequest} loop verbatim:
      * skip rows already in {@code DELETED} (those were removed
-     * outside this cascade and shouldn't be touched).
+     * outside this cascade and shouldn't be touched), and the event CRFs
+     * in {@code held}.
      */
     private void cascadeChildren(StudySubjectBean ss, UserAccountBean currentUser,
-                                 Status cascadeChildStatus) {
+                                 Status cascadeChildStatus, Set<Integer> held) {
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
         ItemDataDAO itemDataDAO = new ItemDataDAO(dataSource);
@@ -2507,6 +2516,7 @@ public class SubjectsApiController {
             java.util.ArrayList<EventCRFBean> eventCrfs = eventCRFDAO.findAllByStudyEvent(event);
             for (EventCRFBean ec : eventCrfs) {
                 if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
+                if (held.contains(ec.getId())) continue;
                 ec.setStatus(cascadeChildStatus);
                 ec.setUpdater(currentUser);
                 ec.setUpdatedDate(now);

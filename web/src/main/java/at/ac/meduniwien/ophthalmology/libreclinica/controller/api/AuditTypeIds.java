@@ -485,4 +485,45 @@ public final class AuditTypeIds {
      * one row per restored event CRF.
      */
     public static final int DDE_SECOND_PASS_DATE_RESTORED    = 150;
+
+    /**
+     * A CRF's name or description changed ({@code PUT /crfs/{oid}}); one row
+     * per field, {@code entity_name} naming it, old and new value. Seeded by
+     * {@code lc-muw-2026-09-30-audit-type-crf-field-updated.xml}.
+     */
+    public static final int CRF_FIELD_UPDATED                = 142;
+
+    /*
+     * 143-144 (lc-muw-2026-09-30-audit-types-event-crf-migration.xml), moving
+     * existing event CRFs to another version of their CRF.
+     */
+
+    /**
+     * A batch move of existing event CRFs to another version of their CRF.
+     * One row per run on the {@code crf} row; {@code new_value} packs the
+     * study, both versions and the counts. Each event CRF's own change is in
+     * the rows the {@code event_crf} triggers write (33 version, 32 SDV).
+     */
+    public static final int EVENT_CRF_BATCH_MIGRATION        = 143;
+    /**
+     * A signed event CRF's signature removed because it moved to another
+     * version: {@code status_id} from signed back to its unsigned status. The
+     * {@code event_crf} trigger does not audit that transition.
+     */
+    public static final int EVENT_CRF_SIGNATURE_REMOVED      = 144;
+
+    /*
+     * 190-191 (lc-muw-2026-09-30-audit-types-crf-lifecycle-cascade.xml): an
+     * event CRF that the removal of its CRF, or of its CRF version, took with
+     * it. One row per event CRF, on the event CRF, in the event_crf trigger's
+     * shape (column "Status", status ids as values), so the change is in the
+     * study's and the subject's audit log. The restore writes
+     * EVENT_CRF_RESTORED (139) per event CRF. CrfLifecycleCascade reads the
+     * latest of these rows to tell which removal holds an event CRF.
+     */
+
+    /** An event CRF auto-removed with its CRF. */
+    public static final int EVENT_CRF_REMOVED_WITH_CRF       = 190;
+    /** An event CRF auto-removed with its CRF version. */
+    public static final int EVENT_CRF_REMOVED_WITH_VERSION   = 191;
 }
