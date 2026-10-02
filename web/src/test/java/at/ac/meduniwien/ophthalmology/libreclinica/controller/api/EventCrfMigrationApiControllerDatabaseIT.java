@@ -325,6 +325,37 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
     }
 
     @Test
+    void aRunThatFailsAtItsLastWriteChangesNothing() throws Exception {
+        World w = world();
+        String digest = digestOf(w, null);
+        // The last write of a run is its summary row (143).
+        String fn = "migit_fail_" + w.t().toLowerCase();
+        fx.execute("CREATE FUNCTION " + fn + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN"
+                + " IF NEW.audit_log_event_type_id = 143 AND NEW.entity_id = " + w.crf()
+                + " THEN RAISE EXCEPTION 'injected failure'; END IF; RETURN NEW; END $$");
+        fx.execute("CREATE TRIGGER " + fn + " BEFORE INSERT ON audit_log_event FOR EACH ROW EXECUTE PROCEDURE "
+                + fn + "()");
+        try {
+            mvc().perform(post(w.url()).session(dm()).contentType("application/json")
+                            .content(w.body(null, 2, digest)))
+                    .andExpect(status().isInternalServerError());
+        } finally {
+            fx.execute("DROP TRIGGER " + fn + " ON audit_log_event");
+            fx.execute("DROP FUNCTION " + fn + "()");
+        }
+
+        assertThat(versionOf(w.ec1())).isEqualTo(w.v1());
+        assertThat(versionOf(w.ec2())).isEqualTo(w.v1());
+        assertThat(fx.boolValue("SELECT sdv_status FROM event_crf WHERE event_crf_id = ?", w.ec1())).isTrue();
+        assertThat(fx.status("event_crf", w.ec2())).isEqualTo(8);
+        assertThat(fx.status("study_subject", w.s2())).isEqualTo(8);
+        assertThat(fx.intValue("SELECT subject_event_status_id FROM study_event WHERE study_event_id = ?", w.ev2()))
+                .isEqualTo(8);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 144"
+                + " AND entity_id = ?", w.ec2())).isZero();
+    }
+
+    @Test
     void aSubjectLabelOrEventCrfIdsNarrowTheMoveToOneSubjectsEventCrf() throws Exception {
         World w = world();
         mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
@@ -434,6 +465,122 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
         mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
                         .content(w.body(null, null)))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void aVersionOfAnotherCrfARemovedSourceAndAStudyThatTakesNoChangesAreRefused() throws Exception {
+        World w = world();
+        int other = fx.crf("CRF " + w.t() + " other", "F_" + w.t() + "_X", dmId);
+        fx.version(other, "x1", "F_" + w.t() + "_X_V1", 1);
+        String selection = "{\"studyOid\":\"" + CrfLibraryFixtures.STUDY_OID + "\",\"sourceVersionOid\":\"%s\","
+                + "\"targetVersionOid\":\"%s\",\"expectedEventCrfCount\":2,\"expectedSelectionDigest\":\"x\"}";
+        mvc().perform(post(w.url()).session(dm()).contentType("application/json")
+                        .content(String.format(selection, "F_" + w.t() + "_V1", "F_" + w.t() + "_X_V1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("targetVersionOid"))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("No version")));
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(String.format(selection, "F_" + w.t() + "_X_V1", "F_" + w.t() + "_V2")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("sourceVersionOid"));
+        assertThat(versionOf(w.ec1())).isEqualTo(w.v1());
+
+        fx.execute("UPDATE crf_version SET status_id = 5 WHERE crf_version_id = ?", w.v1());
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body(null, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("sourceVersionOid"))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("removed")));
+
+        String user = "migit-dm-" + w.t().toLowerCase();
+        int userId = fx.user(user, false);
+        int frozen = fx.topStudy("S_F" + w.t(), "Frozen " + w.t(), 9);
+        fx.role(user, frozen, "director");
+        mvc().perform(post(w.url() + "/preview").session(CrfLibraryFixtures.session(userId, user, false))
+                        .contentType("application/json")
+                        .content("{\"studyOid\":\"S_F" + w.t() + "\",\"sourceVersionOid\":\"F_" + w.t()
+                                + "_V2\",\"targetVersionOid\":\"F_" + w.t() + "_V1\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("frozen")));
+    }
+
+    @Test
+    void aDataManagerWhoseBindingIsNotActiveMayNot() throws Exception {
+        World w = world();
+        String user = "migit-gone-" + w.t().toLowerCase();
+        int userId = fx.user(user, false);
+        fx.role(user, CrfLibraryFixtures.STUDY_ID, "director", 5);
+        MockHttpSession s = CrfLibraryFixtures.session(userId, user, false);
+
+        mvc().perform(get(w.url() + "/options").param("studyOid", CrfLibraryFixtures.STUDY_OID).session(s))
+                .andExpect(status().isForbidden());
+        mvc().perform(post(w.url() + "/preview").session(s).contentType("application/json")
+                        .content(w.body(null, null)))
+                .andExpect(status().isForbidden());
+        mvc().perform(post(w.url()).session(s).contentType("application/json")
+                        .content(w.body(null, 2, digestOf(w, null))))
+                .andExpect(status().isForbidden());
+        assertThat(versionOf(w.ec1())).isEqualTo(w.v1());
+    }
+
+    @Test
+    void aLockedEventCrfIsNotMoved() throws Exception {
+        World w = world();
+        int s6 = fx.subject(w.t() + "-6", CrfLibraryFixtures.STUDY_ID, 1);
+        int ec6 = fx.eventCrf(fx.event(s6, CrfLibraryFixtures.SED_ID, 4, 1), s6, w.v1(), 6, true, true, false);
+
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body(null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventCrfCount").value(2))
+                .andExpect(jsonPath("$.locked.length()").value(3))
+                .andExpect(jsonPath("$.locked[2].row.eventCrfId").value(ec6))
+                .andExpect(jsonPath("$.locked[2].reason").value("event-crf-locked"));
+        mvc().perform(post(w.url()).session(dm()).contentType("application/json")
+                        .content(w.body(null, 2, digestOf(w, null))))
+                .andExpect(status().isOk());
+
+        assertThat(versionOf(ec6)).isEqualTo(w.v1());
+        assertThat(fx.boolValue("SELECT sdv_status FROM event_crf WHERE event_crf_id = ?", ec6)).isTrue();
+    }
+
+    @Test
+    void chosenSitesAndEventDefinitionsNarrowTheMoveAndRemovedOnesAreLeftOut() throws Exception {
+        World w = world();
+        // A removed site and a removed event definition, each with an event CRF on v1.
+        int gone = fx.site("S_G" + w.t(), "Gone " + w.t());
+        fx.execute("UPDATE study SET status_id = 5 WHERE study_id = ?", gone);
+        int sg = fx.subject(w.t() + "-G", gone, 1);
+        fx.eventCrf(fx.event(sg, CrfLibraryFixtures.SED_ID, 4, 1), sg, w.v1(), 1, false, true, false);
+        int sedGone = fx.eventDefinition(CrfLibraryFixtures.STUDY_ID, "Gone " + w.t(), "SE_G" + w.t(), 5);
+        int sr = fx.subject(w.t() + "-R", CrfLibraryFixtures.STUDY_ID, 1);
+        fx.eventCrf(fx.event(sr, sedGone, 4, 1), sr, w.v1(), 1, false, true, false);
+        fx.eventDefinition(CrfLibraryFixtures.STUDY_ID, "Other " + w.t(), "SE_O" + w.t(), 1);
+        fx.topStudy("S_O" + w.t(), "Other " + w.t(), 1);
+
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body(null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventCrfCount").value(2))
+                .andExpect(jsonPath("$.notOffered.length()").value(1));
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body("\"siteOids\":[\"" + CrfLibraryFixtures.STUDY_OID + "\"]", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventCrfCount").value(2))
+                .andExpect(jsonPath("$.notOffered.length()").value(0));
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body("\"siteOids\":[\"S_" + w.t() + "\"]", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventCrfCount").value(0))
+                .andExpect(jsonPath("$.notOffered.length()").value(1));
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body("\"eventDefinitionOids\":[\"SE_O" + w.t() + "\"]", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventCrfCount").value(0));
+        mvc().perform(post(w.url() + "/preview").session(dm()).contentType("application/json")
+                        .content(w.body("\"siteOids\":[\"S_O" + w.t() + "\"]", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("siteOids"));
     }
 
     @Test

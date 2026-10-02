@@ -57,8 +57,10 @@ const REMOVED: Crf = {
   versions: [{ ...V1, oid: 'F_OLD_V1', status: 'auto-removed' }],
 }
 
+let router: ReturnType<typeof createRouter>
+
 function makeRouter() {
-  return createRouter({
+  router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<div />' } },
@@ -68,6 +70,7 @@ function makeRouter() {
       { path: '/crf-authoring-canvas/:crfOid', name: 'crfAuthoringCanvas', component: { template: '<div />' } },
     ],
   })
+  return router
 }
 
 async function mountView(role: 'Data Manager' | 'Investigator' = 'Data Manager'): Promise<VueWrapper> {
@@ -238,6 +241,9 @@ describe('CrfLibraryView', () => {
     expect(preview.text()).toContain('Body height')
     expect(preview.text()).toContain('no data is persisted')
     expect(apiPost).not.toHaveBeenCalled()
+    // Forking only navigates to the builder (and loads the same contents there).
+    expect(router.currentRoute.value.name).not.toBe('crfAuthoringCanvas')
+    expect(router.currentRoute.value.query.fromVersion).toBeUndefined()
 
     await wrapper.find('[data-testid="crf-preview-close"]').trigger('click')
     await flushPromises()

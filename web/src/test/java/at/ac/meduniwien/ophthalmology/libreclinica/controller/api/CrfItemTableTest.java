@@ -23,6 +23,7 @@ class CrfItemTableTest {
 
     private static final int AVAILABLE = 1;
     private static final int REMOVED = 5;
+    private static final int LOCKED = 6;
 
     private static CrfItemTable.Row row(String item, String version, int versionStatus, String group) {
         return new CrfItemTable.Row(item, "I_" + item, "desc " + item, 5, version, versionStatus, group);
@@ -64,6 +65,28 @@ class CrfItemTableTest {
         assertThat(item.placements()).containsExactly(
                 new CrfDetailDto.Placement("G1", "v1"),
                 new CrfDetailDto.Placement("G2", "v2"));
+    }
+
+    @Test
+    void aConflictingPlacementInAVersionThatTakesDataIsAProblem() {
+        // Legacy ViewCRFServlet: the item is a problem as soon as any
+        // version involved in the conflict is available.
+        assertThat(CrfItemTable.build(List.of(
+                row("AGE", "v1", REMOVED, "G1"),
+                row("AGE", "v2", AVAILABLE, "G2"))).get(0).integrity())
+                .as("the reference is removed, the conflict available").isEqualTo(CrfItemTable.PROBLEM);
+        assertThat(CrfItemTable.build(List.of(
+                row("AGE", "v1", LOCKED, "G1"),
+                row("AGE", "v2", AVAILABLE, "G2"))).get(0).integrity())
+                .as("the reference is locked, the conflict available").isEqualTo(CrfItemTable.PROBLEM);
+    }
+
+    @Test
+    void aReferenceInAVersionThatTakesDataIsAProblemWhateverTheConflictsVersion() {
+        assertThat(CrfItemTable.build(List.of(
+                row("AGE", "v1", AVAILABLE, "G1"),
+                row("AGE", "v2", REMOVED, "G2"))).get(0).integrity())
+                .as("the reference is available, the conflict removed").isEqualTo(CrfItemTable.PROBLEM);
     }
 
     @Test

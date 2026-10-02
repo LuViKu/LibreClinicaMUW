@@ -778,6 +778,26 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
         assertThat(fx.status("crf_version", v1)).isEqualTo(1);
     }
 
+    @Test
+    void theNewDefaultIsTheNewestAvailableVersionTheSelectionAllows() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+        int v1 = fx.version(crf, "v1", "F_" + t + "_V1", 1);
+        int v2 = fx.version(crf, "v2", "F_" + t + "_V2", 1);
+        int v3 = fx.version(crf, "v3", "F_" + t + "_V3", 1);
+        fx.version(crf, "v4", "F_" + t + "_V4", 6);    // newest, but locked
+        int edc = fx.eventDefinitionCrf(SED, STUDY, crf, v1, null);
+        int edcPicky = fx.eventDefinitionCrf(CrfLibraryFixtures.SED2_ID, STUDY, crf, v1, v1 + "," + v2);
+
+        mvc().perform(post("/api/v1/crfs/F_" + t + "/versions/F_" + t + "_V1/lock").session(dm()))
+                .andExpect(status().isOk());
+
+        assertThat(fx.intValue("SELECT default_version_id FROM event_definition_crf WHERE event_definition_crf_id = ?",
+                edc)).isEqualTo(v3);
+        assertThat(fx.intValue("SELECT default_version_id FROM event_definition_crf WHERE event_definition_crf_id = ?",
+                edcPicky)).as("the newest its selection allows").isEqualTo(v2);
+    }
+
     /* ------------------------------------------------------------------ */
     /* Hard remove                                                        */
     /* ------------------------------------------------------------------ */
@@ -877,6 +897,34 @@ class CrfsApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabase
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].message").value(containsString("already exists")));
         assertThat(fx.stringValue("SELECT name FROM crf WHERE oc_oid = ?", "F_" + t)).isEqualTo("CRF " + t);
+    }
+
+    @Test
+    void aDescriptionAloneMayChangeAndOnlyItIsAudited() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"CRF " + t + "\",\"description\":\"Only this\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Only this"));
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 142"
+                + " AND entity_id = ? AND entity_name = 'description'", crf)).isEqualTo(1);
+        assertThat(fx.intValue("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = 142"
+                + " AND entity_id = ? AND entity_name = 'name'", crf)).as("the name did not change").isZero();
+    }
+
+    @Test
+    void theLongestNameAndDescriptionTheLegacyFormTakesAreTaken() throws Exception {
+        String t = tag();
+        int crf = fx.crf("CRF " + t, "F_" + t, dmId);
+
+        String name = (t + "n".repeat(255)).substring(0, 255);
+        mvc().perform(put("/api/v1/crfs/F_" + t).session(dm()).contentType("application/json")
+                        .content("{\"name\":\"" + name + "\",\"description\":\"" + "d".repeat(2048) + "\"}"))
+                .andExpect(status().isOk());
+        assertThat(fx.stringValue("SELECT name FROM crf WHERE crf_id = ?", crf)).isEqualTo(name);
+        assertThat(fx.intValue("SELECT length(description) FROM crf WHERE crf_id = ?", crf)).isEqualTo(2048);
     }
 
     @Test
