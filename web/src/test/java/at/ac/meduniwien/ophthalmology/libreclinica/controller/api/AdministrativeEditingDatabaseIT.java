@@ -10,7 +10,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,12 +23,16 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
@@ -177,6 +183,79 @@ class AdministrativeEditingDatabaseIT extends AbstractApiControllerDatabaseIT {
                 + " WHERE d.event_crf_id = ? AND i.oc_oid = ? AND d.ordinal = ? "
                 + "   AND dn.discrepancy_note_type_id = 4 "
                 + " ORDER BY dn.discrepancy_note_id DESC LIMIT 1", eventCrfId, itemOid, ordinal);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* What counts as completion evidence                                 */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * One audit row on an event CRF that has no other evidence. The ids are
+     * not event CRFs of the seed: the evidence is read from the audit trail
+     * alone.
+     */
+    @ParameterizedTest(name = "type {1} on {0}, column ''{2}'' -> {3}")
+    @CsvSource({
+            "9801, 8,   date_completed, true",
+            "9802, 10,  status_id,      true",
+            "9803, 14,  status_id,      true",
+            "9804, 15,  status_id,      true",
+            "9805, 16,  status_id,      true",
+            "9806, 138, date_completed, true",
+            "9807, 11,  date_completed, true",
+            "9808, 11,  ,               true",
+            "9809, 11,  status_id,      false",
+            "9810, 1,   date_completed, false",
+    })
+    void anAuditRowIsCompletionEvidenceOnlyOfItsKind(int eventCrfId, int auditType, String column,
+                                                       boolean completed) throws SQLException {
+        insertAudit("event_crf", eventCrfId, auditType, column);
+
+        assertEquals(completed, AdministrativeEditing.everCompleted(DATA_SOURCE, bean(eventCrfId)));
+    }
+
+    @Test
+    void aCompletionAuditedOnAnotherTableIsNotThisCrfsEvidence() throws SQLException {
+        insertAudit("item_data", 9811, 8, "date_completed");
+
+        assertFalse(AdministrativeEditing.everCompleted(DATA_SOURCE, bean(9811)));
+    }
+
+    @Test
+    void theCrfsOwnStateIsEvidenceWithoutAnyAuditRow() {
+        EventCRFBean completed = bean(9812);
+        completed.setDateCompleted(new java.util.Date());
+        assertTrue(AdministrativeEditing.everCompleted(DATA_SOURCE, completed));
+
+        EventCRFBean secondPassDone = bean(9813);
+        secondPassDone.setDateValidateCompleted(new java.util.Date());
+        assertTrue(AdministrativeEditing.everCompleted(DATA_SOURCE, secondPassDone), "double data entry");
+
+        EventCRFBean unavailable = bean(9814);
+        unavailable.setStatus(Status.UNAVAILABLE);
+        assertTrue(AdministrativeEditing.everCompleted(DATA_SOURCE, unavailable), "status unavailable");
+
+        assertFalse(AdministrativeEditing.everCompleted(DATA_SOURCE, bean(9815)));
+    }
+
+    private static EventCRFBean bean(int eventCrfId) {
+        EventCRFBean ecb = new EventCRFBean();
+        ecb.setId(eventCrfId);
+        ecb.setStatus(Status.AVAILABLE);
+        return ecb;
+    }
+
+    private static void insertAudit(String table, int entityId, int auditType, String column) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, user_id, audit_table, "
+                             + "entity_id, entity_name, old_value, new_value) VALUES (?, now(), 1, ?, ?, ?, '', '')")) {
+            ps.setInt(1, auditType);
+            ps.setString(2, table);
+            ps.setInt(3, entityId);
+            ps.setString(4, column);
+            ps.executeUpdate();
+        }
     }
 
     /** The reason on the newest reason-for-change audit row of the value's row, or null. */
