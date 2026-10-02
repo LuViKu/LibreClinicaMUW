@@ -362,6 +362,15 @@ public class SitesApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "The parent study '" + parentOid + "' is removed. Restore the study first."));
         }
+        // RemoveSiteServlet / RestoreSiteServlet refuse while the study is
+        // locked. The cascade rewrites the site's subjects, events and
+        // item data, so a frozen or removed study refuses it too, as the
+        // site writes in preflight do.
+        if (!StudyAdminAuthorization.studyAcceptsWrites(parent)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Parent study is " + parent.getStatus().getName().toLowerCase()
+                            + " — sites cannot be removed or restored until it is unlocked"));
+        }
 
         final Status oldStatus = site.getStatus();
         final int siteId = site.getId();
@@ -376,6 +385,10 @@ public class SitesApiController {
                     "site_" + operation,
                     MDC.get("reqId"),
                     () -> applyLifecycle(siteId, siteOid, me, removal, oldStatus));
+        } catch (StudyLifecycleCascade.StatusChangedException e) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Site '" + siteOid + "' is not " + (removal ? "live" : "removed")
+                            + " any more; nothing was changed. Reload and check its status."));
         } catch (Exception e) {
             LOG.error("Site {} failed for siteOid={} by user={}", operation, siteOid, me.getName(), e);
             return ResponseEntity.internalServerError().body(Map.of("message",

@@ -46,6 +46,23 @@ final class LifecycleFixtures {
                 + "' AND study_id = " + studyId);
     }
 
+    /** The item's two provenance ids, as {@code jobId|ingestItemId} ({@code null} for a missing one). */
+    static String sourceIdsOf(int itemDataId) throws SQLException {
+        try (Connection c = AbstractApiControllerDatabaseIT.DATA_SOURCE.getConnection();
+             Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery("SELECT source_retinal_job_id, source_ingest_item_id FROM item_data "
+                     + "WHERE item_data_id = " + itemDataId)) {
+            assertTrue(rs.next());
+            return rs.getString(1) + "|" + rs.getString(2);
+        }
+    }
+
+    /** Audit rows of one type for one entity of the {@code study} table. */
+    static int studyAuditCount(int auditTypeId, int studyId) throws SQLException {
+        return intQuery("SELECT count(*) FROM audit_log_event WHERE audit_log_event_type_id = " + auditTypeId
+                + " AND audit_table = 'study' AND entity_id = " + studyId);
+    }
+
     static String sourceKindOf(int itemDataId) throws SQLException {
         try (Connection c = AbstractApiControllerDatabaseIT.DATA_SOURCE.getConnection();
              Statement s = c.createStatement();
@@ -175,6 +192,66 @@ final class LifecycleFixtures {
                 + "owner_id, ordinal, source_kind) VALUES (" + itemId + ", " + eventCrfId + ", " + statusId
                 + ", 'v', now(), 1, 1, " + (sourceKind == null ? "NULL" : "'" + sourceKind + "'") + ") "
                 + "RETURNING item_data_id");
+    }
+
+    static int insertCrf(Connection c, String oid, int statusId) throws SQLException {
+        return insertOne(c, "INSERT INTO crf (status_id, name, description, owner_id, date_created, oc_oid) "
+                + "VALUES (" + statusId + ", '" + oid + "', '', 1, now(), '" + oid + "') RETURNING crf_id");
+    }
+
+    /** An event-definition CRF; {@code parentId} is the parent-level row of a site-level one. */
+    static int insertEventDefinitionCrf(Connection c, int definitionId, int studyId, int crfId, int statusId,
+                                        Integer parentId) throws SQLException {
+        return insertOne(c, "INSERT INTO event_definition_crf (study_event_definition_id, study_id, crf_id, "
+                + "required_crf, double_entry, default_version_id, status_id, owner_id, date_created, ordinal, "
+                + "parent_id) VALUES (" + definitionId + ", " + studyId + ", " + crfId + ", true, false, 1, "
+                + statusId + ", 1, now(), 1, " + (parentId == null ? "NULL" : parentId) + ") "
+                + "RETURNING event_definition_crf_id");
+    }
+
+    /**
+     * Gives an item both provenance ids: a retinal inference job on its
+     * event CRF and an ingest item bound to the study subject (each a
+     * foreign key, so the rows have to exist).
+     */
+    static void setProvenanceIds(Connection c, int itemDataId, int eventCrfId, int studySubjectId, long jobId)
+            throws SQLException {
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate("INSERT INTO retinal_inference_job (job_id, event_crf_id, task, e2e_path, "
+                    + "eye_laterality, status, enqueued_at, model_version) VALUES (" + jobId + ", " + eventCrfId
+                    + ", 'fluid', '/dev/null', 'OD', 'done', now(), 'v1')");
+        }
+        int ingest = insertOne(c, "INSERT INTO ingest_item (kind, source_kind, device, stored_path, "
+                + "original_filename, laterality, received_at, status, bound_study_subject_id) "
+                + "VALUES ('image', 'upload', 'it-camera', '/dev/null', 'lifecycle-" + jobId + ".jpg', 'OD', now(), "
+                + "'BOUND', " + studySubjectId + ") RETURNING ingest_item_id");
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE item_data SET source_retinal_job_id = " + jobId + ", source_ingest_item_id = "
+                    + ingest + " WHERE item_data_id = " + itemDataId);
+        }
+    }
+
+    /**
+     * Makes every UPDATE of one row fail until closed: a temporary trigger,
+     * so a test can break an operation part-way through.
+     */
+    static AutoCloseable failUpdatesOf(String table, String idColumn, int id) throws SQLException {
+        String fn = "lifecycle_it_fail_" + table;
+        try (Connection c = AbstractApiControllerDatabaseIT.DATA_SOURCE.getConnection();
+             Statement s = c.createStatement()) {
+            s.execute("CREATE FUNCTION " + fn + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
+                    + "IF OLD." + idColumn + " = " + id + " THEN RAISE EXCEPTION 'lifecycle IT: injected failure'; "
+                    + "END IF; RETURN NEW; END $$");
+            s.execute("CREATE TRIGGER " + fn + " BEFORE UPDATE ON " + table + " FOR EACH ROW EXECUTE PROCEDURE "
+                    + fn + "()");
+        }
+        return () -> {
+            try (Connection c = AbstractApiControllerDatabaseIT.DATA_SOURCE.getConnection();
+                 Statement s = c.createStatement()) {
+                s.execute("DROP TRIGGER " + fn + " ON " + table);
+                s.execute("DROP FUNCTION " + fn + "()");
+            }
+        };
     }
 
     static int insertDataset(Connection c, int studyId, String name, int statusId) throws SQLException {

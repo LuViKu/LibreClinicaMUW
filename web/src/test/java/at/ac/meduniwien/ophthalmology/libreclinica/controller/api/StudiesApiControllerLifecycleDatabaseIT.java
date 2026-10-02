@@ -23,6 +23,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Locale;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -46,16 +47,24 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * every kind the servlets cascade to, plus rows that were removed on
  * their own before the study: a removed site, subject, definition,
  * event CRF and item, the study subject of a removed person, the role of
- * a removed user account and a revoked role. Removal must auto-remove
- * the live rows and leave those alone; restore must bring back exactly
- * what the removal took.
+ * a removed user account and a revoked role, a removed group class and
+ * dataset, a removed event-definition CRF and one of a CRF removed from
+ * the library, and an item hidden under a live event CRF. The live site
+ * has its own group class, dataset and site-level event-definition CRF.
+ * The subjects removed on their own keep a live subject map, as every
+ * subject removal leaves it. Removal must auto-remove the live rows and
+ * leave those alone; restore must bring back exactly what the removal
+ * took.
  *
- * <p>The tests run in order: preview, the refusals, remove, restore.
+ * <p>The tests run in order: preview, the refusals, a removal that fails
+ * part-way, remove, restore.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final String OID = "S_CASCADE_IT";
+    /** {@code source_retinal_job_id|source_ingest_item_id} of {@code idLive}. */
+    private static String PROVENANCE_IDS;
 
     private static int study;
     private static int siteLive;
@@ -66,11 +75,19 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     private static int subjOnRemovedSite;
     private static int subjOfRemovedPerson;
     private static int groupClass;
+    private static int groupClassOfSite;
+    private static int groupClassRemoved;
     private static int mapLive;
+    private static int mapOfSiteClass;
     private static int mapOfRemovedSubject;
+    private static int mapOfSubjectOnRemovedSite;
+    private static int mapOfRemovedPerson;
     private static int defLive;
     private static int defRemoved;
     private static int edc;
+    private static int edcRemoved;
+    private static int edcOfRemovedCrf;
+    private static int edcOfSite;
     private static int evLive;
     private static int evSigned;
     private static int evOfRemovedSubject;
@@ -86,7 +103,10 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     private static int idOfSignedSubject;
     private static int idOfRemovedSubject;
     private static int idOfRemovedPerson;
+    private static int idHiddenUnderLive;
     private static int dataset;
+    private static int datasetOfSite;
+    private static int datasetRemoved;
 
     @BeforeAll
     static void seed() throws SQLException {
@@ -122,7 +142,17 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
             int group = insertOne(c, "INSERT INTO study_group (name, description, study_group_class_id) "
                     + "VALUES ('A', 'arm A', " + groupClass + ") RETURNING study_group_id");
             mapLive = insertMap(c, groupClass, subjLive, group, 1);
-            mapOfRemovedSubject = insertMap(c, groupClass, subjRemoved, group, 7);
+            // No subject removal touches the subject's maps: they stay live.
+            mapOfRemovedSubject = insertMap(c, groupClass, subjRemoved, group, 1);
+            mapOfSubjectOnRemovedSite = insertMap(c, groupClass, subjOnRemovedSite, group, 1);
+            mapOfRemovedPerson = insertMap(c, groupClass, subjOfRemovedPerson, group, 1);
+            groupClassOfSite = insertGroupClass(c, siteLive, "Site arm");
+            mapOfSiteClass = insertMap(c, groupClassOfSite, subjSigned, insertGroup(c, groupClassOfSite, "S"), 1);
+            groupClassRemoved = insertGroupClass(c, study, "Removed arm");
+            try (Statement s = c.createStatement()) {
+                s.executeUpdate("UPDATE study_group_class SET status_id = 5 WHERE study_group_class_id = "
+                        + groupClassRemoved);
+            }
 
             defLive = insertDefinition(c, study, "SE_CASC_LIVE", 1);
             defRemoved = insertDefinition(c, study, "SE_CASC_GONE", 5);
@@ -130,6 +160,10 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
                     + "required_crf, double_entry, default_version_id, status_id, owner_id, date_created, "
                     + "ordinal) VALUES (" + defLive + ", " + study + ", 1, true, false, 1, 1, 1, now(), 1) "
                     + "RETURNING event_definition_crf_id");
+            edcRemoved = insertEventDefinitionCrf(c, defLive, study, insertCrf(c, "F_CASC_OTHER", 1), 5, null);
+            // RemoveCRFServlet: the CRF removed, its event-definition CRFs auto-removed.
+            edcOfRemovedCrf = insertEventDefinitionCrf(c, defLive, study, insertCrf(c, "F_CASC_GONE", 5), 7, null);
+            edcOfSite = insertEventDefinitionCrf(c, defLive, siteLive, 1, 1, edc);
 
             evLive = insertEvent(c, defLive, subjLive, 1);
             evSigned = insertEvent(c, defLive, subjSigned, 1);
@@ -155,10 +189,18 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
             // The person's removal wrote the rows back with the status they had loaded.
             setOldStatus(c, "event_crf", "event_crf_id", ecOfRemovedPerson, 1);
             setOldStatus(c, "item_data", "item_data_id", idOfRemovedPerson, 1);
+            // Hidden before the study, recorded as available, under a live event CRF.
+            idHiddenUnderLive = insertItemData(c, ecLive, 3, 7, null);
+            setOldStatus(c, "item_data", "item_data_id", idHiddenUnderLive, 1);
+            setProvenanceIds(c, idLive, ecLive, subjLive, 990101L);
+            PROVENANCE_IDS = sourceIdsOf(idLive);
+            assertTrue(PROVENANCE_IDS.matches("990101\\|\\d+"), PROVENANCE_IDS);
 
             dataset = insertOne(c, "INSERT INTO dataset (study_id, status_id, name, description, sql_statement, "
                     + "num_runs, date_created, owner_id) VALUES (" + study + ", 1, 'casc-it-dataset', '', '', 0, "
                     + "now(), 1) RETURNING dataset_id");
+            datasetOfSite = insertDataset(c, siteLive, "casc-it-site-dataset", 1);
+            datasetRemoved = insertDataset(c, study, "casc-it-gone-dataset", 5);
         }
     }
 
@@ -174,12 +216,12 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
                 .andExpect(jsonPath("$.siteNames[0]").value("Cascade IT site A"))
                 .andExpect(jsonPath("$.roleBindings").value(3))
                 .andExpect(jsonPath("$.subjects").value(2))
-                .andExpect(jsonPath("$.groupClasses").value(1))
+                .andExpect(jsonPath("$.groupClasses").value(2))
                 .andExpect(jsonPath("$.eventDefinitions").value(1))
                 .andExpect(jsonPath("$.events").value(2))
                 .andExpect(jsonPath("$.eventCrfs").value(2))
                 .andExpect(jsonPath("$.itemData").value(2))
-                .andExpect(jsonPath("$.datasets").value(1));
+                .andExpect(jsonPath("$.datasets").value(2));
         // A preview changes nothing.
         assertEquals(1, statusOf("study", "study_id", study));
         assertEquals(1, statusOf("study_subject", "study_subject_id", subjLive));
@@ -217,12 +259,43 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
 
     @Test
     @Order(5)
+    void aRemovalThatFailsPartWayChangesNothing() throws Exception {
+        // The datasets are the cascade's last step.
+        try (AutoCloseable failing = failUpdatesOf("dataset", "dataset_id", dataset)) {
+            mockMvc().perform(post("/api/v1/studies/" + OID + "/disable")
+                            .contentType("application/json").content("{\"reason\":\"doomed\"}")
+                            .session(sysadminSession()))
+                    .andExpect(status().isInternalServerError());
+        }
+        assertEquals(1, statusOf("study", "study_id", study));
+        assertEquals(1, statusOf("study", "study_id", siteLive));
+        assertEquals(1, roleStatus("casc_multi", study, "Investigator"));
+        assertEquals(1, statusOf("study_subject", "study_subject_id", subjLive));
+        assertEquals(1, statusOf("study_group_class", "study_group_class_id", groupClass));
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapLive));
+        assertEquals(1, statusOf("study_event_definition", "study_event_definition_id", defLive));
+        assertEquals(1, statusOf("event_definition_crf", "event_definition_crf_id", edc));
+        assertEquals(1, statusOf("study_event", "study_event_id", evLive));
+        assertEquals(1, statusOf("event_crf", "event_crf_id", ecLive));
+        assertEquals(1, statusOf("item_data", "item_data_id", idLive));
+        assertEquals(1, statusOf("dataset", "dataset_id", dataset));
+        assertEquals(0, studyAuditCount(AuditTypeIds.STUDY_LIFECYCLE_CHANGED, study));
+        assertEquals(1, studyAuditCount(61, study), "the failure is audited as OPERATION_FAILED");
+    }
+
+    @Test
+    @Order(6)
     void removalCascadesLikeRemoveStudyServlet() throws Exception {
+        MockHttpSession session = sysadminSession();
+        StudyBean sessionStudy = studyBean(study, 0, Status.AVAILABLE);
+        session.setAttribute("study", sessionStudy);
         mockMvc().perform(post("/api/v1/studies/" + OID + "/disable")
                         .contentType("application/json").content("{\"reason\":\"Study closed early\"}")
-                        .session(sysadminSession()))
+                        .session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("removed"));
+        // As RemoveStudyServlet does to the current study.
+        assertEquals(Status.DELETED, sessionStudy.getStatus());
 
         // The study is removed and remembers what it was; the live site is auto-removed.
         assertEquals(5, statusOf("study", "study_id", study));
@@ -245,11 +318,22 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(7, statusOf("study_subject", "study_subject_id", subjOfRemovedPerson));
 
         assertEquals(7, statusOf("study_group_class", "study_group_class_id", groupClass));
+        assertEquals(7, statusOf("study_group_class", "study_group_class_id", groupClassOfSite));
+        assertEquals(5, statusOf("study_group_class", "study_group_class_id", groupClassRemoved));
         assertEquals(7, statusOf("subject_group_map", "subject_group_map_id", mapLive));
+        assertEquals(7, statusOf("subject_group_map", "subject_group_map_id", mapOfSiteClass));
+        // A map goes with its subject: these subjects were not removed here.
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfRemovedSubject));
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfSubjectOnRemovedSite));
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfRemovedPerson));
 
         assertEquals(7, statusOf("study_event_definition", "study_event_definition_id", defLive));
         assertEquals(5, statusOf("study_event_definition", "study_event_definition_id", defRemoved));
         assertEquals(7, statusOf("event_definition_crf", "event_definition_crf_id", edc));
+        assertEquals(5, statusOf("event_definition_crf", "event_definition_crf_id", edcRemoved));
+        assertEquals(7, statusOf("event_definition_crf", "event_definition_crf_id", edcOfRemovedCrf));
+        // Parent-level rows only, as the servlet's findAllByDefinition.
+        assertEquals(1, statusOf("event_definition_crf", "event_definition_crf_id", edcOfSite));
 
         assertEquals(7, statusOf("study_event", "study_event_id", evLive));
         assertEquals(7, statusOf("study_event", "study_event_id", evSigned));
@@ -263,10 +347,15 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(1, oldStatusOf("item_data", "item_data_id", idLive));
         assertEquals(5, statusOf("item_data", "item_data_id", idRemoved));
         assertEquals(7, statusOf("item_data", "item_data_id", idOfSignedSubject));
+        assertEquals(7, statusOf("item_data", "item_data_id", idHiddenUnderLive));
+        assertEquals(7, oldStatusOf("item_data", "item_data_id", idHiddenUnderLive));
         // Hiding a value must not strip the record of what produced it.
         assertEquals("modality_baseline", sourceKindOf(idLive));
+        assertEquals(PROVENANCE_IDS, sourceIdsOf(idLive));
 
         assertEquals(7, statusOf("dataset", "dataset_id", dataset));
+        assertEquals(7, statusOf("dataset", "dataset_id", datasetOfSite));
+        assertEquals(5, statusOf("dataset", "dataset_id", datasetRemoved));
 
         // One lifecycle audit row, carrying the operator's reason.
         try (Connection c = DATA_SOURCE.getConnection();
@@ -286,13 +375,18 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     }
 
     @Test
-    @Order(6)
+    @Order(7)
     void restoreBringsBackWhatTheRemovalTookAndNothingElse() throws Exception {
+        MockHttpSession session = sysadminSession();
+        StudyBean sessionSite = studyBean(siteLive, study, Status.AUTO_DELETED);
+        session.setAttribute("study", sessionSite);
         mockMvc().perform(post("/api/v1/studies/" + OID + "/restore")
                         .contentType("application/json").content("{\"reason\":\"Removed by mistake\"}")
-                        .session(sysadminSession()))
+                        .session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("available"));
+        // As RestoreStudyServlet does when the current study is one of the sites.
+        assertEquals(Status.AVAILABLE, sessionSite.getStatus());
 
         assertEquals(1, statusOf("study", "study_id", study));
         assertEquals(1, statusOf("study", "study_id", siteLive));
@@ -315,12 +409,22 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(7, statusOf("study_subject", "study_subject_id", subjOfRemovedPerson));
 
         assertEquals(1, statusOf("study_group_class", "study_group_class_id", groupClass));
+        assertEquals(1, statusOf("study_group_class", "study_group_class_id", groupClassOfSite));
+        assertEquals(5, statusOf("study_group_class", "study_group_class_id", groupClassRemoved));
         assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapLive));
-        assertEquals(7, statusOf("subject_group_map", "subject_group_map_id", mapOfRemovedSubject));
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfSiteClass));
+        // Still live, so the subject has its group and arm when it comes back.
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfRemovedSubject));
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfSubjectOnRemovedSite));
+        assertEquals(1, statusOf("subject_group_map", "subject_group_map_id", mapOfRemovedPerson));
 
         assertEquals(1, statusOf("study_event_definition", "study_event_definition_id", defLive));
         assertEquals(5, statusOf("study_event_definition", "study_event_definition_id", defRemoved));
         assertEquals(1, statusOf("event_definition_crf", "event_definition_crf_id", edc));
+        assertEquals(5, statusOf("event_definition_crf", "event_definition_crf_id", edcRemoved));
+        // A CRF removed from the library keeps its event-definition CRFs removed.
+        assertEquals(7, statusOf("event_definition_crf", "event_definition_crf_id", edcOfRemovedCrf));
+        assertEquals(1, statusOf("event_definition_crf", "event_definition_crf_id", edcOfSite));
 
         assertEquals(1, statusOf("study_event", "study_event_id", evLive));
         assertEquals(1, statusOf("study_event", "study_event_id", evSigned));
@@ -339,13 +443,17 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         assertEquals(1, statusOf("item_data", "item_data_id", idOfSignedSubject));
         assertEquals(7, statusOf("item_data", "item_data_id", idOfRemovedSubject));
         assertEquals(7, statusOf("item_data", "item_data_id", idOfRemovedPerson));
+        assertEquals(7, statusOf("item_data", "item_data_id", idHiddenUnderLive));
         assertEquals("modality_baseline", sourceKindOf(idLive));
+        assertEquals(PROVENANCE_IDS, sourceIdsOf(idLive));
 
         assertEquals(1, statusOf("dataset", "dataset_id", dataset));
+        assertEquals(1, statusOf("dataset", "dataset_id", datasetOfSite));
+        assertEquals(5, statusOf("dataset", "dataset_id", datasetRemoved));
     }
 
     @Test
-    @Order(7)
+    @Order(8)
     void restoreReturnsALockedStudyToLocked() throws Exception {
         try (Connection c = DATA_SOURCE.getConnection(); Statement s = c.createStatement()) {
             s.executeUpdate("UPDATE study SET status_id = 6 WHERE study_id = " + study);
@@ -382,6 +490,14 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
         s.setOid("S_DEFAULTS1");
         session.setAttribute("study", s);
         return session;
+    }
+
+    private static StudyBean studyBean(int id, int parentId, Status status) {
+        StudyBean s = new StudyBean();
+        s.setId(id);
+        s.setParentStudyId(parentId);
+        s.setStatus(status);
+        return s;
     }
 
     private static MockHttpSession userSession() {

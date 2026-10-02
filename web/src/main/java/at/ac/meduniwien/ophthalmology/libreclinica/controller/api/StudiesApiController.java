@@ -711,10 +711,22 @@ public class StudiesApiController {
         target_.setUpdatedDate(new java.util.Date());
         studyDao.updateStudyStatus(target_);
 
-        // Cascade to child sites — same pattern A8.1 uses.
-        try {
-            studyDao.updateSitesStatus(target_);
-        } catch (Exception e) {
+        // Cascade to the live sites only. A removed or auto-removed site
+        // keeps its status and the status it recorded at removal: making
+        // it available or locked here would revive it while its subjects,
+        // roles and data stay auto-removed, and a later study removal and
+        // restore would then bring back what was removed on purpose.
+        // (StudyDAO.updateSitesStatus rewrites every site, and overwrites
+        // old_status_id with the parent's.)
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE study SET status_id = ?, date_updated = now(), update_id = ? "
+                             + "WHERE parent_study_id = ? AND status_id NOT IN (5, 7)")) {
+            ps.setInt(1, target.getId());
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target_.getId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Cascade status to sites of study {} failed (continuing): {}",
                     studyOid, e.getMessage());
         }
@@ -845,6 +857,10 @@ public class StudiesApiController {
                     "study_" + operation,
                     MDC.get("reqId"),
                     () -> applyLifecycle(studyId, studyOid, me, removal, oldStatus, reason));
+        } catch (StudyLifecycleCascade.StatusChangedException e) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Study '" + studyOid + "' was " + (removal ? "removed" : "restored")
+                            + " by another request; nothing was changed. Reload and check its status."));
         } catch (Exception e) {
             LOG.error("Study {} failed for oid={} by admin={}", operation, studyOid, me.getName(), e);
             return ResponseEntity.internalServerError().body(Map.of("message",
