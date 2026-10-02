@@ -269,6 +269,18 @@
     "clusterMonitorHint": "Letzte Zeilen des Cron-Monitor-Logs auf der App-VM. Leer ist gut.",
     "clusterMonitorEmpty": "Keine Meldungen aufgezeichnet.",
     "clusterMonitorUnavailable": "Monitor-Log nicht lesbar: {path}",
+    "mail": {
+      "heading": "Ausgehende E-Mail",
+      "hint": "Sendet eine Testnachricht an die E-Mail-Adresse Ihres eigenen Kontos, über den Mailserver der Anwendung. Nach einem Deployment oder einer Änderung der Mail-Einstellungen verwenden.",
+      "send": "Test-E-Mail senden",
+      "sending": "Wird gesendet…",
+      "sent": "Test-E-Mail an {recipient} gesendet. Prüfen Sie, ob sie ankommt.",
+      "failed": "Senden an {recipient} fehlgeschlagen: {message}",
+      "failedGeneric": "Senden der Test-E-Mail fehlgeschlagen.",
+      "noAddress": "Ihr Konto hat keine E-Mail-Adresse. Tragen Sie zuerst eine im Profil ein.",
+      "noSender": "Auf dem Server ist keine Absenderadresse konfiguriert (adminEmail).",
+      "tooSoon": "Vor weniger als einer halben Minute wurde schon eine Test-E-Mail gesendet. Bitte kurz warten."
+    },
     "uploaders": {
       "heading": "Uploader an den Aufnahme-PCs",
       "hint": "Der Export Watcher (Clarus- und Spectralis-PC) und die Optomed Bridge melden sich alle zwei Minuten. Ein Programm, das sich nicht mehr meldet, erscheint als stumm; eines, das beendet oder mit dem PC heruntergefahren wurde, sagt das.",
@@ -383,8 +395,52 @@
     "maxLength": "Maximallänge",
     "expirationDays": "Ablauf (Tage)",
     "zeroDaysNote": "0 = läuft nie ab",
+    "zeroMaxNote": "0 = kein Maximum",
     "changeRequiredOnFirstLogin": "Passwort-Änderung bei erster Anmeldung erzwingen",
+    "lockout": "Kontosperre",
+    "lockoutEnabled": "Konto nach wiederholt fehlgeschlagener Anmeldung sperren",
+    "lockoutFailedAttempts": "Fehlgeschlagene Anmeldungen bis zur Sperre",
+    "lockoutNote": "1–25. Gilt ab der nächsten fehlgeschlagenen Anmeldung. Gesperrte Konten werden in der Nutzerverwaltung entsperrt.",
     "discard": "Neu laden"
+  },
+  "adminLoginHistory": {
+    "title": "Anmeldeverlauf",
+    "subtitle": "Jede An- und Abmeldung und jede fehlgeschlagene Anmeldung, auch über SSO. Neueste zuerst.",
+    "loadFailed": "Der Anmeldeverlauf konnte nicht geladen werden.",
+    "exportCsv": "CSV exportieren",
+    "exporting": "Wird exportiert…",
+    "exportHint": "Alle Zeilen, die die Filter auswählen, nicht nur diese Seite.",
+    "exportFailed": "Export des Anmeldeverlaufs fehlgeschlagen.",
+    "empty": "Keine Anmeldeversuche für diese Filter.",
+    "range": "{start}–{end} von {total}",
+    "pageOfTotal": "Seite {page} von {total}",
+    "prev": "Zurück",
+    "next": "Weiter",
+    "filter": {
+      "user": "Nutzer/-in",
+      "userPlaceholder": "Teil eines Nutzernamens",
+      "status": "Status",
+      "allStatuses": "Alle Status",
+      "allRefused": "Alle abgewiesenen Anmeldungen",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "col": {
+      "when": "Zeitpunkt",
+      "user": "Nutzername",
+      "status": "Status",
+      "details": "Details"
+    },
+    "status": {
+      "SUCCESSFUL_LOGIN": "Anmeldung erfolgreich",
+      "FAILED_LOGIN": "Anmeldung fehlgeschlagen",
+      "FAILED_LOGIN_LOCKED": "Abgewiesen: Konto gesperrt",
+      "SUCCESSFUL_LOGOUT": "Abmeldung",
+      "ACCESS_CODE_VIEWED": "Zugangscode angezeigt",
+      "SSO_LOGIN": "SSO-Anmeldung",
+      "SSO_LOGIN_FAILED": "SSO-Anmeldung abgewiesen",
+      "UNKNOWN": "Unbekannter Status ({code})"
+    }
   },
   "adminConfig": {
     "title": "Anwendungskonfiguration",

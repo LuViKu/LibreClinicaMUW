@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        145 — a security setting changed (R1.2, 2026-09-30).
+
+        The password-policy page (AdminApiController) gains the account
+        lockout that only the legacy /Configure page could edit, and every
+        setting that page changes is now audited: the password rules and the
+        lockout decide who can log in, and until now a change to them left no
+        audit row. One row per changed key, against the configuration table.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-09-30-audit-type-system-setting" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 145;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit type 145 — system_setting_changed.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="145"/>
+            <column name="name" value="system_setting_changed"/>
+            <column name="display_name" value="System setting changed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 145</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

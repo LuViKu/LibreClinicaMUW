@@ -269,6 +269,18 @@
     "clusterMonitorHint": "Last lines of the app-VM cron monitor log. Empty is good.",
     "clusterMonitorEmpty": "No alerts recorded.",
     "clusterMonitorUnavailable": "Monitor log not readable: {path}",
+    "mail": {
+      "heading": "Outgoing e-mail",
+      "hint": "Sends a test message to the e-mail address of your own account, through the mail server the application uses. Use it after a deployment or a change to the mail settings.",
+      "send": "Send test e-mail",
+      "sending": "Sending…",
+      "sent": "Test e-mail sent to {recipient}. Check that it arrives.",
+      "failed": "Sending to {recipient} failed: {message}",
+      "failedGeneric": "Sending the test e-mail failed.",
+      "noAddress": "Your account has no e-mail address. Add one to your profile first.",
+      "noSender": "No sender address is configured on the server (adminEmail).",
+      "tooSoon": "A test e-mail was sent less than half a minute ago. Please wait a moment."
+    },
     "uploaders": {
       "heading": "Uploaders on the acquisition PCs",
       "hint": "The Export Watcher (Clarus and Spectralis PCs) and the Optomed Bridge report every two minutes. A program that stops reporting shows as silent; one that was closed, or whose PC was shut down, says so.",
@@ -383,8 +395,52 @@
     "maxLength": "Maximum length",
     "expirationDays": "Expiration (days)",
     "zeroDaysNote": "0 = never expires",
+    "zeroMaxNote": "0 = no maximum",
     "changeRequiredOnFirstLogin": "Force password change on first login",
+    "lockout": "Account lockout",
+    "lockoutEnabled": "Lock an account after repeated failed logins",
+    "lockoutFailedAttempts": "Failed logins before the account is locked",
+    "lockoutNote": "1–25. Applies from the next failed login. A locked account is unlocked under Users.",
     "discard": "Reload"
+  },
+  "adminLoginHistory": {
+    "title": "Login history",
+    "subtitle": "Every login, logout and failed login, SSO included. Newest first.",
+    "loadFailed": "Failed to load the login history.",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting…",
+    "exportHint": "Every row the filters select, not only this page.",
+    "exportFailed": "Failed to export the login history.",
+    "empty": "No login attempts match these filters.",
+    "range": "{start}–{end} of {total}",
+    "pageOfTotal": "Page {page} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "filter": {
+      "user": "User",
+      "userPlaceholder": "Part of a user name",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "allRefused": "All refused logins",
+      "from": "From",
+      "to": "To"
+    },
+    "col": {
+      "when": "When",
+      "user": "User name",
+      "status": "Status",
+      "details": "Details"
+    },
+    "status": {
+      "SUCCESSFUL_LOGIN": "Successful login",
+      "FAILED_LOGIN": "Failed login",
+      "FAILED_LOGIN_LOCKED": "Refused: account locked",
+      "SUCCESSFUL_LOGOUT": "Logout",
+      "ACCESS_CODE_VIEWED": "Access code viewed",
+      "SSO_LOGIN": "SSO login",
+      "SSO_LOGIN_FAILED": "SSO login refused",
+      "UNKNOWN": "Unknown status ({code})"
+    }
   },
   "adminConfig": {
     "title": "Application configuration",

@@ -114,6 +114,14 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
+    /* R1.1 (2026-09-30) — login history over audit_user_login, the SPA
+       replacement for the legacy /AuditUserActivity page. */
+    {
+      path: '/admin/login-history',
+      name: 'admin-login-history',
+      component: () => import('@/views/AdminLoginHistoryView.vue'),
+      meta: { title: 'Login History', role: 'Administrator' as const },
+    },
     {
       path: '/admin/system-status',
       name: 'admin-system-status',
