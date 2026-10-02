@@ -1136,29 +1136,32 @@ public class ImportCRFDataService {
 
     /**
      * The visit ordinal a StudyEventRepeatKey names: 1 when the file leaves
-     * the key out, null when the key is not a whole number.
+     * the key out or empty, null when the key is not a whole number. Space
+     * around the number is ignored. The import's rule run reads keys the
+     * same way ({@code ImportDataRuleRunnerContainer.repeatKey}).
      */
     public static Integer studyEventOrdinal(String studyEventRepeatKey) {
-        if (studyEventRepeatKey == null) {
+        if (studyEventRepeatKey == null || studyEventRepeatKey.trim().isEmpty()) {
             return 1;
         }
         try {
-            return Integer.valueOf(studyEventRepeatKey);
+            return Integer.valueOf(studyEventRepeatKey.trim());
         } catch (NumberFormatException e) {
             return null;
         }
     }
 
     /**
-     * The row an ItemGroupRepeatKey names: 1 when the file leaves the key out,
-     * null when the key is not a whole number of 1 or more.
+     * The row an ItemGroupRepeatKey names: 1 when the file leaves the key out
+     * or empty, null when the key is not a whole number of 1 or more. Space
+     * around the number is ignored.
      */
     public static Integer itemGroupOrdinal(String itemGroupRepeatKey) {
-        if (itemGroupRepeatKey == null) {
+        if (itemGroupRepeatKey == null || itemGroupRepeatKey.trim().isEmpty()) {
             return 1;
         }
         try {
-            int ordinal = Integer.parseInt(itemGroupRepeatKey);
+            int ordinal = Integer.parseInt(itemGroupRepeatKey.trim());
             return ordinal >= 1 ? ordinal : null;
         } catch (NumberFormatException e) {
             return null;

@@ -248,16 +248,18 @@ public class ImportDataRuleRunnerContainer {
     }
 
     /**
-     * The ordinal an import repeat key names: 1 when the key is left out, null
-     * when it is not a whole number of 1 or more. A bad key is reported by the
-     * import's metadata check and must not be read as row or visit 1.
+     * The ordinal an import repeat key names: 1 when the key is left out or
+     * empty, null when it is not a whole number of 1 or more; space around the
+     * number is ignored, as the import service ignores it. A bad key is
+     * reported by the import's metadata check and must not be read as row or
+     * visit 1.
      */
     static Integer repeatKey(String key) {
-        if (key == null || key.isEmpty()) {
+        if (key == null || key.trim().isEmpty()) {
             return 1;
         }
         try {
-            int ordinal = Integer.parseInt(key);
+            int ordinal = Integer.parseInt(key.trim());
             return ordinal >= 1 ? ordinal : null;
         } catch (NumberFormatException e) {
             return null;

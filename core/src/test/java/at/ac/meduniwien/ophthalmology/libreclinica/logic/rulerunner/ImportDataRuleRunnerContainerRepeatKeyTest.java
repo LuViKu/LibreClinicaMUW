@@ -25,11 +25,14 @@ public class ImportDataRuleRunnerContainerRepeatKeyTest {
     public void aKeyLeftOutIsOne() {
         assertEquals(Integer.valueOf(1), ImportDataRuleRunnerContainer.repeatKey(null));
         assertEquals(Integer.valueOf(1), ImportDataRuleRunnerContainer.repeatKey(""));
+        assertEquals(Integer.valueOf(1), ImportDataRuleRunnerContainer.repeatKey("  "));
     }
 
     @Test
     public void aNumericKeyIsItsNumber() {
         assertEquals(Integer.valueOf(3), ImportDataRuleRunnerContainer.repeatKey("3"));
+        assertEquals("space around it is ignored, as the import service ignores it",
+                Integer.valueOf(3), ImportDataRuleRunnerContainer.repeatKey(" 3 "));
     }
 
     @Test

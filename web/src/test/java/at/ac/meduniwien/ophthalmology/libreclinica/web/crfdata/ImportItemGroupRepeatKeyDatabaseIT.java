@@ -100,6 +100,26 @@ class ImportItemGroupRepeatKeyDatabaseIT extends AbstractApiControllerDatabaseIT
     }
 
     @Test
+    void anEmptyKeyIsAKeyLeftOutAndSpaceAroundANumberIsIgnored() throws Exception {
+        // As the import's rule run reads them (ImportDataRuleRunnerContainer.repeatKey).
+        for (String key : new String[] {"", "  ", " 2 "}) {
+            String group = " ItemGroupRepeatKey=\"" + key + "\"";
+            String event = " StudyEventRepeatKey=\"" + key.replace('2', '1') + "\"";
+            List<String> errors = service().validateStudyMetadata(importFile(event, group), 1);
+            assertFalse(namesTheGroupKey(errors), "ItemGroupRepeatKey='" + key + "': " + errors);
+            assertFalse(errors.stream().anyMatch(e -> e.contains("StudyEventRepeatKey")),
+                    "StudyEventRepeatKey='" + key + "': " + errors);
+            try {
+                lookup(importFile(event, group));
+            } catch (OpenClinicaException e) {
+                // The demo form may refuse the value for other reasons; never for its keys.
+                assertFalse(e.getOpenClinicaMessage().contains("RepeatKey"),
+                        "key '" + key + "': " + e.getOpenClinicaMessage());
+            }
+        }
+    }
+
+    @Test
     void aValueWithABadGroupKeyIsNotFiledUnderRowOne() {
         OpenClinicaException refused = assertThrows(OpenClinicaException.class,
                 () -> lookup(importFile("", " ItemGroupRepeatKey=\"abc\"")));
