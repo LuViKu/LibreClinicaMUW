@@ -24,6 +24,7 @@ The six-month clock starts when the closure reaches **production**, not when it 
 | Wave | Closed in code | Reached production | Paths | SPA replacement | Delete not before | Signed off |
 |---|---|---|---|---|---|---|
 | W0 — not needed | 2026-09-30 (#371) | pending | `/Enterprise`, `/TechAdmin`, `/AdminSystem`, `/AuditDatabase`, `/ListSubject`, `/ListSubjectData`, `/ViewSubject`, `/UpdateSubject`, `/RemoveSubject`, `/RestoreSubject`, `/CreateJobImport`, `/UpdateJobImport`, `/ViewImportJob`, `/ViewLogMessage`, `/PrintoutCertificate`, `/DeleteEventCRF`, `/ConfigurePasswordRequirements` | none needed: SPA home; patient model (`/patients`) and the SPA subject page; imports and two-factor dropped (2026-09-30); `/admin/password-policy` | six months after production | pending (Lukas) |
+| W0 — heritage REST API (bucket HERITAGE_API) | 2026-09-30 (#371) | pending | `/pages/auth` (seven OpenClinica 3.x controllers; API-key only, no caller in the app, the SPA or the deployment; reversible through `LIBRECLINICA_LEGACY_CLOSED_PATHS`) | none needed | six months after production | pending (Lukas) |
 
 ## Deleted after bake-in
 
