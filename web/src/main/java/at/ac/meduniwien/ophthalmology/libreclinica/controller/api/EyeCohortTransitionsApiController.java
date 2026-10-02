@@ -116,8 +116,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <h2>Authorization</h2>
  *
- * <p>Chain-level {@code .anyRequest().hasRole("USER")} + per-request
- * {@link SiteVisibilityFilter} scope guard on BOTH the source
+ * <p>The transition needs a role that may edit subjects
+ * ({@link SubjectEditAuthorization}; see {@link ClinicalWriteAuthorization}),
+ * and a per-request {@link SiteVisibilityFilter} scope guard on BOTH the source
  * (session-bound active study) and the target (the
  * {@code targetStudyOid} body field). Cross-tree attempts return 403
  * not 404 — leaking the existence of an out-of-scope study is the
@@ -288,6 +289,11 @@ public class EyeCohortTransitionsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session — visit /MainMenu after login."));
+        }
+        // A transition edits the source subject's study eye and enrols the
+        // subject in the target study: the subject-edit rule.
+        if (!SubjectEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("moving an eye to another cohort");
         }
         if (body == null) {
             return ResponseEntity.badRequest().body(Map.of(

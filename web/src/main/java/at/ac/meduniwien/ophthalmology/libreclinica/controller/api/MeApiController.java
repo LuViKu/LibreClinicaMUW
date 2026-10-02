@@ -246,7 +246,8 @@ public class MeApiController {
                     spaRoles,
                     protocolTypeKey,
                     enabledModules,
-                    studySettings
+                    studySettings,
+                    permissionsOf(ClinicalWriteAuthorization.roleIdOf(session))
             );
         }
 
@@ -922,6 +923,19 @@ public class MeApiController {
         String l = last == null ? "" : last.trim();
         String joined = (f + " " + l).trim();
         return joined.isEmpty() ? fallback : joined;
+    }
+
+    /**
+     * What the session's binding may write, by the rules of the write
+     * endpoints: data entry ({@link ClinicalWriteAuthorization#roleMayEnterData}),
+     * editing a subject ({@link SubjectEditAuthorization#roleMayEdit}) and
+     * signing one ({@link SubjectsApiController#roleMaySignSubject}).
+     */
+    static MeDto.PermissionsDto permissionsOf(int roleId) {
+        return new MeDto.PermissionsDto(
+                ClinicalWriteAuthorization.roleMayEnterData(roleId),
+                SubjectEditAuthorization.roleMayEdit(roleId),
+                SubjectsApiController.roleMaySignSubject(roleId));
     }
 
     private static String blankToNull(String s) {

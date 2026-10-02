@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   AuthState, AuthenticatedUser, LoginFailure, LoginFailureReason, PasswordChangeFieldError,
-  PasswordChangeRequest, ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption, UserRole,
+  PasswordChangeRequest, ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
+  StudyWritePermissions, UserRole,
 } from '@/types/auth'
 import { useSubjectsStore } from './subjects'
 import { useEventsStore } from './events'
@@ -385,6 +386,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * What the server says the session's binding may write
+   * ({@link ActiveStudySummary.permissions}), or `null` when /me did not
+   * say, so that the caller falls back to its role check. Prefer this to
+   * a role check for a write the roles cannot decide: ra and ra2 are
+   * "Investigator", a system administrator is "Administrator" whatever
+   * the binding.
+   */
+  function permits(permission: keyof StudyWritePermissions): boolean | null {
+    const permissions = user.value?.activeStudy?.permissions
+    return permissions ? permissions[permission] : null
+  }
+
+  /**
    * Sign-out: POST /pages/api/v1/auth/logout writes the logout audit
    * row and ends the server session. A plain fetch rather than
    * apiPost, so a session that has already expired (401) does not
@@ -476,6 +490,7 @@ export const useAuthStore = defineStore('auth', () => {
     completeProfile,
     changePassword,
     hasRole,
+    permits,
     logout,
     clearForUnauthorized,
   }

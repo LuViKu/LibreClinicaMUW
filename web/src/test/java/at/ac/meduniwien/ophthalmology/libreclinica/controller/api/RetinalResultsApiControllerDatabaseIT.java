@@ -28,7 +28,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -428,7 +430,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         long jobId = seedParkedJob();
         try {
             buildMockMvc().perform(patch("/api/v1/retinal-jobs/" + jobId + "/bind")
-                    .session(authenticatedSession())
+                    .session(reconcilerSession())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"eventCrfId\":1}"))
                     .andExpect(status().isOk())
@@ -470,7 +472,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
     void bind_returns409WhenJobNotParked() throws Exception {
         // 9001 is seeded as 'done' by the @BeforeEach.
         buildMockMvc().perform(patch("/api/v1/retinal-jobs/9001/bind")
-                .session(authenticatedSession())
+                .session(reconcilerSession())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"eventCrfId\":1}"))
                 .andExpect(status().isConflict())
@@ -484,7 +486,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         long jobId = seedParkedJob();
         try {
             buildMockMvc().perform(patch("/api/v1/retinal-jobs/" + jobId + "/bind")
-                    .session(authenticatedSession())
+                    .session(reconcilerSession())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"eventCrfId\":987654321}"))
                     .andExpect(status().isNotFound())
@@ -510,7 +512,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         try {
             String body = "{\"jobIds\":[" + jobA + "," + jobB + "],\"eventCrfId\":1}";
             buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
-                    .session(authenticatedSession())
+                    .session(reconcilerSession())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
                     .andExpect(status().isOk())
@@ -563,7 +565,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         try {
             String body = "{\"jobIds\":[" + jobParked + ",9001],\"eventCrfId\":1}";
             buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
-                    .session(authenticatedSession())
+                    .session(reconcilerSession())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
                     .andExpect(status().isOk())
@@ -618,7 +620,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
             MockMvc mvc = buildMockMvcWithEmptyVisibility();
             String body = "{\"jobIds\":[" + jobA + "," + jobB + "],\"eventCrfId\":1}";
             mvc.perform(post("/api/v1/retinal-jobs/bulk-bind")
-                    .session(authenticatedSession())
+                    .session(reconcilerSession())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
                     .andExpect(status().isOk())
@@ -654,7 +656,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
     @Test
     void bulkBind_returns400OnEmptyJobIds() throws Exception {
         buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
-                .session(authenticatedSession())
+                .session(reconcilerSession())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"jobIds\":[],\"eventCrfId\":1}"))
                 .andExpect(status().isBadRequest())
@@ -666,7 +668,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
     @Test
     void bulkBind_returns400OnZeroEventCrfId() throws Exception {
         buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
-                .session(authenticatedSession())
+                .session(reconcilerSession())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"jobIds\":[42],\"eventCrfId\":0}"))
                 .andExpect(status().isBadRequest())
@@ -814,6 +816,17 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
      * assertions. Mirrors the per-IT helper pattern used in
      * ImportApiControllerBulkImportDatabaseIT et al.
      */
+    private MockHttpSession reconcilerSession() {
+        // Binding a scan to a visit needs a reconciling role
+        // (IngestBindAuthorization); the Data Manager holds one.
+        MockHttpSession session = authenticatedSession();
+        StudyUserRoleBean role = new StudyUserRoleBean();
+        role.setRole(Role.STUDYDIRECTOR);
+        role.setStudyId(1);
+        session.setAttribute("userRole", role);
+        return session;
+    }
+
     private MockHttpSession sysadminSession() {
         MockHttpSession session = new MockHttpSession();
         UserAccountBean ub = new UserAccountBean();

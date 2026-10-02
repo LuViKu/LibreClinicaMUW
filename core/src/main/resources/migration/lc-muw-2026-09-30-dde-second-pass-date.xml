@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      The second-pass date a clean double-data-entry pass lost.
+
+      Until 1.5.0-beta.16-muw, DdeService.commitPass2 set
+      date_validate_completed and then saved the event CRF bean, whose
+      second-pass date was still empty; the save wrote every column from the
+      bean and cleared the date again. The pass itself was recorded: the audit
+      row of type 110 (DDE pass-2 committed) with entity_name
+      date_validate_completed, written in the same request. Such a CRF has
+      since read as awaiting its second pass, and SDV, which needs that date
+      for double data entry, leaves it out.
+
+      The second changeset gives those CRFs the date back, from the audit
+      date of that row, and records each restoration as its own audit row
+      (type 150). A CRF is restored only when its latest pass-2 commit was
+      the clean one, its first pass was completed before that commit (a CRF
+      reopened and completed again since needs a new second pass), and it is
+      neither removed nor locked. A CRF that has a second-pass date is left
+      alone.
+    -->
+    <changeSet id="2026-09-30-audit-type-dde-second-pass-date-restored" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 150;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="150"/>
+            <column name="name" value="dde_second_pass_date_restored"/>
+            <column name="display_name" value="Second-pass date restored"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 150</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-09-30-restore-dde-second-pass-date" author="muw" dbms="postgresql">
+        <sql splitStatements="false">
+            WITH last_commit AS (
+                SELECT DISTINCT ON (a.entity_id)
+                       a.entity_id AS event_crf_id, a.entity_name, a.audit_date
+                  FROM audit_log_event a
+                 WHERE a.audit_table = 'event_crf'
+                   AND a.audit_log_event_type_id = 110
+                 ORDER BY a.entity_id, a.audit_date DESC, a.audit_id DESC
+            ), restored AS (
+                UPDATE event_crf ec
+                   SET date_validate_completed = lc.audit_date
+                  FROM last_commit lc
+                 WHERE lc.event_crf_id = ec.event_crf_id
+                   AND lc.entity_name = 'date_validate_completed'
+                   AND ec.date_validate_completed IS NULL
+                   AND ec.date_completed IS NOT NULL
+                   AND ec.date_completed &lt;= lc.audit_date
+                   AND ec.status_id NOT IN (5, 6, 7)
+                RETURNING ec.event_crf_id, ec.study_event_id, ec.date_validate_completed
+            )
+            INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, user_id, audit_table,
+                    entity_id, entity_name, old_value, new_value, reason_for_change, study_event_id)
+            SELECT 150, now(), NULL, 'event_crf', r.event_crf_id, 'date_validate_completed', '',
+                   to_char(r.date_validate_completed, 'YYYY-MM-DD HH24:MI:SS'),
+                   'Restored from the record of the clean second pass, whose date the pass '
+                           || 'itself cleared (fixed in 1.5.0-beta.16-muw)',
+                   r.study_event_id
+              FROM restored r
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE event_crf SET date_validate_completed = NULL
+                 WHERE event_crf_id IN (SELECT entity_id FROM audit_log_event
+                                         WHERE audit_log_event_type_id = 150
+                                           AND audit_table = 'event_crf');
+                DELETE FROM audit_log_event WHERE audit_log_event_type_id = 150
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

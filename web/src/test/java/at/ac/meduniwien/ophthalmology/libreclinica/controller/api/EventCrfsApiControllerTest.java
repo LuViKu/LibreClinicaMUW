@@ -47,6 +47,16 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.class)));
     }
 
+    /**
+     * A session whose role may enter data (Investigator). The role check
+     * runs before the request is validated, so a validation test needs one.
+     */
+    private org.springframework.mock.web.MockHttpSession dataEntrySession() {
+        return (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithRole(
+                2, "physician", 1, "S_DEFAULTS1", "Default Study",
+                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1);
+    }
+
     /* ---------------------------------------------------------------------- */
     /* GET /api/v1/eventCrfs/{id}                                             */
     /* ---------------------------------------------------------------------- */
@@ -88,8 +98,7 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/eventCrfs/1/items")
                 .contentType("application/json")
                 .content("{}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 // Phase E.6 PR (a) reworded the message — now mentions
                 // both 'values' and 'groups' as acceptable payload keys.
@@ -127,8 +136,7 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/eventCrfs/1/items")
                 .contentType("application/json")
                 .content("{\"reasons\":{\"I_HEIGHT_CM\":\"correction\"}}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("'values'")));
@@ -147,8 +155,7 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/eventCrfs/1/items")
                 .contentType("application/json")
                 .content("{\"values\":{\"I_HEIGHT_CM\":172},\"reasons\":{\"I_HEIGHT_CM\":\"correction\"}}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").exists());
     }
@@ -268,8 +275,7 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-commit")
                 .contentType("application/json")
                 .content("{}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("Missing 'values'")));

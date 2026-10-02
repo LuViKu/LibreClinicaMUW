@@ -390,7 +390,8 @@ public class EventsApiController {
      * same one the legacy servlet uses, so audit triggers + study-event
      * status cascades stay consistent.
      *
-     * <p>Guards: 401 anonymous / 400 no active study / 404 unknown
+     * <p>Guards: 401 anonymous / 400 no active study / 403 a role that
+     * may not enter data ({@link ClinicalWriteAuthorization}) / 404 unknown
      * event id or event_definition_crf id / 403 wrong-study visibility
      * / 409 already-started slot (an event_crf for this CRF already
      * exists on the event).
@@ -421,6 +422,11 @@ public class EventsApiController {
         if (noStudyRole != null) {
             return noStudyRole;
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "starting data entry");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
 
         StudyEventDAO seDao = new StudyEventDAO(dataSource);
         StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
@@ -443,6 +449,11 @@ public class EventsApiController {
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "study_event " + eventId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, ev, null, "starting data entry");
+        if (closed != null) {
+            return closed;
         }
 
         // Resolve the event_definition_crf slot the SPA is asking to
@@ -704,6 +715,11 @@ public class EventsApiController {
         if (noStudyRole != null) {
             return noStudyRole;
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "scheduling study events");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
         if (body == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Empty request body"));
         }
@@ -759,6 +775,11 @@ public class EventsApiController {
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study subject with label '" + body.subjectId() + "' in study '" + currentStudy.getOid() + "'"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, null, "scheduling a visit");
+        if (closed != null) {
+            return closed;
         }
 
         StudyEventDefinitionBean def = sedDao.findByOidAndStudy(

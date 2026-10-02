@@ -67,24 +67,33 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Endpoints:
  * <ul>
  *   <li>{@code GET /pages/api/v1/sdv} — returns one
- *       {@link SdvRowDto} per event-CRF in the session-bound active
- *       study. Reuses the same filter/sort overload as the legacy
+ *       {@link SdvRowDto} per complete event-CRF in the session-bound
+ *       active study. Reuses the same filter/sort overload as the legacy
  *       {@code /viewAllSubjectSdvData} JSON endpoint
  *       ({@code SDVController.java:344}) but reshapes the row to the
  *       SPA's contract so {@code stores/sdv.ts} doesn't have to know
  *       about the legacy field set.</li>
  *   <li>{@code POST /pages/api/v1/sdv/verify} — bulk-flips the
  *       {@code sdv_status} column on a list of event-CRFs to
- *       {@code true} (or {@code false} when {@code verified=false} is
- *       sent). Records the verifier id + timestamp via
- *       {@code EventCRFDAO.setSDVStatus}.</li>
+ *       {@code true}. Records the verifier id via
+ *       {@code EventCRFDAO.setSDVStatus}. {@code verified=false} is an
+ *       un-verify and is handled by {@link #unverify}: it needs a
+ *       {@code reason} and an un-verifying role, like any other.</li>
  * </ul>
  *
- * <p><strong>Authorization:</strong> chain-level
- * {@code .anyRequest().hasRole("USER")} gates both endpoints. The
- * write endpoint additionally requires a session-bound active study
- * and verifies that every event-CRF id in the request belongs to that
- * study (returns 403 on any cross-study id).
+ * <p><strong>Authorization:</strong> verifying needs an SDV role
+ * ({@link ClinicalWriteAuthorization#roleMayVerifySdv}), un-verifying
+ * {@link SdvUnverifyAuthorization}: the session's role, or another role
+ * the caller holds on the active study
+ * ({@link ClinicalWriteAuthorization#anyRoleOnTheStudyMay}). Both need a
+ * session-bound active study, and report an event CRF outside the
+ * caller's visible studies as rejected.
+ *
+ * <p><strong>Completion:</strong> only a complete event CRF can be
+ * verified ({@link #completeForVerification}). The list leaves the
+ * others out and verify rejects them, as the legacy SDV table does,
+ * with one exception: a verified CRF stays listed, as verified, until
+ * the verification is withdrawn ({@link #listed}).
  *
  * <p>Status mapping for the read endpoint:
  * <ul>
@@ -143,12 +152,12 @@ public class SdvApiController {
         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
 
         // The legacy /viewAllSubjectSdvData filter restricts to
-        // (status_id ∈ {2, 6} AND source_data_verification_code != 4)
-        // — useful for the "what's left to verify" inbox but it hides
-        // in-progress and signed rows the SPA still wants to render
-        // (so the operator can see SDV requirement vs. completion
-        // state side-by-side). Iterate by study-subject instead and
-        // let the SPA filter client-side.
+        // (status_id ∈ {2, 6} AND source_data_verification_code != 4).
+        // Its status test misses a CRF completed in the SPA, which keeps
+        // status 1 and carries a completion date instead, so iterate by
+        // study-subject and apply completeForVerification per row. Rows
+        // still in data entry are left out: nothing may verify them. A
+        // verified row stays (listed).
         //
         // A4 — per-site visibility. Walk the visible study set
         // rather than the bare currentStudy.id so a Monitor with a
@@ -210,6 +219,9 @@ public class SdvApiController {
             EventDefinitionCRFBean edc = edcDao
                     .findByStudyEventIdAndCRFVersionId(ownerStudy != null ? ownerStudy : currentStudy,
                             evt.getId(), ec.getCRFVersionId());
+            if (!listed(ec, evt, ss, edc)) {
+                continue;
+            }
 
             String requirement = requirementFromEdc(edc);
             int openQueries = countOpenQueries(dnDao, ec.getId());
@@ -257,10 +269,21 @@ public class SdvApiController {
         if (body == null || body.eventCrfOids() == null || body.eventCrfOids().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "'eventCrfOids' is required"));
         }
-        boolean targetState = body.verified() == null ? true : body.verified();
+        // verified=false withdraws verification. That is an un-verify on
+        // every path: it needs the reason and the role /unverify needs.
+        if (Boolean.FALSE.equals(body.verified())) {
+            return unverify(new UnverifyRequest(body.eventCrfOids(), body.reason()), session);
+        }
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                ClinicalWriteAuthorization::roleMayVerifySdv)) {
+            return ClinicalWriteAuthorization.forbidden("source data verification");
+        }
 
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
+        StudyEventDAO studyEventDao = new StudyEventDAO(dataSource);
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
 
         // A4 — per-site visibility. The verify endpoint rejects any
         // event_crf whose study_subject sits outside the user's
@@ -299,8 +322,21 @@ public class SdvApiController {
                 continue;
             }
 
+            // Only a complete CRF can be verified; one still in data
+            // entry has nothing settled to check against the source. A
+            // removed one is not part of the casebook.
+            StudyBean ownerStudy = (StudyBean) studyDao.findByPK(ss.getStudyId());
+            EventDefinitionCRFBean edc = edcDao.findByStudyEventIdAndCRFVersionId(
+                    ownerStudy != null && ownerStudy.getId() > 0 ? ownerStudy : currentStudy,
+                    ec.getStudyEventId(), ec.getCRFVersionId());
+            StudyEventBean evt = (StudyEventBean) studyEventDao.findByPK(ec.getStudyEventId());
+            if (removed(ec, evt, ss) || !completeForVerification(ec, edc)) {
+                rejected.add(oid);
+                continue;
+            }
+
             try {
-                eventCrfDao.setSDVStatus(targetState, ub.getId(), id);
+                eventCrfDao.setSDVStatus(true, ub.getId(), id);
                 verified.add(oid);
             } catch (Exception e) {
                 LOG.warn("Failed to flip sdv_status on event_crf id={}", id, e);
@@ -314,8 +350,8 @@ public class SdvApiController {
         response.put("verifiedCount", verified.size());
         response.put("verifiedAt", Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
         response.put("verifiedBy", ub.getName());
-        LOG.info("Bulk SDV verify=({}) by user={}: {} verified, {} rejected",
-                targetState, ub.getName(), verified.size(), rejected.size());
+        LOG.info("Bulk SDV verify by user={}: {} verified, {} rejected",
+                ub.getName(), verified.size(), rejected.size());
         return ResponseEntity.ok(response);
     }
 
@@ -331,8 +367,8 @@ public class SdvApiController {
      *   <li>{@code 400} — no active study bound.</li>
      *   <li>{@code 400} — body missing {@code eventCrfOids} or
      *       {@code reason}.</li>
-     *   <li>{@code 403} — caller's role is not Monitor / DM / Admin
-     *       (per {@link SdvUnverifyAuthorization}).</li>
+     *   <li>{@code 403} — no role the caller holds on the active study is
+     *       Monitor / DM / Admin (per {@link SdvUnverifyAuthorization}).</li>
      *   <li>Per-row: {@code event_crf} outside the caller's
      *       site-visibility set → row rejected; otherwise the row's
      *       {@code sdv_status} is flipped to false.</li>
@@ -371,7 +407,8 @@ public class SdvApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!SdvUnverifyAuthorization.roleMayUnverify(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SdvUnverifyAuthorization::roleMayUnverify)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit un-verifying CRFs"));
         }
@@ -422,12 +459,14 @@ public class SdvApiController {
                 // through the unified writeAuditEvent helper (Phase
                 // audit-unification, 2026-06-12) so the row lands in
                 // audit_log_event (visible to the SPA Audit Log view).
+                // The reason goes in reason_for_change: the action
+                // message is not stored.
                 EventCrfsApiController.writeAuditEvent(auditDAO,
                         AuditTypeIds.EVENT_CRF_SDV_UNVERIFIED,
                         ub, currentStudy, ss,
-                        "event_crf_sdv_unverify: " + body.reason().trim(),
+                        "event_crf_sdv_unverify",
                         "event_crf", id,
-                        "sdv_status", "true", "false");
+                        "sdv_status", "true", "false", body.reason().trim());
             } catch (Exception e) {
                 LOG.warn("Failed to flip sdv_status to false on event_crf id={}", id, e);
                 rejected.add(oid);
@@ -448,6 +487,72 @@ public class SdvApiController {
     /* ----------------------------------------------------------------- */
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
+
+    /**
+     * Whether an event CRF that is not removed ({@link #removed}) is
+     * complete, and so may be source-data verified.
+     *
+     * <p>Legacy SDV lists and verifies only event CRFs whose status is
+     * completed ({@link Status#UNAVAILABLE}, id 2) or locked (6): the
+     * {@code /viewAllSubjectSdvData} filter and
+     * {@code SDVUtil.setSDVStatusForStudySubjects}. The SPA completes a CRF
+     * by date and leaves its status available: {@code date_completed} once
+     * initial data entry is complete and, where double data entry applies,
+     * {@code date_validate_completed} once the second pass is. Every other
+     * status, signed included, goes by those dates, and double data entry
+     * needs both: signing stamps {@code date_validate_completed} on each CRF
+     * of the visit or subject, whether or not its first pass is done.
+     * Reopening a CRF clears all of these markers
+     * ({@code EventCRFDAO.markIncomplete}).
+     *
+     * @param edc the CRF's event definition CRF, the site's own where the
+     *            subject's site has one, as double data entry reads it;
+     *            {@code null} reads as single data entry
+     */
+    static boolean completeForVerification(EventCRFBean ec, EventDefinitionCRFBean edc) {
+        Status status = ec.getStatus();
+        if (Status.UNAVAILABLE.equals(status) || Status.LOCKED.equals(status)) {
+            return true;
+        }
+        if (ec.getDateCompleted() == null) {
+            return false;
+        }
+        boolean doubleEntry = edc != null && edc.isDoubleEntry();
+        return !doubleEntry || ec.getDateValidateCompleted() != null;
+    }
+
+    /**
+     * Whether the SDV list shows an event CRF: when it is complete for
+     * verification, and when it is verified although it is not, or no
+     * longer, complete. Such a verification was made before only complete
+     * CRFs could be verified, or the CRF was reopened after it; the list
+     * shows it so that it can be withdrawn, which the SDV page offers only
+     * for listed rows. A removed CRF is not listed at all ({@link #removed}).
+     */
+    static boolean listed(EventCRFBean ec, StudyEventBean evt, StudySubjectBean ss,
+                          EventDefinitionCRFBean edc) {
+        if (removed(ec, evt, ss)) {
+            return false;
+        }
+        return ec.isSdvStatus() || completeForVerification(ec, edc);
+    }
+
+    /**
+     * Whether an event CRF is removed: its own status says so, or that of
+     * its visit or subject. Removing a visit or a subject removes its CRFs
+     * too, but signing a subject used to set every CRF of the subject to
+     * signed, removed ones included; such a CRF is still known as removed
+     * by its visit. A removed CRF is neither listed nor verified.
+     */
+    static boolean removed(EventCRFBean ec, StudyEventBean evt, StudySubjectBean ss) {
+        return isRemoved(ec.getStatus())
+                || (evt != null && isRemoved(evt.getStatus()))
+                || (ss != null && isRemoved(ss.getStatus()));
+    }
+
+    private static boolean isRemoved(Status status) {
+        return Status.DELETED.equals(status) || Status.AUTO_DELETED.equals(status);
+    }
 
     private static String statusForRow(EventCRFBean ec, int openQueries) {
         if (ec.isSdvStatus()) return "verified";
@@ -496,7 +601,9 @@ public class SdvApiController {
     /** Body of POST /pages/api/v1/sdv/verify — bulk-flip event_crf.sdv_status. */
     public record VerifyRequest(
             List<String> eventCrfOids,
-            /** Defaults to {@code true} when null. */
-            Boolean verified
+            /** Defaults to {@code true} when null; {@code false} un-verifies. */
+            Boolean verified,
+            /** Required when {@code verified} is {@code false}, as on /unverify. */
+            String reason
     ) {}
 }

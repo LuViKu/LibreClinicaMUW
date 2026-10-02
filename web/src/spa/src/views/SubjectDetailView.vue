@@ -649,12 +649,24 @@ async function onUnlock() {
 const canTransitionEye = computed(() => {
   const role = auth.user?.role ?? null
   if (!role) return false
+  // The server's rule (SubjectEditAuthorization) refuses ra and ra2,
+  // whom the SPA calls Investigator; /me says what the binding may do.
+  const permitted = auth.permits('editSubject')
+  if (permitted !== null) return permitted
   return (
     roleSatisfies(role, 'Investigator') ||
     roleSatisfies(role, 'Data Manager') ||
     roleSatisfies(role, 'Administrator')
   )
 })
+
+/**
+ * Sign-subject link. The server lets only an investigator or study
+ * director binding sign (the preflight's user-role-can-sign check); /me
+ * says whether the session's binding is one. Without that, the link
+ * shows as before and the sign page's preflight explains a refusal.
+ */
+const canSignSubject = computed(() => auth.permits('signSubject') ?? true)
 
 function eyeInScope(eye: 'OD' | 'OS'): boolean {
   const studyEye = subject.value?.studyEye ?? null
@@ -1566,7 +1578,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               :subject-label="subject.id"
             />
             <RouterLink
-              v-if="!subject.signed"
+              v-if="!subject.signed && canSignSubject"
               :to="`/subjects/${subject.id}/sign`"
               class="px-4 py-2 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 inline-flex items-center gap-1.5 font-medium"
             >
