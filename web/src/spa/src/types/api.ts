@@ -4987,6 +4987,9 @@ export interface components {
             assignedTo?: string;
             type?: string;
             eventCrfOid?: string;
+            entityType?: string;
+            column?: string;
+            eventId?: string;
         };
         DiscrepancyNoteDto: {
             id?: string;
@@ -5004,6 +5007,9 @@ export interface components {
             itemValue?: string;
             eventCrfOid?: string;
             eventName?: string;
+            entityType?: string;
+            column?: string;
+            entityId?: string;
         };
         DiscrepancyThreadEntryDto: {
             id?: string;
