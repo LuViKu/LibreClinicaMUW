@@ -13,6 +13,8 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.DisplayStudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -59,6 +61,13 @@ public class ReassignStudySubjectServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form or its confirmation; reassigning the subject takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty() || "confirm".equalsIgnoreCase(action);
     }
 
     @Override

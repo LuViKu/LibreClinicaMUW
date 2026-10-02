@@ -17,7 +17,6 @@ import java.util.Locale;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.StudyParameterValueBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
@@ -117,14 +116,11 @@ public class MainMenuServlet extends SecureController {
         // a flag tells whether users are required to change pwd upon the first
         // time log in or pwd expired
         int pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
-        // update last visit date to current date
+        // update last visit date to current date. Only date_lastvisit: every
+        // login lands here, and a full update() would name the user as the
+        // account's last updater and re-create a sysadmin's admin role.
         UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());
-        UserAccountBean ub1 = (UserAccountBean) udao.findByPK(ub.getId());
-        ub1.setLastVisitDate(new Date(System.currentTimeMillis()));
-        // have to actually set the above to a timestamp? tbh
-        ub1.setOwner(ub1);
-        ub1.setUpdater(ub1);
-        udao.update(ub1);
+        udao.updateLastVisitDate(ub.getId(), new Date());
 
         // Use study Id in JSPs
         request.setAttribute("studyId", currentStudy.getId());

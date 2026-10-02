@@ -21,6 +21,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NullValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
@@ -82,6 +84,13 @@ public class DefineStudyEventServlet extends SecureController {
         addPageMessage(respage.getString("no_have_persmission_add_SED_to_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.STUDY_EVENT_DEFINITION_LIST, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form; the wizard steps and creating the definition take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String actionName = request.getParameter("actionName");
+        return actionName == null || actionName.trim().isEmpty();
     }
 
     /**

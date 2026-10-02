@@ -80,6 +80,12 @@
         <name>updateLockCounter</name>
         <sql>update user_account set lock_counter = ?  where user_id = ?</sql>
     </query>
+    <!-- The home page's visit stamp: date_lastvisit only, so a visit does not
+         show up as a change to the account (update_id, date_updated). -->
+    <query>
+        <name>updateLastVisitDate</name>
+        <sql>update user_account set date_lastvisit = ? where user_id = ?</sql>
+    </query>
     <!-- Phase D.1.b (2026-05-30): targeted single-column update used by
          PasswordRehashService to rewrite a legacy MD5/SHA-1 hash as
          bcrypt after a successful legacy-format login. Sister of

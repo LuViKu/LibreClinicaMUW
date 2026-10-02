@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.extract;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
@@ -46,6 +48,13 @@ public class RemoveDatasetServlet extends SecureController {
 
     public static String getLink(int dsId) {
         return "RemoveDataset?dsId=" + dsId;
+    }
+
+    /** GET shows the confirmation; removing the dataset takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override

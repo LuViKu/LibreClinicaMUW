@@ -12,6 +12,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 
 /**
  * Processes request to change ordinals of study event definitions in a study
@@ -37,6 +38,16 @@ public class ChangeDefinitionOrdinalServlet extends ChangeOrdinalServlet {
         response.sendRedirect(url);
 //        forwardPage(Page.LIST_DEFINITION_SERVLET);
 
+    }
+
+    /** The two event definitions swapped must be ones the current study schedules from. */
+    @Override
+    protected boolean inCurrentStudy(StudyTreeScope scope, FormProcessor fp) {
+        return definitionInStudy(scope, fp.getInt("current")) && definitionInStudy(scope, fp.getInt("previous"));
+    }
+
+    private boolean definitionInStudy(StudyTreeScope scope, int definitionId) {
+        return definitionId <= 0 || scope.containsEventDefinition(currentStudy, definitionId);
     }
 
     /**

@@ -69,6 +69,10 @@ public class DoubleDataEntryServlet extends DataEntryServlet {
      */
     @Override
     protected void mayProceed(HttpServletRequest request, HttpServletResponse response) throws InsufficientPermissionException {
+        // The role check of the block commented out below, and the event CRF
+        // must be one of the current study's.
+        mayEnterData(request);
+        mayUseEventCrfOfCurrentStudy(request);
         checkStudyLocked(Page.LIST_STUDY_SUBJECTS, respage.getString("current_study_locked"), request, response);
         checkStudyFrozen(Page.LIST_STUDY_SUBJECTS, respage.getString("current_study_frozen"), request, response);
         HttpSession session = request.getSession();

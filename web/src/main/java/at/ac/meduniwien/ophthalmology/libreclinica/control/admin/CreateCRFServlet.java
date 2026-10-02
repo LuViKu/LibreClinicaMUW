@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 import java.util.Date;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -66,6 +68,13 @@ public class CreateCRFServlet extends SecureController {
 
         throw new InsufficientPermissionException(Page.CRF_LIST_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form; creating the CRF (action=confirm) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override

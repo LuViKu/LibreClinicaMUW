@@ -662,7 +662,7 @@ public abstract class SecureController extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
         if (!acceptsGet(request)) {
-            logger.warn("{} accepts POST only; refused a GET", getClass().getSimpleName());
+            logger.warn("{} accepts POST only for this request; refused a GET", getClass().getSimpleName());
             response.setHeader("Allow", "POST");
             response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
             return;

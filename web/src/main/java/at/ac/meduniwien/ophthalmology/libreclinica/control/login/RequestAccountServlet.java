@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.TermType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -44,6 +46,13 @@ public class RequestAccountServlet extends SecureController {
 	@Override
     public void mayProceed() throws InsufficientPermissionException {
 
+    }
+
+    /** GET shows the form; the confirmation and the request mail take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override

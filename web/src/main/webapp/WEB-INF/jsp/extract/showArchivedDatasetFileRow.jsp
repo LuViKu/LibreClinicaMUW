@@ -19,10 +19,14 @@
             <img name="bt_Download1" src="images/bt_Download.gif" border="0" align="left" hspace="6"
                  alt="<fmt:message key="download" bundle="${resword}"/>" title="<fmt:message key="download" bundle="${resword}"/>">
         </a>
-        <a href="ExportDataset?action=delete&datasetId=<c:out value="${currRow.bean.datasetId}"/>&adfId=<c:out value="${currRow.bean.id}"/>">
-            <img name="bt_Delete1" src="images/bt_Delete.gif" border="0" alt="<fmt:message key="delete" bundle="${resword}"/>"
-                 title="<fmt:message key="delete" bundle="${resword}"/>" align="left" hspace="6"
-                 onClick='return confirm("<fmt:message key="if_you_delete_this_dataset" bundle="${restext}"/>");'>
-        </a>
+        <%-- Deleting the file posts a small form: ExportDataset refuses a GET with an action. --%>
+        <form action="ExportDataset" method="post" style="display:inline; margin:0"
+              onSubmit='return confirm("<fmt:message key="if_you_delete_this_dataset" bundle="${restext}"/>");'>
+            <input type="hidden" name="action" value="delete"/>
+            <input type="hidden" name="datasetId" value="<c:out value="${currRow.bean.datasetId}"/>"/>
+            <input type="hidden" name="adfId" value="<c:out value="${currRow.bean.id}"/>"/>
+            <input type="image" name="bt_Delete1" src="images/bt_Delete.gif" alt="<fmt:message key="delete" bundle="${resword}"/>"
+                   title="<fmt:message key="delete" bundle="${resword}"/>" align="left" hspace="6"/>
+        </form>
     </td>
 </tr>

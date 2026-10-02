@@ -48,7 +48,7 @@
 </c:if>
 <P><fmt:message key="please_enter_all_the_filter" bundle="${restext}"/>
 <font color="red"><fmt:message key="all_fields_are_required" bundle="${resword}"/></font></P>
-<form action="CreateFiltersThree">
+<form action="CreateFiltersThree" method="post">
 
 <input type="hidden" name="action" value="validate"/>
 <table>

@@ -15,6 +15,8 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NullValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
@@ -76,6 +78,13 @@ public class UpdateEventDefinitionServlet extends SecureController {
         }
         addPageMessage(respage.getString("no_have_permission_to_update_study_event_definition") + "<br>" + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
+    }
+
+    /** GET shows the form; the confirmation and the update take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override

@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -46,6 +48,12 @@ public class UpdateProfileServlet extends SecureController {
         // NOOP
     }
     
+    /** GET shows the profile form; the confirmation and the update take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return StringUtils.isBlank(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         String userSentAction = request.getParameter("action");
