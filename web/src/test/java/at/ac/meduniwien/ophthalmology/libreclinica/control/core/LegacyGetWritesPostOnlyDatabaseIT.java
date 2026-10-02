@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.lang.NonNull;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -125,7 +127,7 @@ class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT 
         when(passwords.verifyPassword(anyString(), any())).thenReturn(true);
         JavaMailSenderImpl mail = new JavaMailSenderImpl() {
             @Override
-            public void send(MimeMessage message) {
+            public void send(@NonNull MimeMessage message) {
                 sent.add(message);
             }
         };
@@ -490,16 +492,16 @@ class LegacyGetWritesPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT 
             // Carry what the previous request left in the session (the study
             // switch confirms before it submits), then the user of this one.
             Collections.list(session.getAttributeNames())
-                    .forEach(name -> req.getSession().setAttribute(name, session.getAttribute(name)));
-            req.getSession().setAttribute(SecureController.USER_BEAN_NAME, user);
+                    .forEach(name -> Objects.requireNonNull(req.getSession()).setAttribute(name, session.getAttribute(name)));
+            Objects.requireNonNull(req.getSession()).setAttribute(SecureController.USER_BEAN_NAME, user);
         }
         for (int i = 0; i < params.length; i += 2) {
             req.addParameter(params[i], params[i + 1]);
         }
         MockHttpServletResponse resp = harness.run(servlet, req);
         if (session != null) {
-            Collections.list(req.getSession().getAttributeNames())
-                    .forEach(name -> session.setAttribute(name, req.getSession().getAttribute(name)));
+            Collections.list(Objects.requireNonNull(req.getSession()).getAttributeNames())
+                    .forEach(name -> session.setAttribute(name, Objects.requireNonNull(req.getSession()).getAttribute(name)));
         }
         return resp;
     }

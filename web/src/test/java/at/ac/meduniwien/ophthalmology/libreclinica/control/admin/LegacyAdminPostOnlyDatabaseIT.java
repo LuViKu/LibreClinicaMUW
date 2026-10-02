@@ -27,6 +27,7 @@ import jakarta.mail.internet.MimeMessage;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.lang.NonNull;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -68,7 +69,7 @@ class LegacyAdminPostOnlyDatabaseIT extends AbstractApiControllerDatabaseIT {
         when(passwords.encryptPassword(anyString(), anyBoolean())).thenReturn("{bcrypt}reset-hash");
         JavaMailSenderImpl mail = new JavaMailSenderImpl() {
             @Override
-            public void send(MimeMessage message) {
+            public void send(@NonNull MimeMessage message) {
                 sent.add(message);
             }
         };

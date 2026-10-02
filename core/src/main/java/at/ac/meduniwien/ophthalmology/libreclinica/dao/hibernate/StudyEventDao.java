@@ -18,6 +18,7 @@ import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
+import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,7 +93,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 
 	@Override
 	public void setApplicationEventPublisher(
-			ApplicationEventPublisher applicationEventPublisher) {
+			@NonNull ApplicationEventPublisher applicationEventPublisher) {
  this.eventPublisher = applicationEventPublisher;
 	}
 
