@@ -176,9 +176,60 @@ class BuildStudyAcknowledgeDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(1, countAcks(DEFAULT_STUDY_ID, "rules"));
     }
 
+    /** The study's coordinator may record progress, as legacy Mark Complete admitted. */
+    @Test
+    void acknowledgeAdmitsTheStudyCoordinator() throws Exception {
+        mockMvc().perform(post("/api/v1/studies/" + DEFAULT_STUDY_OID + "/build-status/acknowledge")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"taskId\":\"sites\"}")
+                .session(boundSession("manual_crc", Role.COORDINATOR)))
+                .andExpect(status().isOk());
+
+        assertEquals(1, countAcks(DEFAULT_STUDY_ID, "sites"));
+    }
+
+    /** A locked or frozen study takes no write, the acknowledgement included; not even from an admin. */
+    @Test
+    void acknowledgeRefusesALockedOrFrozenStudy() throws Exception {
+        int statusBefore = studyStatus();
+        try {
+            for (int closed : new int[] {6, 9}) {
+                setStudyStatus(closed);
+                mockMvc().perform(post("/api/v1/studies/" + DEFAULT_STUDY_OID + "/build-status/acknowledge")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskId\":\"groups\"}")
+                        .session(adminSession()))
+                        .andExpect(status().isConflict());
+                assertEquals(0, countAcks(DEFAULT_STUDY_ID, "groups"), "acknowledged on study status " + closed);
+            }
+        } finally {
+            setStudyStatus(statusBefore);
+        }
+    }
+
     /* ====================================================================== */
     /* Helpers                                                                */
     /* ====================================================================== */
+
+    private static int studyStatus() throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT status_id FROM study WHERE study_id = ?")) {
+            ps.setInt(1, DEFAULT_STUDY_ID);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    private static void setStudyStatus(int statusId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("UPDATE study SET status_id = ? WHERE study_id = ?")) {
+            ps.setInt(1, statusId);
+            ps.setInt(2, DEFAULT_STUDY_ID);
+            ps.executeUpdate();
+        }
+    }
 
     private MockHttpSession adminSession() {
         ResourceBundleProvider.updateLocale(Locale.ENGLISH);
