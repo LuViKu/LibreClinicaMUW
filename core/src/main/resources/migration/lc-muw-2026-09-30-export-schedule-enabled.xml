@@ -26,6 +26,9 @@
                 <constraints nullable="false"/>
             </column>
         </addColumn>
+        <rollback>
+            <dropColumn tableName="export_schedule" columnName="enabled"/>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>

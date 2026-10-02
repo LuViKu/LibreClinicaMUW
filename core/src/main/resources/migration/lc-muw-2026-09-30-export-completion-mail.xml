@@ -31,6 +31,9 @@
                 <constraints nullable="true"/>
             </column>
         </addColumn>
+        <rollback>
+            <dropColumn tableName="export_schedule" columnName="notify_email"/>
+        </rollback>
     </changeSet>
 
     <changeSet author="muw-ophthalmology" id="2026-09-30-export-job-schedule-id">
@@ -46,6 +49,10 @@
                                  constraintName="fk_export_job_schedule"
                                  referencedTableName="export_schedule" referencedColumnNames="id"
                                  onDelete="SET NULL" onUpdate="RESTRICT"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="export_job" constraintName="fk_export_job_schedule"/>
+            <dropColumn tableName="export_job" columnName="schedule_id"/>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>
