@@ -196,3 +196,17 @@ export interface SsoConfig {
   entryUrl: string | null
   providerHint: string | null
 }
+
+/**
+ * Why `j_spring_security_check` refused an SPA login (the `error` of its
+ * 401 body): a locked account, a two-factor set-up that has to be
+ * renewed, or anything else (unknown user, wrong password and disabled
+ * account alike).
+ */
+export type LoginFailureReason = 'bad_credentials' | 'locked' | '2fa_outdated'
+
+/** Body of the 401 the login filter answers an SPA login with. */
+export interface LoginFailure {
+  error: LoginFailureReason
+  message: string
+}

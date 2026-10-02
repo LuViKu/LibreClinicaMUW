@@ -95,6 +95,12 @@
         <name>updatePasswordHash</name>
         <sql>update user_account set passwd = ?, passwd_timestamp = ? where user_id = ?</sql>
     </query>
+    <!-- The SPA's login records the visit that MainMenuServlet records
+         through the full update: date_lastvisit only. -->
+    <query>
+        <name>updateLastVisitDate</name>
+        <sql>update user_account set date_lastvisit = ? where user_id = ?</sql>
+    </query>
     <query>
         <name>lockUser</name>
         <sql>update user_account set account_non_locked = ? , status_id= ? where user_id = ?</sql>

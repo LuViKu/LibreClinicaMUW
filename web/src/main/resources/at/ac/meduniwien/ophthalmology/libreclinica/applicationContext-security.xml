@@ -70,18 +70,30 @@
         <property name="ssoProperties" ref="ssoProperties"/>
     </bean>
     
-    <bean id="successHandler" class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >
-        <property name="defaultTargetUrl" value="/MainMenu" /> <!-- which is the default value -->
+    <!-- The SPA's login (Accept: application/json) is answered here: 204 on
+         success, 401 with the reason as JSON on failure. Every other login
+         is passed to the legacy handler inside, which redirects as before. -->
+    <bean id="successHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SpaLoginSuccessHandler">
+        <constructor-arg>
+            <bean class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >
+                <property name="defaultTargetUrl" value="/MainMenu" /> <!-- which is the default value -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="dataSource"/>
     </bean>
     
-    <bean id="failureHandler" class="org.springframework.security.web.authentication.ExceptionMappingAuthenticationFailureHandler" >
-        <property name="defaultFailureUrl" value="/pages/login/login?action=errorLogin" />
-        <property name="exceptionMappings">
-            <props>
-                <prop key="org.springframework.security.authentication.LockedException">/pages/login/login?action=errorLocked</prop>
-                <prop key="at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException">/pages/login/login?action=2faOutdated</prop>
-            </props>
-        </property>
+    <bean id="failureHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SpaLoginFailureHandler">
+        <constructor-arg>
+            <bean class="org.springframework.security.web.authentication.ExceptionMappingAuthenticationFailureHandler" >
+                <property name="defaultFailureUrl" value="/pages/login/login?action=errorLogin" />
+                <property name="exceptionMappings">
+                    <props>
+                        <prop key="org.springframework.security.authentication.LockedException">/pages/login/login?action=errorLocked</prop>
+                        <prop key="at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException">/pages/login/login?action=2faOutdated</prop>
+                    </props>
+                </property>
+            </bean>
+        </constructor-arg>
     </bean>
     
      <!-- A second login of the same account expires the first session
@@ -135,9 +147,13 @@
 		</constructor-arg>
 	</bean>
     
+    <!-- Writes the logout audit row once per session: through the registry
+         for a session it holds, which it removes before the session ends,
+         and itself for any other (an SSO login). -->
     <bean id="openClinicaLogoutHandler" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurityContextLogoutHandler">
         <property name="auditUserLoginDao" ref="auditUserLoginDao"/>
         <property name="dataSource" ref="dataSource"/>
+        <property name="sessionRegistry" ref="sessionRegistry"/>
     </bean>
     
     <!--

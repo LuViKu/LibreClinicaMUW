@@ -131,4 +131,15 @@ public class SessionManager {
         return staticDataSource;
     }
 
+    /**
+     * Sets what {@link #getStaticDataSource()} returns, as the constructors
+     * that take an application context do. Beans that load their owner or
+     * updater lazily read it ({@code AuditableEntityBean}), and so does
+     * {@code EntityDAO.getUserById}. The SPA's login calls this because it
+     * reaches no servlet that builds a SessionManager.
+     */
+    public static void setStaticDataSource(DataSource dataSource) {
+        staticDataSource = dataSource;
+    }
+
 }
