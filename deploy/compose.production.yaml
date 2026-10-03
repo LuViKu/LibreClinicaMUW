@@ -57,6 +57,16 @@ services:
     volumes:
       - ./deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/libreclinica/tls:/etc/libreclinica/tls:ro
+      # Server blocks for other apps on this VM (DR-038). The setup script puts
+      # a block here only once its certificate exists; empty is fine.
+      - /etc/libreclinica/nginx-sites:/etc/nginx/sites:ro
+    # `default` MUST stay listed: once `networks:` is set, Compose stops
+    # attaching the service to the project network implicitly, and without it
+    # nginx cannot reach libreclinica:8080. `edge` is the external network
+    # shared with other apps' compose projects (DutyPlan, DR-038).
+    networks:
+      - default
+      - edge
 
   libreclinica:
     image: ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG:-latest}
@@ -229,3 +239,9 @@ services:
       # DR-029: the unified ingest store (core.ingest.storePath) the app writes
       # uploads to. Same bind in both containers — see the runbook, §7.
       - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
+
+networks:
+  # Created by setup-ubuntu-host.sh and by the systemd unit's ExecStartPre;
+  # external, so `compose down` never removes it.
+  edge:
+    external: true
