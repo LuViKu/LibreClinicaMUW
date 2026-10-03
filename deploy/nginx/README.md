@@ -121,7 +121,7 @@ to a daily cron so it can't lapse silently:
 ```sh
 0 8 * * *  /opt/libreclinica/deploy/nginx/cert-expiry-check.sh \
              || echo "eCRF TLS cert needs renewal" | mail -s "eCRF cert" you@meduniwien.ac.at
-5 8 * * *  /opt/libreclinica/deploy/nginx/cert-expiry-check.sh /etc/libreclinica/tls/dutyplan-augen.crt \
+5 8 * * *  /opt/libreclinica/deploy/nginx/cert-expiry-check.sh /etc/libreclinica/tls/einteilung-augen.crt \
              || echo "DutyPlan TLS cert needs renewal" | mail -s "DutyPlan cert" you@meduniwien.ac.at
 ```
 
@@ -134,7 +134,7 @@ sudo docker exec libreclinica-muw-nginx-1 nginx -s reload
 
 The VM also hosts **DutyPlan**, a small separate web app (FastAPI, one container,
 its own compose project and repository). This nginx serves it at
-`https://dutyplan.augen.meduniwien.ac.at`, so it needs no port of its own.
+`https://einteilung.augen.meduniwien.ac.at`, so it needs no port of its own.
 
 - **Network:** nginx and DutyPlan meet on the external docker network `edge`.
   `setup-ubuntu-host.sh` creates it, and the systemd unit re-creates it before
@@ -142,7 +142,7 @@ its own compose project and repository). This nginx serves it at
   external network is missing. `compose down` never removes it.
 - **Server block:** [dutyplan.conf](dutyplan.conf). The setup script copies it to
   `/etc/libreclinica/nginx-sites/` (mounted into the sidecar and included by
-  `ecrf.conf`) **only when** `/etc/libreclinica/tls/dutyplan-augen.crt` and
+  `ecrf.conf`) **only when** `/etc/libreclinica/tls/einteilung-augen.crt` and
   `.key` exist, and removes it otherwise. nginx exits on a missing certificate,
   so this is what keeps a DutyPlan cert problem from taking the eCRF down.
 - **Upstream:** `dutyplan:8000`, resolved per request, so a stopped DutyPlan
@@ -152,14 +152,14 @@ its own compose project and repository). This nginx serves it at
 
   ```sh
   sudo openssl req -new -newkey rsa:2048 -nodes \
-    -keyout /etc/libreclinica/tls/dutyplan-augen.key \
-    -out    /etc/libreclinica/tls/dutyplan-augen.csr \
-    -subj   "/C=AT/O=Medizinische Universitaet Wien/CN=dutyplan.augen.meduniwien.ac.at" \
-    -addext "subjectAltName=DNS:dutyplan.augen.meduniwien.ac.at"
-  sudo chmod 600 /etc/libreclinica/tls/dutyplan-augen.key
+    -keyout /etc/libreclinica/tls/einteilung-augen.key \
+    -out    /etc/libreclinica/tls/einteilung-augen.csr \
+    -subj   "/C=AT/O=Medizinische Universitaet Wien/CN=einteilung.augen.meduniwien.ac.at" \
+    -addext "subjectAltName=DNS:einteilung.augen.meduniwien.ac.at"
+  sudo chmod 600 /etc/libreclinica/tls/einteilung-augen.key
   ```
 
-  Install the signed full chain as `dutyplan-augen.crt` (chmod 600, server cert
+  Install the signed full chain as `einteilung-augen.crt` (chmod 600, server cert
   first), then **re-run the setup script** to activate the block, or copy it by
   hand and reload:
 
@@ -168,7 +168,7 @@ its own compose project and repository). This nginx serves it at
   sudo docker exec libreclinica-muw-nginx-1 nginx -t && sudo docker exec libreclinica-muw-nginx-1 nginx -s reload
   ```
 
-- **DNS:** IT adds a CNAME `dutyplan.augen.meduniwien.ac.at` →
+- **DNS:** IT adds a CNAME `einteilung.augen.meduniwien.ac.at` →
   `vrc-lin-tasks.augen.meduniwien.ac.at`.
 - **Rollback:** `sudo rm /etc/libreclinica/nginx-sites/dutyplan.conf` and
   `nginx -s reload` as above. The `edge` network can stay.

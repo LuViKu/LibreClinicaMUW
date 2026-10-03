@@ -1002,7 +1002,7 @@ repository and compose project), runs on the eCRF VM. The eCRF's nginx sidecar
 already owns ports 80 and 443 there, and opening another port is not wanted.
 
 **Decision.** The eCRF nginx gets one more name-based server block for
-`dutyplan.augen.meduniwien.ac.at` ([deploy/nginx/dutyplan.conf](../../../deploy/nginx/dutyplan.conf)),
+`einteilung.augen.meduniwien.ac.at` ([deploy/nginx/dutyplan.conf](../../../deploy/nginx/dutyplan.conf)),
 forwarding to `dutyplan:8000` over an external docker network `edge` that both
 compose projects join. DutyPlan stays out of the LibreClinica compose files. Three
 rules keep a DutyPlan problem from ever affecting the eCRF:

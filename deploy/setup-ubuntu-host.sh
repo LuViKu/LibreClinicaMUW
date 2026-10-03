@@ -908,12 +908,12 @@ section "systemd unit"
 # would take the eCRF down with it. Re-run this script after installing a cert.
 NGINX_SITES_DIR="${CONFIG_DIR}/nginx-sites"
 install -d -m 0755 "$NGINX_SITES_DIR"
-if [[ -s "${CONFIG_DIR}/tls/dutyplan-augen.crt" && -s "${CONFIG_DIR}/tls/dutyplan-augen.key" ]]; then
+if [[ -s "${CONFIG_DIR}/tls/einteilung-augen.crt" && -s "${CONFIG_DIR}/tls/einteilung-augen.key" ]]; then
   install -m 0644 "${INSTALL_PREFIX}/deploy/nginx/dutyplan.conf" "${NGINX_SITES_DIR}/dutyplan.conf"
   log "DutyPlan server block active (certificate found)"
 else
   rm -f "${NGINX_SITES_DIR}/dutyplan.conf"
-  log "DutyPlan server block not active (no ${CONFIG_DIR}/tls/dutyplan-augen.{crt,key} yet)"
+  log "DutyPlan server block not active (no ${CONFIG_DIR}/tls/einteilung-augen.{crt,key} yet)"
 fi
 docker network inspect edge >/dev/null 2>&1 || { docker network create edge >/dev/null && log "Created docker network 'edge'"; }
 
