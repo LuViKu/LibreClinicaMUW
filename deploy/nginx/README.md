@@ -71,7 +71,8 @@ sudo systemctl daemon-reload
 sudo docker run --rm --add-host libreclinica:127.0.0.1 \
      -v /opt/libreclinica/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro \
      -v /opt/libreclinica/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-edge.conf:ro \
-     -v /opt/libreclinica/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-realip.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/empty.conf:/etc/nginx/ecrf-realip.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/empty.conf:/etc/nginx/ecrf-edge-http.conf:ro \
      -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
 sudo systemctl restart libreclinica
 ```
@@ -150,7 +151,14 @@ Applies to both deployments (it is in the shared `ecrf.conf`):
   on every proxied request. `Connection ""` is set at server level so the SSE
   location inherits all of it (a location with its own `proxy_set_header`
   drops the server-level ones).
-- Request bodies: **2 MB** by default. The large limit is granted only here:
+- **Per-mode limits** (only ONE file sets them, the server-level include
+  `ecrf-edge.conf`): the internal deployment (`edge-none.conf`) keeps the old
+  server-level `client_max_body_size 1024m`, nginx's default timeouts and no
+  rate limiting; the internet-facing one (`internet-facing.conf`) sets 2 MB, the
+  timeouts and the rate limits below. The per-location limits in this table are
+  in `ecrf.conf` and apply in both modes (200m on the app-capped routes is the
+  app's own `/pages/*` multipart cap, so nothing larger worked before either).
+- Request bodies, internet-facing: **2 MB** by default. The large limit is granted only here:
 
   | Location | Limit |
   |---|---|
@@ -166,18 +174,38 @@ Applies to both deployments (it is in the shared `ecrf.conf`):
   2 MB default. **A new upload route needs a line in this table and in
   `ecrf.conf`, or it answers 413.** The `:8088` retinal failover listener keeps
   its own 1024m.
-- Rate limits (per client address; `429` when exceeded): login
+- Rate limits, **internet-facing only** (per client address; `429` when exceeded): login
   (`/LibreClinica/j_spring_security_check`) 20/min burst 10; `RequestAccount`,
   `Contact`, `/pages/api/v1/contact` 6/min burst 5; everything else 50 r/s burst
   200; 100 concurrent requests per address. `client_header_timeout 15s`,
   `client_body_timeout 60s`, `send_timeout 60s`.
-- Per-deployment includes, both default to an empty file (`edge-none.conf`):
-  `LIBRECLINICA_NGINX_EDGE_CONF` (set to `./deploy/nginx/internet-facing.conf` by
-  the setup script's internet-facing mode: 404 for actuator, Swagger, public,
+- Per-deployment includes (compose variables; defaults are the internal
+  deployment's, the setup script's internet-facing mode sets the others):
+  `LIBRECLINICA_NGINX_EDGE_CONF` (server level; default `edge-none.conf`, internet:
+  `internet-facing.conf` = limits above plus 404 for actuator, Swagger, public,
   internal and device APIs, `pages/auth`, the clean twins, the public portal
-  pages and `;param` path tricks) and `LIBRECLINICA_NGINX_REALIP_CONF` (generated
-  `set_real_ip_from` lines for the DMZ proxy). See
+  pages and `;param` path tricks), `LIBRECLINICA_NGINX_EDGE_HTTP_CONF` (http level;
+  default `empty.conf`, internet: `internet-facing-http.conf` = `default_server`
+  catch-alls that close unknown `Host` on :80 with 444 and refuse unknown SNI on
+  :443 via `ssl_reject_handshake`) and `LIBRECLINICA_NGINX_REALIP_CONF` (default
+  `empty.conf`; generated `set_real_ip_from` lines for the DMZ proxy). See
   [../README.md](../README.md#internet-facing-multicenter-deployment).
+- **Who breaks with AEAD-only TLS (both deployments).** Only
+  ECDHE/DHE + AES-GCM/ChaCha20 over TLS 1.2/1.3 is offered (the old list was
+  `HIGH:!aNULL:!MD5`, which also allowed CBC suites and static RSA key exchange).
+  Checked in this repo: `deploy/optomed/OptomedBridge.ps1` and
+  `deploy/export-watcher/ExportWatcher.ps1` are Windows PowerShell + .NET
+  `HttpClient` and pin `SecurityProtocol = Tls12`, so they use the OS's Schannel:
+  fine on Windows 10/11 and Server 2016+ (and 8.1/2012 R2), which offer
+  ECDHE-RSA-AES-GCM; **not fine on Windows 7 / Server 2008 R2 / 2012 (non-R2)**,
+  which have no AES-GCM suites. Verify on each acquisition PC with
+  `Invoke-WebRequest https://<host>/login -UseBasicParsing`
+  (or open the site in its browser) after the change. The Remidio probe
+  (`deploy/remidio/remidio-probe.sh`) and the app's Remidio client only make
+  outbound calls to Remidio's cloud and are not affected. Other possible
+  victims: Java 7 or older, Python 2 / OpenSSL < 1.0.1, embedded devices and
+  old Android (< 5) browsers. The server certificate must be RSA or ECDSA
+  (both suites are listed).
 
 Validate a change without touching the running stack (a dummy cert is enough;
 the app hostname must resolve, hence `--add-host`):
@@ -186,7 +214,8 @@ the app hostname must resolve, hence `--add-host`):
 docker run --rm --add-host libreclinica:127.0.0.1 \
   -v "$PWD/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro" \
   -v "$PWD/deploy/nginx/internet-facing.conf:/etc/nginx/ecrf-edge.conf:ro" \
-  -v "$PWD/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-realip.conf:ro" \
+  -v "$PWD/deploy/nginx/empty.conf:/etc/nginx/ecrf-realip.conf:ro" \
+  -v "$PWD/deploy/nginx/internet-facing-http.conf:/etc/nginx/ecrf-edge-http.conf:ro" \
   -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
 ```
 

@@ -56,14 +56,17 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro
-      # Per-deployment edge rules, included by ecrf.conf. Both default to an
-      # empty file (internal deployment). The internet-facing deployment sets
-      # LIBRECLINICA_NGINX_EDGE_CONF=./deploy/nginx/internet-facing.conf and
+      # Per-deployment edge rules, included by ecrf.conf. Defaults are the
+      # internal deployment's (edge-none.conf: the old 1024m body limit, no rate
+      # limits; the other two are empty). The internet-facing deployment sets
+      # LIBRECLINICA_NGINX_EDGE_CONF=./deploy/nginx/internet-facing.conf,
+      # LIBRECLINICA_NGINX_EDGE_HTTP_CONF=./deploy/nginx/internet-facing-http.conf and
       # LIBRECLINICA_NGINX_REALIP_CONF=/etc/libreclinica/nginx-realip.conf in
       # /etc/libreclinica/env (setup-ubuntu-host.sh does this when run with
       # INTERNET_FACING=true).
       - ${LIBRECLINICA_NGINX_EDGE_CONF:-./deploy/nginx/edge-none.conf}:/etc/nginx/ecrf-edge.conf:ro
-      - ${LIBRECLINICA_NGINX_REALIP_CONF:-./deploy/nginx/edge-none.conf}:/etc/nginx/ecrf-realip.conf:ro
+      - ${LIBRECLINICA_NGINX_REALIP_CONF:-./deploy/nginx/empty.conf}:/etc/nginx/ecrf-realip.conf:ro
+      - ${LIBRECLINICA_NGINX_EDGE_HTTP_CONF:-./deploy/nginx/empty.conf}:/etc/nginx/ecrf-edge-http.conf:ro
       - /etc/libreclinica/tls:/etc/libreclinica/tls:ro
 
   libreclinica:

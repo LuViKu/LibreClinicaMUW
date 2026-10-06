@@ -850,6 +850,7 @@ if [[ "$IFACE" == "1" ]]; then
   set_kv "$ENV_FILE" LIBRECLINICA_BIND_ADDR 127.0.0.1
   set_kv "$ENV_FILE" LIBRECLINICA_DEPLOYMENT_INTERNET_FACING true
   set_kv "$ENV_FILE" LIBRECLINICA_NGINX_EDGE_CONF ./deploy/nginx/internet-facing.conf
+  set_kv "$ENV_FILE" LIBRECLINICA_NGINX_EDGE_HTTP_CONF ./deploy/nginx/internet-facing-http.conf
   set_kv "$ENV_FILE" LIBRECLINICA_NGINX_REALIP_CONF "$REALIP_CONF"
   set_kv "$ENV_FILE" LIBRECLINICA_DICOM_BIND_ADDR 127.0.0.1
   set_kv "$ENV_FILE" RETINAL_INFERENCE_ADAPTER "$RETINAL_ADAPTER_EFFECTIVE"
@@ -888,7 +889,7 @@ elif [[ "$IFACE_WAS_ON" == "1" ]]; then
   warn "  LIBRECLINICA_BIND_ADDR stays 127.0.0.1 and the env file stays 0600; widen them by hand if the"
   warn "  internal deployment needs a routable bind."
   set_kv "$ENV_FILE" LIBRECLINICA_DEPLOYMENT_INTERNET_FACING false
-  sed -i '/^LIBRECLINICA_NGINX_\(EDGE\|REALIP\)_CONF=/d' "$ENV_FILE"
+  sed -i '/^LIBRECLINICA_NGINX_\(EDGE\|EDGE_HTTP\|REALIP\)_CONF=/d' "$ENV_FILE"
 fi
 
 # Backup settings, one file per host, read by the backup unit. Written in both

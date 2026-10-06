@@ -826,10 +826,14 @@ Both deployments get (shared `ecrf.conf`): `server_tokens off`, Mozilla "interme
 AEAD ciphers, session tickets off), HSTS `max-age=31536000` (plus `includeSubDomains` here only),
 `Referrer-Policy: same-origin`, `X-Content-Type-Options: nosniff`, a CSP of
 `frame-ancestors 'none'; base-uri 'self'; object-src 'none'` (no `script-src`: the heritage JSPs use inline
-scripts), `X-Forwarded-For` set to the address nginx saw, the SSO identity headers blanked, a 2 MB
-default request body (1 GiB / 200 MiB only on the upload routes; see
-[nginx/README.md](nginx/README.md)), and per-IP rate limits (login 20/min, `RequestAccount`/`Contact`
-6/min, 50 r/s overall, 100 concurrent requests).
+scripts), `X-Forwarded-For` set to the address nginx saw, and the SSO identity headers blanked.
+
+Only the internet-facing deployment additionally gets (in `internet-facing.conf`; the internal one keeps
+its old 1024m body limit, default timeouts and no rate limits): a 2 MB default request body (1 GiB /
+200 MiB only on the upload routes; see [nginx/README.md](nginx/README.md)), header/body timeouts, per-IP
+rate limits (login 20/min, `RequestAccount`/`Contact` 6/min, 50 r/s overall, 100 concurrent requests),
+and a `default_server` that refuses an unknown `Host` / TLS SNI (the DMZ proxy must send the public name
+as both).
 
 ### Backups
 
