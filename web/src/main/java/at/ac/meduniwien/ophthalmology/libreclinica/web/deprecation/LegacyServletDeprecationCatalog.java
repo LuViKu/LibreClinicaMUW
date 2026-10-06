@@ -371,7 +371,6 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ExecuteCrossEditCheck", NONE, Bucket.SITES_GROUPS_RULES);
 
         put(m, "/RequestAccount", NONE, Bucket.SUPPORT_FORMS);
-        put(m, "/RequestPassword", NONE, Bucket.SUPPORT_FORMS);
 
         put(m, "/AdminSystem", NONE, Bucket.ADMIN_TOOLING);
         put(m, "/TechAdmin", NONE, Bucket.ADMIN_TOOLING);

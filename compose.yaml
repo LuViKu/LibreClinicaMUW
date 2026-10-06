@@ -23,6 +23,10 @@ services:
     # default to safe values in application.yml; the `:-` fallbacks
     # here let `docker compose up` work with none set on the host.
     environment:
+      # Internet-facing deployment switch (closes the upload portals, device
+      # APIs, actuator info/prometheus, springdoc; uniform login failures;
+      # refuses to start with the default root password). See application.yml.
+      LIBRECLINICA_DEPLOYMENT_INTERNET_FACING: "${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}"
       LIBRECLINICA_SSO_ENABLED: "${LIBRECLINICA_SSO_ENABLED:-false}"
       LIBRECLINICA_SSO_PRINCIPAL_HEADER: "${LIBRECLINICA_SSO_PRINCIPAL_HEADER:-REMOTE_USER}"
       LIBRECLINICA_SSO_EMAIL_HEADER: "${LIBRECLINICA_SSO_EMAIL_HEADER:-mail}"

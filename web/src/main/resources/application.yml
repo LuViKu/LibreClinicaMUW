@@ -70,15 +70,11 @@ logging:
   # runtime; explicit reference keeps Spring Boot's default
   # auto-configuration out of the way).
   config: classpath:logback.xml
-  # Phase C.14 cliff diagnosis (2026-05-30): bump dispatcher + handler
-  # resolution to DEBUG and route to stdout so we can see why the
-  # pages DispatcherServlet's child context isn't picking up
-  # pages-servlet.xml handlers. Note: under LoggingSystem=none, these
-  # have no effect — they're documented here for the next iteration
-  # where logback patterns get a console appender.
-  level:
-    org.springframework.web.servlet: DEBUG
-    org.springframework.security: DEBUG
+  # The Phase C.14 diagnostic DEBUG levels for org.springframework.web.servlet
+  # and org.springframework.security were removed (2026-10-06): they were
+  # leftovers from a one-off investigation, and with logback active they log
+  # request/authentication detail on every request. Set levels per host with
+  # LOGGING_LEVEL_<LOGGER>=DEBUG when diagnosing.
 
 server:
   servlet:
@@ -133,6 +129,17 @@ management:
 # specific reverse-proxy IP. Tomcat MUST bind to the compose-internal
 # network only; the header-spoofing defence depends on it.
 libreclinica:
+  # A second, internet-facing deployment (behind the DMZ reverse proxy) sets
+  # LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true. That (a) answers 404 for the
+  # account-less upload/entry portals, the device + sidecar APIs, springdoc
+  # and /actuator/info + /actuator/prometheus (SecurityConfig), (b) returns an
+  # identical failure for locked / unknown / bad-password logins
+  # (SpaLoginFailureHandler) and (c) refuses to start while the seeded `root`
+  # password (or any active account with it) is unchanged
+  # (InternetFacingStartupGuard). Default false: the internal deployment is
+  # unchanged.
+  deployment:
+    internet-facing: ${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:false}
   sso:
     enabled: ${LIBRECLINICA_SSO_ENABLED:false}
     header:

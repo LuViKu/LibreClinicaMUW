@@ -1,6 +1,11 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.config;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.InternetFacingPathBlockFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SpaLoginFailureHandler;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -77,7 +82,6 @@ public class SecurityConfig {
     static final String[] PUBLIC_PATHS = {
             "/pages/login/login",
             "/SystemStatus",
-            "/RequestPassword",
             "/RequestAccount",
             "/Contact",
             "/includes/**",
@@ -238,6 +242,75 @@ public class SecurityConfig {
     };
 
     /**
+     * Paths that must not be reachable on an internet-facing deployment
+     * ({@code libreclinica.deployment.internet-facing=true}). They are answered
+     * 404 by {@link InternetFacingPathBlockFilter} (so existence is not
+     * revealed) and, as defence in depth, denied by the authorization rules.
+     * {@code /actuator/health}, {@code /pages/api/v1/contact}, {@code /app/**},
+     * the login page and {@code /error} stay open.
+     * <ul>
+     *   <li>the account-less upload / entry portals and the device and sidecar
+     *       APIs ({@code /pages/api/v1/public|internal|device});</li>
+     *   <li>information-leaking operational endpoints: actuator info and
+     *       prometheus, springdoc and swagger (pages and bare twins);</li>
+     *   <li>the heritage API-key REST API under {@code /pages/auth}, closed
+     *       (410) by default in {@code libreclinica.legacy.closedPaths} but
+     *       reopenable by that setting, so the public-path entries behind it
+     *       are denied here as well; and the anonymous {@code /SystemStatus}
+     *       page.</li>
+     * </ul>
+     * {@code /pages/sso/reauth} is added by {@link #internetFacingDeniedPaths}
+     * only when SSO is off; with SSO on the proxy-mediated re-authentication
+     * flow needs it.
+     */
+    public static final String[] INTERNET_FACING_DENIED_PATHS = {
+            "/pages/api/v1/public/**",
+            "/pages/api/v1/internal/**",
+            "/pages/api/v1/device/**",
+            "/actuator/info",
+            "/actuator/info/**",
+            "/actuator/prometheus",
+            "/actuator/prometheus/**",
+            "/pages/v3/api-docs*",
+            "/pages/v3/api-docs/**",
+            "/pages/swagger-ui*",
+            "/pages/swagger-ui/**",
+            "/v3/api-docs*",
+            "/v3/api-docs/**",
+            "/swagger-ui*",
+            "/swagger-ui/**",
+            "/pages/auth/**",
+            "/SystemStatus",
+            "/SystemStatus/**",
+    };
+
+    /** The deny list for a deployment: the fixed list plus SSO re-auth when SSO is off. */
+    public static String[] internetFacingDeniedPaths(boolean ssoEnabled) {
+        if (ssoEnabled) {
+            return INTERNET_FACING_DENIED_PATHS;
+        }
+        String[] all = java.util.Arrays.copyOf(INTERNET_FACING_DENIED_PATHS,
+                INTERNET_FACING_DENIED_PATHS.length + 1);
+        all[all.length - 1] = "/pages/sso/reauth";
+        return all;
+    }
+
+    /**
+     * URL authorization rules. When {@code internetFacing} the deny rule is
+     * registered FIRST so it wins over the {@code permitAll} list that follows.
+     */
+    static Customizer<AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry>
+            authorization(boolean internetFacing, boolean ssoEnabled) {
+        return auth -> {
+            if (internetFacing) {
+                auth.requestMatchers(antPaths(internetFacingDeniedPaths(ssoEnabled))).denyAll();
+            }
+            auth.requestMatchers(antPaths(PUBLIC_PATHS)).permitAll()
+                .anyRequest().hasRole("USER");
+        };
+    }
+
+    /**
      * Phase D.3 (DR-014): SSO config bean with a stable ID
      * ({@code ssoProperties}) so the legacy
      * {@code applicationContext-security.xml} can {@code <ref bean=…/>}
@@ -272,7 +345,13 @@ public class SecurityConfig {
             // public OCT-upload portal. The filter no-ops for every
             // path that doesn't match its guarded prefix; cost is one
             // request URI startsWith for the rest of the chain.
-            PublicOctUploadRateLimitFilter publicOctUploadRateLimitFilter) throws Exception {
+            PublicOctUploadRateLimitFilter publicOctUploadRateLimitFilter,
+            // Second, internet-facing deployment: closes the portals, device
+            // APIs and operational endpoints. Off for the internal deployment.
+            @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing,
+            @Qualifier("failureHandler") SpaLoginFailureHandler failureHandler) throws Exception {
+        // One failure for every cause when internet-facing (see the handler).
+        failureHandler.setInternetFacing(internetFacing);
 
         // Phase E.6 (2026-06-03) — SPA-vs-legacy entry-point split.
         // The legacy form-login entry point at /pages/login/login emits
@@ -309,10 +388,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .anonymous(_ -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(antPaths(PUBLIC_PATHS)).permitAll()
-                .anyRequest().hasRole("USER")
-            )
+            .authorizeHttpRequests(authorization(internetFacing, ssoProperties.isEnabled()))
             .addFilterBefore(publicOctUploadRateLimitFilter, ChannelProcessingFilter.class)
             .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
@@ -323,6 +399,17 @@ public class SecurityConfig {
                 .addLogoutHandler(logoutHandler)
                 .logoutSuccessHandler(logoutHandler)
             );
+
+        // Internet-facing deployment: answer 404 for the portals, device APIs
+        // and operational endpoints before the rate limiter or any controller
+        // sees the request. Registered after the rate-limit filter's anchor but
+        // placed before it so it runs first. The authorization rules deny the
+        // same paths as a second layer.
+        if (internetFacing) {
+            http.addFilterBefore(
+                    new InternetFacingPathBlockFilter(internetFacingDeniedPaths(ssoProperties.isEnabled())),
+                    PublicOctUploadRateLimitFilter.class);
+        }
 
         // Phase D.3 (DR-014): institution-agnostic SSO pre-auth.
         // Wired AHEAD of myFilter (the local username/password filter)
