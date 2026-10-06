@@ -32,6 +32,9 @@
 #     /var/lib/libreclinica/dicom-ingest, DICOM port bound to the
 #     camera-facing address only. Behind the `dicom` profile, so it
 #     starts only where COMPOSE_PROFILES includes it.
+#   - dicom-verify: internet-facing counterpart of dicom-scp (profile
+#     `dicom-verify`): the same image with the SCP off - HTTP /describe +
+#     /verify only, no DICOM port. Never run together with dicom-scp.
 #   - smtp/mailcrab: not started in production (the systemd ExecStart in
 #     libreclinica.service names the services explicitly and omits smtp).
 
@@ -231,7 +234,7 @@ services:
       # file, profiles or not, so a `:?` here would stop every host without the
       # `dicom` profile (the internal deployment today) from starting at all.
       # The internet-facing deployment publishes no DICOM port and runs no
-      # dicom-scp, so it never reaches this service.
+      # dicom-scp (it runs dicom-verify below instead).
       DICOM_SCP_ALLOWED_CALLING_AE_TITLES: ${DICOM_SCP_ALLOWED_CALLING_AE_TITLES:-}
       # Must equal core.dicom.ingest.token in datainfo.properties. Blank is
       # allowed for the same reason as above; setup-ubuntu-host.sh --dicom
@@ -248,7 +251,7 @@ services:
       DICOM_SCP_DESCRIBE_PORT: ${DICOM_SCP_DESCRIBE_PORT:-8081}
       # Match libreclinica.ingest.deidentification.required on the app: always
       # strict (private tags dropped, extended attribute list cleared).
-      DICOM_SCP_DEIDENTIFY_STRICT: ${DICOM_SCP_DEIDENTIFY_STRICT:-${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:-false}}
+      DICOM_SCP_DEIDENTIFY_STRICT: ${DICOM_SCP_DEIDENTIFY_STRICT:-${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:-${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}}}
     volumes:
       # Stable host path under the backup root, like the other stores. The
       # app reads the same directory to serve image previews, so the two
@@ -256,4 +259,39 @@ services:
       - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest
       # DR-029: the unified ingest store (core.ingest.storePath) the app writes
       # uploads to. Same bind in both containers — see the runbook, §7.
+      - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
+
+  # Internet-facing hosts: describe/verify-only sidecar. The app needs the
+  # sidecar's HTTP endpoints for every authenticated DICOM upload (/describe,
+  # and /verify, the de-identification check the nightly scanner also uses),
+  # but an internet-facing host must never listen for a camera. Same image as
+  # dicom-scp with DICOM_SCP_SCP_ENABLED=false: no C-STORE, no worklist C-FIND,
+  # port 11112 is never bound and nothing is published. The network alias
+  # `dicom-scp` keeps core.dicom.describe.url (http://dicom-scp:8081/describe)
+  # working unchanged.
+  # MUTUALLY EXCLUSIVE with dicom-scp (same alias, same stores): never put both
+  # `dicom` and `dicom-verify` in COMPOSE_PROFILES. setup-ubuntu-host.sh sets
+  # exactly one: dicom-verify in INTERNET_FACING mode, dicom with --dicom.
+  dicom-verify:
+    image: ghcr.io/luviku/libreclinicamuw/dicom-scp:${LIBRECLINICA_DICOM_IMAGE_TAG:-${LIBRECLINICA_IMAGE_TAG:-latest}}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["dicom-verify"]
+    # No `ports:` - deliberately, and never add one.
+    networks:
+      default:
+        aliases:
+          - dicom-scp
+    environment:
+      DICOM_SCP_SCP_ENABLED: "false"
+      # Must equal core.dicom.ingest.token on the app (setup-ubuntu-host.sh
+      # mints and pairs it in internet-facing mode too).
+      DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
+      DICOM_SCP_LOG_LEVEL: ${DICOM_SCP_LOG_LEVEL:-INFO}
+      DICOM_SCP_DESCRIBE_PORT: ${DICOM_SCP_DESCRIBE_PORT:-8081}
+      # Always strict here: this service exists only for the internet-facing
+      # mode, where de-identification is required.
+      DICOM_SCP_DEIDENTIFY_STRICT: "true"
+    volumes:
+      - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest
       - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest

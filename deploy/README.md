@@ -641,6 +641,24 @@ account can write to, the log says so and names the ids that are, and the sync
 stays off until it is corrected. (A mistyped digit otherwise fails on every
 subject, every two minutes, with only a per-subject "site cannot be found".)
 
+### Internet-facing host: the verify-only sidecar (`dicom-verify`)
+
+The app needs the sidecar's HTTP endpoints on every authenticated DICOM upload
+(`/describe`, and `/verify`, the de-identification check the nightly scanner
+also uses), so an internet-facing host cannot simply run without it: uploads
+would get 503 and the scan would report "incomplete". It also must never listen
+for a camera. `INTERNET_FACING=true` therefore sets `COMPOSE_PROFILES=dicom-verify`:
+the same `dicom-scp` image with `DICOM_SCP_SCP_ENABLED=false` - no C-STORE, no
+worklist C-FIND, port 11112 never bound, **no published port at all**, always
+strict. It takes the network alias `dicom-scp`, so `core.dicom.describe.url`
+(`http://dicom-scp:8081/describe`) is unchanged. The setup script mints
+`DICOM_SCP_INGEST_TOKEN` and pairs it into `core.dicom.ingest.token` in this
+mode too, and adds `dicom-verify` to the systemd unit. Leaving the mode
+removes `dicom-verify` from `COMPOSE_PROFILES`.
+
+`dicom` and `dicom-verify` are mutually exclusive (same alias, same stores);
+the script refuses `--dicom` with the mode and stops if both profiles are listed.
+
 ### DICOM sidecar (optional, but needed for any DICOM upload)
 
 Every DICOM file the platform takes in - a camera's C-STORE, a Clarus or
@@ -739,7 +757,7 @@ on the internal VM changes none of it.
 | App | `LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true` in `/etc/libreclinica/env`, passed to the container by `deploy/compose.production.yaml`. The app then disables the public portals and the device/internal endpoints. |
 | Session | `maxInactiveInterval=1800` (30 min idle) in `datainfo.properties` (the internal VM keeps the shipped 3600). Override with `LIBRECLINICA_SESSION_MAX_INACTIVE`. |
 | nginx | `deploy/nginx/internet-facing.conf` is included (see "What is blocked"); `/etc/libreclinica/nginx-realip.conf` is generated from `DMZ_PROXY_CIDRS` so rate limits see the visitor, not the proxy. |
-| Ports | `LIBRECLINICA_BIND_ADDR=127.0.0.1` (re-asserted every run, never `0.0.0.0`); no DICOM port, no `dicom-scp` (`COMPOSE_PROFILES` is cleared; `--dicom` is refused). |
+| Ports | `LIBRECLINICA_BIND_ADDR=127.0.0.1` (re-asserted every run, never `0.0.0.0`); no DICOM port and no `dicom-scp`; `COMPOSE_PROFILES=dicom-verify` runs the verify-only sidecar instead (see below; `--dicom` is refused). |
 | Firewall | `libreclinica-firewall.service` (see below). |
 | Secrets | `/etc/libreclinica/env` is mode `0600`, created closed. |
 | Backups | Always encrypted with age, file stores included, optional off-host copy (see below). |

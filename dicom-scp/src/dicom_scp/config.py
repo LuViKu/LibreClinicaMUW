@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DICOM_SCP_", extra="ignore")
 
     # --- DICOM Storage SCP listener ---
+    # False = describe/verify-only: no C-STORE, no worklist C-FIND, the SCP
+    # port is never bound; only the HTTP /describe + /verify endpoints run.
+    # Used by the internet-facing deployment (`dicom-verify` service), which
+    # must not listen for modalities but still needs the app's upload checks.
+    scp_enabled: bool = True
     ae_title: str = "LIBRECLINICA"
     host: str = "0.0.0.0"
     port: int = 11112
