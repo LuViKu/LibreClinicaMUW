@@ -93,23 +93,25 @@ class PublicOctUploadRateLimitFilterTest {
     }
 
     @Test
-    void prefersXForwardedForOverRemoteAddr() throws Exception {
+    void ignoresSpoofableXForwardedFor() throws Exception {
+        // The client rotates X-Forwarded-For on every request to dodge its
+        // bucket; the bucket is keyed on remoteAddr, so the limit still bites.
         ClockableFilter filter = new ClockableFilter(0L);
         for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
             MockHttpServletRequest req = guardedRequest();
-            req.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.1");
+            req.addHeader("X-Forwarded-For", "203.0.113." + i);
             req.setRemoteAddr("10.0.0.1");
             MockHttpServletResponse resp = new MockHttpServletResponse();
             filter.doFilter(req, resp, new MockFilterChain());
             assertEquals(200, resp.getStatus());
         }
-        // XFF IP exhausted; an XFF-less request from the same backend
-        // remote IP (10.0.0.1) is in a separate bucket and passes.
-        MockHttpServletRequest direct = guardedRequest();
-        direct.setRemoteAddr("10.0.0.1");
+        MockHttpServletRequest spoofed = guardedRequest();
+        spoofed.addHeader("X-Forwarded-For", "198.51.100.99");
+        spoofed.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse resp = new MockHttpServletResponse();
-        filter.doFilter(direct, resp, new MockFilterChain());
-        assertEquals(200, resp.getStatus());
+        filter.doFilter(spoofed, resp, new MockFilterChain());
+        assertEquals(429, resp.getStatus());
+        assertEquals("10.0.0.1", PublicOctUploadRateLimitFilter.clientIp(spoofed));
     }
 
     @Test

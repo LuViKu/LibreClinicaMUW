@@ -39,9 +39,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * 30 succeed immediately; subsequent calls wait until the next token
  * refills.
  *
- * <p>Client IP resolution: prefers the first entry in {@code X-Forwarded-For}
- * (the reverse proxy is mandatory for production), falls back to
- * {@code request.getRemoteAddr()} for direct (dev / smoke-test) hits.
+ * <p>Client IP resolution: {@code request.getRemoteAddr()} only. Tomcat's
+ * RemoteIpValve (Dockerfile) already substitutes the real client address
+ * from the trusted proxy's {@code X-Forwarded-For}; reading that header here
+ * as well would let a client pick its own bucket by sending one.
  *
  * <p>Idle eviction: a scheduled task drops buckets that haven't seen a
  * request in 1 h so a parade of distinct client IPs can't bloat the
@@ -246,17 +247,10 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * First X-Forwarded-For entry (the reverse proxy is mandatory in
-     * production) falling back to remoteAddr. Cheap to spoof on a
-     * non-proxied edge — fine for the institutional model where the
-     * proxy is the only access gate.
+     * The connection peer as the container resolved it. Never the raw
+     * X-Forwarded-For header, which a client can set to anything.
      */
     static String clientIp(HttpServletRequest req) {
-        String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma < 0 ? xff : xff.substring(0, comma)).trim();
-        }
         return req.getRemoteAddr();
     }
 
