@@ -68,7 +68,10 @@ sudo sed -i 's| retinal-inference$| retinal-inference nginx|' /etc/systemd/syste
 sudo systemctl daemon-reload
 
 # 5. Validate the nginx config, then restart the stack.
-sudo docker run --rm -v /opt/libreclinica/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro \
+sudo docker run --rm --add-host libreclinica:127.0.0.1 \
+     -v /opt/libreclinica/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-edge.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-realip.conf:ro \
      -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
 sudo systemctl restart libreclinica
 ```
@@ -128,9 +131,66 @@ After installing a renewed cert, reload nginx without downtime:
 sudo docker exec libreclinica-muw-nginx-1 nginx -s reload
 ```
 
+## Edge hardening (2026-10)
+
+Applies to both deployments (it is in the shared `ecrf.conf`):
+
+- `server_tokens off`; Mozilla "intermediate" TLS (TLS 1.2 + 1.3, AEAD
+  ciphers, `ssl_prefer_server_ciphers off`, `ssl_session_tickets off`). A
+  client that only speaks CBC suites or TLS 1.0/1.1 will no longer connect.
+- **HSTS** `max-age=31536000` is **on**: port 80 only redirects, so both
+  deployments are already HTTPS-only. Browsers remember it for a year; if
+  HTTPS ever has to be taken away from the internal name, that is a long wait.
+  `includeSubDomains` is added only on the internet-facing host.
+- `Referrer-Policy: same-origin`, `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'`.
+  There is deliberately no `script-src`: the heritage JSPs use inline scripts.
+- `X-Forwarded-For` is **set** to `$remote_addr` (nginx is the first hop), and
+  `REMOTE_USER`, `mail` and `displayName` (the SSO identity headers) are blanked
+  on every proxied request. `Connection ""` is set at server level so the SSE
+  location inherits all of it (a location with its own `proxy_set_header`
+  drops the server-level ones).
+- Request bodies: **2 MB** by default. The large limit is granted only here:
+
+  | Location | Limit |
+  |---|---|
+  | `/LibreClinica/pages/api/v1/public/` (portals; 404 on internet-facing) | 1024m |
+  | `/LibreClinica/pages/api/v1/ingest/upload/` (SPA `/ingest-inbox/upload`) | 1024m |
+  | `/LibreClinica/pages/api/v1/event-crfs/{id}/oct-upload` | 1024m |
+  | `/LibreClinica/pages/api/v1/eventCrfs/{id}/items/{oid}/file` (CRF file item) | 200m |
+  | `/LibreClinica/pages/api/v1/crfs/{oid}/versions`, `…/import`, `…/rules/import` | 200m |
+  | `/LibreClinica/{CreateCRFVersion,CreateXformCRFVersion,ImportCRFData,ImportRule,UploadFile}` (legacy multipart JSPs) | 200m |
+
+  The app itself caps the `/pages/*` multipart parser at 200 MiB (`web.xml`).
+  The Optomed device endpoints and uploader heartbeats are tiny and keep the
+  2 MB default. **A new upload route needs a line in this table and in
+  `ecrf.conf`, or it answers 413.** The `:8088` retinal failover listener keeps
+  its own 1024m.
+- Rate limits (per client address; `429` when exceeded): login
+  (`/LibreClinica/j_spring_security_check`) 20/min burst 10; `RequestAccount`,
+  `Contact`, `/pages/api/v1/contact` 6/min burst 5; everything else 50 r/s burst
+  200; 100 concurrent requests per address. `client_header_timeout 15s`,
+  `client_body_timeout 60s`, `send_timeout 60s`.
+- Per-deployment includes, both default to an empty file (`edge-none.conf`):
+  `LIBRECLINICA_NGINX_EDGE_CONF` (set to `./deploy/nginx/internet-facing.conf` by
+  the setup script's internet-facing mode: 404 for actuator, Swagger, public,
+  internal and device APIs, `pages/auth`, the clean twins, the public portal
+  pages and `;param` path tricks) and `LIBRECLINICA_NGINX_REALIP_CONF` (generated
+  `set_real_ip_from` lines for the DMZ proxy). See
+  [../README.md](../README.md#internet-facing-multicenter-deployment).
+
+Validate a change without touching the running stack (a dummy cert is enough;
+the app hostname must resolve, hence `--add-host`):
+
+```sh
+docker run --rm --add-host libreclinica:127.0.0.1 \
+  -v "$PWD/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro" \
+  -v "$PWD/deploy/nginx/internet-facing.conf:/etc/nginx/ecrf-edge.conf:ro" \
+  -v "$PWD/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-realip.conf:ro" \
+  -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
+```
+
 ## Notes
 
-- **HSTS** is commented out in `ecrf.conf` — enable it only once HTTPS is
-  proven stable on every path (it's hard to unpin in browsers).
-- If clean-URL routing misbehaves, iterate on `ecrf.conf` + `nginx -s reload`
+- HSTS is enabled (see above). If clean-URL routing misbehaves, iterate on `ecrf.conf` + `nginx -s reload`
   (no image rebuild needed); only the SPA base / valve need a rebuild.
