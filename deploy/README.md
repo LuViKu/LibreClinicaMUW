@@ -8,17 +8,20 @@ the host like a managed config target, not a hand-crafted server.
 
 - Ubuntu 24.04 LTS (Noble Numbat), fully patched, dedicated VM.
 - Root or `sudo` access for the operator running this script.
-- **Host-level access hardening and network ACLs are out of scope** for this
-  script. The production VM is expected to live on the internal MUW network
-  behind the institutional reverse proxy / campus firewall; SSH hardening,
-  UFW, fail2ban, and similar host-hardening are the campus admin team's
-  responsibility and should be applied before you run this script. The
-  script focuses only on the LibreClinicaMUW stack — Docker, the deploy
-  user, the systemd unit, and the backup timer.
+- **Internal deployment: host-level access hardening and network ACLs are out
+  of scope** for this script. That VM is expected to live on the internal MUW
+  network behind the campus firewall; SSH hardening, UFW, fail2ban, and
+  similar host-hardening are the campus admin team's responsibility and
+  should be applied before you run this script. The script focuses only on
+  the LibreClinicaMUW stack — Docker, the deploy user, the systemd unit, and
+  the backup timer. **The internet-facing deployment is different:** run with
+  `INTERNET_FACING=true` the script installs a host firewall itself — see
+  [§ Internet-facing (multicenter) deployment](#internet-facing-multicenter-deployment).
 - One or more CIDRs the institutional reverse proxy / campus subnets occupy.
   These feed `LIBRECLINICA_SSO_TRUSTED_CIDRS` (the SSO header-trust filter
   the application uses to decide which incoming request headers it'll trust
-  for upstream-provided identity), NOT any host firewall — there isn't one.
+  for upstream-provided identity), NOT the host firewall of the
+  internet-facing mode (that one takes `ADMIN_CIDRS` / `DMZ_PROXY_CIDRS`).
   Today's MUW campus CIDRs: ask netops/infrastructure.
 - Published release images at both
   `ghcr.io/luviku/libreclinicamuw:<tag>` and
@@ -170,8 +173,22 @@ above for the host-hardening scope split.
    intentionally not started.
 9. **Backups** — `libreclinica-backup-db.timer` fires nightly at 03:00 local
    (with 30 min jitter). Output goes to `/var/backups/libreclinica/`,
-   gzipped, retention 30 days (`--backup-days`).
+   gzipped, retention 30 days (`--backup-days`). By default that is the
+   database dump only, in clear, local only (unchanged). Settings in
+   `/etc/libreclinica/backup.env` (written by the script, from env vars):
+   `BACKUP_AGE_RECIPIENT` encrypts every artefact with
+   [age](https://age-encryption.org) (`.age` suffix),
+   `LIBRECLINICA_BACKUP_FILES=true` adds a
+   `libreclinica-files-<stamp>.tar.gz` of the file stores under
+   `/var/lib/libreclinica` (e2e uploads, retinal artifacts and inference
+   output, ingest, dicom-ingest, app-data — not Postgres, which the dump
+   covers, nor logs), `BACKUP_RSYNC_TARGET=user@host:/dir` copies each night's
+   artefacts off-host (requires the age key; remote retention is the target's
+   job). Files are written under a `.partial` name and renamed when complete.
+   Internet-facing mode turns all three on.
 10. **logrotate** — safety net for the backup directory.
+11. **Internet-facing mode only** (`INTERNET_FACING=true`) — host firewall,
+    session timeout, nginx edge rules, 0600 env file. See the next section.
 
 ## After the script
 
@@ -230,11 +247,13 @@ sudo systemctl restart libreclinica
 
 ### 2. Wire the institutional reverse proxy
 
-The VM exposes Tomcat on `127.0.0.1:8080` only. The MUW reverse proxy is
-expected to terminate TLS, do Shibboleth SP auth, and forward to
-`http://<vm-internal-ip>:8080/LibreClinica/`. Network-level access control
+The VM's own nginx sidecar already terminates TLS on 80/443 (see the FAQ).
+Tomcat is published on `LIBRECLINICA_BIND_ADDR`:8080 for a reverse proxy on
+another host, if the site uses one for Shibboleth SP auth: it would forward
+to `http://<vm-internal-ip>:8080/LibreClinica/`. Network-level access control
 (which sources can reach port 8080) is handled at the institutional
-perimeter, not on the VM itself — see the **Prerequisites** scope split.
+perimeter on the internal deployment, not on the VM itself — see the
+**Prerequisites** scope split.
 
 When the reverse proxy is in place and forwarding the SSO headers, flip
 `LIBRECLINICA_SSO_ENABLED=true` in `/etc/libreclinica/env` and restart.
@@ -661,6 +680,7 @@ ls -lh /var/backups/libreclinica/
 # 2. Stop the app (Postgres stays up so we can restore into it).
 sudo docker compose -f /opt/libreclinica/compose.yaml \
     -f /opt/libreclinica/deploy/compose.production.yaml \
+    --env-file /etc/libreclinica/env \
     stop libreclinica retinal-inference
 
 # 3. Wipe + restore the db.
@@ -675,6 +695,23 @@ gunzip -c /var/backups/libreclinica/libreclinica-<stamp>.sql.gz \
 sudo systemctl start libreclinica
 ```
 
+`--env-file /etc/libreclinica/env` matters: the production overlay has no
+fallback for `POSTGRES_PASSWORD`, so a bare `docker compose -f … -f …` without
+the env file stops with "required variable POSTGRES_PASSWORD is missing".
+
+**Encrypted backups (`*.age`).** Decrypt with the private key, which lives
+off this host, and feed the result into the same commands:
+
+```sh
+age -d -i /path/to/age-key.txt /var/backups/libreclinica/libreclinica-<stamp>.sql.gz.age \
+    | gunzip | sudo docker exec -i libreclinica-muw-db-1 psql -U clinica -d libreclinica
+
+# File stores (only present when LIBRECLINICA_BACKUP_FILES=true). Restore into a
+# scratch directory first and inspect, then copy what you need back:
+mkdir /tmp/restore && age -d -i /path/to/age-key.txt \
+    /var/backups/libreclinica/libreclinica-files-<stamp>.tar.gz.age | tar -xz -C /tmp/restore
+```
+
 ### Read-only DB shell
 
 ```sh
@@ -687,6 +724,172 @@ sudo docker exec -it libreclinica-muw-db-1 psql -U clinica libreclinica
 sudo docker logs -f libreclinica-muw-retinal-inference-1
 ```
 
+## Internet-facing (multicenter) deployment
+
+A second VM, separate from the internal one, serves a multicenter study and is
+reachable from the internet **through the MUW DMZ reverse proxy**. It runs the
+same stack with `INTERNET_FACING=true`. The internal deployment is unaffected:
+nothing below applies unless that mode is on, and a plain re-run of the script
+on the internal VM changes none of it.
+
+### What the mode does
+
+| Layer | Effect |
+|---|---|
+| App | `LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true` in `/etc/libreclinica/env`, passed to the container by `deploy/compose.production.yaml`. The app then disables the public portals and the device/internal endpoints. |
+| Session | `maxInactiveInterval=1800` (30 min idle) in `datainfo.properties` (the internal VM keeps the shipped 3600). Override with `LIBRECLINICA_SESSION_MAX_INACTIVE`. |
+| nginx | `deploy/nginx/internet-facing.conf` is included (see "What is blocked"); `/etc/libreclinica/nginx-realip.conf` is generated from `DMZ_PROXY_CIDRS` so rate limits see the visitor, not the proxy. |
+| Ports | `LIBRECLINICA_BIND_ADDR=127.0.0.1` (re-asserted every run, never `0.0.0.0`); no DICOM port, no `dicom-scp` (`COMPOSE_PROFILES` is cleared; `--dicom` is refused). |
+| Firewall | `libreclinica-firewall.service` (see below). |
+| Secrets | `/etc/libreclinica/env` is mode `0600`, created closed. |
+| Backups | Always encrypted with age, file stores included, optional off-host copy (see below). |
+
+### Required and optional variables
+
+```sh
+sudo INTERNET_FACING=true \
+  ADMIN_CIDRS='10.1.2.0/24' \
+  DMZ_PROXY_CIDRS='192.0.2.10/32' \
+  BACKUP_AGE_RECIPIENT='age1…' \
+  BACKUP_RSYNC_TARGET='backup@offsite.example.org:/srv/lcmuw' \
+  RETINAL_INFERENCE_ADAPTER=optima \
+  LIBRECLINICA_RETINAL_REMOTE_PUSH_URL='https://gpu.example.org:8000' \
+  LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN='<long random, same on the GPU host>' \
+  bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --image-tag v1.5.0-muw --ghcr-token "$(cat ~/libreclinica-deploy.pat)"
+```
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `INTERNET_FACING=true` (or `--internet-facing`) | to enable | Once the env file says the host is internet-facing, a re-run without it **stays** in the mode (so an operator cannot silently drop it). `INTERNET_FACING=false` / `--no-internet-facing` leaves the mode: switch off, edge include off, firewall removed, session timeout restored. |
+| `ADMIN_CIDRS` | yes | Comma list of addresses/CIDRs allowed to reach SSH. Persisted in `/etc/libreclinica/firewall.conf`. |
+| `DMZ_PROXY_CIDRS` | strongly advised | Addresses allowed to reach 80/443, and the trusted real-IP source for nginx. Unset = 80/443 open to every source (the script warns). |
+| `BACKUP_AGE_RECIPIENT` | yes | age **public** key. Generate the pair on an admin workstation (`age-keygen`); the private key must never be on this host. |
+| `BACKUP_RSYNC_TARGET` | no | `user@host:/dir`; needs a passwordless root SSH key to the target (`BatchMode`). |
+| `RETINAL_INFERENCE_ADAPTER` | yes (unless already set in the env file) | A real adapter. `placeholder` is refused. |
+| `LIBRECLINICA_RETINAL_REMOTE_PUSH_URL` / `_TOKEN` | yes on a first run | URL must be `https://`; the token must not be `choose-a-long-shared-secret`. Both are checked before anything is changed. On a re-run the values in `datainfo.properties` are checked. |
+| `SSH_PORT` | no (22) | The SSH port the firewall admits. |
+| `SKIP_ADMIN_LOCKOUT_CHECK=true` | no | The script refuses a firewall that would cut the SSH session it is running in (your address is not in `ADMIN_CIDRS`); this overrides that. |
+
+The script refuses (exit 1, before changing the host) when `ADMIN_CIDRS` or
+`BACKUP_AGE_RECIPIENT` is missing or malformed, the retinal push token is the
+placeholder or the URL is not `https://`, the adapter is `placeholder`, or
+`--dicom` is combined with the mode. Note that this also rules out the
+internal `http://nginx:8088` retinal failover listener on this host: it is
+plain HTTP by design, so the internet-facing VM needs an `https://` GPU
+endpoint (or a TLS-terminating failover in front of the cluster).
+
+### The host firewall
+
+`/usr/local/sbin/libreclinica-firewall` (rules in two chains of its own, so it
+is reversible and does not touch anyone else's rules):
+
+- `LIBRECLINICA-IN`, first in `INPUT`: loopback, established/related, ICMP,
+  Docker bridges, SSH only from `ADMIN_CIDRS`, 80/443 from `DMZ_PROXY_CIDRS`
+  (or anywhere if unset), DHCP; everything else dropped.
+- `LIBRECLINICA-FWD`, first in `DOCKER-USER`: Docker publishes ports with DNAT,
+  so published-port traffic never reaches `INPUT`; this chain is the only place
+  to stop it. It admits container-originated and established traffic and, from
+  outside, only original destination ports 443 and 80 (from `DMZ_PROXY_CIDRS`
+  when set). Anything else a container might publish is unreachable.
+- IPv6 gets the same chains when `ip6tables` has a `DOCKER-USER` chain; no
+  IPv6 admin CIDR means no IPv6 SSH.
+- Persisted by `libreclinica-firewall.service` (enabled; re-applied at boot and
+  whenever Docker restarts; `libreclinica.service` starts after it).
+
+```sh
+sudo libreclinica-firewall status             # what is installed
+sudo systemctl disable --now libreclinica-firewall   # remove it (reversible)
+sudo systemctl restart libreclinica-firewall  # re-apply after editing /etc/libreclinica/firewall.conf
+```
+
+If a monitoring agent or other service on this VM needs an inbound port, add
+it to `libreclinica-firewall` deliberately; the chain ends in `DROP`.
+
+### What is blocked at the edge (nginx, `internet-facing.conf`)
+
+All answer `404` (not `403`), matched case-insensitively on the normalised path:
+
+- `/LibreClinica/actuator/`, `/LibreClinica/pages/v3/`, `/LibreClinica/pages/swagger-ui*` (and the `/LibreClinica/v3`, `/LibreClinica/swagger-ui*` twins)
+- `/LibreClinica/pages/auth/` (heritage permit-all REST: study/CRF import, forms migrate)
+- `/LibreClinica/pages/api/vN/public/`, `…/internal/`, `…/device/` (the Optomed worklist and uploader heartbeats are `404` here too), `…/anonymousform/`
+- the clean-URL twins `/api/vN/(public|internal|device|anonymousform)/`
+- the public portal pages: `/upload`, `/oct-upload`, `/image-upload`, `/bcva-entry/…` (and their `/LibreClinica/app/…` spelling). The authenticated `/ingest-inbox/upload` is not touched.
+- any `;` path parameter other than `;jsessionid=`. nginx does not strip path parameters but Tomcat does, so
+  `/LibreClinica/pages/api/v1/public;x=1/…` would otherwise slip past a prefix rule.
+
+Everything else (login, SPA routes, `/contact`, `/api/v1/me` and the other authenticated APIs) is
+unchanged. Further heritage endpoints (SOAP `/ws/`, OpenRosa, `pages/odmk` …) are listed commented-out
+in the file, for you to enable once nothing depends on them. The app-side switch closes the same set
+inside the application, so a regression in either layer alone does not open them.
+
+Both deployments get (shared `ecrf.conf`): `server_tokens off`, Mozilla "intermediate" TLS (TLS 1.2/1.3,
+AEAD ciphers, session tickets off), HSTS `max-age=31536000` (plus `includeSubDomains` here only),
+`Referrer-Policy: same-origin`, `X-Content-Type-Options: nosniff`, a CSP of
+`frame-ancestors 'none'; base-uri 'self'; object-src 'none'` (no `script-src`: the heritage JSPs use inline
+scripts), `X-Forwarded-For` set to the address nginx saw, and the SSO identity headers blanked.
+
+Only the internet-facing deployment additionally gets (in `internet-facing.conf`; the internal one keeps
+its old 1024m body limit, default timeouts and no rate limits): a 2 MB default request body (1 GiB /
+200 MiB only on the upload routes; see [nginx/README.md](nginx/README.md)), header/body timeouts, per-IP
+rate limits (login 20/min, `RequestAccount`/`Contact` 6/min, 50 r/s overall, 100 concurrent requests),
+and a `default_server` that refuses an unknown `Host` / TLS SNI (the DMZ proxy must send the public name
+as both).
+
+### Backups
+
+- Nightly 03:00: database dump **and** the file stores (`e2e-uploads`, `retinal-artifacts`,
+  `retinal-inference`, `ingest`, `dicom-ingest`, `app-data`), each encrypted to `BACKUP_AGE_RECIPIENT`
+  (`libreclinica-<stamp>.sql.gz.age`, `libreclinica-files-<stamp>.tar.gz.age`). Nothing is written in clear.
+- A **full** archive of the file stores each night: size it accordingly (OCT volumes are large). Retention
+  is `--backup-days` (30) locally; the off-host target's retention is its own.
+- `BACKUP_RSYNC_TARGET` copies that night's files after the local ones are written; a failed copy turns
+  the unit red (`systemctl status libreclinica-backup-db`) but keeps the local copy.
+- Restore: see § "Restore from backup" (age variant).
+
+### Go-live checklist
+
+Run these and keep the output with the release record.
+
+- [ ] The VM's **root password was changed** (or root password login is disabled) and SSH is key-only:
+      `sudo passwd -S root` (expect `L` or a recent change date) and
+      `sudo sshd -T | grep -Ei 'passwordauthentication|permitrootlogin'`.
+- [ ] The **TLS certificate** for the public name is in `/etc/libreclinica/tls` and the DMZ proxy talks
+      HTTPS to this VM; `curl -sI https://<public-name>/login` shows the HSTS header with `includeSubDomains`.
+- [ ] **External scan** from a host outside the allowed CIDRs shows only 80/443 open:
+      `nmap -Pn -p- --reason <vm-address>` (expect `80/tcp`, `443/tcp` only, and only from the DMZ proxy
+      when `DMZ_PROXY_CIDRS` is set; `22`, `8080`, `11112`, `5432` filtered). Repeat for IPv6 if the VM has a v6 address.
+- [ ] From an `ADMIN_CIDRS` host SSH works; from elsewhere it does not.
+- [ ] **Session cookie flags**: `curl -skI -c - https://<public-name>/LibreClinica/pages/login/login | grep -i set-cookie`
+      (or after a login) shows `JSESSIONID=…; Secure; HttpOnly; SameSite=Lax` (or `Strict`).
+- [ ] **Blocked paths return 404** (each must print `404`):
+      ```sh
+      for p in /LibreClinica/actuator/health /LibreClinica/pages/v3/api-docs /LibreClinica/pages/swagger-ui.html \
+               /LibreClinica/pages/api/v1/public/upload/preflight /LibreClinica/pages/api/v1/internal/dicom-worklist/x \
+               /LibreClinica/pages/api/v1/device/optomed/worklist.txt /LibreClinica/pages/auth/api/v1/studies \
+               '/LibreClinica/pages/api/v1/public;x=1/upload/preflight' /upload /oct-upload /bcva-entry/X /api/v1/public/x; do
+        printf '%s ' "$(curl -sk -o /dev/null -w '%{http_code}' "https://<public-name>$p")"; echo "$p"
+      done
+      ```
+- [ ] Legitimate routes still work: `/login`, a login with a test account, `/subjects`, an OCT upload from the
+      authenticated page (`/ingest-inbox/upload`), `/contact`.
+- [ ] Rate limit: 40 rapid POSTs to `/LibreClinica/j_spring_security_check` end in `429`.
+- [ ] Idle timeout: a session left idle 31 minutes is logged out.
+- [ ] `grep -E '^(LIBRECLINICA_BIND_ADDR|LIBRECLINICA_DEPLOYMENT_INTERNET_FACING|COMPOSE_PROFILES)=' /etc/libreclinica/env`
+      shows `127.0.0.1`, `true` and an empty profile list; `stat -c %a /etc/libreclinica/env` prints `600`.
+- [ ] `core.retinalInference.remotePushUrl` is `https://` and the push token is not the placeholder
+      (the script enforces it on every run).
+- [ ] **Restore test of an encrypted backup**: run `sudo systemctl start libreclinica-backup-db`, copy the newest
+      `.age` files to an admin workstation, decrypt them there with the private key
+      (`age -d -i key.txt … | gunzip | head`), restore the dump into a scratch Postgres, and open the files
+      archive. Confirm the off-host copy arrived. A backup that has never been restored is not a backup.
+
+### Reverting
+
+`INTERNET_FACING=false bash deploy/setup-ubuntu-host.sh` (or `--no-internet-facing`) turns the app switch and
+edge include off, removes the firewall and restores the 3600 s session timeout. It leaves
+`LIBRECLINICA_BIND_ADDR=127.0.0.1` and the `0600` mode in place (widen them by hand if the VM is to become
+an internal one), and does not delete backups.
+
 ## FAQ
 
 **Why containerised Postgres instead of host Postgres?**
@@ -698,12 +901,14 @@ If MUW DBAs want host Postgres later, swap the `db` service's
 `volumes:` entry for an `external: true` network and point the
 application at `host.docker.internal`.
 
-**Why no nginx/TLS on this host?**
-The MUW institutional reverse proxy is expected to terminate TLS, do
-Shibboleth SP auth, and forward to this VM. Adding a local TLS stack
-would just add a second cert to rotate. For staging/dev VMs not behind
-the proxy, run a separate nginx on port 443 → 127.0.0.1:8080 (out of
-scope for this script).
+**Is there TLS on this host?**
+Yes: the compose stack includes an nginx sidecar (`deploy/nginx/ecrf.conf`,
+see [nginx/README.md](nginx/README.md)) that terminates HTTPS on 80/443,
+serves the SPA at clean URLs and applies the edge hardening (security
+headers, rate limits, request-size limits). You supply the certificate in
+`/etc/libreclinica/tls`. Port 8080 of the app is for that sidecar and, on the
+internal deployment, an optional institutional reverse proxy on another host
+(Shibboleth SP auth); the internet-facing deployment binds 8080 to loopback.
 
 **Why is mailcrab gone?**
 It's a dev SMTP catcher. Production sends through the institutional MUW
