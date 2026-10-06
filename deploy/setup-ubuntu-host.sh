@@ -244,6 +244,12 @@ set_kv() {
   fi
 }
 
+# Does COMPOSE_PROFILES in the env file list exactly this profile? (Whole-entry
+# match: 'dicom' must not match 'dicom-verify'.)
+profile_has() {
+  get_kv "$ENV_FILE" COMPOSE_PROFILES | tr ',' '\n' | grep -qx "$1"
+}
+
 # Is every comma-separated entry an IPv4/IPv6 address or CIDR? (Shape check, not
 # a full parse: it exists to catch typos before they land in a firewall rule.)
 valid_cidr_list() {
@@ -381,7 +387,7 @@ if [[ "$IFACE" == "1" ]]; then
   LIBRECLINICA_BACKUP_FILES=true
 
   [[ "${LIBRECLINICA_DICOM}" != "1" ]] \
-    || die "--dicom cannot be combined with INTERNET_FACING: no DICOM port may be published on an internet-facing host."
+    || die "--dicom cannot be combined with INTERNET_FACING: no DICOM port may be published on an internet-facing host (the verify-only sidecar dicom-verify runs instead, with no port)."
 
   if [[ "${RETINAL_ADAPTER_EFFECTIVE,,}" == "placeholder" ]]; then
     die "INTERNET_FACING refuses RETINAL_INFERENCE_ADAPTER=placeholder: it would return fake segmentation results. Pass RETINAL_INFERENCE_ADAPTER=<real adapter> (e.g. optima)."
@@ -786,6 +792,9 @@ RETINAL_INFERENCE_ADAPTER=placeholder
 # equal core.dicom.ingest.token in datainfo.properties (the setup script pairs
 # them when run with --dicom). 11112 is the camera-facing C-STORE port; keep
 # it on loopback until a camera is actually being wired.
+# INTERNET_FACING mode sets COMPOSE_PROFILES=dicom-verify instead: the same
+# image with the SCP off (HTTP /describe + /verify only, no DICOM port). The
+# two profiles are mutually exclusive.
 COMPOSE_PROFILES=
 DICOM_SCP_INGEST_TOKEN=
 LIBRECLINICA_DICOM_BIND_ADDR=${LIBRECLINICA_DICOM_BIND_ADDR}
@@ -854,9 +863,16 @@ if [[ "$IFACE" == "1" ]]; then
   set_kv "$ENV_FILE" LIBRECLINICA_NGINX_REALIP_CONF "$REALIP_CONF"
   set_kv "$ENV_FILE" LIBRECLINICA_DICOM_BIND_ADDR 127.0.0.1
   set_kv "$ENV_FILE" RETINAL_INFERENCE_ADAPTER "$RETINAL_ADAPTER_EFFECTIVE"
-  if grep -qE '^COMPOSE_PROFILES=.*\bdicom\b' "$ENV_FILE"; then
-    warn "COMPOSE_PROFILES contained 'dicom'; cleared it: no DICOM sidecar or port on an internet-facing host"
-    set_kv "$ENV_FILE" COMPOSE_PROFILES ""
+  # The app needs the sidecar's /describe and /verify for every DICOM upload,
+  # but no camera-facing listener may exist here: run the verify-only service
+  # (profile dicom-verify; dicom-scp and its port 11112 never start).
+  if profile_has dicom; then
+    warn "COMPOSE_PROFILES contained 'dicom'; replaced by 'dicom-verify': no DICOM listener or port on an internet-facing host"
+  fi
+  set_kv "$ENV_FILE" COMPOSE_PROFILES dicom-verify
+  if [[ -z "$(get_kv "$ENV_FILE" DICOM_SCP_INGEST_TOKEN)" ]]; then
+    set_kv "$ENV_FILE" DICOM_SCP_INGEST_TOKEN "$(gen_secret)"
+    log "Minted DICOM_SCP_INGEST_TOKEN in $ENV_FILE (paired with core.dicom.ingest.token below)"
   fi
   chmod 0600 "$ENV_FILE"
   log "Env file: bind 127.0.0.1, LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true, edge include on, mode 0600"
@@ -889,6 +905,11 @@ elif [[ "$IFACE_WAS_ON" == "1" ]]; then
   warn "  LIBRECLINICA_BIND_ADDR stays 127.0.0.1 and the env file stays 0600; widen them by hand if the"
   warn "  internal deployment needs a routable bind."
   set_kv "$ENV_FILE" LIBRECLINICA_DEPLOYMENT_INTERNET_FACING false
+  if profile_has dicom-verify; then
+    # Drop only our profile; keep anything else the operator listed.
+    set_kv "$ENV_FILE" COMPOSE_PROFILES "$(get_kv "$ENV_FILE" COMPOSE_PROFILES | tr ',' '\n' | grep -vx 'dicom-verify' | paste -sd, - || true)"
+    warn "  COMPOSE_PROFILES: removed dicom-verify (the verify-only sidecar is internet-facing only; pass --dicom for a camera host)."
+  fi
   sed -i '/^LIBRECLINICA_NGINX_\(EDGE\|EDGE_HTTP\|REALIP\)_CONF=/d' "$ENV_FILE"
 fi
 
@@ -919,7 +940,12 @@ if [[ "${LIBRECLINICA_DICOM}" == "1" ]]; then
 fi
 DICOM_TOKEN="$(sed -n 's/^DICOM_SCP_INGEST_TOKEN=//p' "$ENV_FILE" | tail -1)"
 DICOM_PROFILE_ON=0
-grep -qE '^COMPOSE_PROFILES=.*\bdicom\b' "$ENV_FILE" && DICOM_PROFILE_ON=1
+DICOM_VERIFY_ON=0
+profile_has dicom && DICOM_PROFILE_ON=1
+profile_has dicom-verify && DICOM_VERIFY_ON=1
+if [[ "$DICOM_PROFILE_ON" == "1" && "$DICOM_VERIFY_ON" == "1" ]]; then
+  die "COMPOSE_PROFILES lists both 'dicom' and 'dicom-verify': they are mutually exclusive (same network alias, same stores). Keep one."
+fi
 
 # The active Postgres password drives both the DB container (POSTGRES_PASSWORD
 # above) and the app's datainfo.properties dbPass below — they must match or the
@@ -1192,6 +1218,10 @@ COMPOSE_SERVICES="libreclinica db retinal-inference nginx"
 if [[ "$DICOM_PROFILE_ON" == "1" ]]; then
   COMPOSE_SERVICES="${COMPOSE_SERVICES} dicom-scp"
   log "systemd unit will also start dicom-scp"
+fi
+if [[ "$DICOM_VERIFY_ON" == "1" ]]; then
+  COMPOSE_SERVICES="${COMPOSE_SERVICES} dicom-verify"
+  log "systemd unit will also start dicom-verify (verify-only, no DICOM port)"
 fi
 # Internet-facing: the stack (and so the published 80/443) starts only after the
 # firewall unit has applied its rules.
@@ -1697,7 +1727,7 @@ INTERNET-FACING mode is ON (this host is meant to sit behind the MUW DMZ proxy):
   - Firewall: SSH ${SSH_PORT} from ${ADMIN_CIDRS}; 80/443 from ${DMZ_PROXY_CIDRS:-ANYWHERE (set DMZ_PROXY_CIDRS!)}.
       libreclinica-firewall status | systemctl disable --now libreclinica-firewall
   - App: LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true, session idle timeout ${LIBRECLINICA_SESSION_MAX_INACTIVE}s,
-    port 8080 bound to 127.0.0.1, no DICOM sidecar.
+    port 8080 bound to 127.0.0.1, DICOM verify-only sidecar (dicom-verify: no DICOM port, no C-STORE).
   - nginx: deploy/nginx/internet-facing.conf is included (404 for actuator, Swagger,
     public/internal/device APIs and the public portal pages).
   - Backups: age-encrypted to ${BACKUP_AGE_RECIPIENT:0:12}..., file stores included,

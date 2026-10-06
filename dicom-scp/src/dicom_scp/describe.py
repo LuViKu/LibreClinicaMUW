@@ -162,13 +162,34 @@ class DescribeHandler(BaseHTTPRequestHandler):
         self._json(200, payload)
 
 
-def start_in_background(settings: config.Settings) -> ThreadingHTTPServer | None:
-    """Serve ``/describe`` on a daemon thread; None when the port is 0 (disabled)."""
+def _make_server(settings: config.Settings) -> ThreadingHTTPServer | None:
     if settings.describe_port <= 0:
         LOG.info("describe endpoint: DISABLED (DICOM_SCP_DESCRIBE_PORT=0)")
         return None
     server = ThreadingHTTPServer((settings.describe_host, settings.describe_port), DescribeHandler)
     server.daemon_threads = True
+    return server
+
+
+def serve_forever(settings: config.Settings) -> None:
+    """Serve ``/describe`` and ``/verify`` in the foreground (describe-only mode)."""
+    server = _make_server(settings)
+    if server is None:
+        raise SystemExit("dicom-scp: describe-only mode needs DICOM_SCP_DESCRIBE_PORT > 0")
+    LOG.info("describe endpoint listening on %s:%s (roots: %s)",
+             settings.describe_host, server.server_address[1],
+             ", ".join(str(r) for r in settings.describe_root_paths))
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+
+
+def start_in_background(settings: config.Settings) -> ThreadingHTTPServer | None:
+    """Serve ``/describe`` on a daemon thread; None when the port is 0 (disabled)."""
+    server = _make_server(settings)
+    if server is None:
+        return None
     thread = threading.Thread(target=server.serve_forever, name="dicom-scp-describe", daemon=True)
     thread.start()
     LOG.info("describe endpoint listening on %s:%s (roots: %s)",

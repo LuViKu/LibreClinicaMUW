@@ -60,6 +60,8 @@ LIBRECLINICA_INGEST_DEIDENTIFICATION_SCAN_CRON=0 30 2 * * *   # nightly re-scan;
 DICOM_SCP_DEIDENTIFY_STRICT=true                     # dicom-scp sidecar; compose derives it from the switch above
 ```
 
+**The DICOM sidecar on this host is verify-only.** Both `/describe` and `/verify` live in the `dicom-scp` image, and uploads need them, so `setup-ubuntu-host.sh` runs it as the `dicom-verify` service (`COMPOSE_PROFILES=dicom-verify`) with `DICOM_SCP_SCP_ENABLED=false`: HTTP endpoints only, no C-STORE, no worklist C-FIND, port 11112 not bound, no port published, strict de-identification always on, network alias `dicom-scp`. The camera-facing `dicom-scp` service and `--dicom` stay refused here, and the two profiles must never be combined. The sidecar token is minted and paired with `core.dicom.ingest.token` as on an internal host. If `dicom-verify` is down, DICOM uploads answer 503 and the scan reports `incomplete`.
+
 The default of the first is the value of `LIBRECLINICA_DEPLOYMENT_INTERNET_FACING`, so the internet-facing deployment has it on and the internal one off, unchanged. It is reported to the SPA as `deidentificationRequired` on `GET /pages/api/v1/me`.
 
 Three layers. The browser strips the file first (layer 1). The server never trusts that (layer 2) and looks again at what is stored (layer 3).
