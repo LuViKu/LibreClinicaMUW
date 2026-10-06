@@ -102,7 +102,7 @@ const crtDelta = computed<number | null>(() => {
               :aria-label="t('studyModules.namd.overview2.crtDeltaAria')"
             />
             <span class="text-[15px] font-semibold text-slate-900 tabular-nums" data-testid="namd-overview-crt-value">
-              <template v-if="props.data.current">{{ props.data.current.crt }} µm</template>
+              <template v-if="props.data.current?.crt != null">{{ props.data.current.crt }} µm</template>
               <template v-else>—</template>
             </span>
           </span>

@@ -94,8 +94,8 @@ export interface NamdVisit {
     c3: { irf: number; srf: number; ped: number }
     c6: { irf: number; srf: number; ped: number }
   } | null
-  /** Central retinal thickness (µm). */
-  crt: number
+  /** Central retinal thickness (µm). Null when unknown — not 0. */
+  crt: number | null
   /**
    * Best-corrected visual acuity (ETDRS letters). Null when no BCVA was
    * recorded for the visit (or the BCVA timeline could not be fetched) — NOT 0.

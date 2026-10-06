@@ -157,6 +157,10 @@
         "skip": "Später",
         "alreadyPlanned": "Eine Visite ist bereits für den {date} geplant."
       },
+      "placeholder": {
+        "banner": "Platzhalter-Ergebnis — keine echte Segmentierung. Die Flüssigkeitswerte der Visite(n) {visits} stammen aus einem Platzhalter-Modell mit künstlichen Werten und dürfen nicht klinisch verwendet werden.",
+        "badge": "Platzhalter"
+      },
       "recommendation": {
         "headline": {
           "SHORTEN": "Intervall verkürzen",

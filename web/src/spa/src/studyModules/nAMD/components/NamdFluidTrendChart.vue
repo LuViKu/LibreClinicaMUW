@@ -132,7 +132,7 @@ function yFluid(value: number): number {
  * mirrors {@link fluidMax}'s "nice number" rounding.
  */
 const crtRange = computed<{ min: number; max: number }>(() => {
-  const values = regionVisits.value.map((v) => v.crt).filter((c) => c > 0)
+  const values = regionVisits.value.map((v) => v.crt).filter((c): c is number => c != null && c > 0)
   if (values.length === 0) {
     // No CRT data yet — keep the design-mock band so the empty chart
     // still has a familiar axis.
@@ -178,8 +178,23 @@ function yBcva(value: number): number {
 interface Layer {
   key: 'IRF' | 'SRF' | 'PED'
   color: string
-  points: string
+  /** One polygon per contiguous run of visits with KNOWN fluid; unknown visits are gaps. */
+  polygons: string[]
 }
+
+/** True when all three fluid volumes of the (region-swapped) visit are known. */
+function fluidKnown(v: NamdVisit): boolean {
+  return v.irf != null && v.srf != null && v.ped != null
+}
+
+/**
+ * A missing volume is a GAP in the chart, never a zero: plotted as 0 it would
+ * read as "dry", which is exactly the misreading the recommendation engine was
+ * fixed to avoid. Indices of visits whose fluid is unknown, for the gap markers.
+ */
+const unknownFluidIdx = computed<number[]>(() =>
+  regionVisits.value.flatMap((v, i) => (fluidKnown(v) ? [] : [i])),
+)
 
 /** Five evenly-spaced gridline values derived from the dynamic {@link fluidMax}. */
 const gridVals = computed<number[]>(() => {
@@ -199,6 +214,14 @@ const layers = computed<Layer[]>(() => {
   // increase in subretinal fluid pushes the IRF cap upward
   // visibly.
   let baseline = regionVisits.value.map(() => 0)
+  // Contiguous runs of known visits; an unknown visit ends the run.
+  const runs: number[][] = []
+  let cur: number[] = []
+  regionVisits.value.forEach((v, i) => {
+    if (fluidKnown(v)) cur.push(i)
+    else if (cur.length > 0) { runs.push(cur); cur = [] }
+  })
+  if (cur.length > 0) runs.push(cur)
   const order: Array<{ key: Layer['key']; field: 'irf' | 'srf' | 'ped' }> = [
     { key: 'PED', field: 'ped' },
     { key: 'SRF', field: 'srf' },
@@ -206,15 +229,22 @@ const layers = computed<Layer[]>(() => {
   ]
   return order.map(({ key, field }) => {
     const lower = baseline.slice()
+    // Unknown visits contribute 0 to the running stack only so the arrays stay
+    // aligned; they are never drawn (see runs).
     const upper = regionVisits.value.map((v, i) => lower[i]! + (v[field] ?? 0))
     baseline = upper
-    const top = regionVisits.value.map(
-      (v, i) => `${xAt(v.week).toFixed(1)},${yFluid(upper[i]!).toFixed(1)}`,
-    )
-    const bot = regionVisits.value
-      .map((v, i) => `${xAt(v.week).toFixed(1)},${yFluid(lower[i]!).toFixed(1)}`)
-      .reverse()
-    return { key, color: FLUID[key].color, points: [...top, ...bot].join(' ') }
+    const polygons = runs.map((run) => {
+      // A lone known visit would collapse to a zero-width sliver: give it a
+      // small width so a real measurement between two gaps stays visible.
+      const half = run.length === 1 ? 3 : 0
+      const top = run.map((i) => [xAt(regionVisits.value[i]!.week), yFluid(upper[i]!)] as const)
+      const bot = run.map((i) => [xAt(regionVisits.value[i]!.week), yFluid(lower[i]!)] as const).reverse()
+      const pts = half
+        ? [[top[0]![0] - half, top[0]![1]], [top[0]![0] + half, top[0]![1]], [bot[0]![0] + half, bot[0]![1]], [bot[0]![0] - half, bot[0]![1]]]
+        : [...top, ...bot]
+      return pts.map(([x, y]) => `${x!.toFixed(1)},${y!.toFixed(1)}`).join(' ')
+    })
+    return { key, color: FLUID[key].color, polygons }
   })
 })
 
@@ -247,8 +277,8 @@ const crtPath = computed(() => {
   return buildBrokenPath(
     regionVisits.value.map((v) => ({
       x: xAt(v.week),
-      y: yCrt(v.crt),
-      present: v.crt > 0,
+      y: yCrt(v.crt ?? 0),
+      present: (v.crt ?? 0) > 0,
     })),
   )
 })
@@ -459,14 +489,39 @@ function fmtDate(iso: string): string {
       </clipPath>
 
       <g clip-path="url(#namd-trend-reveal)">
-        <polygon
-          v-for="l in layers"
-          :key="`poly-${l.key}`"
-          :data-testid="`namd-trend-poly-${l.key}`"
-          :points="l.points"
-          :fill="l.color"
-          fill-opacity="0.82"
-        />
+        <template v-for="l in layers" :key="`poly-${l.key}`">
+          <polygon
+            v-for="(pts, pi) in l.polygons"
+            :key="`poly-${l.key}-${pi}`"
+            :data-testid="`namd-trend-poly-${l.key}`"
+            :points="pts"
+            :fill="l.color"
+            fill-opacity="0.82"
+          />
+        </template>
+        <!-- Unknown fluid: a dashed marker + "n/a", not a flat zero. -->
+        <g
+          v-for="i in unknownFluidIdx"
+          :key="`gap-${i}`"
+          :data-testid="`namd-trend-gap-${i}`"
+        >
+          <line
+            :x1="xAt(regionVisits[i]!.week)"
+            :x2="xAt(regionVisits[i]!.week)"
+            :y1="PT"
+            :y2="H - PB"
+            stroke="#94a3b8"
+            stroke-width="1"
+            stroke-dasharray="3 3"
+          />
+          <text
+            :x="xAt(regionVisits[i]!.week)"
+            :y="H - PB - 4"
+            text-anchor="middle"
+            font-size="9"
+            fill="#64748b"
+          >n/a</text>
+        </g>
         <path
           :d="crtPath"
           fill="none"
@@ -476,10 +531,10 @@ function fmtDate(iso: string): string {
         />
         <circle
           v-for="(v, i) in visits"
-          v-show="v.crt > 0"
+          v-show="(v.crt ?? 0) > 0"
           :key="`crt-dot-${i}`"
           :cx="xAt(v.week)"
-          :cy="yCrt(v.crt)"
+          :cy="yCrt(v.crt ?? 0)"
           r="2.6"
           fill="#fff"
           stroke="#111d4e"
@@ -620,20 +675,20 @@ function fmtDate(iso: string): string {
         <span class="inline-flex items-center gap-1.5">
           <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.IRF.color}`" />IRF
         </span>
-        <span class="text-right font-medium">{{ hovered.irf }} nL</span>
+        <span class="text-right font-medium">{{ hovered.irf ?? '—' }} nL</span>
         <span class="inline-flex items-center gap-1.5">
           <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.SRF.color}`" />SRF
         </span>
-        <span class="text-right font-medium">{{ hovered.srf }} nL</span>
+        <span class="text-right font-medium">{{ hovered.srf ?? '—' }} nL</span>
         <span class="inline-flex items-center gap-1.5">
           <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.PED.color}`" />PED
         </span>
-        <span class="text-right font-medium">{{ hovered.ped }} nL</span>
+        <span class="text-right font-medium">{{ hovered.ped ?? '—' }} nL</span>
         <span class="text-slate-500">CST</span>
-        <span class="text-right font-medium">{{ hovered.crt }} µm</span>
+        <span class="text-right font-medium">{{ hovered.crt ?? '—' }} µm</span>
         <span class="text-slate-500">BCVA</span>
         <span class="text-right font-medium">
-          {{ hovered.bcva }} L<span
+          {{ hovered.bcva ?? '—' }} L<span
             v-if="hovered.bcvaRaw"
             class="text-slate-400 text-[10px] ml-1"
           >· {{ hovered.bcvaRaw }}</span>

@@ -29,6 +29,7 @@ import NamdOverviewTab from './NamdOverviewTab.vue'
 import NamdViewerTab from './NamdViewerTab.vue'
 import NamdCompareTab from './NamdCompareTab.vue'
 import NamdReportTab from './NamdReportTab.vue'
+import NamdPlaceholderBanner from '../components/NamdPlaceholderBanner.vue'
 import { useNamdVisitData } from '../composables/useNamdVisitData'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -95,6 +96,12 @@ const trail = computed(() => {
       :selected-eye="selectedEye"
       @switch-eye="setEye"
     />
+
+    <!-- Placeholder-model results are fake: warn on every tab, not dismissable.
+         Hidden in print only because the Report tab carries its own copy. -->
+    <div v-if="data" class="max-w-[1240px] mx-auto px-6 pt-4 print:hidden">
+      <NamdPlaceholderBanner :visits="data.visits" />
+    </div>
 
     <NamdTabs v-model="tab" />
 

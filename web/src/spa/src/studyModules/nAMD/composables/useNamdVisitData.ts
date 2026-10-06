@@ -212,7 +212,7 @@ function fluidJobToVisit(
   // 2026-06-24 — pick the central-1mm CRT for the visit's eye. Each
   // eye's value is null until both the GA + BM jobs for that
   // (visit, eye) reach `done`; the chart renders 0 in that case.
-  let crtMicrons = 0
+  let crtMicrons: number | null = null
   if (crtRow) {
     const eye = summary.laterality === 'OS' ? crtRow.os : crtRow.od
     if (eye != null) crtMicrons = Math.round(eye.crtMicrons)
@@ -313,7 +313,7 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   // composable falls back to `bcva = 0` in that case.
   const bcvaByEventId = new Map<number, BcvaTimelineRow>()
   // 2026-06-24 — per-event CRT timeline (central 1 mm, paired GA + BM).
-  // Same lookup pattern as the BCVA cache; soft-fails to `visit.crt = 0`
+  // Same lookup pattern as the BCVA cache; soft-fails to `visit.crt = null`
   // when the event has no paired done jobs.
   const crtByEventId = new Map<number, CrtTimelineRow>()
   // 2026-06-30 — per-event clinical-flag timeline (hemorrhage,
