@@ -58,6 +58,8 @@ const uploadPercentLabel = computed(() => `${Math.round(store.uploadPct.get(prop
 const errorText = computed(() => {
   const e = props.row.error
   if (!e) return t('octPortal.assignment.processError')
+  // Refusals of the browser de-identification layer: `deid.<code>`, never a value.
+  if (e.startsWith('deid.')) return t(`uploadPortal.deid.errors.${e.slice(5)}`, { file: props.row.file.name })
   const keyed: Record<string, string> = {
     unsupported: t('uploadPortal.row.unsupported'),
     noVolumes: t('uploadPortal.row.noVolumes'),
@@ -240,8 +242,10 @@ const withoutVisitLabel = computed(() =>
           >{{ t('octPortal.assignment.change') }}</button>
           <button
             type="button"
-            class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap"
+            class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             :data-testid="`action-confirm-${props.row.rowId}`"
+            :disabled="props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true"
+            :title="props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true ? t('uploadPortal.deid.confirmFirst') : undefined"
             @click="emit('confirm', props.row.rowId)"
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
@@ -298,7 +302,9 @@ const withoutVisitLabel = computed(() =>
             </svg>
             {{ t('octPortal.actions.searchPatient') }}
           </button>
+          <!-- Without a subject there is no label to write into the file. -->
           <button
+            v-if="!props.row.needsDeidConfirm"
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"

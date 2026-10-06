@@ -29,6 +29,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/newsreader": "^5.2.10",
     "chart.js": "^4.4.4",
+    "dcmjs": "^0.52.0",
     "dicom-parser": "^1.8.21",
     "pinia": "^2.2.2",
     "sortablejs": "^1.15.7",
