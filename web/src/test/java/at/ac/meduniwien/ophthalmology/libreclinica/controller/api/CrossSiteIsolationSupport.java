@@ -278,7 +278,10 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
             f.ss = LifecycleFixtures.insertStudySubject(c, f.label, site.id, 1);
             f.person = LifecycleFixtures.insertOne(c,
                     "SELECT subject_id FROM study_subject WHERE study_subject_id = " + f.ss);
+            // The person has a name (unique per set, and carrying the site marker) so the duplicate
+            // check has something to match on: first name Anna, last name = the label without its dash.
             exec(c, "UPDATE subject SET unique_identifier = 'PID-" + f.label + "', gender = 'f', "
+                    + "first_name = 'Anna', last_name = '" + f.label.replace("-", "") + "', "
                     + "date_of_birth = '1950-05-05', dob_collected = true WHERE subject_id = " + f.person);
             f.patientId = LifecycleFixtures.insertOne(c,
                     "INSERT INTO patient (patient_uuid, created_by) VALUES ('" + f.patientUuid
@@ -392,11 +395,11 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
             Files.write(unbound, (f.label + " unbound image").getBytes(StandardCharsets.UTF_8));
             f.ingestUnbound = LifecycleFixtures.insertOne(c,
                     "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
-                            + "laterality, received_at, status, patient_id, sha256, byte_size, "
+                            + "laterality, received_at, status, patient_id, sha256, byte_size, origin_study_id, "
                             + "candidate_study_subject_id) VALUES ('image', 'upload', '" + site.tag.toLowerCase()
                             + "-cam', '" + unbound.toString().replace('\\', '/') + "', '" + site.tag.toLowerCase() + "-" + n
                             + "-unbound.jpg', 'OS', now(), 'UNBOUND', '" + f.pid + "', '" + sha(site, n, 2)
-                            + "', 20, " + f.ss + ") RETURNING ingest_item_id");
+                            + "', 20, " + site.id + ", " + f.ss + ") RETURNING ingest_item_id");
             Path fresh = dir.resolve("fresh.jpg");
             Files.write(fresh, (f.label + " fresh image").getBytes(StandardCharsets.UTF_8));
             f.ingestFresh = LifecycleFixtures.insertOne(c,
@@ -411,10 +414,10 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
             Files.write(dismissed, (f.label + " dismissed image").getBytes(StandardCharsets.UTF_8));
             f.ingestDismissed = LifecycleFixtures.insertOne(c,
                     "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
-                            + "laterality, received_at, status, patient_id, sha256, byte_size) VALUES ('image', "
+                            + "laterality, received_at, status, patient_id, sha256, byte_size, origin_study_id) VALUES ('image', "
                             + "'upload', '" + site.tag.toLowerCase() + "-cam', '" + dismissed.toString().replace('\\', '/')
                             + "', '" + site.tag.toLowerCase() + "-" + n + "-dismissed.jpg', 'OD', now(), 'DISMISSED', '"
-                            + f.pid + "', '" + sha(site, n, 7) + "', 20) RETURNING ingest_item_id");
+                            + f.pid + "', '" + sha(site, n, 7) + "', 20, " + site.id + ") RETURNING ingest_item_id");
 
             // Dataset, archived file, export job, schedule — of the site's own study.
             f.dataset = LifecycleFixtures.insertDataset(c, site.id, site.tag + " dataset " + n, 1);

@@ -101,41 +101,14 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
             "StudyModuleEnrollmentApiController", "StudyParametersApiController", "StudySettingsApiController",
             "BuildStudyApiController");
 
+
     /**
      * Refusals the suite found missing, as {@code key} (every role and direction) or
      * {@code key|ROLE|A->B}. They run in {@link CrossSiteIsolationLeaksIT}, not in the gate.
+     * Empty since the 2026-10 fixes: every authenticated case is in the gate. A new finding
+     * is listed here until its guard exists.
      */
-    static final Set<String> KNOWN_LEAKS = new java.util.TreeSet<>(Set.of(
-            // identity of another site's patients (PID, sex, date of birth) through the duplicate check
-            "SubjectsApiController#matchPreflight",
-            // the ingest inbox lists / opens / changes files by status, not by site
-            "IngestInboxApiController#inbox",
-            "IngestInboxApiController#inbox|unbound",
-            "IngestInboxApiController#inbox|unbound-by-q",
-            "IngestInboxApiController#inbox|dismissed",
-            "IngestInboxApiController#one|unbound",
-            "IngestInboxApiController#bind|foreign-item",
-            "IngestInboxApiController#dismiss",
-            "IngestInboxApiController#restore",
-            "IngestInboxApiController#bulkDismiss",
-            "ImageIngestApiController#inbox",
-            "ImageIngestApiController#dismiss",
-            // the 60-second undo deletes a file or job of any site
-            "IngestUploadApiController#undoStaffUploadItem",
-            "IngestUploadApiController#undoStaffUploadJob",
-            // duplicate check names the other site's file by id
-            "IngestUploadApiController#preflightStaffUpload",
-            // datasets
-            "DatasetsApiController#getDataset",
-            "DatasetsApiController#testFilter",
-            // study / site master data of a sibling site
-            "StudiesApiController#get",
-            "SitesApiController#list",
-            "StudyParametersApiController#get",
-            "StudySettingsApiController#get",
-            "StudyModuleEnrollmentApiController#list",
-            // the status check answers before the visibility check
-            "RetinalResultsApiController#retryJob|not-failed"));
+    static final Set<String> KNOWN_LEAKS = new java.util.TreeSet<>();
 
     static boolean isKnownLeak(String name) {
         if (KNOWN_LEAKS.contains(name)) return true;
@@ -217,8 +190,9 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         c("SubjectsApiController#unlock", f -> post(s + "/" + f.label + "/unlock")).write()
                 .noControl("the fixture subject is not locked, so unlock is a 409 for the owner");
         c("SubjectsApiController#matchPreflight", f -> json(post(s + "/match-preflight"),
-                "{\"firstName\":\"Anna\",\"lastName\":\"Test\",\"dateOfBirth\":\"1950-05-05\",\"label\":\"" + f.label + "\"}"))
-                .list().noControl("the fixture person has no name to match on");
+                "{\"firstName\":\"Anna\",\"lastName\":\"" + f.label.replace("-", "")
+                        + "\",\"dateOfBirth\":\"1950-05-05\",\"label\":\"" + f.label + "\"}"))
+                .list();
     }
 
     private static void eventsAndCrfs() {

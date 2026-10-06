@@ -33,10 +33,11 @@ import org.springframework.mock.web.MockHttpSession;
  * See {@link CrossSiteIsolationSupport} for the world, the session and the
  * oracles, and {@link CrossSiteIsolationMatrix} for the endpoints.
  *
- * <p>The refusals the suite found missing are not asserted here: they are in
- * {@link CrossSiteIsolationLeaksIT}, where they fail until the guard exists,
- * and {@link CrossSiteIsolationMatrix#KNOWN_LEAKS} lists them so this class
- * stays a regression gate for everything that does hold.
+ * <p>Every authenticated case is asserted here. A refusal found missing is
+ * parked in {@link CrossSiteIsolationMatrix#KNOWN_LEAKS} (empty today) and
+ * runs in {@link CrossSiteIsolationLeaksIT} until the guard exists; that class
+ * otherwise holds only the anonymous Public* portal cases, which are by design
+ * on the internal deployment and closed on the internet-facing one.
  *
  * <p>Run it (Linux, Docker socket for Testcontainers; see CLAUDE.md for the container recipe):
  * <pre>
@@ -179,6 +180,105 @@ class CrossSiteIsolationDatabaseIT extends CrossSiteIsolationSupport {
             assertEquals(200, r.status, r.snippet());
         }));
         return nodes.stream();
+    }
+
+    /* ====================================================================== */
+    /* Ingest origin                                                           */
+    /* ====================================================================== */
+
+    private static Integer originOf(long ingestItemId) throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.Statement s = c.createStatement();
+             java.sql.ResultSet rs = s.executeQuery(
+                     "SELECT origin_study_id FROM ingest_item WHERE ingest_item_id = " + ingestItemId)) {
+            if (!rs.next()) return null;
+            int v = rs.getInt(1);
+            return rs.wasNull() ? null : v;
+        }
+    }
+
+    /** A staff upload records the uploader's session study, for a parked and for a visit-picked file. */
+    @Test
+    void aStaffUploadRecordsTheUploadersStudyAsItsOrigin() throws Exception {
+        Fx own = newSet(A);
+        MockHttpSession s = loginAs(Who.INV, A);
+        // Parked: no visit named, so the file lands UNBOUND.
+        Resp parked = call(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .multipart("/api/v1/ingest/upload/commit")
+                .file(new org.springframework.mock.web.MockMultipartFile("file", "origin-a.jpg", "image/jpeg",
+                        originJpeg(1)))
+                .param("scanDate", java.time.LocalDate.now().toString()), s);
+        assertEquals(201, parked.status, parked.snippet());
+        long parkedId = idOf(parked.body);
+        assertEquals(Integer.valueOf(A.id), originOf(parkedId), "the unbound upload carries the uploader's study");
+
+        // Filed against a visit at upload.
+        Resp filed = call(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .multipart("/api/v1/ingest/upload/commit")
+                .file(new org.springframework.mock.web.MockMultipartFile("file", "origin-b.jpg", "image/jpeg",
+                        originJpeg(2)))
+                .param("patientId", own.pid).param("studyEventId", String.valueOf(own.event))
+                .param("scanDate", java.time.LocalDate.now().toString()), s);
+        assertEquals(201, filed.status, filed.snippet());
+        assertEquals(Integer.valueOf(A.id), originOf(idOf(filed.body)), "the bound upload carries the uploader's study");
+
+        // Site B's coordinator sees neither file in the unbound pool.
+        Resp bView = call(get("/api/v1/ingest/inbox"), loginAs(Who.CRC, B));
+        assertEquals(200, bView.status, bView.snippet());
+        assertFalse(bView.body.contains("\"id\":" + parkedId + ","), "site B must not list site A's parked upload");
+        assertEquals(404, call(get("/api/v1/ingest/" + parkedId), loginAs(Who.CRC, B)).status);
+        // Site A's coordinator does.
+        Resp aView = call(get("/api/v1/ingest/inbox"), loginAs(Who.CRC, A));
+        assertTrue(aView.body.contains("\"id\":" + parkedId + ","), "site A lists its own parked upload: " + aView.snippet());
+    }
+
+    /**
+     * Items from anonymous / device ingress carry no origin and stay visible and
+     * workable across studies: the internal deployment's behaviour is unchanged.
+     */
+    @Test
+    void anItemWithNoOriginStaysVisibleAcrossStudies() throws Exception {
+        int neutral = neutralUnboundItem();
+        assertEquals(null, originOf(neutral));
+        for (Site site : new Site[] {A, B}) {
+            MockHttpSession s = loginAs(Who.CRC, site);
+            Resp list = call(get("/api/v1/ingest/inbox"), s);
+            assertEquals(200, list.status, list.snippet());
+            assertTrue(list.body.contains("\"id\":" + neutral + ","), site.tag + " lists the origin-less item: " + list.snippet());
+            assertEquals(200, call(get("/api/v1/ingest/" + neutral), s).status, site.tag + " opens it");
+        }
+        // And either site may dismiss it (current internal behaviour).
+        Resp dismiss = call(json(post("/api/v1/ingest/" + neutral + "/dismiss"), "{\"reason\":\"x\"}"),
+                loginAs(Who.CRC, B));
+        assertEquals(200, dismiss.status, dismiss.snippet());
+    }
+
+    /** Binding needs a target subject the caller can see, even for an item the caller can see. */
+    @Test
+    void bindingAnItemIntoAnInvisibleSubjectIsRefused() throws Exception {
+        Fx b = newSet(B);
+        int neutral = neutralUnboundItem();
+        Map<String, String> before = snapshot();
+        Resp r = call(json(post("/api/v1/ingest/" + neutral + "/bind"), "{\"studySubjectId\":" + b.ss
+                + ",\"studyEventId\":" + b.event + ",\"eventCrfId\":" + b.eventCrf + ",\"laterality\":\"OD\"}"),
+                loginAs(Who.CRC, A));
+        assertTrue(r.status == 403 || r.status == 404, "bind into site B's subject: " + r.snippet());
+        assertEquals(before, snapshot(), "the refused bind changed tables");
+    }
+
+    private static long idOf(String body) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"ingestItemId\"\\s*:\\s*(\\d+)").matcher(body);
+        assertTrue(m.find(), "no ingestItemId in " + body);
+        return Long.parseLong(m.group(1));
+    }
+
+    /** A tiny JPEG that differs per {@code salt} (the upload refuses a repeat of the same bytes). */
+    private static byte[] originJpeg(int salt) {
+        byte[] j = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 16, 'J', 'F', 'I', 'F', 0, 1, 1, 0,
+                0, 1, 0, 1, 0, 0, (byte) 0xFF, (byte) 0xD9};
+        j[19] = (byte) salt;
+        j[20] = (byte) (System.nanoTime() & 0x7F);
+        return j;
     }
 
     /** Small helper so the tamper test can read what the real study switch left in the session. */

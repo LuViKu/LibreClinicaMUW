@@ -27,7 +27,13 @@ import org.springframework.mock.web.MockHttpSession;
 
 /**
  * The cross-site refusals that are missing. Every test here FAILS until the
- * guard it names exists; none was weakened to pass. They live apart from
+ * guard it names exists; none was weakened to pass. As of the 2026-10 isolation
+ * fixes the authenticated cases are all in {@link CrossSiteIsolationDatabaseIT};
+ * what remains here are the anonymous Public* portal and device endpoints. Those
+ * serve the internal clinic by design (devices and portals upload without a
+ * session and see every study's patients) and are closed on the internet-facing
+ * multicenter deployment, so these tests are expected to fail on the internal
+ * configuration and document exactly what the closure removes. They live apart from
  * {@link CrossSiteIsolationDatabaseIT} so that class stays a regression gate
  * for what holds, and the class name has no {@code Database} in it, so the
  * default {@code mvn test} (which selects {@code *DatabaseIT}) does not run it;
@@ -46,6 +52,10 @@ import org.springframework.mock.web.MockHttpSession;
 @Tag("isolation-leak")
 class CrossSiteIsolationLeaksIT extends CrossSiteIsolationSupport {
 
+    /**
+     * Authenticated cases listed in {@link CrossSiteIsolationMatrix#KNOWN_LEAKS} (empty since the
+     * 2026-10 fixes; a new finding is parked there until its guard exists).
+     */
     @TestFactory
     Stream<DynamicNode> knownLeaks() {
         return CrossSiteIsolationMatrix.run(CrossSiteIsolationMatrix::isKnownLeak);
