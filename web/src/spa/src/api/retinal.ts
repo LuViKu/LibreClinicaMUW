@@ -454,8 +454,10 @@ export function listSubjectCrtTimeline(studySubjectId: number): Promise<CrtTimel
  * migration).
  */
 export interface NamdClinicalFlagsEye {
-  hemorrhage: boolean
-  bcvaLossAttributedToNamd: boolean
+  /** null = never recorded for this eye (not "no"). */
+  hemorrhage: boolean | null
+  /** null = never recorded for this eye (not "no"). */
+  bcvaLossAttributedToNamd: boolean | null
 }
 
 export interface NamdClinicalFlagsRow {

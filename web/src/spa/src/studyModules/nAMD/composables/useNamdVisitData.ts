@@ -18,18 +18,23 @@
  * 8-visit treat-and-extend example so the workspace renders end-to-end
  * even when the live demo study has no real retinal jobs yet.
  *
- * <p>Fields the existing endpoints don't surface (BCVA letters, CRT in
- * µm, injection agent, interval-to-next) come back as zero / empty
- * string / null. The Report tab + Overview tolerate null gracefully; a
- * future eCRF-bound fetch can fill them in without changing the
- * consumer shape.
+ * <p>Fields the existing endpoints don't surface (CRT in µm, injection
+ * agent, interval-to-next) come back as zero / empty string / null.
+ *
+ * <p><b>Unknown is null, never zero (fail-closed, 2026-10).</b> Biomarker
+ * volumes, BCVA and the two clinical flags are inputs to the treatment
+ * recommendation. When one was never recorded, or its fetch failed, it is
+ * {@code null} on the visit — the rule engine then refuses to recommend
+ * instead of reading "no fluid / no haemorrhage". Failed fetches are also
+ * listed in {@link NamdVisit.fetchFailures} so the UI can tell "fetch failed"
+ * from "not recorded".
  */
 
 import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { listSubjectJobs, listSubjectBcvaTimeline, listSubjectCrtTimeline, listSubjectNamdClinicalFlags, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow, type CrtTimelineRow, type NamdClinicalFlagsRow } from '@/api/retinal'
 import { apiGet } from '@/api/client'
 import { decimalToLetters, formatBcva } from '@/lib/bcvaConversion'
-import type { Laterality, NamdAiRecommendation, NamdPatient, NamdSubjectArm, NamdVisit, NamdWorkspaceData } from '../types'
+import type { Laterality, NamdAiRecommendation, NamdFetchFailure, NamdPatient, NamdSubjectArm, NamdVisit, NamdWorkspaceData } from '../types'
 import { useNamdAiRecommendation } from './useNamdAiRecommendation'
 
 export interface UseNamdVisitDataArgs {
@@ -88,9 +93,22 @@ export interface UseNamdVisitDataResult {
  * NAMD_THRESHOLDS_VERSION and
  * docs/development/study-modules/namd-treat-and-extend-rules.md.
  */
-function mm3ToNl(v: number | null | undefined): number {
-  if (v == null) return 0
+export function mm3ToNl(v: number | null | undefined): number | null {
+  // Unknown stays unknown. This used to return 0, which the rule engine read as
+  // "no fluid" — a missing measurement could be recommended an EXTEND.
+  if (v == null || !Number.isFinite(v)) return null
   return Math.round(v * 1000)
+}
+
+/** One ETDRS ring in nL, or null when any of its three volumes is unknown. */
+function ringToNl(r: { irf?: number | null; srf?: number | null; ped?: number | null } | null | undefined):
+  { irf: number; srf: number; ped: number } | null {
+  if (!r) return null
+  const irf = mm3ToNl(r.irf)
+  const srf = mm3ToNl(r.srf)
+  const ped = mm3ToNl(r.ped)
+  if (irf == null || srf == null || ped == null) return null
+  return { irf, srf, ped }
 }
 
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
@@ -161,6 +179,10 @@ function buildMockData(): NamdWorkspaceData {
     intervalWeeks: 6,
     rationale: { key: 'studyModules.namd.recommendation.rationale.IRF_INCREASE', params: { value: 12, threshold: 200 } },
     triggersFired: [],
+    reason: null,
+    missing: [],
+    placeholderModel: false,
+    fetchFailures: [],
   }
   return { patient, visits, current, prev, ai, nSlices: 49, subjectArm: 'study' }
 }
@@ -172,6 +194,7 @@ function fluidJobToVisit(
   fallbackLabel: string,
   bcvaRow: BcvaTimelineRow | null,
   crtRow: CrtTimelineRow | null,
+  fetchFailures: NamdFetchFailure[] = [],
 ): NamdVisit {
   const payload = detail?.outputPayload
   const biomarkers = isFluidPayload(payload) ? payload.biomarkers : null
@@ -181,13 +204,11 @@ function fluidJobToVisit(
   // Same mm³→nL conversion as the flat biomarkers above. Null when
   // the source payload predates the etdrs_mm3 emission.
   const etdrs = isFluidPayload(payload) ? payload.etdrs_mm3 : null
-  const fluidByRegion = etdrs
-    ? {
-        c1: { irf: mm3ToNl(etdrs.central_1mm.irf), srf: mm3ToNl(etdrs.central_1mm.srf), ped: mm3ToNl(etdrs.central_1mm.ped) },
-        c3: { irf: mm3ToNl(etdrs.central_3mm.irf), srf: mm3ToNl(etdrs.central_3mm.srf), ped: mm3ToNl(etdrs.central_3mm.ped) },
-        c6: { irf: mm3ToNl(etdrs.central_6mm.irf), srf: mm3ToNl(etdrs.central_6mm.srf), ped: mm3ToNl(etdrs.central_6mm.ped) },
-      }
-    : null
+  // All three rings or nothing: a half-known breakdown is unknown.
+  const c1 = ringToNl(etdrs?.central_1mm)
+  const c3 = ringToNl(etdrs?.central_3mm)
+  const c6 = ringToNl(etdrs?.central_6mm)
+  const fluidByRegion = c1 && c3 && c6 ? { c1, c3, c6 } : null
   // 2026-06-24 — pick the central-1mm CRT for the visit's eye. Each
   // eye's value is null until both the GA + BM jobs for that
   // (visit, eye) reach `done`; the chart renders 0 in that case.
@@ -199,7 +220,8 @@ function fluidJobToVisit(
   // 2026-06-24 user-feedback round — derive BCVA letters + canonical
   // raw form from the timeline row matching this job's study_event.
   // Picks the eye that matches the summary's laterality.
-  let bcvaLetters = 0
+  // Null = unknown (no row, no value, or the BCVA fetch failed) — never 0.
+  let bcvaLetters: number | null = null
   let bcvaRaw: string | null = null
   if (bcvaRow) {
     const eye = summary.laterality === 'OS' ? bcvaRow.os : bcvaRow.od
@@ -255,13 +277,14 @@ function fluidJobToVisit(
     // job summary. Powers the clinical-flags write endpoint's
     // event_crf-on-demand path.
     studyEventId: summary.studyEventId ?? null,
-    // 2026-06-30 — clinical-flag observations from the new
-    // /namd-clinical-flags endpoint. Default false when the timeline
-    // row hasn't surfaced yet (subject has no flags written, or
-    // request still in flight). The rule engine treats missing as
-    // negative trigger.
-    hemorrhage: false,
-    bcvaAttributableToNamd: false,
+    // 2026-06-30 — clinical-flag observations from the
+    // /namd-clinical-flags endpoint. Null = unknown (not recorded, or the
+    // fetch failed); rebuildData overlays the recorded values. The rule engine
+    // refuses to recommend on null — it must not read it as "no haemorrhage".
+    hemorrhage: null,
+    bcvaAttributableToNamd: null,
+    modelVersion: detail?.modelVersion ?? summary.modelVersion ?? null,
+    fetchFailures,
   }
 }
 
@@ -302,6 +325,10 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   // subject's group-membership, not the job). Drives the AI-panel
   // gate in useStudyArm.
   let subjectArm: NamdSubjectArm = null
+  // Fail-closed bookkeeping: which whole-subject fetches failed (as opposed to
+  // returning no row). A failed fetch must surface as "unknown", not "none".
+  let bcvaFetchFailed = false
+  let flagsFetchFailed = false
 
   /**
    * Build the visit timeline + patient banner from the cached
@@ -326,20 +353,28 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       const bcvaRow = eventId != null ? (bcvaByEventId.get(eventId) ?? null) : null
       const crtRow = eventId != null ? (crtByEventId.get(eventId) ?? null) : null
       const flagsRow = eventId != null ? (flagsByEventId.get(eventId) ?? null) : null
+      const detail = fluidDetailsCache.get(s.jobId) ?? null
+      const failures: NamdFetchFailure[] = []
+      // detail is null only when getJob threw (the cache stores null on failure).
+      if (detail == null) failures.push('jobDetail')
+      if (bcvaFetchFailed) failures.push('bcva')
+      if (flagsFetchFailed) failures.push('clinicalFlags')
       const v = fluidJobToVisit(
         s,
-        fluidDetailsCache.get(s.jobId) ?? null,
+        detail,
         `V${String(idx + 1).padStart(2, '0')}`,
         bcvaRow,
         crtRow,
+        failures,
       )
       // 2026-06-30 — per-eye clinical-flag overlay. The timeline row
       // carries OD + OS independently; pick whichever matches the
-      // workspace's selected eye.
-      if (flagsRow) {
+      // workspace's selected eye. A flag the backend reports as null was never
+      // recorded and stays null (unknown), as does every flag when the fetch failed.
+      if (flagsRow && !flagsFetchFailed) {
         const eyeFlags = selectedEye.value === 'OD' ? flagsRow.od : flagsRow.os
-        v.hemorrhage = eyeFlags.hemorrhage
-        v.bcvaAttributableToNamd = eyeFlags.bcvaLossAttributedToNamd
+        v.hemorrhage = eyeFlags.hemorrhage ?? null
+        v.bcvaAttributableToNamd = eyeFlags.bcvaLossAttributedToNamd ?? null
       }
       return v
     })
@@ -408,14 +443,19 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       // network error so legacy studies without any BCVA writes (or
       // pre-portal deploys) keep rendering the nAMD module without
       // BCVA values rather than failing the whole load.
+      //
+      // Fail-closed: the workspace still loads when the BCVA / flags fetch
+      // fails (so the clinician can see scans and decide manually), but the
+      // failure is remembered and the affected inputs become unknown — never
+      // "no BCVA drop" / "no haemorrhage".
+      bcvaFetchFailed = false
+      flagsFetchFailed = false
       const [summaries, bcvaTimeline, crtTimeline, flagsTimeline] = await Promise.all([
         listSubjectJobs(numericId),
-        listSubjectBcvaTimeline(numericId).catch(() => [] as BcvaTimelineRow[]),
+        listSubjectBcvaTimeline(numericId).catch(() => { bcvaFetchFailed = true; return [] as BcvaTimelineRow[] }),
+        // CRT is display-only (not a rule input), so its failure stays soft.
         listSubjectCrtTimeline(numericId).catch(() => [] as CrtTimelineRow[]),
-        // 2026-06-30 — soft-fail like the BCVA/CRT timelines so the
-        // workspace still loads on legacy compose deploys before the
-        // namd-clinical-flags endpoint shipped.
-        listSubjectNamdClinicalFlags(numericId).catch(() => [] as NamdClinicalFlagsRow[]),
+        listSubjectNamdClinicalFlags(numericId).catch(() => { flagsFetchFailed = true; return [] as NamdClinicalFlagsRow[] }),
       ])
       bcvaByEventId.clear()
       for (const row of bcvaTimeline) {

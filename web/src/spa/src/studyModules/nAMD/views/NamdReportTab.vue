@@ -252,7 +252,7 @@ function printReport() {
         </div>
         <div>
           <span class="text-slate-500">BCVA:</span>
-          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva }} L</span>
+          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva ?? '—' }} L</span>
           <span
             v-if="props.data.current.bcvaRaw"
             class="ml-1 text-slate-400 text-xs"
@@ -260,7 +260,7 @@ function printReport() {
         </div>
         <div>
           <span class="text-slate-500">Total:</span>
-          <span class="ml-1 font-semibold tabular-nums">{{ totalFluid(props.data.current) }} nL</span>
+          <span class="ml-1 font-semibold tabular-nums">{{ totalFluid(props.data.current) ?? '—' }} nL</span>
         </div>
       </div>
     </section>

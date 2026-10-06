@@ -26,7 +26,7 @@ const props = defineProps<Props>()
 const { t } = useI18n()
 
 const KEYS: FluidKey[] = ['IRF', 'SRF', 'PED']
-const ACCESSORS: Record<FluidKey, (v: NamdVisit) => number> = {
+const ACCESSORS: Record<FluidKey, (v: NamdVisit) => number | null> = {
   IRF: (v) => v.irf,
   SRF: (v) => v.srf,
   PED: (v) => v.ped,

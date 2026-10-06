@@ -206,7 +206,7 @@ const layers = computed<Layer[]>(() => {
   ]
   return order.map(({ key, field }) => {
     const lower = baseline.slice()
-    const upper = regionVisits.value.map((v, i) => lower[i]! + v[field])
+    const upper = regionVisits.value.map((v, i) => lower[i]! + (v[field] ?? 0))
     baseline = upper
     const top = regionVisits.value.map(
       (v, i) => `${xAt(v.week).toFixed(1)},${yFluid(upper[i]!).toFixed(1)}`,
@@ -258,8 +258,8 @@ const bcvaPath = computed(() => {
   return buildBrokenPath(
     regionVisits.value.map((v) => ({
       x: xAt(v.week),
-      y: yBcva(v.bcva),
-      present: v.bcva > 0,
+      y: yBcva(v.bcva ?? 0),
+      present: (v.bcva ?? 0) > 0,
     })),
   )
 })
@@ -585,10 +585,10 @@ function fmtDate(iso: string): string {
         />
         <circle
           v-for="(v, i) in visits"
-          v-show="v.bcva > 0"
+          v-show="(v.bcva ?? 0) > 0"
           :key="`bcva-dot-${i}`"
           :cx="xAt(v.week)"
-          :cy="yBcva(v.bcva)"
+          :cy="yBcva(v.bcva ?? 0)"
           r="2.4"
           fill="#5fb4e5"
           clip-path="url(#namd-trend-reveal)"
