@@ -35,4 +35,4 @@ On this deployment the locked state is not shown to the person typing, so a lock
 ## What the switch does not do
 
 - `/app/**` (the SPA shell) stays public; the upload routes in it render but every API behind them is 404.
-- Other anonymous paths remain (`/pages/api/v1/contact`, `/pages/auth/api/**` with its own API-key filter, `/ws/**`, `/rest2/openrosa/**`, `/pages/odmk/**`, `/pages/openrosa/**`, the anonymous-form paths, `/SystemStatus`). Block what the study does not need at the reverse proxy.
+- The remaining anonymous paths are the login page, `/RequestAccount`, `/Contact`, `/pages/api/v1/contact`, the static assets, `/error` and `/actuator/health`. `/pages/auth/**` (heritage API-key REST API), `/SystemStatus` and, with SSO off, `/pages/sso/reauth` also answer 404 here. The OpenRosa, ODM and anonymous-form paths were removed from the public list for both deployments with the participant chain (#373).
