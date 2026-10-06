@@ -156,8 +156,9 @@ Applies to both deployments (it is in the shared `ecrf.conf`):
   server-level `client_max_body_size 1024m`, nginx's default timeouts and no
   rate limiting; the internet-facing one (`internet-facing.conf`) sets 2 MB, the
   timeouts and the rate limits below. The per-location limits in this table are
-  in `ecrf.conf` and apply in both modes (200m on the app-capped routes is the
-  app's own `/pages/*` multipart cap, so nothing larger worked before either).
+  in `ecrf.conf` and apply in both modes. All are 1024m (the old internal
+  limit), so internal is unchanged; the app's own `/pages/*` multipart cap of
+  200 MiB is the real ceiling on those routes.
 - Request bodies, internet-facing: **2 MB** by default. The large limit is granted only here:
 
   | Location | Limit |
@@ -165,9 +166,9 @@ Applies to both deployments (it is in the shared `ecrf.conf`):
   | `/LibreClinica/pages/api/v1/public/` (portals; 404 on internet-facing) | 1024m |
   | `/LibreClinica/pages/api/v1/ingest/upload/` (SPA `/ingest-inbox/upload`) | 1024m |
   | `/LibreClinica/pages/api/v1/event-crfs/{id}/oct-upload` | 1024m |
-  | `/LibreClinica/pages/api/v1/eventCrfs/{id}/items/{oid}/file` (CRF file item) | 200m |
-  | `/LibreClinica/pages/api/v1/crfs/{oid}/versions`, `…/import`, `…/rules/import` | 200m |
-  | `/LibreClinica/{CreateCRFVersion,CreateXformCRFVersion,ImportCRFData,ImportRule,UploadFile}` (legacy multipart JSPs) | 200m |
+  | `/LibreClinica/pages/api/v1/eventCrfs/{id}/items/{oid}/file` (CRF file item) | 1024m |
+  | `/LibreClinica/pages/api/v1/crfs/{oid}/versions`, `…/import`, `…/rules/import` | 1024m |
+  | `/LibreClinica/{CreateCRFVersion,CreateXformCRFVersion,ImportCRFData,ImportRule,UploadFile}` (legacy multipart JSPs) | 1024m |
 
   The app itself caps the `/pages/*` multipart parser at 200 MiB (`web.xml`).
   The Optomed device endpoints and uploader heartbeats are tiny and keep the
