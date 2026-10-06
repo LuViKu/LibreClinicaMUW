@@ -79,7 +79,7 @@ class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT
              Statement stmt = conn.createStatement()) {
             stmt.executeUpdate(
                     "UPDATE user_account "
-                    + "   SET account_non_locked = false, lock_counter = 5 "
+                    + "   SET account_non_locked = false, lock_counter = 5, status_id = 6 "
                     + " WHERE user_name = 'physician'");
         }
     }
@@ -128,11 +128,13 @@ class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT
         // Side-effect: account_non_locked back to true, lock_counter zeroed.
         try (Connection conn = DATA_SOURCE.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                     "SELECT account_non_locked, lock_counter "
+                     "SELECT account_non_locked, lock_counter, status_id "
                      + "FROM user_account WHERE user_name = 'physician'")) {
             try (ResultSet rs = ps.executeQuery()) {
                 org.junit.jupiter.api.Assertions.assertTrue(rs.next(),
                         "physician row should exist");
+                org.junit.jupiter.api.Assertions.assertEquals(1, rs.getInt(3),
+                        "status_id must go back to AVAILABLE; a LOCKED status keeps the login refused");
                 org.junit.jupiter.api.Assertions.assertTrue(rs.getBoolean(1),
                         "account_non_locked should be true after unlock");
                 org.junit.jupiter.api.Assertions.assertEquals(0, rs.getInt(2),
