@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -127,6 +128,46 @@ public class LegacyServletTelemetryFilter implements Filter {
 
     private final LegacyServletDeprecationCatalog catalog;
     private final Set<String> closedPaths;
+    private final boolean internetFacing;
+
+    /**
+     * Internet-facing deployment ({@code libreclinica.deployment.internet-facing}):
+     * external site staff use the SPA only, so every legacy screen is closed
+     * for anyone but a system administrator, except what is listed here.
+     *
+     * <p>Servlets (catalogue keys): the SPA calls no legacy servlet. Its login
+     * is {@code POST /j_spring_security_check} (a filter, not a servlet), its
+     * logout is {@code POST /pages/api/v1/auth/logout}, and the active study
+     * and password change go through {@code /pages/api/v1}. So no servlet is
+     * left open, with the one conditional exception below.
+     */
+    public static final Set<String> INTERNET_FACING_OPEN_SERVLETS = Set.of();
+
+    /**
+     * Open only while the request has no signed-in user. {@code /MainMenu} is
+     * where the concurrent-session filter sends a session that was replaced
+     * by a second login, and where a legacy form login lands; it then sends an
+     * anonymous caller on to the login page. For a signed-in non-administrator
+     * it would render the legacy home page, so it is closed for them.
+     */
+    public static final Set<String> INTERNET_FACING_ANONYMOUS_ONLY = Set.of("/MainMenu");
+
+    /**
+     * Paths below {@code /pages} (the Spring MVC dispatcher) that stay open in
+     * that mode; every other {@code /pages} path, catalogued or not, is
+     * closed. A prefix matches itself and everything below it.
+     */
+    public static final Map<String, String> INTERNET_FACING_OPEN_PAGES = openPages();
+
+    private static Map<String, String> openPages() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("/api/", "the SPA's JSON API (/pages/api/v1, v2) and the portals and device endpoints, which have their own gates");
+        m.put("/login/", "the legacy login page: the login entry point and the target of a failed form login");
+        m.put("/sso/reauth", "SSO re-authentication redirect; denied separately when SSO is off");
+        m.put("/v3/", "springdoc spec; denied separately on this deployment by the path block");
+        m.put("/swagger-ui", "swagger UI; denied separately on this deployment by the path block");
+        return Collections.unmodifiableMap(m);
+    }
 
     /**
      * @param catalog     the legacy screens
@@ -134,8 +175,27 @@ public class LegacyServletTelemetryFilter implements Filter {
      *                    and ignored
      */
     public LegacyServletTelemetryFilter(LegacyServletDeprecationCatalog catalog, Collection<String> closedPaths) {
+        this(catalog, closedPaths, false);
+    }
+
+    /**
+     * @param internetFacing close every catalogued screen except the open
+     *                       lists above, and every other {@code /pages} path
+     *                       outside {@link #INTERNET_FACING_OPEN_PAGES}, for
+     *                       non-administrators
+     */
+    public LegacyServletTelemetryFilter(LegacyServletDeprecationCatalog catalog, Collection<String> closedPaths,
+            boolean internetFacing) {
         this.catalog = catalog;
+        this.internetFacing = internetFacing;
         Set<String> closed = new LinkedHashSet<>();
+        if (internetFacing) {
+            for (String key : catalog.all().keySet()) {
+                if (!INTERNET_FACING_OPEN_SERVLETS.contains(key)) {
+                    closed.add(key);
+                }
+            }
+        }
         for (String path : closedPaths) {
             if (catalog.entry(path).isPresent()) {
                 closed.add(path);
@@ -179,12 +239,32 @@ public class LegacyServletTelemetryFilter implements Filter {
             return;
         }
         Entry entry = catalog.lookup(httpReq.getServletPath(), httpReq.getPathInfo()).orElse(null);
+        // A /pages route the catalogue does not know, closed by the
+        // internet-facing mode: no alias exists for it, so an administrator
+        // is passed on instead of redirected.
+        boolean uncatalogued = false;
+        if (entry == null && internetFacing && isClosedUncataloguedPagesPath(httpReq)) {
+            String info = httpReq.getPathInfo();
+            entry = new Entry(LegacyServletDeprecationCatalog.PAGES_SERVLET_PATH + (info == null ? "" : info),
+                    null, LegacyServletDeprecationCatalog.Bucket.HERITAGE_API);
+            uncatalogued = true;
+        }
         if (entry == null) {
             chain.doFilter(request, response);
             return;
         }
         UserAccountBean user = LegacyAccessLog.sessionUser(httpReq);
-        if (!closedPaths.contains(entry.legacyPath())) {
+        boolean closed = uncatalogued || closedPaths.contains(entry.legacyPath());
+        if (closed && internetFacing && user == null
+                && INTERNET_FACING_ANONYMOUS_ONLY.contains(entry.legacyPath())) {
+            closed = false;
+        }
+        if (!closed) {
+            LegacyAccessLog.hit(entry, httpReq, user, false, Action.PASS);
+            chain.doFilter(request, response);
+            return;
+        }
+        if (uncatalogued && LegacyAccessLog.isSysAdmin(user)) {
             LegacyAccessLog.hit(entry, httpReq, user, false, Action.PASS);
             chain.doFilter(request, response);
             return;
@@ -198,6 +278,23 @@ public class LegacyServletTelemetryFilter implements Filter {
         }
         LegacyAccessLog.hit(entry, httpReq, user, false, Action.GONE);
         gone(httpReq, httpResp, entry);
+    }
+
+    /** A request to the {@code /pages} dispatcher whose path is not on the open list. */
+    private static boolean isClosedUncataloguedPagesPath(HttpServletRequest req) {
+        if (!LegacyServletDeprecationCatalog.PAGES_SERVLET_PATH.equals(req.getServletPath())) {
+            return false;
+        }
+        String info = req.getPathInfo();
+        if (info == null || info.isEmpty() || "/".equals(info)) {
+            return true;
+        }
+        for (String prefix : INTERNET_FACING_OPEN_PAGES.keySet()) {
+            if (info.startsWith(prefix)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

@@ -121,7 +121,7 @@ class LegacyRetirementEndToEndTest {
     private static void register(ServletContext servletContext) throws ServletException {
         LegacyServletDeprecationCatalog catalog = new LegacyServletDeprecationCatalog();
         ServletInfraConfig config = new ServletInfraConfig();
-        config.legacyServletTelemetryFilter(catalog, CLOSED_PATHS).onStartup(servletContext);
+        config.legacyServletTelemetryFilter(catalog, CLOSED_PATHS, false).onStartup(servletContext);
         config.legacyAliasServlet(catalog).onStartup(servletContext);
 
         ServletRegistration.Dynamic screens = servletContext.addServlet("legacyScreens", new ScreenStandIn());

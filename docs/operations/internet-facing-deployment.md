@@ -18,6 +18,7 @@ Default `false`; the internal deployment is unchanged. Set it in `/etc/libreclin
 | Healthcheck | `/actuator/health` stays open | unchanged |
 | Login failures | locked, 2FA-outdated, unknown and wrong-password all redirect to the same `errorLogin`; the audit row and the denied-login mail still carry the real reason | `SpaLoginFailureHandler` |
 | Startup | refuses to start if any active account still has the default password (`12345678`, as seeded for `root`), in either the seeded MD5 form or a bcrypt rehash of it | `InternetFacingStartupGuard` |
+| Legacy screens | every legacy servlet and JSP screen, and every `/pages` Spring MVC route that is not on the open list below, answers 410 to anyone who is not a system administrator (signed in or not). External site staff use the SPA only. A system administrator is redirected to the `/legacy/` alias (catalogued screens) or passed on (uncatalogued `/pages` routes) | `LegacyServletTelemetryFilter` (`closedPaths` mechanism) |
 
 The deny list is applied twice: the 404 filter runs first, and the authorization rules deny the same patterns if the filter were ever absent.
 
@@ -36,3 +37,17 @@ On this deployment the locked state is not shown to the person typing, so a lock
 
 - `/app/**` (the SPA shell) stays public; the upload routes in it render but every API behind them is 404.
 - The remaining anonymous paths are the login page, `/RequestAccount`, `/Contact`, `/pages/api/v1/contact`, the static assets, `/error` and `/actuator/health`. `/pages/auth/**` (heritage API-key REST API), `/SystemStatus` and, with SSO off, `/pages/sso/reauth` also answer 404 here. The OpenRosa, ODM and anonymous-form paths were removed from the public list for both deployments with the participant chain (#373).
+
+## Legacy screens: what stays open
+
+The SPA calls no legacy servlet. Its login is `POST /j_spring_security_check` (a security filter), its logout `POST /pages/api/v1/auth/logout`, and the active study, password change and everything else go through `/pages/api/v1`. So the servlet allow-list (`INTERNET_FACING_OPEN_SERVLETS`) is empty, with one conditional entry:
+
+| Path | Open for | Why |
+|------|----------|-----|
+| `/MainMenu` | callers with no signed-in user only | The concurrent-session filter and a legacy form login send the browser here, and it forwards an anonymous caller to the login page. For a signed-in non-administrator it would render the legacy home page, so it answers 410. A session replaced by a second login still holds its user, so its next request gets 410 instead of the login page; the SPA reports that as an error and the user signs in again. |
+
+Open `/pages` paths (`INTERNET_FACING_OPEN_PAGES`): `/api/` (the SPA API, and the portals and device endpoints, which the path block above handles), `/login/` (the login page and the target of a failed form login), `/sso/reauth`, `/v3/` and `/swagger-ui` (denied by the path block on this deployment).
+
+Everything else is closed. The closed set is the whole legacy catalogue plus any `/pages` path outside the open list, so a route added later is closed by default. `libreclinica.legacy.closedPaths` still applies on top.
+
+No SPA code links to or fetches a legacy servlet. A role that still depends on one (for example the legacy print views `/PrintDataEntry` and `/PrintCRF`) gets 410 here; check with the study team before go-live.
