@@ -109,6 +109,10 @@ export default defineConfig({
   // proxy — a direct :8080/LibreClinica/app load can't resolve the root-based
   // asset URLs. See deploy/nginx/README.md.
   base: '/',
+  // The de-identification worker (lib/deid/deid.worker.ts) lazy-loads dcmjs
+  // and dicom-parser, which needs code-splitting; the default IIFE worker
+  // format cannot do that. ES module workers: Chrome 80+, Firefox 114+, Safari 15+.
+  worker: { format: 'es' },
   build: {
     outDir: fileURLToPath(new URL('../main/webapp/app', import.meta.url)),
     emptyOutDir: true,

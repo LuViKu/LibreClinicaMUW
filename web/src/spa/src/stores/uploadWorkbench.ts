@@ -25,8 +25,15 @@ import { computed, ref } from 'vue'
 import { parseE2e, type E2eScan } from '@/lib/e2eParser'
 import { sniffFile, type UploadFormat, type UploadKind } from '@/lib/fileKind'
 import { readDicomHints, type DicomHints } from '@/lib/dicomHeader'
+import { analyzeInBackground, deidentifyInBackground } from '@/lib/deid/deidClient'
+import { isDeidError } from '@/lib/deid/errors'
+import { deidFilename } from '@/lib/deid/filename'
+import { previewToUrl } from '@/lib/deid/preview'
+import type { DeidResult } from '@/lib/deid/pipeline'
+import { useAuthStore } from '@/stores/auth'
 import {
   commitFile,
+  listVisibleSubjectLabels,
   preflight,
   resolveRows,
   sha256OfFile,
@@ -83,6 +90,22 @@ export interface UploadRow {
   /** DR-036 — for a held row, the earlier file that shows the same picture. */
   sameImageAs?: number
   fileHash?: string
+  /**
+   * De-identifying deployment (browser layer 1): this row must be stripped
+   * before it travels and the operator must confirm its preview first.
+   */
+  needsDeidConfirm?: boolean
+  /** The operator ticked "no patient name/ID visible in the image". */
+  deidConfirmed?: boolean
+  /** Object URL of the preview image; null when none could be rendered. */
+  previewUrl?: string | null
+  /** Volumes in the file (an E2E may hold several; the upload name then carries an ordinal). */
+  volumeCount?: number
+}
+
+/** A row the batch confirm may send: ready, and — where required — confirmed against its preview. */
+export function isConfirmable(r: UploadRow): boolean {
+  return r.state === 'suggested' && !!r.selectedEvent && (!r.needsDeidConfirm || r.deidConfirmed === true)
 }
 
 /** The visit a batch is filed against. */
@@ -110,6 +133,13 @@ function generateRowId(): string {
   return `${r()}-${r()}-${r()}-${r()}`
 }
 
+/** Session-local identity of a dropped file (name hashed, so a patient's name in it is not kept verbatim). */
+function localFileKey(f: File): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < f.name.length; i++) h = Math.imul(h ^ f.name.charCodeAt(i), 0x01000193)
+  return `local:${(h >>> 0).toString(16)}:${f.size}:${f.lastModified}`
+}
+
 /** Local-timezone ISO date — what the operator sees on the row (Vienna clock), not UTC. */
 export function isoLocalDate(d: Date | null): string | null {
   if (d === null) return null
@@ -128,6 +158,20 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   const patientIdHint = ref('')
   /** Typed date, applied to image rows (a photo says nothing about when it was taken). */
   const dateHint = ref('')
+
+  /**
+   * True on the internet-facing deployment (`GET /me` → deidentificationRequired).
+   * The public route has no session and so no way to know; it is not covered
+   * here — the server refuses unstripped files whichever route they arrive on.
+   */
+  const deidRequired = computed(
+    () => mode.value === 'staff' && useAuthStore().user?.deidentificationRequired === true,
+  )
+  /** The study labels this user sees — fetched once, matched locally, never sent back. */
+  let visibleLabels: Promise<Set<string>> | null = null
+  /** One stripped copy per (file, label): a multi-volume E2E is stripped once, not per row. */
+  let strippedCache = new WeakMap<File, Map<string, Promise<DeidResult>>>()
+  const previewUrls = new Set<string>()
 
   const isParsing = computed(() => rows.value.some((r) => r.state === 'parsing'))
   const reviewReady = computed(() => rows.value.length > 0 && !isParsing.value)
@@ -155,7 +199,13 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
         rowId: seed.rowId, file: seed.file, patientId: '', date: null, laterality: null, state: 'parsing',
       })
     }
-    await Promise.all(seeds.map((seed) => classify(seed.rowId, seed.file)))
+    if (deidRequired.value) {
+      // One file at a time: each analysis holds the whole file in a worker, and
+      // several hundred-MB exports in parallel are how a clinic PC runs out of memory.
+      for (const seed of seeds) await classify(seed.rowId, seed.file)
+    } else {
+      await Promise.all(seeds.map((seed) => classify(seed.rowId, seed.file)))
+    }
     await hashAndPreflight()
     if (batchVisit.value) {
       applyBatchVisit(batchVisit.value)
@@ -173,7 +223,11 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       sniffed = null
     }
     if (!sniffed) {
-      replaceSeedWithError(rowId, file, 'unsupported')
+      replaceSeedWithError(rowId, file, deidRequired.value ? 'deid.format' : 'unsupported')
+      return
+    }
+    if (deidRequired.value) {
+      await classifyDeid(rowId, file, sniffed.kind)
       return
     }
     if (sniffed.kind === 'e2e') {
@@ -208,6 +262,96 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     }])
   }
 
+  /* ---------------- de-identifying deployment (browser layer 1) ---------------- */
+
+  async function matchableLabels(): Promise<Set<string>> {
+    visibleLabels ??= listVisibleSubjectLabels()
+      .then((l) => new Set(l))
+      // No list, no auto-match: the operator picks. Never a reason to refuse a file.
+      .catch(() => new Set<string>())
+    return visibleLabels
+  }
+
+  function deidErrorKey(e: unknown): string {
+    return `deid.${isDeidError(e) ? e.code : 'parse'}`
+  }
+
+  /**
+   * Read the file's own header in a worker, match its patient ID against the
+   * study's labels LOCALLY, and build the review row(s). Only .e2e and DICOM
+   * are accepted; everything else is refused here, before a byte travels.
+   * The header value never reaches a row, a request or a log: a match
+   * becomes the (public) study label, a miss becomes an empty label.
+   */
+  async function classifyDeid(rowId: string, file: File, kind: UploadKind): Promise<void> {
+    if (kind !== 'e2e' && kind !== 'dicom') {
+      replaceSeedWithError(rowId, file, 'deid.format')
+      return
+    }
+    let analysis
+    try {
+      analysis = await analyzeInBackground(file, kind)
+    } catch (e) {
+      replaceSeedWithError(rowId, file, deidErrorKey(e))
+      return
+    }
+    const labels = await matchableLabels()
+    const header = analysis.headerPatientId
+    const matched = header !== null && labels.has(header) ? header : ''
+    const previewUrl = analysis.preview ? await previewToUrl(analysis.preview) : null
+    if (previewUrl) previewUrls.add(previewUrl)
+    const common = { needsDeidConfirm: true, deidConfirmed: false, previewUrl, patientId: matched }
+    if (kind === 'e2e') {
+      if (analysis.scans.length === 0) {
+        replaceSeedWithError(rowId, file, 'noVolumes')
+        return
+      }
+      replaceSeed(rowId, analysis.scans.map((scan) => ({
+        ...common,
+        file, kind: 'e2e' as const, format: 'e2e' as const, scan, volumeCount: analysis.scans.length,
+        date: isoLocalDate(scan.scanDate), laterality: scan.laterality,
+      })))
+      return
+    }
+    const hints = analysis.hints
+    replaceSeed(rowId, [{
+      ...common,
+      patientId: matched || patientIdHint.value.trim(),
+      file, kind: 'dicom', format: 'dicom', hints: hints ?? undefined,
+      date: hints?.acquisitionDate ?? (dateHint.value || null),
+      laterality: hints?.laterality ?? null,
+    }])
+  }
+
+  /** Strip + sweep + hash a row's file for a label, once per (file, label). */
+  function stripFor(row: UploadRow, label: string): Promise<DeidResult> {
+    let byLabel = strippedCache.get(row.file)
+    if (!byLabel) {
+      byLabel = new Map()
+      strippedCache.set(row.file, byLabel)
+    }
+    let p = byLabel.get(label)
+    if (!p) {
+      p = deidentifyInBackground(row.file, row.kind as 'e2e' | 'dicom', label)
+      p.catch(() => byLabel!.delete(label))
+      byLabel.set(label, p)
+    }
+    return p
+  }
+
+  function setDeidConfirmed(rowId: string, confirmed: boolean): void {
+    const row = rows.value.find((r) => r.rowId === rowId)
+    if (!row || !row.needsDeidConfirm) return
+    patch(rowId, { deidConfirmed: confirmed })
+  }
+
+  /** Tick (or clear) every row that is waiting for it — the per-batch confirmation. */
+  function setAllDeidConfirmed(confirmed: boolean): void {
+    for (const r of rows.value) {
+      if (r.needsDeidConfirm && r.state === 'suggested') patch(r.rowId, { deidConfirmed: confirmed })
+    }
+  }
+
   function replaceSeed(
     rowId: string,
     replacements: Array<Omit<UploadRow, 'rowId' | 'state'>>,
@@ -230,6 +374,17 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   /** Hash each file once, drop re-drops, and ask the backend what it already has. */
   async function hashAndPreflight(): Promise<void> {
     const targets = rows.value.filter((r) => r.state === 'parsing' && r.kind)
+    if (deidRequired.value) {
+      // No hashing of the original (the server hashes the stripped bytes, and
+      // reading a several-hundred-MB file again on the main thread buys
+      // nothing): a local name+size+mtime key drops re-drops within the
+      // session, and the commit-time unique index answers 409 for the rest.
+      for (const r of targets) {
+        patch(r.rowId, { fileHash: localFileKey(r.file) })
+      }
+      dedupSessionRows()
+      return
+    }
     const seen = new Map<File, string>()
     for (const r of targets) {
       let hash = seen.get(r.file)
@@ -413,11 +568,14 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   async function confirm(rowId: string): Promise<void> {
     const row = rows.value.find((r) => r.rowId === rowId)
     if (!row || row.state !== 'suggested' || !row.selectedEvent) return
+    // Where de-identification is required, nothing is sent until the operator
+    // has looked at the preview and ticked it.
+    if (row.needsDeidConfirm && row.deidConfirmed !== true) return
     await commitRow(row, row.selectedEvent.eventCrfId, row.selectedEvent.studyEventId, false)
   }
 
   async function confirmAll(): Promise<void> {
-    const targets = rows.value.filter((r) => r.state === 'suggested' && r.selectedEvent)
+    const targets = rows.value.filter(isConfirmable)
     // Sequential rather than parallel: a batch of widefield exports in flight
     // at once is how a phone on clinic Wi-Fi times out on all of them.
     for (const r of targets) {
@@ -429,6 +587,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   async function park(rowId: string): Promise<void> {
     const row = rows.value.find((r) => r.rowId === rowId)
     if (!row || !REVIEWABLE.has(row.state)) return
+    if (row.needsDeidConfirm && row.deidConfirmed !== true) return
     await commitRow(row, null, null, true)
   }
 
@@ -446,9 +605,30 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     patch(row.rowId, { state: 'committing' })
     uploadPct.value.set(row.rowId, 0)
     try {
+      let upload: { file: File; patientId: string | null; deidConfirmed?: boolean; deidSha256?: string }
+      if (row.needsDeidConfirm) {
+        // Strip in the browser, prove it, and send ONLY the stripped bytes
+        // under a name built from the label — never the original file name,
+        // never a header value. Any failure ends here: nothing is uploaded.
+        const label = row.selectedCandidate?.subjectLabel ?? ''
+        if (!label) throw new Error('deid.noSubject')
+        const eye = row.kind === 'e2e' ? row.scan!.laterality : row.laterality
+        const name = deidFilename({
+          label, date: row.date, laterality: eye, format: row.kind === 'e2e' ? 'e2e' : 'dicom',
+          n: row.kind === 'e2e' && (row.volumeCount ?? 1) > 1 ? row.scan!.scanIndex + 1 : null,
+        })
+        const prepared = await stripFor(row, label)
+        upload = {
+          file: new File([prepared.blob], name, { type: prepared.blob.type }),
+          patientId: label,
+          deidConfirmed: true,
+          deidSha256: prepared.sha256,
+        }
+      } else {
+        upload = { file: row.file, patientId: row.patientId.trim() || null }
+      }
       const res = await commitFile(mode.value, {
-        file: row.file,
-        patientId: row.patientId.trim() || null,
+        ...upload,
         scanDate: row.date,
         laterality: row.kind === 'e2e' ? row.scan!.laterality : row.laterality,
         scanIndex: row.kind === 'e2e' ? row.scan!.scanIndex : null,
@@ -479,6 +659,9 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
           existingIngestItemId: body?.existingIngestItemId ?? undefined,
           existingJobId: body?.existingJobId ?? undefined,
         })
+      } else if (isDeidError(e)) {
+        // A refusal by the browser layer: a code, never a value.
+        patch(row.rowId, { state: 'error', error: `deid.${e.code}` })
       } else {
         patch(row.rowId, { state: 'error', error: e instanceof Error && e.message ? e.message : 'uploadFailed' })
       }
@@ -512,6 +695,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   }
 
   function reset(): void {
+    for (const url of previewUrls) {
+      try { URL.revokeObjectURL(url) } catch { /* nothing to free */ }
+    }
+    previewUrls.clear()
+    strippedCache = new WeakMap()
+    visibleLabels = null
     rows.value = []
     batchVisit.value = null
     patientIdHint.value = ''
@@ -600,8 +789,9 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   }
 
   return {
-    mode, rows, uploadPct, batchVisit, patientIdHint, dateHint,
+    mode, rows, uploadPct, batchVisit, patientIdHint, dateHint, deidRequired,
     isParsing, reviewReady, counts,
+    setDeidConfirmed, setAllDeidConfirmed,
     setMode, addFiles, setBatchVisit, setPatientIdHint, applyPatientIdHint, setDateHint,
     setRowLaterality, resolveRowByLabel,
     confirm, confirmAll, park, undo, dismiss, reset,

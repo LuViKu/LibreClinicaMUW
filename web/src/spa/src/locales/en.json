@@ -895,7 +895,8 @@
       "replace": "Replace",
       "removeConfirm": "Remove the attached file? The deletion is recorded in the audit trail.",
       "tooBig": "File exceeds the configured size limit.",
-      "badExtension": "File type is not in the allowed list."
+      "badExtension": "File type is not in the allowed list.",
+      "deidBlocked": "File attachments are disabled on this internet-facing deployment: they cannot be checked for patient-identifying content."
     },
     "selectMulti": {
       "noneSelected": "None selected"
@@ -3928,6 +3929,26 @@
     },
     "actions": {
       "uploadWithoutVisit": "Upload without visit"
+    },
+    "deid": {
+      "banner": "Internet-facing deployment: only Heidelberg .e2e and DICOM files are accepted. Identifying data is removed in your browser before anything is sent — check each preview for names or IDs in the picture itself.",
+      "previewAlt": "Preview of {file}",
+      "noPreview": "No preview can be shown for this file. Open it in your viewer first and make sure no patient name or ID is visible in the image.",
+      "confirmLabel": "No patient name or ID is visible in the image",
+      "confirmAllLabel": "All previews checked: no patient name or ID visible",
+      "confirmFirst": "Tick the confirmation under the preview first.",
+      "errors": {
+        "format": "{file}: not accepted here — only Heidelberg .e2e and DICOM files can be uploaded.",
+        "label": "{file}: the study subject label cannot be written into the file (too long or unusual characters).",
+        "e2eNoPatientChunk": "{file}: the .e2e file has no readable patient-data block, so de-identification cannot be verified. Not uploaded.",
+        "e2eTruncated": "{file}: the .e2e file is damaged (patient block cut off). Not uploaded.",
+        "parse": "{file}: the file could not be read or de-identified. Not uploaded.",
+        "burnedIn": "{file}: the DICOM file declares burned-in annotation (identity in the image). Not uploaded.",
+        "residual": "{file}: identifying data was still found in the file after removal. Not uploaded.",
+        "verify": "{file}: the de-identified file failed its own check. Not uploaded.",
+        "laterality": "{file}: choose the eye (OD or OS) before uploading.",
+        "noSubject": "{file}: pick the study subject first — the label is written into the file."
+      }
     },
     "summary": {
       "fileSingular": "file",

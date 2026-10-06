@@ -88,6 +88,12 @@ function onStudyPicked(candidate: ResolveCandidate): void {
 
 <template>
   <div data-testid="upload-workbench" :data-mode="props.mode">
+    <p
+      v-if="store.deidRequired"
+      class="mb-4 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-[13px] text-amber-900"
+      role="note"
+      data-testid="deid-banner"
+    >{{ t('uploadPortal.deid.banner') }}</p>
     <BatchVisitPanel :mode="props.mode" />
 
     <template v-if="!hasRows">
@@ -96,7 +102,11 @@ function onStudyPicked(candidate: ResolveCandidate): void {
 
     <template v-else>
       <UploadDropzone mode="slim" @files-added="onFilesAdded" />
-      <UploadSummaryBar :rows="store.rows" @confirm-all="store.confirmAll()" />
+      <UploadSummaryBar
+        :rows="store.rows"
+        @confirm-all="store.confirmAll()"
+        @tick-all-previews="(checked) => store.setAllDeidConfirmed(checked)"
+      />
       <div class="bg-white rounded-b-2xl ring-1 ring-slate-200 ring-t-0 overflow-hidden" data-testid="upload-rows">
         <div class="hidden md:flex items-center gap-4 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400" aria-hidden="true">
           <div class="w-[260px] shrink-0">{{ t('uploadPortal.columns.file') }}</div>

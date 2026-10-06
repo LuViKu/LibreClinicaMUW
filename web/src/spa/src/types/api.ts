@@ -4604,6 +4604,7 @@ export interface components {
             passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
             userType?: string;
+            deidentificationRequired?: boolean;
         };
         PermissionsDto: {
             enterData?: boolean;
