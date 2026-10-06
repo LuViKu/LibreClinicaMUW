@@ -369,7 +369,7 @@ def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
 
     cmd = captured["cmd"]
     assert cmd[0] == "srun"
-    assert "--gres=gpu:1" in cmd
+    assert "--gres=gpu:nv2080ti:1" in cmd
     assert "--time=01:00:00" in cmd
     assert "--partition=full_optima" in cmd
     assert "--account=optima" in cmd
