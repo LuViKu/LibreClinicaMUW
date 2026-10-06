@@ -148,7 +148,7 @@ public class LegacyServletTelemetryFilter implements Filter {
      * where the concurrent-session filter sends a session that was replaced
      * by a second login, and where a legacy form login lands; it then sends an
      * anonymous caller on to the login page. For a signed-in non-administrator
-     * it would render the legacy home page, so it is closed for them.
+     * it would render the legacy home page, so they are redirected (302) to the SPA home.
      */
     public static final Set<String> INTERNET_FACING_ANONYMOUS_ONLY = Set.of("/MainMenu");
 
@@ -262,6 +262,16 @@ public class LegacyServletTelemetryFilter implements Filter {
         if (!closed) {
             LegacyAccessLog.hit(entry, httpReq, user, false, Action.PASS);
             chain.doFilter(request, response);
+            return;
+        }
+        if (internetFacing && user != null && !LegacyAccessLog.isSysAdmin(user)
+                && INTERNET_FACING_ANONYMOUS_ONLY.contains(entry.legacyPath())) {
+            // A signed-in site user landing on the legacy home (a replaced session,
+            // a legacy form login): send them to the SPA rather than an error.
+            LegacyAccessLog.hit(entry, httpReq, user, false, Action.REDIRECT);
+            httpResp.setStatus(HttpServletResponse.SC_FOUND);
+            httpResp.setHeader("Location", httpReq.getContextPath() + "/app/");
+            httpResp.setHeader("Cache-Control", "no-store");
             return;
         }
         if (uncatalogued && LegacyAccessLog.isSysAdmin(user)) {

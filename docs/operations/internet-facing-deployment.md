@@ -44,7 +44,7 @@ The SPA calls no legacy servlet. Its login is `POST /j_spring_security_check` (a
 
 | Path | Open for | Why |
 |------|----------|-----|
-| `/MainMenu` | callers with no signed-in user only | The concurrent-session filter and a legacy form login send the browser here, and it forwards an anonymous caller to the login page. For a signed-in non-administrator it would render the legacy home page, so it answers 410. A session replaced by a second login still holds its user, so its next request gets 410 instead of the login page; the SPA reports that as an error and the user signs in again. |
+| `/MainMenu` | callers with no signed-in user only | The concurrent-session filter and a legacy form login send the browser here, and it forwards an anonymous caller to the login page. For a signed-in non-administrator it would render the legacy home page, so it answers `302` to `<context>/app/` (the SPA home). A session replaced by a second login still holds its user, so it lands in the SPA, whose first call gets 401 and shows the login view. |
 
 Open `/pages` paths (`INTERNET_FACING_OPEN_PAGES`): `/api/` (the SPA API, and the portals and device endpoints, which the path block above handles), `/login/` (the login page and the target of a failed form login), `/sso/reauth`, `/v3/` and `/swagger-ui` (denied by the path block on this deployment).
 

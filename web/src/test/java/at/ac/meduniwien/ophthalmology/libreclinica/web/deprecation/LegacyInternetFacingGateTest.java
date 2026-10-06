@@ -135,9 +135,12 @@ class LegacyInternetFacingGateTest {
     }
 
     @Test
-    void flagOn_mainMenuIsOpenOnlyWithoutASignedInUser() throws Exception {
+    void flagOn_mainMenuIsOpenWithoutAUserAndSendsASignedInUserToTheSpa() throws Exception {
         assertTrue(call(true, null, "/MainMenu", null).reachedApp);
-        assertEquals(410, call(true, sessionOf(UserType.USER), "/MainMenu", null).status);
+        Result signedIn = call(true, sessionOf(UserType.USER), "/MainMenu", null);
+        assertEquals(302, signedIn.status);
+        assertEquals(CONTEXT + "/app/", signedIn.location);
+        assertTrue(!signedIn.reachedApp);
     }
 
     @Test
