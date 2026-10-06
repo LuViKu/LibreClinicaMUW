@@ -140,6 +140,17 @@ libreclinica:
   # unchanged.
   deployment:
     internet-facing: ${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:false}
+  # Every uploaded file must be verified as de-identified before it is kept
+  # (DeidUploadGate, E2eDeidentificationVerifier, the dicom-scp /verify route,
+  # and the nightly DeidentificationScanner). Defaults to the internet-facing
+  # flag; the internal deployment is unchanged. Also exposed to the SPA as
+  # `deidentificationRequired` on GET /pages/api/v1/me. On the dicom-scp
+  # sidecar set DICOM_SCP_DEIDENTIFY_STRICT=true alongside it.
+  ingest:
+    deidentification:
+      required: ${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:false}}
+      # Nightly re-verification of everything stored; "-" turns it off.
+      scan-cron: ${LIBRECLINICA_INGEST_DEIDENTIFICATION_SCAN_CRON:0 30 2 * * *}
   sso:
     enabled: ${LIBRECLINICA_SSO_ENABLED:false}
     header:

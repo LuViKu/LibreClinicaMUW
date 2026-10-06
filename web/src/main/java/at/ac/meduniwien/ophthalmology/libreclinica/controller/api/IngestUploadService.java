@@ -94,9 +94,22 @@ final class IngestUploadService {
      */
     record Upload(FileKindSniffer.Sniffed sniffed, MultipartFile file, String patientId,
                   LocalDate acquisitionDate, String laterality, Integer studyEventId, String device,
-                  Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope) {}
+                  Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope,
+                  DeidUploadGate.Context deid) {
 
-    sealed interface Outcome permits Created, Duplicate, Rejected, Undone {}
+        /** An upload on a deployment that does not require de-identification. */
+        Upload(FileKindSniffer.Sniffed sniffed, MultipartFile file, String patientId,
+               LocalDate acquisitionDate, String laterality, Integer studyEventId, String device,
+               Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope) {
+            this(sniffed, file, patientId, acquisitionDate, laterality, studyEventId, device,
+                    channel, actor, studyScope, null);
+        }
+    }
+
+    sealed interface Outcome permits Created, Duplicate, Rejected, Undone, DeidRejected {}
+
+    /** The file failed the server's de-identification check; {@code violations} are field names. */
+    record DeidRejected(java.util.List<String> violations) implements Outcome {}
 
     /**
      * @param sameImageAs DR-036 — set when the file was held back: the row
@@ -160,6 +173,26 @@ final class IngestUploadService {
         String preview = null;
 
         try {
+            // Required de-identification: the file is read by the sidecar
+            // BEFORE anything touches it, and refused unless it is already
+            // clean. The in-place rewrite further down still runs.
+            if (up.deid() != null && kind == IngestArtifactStore.Kind.DICOM) {
+                if (!up.deid().sha256().equals(stored.sha256())) {
+                    // The bytes stored are not the bytes that were checked.
+                    return rejectDeid(path, up.deid(), java.util.List.of(DeidUploadGate.V_SHA256));
+                }
+                try {
+                    DicomDescribeClient.Verification v = describe.verify(path, up.deid().label());
+                    if (!v.ok()) return rejectDeid(path, up.deid(), v.violations());
+                } catch (DicomDescribeClient.DescribeException e) {
+                    if (e.reason() == DicomDescribeClient.DescribeException.Reason.NOT_DICOM) {
+                        return rejectDeid(path, up.deid(), java.util.List.of(DeidUploadGate.V_FILE_TYPE));
+                    }
+                    // Fail-closed: a file the sidecar could not check is not kept.
+                    return discard(path, null, rejectionFor(e));
+                }
+            }
+
             Duplicate dup = findDuplicateBySha(stored.sha256());
             if (dup != null) return discard(path, null, dup);
 
@@ -211,7 +244,9 @@ final class IngestUploadService {
             DicomDescribeClient.Description desc = null;
             if (kind == IngestArtifactStore.Kind.DICOM) {
                 try {
-                    desc = describe.describe(path, target == null ? null : target.subjectLabel());
+                    desc = up.deid() != null
+                            ? describe.describe(path, up.deid().label(), true)
+                            : describe.describe(path, target == null ? null : target.subjectLabel());
                 } catch (DicomDescribeClient.DescribeException e) {
                     return discard(path, null, rejectionFor(e));
                 }
@@ -266,7 +301,10 @@ final class IngestUploadService {
                         .newItem(kind, SOURCE_KIND, path.toString())
                         .device(device)
                         .previewPngPath(kind == IngestArtifactStore.Kind.IMAGE ? path.toString() : preview)
-                        .originalFilename(up.file().getOriginalFilename())
+                        // Required de-identification: only the neutral name
+                        // the gate validated is ever stored.
+                        .originalFilename(up.deid() != null ? up.deid().neutralFilename()
+                                : up.file().getOriginalFilename())
                         .contentType(up.sniffed().contentType())
                         .digest(stored.sha256(), stored.byteSize())
                         .pixelSha256(pixelSha256)
@@ -612,6 +650,12 @@ final class IngestUploadService {
             LOG.warn("upload: could not fingerprint the image: {}", e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    /** Delete the stored file, tell the caller's audit, and answer 422. */
+    private static Outcome rejectDeid(Path stored, DeidUploadGate.Context deid, java.util.List<String> violations) {
+        deid.rejected(violations);
+        return discard(stored, null, new DeidRejected(violations));
     }
 
     private static Outcome discard(Path stored, String preview, Outcome outcome) {

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Server-side de-identification check of uploaded files, on a deployment
+        that requires it (libreclinica.ingest.deidentification.required).
+        Seeds three audit_log_event_type rows:
+
+          192 deid_upload_confirmed  the browser's confirmation (user, SHA-256,
+                                     time) kept with the ingest_item it let in
+          193 deid_upload_rejected   an upload refused for not being de-identified
+          194 deid_scan_finding      the nightly scan found a stored file or row
+                                     the upload check would have refused
+
+        No row carries a value read from a file: field names and a file SHA-256.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-07-audit-types-deidentification" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id IN (192, 193, 194);
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="192"/>
+            <column name="name" value="deid_upload_confirmed"/>
+            <column name="display_name" value="Upload accepted with de-identification confirmation"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="193"/>
+            <column name="name" value="deid_upload_rejected"/>
+            <column name="display_name" value="Upload refused: not de-identified"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="194"/>
+            <column name="name" value="deid_scan_finding"/>
+            <column name="display_name" value="Stored file or record failed the de-identification scan"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id IN (192, 193, 194)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

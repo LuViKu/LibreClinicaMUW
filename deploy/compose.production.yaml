@@ -246,6 +246,9 @@ services:
       # app reaches it at core.dicom.describe.url. 0 turns it off, which
       # turns DICOM uploads into a 503 — never into files stored as-is.
       DICOM_SCP_DESCRIBE_PORT: ${DICOM_SCP_DESCRIBE_PORT:-8081}
+      # Match libreclinica.ingest.deidentification.required on the app: always
+      # strict (private tags dropped, extended attribute list cleared).
+      DICOM_SCP_DEIDENTIFY_STRICT: ${DICOM_SCP_DEIDENTIFY_STRICT:-${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:-false}}
     volumes:
       # Stable host path under the backup root, like the other stores. The
       # app reads the same directory to serve image previews, so the two
