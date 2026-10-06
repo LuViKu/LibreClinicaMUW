@@ -296,6 +296,19 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
                 .write().ownOk(x -> x.ok() && x.body.contains("\"bound\":1"))
                 .alsoRefused(x -> x.ok() && x.body.contains("\"bound\":0"));
 
+        // Parked jobs of a staff upload: placed by their ingest item's origin study.
+        c("RetinalResultsApiController#bindParkedJob|origin-parked", f -> rethrow(() ->
+                json(patch(r + f.parkedJob + "/bind"), "{\"eventCrfId\":" + f.eventCrf + "}"))).write()
+                .mixed((own, foreign) -> json(patch(r + foreign.parkedJob + "/bind"),
+                        "{\"eventCrfId\":" + own.eventCrf + "}"));
+        c("RetinalResultsApiController#bulkBindParkedJobs|origin-parked", f -> rethrow(() ->
+                json(post(r + "bulk-bind"), "{\"jobIds\":[" + f.parkedJob + "],\"eventCrfId\":" + f.eventCrf + "}")))
+                .write().mixed((own, foreign) -> json(post(r + "bulk-bind"),
+                        "{\"jobIds\":[" + foreign.parkedJob + "],\"eventCrfId\":" + own.eventCrf + "}"))
+                .ownOk(x -> x.ok() && x.body.contains("\"bound\":1"))
+                .alsoRefused(x -> x.ok() && x.body.contains("\"bound\":0"));
+        c("RetinalResultsApiController#getJob|parked", f -> get(r + f.parkedJob))
+                .noControlRoleGated("a job with no visit has no study, so every non-admin is refused, owner included");
         c("RetinalJobArtifactsApiController#streamArtifact", f -> get(r + f.job + "/artifacts/retina-thickness.csv"));
         c("RetinalJobArtifactsApiController#streamArtifact|companion", f -> get(r + f.job + "/artifacts/fundus.png"));
         c("RetinalJobArtifactsApiController#streamSegmentation", f -> get(r + f.job + "/segmentation"))
@@ -365,6 +378,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
                 .param("studyEventId", String.valueOf(f.event))).write();
         c("IngestUploadApiController#undoStaffUploadItem", f -> delete(u + "items/" + f.ingestFresh)).write();
         c("IngestUploadApiController#undoStaffUploadJob", f -> delete(u + "jobs/" + f.jobFresh)).write();
+        c("IngestUploadApiController#undoStaffUploadJob|origin-parked", f -> delete(u + "jobs/" + f.parkedJob)).write();
     }
 
     /** The smallest thing the upload sniffing takes for a JPEG. */

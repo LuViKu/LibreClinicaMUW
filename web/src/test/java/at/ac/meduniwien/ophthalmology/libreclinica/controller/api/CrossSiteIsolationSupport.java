@@ -165,6 +165,8 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         long job;
         long jobFailed;
         long jobFresh;
+        /** A parked job (no visit) whose ingest item carries this site as its origin. */
+        long parkedJob;
         String e2eUuid;
         String jobSha;
         int ingestBound;
@@ -418,6 +420,21 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
                             + "'upload', '" + site.tag.toLowerCase() + "-cam', '" + dismissed.toString().replace('\\', '/')
                             + "', '" + site.tag.toLowerCase() + "-" + n + "-dismissed.jpg', 'OD', now(), 'DISMISSED', '"
                             + f.pid + "', '" + sha(site, n, 7) + "', 20, " + site.id + ") RETURNING ingest_item_id");
+
+            // A parked OCT job: no visit yet; its ingest item (origin = the uploader's study) is what places it.
+            Path parkedFile = dir.resolve("parked.e2e");
+            Files.write(parkedFile, (f.label + " parked").getBytes(StandardCharsets.UTF_8));
+            int parkedItem = LifecycleFixtures.insertOne(c,
+                    "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
+                            + "laterality, received_at, status, patient_id, sha256, byte_size, origin_study_id) "
+                            + "VALUES ('e2e', 'upload', '" + site.tag.toLowerCase() + "-oct', '"
+                            + parkedFile.toString().replace('\\', '/') + "', '" + site.tag.toLowerCase() + "-" + n
+                            + "-parked.e2e', 'OD', now(), 'UNBOUND', '" + f.pid + "', '" + sha(site, n, 8)
+                            + "', 20, " + site.id + ") RETURNING ingest_item_id");
+            f.parkedJob = f.job + 3;
+            exec(c, "INSERT INTO retinal_inference_job (job_id, task, e2e_path, eye_laterality, status, "
+                    + "enqueued_at, model_version, ingest_item_id) VALUES (" + f.parkedJob + ", 'fluid', '"
+                    + parkedFile.toString().replace('\\', '/') + "', 'OD', 'parked', now(), 'v1', " + parkedItem + ")");
 
             // Dataset, archived file, export job, schedule — of the site's own study.
             f.dataset = LifecycleFixtures.insertDataset(c, site.id, site.tag + " dataset " + n, 1);

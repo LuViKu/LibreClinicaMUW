@@ -116,6 +116,18 @@ public class RetinalResultsApiController {
         return access;
     }
 
+    private IngestItemVisibility itemVisibility;
+
+    /**
+     * A parked job (no visit yet) belongs to the pool of its ingest item: visible
+     * when that item is (origin study of a staff upload), open to every reconciler
+     * when it has none (anonymous portal), like the ingest inbox itself.
+     */
+    private boolean mayWorkOnJob(long jobId, HttpSession session) {
+        if (itemVisibility == null) itemVisibility = new IngestItemVisibility(dataSource, access());
+        return itemVisibility.canSeeJob(jobId, session);
+    }
+
     /** P3.6 — the job row, its visibility and its files, shared with the split-out controllers. */
     private RetinalJobAccess jobs;
 
@@ -785,6 +797,11 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(403).body(Map.of("message", ctx.errorMessage()));
         }
 
+        if (!mayWorkOnJob(jobId, session)) {
+            // Before any state check: a foreign parked job is "not found", not "already bound".
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
         BindOutcome outcome = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                 eventCrfId, ctx.currentUser(), ctx.currentStudy());
         return switch (outcome.status()) {
@@ -929,6 +946,9 @@ public class RetinalResultsApiController {
             if (batchForbidden) {
                 out = new BindOutcome(jobId, BindOutcomeStatus.FORBIDDEN,
                         null, ctx.errorMessage());
+            } else if (!mayWorkOnJob(jobId, session)) {
+                out = new BindOutcome(jobId, BindOutcomeStatus.NOT_FOUND, null,
+                        "No retinal_inference_job with id " + jobId);
             } else {
                 out = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                         eventCrfId, ctx.currentUser(), ctx.currentStudy());

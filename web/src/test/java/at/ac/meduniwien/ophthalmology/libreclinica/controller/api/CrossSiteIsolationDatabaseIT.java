@@ -98,6 +98,23 @@ class CrossSiteIsolationDatabaseIT extends CrossSiteIsolationSupport {
         }
     }
 
+    /** The parked-job pool handlers exist, and the matrix (not a blanket exemption) covers each. */
+    @Test
+    void theParkedJobHandlersAreInventoriedAndInTheMatrix() throws Exception {
+        Set<String> inventory = ApiEndpointInventory.keys(ApiEndpointInventory.all());
+        Set<String> matrix = new TreeSet<>(CrossSiteIsolationMatrix.allKeys());
+        for (String key : new String[] {
+                "RetinalResultsApiController#listParkedJobs", "RetinalResultsApiController#bindParkedJob",
+                "RetinalResultsApiController#bulkBindParkedJobs", "RetinalResultsApiController#getJob",
+                "RetinalJobArtifactsApiController#streamArtifact", "RetinalJobStatusSseController#stream",
+                "IngestUploadApiController#undoStaffUploadJob"}) {
+            assertTrue(inventory.contains(key), "no such handler any more: " + key);
+            assertTrue(matrix.contains(key), "not in the isolation matrix: " + key);
+        }
+        assertEquals(403, call(get("/api/v1/retinal-jobs?status=parked"), loginAs(Who.DIR, A)).status,
+                "the cross-study parked list is sysadmin-only");
+    }
+
     /* ====================================================================== */
     /* The matrix                                                              */
     /* ====================================================================== */
