@@ -20,8 +20,11 @@ mm³ / ONL-PR µm / GA mm² is computed here.
 Cluster caveats encoded here:
   * the pr task (sese_pr, torch1.0/CUDA9) has no Turing kernels → pin to a
     non-Turing GPU via ``apptainer_pr_gpu_device`` (or "" for CPU).
-  * ``apptainer_use_slurm`` will wrap calls in ``sbatch`` once the hosting model
-    is fixed; for now it runs apptainer directly.
+  * ``apptainer_use_slurm`` wraps every GPU call (the .sif tasks and the
+    host-native bm venv) in a blocking ``srun`` -- one SLURM job per task, with a
+    typed ``--gres`` so it only lands on Turing nodes. The dispatcher pins no GPU
+    in that mode. The host-native IOWA step (ga / layers) is CPU-only and still
+    runs on the dispatcher host. See docs/cluster-deployment.md section 4.
 
 Every command + parse below mirrors the vendor wrapper invocations and is
 flagged "confirm on the cluster" — not runnable without the .sif images + GPUs.
@@ -32,6 +35,8 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 from typing import Any, Literal
 
@@ -39,6 +44,7 @@ from retinal_inference import config as _config
 from retinal_inference.models.responses import FastScreenResult, FullVolumeResult
 from retinal_inference.tasks import SUPPORTED_TASKS, TaskName
 
+from .adapter import cancel_event as _cancel_event
 from .adapter import (
     FastScreenUnavailable,
     RetinalInferenceAdapter,
@@ -46,22 +52,61 @@ from .adapter import (
 )
 
 _TIMEOUT_S = 3600
+# Seconds a terminated child (typically ``srun``) gets to forward the signal and
+# cancel its SLURM job before it is SIGKILLed.
+_TERM_GRACE_S = 15
+_POLL_S = 1.0
+
+def _terminate(proc: subprocess.Popen) -> None:
+    """SIGTERM first, SIGKILL after a grace period.
+
+    SIGTERM matters for ``srun``: it forwards the signal and cancels the job
+    step, so SLURM frees the GPU. A bare SIGKILL gives srun no chance to do so
+    and can leave the job running until the controller notices the dead step.
+    """
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=_TERM_GRACE_S)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 def _exec(cmd: list[str], env: dict[str, str] | None = None) -> str:
     """Run a subprocess, raising RuntimeError with stderr on failure.
 
-    Single choke-point so unit tests can monkeypatch all dispatch.
+    Single choke-point so unit tests can monkeypatch all dispatch. On timeout,
+    on cancellation (see ``_cancel_event``) or on any other exception the child
+    is terminated (SIGTERM, then SIGKILL) -- under SLURM that cancels the job.
     """
     full_env = {**os.environ, **(env or {})}
-    proc = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=_TIMEOUT_S, env=full_env
+    cancel = _cancel_event.get()
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=full_env
     )
+    deadline = time.monotonic() + _TIMEOUT_S
+    try:
+        while True:
+            try:
+                stdout, stderr = proc.communicate(timeout=_POLL_S)
+                break
+            except subprocess.TimeoutExpired:
+                if cancel is not None and cancel.is_set():
+                    _terminate(proc)
+                    raise RuntimeError(f"{cmd[0]} cancelled (request abandoned)") from None
+                if time.monotonic() >= deadline:
+                    _terminate(proc)
+                    raise subprocess.TimeoutExpired(cmd, _TIMEOUT_S) from None
+    except BaseException:
+        _terminate(proc)
+        raise
     if proc.returncode != 0:
         raise RuntimeError(
-            f"{cmd[0]} failed (rc={proc.returncode}): {proc.stderr or proc.stdout}"
+            f"{cmd[0]} failed (rc={proc.returncode}): {stderr or stdout}"
         )
-    return proc.stdout
+    return stdout
 
 
 def _resolve_dcm(path: Path) -> tuple[Path, Path]:
@@ -89,6 +134,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
 
     def __init__(self) -> None:
         s = _config.settings
+        s.validate_slurm()  # SLURM mode: account required, typed gres (startup error)
         self._sif: dict[TaskName, str | None] = {
             "fluid": s.fluid_sif,
             "onl": s.onl_sif,
@@ -134,7 +180,37 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         # Apptainer forwards APPTAINERENV_* into the container.
         return {"CUDA_VISIBLE_DEVICES": dev, "APPTAINERENV_CUDA_VISIBLE_DEVICES": dev}
 
-    def _apptainer(self, verb: str, sif: str, binds: list[str], args: list[str]) -> list[str]:
+    @staticmethod
+    def _srun(task: str) -> list[str]:
+        """The ``srun`` prefix for one task (SLURM mode only).
+
+        One blocking job per task. Job name is ``<prefix>-<task>`` -- never a
+        patient / scan identifier (job names are world-visible in squeue).
+        """
+        s = _config.settings
+        s.validate_slurm()
+        srun = [
+            "srun",
+            f"--job-name={s.apptainer_slurm_job_name}-{task}",
+            f"--time={s.apptainer_slurm_time}",
+            f"--gres={s.apptainer_slurm_gres}",
+            f"--account={s.apptainer_slurm_account}",
+        ]
+        if s.apptainer_slurm_partition:
+            srun.append(f"--partition={s.apptainer_slurm_partition}")
+        if s.apptainer_slurm_mem:
+            srun.append(f"--mem={s.apptainer_slurm_mem}")
+        if s.apptainer_slurm_cpus_per_task:
+            srun.append(f"--cpus-per-task={s.apptainer_slurm_cpus_per_task}")
+        if s.apptainer_slurm_qos:
+            srun.append(f"--qos={s.apptainer_slurm_qos}")
+        if s.apptainer_slurm_constraint:
+            srun.append(f"--constraint={s.apptainer_slurm_constraint}")
+        return srun
+
+    def _apptainer(
+        self, verb: str, sif: str, binds: list[str], args: list[str], task: str = "task"
+    ) -> list[str]:
         s = _config.settings
         cmd = [s.apptainer_bin, verb, "-e", "--nv", "--no-home"]
         if binds:
@@ -143,13 +219,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         if s.apptainer_use_slurm:
             # One blocking SLURM job per scan (cluster caps walltime at 2d, so no
             # persistent GPU service). srun allocates a GPU and runs to completion.
-            srun = ["srun", f"--time={s.apptainer_slurm_time}", f"--gres={s.apptainer_slurm_gres}"]
-            if s.apptainer_slurm_partition:
-                srun.append(f"--partition={s.apptainer_slurm_partition}")
-            if s.apptainer_slurm_account:
-                # This cluster has no default association — srun fails without it.
-                srun.append(f"--account={s.apptainer_slurm_account}")
-            cmd = srun + cmd
+            cmd = self._srun(task) + cmd
         return cmd
 
     # --- per-task handlers (return the generic result fields) ----------------
@@ -164,6 +234,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             [f"{dcm_dir}:/workdir/input-data", f"{out}:/workdir/output"],
             ["/workdir/AWS/run_inference.py", "--input_folder", "/workdir/input-data",
              "--optima_spacing", "--run_local"],
+            task="fluid",
         )
         _exec(cmd, self._gpu_env("fluid"))
         # Server returns the raw fluid mask only; Java computes the IRF/SRF/PED mm³.
@@ -195,6 +266,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             [str(code), str(weights), str(dcm_dir), str(out)],
             ["python", str(code / "process_input_for_optimus.py"),
              str(dcm_dir / "bscan.dcm"), str(out), str(weights)],
+            task="onl",
         )
         _exec(cmd, self._gpu_env("onl"))
         # ONL is bounded by the OPL-HFL and BMEIS surfaces; the server returns
@@ -252,6 +324,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             "exec", s.pr_sif or "",
             binds,
             ["bash", "-c", f"{convert} && {run_model}"],
+            task="pr",
         )
         _exec(cmd, self._gpu_env("pr"))
         # The PR (photoreceptor) layer is bounded by the BMEIS and OB-OPR
@@ -356,10 +429,17 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             env["LD_LIBRARY_PATH"] = (
                 f"{s.bm_ld_library_path}:{existing}" if existing else s.bm_ld_library_path
             )
-        dev = s.bm_gpu_device if s.bm_gpu_device is not None else s.apptainer_gpu_device
-        if dev is not None:
-            env["CUDA_VISIBLE_DEVICES"] = dev
-        _exec([python, str(code / "application.py"), str(dcm), str(out)], env or None)
+        cmd = [python, str(code / "application.py"), str(dcm), str(out)]
+        if s.apptainer_use_slurm:
+            # SLURM mode: BM needs a GPU, so it too runs as an srun job (typed
+            # gres -> Turing) and SLURM assigns the device; no CUDA pin. srun
+            # propagates this env (LD_LIBRARY_PATH) to the job by default.
+            cmd = self._srun("bm") + cmd
+        else:
+            dev = s.bm_gpu_device if s.bm_gpu_device is not None else s.apptainer_gpu_device
+            if dev is not None:
+                env["CUDA_VISIBLE_DEVICES"] = dev
+        _exec(cmd, env or None)
         bm = sorted(glob.glob(str(out / "*BM*.csv"))) or sorted(glob.glob(str(out / "*Bruch*.csv")))
         if not bm:
             raise RuntimeError(f"sese_bm produced no BM CSV in {out}")
@@ -384,6 +464,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             ["python", str(code / "infer_sample_filly.py"), "--PathToWeights", *wlist,
              "--BscanPath", str(dcm), "--LayerSegPath", str(layers_csv),
              "--OutputGA", str(out), "--threshold", s.ga_threshold],
+            task="ga",
         )
         _exec(cmd, self._gpu_env("ga"))
         # infer_sample_filly.py writes RPEL + EZL + ELM; return ONLY RPEL (the
