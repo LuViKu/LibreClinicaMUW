@@ -1490,6 +1490,14 @@ public class SubjectsApiController {
 
         for (Map.Entry<Integer, Acc> e : bySubject.entrySet()) {
             Acc a = e.getValue();
+            // Cross-site isolation: a person enrolled only where the caller has no
+            // role (a sibling site, another study) is not shown at all. Her PID,
+            // sex, date of birth and names are that site's patient data, and the
+            // follow-up (link-patient) refuses a target outside the caller's
+            // visibility anyway. For a person the caller can see, the enrolments
+            // elsewhere stay a bare count (otherStudyCount).
+            // (A system administrator reads every patient anyway.)
+            if (a.visibleStudies().isEmpty() && !currentUser.isSysAdmin()) continue;
             out.add(new SubjectMatchCandidate(
                     e.getKey(),
                     a.uniqueIdentifier(),
