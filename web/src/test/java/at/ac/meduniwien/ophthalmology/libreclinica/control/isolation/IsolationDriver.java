@@ -90,6 +90,8 @@ final class IsolationDriver {
             "study_event_definition", "study_group_class", "study_group", "subject_group_map",
             "archived_dataset_file", "user_account");
 
+    /** The lock registry the servlets share. */
+    final CRFLocker crfLocker = new CRFLocker();
     private final DataSource dataSource;
     private final MockServletContext servletContext = new MockServletContext();
     private final GenericWebApplicationContext spring = new GenericWebApplicationContext();
@@ -100,7 +102,7 @@ final class IsolationDriver {
         spring.refresh();
         servletContext.setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, spring);
         bean("dataSource", dataSource);
-        bean("crfLocker", new CRFLocker());
+        bean("crfLocker", crfLocker);
         bean("securityManager", mock(SecurityManager.class));
         bean("mailSender", mock(JavaMailSenderImpl.class));
         bean("ruleSetService", mock(RuleSetServiceInterface.class));

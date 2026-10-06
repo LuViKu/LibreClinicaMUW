@@ -88,29 +88,6 @@ final class IsolationProbes {
     private IsolationProbes() {}
 
     /**
-     * Probes (see {@link #all()}) that reach another site's data or rows, for at least one site role. They
-     * are asserted in {@link CrossSiteIsolationLegacyLeaksDatabaseIT}; the rest in
-     * {@link CrossSiteIsolationLegacyDatabaseIT}. The causes, by servlet:
-     * <ul>
-     * <li>no record-level check at all: ViewEventCRF, ViewEventCRFContent, ViewItemAuditLog, PrintDataEntry,
-     *     ShowFile, ViewStudyUser, Remove/SetStudyUserRole;</li>
-     * <li>the study subject, event or event CRF is loaded from the request id and used before (or without)
-     *     any scope check: UpdateStudySubject, EnterDataForStudyEvent, ReassignStudySubject, Remove/Restore
-     *     StudySubject, Remove/Restore/DeleteStudyEvent, Remove/RestoreEventCRF.</li>
-     * </ul>
-     */
-    static final Set<String> LEAKS = Set.of(
-            "UpdateStudySubject.GET",
-            "RemoveStudySubject.POST", "RestoreStudySubject.POST",
-            "ReassignStudySubject.GET", "ReassignStudySubject.POST",
-            "EnterDataForStudyEvent",
-            "RemoveStudyEvent.GET", "RemoveStudyEvent.POST", "RestoreStudyEvent.POST", "DeleteStudyEvent.POST",
-            "ViewEventCRF", "ViewEventCRFContent", "ViewItemAuditLog", "PrintDataEntry",
-            "RemoveEventCRF.GET", "RemoveEventCRF.POST", "RestoreEventCRF.POST",
-            "ShowFile",
-            "ViewStudyUser", "RemoveStudyUserRole.POST", "SetStudyUserRole.POST");
-
-    /**
      * Probes the harness cannot drive past their access check (a bean the servlet needs is not wired, or the
      * action needs a state this fixture does not have): static review only, see the report in the class comment
      * of {@link CrossSiteIsolationLegacyDatabaseIT}.
@@ -152,9 +129,9 @@ final class IsolationProbes {
                 "UPDATE study_subject SET status_id = 5 WHERE study_subject_id = %SS%"));
         p.add(new Probe("ReassignStudySubject.GET", ReassignStudySubjectServlet::new, "GET", "/ReassignStudySubject",
                 x -> new String[] { "id", s(x.studySubjectId) }, false));
-        // Moves the subject to the parent study (study 1), taking it out of its site.
+        // Moves the subject to the site it is in already: for a site user, the parent is outside the scope.
         p.add(new Probe("ReassignStudySubject.POST", ReassignStudySubjectServlet::new, "POST", "/ReassignStudySubject",
-                x -> new String[] { "id", s(x.studySubjectId), "action", "submit", "studyId", "1" }, true));
+                x -> new String[] { "id", s(x.studySubjectId), "action", "submit", "studyId", s(x.studyId) }, true));
 
         // ---- events -------------------------------------------------------------------------
         p.add(new Probe("EnterDataForStudyEvent", EnterDataForStudyEventServlet::new, "GET", "/EnterDataForStudyEvent",
@@ -192,7 +169,7 @@ final class IsolationProbes {
         p.add(new Probe("ViewEventCRF", ViewEventCRFServlet::new, "GET", "/ViewEventCRF",
                 x -> new String[] { "id", s(x.eventCrfId), "studySubId", s(x.studySubjectId) }, false));
         p.add(new Probe("ViewEventCRFContent", ViewEventCRFContentServlet::new, "GET", "/ViewEventCRFContent",
-                x -> new String[] { "ecId", s(x.eventCrfId), "id", s(x.eventCrfId), "eventId", s(x.eventId) },
+                x -> new String[] { "ecId", s(x.eventCrfId), "id", s(x.studySubjectId), "eventId", s(x.eventId) },
                 false));
         p.add(new Probe("ViewItemAuditLog", ViewItemAuditLogServlet::new, "GET", "/ViewItemAuditLog",
                 x -> new String[] { "entityId", s(x.itemDataId), "auditTable", "itemdata" }, false));

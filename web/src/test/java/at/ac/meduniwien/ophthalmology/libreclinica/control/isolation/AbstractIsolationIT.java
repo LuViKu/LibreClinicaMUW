@@ -85,13 +85,10 @@ abstract class AbstractIsolationIT extends AbstractApiControllerDatabaseIT {
                 || (!o.refused() && !refusedByException && (o.firstForward() != null || !o.body.isEmpty()));
     }
 
-    /** Every (probe, role) pair of the probes {@code selected} picks. */
-    static Stream<Arguments> attacks(boolean leaking) {
+    /** Every (probe, role) pair. */
+    static Stream<Arguments> attacks() {
         List<Arguments> args = new ArrayList<>();
         for (IsolationProbes.Probe p : IsolationProbes.all()) {
-            if (IsolationProbes.LEAKS.contains(p.name()) != leaking) {
-                continue;
-            }
             for (String role : IsolationFixture.SITE_ROLES) {
                 args.add(Arguments.of(p.name(), role));
             }
