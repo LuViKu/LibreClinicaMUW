@@ -51,3 +51,34 @@ Open `/pages` paths (`INTERNET_FACING_OPEN_PAGES`): `/api/` (the SPA API, and th
 Everything else is closed. The closed set is the whole legacy catalogue plus any `/pages` path outside the open list, so a route added later is closed by default. `libreclinica.legacy.closedPaths` still applies on top.
 
 No SPA code links to or fetches a legacy servlet. A role that still depends on one (for example the legacy print views `/PrintDataEntry` and `/PrintCRF`) gets 410 here; check with the study team before go-live.
+
+## Uploaded files must be de-identified
+
+```
+LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED=true   # property: libreclinica.ingest.deidentification.required
+LIBRECLINICA_INGEST_DEIDENTIFICATION_SCAN_CRON=0 30 2 * * *   # nightly re-scan; "-" turns it off
+DICOM_SCP_DEIDENTIFY_STRICT=true                     # dicom-scp sidecar; compose derives it from the switch above
+```
+
+The default of the first is the value of `LIBRECLINICA_DEPLOYMENT_INTERNET_FACING`, so the internet-facing deployment has it on and the internal one off, unchanged. It is reported to the SPA as `deidentificationRequired` on `GET /pages/api/v1/me`.
+
+Three layers. The browser strips the file first (layer 1). The server never trusts that (layer 2) and looks again at what is stored (layer 3).
+
+**Layer 2, on every authenticated upload (`POST /pages/api/v1/ingest/upload/commit`):**
+
+| Check | Failure |
+|-------|---------|
+| Only E2E and DICOM, by their bytes. JPEG, PNG, anything else | 415 |
+| `patientId` is the label of a live study subject the caller's site visibility reaches (and, when a visit is named, that visit's subject). Never free text | 422 `patientId` |
+| `deidConfirmed=true` and `deidSha256` equal to the SHA-256 of the bytes received | 422 `deidConfirmed`, `deidSha256` |
+| The received filename is `<label>_<yyyyMMdd>_<OD\|OS>[_<n>].<e2e\|dcm>` for that label; that name is what is stored and what the preprocess sidecar is sent | 422 `filename` |
+| E2E: every type-9 patient record has `first_name`, `title`, `birthdate`, `sex` blank, and `surname` and `patient_id` blank or exactly the label; the structure must walk, and image chunks need a patient record | 422 `e2e.*` |
+| DICOM: the sidecar's `/verify` runs on the file BEFORE it is modified: name and id blank or the label, the cleared attributes and a further list (sex, size, weight, descriptions, device and station, operators) empty, no private tag at any depth, no burned-in annotation, `PatientIdentityRemoved=YES`. The in-place rewrite then still runs, strict | 422 with the keyword |
+
+A refusal is `422 {"code":"DEID_REQUIRED","message":...,"violations":[field names]}` and the stored file is deleted. No value from the request or the file is returned or logged; the audit trail gets a `deid_upload_rejected` row (193) holding the field names and the file's SHA-256. An accepted upload gets a `deid_upload_confirmed` row (192) on its `ingest_item`: user, SHA-256 and time, nothing else.
+
+Closed while required: the account-less upload routes (`/public/**`, already 404 when internet-facing), `POST /pages/api/v1/event-crfs/{id}/oct-upload` (no caller in the SPA; it takes no label, confirmation or neutral name) and the CRF item file upload (`POST /pages/api/v1/eventCrfs/{id}/items/{oid}/file`, 403 with a message: it stores a file nobody reads).
+
+**Layer 3** (`DeidentificationScanner`): nightly while required, and on demand with `POST /pages/api/v1/admin/deidentification/scan` (sysadmin; works whether or not the mode is on). It re-verifies every `.e2e` under `core.retinalInference.e2eUploadsPath` and every E2E and DICOM `ingest_item` with the same verifiers (DICOM through `/verify`, read-only), and checks that `ingest_item.patient_id` is a study label, `original_filename` is the neutral name and `patient_name` is empty. A finding is an ERROR log line, an audit row (194, once per distinct finding) and an entry in `GET /pages/api/v1/admin/deidentification`. A scan that could not check something (sidecar down) reports `incomplete`, never clean. Files stored before the mode was switched on will be reported until they are removed.
+
+Not covered: ODM XML imports (`/api/v1/import/**`) can carry identifying text in item values, and CRF template uploads are spreadsheets; neither is a patient file but neither is checked here.

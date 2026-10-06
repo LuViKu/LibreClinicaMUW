@@ -176,6 +176,14 @@ public class EventCrfsApiController {
     private final at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
             retinalAutoPopulator;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
                                   SiteVisibilityFilter siteVisibilityFilter,
@@ -2846,6 +2854,16 @@ public class EventCrfsApiController {
                 session, "uploading CRF files");
         if (roleRefusal != null) {
             return roleRefusal;
+        }
+        // A file typed into a CRF item is stored as it came: nothing reads it,
+        // so nothing can vouch that it carries no patient data. Closed when
+        // the deployment requires de-identification.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "code", DeidUploadGate.CODE,
+                    "message", "File uploads into CRF items are disabled on this deployment: "
+                            + "uploaded files must be verified as de-identified, and a CRF file "
+                            + "is stored unchecked. Use the imaging upload page for scans."));
         }
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));

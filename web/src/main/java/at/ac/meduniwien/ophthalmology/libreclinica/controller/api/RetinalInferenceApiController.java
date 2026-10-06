@@ -20,6 +20,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -142,6 +143,14 @@ public class RetinalInferenceApiController {
     private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
             retinalAutoPopulator;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired(required = false)
     public void setRetinalAutoPopulator(
             at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator p) {
@@ -230,6 +239,15 @@ public class RetinalInferenceApiController {
                 session, "uploading scans to a CRF");
         if (roleRefusal != null) {
             return roleRefusal;
+        }
+        // Denied outright when de-identification is required. This endpoint has
+        // no caller in the SPA (the upload page uses /ingest/upload/commit),
+        // takes no patient label, no SHA-256 confirmation and no neutral
+        // filename, and keeps the multipart name as given: verifying it to the
+        // same standard would mean duplicating the staff route for a path
+        // nobody uses, so the one place a file can come in is the one that checks.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.response(403, List.of("directOctUploadClosed"));
         }
 
         // ---- request-shape gates ------------------------------------------------

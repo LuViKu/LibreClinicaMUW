@@ -82,6 +82,14 @@ public class IngestUploadApiController {
 
     private StudyResourceAccess access;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired
     public IngestUploadApiController(@Qualifier("dataSource") DataSource dataSource,
                                      SiteVisibilityFilter siteVisibilityFilter,
@@ -167,6 +175,11 @@ public class IngestUploadApiController {
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
             @RequestParam(value = "park", defaultValue = "false") boolean park,
             @RequestParam(value = "device", required = false) String device,
+            // Required de-identification (libreclinica.ingest.deidentification.required):
+            // the browser's confirmation that it stripped the file, and the
+            // SHA-256 of the bytes it sent, which the server checks.
+            @RequestParam(value = "deidConfirmed", required = false) String deidConfirmed,
+            @RequestParam(value = "deidSha256", required = false) String deidSha256,
             HttpSession session) {
 
         ResponseEntity<?> guard = guards(session);
@@ -174,8 +187,9 @@ public class IngestUploadApiController {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }
+        final boolean deidRequired = DeidentificationPolicy.required(deidPolicy);
         FileKindSniffer.Sniffed sniffed = UploadRoute.sniff(file);
-        if (sniffed == null) {
+        if (sniffed == null && !deidRequired) {
             return ResponseEntity.badRequest().body(Map.of("message", UploadRoute.UNSUPPORTED_MESSAGE));
         }
         String date = UploadRoute.isBlank(scanDate) ? studyDate : scanDate;
@@ -194,26 +208,62 @@ public class IngestUploadApiController {
         }
         IngestBindService.Actor actor = actor(session);
 
+        // Required de-identification, layer 2: the request is checked against
+        // what the server knows (kind, label, SHA-256, name) before a byte is
+        // stored; the content checks run on the stored bytes further down.
+        DeidUploadGate.Context deid = null;
+        if (deidRequired) {
+            String visitLabel = visit == null ? null : UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
+            DeidUploadGate.Check check = DeidUploadGate.precheck(dataSource, file, sniffed, patientId,
+                    deidConfirmed, deidSha256, access().visibleStudyIds(session), visitLabel);
+            if (check instanceof DeidUploadGate.Reject rejected) {
+                LOG.warn("staff upload refused as not de-identified (sha256={}): {}",
+                        rejected.sha256(), rejected.violations());
+                DeidUploadGate.auditRejected(dataSource, actor.user(), actor.study(),
+                        rejected.violations(), rejected.sha256(), "staff");
+                return rejected.toResponse();
+            }
+            DeidUploadGate.Pass pass = (DeidUploadGate.Pass) check;
+            deid = new DeidUploadGate.Context(pass.label(), pass.sha256(), pass.filename(),
+                    violations -> DeidUploadGate.auditRejected(dataSource, actor.user(), actor.study(),
+                            violations, pass.sha256(), "staff"));
+        }
+
         if (sniffed.kind() == IngestArtifactStore.Kind.E2E) {
             String pid = patientId;
-            if (UploadRoute.isBlank(pid) && visit != null) {
+            if (deid == null && UploadRoute.isBlank(pid) && visit != null) {
                 pid = UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
             }
-            ResponseEntity<?> r = oct.commit(file, pid == null ? "" : pid, date == null ? "" : date,
+            ResponseEntity<?> r = oct.commitStaff(file, pid == null ? "" : pid, date == null ? "" : date,
                     laterality == null ? "" : laterality, scanIndex, eventCrfId, studyEventId, park,
-                    false, 0);
+                    false, 0, deid);
             attributeOctUpload(r, actor);
+            if (deid != null) auditDeidConfirmed(r, actor, deid, visit);
             return UploadRoute.asE2e(r);
         }
 
         IngestUploadService.Outcome outcome = uploads.commit(new IngestUploadService.Upload(
                 sniffed, file, patientId, UploadRoute.parseIsoDateOrNull(date), laterality, visit, device,
-                IngestUploadService.Channel.STAFF, actor, access().visibleStudyIds(session)));
+                IngestUploadService.Channel.STAFF, actor, access().visibleStudyIds(session), deid));
         if (outcome instanceof IngestUploadService.Created c) {
             LOG.info("staff upload: ingest_item {} ({}) {} by user {}",
                     c.ingestItemId(), c.format(), c.status(), actor.userId());
+            if (deid != null) {
+                DeidUploadGate.auditConfirmed(dataSource, actor.user(), actor.study(),
+                        c.ingestItemId(), deid.sha256(), visit);
+            }
         }
         return UploadRoute.respond(outcome);
+    }
+
+    /** Keep the browser's confirmation with the row the OCT route created. */
+    private void auditDeidConfirmed(ResponseEntity<?> r, IngestBindService.Actor actor,
+                                    DeidUploadGate.Context deid, Integer visit) {
+        if (!r.getStatusCode().is2xxSuccessful()) return;
+        if (!(r.getBody() instanceof Map<?, ?> body)) return;
+        if (!(body.get("ingestItemId") instanceof Number n)) return;
+        DeidUploadGate.auditConfirmed(dataSource, actor.user(), actor.study(), n.longValue(),
+                deid.sha256(), visit);
     }
 
     /* ---------------- undo ---------------- */

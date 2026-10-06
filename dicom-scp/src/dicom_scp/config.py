@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # Private (vendor) tags carry calibration a study may need, so they stay
     # unless a deployment says otherwise.
     deidentify_drop_private: bool = False
+    # De-identification required (the app's
+    # libreclinica.ingest.deidentification.required): every describe call acts
+    # as ``strict`` — private tags dropped and the extended attribute list
+    # cleared — whether or not the caller asks. Implies drop_private.
+    deidentify_strict: bool = False
 
     @property
     def allowed_calling_aes(self) -> set[str]:

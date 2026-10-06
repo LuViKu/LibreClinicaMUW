@@ -27,6 +27,10 @@ services:
       # APIs, actuator info/prometheus, springdoc; uniform login failures;
       # refuses to start with the default root password). See application.yml.
       LIBRECLINICA_DEPLOYMENT_INTERNET_FACING: "${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}"
+      # Every uploaded file is verified as de-identified before it is kept.
+      # Defaults to the internet-facing flag. Set DICOM_SCP_DEIDENTIFY_STRICT
+      # on the dicom-scp service to match.
+      LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED: "${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:-${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}}"
       LIBRECLINICA_SSO_ENABLED: "${LIBRECLINICA_SSO_ENABLED:-false}"
       LIBRECLINICA_SSO_PRINCIPAL_HEADER: "${LIBRECLINICA_SSO_PRINCIPAL_HEADER:-REMOTE_USER}"
       LIBRECLINICA_SSO_EMAIL_HEADER: "${LIBRECLINICA_SSO_EMAIL_HEADER:-mail}"
@@ -286,6 +290,9 @@ services:
       # core.dicom.describe.url over the compose network only — deliberately
       # not in `ports:`. 0 disables it.
       DICOM_SCP_DESCRIBE_PORT: "8081"
+      # With de-identification required the sidecar always acts strict:
+      # private tags dropped, the extended attribute list cleared.
+      DICOM_SCP_DEIDENTIFY_STRICT: ${DICOM_SCP_DEIDENTIFY_STRICT:-${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:-${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}}}
     volumes:
       # Shared ingest store — the sidecar writes, the app reads (same bind).
       - ./docker/dicom-ingest:/var/lib/libreclinica/dicom-ingest
