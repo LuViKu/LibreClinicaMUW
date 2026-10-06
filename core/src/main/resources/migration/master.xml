@@ -127,5 +127,6 @@
   <include  file="migration/lc-muw-2026-09-30-audit-log-event-date-index.xml"/>
   <include  file="migration/lc-muw-2026-09-30-audit-type-event-crf-removed.xml"/>
   <include  file="migration/lc-muw-2026-09-30-event-crf-cascade-removal.xml"/>
+  <include  file="migration/lc-muw-2026-10-07-ingest-origin-study.xml"/>
 </databaseChangeLog>
 

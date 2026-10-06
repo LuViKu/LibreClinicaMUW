@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.LongPredicate;
 
 import javax.sql.DataSource;
 
@@ -94,7 +95,36 @@ final class IngestUploadService {
      */
     record Upload(FileKindSniffer.Sniffed sniffed, MultipartFile file, String patientId,
                   LocalDate acquisitionDate, String laterality, Integer studyEventId, String device,
-                  Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope) {}
+                  Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope,
+                  LongPredicate visibleItem) {
+
+        /** An upload with no limit on which existing items a duplicate may name (the portal's). */
+        Upload(FileKindSniffer.Sniffed sniffed, MultipartFile file, String patientId,
+               LocalDate acquisitionDate, String laterality, Integer studyEventId, String device,
+               Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope) {
+            this(sniffed, file, patientId, acquisitionDate, laterality, studyEventId, device, channel, actor,
+                    studyScope, null);
+        }
+
+        /** True when the caller may be told about {@code ingestItemId} (null predicate = unrestricted). */
+        boolean mayName(long ingestItemId) {
+            return visibleItem == null || visibleItem.test(ingestItemId);
+        }
+
+        /** The study the staff uploader was working in; null on the portal and for the system actor. */
+        Integer originStudyId() {
+            if (channel != Channel.STAFF || actor == null || actor.isSystem() || actor.study() == null) return null;
+            int id = actor.study().getId();
+            return id > 0 ? id : null;
+        }
+    }
+
+    private static final Rejected ALREADY_UPLOADED = new Rejected(409, "Diese Datei wurde bereits hochgeladen.");
+
+    /** A duplicate the caller may not be told the details of is only "already uploaded". */
+    private static Outcome maskDuplicate(Upload up, Duplicate d) {
+        return up.mayName(d.existingIngestItemId()) ? d : ALREADY_UPLOADED;
+    }
 
     sealed interface Outcome permits Created, Duplicate, Rejected, Undone {}
 
@@ -161,7 +191,7 @@ final class IngestUploadService {
 
         try {
             Duplicate dup = findDuplicateBySha(stored.sha256());
-            if (dup != null) return discard(path, null, dup);
+            if (dup != null) return discard(path, null, maskDuplicate(up, dup));
 
             // The visit first: the label written into a DICOM file's patient
             // identity is the visit's subject and nothing else — an upload
@@ -218,7 +248,9 @@ final class IngestUploadService {
                 preview = desc.previewPngPath();
                 if (desc.sopInstanceUid() != null) {
                     Long existing = findBySopInstanceUid(desc.sopInstanceUid());
-                    if (existing != null) return discard(path, preview, new Duplicate(existing, null));
+                    if (existing != null) {
+                        return discard(path, preview, maskDuplicate(up, new Duplicate(existing, null)));
+                    }
                 }
             }
 
@@ -232,7 +264,7 @@ final class IngestUploadService {
             String claimedLabel = target != null ? target.subjectLabel() : blankToNull(up.patientId());
             IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
             if (verdict == IngestTwins.Verdict.DUPLICATE) {
-                return discard(path, preview, new Duplicate(twin.ingestItemId(), null));
+                return discard(path, preview, maskDuplicate(up, new Duplicate(twin.ingestItemId(), null)));
             }
             boolean held = verdict == IngestTwins.Verdict.HELD;
             if (held) target = null;
@@ -276,7 +308,9 @@ final class IngestUploadService {
                         .laterality(laterality)
                         .acquisitionDate(acquisition)
                         .acquisitionDateSource(acquisitionSource)
-                        .imagingModalityId(modalityId);
+                        .imagingModalityId(modalityId)
+                        // Who may see the file while it is unbound: the uploader's study (staff only).
+                        .originStudyId(up.originStudyId());
                 if (desc != null) {
                     item.sopInstanceUid(desc.sopInstanceUid())
                             .sopClassUid(desc.sopClassUid())
@@ -309,13 +343,15 @@ final class IngestUploadService {
                     held ? " — held back, same picture as ingest_item " + twin.ingestItemId() : "");
             return new Created(id, kind.dir(), up.sniffed().format(),
                     target == null ? "UNBOUND" : "BOUND", laterality, acquisition, device, modalityId,
-                    desc != null && desc.identityRemoved(), held ? twin.ingestItemId() : null);
+                    desc != null && desc.identityRemoved(),
+                    held && up.mayName(twin.ingestItemId()) ? twin.ingestItemId() : null);
         } catch (SQLException e) {
             // The race-safe dedup index fires here when two operators upload
             // the same bytes at once; the earlier row wins.
             if ("23505".equals(e.getSQLState())) {
                 Duplicate raced = findDuplicateBySha(stored.sha256());
-                return discard(path, preview, raced != null ? raced : new Rejected(409, "already uploaded"));
+                return discard(path, preview,
+                        raced != null ? maskDuplicate(up, raced) : new Rejected(409, "already uploaded"));
             }
             LOG.error("upload: INSERT failed: {}", e.getMessage());
             return discard(path, preview, new Rejected(500, "the upload could not be recorded"));
@@ -412,8 +448,18 @@ final class IngestUploadService {
      *                  match a file that is one acquisition
      */
     Map<String, Object> preflight(String sha256, Integer scanIndex) {
+        return preflight(sha256, scanIndex, null);
+    }
+
+    /**
+     * As {@link #preflight(String, Integer)}, reporting only items the caller
+     * may see ({@code visibleItem} null = all): a file of a site the caller
+     * has no access to is not "already here" as far as they can tell.
+     */
+    Map<String, Object> preflight(String sha256, Integer scanIndex, LongPredicate visibleItem) {
         Map<String, Object> body = new LinkedHashMap<>();
         Duplicate d = scanIndex == null ? findDuplicateBySha(sha256) : findDuplicateByShaAndScan(sha256, scanIndex);
+        if (d != null && visibleItem != null && !visibleItem.test(d.existingIngestItemId())) d = null;
         body.put("exists", d != null);
         body.put("ingestItemId", d == null ? null : d.existingIngestItemId());
         body.put("jobId", d == null ? null : d.existingJobId());
