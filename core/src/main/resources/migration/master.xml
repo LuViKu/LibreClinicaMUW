@@ -129,5 +129,6 @@
   <include  file="migration/lc-muw-2026-09-30-event-crf-cascade-removal.xml"/>
   <include  file="migration/lc-muw-2026-10-06-account-lockout.xml"/>
   <include  file="migration/lc-muw-2026-10-07-audit-types-deidentification.xml"/>
+  <include  file="migration/lc-muw-2026-10-07-ingest-origin-study.xml"/>
 </databaseChangeLog>
 

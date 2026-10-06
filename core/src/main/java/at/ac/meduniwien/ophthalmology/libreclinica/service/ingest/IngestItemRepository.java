@@ -246,6 +246,15 @@ public final class IngestItemRepository {
             return set("candidate_study_subject_id", v, Types.INTEGER);
         }
 
+        /**
+         * The study the signed-in uploader was working in when the file was
+         * uploaded (their session study, a site or a parent). Set by the
+         * authenticated staff paths only; anonymous and device paths leave it
+         * NULL. It scopes who may see the file while it is still unbound or
+         * dismissed.
+         */
+        public Builder originStudyId(Integer v) { return set("origin_study_id", v, Types.INTEGER); }
+
         /* ---------------- the binding ---------------- */
 
         /**

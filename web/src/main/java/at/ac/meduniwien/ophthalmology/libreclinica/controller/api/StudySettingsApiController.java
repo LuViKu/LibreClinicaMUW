@@ -22,6 +22,8 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudyBindings;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
@@ -108,6 +110,11 @@ public class StudySettingsApiController {
         if (studyId == null) {
             return ResponseEntity.status(404).body(Map.of("message", "no study " + studyOid));
         }
+        // A site user reads her own site and its parent study, no other study.
+        StudyBean readTarget = new StudyDAO(dataSource).findByOid(studyOid);
+        ResponseEntity<?> notYours = StudyAdminAuthorization.refuseUnlessMayReadStudy(
+                (UserAccountBean) session.getAttribute("userBean"), readTarget, studyOid, dataSource);
+        if (notYours != null) return notYours;
         StudySettingService svc = new StudySettingService(dataSource);
         Map<String, String> set = svc.allFor(studyId);
 

@@ -118,6 +118,7 @@ public class IngestInboxApiController {
 
     private StudyResourceAccess access;
     private IngestBindService binds;
+    private IngestItemVisibility visibility;
 
     @Autowired
     public IngestInboxApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -142,6 +143,17 @@ public class IngestInboxApiController {
     private StudyResourceAccess access() {
         if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
         return access;
+    }
+
+    private IngestItemVisibility visibility() {
+        if (visibility == null) visibility = new IngestItemVisibility(dataSource, access());
+        return visibility;
+    }
+
+    /** 404 for an item that does not exist or that the session may not see (no existence oracle). */
+    private ResponseEntity<?> guardItem(long id, HttpSession session) {
+        if (visibility().canSee(id, session)) return null;
+        return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
     }
 
     private IngestBindService binds() {
@@ -241,6 +253,8 @@ public class IngestInboxApiController {
                         + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
                         + "received_at, preview_png_path, " + TWIN_COLUMN
                         + "  FROM ingest_item WHERE status = ?");
+        // Cross-site isolation: only the rows this session may see (IngestItemVisibility).
+        sql.append(" AND ").append(visibility().predicate("ingest_item", session));
         List<Object> args = new ArrayList<>();
         args.add(wantedStatus);
         if (notBlank(kind)) {
@@ -297,8 +311,9 @@ public class IngestInboxApiController {
         int total = 0;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT kind, count(*) FROM ingest_item WHERE status = 'UNBOUND' "
-                             + "GROUP BY kind ORDER BY kind");
+                     "SELECT kind, count(*) FROM ingest_item WHERE status = 'UNBOUND' AND "
+                             + visibility().predicate("ingest_item", session)
+                             + " GROUP BY kind ORDER BY kind");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 byKind.put(rs.getString(1), rs.getInt(2));
@@ -338,6 +353,9 @@ public class IngestInboxApiController {
                             subjectStudyId(boundSubject), session,
                             "This file belongs to a study you cannot access");
                     if (vis != null) return vis;
+                } else if (!visibility().canSee(id, session)) {
+                    // Unbound or dismissed: visible by the uploader's study (origin_study_id).
+                    return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
                 }
                 return ResponseEntity.ok(toRow(rs, visible));
             }
@@ -413,7 +431,8 @@ public class IngestInboxApiController {
         if (subjectLabel != null && !subjectLabel.isBlank()) {
             try (Connection c = dataSource.getConnection();
                  PreparedStatement ps = c.prepareStatement(
-                         "SELECT count(*) FROM ingest_item WHERE status = 'UNBOUND' AND lower(patient_id) = lower(?)")) {
+                         "SELECT count(*) FROM ingest_item WHERE status = 'UNBOUND' AND lower(patient_id) = lower(?) AND "
+                                 + visibility().predicate("ingest_item", session))) {
                 ps.setString(1, subjectLabel.trim());
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) pendingForSubject = rs.getInt(1);
@@ -498,6 +517,8 @@ public class IngestInboxApiController {
         } else {
             ResponseEntity<?> role = guards(session);
             if (role != null) return role;
+            ResponseEntity<?> item = guardItem(id, session);
+            if (item != null) return item;
         }
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for file " + id));
@@ -541,6 +562,8 @@ public class IngestInboxApiController {
         }
         ResponseEntity<?> targetGuard = guardBindTarget(req.studySubjectId(), session);
         if (targetGuard != null) return targetGuard;
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
 
         // What the file says about itself, before it is filed under a day it
         // may not belong to. A mismatch is refused once and applied on the
@@ -611,6 +634,10 @@ public class IngestInboxApiController {
         List<Map<String, Object>> skipped = new ArrayList<>();
         for (Long id : req.ids()) {
             if (id == null) continue;
+            if (!visibility().canSee(id, session)) {
+                skipped.add(Map.of("id", id, "reason", IngestBindService.Result.NOT_FOUND.name()));
+                continue;
+            }
             // Each file is dated on its own, so one scan from the wrong day
             // is skipped with its two dates rather than taking the batch down
             // — the same shape the already-reconciled case uses.
@@ -653,6 +680,8 @@ public class IngestInboxApiController {
                     "This file belongs to a study you cannot access");
             if (vis != null) return vis;
         }
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
         IngestBindService.Actor actor = actor(session);
         IngestBindService.Result r = binds().unbind(id, actor);
         // 2026-09-24 — "remove from visit" on the visit page carries the
@@ -677,6 +706,8 @@ public class IngestInboxApiController {
     public ResponseEntity<?> restore(@PathVariable("id") long id, HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
         return bindResponse(binds().restore(id, actor(session)), id, "UNBOUND");
     }
 
@@ -703,6 +734,10 @@ public class IngestInboxApiController {
         List<Map<String, Object>> skipped = new ArrayList<>();
         for (Long id : req.ids()) {
             if (id == null) continue;
+            if (!visibility().canSee(id, session)) {
+                skipped.add(Map.of("id", id, "reason", IngestBindService.Result.NOT_FOUND.name()));
+                continue;
+            }
             IngestBindService.Result r = binds().dismiss(id, req.reason(), actor);
             if (r == IngestBindService.Result.OK) {
                 dismissed.add(id);
@@ -722,6 +757,8 @@ public class IngestInboxApiController {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
 
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
         String reason = req == null ? null : req.reason();
         return bindResponse(binds().dismiss(id, reason, actor(session)), id, "DISMISSED");
     }
