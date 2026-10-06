@@ -94,8 +94,11 @@
                 </property>
             </bean>
         </constructor-arg>
+        <!-- libreclinica.deployment.internet-facing: when true locked / 2FA-outdated /
+             bad-password are all reported as bad credentials. -->
+        <constructor-arg value="#{environment.getProperty('libreclinica.deployment.internet-facing', 'false')}"/>
     </bean>
-    
+
      <!-- A second login of the same account expires the first session
           (maximumSessions=1 below); that session's next request goes to
           /MainMenu, which sends it on to the login page. The strategy is

@@ -134,7 +134,7 @@ libreclinica:
   # account-less upload/entry portals, the device + sidecar APIs, springdoc
   # and /actuator/info + /actuator/prometheus (SecurityConfig), (b) returns an
   # identical failure for locked / unknown / bad-password logins
-  # (LoginFailureHandler) and (c) refuses to start while the seeded `root`
+  # (SpaLoginFailureHandler) and (c) refuses to start while the seeded `root`
   # password (or any active account with it) is unchanged
   # (InternetFacingStartupGuard). Default false: the internal deployment is
   # unchanged.

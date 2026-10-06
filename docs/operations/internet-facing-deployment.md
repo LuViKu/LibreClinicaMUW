@@ -16,7 +16,7 @@ Default `false`; the internal deployment is unchanged. Set it in `/etc/libreclin
 | Sidecar / device APIs | `/pages/api/v1/internal/**` (DICOM ingest, worklist) and `/pages/api/v1/device/**` (Optomed worklist, uploader heartbeat) answer 404 | same |
 | Operational endpoints | `/actuator/info`, `/actuator/prometheus`, springdoc (`/pages/v3/api-docs*`, `/pages/swagger-ui*` and the bare `/v3/api-docs*`, `/swagger-ui*`) answer 404 | same |
 | Healthcheck | `/actuator/health` stays open | unchanged |
-| Login failures | locked, 2FA-outdated, unknown and wrong-password all redirect to the same `errorLogin`; the audit row and the denied-login mail still carry the real reason | `LoginFailureHandler` |
+| Login failures | locked, 2FA-outdated, unknown and wrong-password all redirect to the same `errorLogin`; the audit row and the denied-login mail still carry the real reason | `SpaLoginFailureHandler` |
 | Startup | refuses to start if any active account still has the default password (`12345678`, as seeded for `root`), in either the seeded MD5 form or a bcrypt rehash of it | `InternetFacingStartupGuard` |
 
 The deny list is applied twice: the 404 filter runs first, and the authorization rules deny the same patterns if the filter were ever absent.
