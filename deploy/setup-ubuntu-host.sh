@@ -14,16 +14,22 @@
 #   6. Stack tree under /opt/libreclinica + /etc/libreclinica
 #   7. systemd unit `libreclinica.service` that brings the compose stack up
 #   8. Nightly pg_dump backup via systemd timer to /var/backups/libreclinica
+#      (optionally also the file stores, age-encrypted, copied off-host)
 #   9. Log rotation for backup files
+#  10. INTERNET_FACING=true only: host firewall, session timeout, edge rules,
+#      mandatory encrypted backups (see "Internet-facing mode" below)
 #
-# What it does NOT do:
-#   - TLS termination: the MUW institutional reverse proxy is expected to
-#     front this host on the internal network. If you need local TLS,
-#     add nginx separately.
-#   - Host-level firewall / SSH hardening / fail2ban: the production VM
-#     is reachable only via the MUW internal network. Network-level
-#     access control sits at the institutional perimeter; host-level
-#     hardening was removed to keep the deploy script minimal.
+# TLS: the compose stack runs its own nginx sidecar (deploy/nginx/ecrf.conf)
+# that terminates HTTPS on 80/443 for ecrf.augen.meduniwien.ac.at; the app's
+# port 8080 is only for that sidecar (and, on the internal deployment, an
+# institutional reverse proxy on another host). The certificate is NOT created
+# here: place it in /etc/libreclinica/tls (see deploy/nginx/README.md).
+#
+# What it does NOT do (default, internal mode):
+#   - Host-level firewall / SSH hardening / fail2ban: the internal VM is
+#     reachable only via the MUW internal network; network-level access control
+#     sits at the institutional perimeter. INTERNET_FACING=true installs a
+#     firewall; nothing else here ever does.
 #   - Pull the libreclinica image. The first `systemctl start libreclinica`
 #     after setup will pull from ghcr.io/luviku/libreclinicamuw:<tag>. Make
 #     sure the image exists (run the `Release image` workflow on GitHub
@@ -40,7 +46,32 @@
 # All knobs can also be set via env vars before invocation; flags override.
 # `--trusted-cidrs` is consumed by the SSO header-trust filter
 # (LIBRECLINICA_SSO_TRUSTED_CIDRS in /etc/libreclinica/env), not by any
-# host-level firewall — there isn't one.
+# host-level firewall.
+#
+# Internet-facing mode (a separate VM behind the MUW DMZ reverse proxy; see
+# deploy/README.md § "Internet-facing (multicenter) deployment"):
+#
+#   sudo INTERNET_FACING=true \
+#     ADMIN_CIDRS='10.1.2.0/24' DMZ_PROXY_CIDRS='192.0.2.10/32' \
+#     BACKUP_AGE_RECIPIENT='age1...' \
+#     RETINAL_INFERENCE_ADAPTER=optima \
+#     LIBRECLINICA_RETINAL_REMOTE_PUSH_URL='https://gpu.example.org:8000' \
+#     LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN='<long random>' \
+#     bash deploy/setup-ubuntu-host.sh --image-tag v1.5.0-muw
+#
+#   (flag form: --internet-facing / --no-internet-facing)
+#   INTERNET_FACING          true to enable the mode. Once the env file says the
+#                            host is internet-facing, a re-run without it stays
+#                            in the mode; INTERNET_FACING=false turns it off.
+#   ADMIN_CIDRS      (required) comma list allowed to reach SSH.
+#   DMZ_PROXY_CIDRS  comma list allowed to reach 80/443; also the trusted
+#                    real-IP source for nginx rate limiting. Strongly advised.
+#   BACKUP_AGE_RECIPIENT (required) age public key; dump + file archives are
+#                    encrypted to it. Keep the private key OFF this host.
+#   BACKUP_RSYNC_TARGET  optional user@host:/dir for an off-host copy.
+#   SSH_PORT         default 22.
+# The mode refuses to run with the placeholder retinal push token, a non-https
+# retinal push URL, or RETINAL_INFERENCE_ADAPTER=placeholder.
 #
 # Tested against: Ubuntu 24.04 LTS (Noble Numbat), kernel 6.8+
 # ------------------------------------------------------------------------------
@@ -111,6 +142,22 @@ IMAGE_TAG_GIVEN=${IMAGE_TAG_GIVEN:-0}
 # (http://localhost:8080/...); this stamps the institutional https URL.
 : "${LIBRECLINICA_SYS_URL:=https://ecrf.augen.meduniwien.ac.at/LibreClinica/MainMenu}"
 
+# Internet-facing mode (see the header). INTERNET_FACING is deliberately left
+# empty here: "not given" must stay distinguishable from "false", because a host
+# already running in the mode keeps it on a plain re-run.
+: "${INTERNET_FACING:=}"
+: "${ADMIN_CIDRS:=}"
+: "${DMZ_PROXY_CIDRS:=}"
+: "${SSH_PORT:=}"                           # default 22; a persisted value is reused on re-run
+: "${BACKUP_AGE_RECIPIENT:=}"
+: "${BACKUP_RSYNC_TARGET:=}"
+: "${LIBRECLINICA_BACKUP_FILES:=}"        # true: also archive the file stores (always on in internet mode)
+: "${LIBRECLINICA_SESSION_MAX_INACTIVE:=1800}"   # seconds; datainfo maxInactiveInterval in internet mode
+: "${SKIP_ADMIN_LOCKOUT_CHECK:=false}"   # true: do not refuse a firewall that would cut this SSH session
+# RETINAL_INFERENCE_ADAPTER is read from the environment only when given; the
+# env file's value is used otherwise (see the deployment-mode section).
+: "${RETINAL_INFERENCE_ADAPTER:=}"
+
 INSTALL_PREFIX=/opt/libreclinica
 CONFIG_DIR=/etc/libreclinica
 ENV_FILE=${CONFIG_DIR}/env
@@ -120,8 +167,9 @@ E2E_UPLOADS_DIR=/var/lib/libreclinica/e2e-uploads
 RETINAL_OUTPUT_DIR=/var/lib/libreclinica/retinal-inference
 # The remaining file stores (deploy/compose.production.yaml binds every store
 # under /var/lib/libreclinica at the same path in every container that
-# touches it). The nightly timer backs up the database only; the stores are
-# covered by whatever backs up this VM's disk.
+# touches it). The nightly timer backs up the database; it archives these
+# stores too when LIBRECLINICA_BACKUP_FILES=true (always, in internet mode).
+# Otherwise they are covered by whatever backs up this VM's disk.
 RETINAL_ARTIFACTS_DIR=/var/lib/libreclinica/retinal-artifacts
 DICOM_INGEST_DIR=/var/lib/libreclinica/dicom-ingest
 INGEST_DIR=/var/lib/libreclinica/ingest
@@ -158,6 +206,8 @@ while [[ $# -gt 0 ]]; do
     --ghcr-user)        LIBRECLINICA_GHCR_USER="$2"; shift 2 ;;
     --ghcr-token)       LIBRECLINICA_GHCR_TOKEN="$2"; shift 2 ;;
     --dicom)            LIBRECLINICA_DICOM=1; shift ;;
+    --internet-facing)    INTERNET_FACING=true; shift ;;
+    --no-internet-facing) INTERNET_FACING=false; shift ;;
     -h|--help)
       sed -n '/^# ---/,/^# ---/p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -180,6 +230,47 @@ section() { printf '\n\033[1;36m=== %s ===\033[0m\n' "$*"; }
 # Postgres password — written to /etc/libreclinica/env on first run and
 # never regenerated, so re-running this script doesn't lock the DB out.
 gen_secret() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32 || true; }
+
+# Read KEY's last value from a KEY=VALUE file (empty when file or key is absent).
+get_kv() { [[ -r "$1" ]] && sed -n "s/^${2}=//p" "$1" | tail -1 || true; }
+
+# Set KEY=VALUE in a KEY=VALUE file: replace in place, else append. VALUE must
+# not contain '|', '&' or a backslash (every caller passes a path or a token).
+set_kv() {
+  if grep -q "^${2}=" "$1"; then
+    sed -i "s|^${2}=.*|${2}=${3}|" "$1"
+  else
+    printf '%s=%s\n' "$2" "$3" >>"$1"
+  fi
+}
+
+# Is every comma-separated entry an IPv4/IPv6 address or CIDR? (Shape check, not
+# a full parse: it exists to catch typos before they land in a firewall rule.)
+valid_cidr_list() {
+  local entry
+  [[ -n "$1" ]] || return 1
+  IFS=',' read -ra _entries <<<"$1"
+  for entry in "${_entries[@]}"; do
+    [[ "$entry" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ || "$entry" =~ ^[0-9A-Fa-f:]+:[0-9A-Fa-f:]*(/[0-9]{1,3})?$ ]] || return 1
+  done
+}
+
+# Does the CIDR list contain this address? Needs python3 (stock on Ubuntu);
+# returns 2 when it cannot tell.
+cidr_list_contains() {
+  command -v python3 >/dev/null || return 2
+  python3 - "$1" "$2" <<'PY'
+import ipaddress, sys
+addr = ipaddress.ip_address(sys.argv[2])
+for c in sys.argv[1].split(','):
+    try:
+        if addr in ipaddress.ip_network(c.strip(), strict=False):
+            sys.exit(0)
+    except ValueError:
+        pass
+sys.exit(1)
+PY
+}
 
 # ----------------------------- preflight --------------------------------------
 
@@ -232,6 +323,106 @@ log "GHCR user:         ${LIBRECLINICA_GHCR_USER}"
 log "Trusted CIDRs (SSO): ${LIBRECLINICA_TRUSTED_CIDRS:-<none>}"
 log "Timezone:          ${LIBRECLINICA_TIMEZONE}"
 
+# ----------------------------- deployment mode --------------------------------
+
+section "Deployment mode"
+
+FW_CONF=${CONFIG_DIR}/firewall.conf          # persisted ADMIN_CIDRS / DMZ_PROXY_CIDRS / SSH_PORT (0600)
+BACKUP_ENV=${CONFIG_DIR}/backup.env          # persisted backup settings (0600), the backup unit's EnvironmentFile
+REALIP_CONF=${CONFIG_DIR}/nginx-realip.conf  # generated nginx real-ip include (internet mode)
+
+# Backup settings persist across re-runs, in either mode, so an operator does
+# not have to repeat the age key to change an unrelated setting.
+[[ -n "$BACKUP_AGE_RECIPIENT" ]]     || BACKUP_AGE_RECIPIENT="$(get_kv "$BACKUP_ENV" BACKUP_AGE_RECIPIENT)"
+[[ -n "$BACKUP_RSYNC_TARGET" ]]      || BACKUP_RSYNC_TARGET="$(get_kv "$BACKUP_ENV" BACKUP_RSYNC_TARGET)"
+[[ -n "$LIBRECLINICA_BACKUP_FILES" ]] || LIBRECLINICA_BACKUP_FILES="$(get_kv "$BACKUP_ENV" LIBRECLINICA_BACKUP_FILES)"
+
+# Is this host already in the mode? (Decides what a plain re-run means.)
+IFACE_WAS_ON=0
+[[ "$(get_kv "$ENV_FILE" LIBRECLINICA_DEPLOYMENT_INTERNET_FACING)" == "true" ]] && IFACE_WAS_ON=1
+
+case "${INTERNET_FACING,,}" in
+  true|1|yes|on)  IFACE=1 ;;
+  false|0|no|off) IFACE=0 ;;
+  "")             IFACE=$IFACE_WAS_ON
+                  [[ "$IFACE" == "1" ]] && log "Internet-facing mode inherited from ${ENV_FILE} (pass INTERNET_FACING=false to leave it)" ;;
+  *)              die "INTERNET_FACING must be true or false (got '${INTERNET_FACING}')" ;;
+esac
+
+RETINAL_ADAPTER_EFFECTIVE="${RETINAL_INFERENCE_ADAPTER:-$(get_kv "$ENV_FILE" RETINAL_INFERENCE_ADAPTER)}"
+RETINAL_ADAPTER_EFFECTIVE="${RETINAL_ADAPTER_EFFECTIVE:-placeholder}"
+
+if [[ "$IFACE" == "1" ]]; then
+  log "Mode:              INTERNET-FACING (host firewall, 1800 s sessions, encrypted backups, edge rules)"
+
+  # Persisted values from the previous run, unless given now.
+  [[ -n "$ADMIN_CIDRS" ]]     || ADMIN_CIDRS="$(get_kv "$FW_CONF" ADMIN_CIDRS)"
+  [[ -n "$DMZ_PROXY_CIDRS" ]] || DMZ_PROXY_CIDRS="$(get_kv "$FW_CONF" DMZ_PROXY_CIDRS)"
+  [[ -n "$SSH_PORT" ]]        || SSH_PORT="$(get_kv "$FW_CONF" SSH_PORT)"
+  : "${SSH_PORT:=22}"
+  [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]] || die "SSH_PORT must be a port number (got '${SSH_PORT}')"
+
+  # The mode's own preconditions. Everything here is checked BEFORE any change
+  # to the host, so a refusal leaves it exactly as it was.
+  [[ -n "$ADMIN_CIDRS" ]] \
+    || die "INTERNET_FACING needs ADMIN_CIDRS (comma-separated addresses/CIDRs allowed to reach SSH). Without it the firewall would lock everyone out."
+  valid_cidr_list "$ADMIN_CIDRS" || die "ADMIN_CIDRS is not a comma-separated list of IPs/CIDRs: '${ADMIN_CIDRS}'"
+  if [[ -n "$DMZ_PROXY_CIDRS" ]]; then
+    valid_cidr_list "$DMZ_PROXY_CIDRS" || die "DMZ_PROXY_CIDRS is not a comma-separated list of IPs/CIDRs: '${DMZ_PROXY_CIDRS}'"
+  else
+    warn "DMZ_PROXY_CIDRS is not set: ports 80/443 will be open to every source, and nginx's per-IP"
+    warn "  rate limits will see only the DMZ proxy's address. Set it to the proxy's address(es)."
+  fi
+
+  [[ -n "$BACKUP_AGE_RECIPIENT" ]] \
+    || die "INTERNET_FACING needs BACKUP_AGE_RECIPIENT (an age public key, 'age1...'): backups here are always encrypted. Generate a key pair elsewhere with 'age-keygen' and keep the private key off this host."
+  [[ "$BACKUP_AGE_RECIPIENT" =~ ^age1[a-z0-9]{50,}$ ]] \
+    || die "BACKUP_AGE_RECIPIENT does not look like an age public key (expected 'age1' + bech32 characters)."
+  LIBRECLINICA_BACKUP_FILES=true
+
+  [[ "${LIBRECLINICA_DICOM}" != "1" ]] \
+    || die "--dicom cannot be combined with INTERNET_FACING: no DICOM port may be published on an internet-facing host."
+
+  if [[ "${RETINAL_ADAPTER_EFFECTIVE,,}" == "placeholder" ]]; then
+    die "INTERNET_FACING refuses RETINAL_INFERENCE_ADAPTER=placeholder: it would return fake segmentation results. Pass RETINAL_INFERENCE_ADAPTER=<real adapter> (e.g. optima)."
+  fi
+
+  # Retinal push endpoint: the URL/token that will be in effect once this run
+  # has stamped datainfo.properties. The stamp only happens while remotePushUrl
+  # is still the dev default, so on a re-run the file's values are the ones in
+  # effect; on a first run they are the LIBRECLINICA_RETINAL_REMOTE_PUSH_* ones.
+  PRE_CFG="${INSTALL_PREFIX}/config/datainfo.properties"
+  eff_url="$(get_kv "$PRE_CFG" core.retinalInference.remotePushUrl)"
+  if [[ -z "$eff_url" || "$eff_url" == "http://host.docker.internal:8000" ]]; then
+    eff_url="$LIBRECLINICA_RETINAL_REMOTE_PUSH_URL"
+    eff_token="$LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN"
+  else
+    eff_token="$(get_kv "$PRE_CFG" core.retinalInference.remotePushToken)"
+  fi
+  if [[ -n "$eff_url" && "$eff_url" != https://* ]]; then
+    die "INTERNET_FACING requires an https:// retinal push URL (got '${eff_url}'). OCT images must not cross the network in clear. Set LIBRECLINICA_RETINAL_REMOTE_PUSH_URL (first run) or core.retinalInference.remotePushUrl in ${PRE_CFG}."
+  fi
+  if [[ "$eff_token" == "choose-a-long-shared-secret" || -z "$eff_token" ]]; then
+    die "INTERNET_FACING refuses the placeholder/empty retinal push token. Set LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN (first run) or core.retinalInference.remotePushToken in ${PRE_CFG}, and the same value on the GPU host."
+  fi
+
+  # Would the firewall cut the session this script is running in?
+  ssh_ip="${SSH_CLIENT:-}"; ssh_ip="${ssh_ip%% *}"
+  [[ -n "$ssh_ip" ]] || ssh_ip="$(who -m 2>/dev/null | sed -n 's/.*(\(.*\))$/\1/p')"
+  if [[ -n "$ssh_ip" && "$SKIP_ADMIN_LOCKOUT_CHECK" != "true" ]]; then
+    set +e; cidr_list_contains "$ADMIN_CIDRS" "$ssh_ip"; rc=$?; set -e
+    if [[ $rc -eq 1 ]]; then
+      die "You are connected from ${ssh_ip}, which is not in ADMIN_CIDRS (${ADMIN_CIDRS}); the firewall would cut this session. Add it, or set SKIP_ADMIN_LOCKOUT_CHECK=true if you reach SSH another way."
+    fi
+  fi
+else
+  log "Mode:              internal (default)"
+  if [[ -n "$BACKUP_RSYNC_TARGET" && -z "$BACKUP_AGE_RECIPIENT" ]]; then
+    die "BACKUP_RSYNC_TARGET needs BACKUP_AGE_RECIPIENT: nothing leaves this host unencrypted."
+  fi
+fi
+[[ "$BACKUP_RSYNC_TARGET" != *$'\n'* && "$BACKUP_AGE_RECIPIENT" != *$'\n'* ]] || die "Backup settings must be single-line values."
+
 # ----------------------------- system packages --------------------------------
 
 section "System update + base packages"
@@ -247,6 +438,18 @@ apt-get install -y -qq \
   postgresql-client-16 \
   logrotate \
   apparmor apparmor-utils
+
+# age: encrypts the backups (required in internet mode; used in either mode as
+# soon as BACKUP_AGE_RECIPIENT is set). iptables: the internet-facing firewall.
+extra_pkgs=()
+if [[ "$IFACE" == "1" || -n "$BACKUP_AGE_RECIPIENT" ]]; then extra_pkgs+=(age); fi
+if [[ "$IFACE" == "1" ]]; then extra_pkgs+=(iptables); fi
+if [[ ${#extra_pkgs[@]} -gt 0 ]]; then
+  apt-get install -y -qq "${extra_pkgs[@]}"
+  if printf '%s\n' "${extra_pkgs[@]}" | grep -qx age; then
+    command -v age >/dev/null || die "age did not install; backups cannot be encrypted."
+  fi
+fi
 
 # ----------------------------- timezone ---------------------------------------
 
@@ -533,6 +736,12 @@ section "Environment file"
 
 if [[ ! -s "$ENV_FILE" ]]; then
   pg_password=$(gen_secret)
+  # The first bind address. Internet-facing hosts never publish 8080 beyond
+  # loopback (nginx reaches the app over the compose network).
+  INITIAL_BIND_ADDR=0.0.0.0
+  [[ "$IFACE" == "1" ]] && INITIAL_BIND_ADDR=127.0.0.1
+  # Create the file closed before the secrets go in: no window with a wider mode.
+  install -m 0600 -o libreclinica -g libreclinica /dev/null "$ENV_FILE"
   cat >"$ENV_FILE" <<EOF
 # /etc/libreclinica/env — populated on first run of setup-ubuntu-host.sh.
 # Edit cautiously; the Postgres password here must match what's in the
@@ -550,7 +759,8 @@ LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 # reach it over the internal network — the base compose.yaml defaults to
 # loopback (dev), so production MUST set this for the proxy to connect.
 # Narrow to the VM's internal IP if you want to restrict the bind.
-LIBRECLINICA_BIND_ADDR=0.0.0.0
+# (An INTERNET_FACING=true run writes 127.0.0.1 here and keeps it there.)
+LIBRECLINICA_BIND_ADDR=${INITIAL_BIND_ADDR}
 POSTGRES_PASSWORD=${pg_password}
 
 # Classic GitHub PAT used for:
@@ -581,7 +791,10 @@ DICOM_SCP_INGEST_TOKEN=
 LIBRECLINICA_DICOM_BIND_ADDR=${LIBRECLINICA_DICOM_BIND_ADDR}
 EOF
   chown libreclinica:libreclinica "$ENV_FILE"
-  chmod 0640 "$ENV_FILE"
+  # 0640 internal (as before); 0600 internet-facing (the env file holds the DB
+  # password, GHCR token and the retinal tokens). Root, which runs the unit and
+  # this script, reads it either way.
+  if [[ "$IFACE" == "1" ]]; then chmod 0600 "$ENV_FILE"; else chmod 0640 "$ENV_FILE"; fi
   log "Generated $ENV_FILE (Postgres password rolled, 32 chars; GHCR token persisted)"
 else
   log "$ENV_FILE already exists; preserving secrets"
@@ -630,6 +843,64 @@ else
   fi
 fi
 
+# Internet-facing keys in the env file (read by compose through the unit's
+# EnvironmentFile). Re-asserted on every run, so a hand edit cannot quietly
+# reopen the bind or turn the app-side switch off.
+if [[ "$IFACE" == "1" ]]; then
+  set_kv "$ENV_FILE" LIBRECLINICA_BIND_ADDR 127.0.0.1
+  set_kv "$ENV_FILE" LIBRECLINICA_DEPLOYMENT_INTERNET_FACING true
+  set_kv "$ENV_FILE" LIBRECLINICA_NGINX_EDGE_CONF ./deploy/nginx/internet-facing.conf
+  set_kv "$ENV_FILE" LIBRECLINICA_NGINX_REALIP_CONF "$REALIP_CONF"
+  set_kv "$ENV_FILE" LIBRECLINICA_DICOM_BIND_ADDR 127.0.0.1
+  set_kv "$ENV_FILE" RETINAL_INFERENCE_ADAPTER "$RETINAL_ADAPTER_EFFECTIVE"
+  if grep -qE '^COMPOSE_PROFILES=.*\bdicom\b' "$ENV_FILE"; then
+    warn "COMPOSE_PROFILES contained 'dicom'; cleared it: no DICOM sidecar or port on an internet-facing host"
+    set_kv "$ENV_FILE" COMPOSE_PROFILES ""
+  fi
+  chmod 0600 "$ENV_FILE"
+  log "Env file: bind 127.0.0.1, LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true, edge include on, mode 0600"
+
+  # nginx real-IP include: trust the DMZ proxy's X-Forwarded-For so per-IP rate
+  # limits see the visitor, not the proxy. Root-owned, mounted read-only.
+  {
+    echo "# Generated by setup-ubuntu-host.sh from DMZ_PROXY_CIDRS - do not edit."
+    if [[ -n "$DMZ_PROXY_CIDRS" ]]; then
+      IFS=',' read -ra _dmz <<<"$DMZ_PROXY_CIDRS"
+      for c in "${_dmz[@]}"; do echo "set_real_ip_from ${c};"; done
+      echo "real_ip_header X-Forwarded-For;"
+      echo "real_ip_recursive on;"
+    else
+      echo "# DMZ_PROXY_CIDRS was not set: client addresses are the connecting peer's."
+    fi
+  } >"$REALIP_CONF"
+  chown root:root "$REALIP_CONF"; chmod 0644 "$REALIP_CONF"
+
+  # Firewall inputs, for libreclinica-firewall (installed below).
+  ( umask 077
+    {
+      echo "# Written by setup-ubuntu-host.sh; read by /usr/local/sbin/libreclinica-firewall."
+      echo "ADMIN_CIDRS=${ADMIN_CIDRS}"
+      echo "DMZ_PROXY_CIDRS=${DMZ_PROXY_CIDRS}"
+      echo "SSH_PORT=${SSH_PORT}"
+    } >"$FW_CONF" )
+elif [[ "$IFACE_WAS_ON" == "1" ]]; then
+  warn "Leaving internet-facing mode: app-side switch off, edge include off, firewall removed."
+  warn "  LIBRECLINICA_BIND_ADDR stays 127.0.0.1 and the env file stays 0600; widen them by hand if the"
+  warn "  internal deployment needs a routable bind."
+  set_kv "$ENV_FILE" LIBRECLINICA_DEPLOYMENT_INTERNET_FACING false
+  sed -i '/^LIBRECLINICA_NGINX_\(EDGE\|REALIP\)_CONF=/d' "$ENV_FILE"
+fi
+
+# Backup settings, one file per host, read by the backup unit. Written in both
+# modes (empty values mean: database dump only, unencrypted, local only).
+( umask 077
+  {
+    echo "# Written by setup-ubuntu-host.sh; EnvironmentFile of libreclinica-backup-db.service."
+    echo "LIBRECLINICA_BACKUP_FILES=${LIBRECLINICA_BACKUP_FILES:-false}"
+    echo "BACKUP_AGE_RECIPIENT=${BACKUP_AGE_RECIPIENT}"
+    echo "BACKUP_RSYNC_TARGET=${BACKUP_RSYNC_TARGET}"
+  } >"$BACKUP_ENV" )
+
 # --dicom: profile on, and a shared secret minted once. An explicit non-empty
 # DICOM_SCP_INGEST_TOKEN already in the env file is kept - it may be the one
 # the app is configured with.
@@ -640,6 +911,10 @@ if [[ "${LIBRECLINICA_DICOM}" == "1" ]]; then
     log "Minted DICOM_SCP_INGEST_TOKEN in $ENV_FILE"
   fi
   log "DICOM sidecar enabled (COMPOSE_PROFILES=dicom)"
+  if [[ -z "$(get_kv "$ENV_FILE" DICOM_SCP_ALLOWED_CALLING_AE_TITLES)" ]]; then
+    warn "DICOM_SCP_ALLOWED_CALLING_AE_TITLES is not set in $ENV_FILE: the sidecar will accept an"
+    warn "  association from any caller that can reach port 11112. Set it to the camera's AE title."
+  fi
 fi
 DICOM_TOKEN="$(sed -n 's/^DICOM_SCP_INGEST_TOKEN=//p' "$ENV_FILE" | tail -1)"
 DICOM_PROFILE_ON=0
@@ -863,6 +1138,18 @@ if [[ -f "$DATAINFO_FILE" ]]; then
   else
     log "datainfo.properties sysURL already configured (off the localhost default) — leaving as-is"
   fi
+
+  # Session idle timeout (maxInactiveInterval, seconds). The shipped 3600 stays
+  # on the internal deployment; the internet-facing one gets 1800, re-asserted
+  # each run. Leaving the mode puts the shipped value back, but only if it is
+  # still the one this script set.
+  if [[ "$IFACE" == "1" ]]; then
+    set_kv "$DATAINFO_FILE" maxInactiveInterval "$LIBRECLINICA_SESSION_MAX_INACTIVE"
+    log "Set datainfo.properties maxInactiveInterval=${LIBRECLINICA_SESSION_MAX_INACTIVE} (internet-facing)"
+  elif [[ "$IFACE_WAS_ON" == "1" && "$(get_kv "$DATAINFO_FILE" maxInactiveInterval)" == "$LIBRECLINICA_SESSION_MAX_INACTIVE" ]]; then
+    set_kv "$DATAINFO_FILE" maxInactiveInterval 3600
+    log "Restored datainfo.properties maxInactiveInterval=3600"
+  fi
 else
   warn "  $DATAINFO_FILE not found — could not sync dbPass / mail config"
 fi
@@ -905,13 +1192,17 @@ if [[ "$DICOM_PROFILE_ON" == "1" ]]; then
   COMPOSE_SERVICES="${COMPOSE_SERVICES} dicom-scp"
   log "systemd unit will also start dicom-scp"
 fi
+# Internet-facing: the stack (and so the published 80/443) starts only after the
+# firewall unit has applied its rules.
+FW_UNIT_AFTER=""
+[[ "$IFACE" == "1" ]] && FW_UNIT_AFTER=" libreclinica-firewall.service"
 cat >/etc/systemd/system/libreclinica.service <<EOF
 [Unit]
 Description=LibreClinicaMUW compose stack
 Documentation=https://github.com/LuViKu/LibreClinicaMUW
-After=network-online.target docker.service
+After=network-online.target docker.service${FW_UNIT_AFTER}
 Requires=docker.service
-Wants=network-online.target
+Wants=network-online.target${FW_UNIT_AFTER}
 
 [Service]
 Type=oneshot
@@ -935,19 +1226,47 @@ log "Enabled libreclinica.service (start manually with: systemctl start librecli
 
 # ----------------------------- backup script + timer --------------------------
 
-section "Postgres backup"
+section "Backups (database, optionally file stores; optionally encrypted + off-host)"
 
 cat >/usr/local/sbin/libreclinica-backup-db <<'EOF'
 #!/usr/bin/env bash
-# Nightly pg_dump of the libreclinica database to /var/backups/libreclinica.
-# Retention is enforced by find -mtime; tune via the systemd timer's
-# environment if 30 days isn't the right window.
+# Nightly backup of LibreClinicaMUW into /var/backups/libreclinica:
+#
+#   libreclinica-<stamp>.sql.gz[.age]        pg_dump of the database (always)
+#   libreclinica-files-<stamp>.tar.gz[.age]  the file stores under
+#                                            /var/lib/libreclinica (e2e uploads,
+#                                            retinal artifacts, ingest, app-data)
+#                                            - only when LIBRECLINICA_BACKUP_FILES=true
+#
+# Settings arrive as environment from /etc/libreclinica/backup.env (written by
+# setup-ubuntu-host.sh):
+#   BACKUP_AGE_RECIPIENT   age public key. When set, every artefact is encrypted
+#                          to it (suffix .age) and never touches the disk in
+#                          clear. The private key must NOT be on this host.
+#   BACKUP_RSYNC_TARGET    user@host:/dir. When set, the artefacts of this run
+#                          are copied there after the local ones are written.
+#                          Needs BACKUP_AGE_RECIPIENT; remote retention is the
+#                          target's job.
+#   LIBRECLINICA_BACKUP_FILES  true to include the file stores.
+#   LIBRECLINICA_BACKUP_RETENTION_DAYS  local retention (find -mtime).
+#
+# Restore: see deploy/README.md "Restore from backup" (the .age variants are
+# decrypted with `age -d -i <private-key>` first).
 set -euo pipefail
+umask 077
 
 BACKUP_DIR=/var/backups/libreclinica
+STORE_ROOT=/var/lib/libreclinica
 RETENTION_DAYS=${LIBRECLINICA_BACKUP_RETENTION_DAYS:-30}
+AGE_RECIPIENT=${BACKUP_AGE_RECIPIENT:-}
+RSYNC_TARGET=${BACKUP_RSYNC_TARGET:-}
+WITH_FILES=${LIBRECLINICA_BACKUP_FILES:-false}
+# Stores worth keeping. Not postgres (the dump covers it), tomcat-logs, monitor
+# or home.
+STORES=(e2e-uploads retinal-artifacts retinal-inference ingest dicom-ingest app-data)
 STAMP=$(date +%Y%m%dT%H%M%S)
-DUMP_FILE="${BACKUP_DIR}/libreclinica-${STAMP}.sql.gz"
+SUFFIX=""
+rc=0
 
 mkdir -p "$BACKUP_DIR"
 
@@ -956,14 +1275,69 @@ if ! docker inspect libreclinica-muw-db-1 >/dev/null 2>&1; then
   exit 0
 fi
 
+if [[ -n "$AGE_RECIPIENT" ]]; then
+  command -v age >/dev/null || { echo "[backup] BACKUP_AGE_RECIPIENT is set but age is not installed" >&2; exit 1; }
+  SUFFIX=".age"
+elif [[ -n "$RSYNC_TARGET" ]]; then
+  echo "[backup] BACKUP_RSYNC_TARGET is set without BACKUP_AGE_RECIPIENT; refusing to copy plaintext off-host" >&2
+  exit 1
+fi
+
+# stdin -> stdout, encrypted when a recipient is configured.
+encrypt() { if [[ -n "$AGE_RECIPIENT" ]]; then age -r "$AGE_RECIPIENT"; else cat; fi; }
+
+# Every artefact is written under a .partial name and renamed once complete, so
+# an interrupted run never leaves a truncated file under a real name (the old
+# script left one, and the next restore would have used it).
+DUMP_FILE="${BACKUP_DIR}/libreclinica-${STAMP}.sql.gz${SUFFIX}"
+produced=("$DUMP_FILE")
+
 # pg_dump runs inside the container; gzip on the host so the file size
 # is what we actually keep on disk.
-docker exec libreclinica-muw-db-1 \
-  pg_dump --username=clinica --format=plain --no-owner --no-privileges libreclinica \
-  | gzip -9 > "$DUMP_FILE"
+if docker exec libreclinica-muw-db-1 \
+     pg_dump --username=clinica --format=plain --no-owner --no-privileges libreclinica \
+   | gzip -9 | encrypt > "${DUMP_FILE}.partial"; then
+  mv -f "${DUMP_FILE}.partial" "$DUMP_FILE"
+else
+  rm -f "${DUMP_FILE}.partial"
+  echo "[backup] pg_dump FAILED" >&2
+  exit 1
+fi
 
-chmod 0600 "$DUMP_FILE"
-chown libreclinica:libreclinica "$DUMP_FILE"
+if [[ "$WITH_FILES" == "true" ]]; then
+  FILES_FILE="${BACKUP_DIR}/libreclinica-files-${STAMP}.tar.gz${SUFFIX}"
+  present=()
+  for s in "${STORES[@]}"; do [[ -d "${STORE_ROOT}/${s}" ]] && present+=("$s"); done
+  if [[ ${#present[@]} -gt 0 ]]; then
+    # tar exits 1 for "a file changed while we read it" (the app is live); that
+    # is a warning here, anything higher is a failure.
+    if { tar --warning=no-file-changed -C "$STORE_ROOT" -cf - "${present[@]}" || [[ $? -eq 1 ]]; } \
+       | gzip -1 | encrypt > "${FILES_FILE}.partial"; then
+      mv -f "${FILES_FILE}.partial" "$FILES_FILE"
+      produced+=("$FILES_FILE")
+    else
+      rm -f "${FILES_FILE}.partial"
+      echo "[backup] file-store archive FAILED" >&2
+      rc=1
+    fi
+  fi
+fi
+
+for f in "${produced[@]}"; do
+  chmod 0600 "$f"
+  chown libreclinica:libreclinica "$f"
+done
+
+# Off-host copy of this run's artefacts. A failure is reported (unit goes red)
+# but does not remove the local copy.
+if [[ -n "$RSYNC_TARGET" ]]; then
+  if rsync -a --partial -e "ssh -o BatchMode=yes" "${produced[@]}" "${RSYNC_TARGET%/}/"; then
+    echo "[backup] copied ${#produced[@]} file(s) to ${RSYNC_TARGET}"
+  else
+    echo "[backup] rsync to ${RSYNC_TARGET} FAILED" >&2
+    rc=1
+  fi
+fi
 
 # Rotate.
 #
@@ -974,32 +1348,38 @@ chown libreclinica:libreclinica "$DUMP_FILE"
 # in place, 100 days into a 30-day window. The logrotate stanza is gone
 # (see the Logrotate section below), and the trailing '*' lets this prune
 # clean up the already-renamed backlog on the next run instead of leaving
-# it stranded forever.
-find "$BACKUP_DIR" -name 'libreclinica-*.sql.gz*' -mtime +"$RETENTION_DAYS" -delete
+# it stranded forever. The same trailing '*' covers the .age suffix and any
+# stale .partial left by a killed run.
+find "$BACKUP_DIR" \( -name 'libreclinica-*.sql.gz*' -o -name 'libreclinica-files-*.tar.gz*' \) \
+  -mtime +"$RETENTION_DAYS" -delete
 
-# Surface size to journald so `journalctl -u libreclinica-backup-db.service`
-# tells the operator at a glance whether the dump shrank suspiciously.
-size_bytes=$(stat -c '%s' "$DUMP_FILE")
-size_human=$(numfmt --to=iec --suffix=B "$size_bytes")
-echo "[backup] $(basename "$DUMP_FILE") (${size_human})"
+# Surface sizes to journald so `journalctl -u libreclinica-backup-db.service`
+# tells the operator at a glance whether a dump shrank suspiciously.
+for f in "${produced[@]}"; do
+  size_human=$(numfmt --to=iec --suffix=B "$(stat -c '%s' "$f")")
+  echo "[backup] $(basename "$f") (${size_human})"
+done
+exit "$rc"
 EOF
 chmod 0755 /usr/local/sbin/libreclinica-backup-db
 
 cat >/etc/systemd/system/libreclinica-backup-db.service <<EOF
 [Unit]
-Description=LibreClinicaMUW nightly pg_dump
+Description=LibreClinicaMUW nightly backup
 After=libreclinica.service
 Requires=libreclinica.service
 
 [Service]
 Type=oneshot
 Environment=LIBRECLINICA_BACKUP_RETENTION_DAYS=${LIBRECLINICA_BACKUP_RETENTION_DAYS}
+# File-store archiving, age encryption and the off-host copy; written above.
+EnvironmentFile=-${BACKUP_ENV}
 ExecStart=/usr/local/sbin/libreclinica-backup-db
 EOF
 
 cat >/etc/systemd/system/libreclinica-backup-db.timer <<'EOF'
 [Unit]
-Description=LibreClinicaMUW nightly pg_dump (03:00 local + random 30 min jitter)
+Description=LibreClinicaMUW nightly backup (03:00 local + random 30 min jitter)
 
 [Timer]
 OnCalendar=*-*-* 03:00:00
@@ -1014,6 +1394,11 @@ EOF
 systemctl daemon-reload
 systemctl enable --now libreclinica-backup-db.timer >/dev/null
 log "Enabled libreclinica-backup-db.timer (next run: $(systemctl show libreclinica-backup-db.timer -p NextElapseUSecRealtime --value 2>/dev/null || echo 'unknown'))"
+if [[ -n "$BACKUP_AGE_RECIPIENT" ]]; then
+  log "Backups are age-encrypted to ${BACKUP_AGE_RECIPIENT:0:12}...; file stores: ${LIBRECLINICA_BACKUP_FILES:-false}; off-host: ${BACKUP_RSYNC_TARGET:-<none>}"
+else
+  log "Backups are NOT encrypted (no BACKUP_AGE_RECIPIENT); file stores: ${LIBRECLINICA_BACKUP_FILES:-false}"
+fi
 
 # ----------------------------- cluster monitor --------------------------------
 
@@ -1109,6 +1494,171 @@ cat >/etc/logrotate.d/libreclinica <<EOF
 }
 EOF
 
+# ----------------------------- host firewall (internet-facing) ----------------
+
+section "Host firewall"
+
+if [[ "$IFACE" == "1" ]]; then
+  # Two chains, kept apart from Docker's own and from anything the campus admins
+  # add, so the whole thing is reversible with `libreclinica-firewall remove`:
+  #   LIBRECLINICA-IN   hooked first in INPUT        -> SSH from ADMIN_CIDRS only
+  #   LIBRECLINICA-FWD  hooked first in DOCKER-USER  -> from outside, only
+  #                     published 80/443 (optionally only from DMZ_PROXY_CIDRS)
+  # Docker publishes ports with DNAT, so published-port traffic never reaches
+  # INPUT; DOCKER-USER (FORWARD, after DNAT) is the only place a rule can stop
+  # it, and matches the ORIGINAL destination port with conntrack.
+  cat >/usr/local/sbin/libreclinica-firewall <<'EOF'
+#!/usr/bin/env bash
+# libreclinica-firewall apply|remove|status  (written by setup-ubuntu-host.sh)
+# Inputs: /etc/libreclinica/firewall.conf  (ADMIN_CIDRS, DMZ_PROXY_CIDRS, SSH_PORT)
+set -euo pipefail
+
+CONF=/etc/libreclinica/firewall.conf
+IN=LIBRECLINICA-IN
+FWD=LIBRECLINICA-FWD
+
+[[ -r "$CONF" ]] || { echo "libreclinica-firewall: $CONF missing" >&2; exit 1; }
+ADMIN_CIDRS="$(sed -n 's/^ADMIN_CIDRS=//p' "$CONF" | tail -1)"
+DMZ_PROXY_CIDRS="$(sed -n 's/^DMZ_PROXY_CIDRS=//p' "$CONF" | tail -1)"
+SSH_PORT="$(sed -n 's/^SSH_PORT=//p' "$CONF" | tail -1)"
+SSH_PORT="${SSH_PORT:-22}"
+
+# Entries of a comma list that belong to one IP family ("4" or "6").
+family_of() { case "$1" in *:*) echo 6 ;; *) echo 4 ;; esac; }
+cidrs_for() { # list family
+  local c
+  [[ -n "$1" ]] || return 0
+  IFS=',' read -ra _l <<<"$1"
+  for c in "${_l[@]}"; do [[ -n "$c" && "$(family_of "$c")" == "$2" ]] && echo "$c"; done
+  return 0
+}
+
+unhook() { # cmd chain-name parent
+  while "$1" -C "$3" -j "$2" 2>/dev/null; do "$1" -D "$3" -j "$2"; done
+}
+
+remove_family() {
+  local cmd=$1
+  command -v "$cmd" >/dev/null || return 0
+  unhook "$cmd" "$IN" INPUT
+  "$cmd" -L DOCKER-USER >/dev/null 2>&1 && unhook "$cmd" "$FWD" DOCKER-USER
+  for ch in "$IN" "$FWD"; do
+    if "$cmd" -L "$ch" >/dev/null 2>&1; then "$cmd" -F "$ch"; "$cmd" -X "$ch"; fi
+  done
+}
+
+apply_family() {
+  local cmd=$1 fam=$2 c
+  command -v "$cmd" >/dev/null || { echo "libreclinica-firewall: $cmd not found, skipping IPv$fam" >&2; return 0; }
+  local icmp=icmp; [[ "$fam" == "6" ]] && icmp=ipv6-icmp
+
+  # ---- INPUT: the host's own services (SSH) ----
+  "$cmd" -N "$IN" 2>/dev/null || "$cmd" -F "$IN"
+  "$cmd" -A "$IN" -i lo -j ACCEPT
+  "$cmd" -A "$IN" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  "$cmd" -A "$IN" -p "$icmp" -j ACCEPT
+  "$cmd" -A "$IN" -i docker0 -j ACCEPT
+  "$cmd" -A "$IN" -i 'br-+' -j ACCEPT
+  while read -r c; do
+    [[ -n "$c" ]] && "$cmd" -A "$IN" -p tcp --dport "$SSH_PORT" -s "$c" -j ACCEPT
+  done < <(cidrs_for "$ADMIN_CIDRS" "$fam")
+  # 80/443 as seen by INPUT (only matters if a docker-proxy ever terminates them
+  # on the host); same source restriction as the forwarded path below.
+  if [[ -n "$DMZ_PROXY_CIDRS" ]]; then
+    while read -r c; do
+      [[ -n "$c" ]] && "$cmd" -A "$IN" -p tcp -m multiport --dports 80,443 -s "$c" -j ACCEPT
+    done < <(cidrs_for "$DMZ_PROXY_CIDRS" "$fam")
+  else
+    "$cmd" -A "$IN" -p tcp -m multiport --dports 80,443 -j ACCEPT
+  fi
+  if [[ "$fam" == "4" ]]; then "$cmd" -A "$IN" -p udp --dport 68 -j ACCEPT   # DHCP client
+  else "$cmd" -A "$IN" -p udp --dport 546 -j ACCEPT; fi
+  "$cmd" -A "$IN" -j DROP
+  "$cmd" -C INPUT -j "$IN" 2>/dev/null || "$cmd" -I INPUT 1 -j "$IN"
+
+  # ---- DOCKER-USER: traffic forwarded to containers ----
+  if ! "$cmd" -L DOCKER-USER >/dev/null 2>&1; then
+    echo "libreclinica-firewall: no DOCKER-USER chain for IPv$fam (docker not running / ip6tables off): FORWARD filter skipped" >&2
+    return 0
+  fi
+  "$cmd" -N "$FWD" 2>/dev/null || "$cmd" -F "$FWD"
+  "$cmd" -A "$FWD" -i docker0 -j RETURN          # container-originated
+  "$cmd" -A "$FWD" -i 'br-+' -j RETURN
+  "$cmd" -A "$FWD" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+  for port in 443 80; do
+    if [[ -n "$DMZ_PROXY_CIDRS" ]]; then
+      while read -r c; do
+        [[ -n "$c" ]] && "$cmd" -A "$FWD" -p tcp -m conntrack --ctorigdstport "$port" -s "$c" -j RETURN
+      done < <(cidrs_for "$DMZ_PROXY_CIDRS" "$fam")
+    else
+      "$cmd" -A "$FWD" -p tcp -m conntrack --ctorigdstport "$port" -j RETURN
+    fi
+  done
+  "$cmd" -A "$FWD" -j DROP
+  "$cmd" -C DOCKER-USER -j "$FWD" 2>/dev/null || "$cmd" -I DOCKER-USER 1 -j "$FWD"
+}
+
+case "${1:-}" in
+  apply)
+    apply_family iptables 4
+    apply_family ip6tables 6
+    echo "libreclinica-firewall: applied (SSH ${SSH_PORT} from ${ADMIN_CIDRS:-nobody}; 80/443 from ${DMZ_PROXY_CIDRS:-anywhere})"
+    ;;
+  remove)
+    remove_family iptables
+    remove_family ip6tables
+    echo "libreclinica-firewall: removed"
+    ;;
+  status)
+    for cmd in iptables ip6tables; do
+      command -v "$cmd" >/dev/null || continue
+      echo "== $cmd"
+      for ch in "$IN" "$FWD"; do "$cmd" -S "$ch" 2>/dev/null || echo "(no $ch)"; done
+      "$cmd" -S INPUT | grep -- "-j $IN" || echo "(INPUT does not jump to $IN)"
+      "$cmd" -S DOCKER-USER 2>/dev/null | grep -- "-j $FWD" || echo "(DOCKER-USER does not jump to $FWD)"
+    done
+    ;;
+  *) echo "usage: libreclinica-firewall apply|remove|status" >&2; exit 2 ;;
+esac
+EOF
+  chmod 0755 /usr/local/sbin/libreclinica-firewall
+
+  cat >/etc/systemd/system/libreclinica-firewall.service <<'EOF'
+[Unit]
+Description=LibreClinicaMUW host firewall (INPUT + DOCKER-USER)
+Documentation=file:///opt/libreclinica/deploy/README.md
+After=network-pre.target docker.service
+Requires=docker.service
+# Re-applied whenever Docker restarts, in case it rebuilt its chains.
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/libreclinica-firewall apply
+ExecStop=/usr/local/sbin/libreclinica-firewall remove
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable libreclinica-firewall.service >/dev/null
+  # restart (not start): picks up a changed firewall.conf on a re-run.
+  systemctl restart libreclinica-firewall.service
+  log "Firewall active: SSH ${SSH_PORT} from ${ADMIN_CIDRS}; 80/443 from ${DMZ_PROXY_CIDRS:-ANYWHERE}; everything else dropped"
+  log "  Persisted: libreclinica-firewall.service (re-applied at boot and after a Docker restart)"
+  log "  Inspect: libreclinica-firewall status   Remove: systemctl disable --now libreclinica-firewall"
+elif [[ -f /etc/systemd/system/libreclinica-firewall.service ]]; then
+  # Left the mode (INTERNET_FACING=false on a host that had it): take the rules out.
+  systemctl disable --now libreclinica-firewall.service >/dev/null 2>&1 || true
+  [[ -x /usr/local/sbin/libreclinica-firewall ]] && /usr/local/sbin/libreclinica-firewall remove || true
+  rm -f /etc/systemd/system/libreclinica-firewall.service
+  systemctl daemon-reload
+  log "Removed the internet-facing firewall (libreclinica-firewall.service)"
+else
+  log "Internal mode: no host firewall (the campus perimeter is the control)"
+fi
+
 # ----------------------------- summary ----------------------------------------
 
 section "Summary"
@@ -1131,9 +1681,28 @@ Next steps:
         sudo journalctl -u libreclinica -f
      and the Tomcat log:
         sudo docker logs -f libreclinica-muw-libreclinica-1
-  5. From a host on the MUW internal network, confirm:
-        curl -I http://<vm-ip>:${LIBRECLINICA_HOST_PORT}/LibreClinica/
-  6. Wire the institutional reverse proxy to forward HTTPS → http://<vm-ip>:${LIBRECLINICA_HOST_PORT}.
-  7. Verify the backup timer fires tonight:
+  5. Put the TLS certificate and key in /etc/libreclinica/tls (see
+     deploy/nginx/README.md); the nginx sidecar terminates HTTPS on 80/443.
+     From a host that may reach it, confirm:
+        curl -Ik https://<fqdn>/login
+  6. Verify the backup timer fires tonight:
         systemctl list-timers libreclinica-backup-db.timer
 EOF
+
+if [[ "$IFACE" == "1" ]]; then
+  cat <<EOF
+
+INTERNET-FACING mode is ON (this host is meant to sit behind the MUW DMZ proxy):
+  - Firewall: SSH ${SSH_PORT} from ${ADMIN_CIDRS}; 80/443 from ${DMZ_PROXY_CIDRS:-ANYWHERE (set DMZ_PROXY_CIDRS!)}.
+      libreclinica-firewall status | systemctl disable --now libreclinica-firewall
+  - App: LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true, session idle timeout ${LIBRECLINICA_SESSION_MAX_INACTIVE}s,
+    port 8080 bound to 127.0.0.1, no DICOM sidecar.
+  - nginx: deploy/nginx/internet-facing.conf is included (404 for actuator, Swagger,
+    public/internal/device APIs and the public portal pages).
+  - Backups: age-encrypted to ${BACKUP_AGE_RECIPIENT:0:12}..., file stores included,
+    off-host copy: ${BACKUP_RSYNC_TARGET:-none}.
+Before go-live run the checklist in deploy/README.md
+(§ "Internet-facing (multicenter) deployment"), including a restore test of an
+encrypted backup with the PRIVATE key from its safe place.
+EOF
+fi
