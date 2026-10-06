@@ -8,6 +8,11 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.util.List;
+
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -31,7 +36,9 @@ import org.springframework.stereotype.Component;
  * {@link DeidUploadGate}.
  */
 @Component
-public class DeidentificationPolicy {
+public class DeidentificationPolicy implements org.springframework.beans.factory.InitializingBean {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DeidentificationPolicy.class);
 
     public static final String PROPERTY = "libreclinica.ingest.deidentification.required";
 
@@ -41,6 +48,23 @@ public class DeidentificationPolicy {
             @Value("${libreclinica.ingest.deidentification.required:${libreclinica.deployment.internet-facing:false}}")
             boolean required) {
         this.required = required;
+    }
+
+    /** The ingest paths the mode closes, for the one startup line. */
+    static final List<String> CLOSED_PATHS = List.of(
+            "account-less upload portals (/public/upload, /public/oct-upload, /public/image-upload)",
+            "DICOM C-STORE hand-off (/internal/dicom-ingest)",
+            "Remidio pull scheduler and its manual trigger",
+            "direct OCT upload (/event-crfs/{id}/oct-upload)",
+            "CRF item file upload (/eventCrfs/{id}/items/{oid}/file)");
+
+    /** Once, at startup: which ingest paths this mode switched off. */
+    @Override
+    public void afterPropertiesSet() {
+        if (required) {
+            LOG.warn("De-identification is required ({}): staff upload takes only verified E2E and DICOM; "
+                    + "closed ingest paths: {}", PROPERTY, String.join("; ", CLOSED_PATHS));
+        }
     }
 
     public boolean isRequired() {

@@ -301,9 +301,32 @@ public class SecurityConfig {
      */
     static Customizer<AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry>
             authorization(boolean internetFacing, boolean ssoEnabled) {
+        return authorization(internetFacing, ssoEnabled, false);
+    }
+
+    /**
+     * Paths that take a file in without a session. Closed whenever
+     * {@code libreclinica.ingest.deidentification.required} is on, whether or
+     * not the deployment is internet-facing: nothing unverified gets in. The
+     * DICOM C-STORE hand-off is the sidecar's way of filing a camera's file
+     * unchecked.
+     */
+    public static final String[] DEIDENTIFICATION_CLOSED_PATHS = {
+            "/pages/api/v1/public/upload/**",
+            "/pages/api/v1/public/oct-upload/**",
+            "/pages/api/v1/public/image-upload/**",
+            "/pages/api/v1/internal/dicom-ingest",
+            "/pages/api/v1/internal/dicom-ingest/**",
+    };
+
+    static Customizer<AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry>
+            authorization(boolean internetFacing, boolean ssoEnabled, boolean deidRequired) {
         return auth -> {
             if (internetFacing) {
                 auth.requestMatchers(antPaths(internetFacingDeniedPaths(ssoEnabled))).denyAll();
+            }
+            if (deidRequired) {
+                auth.requestMatchers(antPaths(DEIDENTIFICATION_CLOSED_PATHS)).denyAll();
             }
             auth.requestMatchers(antPaths(PUBLIC_PATHS)).permitAll()
                 .anyRequest().hasRole("USER");
@@ -349,6 +372,11 @@ public class SecurityConfig {
             // Second, internet-facing deployment: closes the portals, device
             // APIs and operational endpoints. Off for the internal deployment.
             @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing,
+            // Every upload must be verified as de-identified: closes the
+            // account-less upload routes and the DICOM C-STORE hand-off
+            // whether or not the deployment is internet-facing.
+            @Value("${libreclinica.ingest.deidentification.required:${libreclinica.deployment.internet-facing:false}}")
+                    boolean deidRequired,
             @Qualifier("failureHandler") SpaLoginFailureHandler failureHandler) throws Exception {
         // One failure for every cause when internet-facing (see the handler).
         failureHandler.setInternetFacing(internetFacing);
@@ -388,7 +416,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .anonymous(_ -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
-            .authorizeHttpRequests(authorization(internetFacing, ssoProperties.isEnabled()))
+            .authorizeHttpRequests(authorization(internetFacing, ssoProperties.isEnabled(), deidRequired))
             .addFilterBefore(publicOctUploadRateLimitFilter, ChannelProcessingFilter.class)
             .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
@@ -408,6 +436,9 @@ public class SecurityConfig {
         if (internetFacing) {
             http.addFilterBefore(
                     new InternetFacingPathBlockFilter(internetFacingDeniedPaths(ssoProperties.isEnabled())),
+                    PublicOctUploadRateLimitFilter.class);
+        } else if (deidRequired) {
+            http.addFilterBefore(new InternetFacingPathBlockFilter(DEIDENTIFICATION_CLOSED_PATHS),
                     PublicOctUploadRateLimitFilter.class);
         }
 

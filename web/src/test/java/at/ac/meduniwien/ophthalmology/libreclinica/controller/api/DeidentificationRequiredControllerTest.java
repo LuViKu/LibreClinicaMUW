@@ -121,6 +121,44 @@ class DeidentificationRequiredControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    /* ---------------- server-initiated ingest ---------------- */
+
+    @Test
+    void theDicomCStoreHandoffRefusesWhenRequiredBeforeLookingAtTheToken() throws Exception {
+        javax.sql.DataSource ds = mockDataSource();
+        DicomIngestApiController c = new DicomIngestApiController(ds);
+        c.setDeidentificationPolicy(DeidentificationPolicy.of(true));
+        mockMvcFor(c).perform(post("/api/v1/internal/dicom-ingest")
+                .contentType("application/json")
+                .header("X-MUW-Dicom-Token", "anything")
+                .content("{\"sopInstanceUid\":\"1.2\",\"dicomPath\":\"/x.dcm\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DEID_REQUIRED"));
+        Mockito.verifyNoInteractions(ds);
+    }
+
+    @Test
+    void theRemidioPullDoesNotRunAndItsManualTriggerIsRefusedWhenRequired() {
+        RemidioPullScheduler s = new RemidioPullScheduler(mockDataSource());
+        s.setDeidentificationPolicy(DeidentificationPolicy.of(true));
+        assertTrue(s.pullClosed());
+        assertTrue(s.runOnce().isEmpty());
+        assertTrue(s.lastError().contains("de-identification is required"));
+        assertFalse(s.lastSuccess().isPresent());
+
+        RemidioPullScheduler internal = new RemidioPullScheduler(mockDataSource());
+        assertFalse(internal.pullClosed(), "no policy: the internal deployment is unchanged");
+        internal.setDeidentificationPolicy(DeidentificationPolicy.of(false));
+        assertFalse(internal.pullClosed());
+    }
+
+    @Test
+    void theClosedPathsAreNamedForTheStartupLine() {
+        assertTrue(DeidentificationPolicy.CLOSED_PATHS.stream().anyMatch(p -> p.contains("Remidio")));
+        assertTrue(DeidentificationPolicy.CLOSED_PATHS.stream().anyMatch(p -> p.contains("C-STORE")));
+        assertTrue(DeidentificationPolicy.CLOSED_PATHS.stream().anyMatch(p -> p.contains("account-less")));
+    }
+
     @Test
     void theStaffRouteWithoutAPolicyBehavesAsBefore() {
         // a hand-built controller (every pre-existing test) has no policy: not required
