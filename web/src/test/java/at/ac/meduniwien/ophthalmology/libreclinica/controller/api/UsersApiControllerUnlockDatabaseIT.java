@@ -163,6 +163,28 @@ class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT
         }
     }
 
+    /**
+     * lc-muw-2026-10-06-account-lockout.xml: a fresh database (seeded switch
+     * FALSE / threshold 3) comes out with lockout on and five attempts.
+     */
+    @Test
+    void migrationEnablesAccountLockoutOnAFreshDatabase() throws Exception {
+        try (Connection conn = DATA_SOURCE.getConnection();
+             Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT value FROM configuration WHERE key = 'user.lock.switch'")) {
+                org.junit.jupiter.api.Assertions.assertTrue(rs.next());
+                org.junit.jupiter.api.Assertions.assertEquals("TRUE", rs.getString(1));
+            }
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT value FROM configuration "
+                    + "WHERE key = 'user.lock.allowedFailedConsecutiveLoginAttempts'")) {
+                org.junit.jupiter.api.Assertions.assertTrue(rs.next());
+                org.junit.jupiter.api.Assertions.assertEquals("5", rs.getString(1));
+            }
+        }
+    }
+
     @Test
     void unlockReturns409WhenAccountAlreadyUnlocked() throws Exception {
         // Pre-state correction: undo the BeforeEach lock for this test
