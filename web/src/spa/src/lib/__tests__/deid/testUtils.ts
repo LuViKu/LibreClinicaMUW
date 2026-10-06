@@ -158,6 +158,23 @@ export function fundusChunk(width = 8, height = 6): ChunkSpec {
   return { type: TYPE_IMAGE, patientDbId: 7, studyId: 30, seriesId: 300, ind: 0, payload }
 }
 
+/** An image chunk (ind 0 = 8-bit SLO, ind 1 = 16-bit B-scan) with pseudo-random pixels and optional planted bytes. */
+export function imageChunk(ind: 0 | 1, width: number, height: number, planted: Uint8Array[] = []): ChunkSpec {
+  const bpp = ind === 0 ? 1 : 2
+  const payload = new Uint8Array(20 + width * height * bpp)
+  const dv = new DataView(payload.buffer)
+  dv.setUint32(0, width * height * bpp, true)
+  dv.setUint32(12, height, true)
+  dv.setUint32(16, width, true)
+  let s = 12345
+  for (let i = 20; i < payload.length; i++) {
+    s = (Math.imul(s, 1103515245) + 12345) >>> 0
+    payload[i] = s >>> 24
+  }
+  planted.forEach((p, k) => payload.set(p, 20 + 1000 + k * 997))
+  return { type: TYPE_IMAGE, patientDbId: 7, studyId: 30, seriesId: 301, ind, payload }
+}
+
 /** A standard OD volume + patient chunk + optional extra chunks. */
 export function e2eWith(patient: PatientFields, extra: ChunkSpec[] = []): Uint8Array {
   return assembleE2e([

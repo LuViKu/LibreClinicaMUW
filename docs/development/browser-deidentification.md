@@ -25,7 +25,7 @@ The file length does not change and no other byte changes. The label must be pri
 
 **Kept on purpose: the chunk header's `patient_db_id`.** It is a numeric internal database key of the acquisition software; volume grouping `(patient_db_id, study_id, series_id)` needs it, and it is neither a name, a hospital ID nor a date.
 
-Known limits: other chunks that `oct_converter` or Heidelberg tools may fill with operator or exam text (for example the operator login in the type-10 acquisition-info chunk) are not rewritten. They are covered only by the residual sweep when they repeat a patient value.
+**Not rewritten: operator/exam text in other chunks.** Only chunk type 9 is rewritten. Chunks that may carry operator or exam text (for example the operator login in the type-10 acquisition-info chunk) are left as they are. They are covered only by the residual sweep, and only when they repeat a patient value. Whether any such chunk holds patient-identifying text in real Spectralis exports is still to be checked against real sample files.
 
 ## DICOM
 
@@ -35,7 +35,7 @@ dcmjs (MIT, lazy-loaded, about 0.7 MB minified) reads and writes the object. The
 
 Before stripping, the original identifying strings are collected (E2E: first name, surname, patient_id, title; DICOM: PatientName components, PatientID, OtherPatientIDs, OtherPatientNames, PatientBirthName, PatientMotherBirthName, PatientBirthDate). Values shorter than 3 characters and values equal to the label are ignored. After stripping, the entire output is searched for each value as single-byte, UTF-8 and UTF-16LE, letters compared case-insensitively. Any hit refuses the upload; the message names the file, never the value.
 
-A consequence: a 3-4 character identifier can by chance occur in the pixel data of a very large file and cause a false refusal. That fails closed.
+**Pixel payloads are excluded from the sweep.** High-entropy pixel data contains any 3-character string by chance many times in a few hundred MB, so searching it would refuse good files. E2E: the pixel bytes of image chunks (type 0x40000000, ind 0 8-bit and ind 1 16-bit) are skipped; the chunk header, the 20-byte image struct, every other chunk and the directory are swept. DICOM: the values of PixelData, FloatPixelData and DoubleFloatPixelData (top level) are skipped; everything else is swept. If the pixel regions cannot be located the sweep covers the whole file (it can only refuse more). Text inside the pixels is burned-in annotation, covered by the preview and confirmation, which no byte search can replace.
 
 ## Matching and what is sent
 
@@ -43,7 +43,7 @@ The header patient ID (E2E: the `patient_id` slot only, no surname/first-name fa
 
 ## Confirmation
 
-Each file shows a preview (E2E: the SLO image, else the first B-scan; DICOM: the first frame for native and JPEG-baseline data, otherwise a notice that no preview is possible). The operator ticks "no patient name or ID visible in the image" per file (or once for the batch with all previews visible). The commit carries `deidConfirmed=true` and `deidSha256=<hex of the stripped bytes>`; the server verifies the hash against the bytes it received.
+Each file shows a preview (E2E: the SLO image, else the first B-scan; DICOM: the first frame; native and JPEG-baseline data are rendered in the worker, JPEG 2000, JPEG-LS, JPEG lossless, HTJ2K and RLE on the main thread with the codecs of `@cornerstonejs/dicom-image-loader`; a notice is shown only if decoding fails). The operator ticks "no patient name or ID visible in the image" per file (or once for the batch with all previews visible). The commit carries `deidConfirmed=true` and `deidSha256=<hex of the stripped bytes>`; the server verifies the hash against the bytes it received.
 
 ## Fail-closed and memory
 

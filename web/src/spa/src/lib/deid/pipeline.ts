@@ -12,8 +12,8 @@
 import { DeidError } from './errors'
 import { parseE2eBytes, type E2eScan } from '../e2eParser'
 import { hintsFromBytes, type DicomHints } from '../dicomHeader'
-import { extractE2ePreview, readE2eIdentity, stripE2e, type RawPreview } from './e2eDeidentify'
-import { extractDicomPreview, readDicom, stripDicom } from './dicomDeidentify'
+import { e2ePixelRanges, extractE2ePreview, readE2eIdentity, stripE2e, type RawPreview } from './e2eDeidentify'
+import { dicomPixelRanges, extractDicomPreview, previewPathFor, readDicom, stripDicom } from './dicomDeidentify'
 import { downscale } from './preview'
 import { sweepCandidates, sweepFindsResidual } from './sweep'
 
@@ -33,6 +33,8 @@ export interface AnalyzeResult {
   hints: DicomHints | null
   /** Preview, null when none can be rendered. */
   preview: RawPreview | null
+  /** DICOM whose transfer syntax only Cornerstone's codecs decode: the caller renders it on the main thread. */
+  needsCornerstone?: boolean
 }
 
 export interface DeidResult {
@@ -69,7 +71,13 @@ export async function analyzeFile(file: File, kind: DeidKind): Promise<AnalyzeRe
   if (read.burnedIn) throw new DeidError('burnedIn')
   const hints = await hintsFromBytes(new Uint8Array(buf))
   const raw = await extractDicomPreview(read)
-  return { kind, headerPatientId: read.patientId, scans: [], hints, preview: raw ? downscale(raw) : null }
+  // Nothing rendered here (JPEG 2000, JPEG-LS, RLE …): the main thread tries
+  // Cornerstone's codecs, which need a window and so cannot run in the worker.
+  const needsCornerstone = raw === null && previewPathFor(read.transferSyntax) === 'cornerstone'
+  return {
+    kind, headerPatientId: read.patientId, scans: [], hints,
+    preview: raw ? downscale(raw) : null, needsCornerstone,
+  }
 }
 
 /**
@@ -81,13 +89,13 @@ export async function deidentifyFile(file: File, kind: DeidKind, label: string):
   if (kind === 'e2e') {
     const u8 = new Uint8Array(buf)
     const { identifiers } = stripE2e(u8, label)
-    if (sweepFindsResidual(u8, sweepCandidates(identifiers, label))) throw new DeidError('residual')
+    if (sweepFindsResidual(u8, sweepCandidates(identifiers, label), e2ePixelRanges(u8))) throw new DeidError('residual')
     const sha256 = await sha256Hex(u8)
     return { blob: new Blob([u8 as BlobPart], { type: 'application/octet-stream' }), sha256, size: u8.length }
   }
   const { output, identifiers } = await stripDicom(buf, label)
   const u8 = new Uint8Array(output)
-  if (sweepFindsResidual(u8, sweepCandidates(identifiers, label))) throw new DeidError('residual')
+  if (sweepFindsResidual(u8, sweepCandidates(identifiers, label), await dicomPixelRanges(u8))) throw new DeidError('residual')
   const sha256 = await sha256Hex(u8)
   return { blob: new Blob([u8 as BlobPart], { type: 'application/dicom' }), sha256, size: u8.length }
 }

@@ -10,10 +10,11 @@ import dcmjs from 'dcmjs'
 
 import { deidentifyFile, analyzeFile } from '../../deid/pipeline'
 import {
-  DICOM_DEIDENTIFICATION_METHOD, extractDicomPreview, pixelFingerprint, readDicom, stripDicom,
+  DICOM_DEIDENTIFICATION_METHOD, dicomPixelRanges, extractDicomPreview, pixelFingerprint, previewPathFor, readDicom, stripDicom,
   type DicomDataset,
 } from '../../deid/dicomDeidentify'
 import { DeidError } from '../../deid/errors'
+import { pixelsToRaw } from '../../deid/cornerstonePreview'
 import { asFile, fileBytes } from './testUtils'
 
 const { DicomMessage, DicomDict } = (dcmjs as unknown as {
@@ -246,6 +247,30 @@ describe('deidentifyFile (dicom) — sweep and hash', () => {
     await expect(deidentifyFile(asFile(asBytes(buf)), 'dicom', LABEL)).rejects.toMatchObject({ code: 'residual' })
   })
 
+  it('does NOT refuse when the name bytes occur inside the pixel data (native and encapsulated)', async () => {
+    const px = new Uint8Array(2 * 1024 * 1024)
+    let s = 99
+    for (let i = 0; i < px.length; i++) { s = (Math.imul(s, 1103515245) + 12345) >>> 0; px[i] = s >>> 24 }
+    px.set(new TextEncoder().encode('Mustermann'), 5000)
+    px.set(new TextEncoder().encode('MRN-778899'), 9000)
+    px.set(new TextEncoder().encode('Max'), 12000)
+    const native = buildDicom({ pixel: [px.buffer.slice(0)] })
+    expect(await dicomPixelRanges(asBytes(native))).toHaveLength(1)
+    await expect(deidentifyFile(asFile(asBytes(native)), 'dicom', LABEL)).resolves.toBeDefined()
+
+    const frag = new Uint8Array([0xff, 0xd8, ...px.subarray(0, 4096), 0xff, 0xd9])
+    frag.set(new TextEncoder().encode('Mustermann'), 100)
+    const enc = buildDicom({ syntax: '1.2.840.10008.1.2.4.50', pixel: [frag.buffer.slice(0)] })
+    expect(await dicomPixelRanges(asBytes(enc))).toHaveLength(1)
+    await expect(deidentifyFile(asFile(asBytes(enc)), 'dicom', LABEL)).resolves.toBeDefined()
+  })
+
+  it('still refuses the name in any non-pixel element, even with a big pixel region present', async () => {
+    const px = new Uint8Array(1024 * 1024).fill(7)
+    const buf = buildDicom({ pixel: [px.buffer], extra: { '00080094': { vr: 'SH', Value: ['MUSTERMANN'] } } })
+    await expect(deidentifyFile(asFile(asBytes(buf)), 'dicom', LABEL)).rejects.toMatchObject({ code: 'residual' })
+  })
+
   it('refuses burned-in annotation before anything is produced', async () => {
     await expect(deidentifyFile(asFile(asBytes(buildDicom({ burnedIn: 'YES' }))), 'dicom', LABEL))
       .rejects.toMatchObject({ code: 'burnedIn' })
@@ -266,9 +291,30 @@ describe('analyze (dicom)', () => {
     await expect(analyzeFile(asFile(asBytes(buildDicom({ burnedIn: 'YES' }))), 'dicom')).rejects.toMatchObject({ code: 'burnedIn' })
   })
 
-  it('has no preview for a transfer syntax it cannot decode (the UI shows a notice)', async () => {
+  it('does not render JPEG 2000 here, and asks the main thread to decode it with Cornerstone', async () => {
     const buf = buildDicom({ syntax: '1.2.840.10008.1.2.4.90', pixel: [new Uint8Array([1, 2, 3, 4]).buffer] })
     const read = await readDicom(buf)
     expect(await extractDicomPreview(read)).toBeNull()
+    const a = await analyzeFile(asFile(asBytes(buf)), 'dicom')
+    expect(a.preview).toBeNull()
+    expect(a.needsCornerstone).toBe(true)
+  })
+
+  it('chooses the decode path by transfer syntax', () => {
+    expect(previewPathFor('1.2.840.10008.1.2.1')).toBe('native')
+    expect(previewPathFor('1.2.840.10008.1.2')).toBe('native')
+    expect(previewPathFor('1.2.840.10008.1.2.4.50')).toBe('jpegBaseline')
+    for (const ts of ['1.2.840.10008.1.2.4.90', '1.2.840.10008.1.2.4.91', '1.2.840.10008.1.2.4.80', '1.2.840.10008.1.2.4.81', '1.2.840.10008.1.2.4.70', '1.2.840.10008.1.2.5', '1.2.840.10008.1.2.4.201']) {
+      expect(previewPathFor(ts), ts).toBe('cornerstone')
+    }
+    expect(previewPathFor('1.2.840.10008.1.2.4.100')).toBe('none') // MPEG2: no still frame to show
+  })
+
+  it('converts Cornerstone pixel arrays: RGBA, RGB, grey stretched, MONOCHROME1 inverted, mismatch refused', () => {
+    expect(Array.from(pixelsToRaw([10, 20, 30, 255, 1, 2, 3, 255], 1, 2)!.rgba)).toEqual([10, 20, 30, 255, 1, 2, 3, 255])
+    expect(Array.from(pixelsToRaw([10, 20, 30, 1, 2, 3], 1, 2, { color: true })!.rgba)).toEqual([10, 20, 30, 255, 1, 2, 3, 255])
+    expect(Array.from(pixelsToRaw([0, 1000], 1, 2)!.rgba)).toEqual([0, 0, 0, 255, 255, 255, 255, 255])
+    expect(Array.from(pixelsToRaw([0, 1000], 1, 2, { invert: true })!.rgba)).toEqual([255, 255, 255, 255, 0, 0, 0, 255])
+    expect(pixelsToRaw([1, 2, 3], 2, 2)).toBeNull()
   })
 })

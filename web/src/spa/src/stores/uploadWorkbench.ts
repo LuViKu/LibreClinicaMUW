@@ -298,7 +298,20 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     const labels = await matchableLabels()
     const header = analysis.headerPatientId
     const matched = header !== null && labels.has(header) ? header : ''
-    const previewUrl = analysis.preview ? await previewToUrl(analysis.preview) : null
+    let rawPreview = analysis.preview
+    if (!rawPreview && analysis.needsCornerstone) {
+      // JPEG 2000 / JPEG-LS / RLE: decode with Cornerstone's codecs on the main
+      // thread. A genuine failure leaves null → the "no preview" notice.
+      try {
+        const { cornerstonePreview } = await import('@/lib/deid/cornerstonePreview')
+        const { downscale } = await import('@/lib/deid/preview')
+        const raw = await cornerstonePreview(file)
+        rawPreview = raw ? downscale(raw) : null
+      } catch {
+        rawPreview = null
+      }
+    }
+    const previewUrl = rawPreview ? await previewToUrl(rawPreview) : null
     if (previewUrl) previewUrls.add(previewUrl)
     const common = { needsDeidConfirm: true, deidConfirmed: false, previewUrl, patientId: matched }
     if (kind === 'e2e') {

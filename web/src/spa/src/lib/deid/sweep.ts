@@ -112,11 +112,40 @@ function containsFolded(buf: Uint8Array, pat: Uint8Array): boolean {
 }
 
 /** True when any of {@code values} (as returned by {@link sweepCandidates}) is found in {@code buf}. */
-export function sweepFindsResidual(buf: Uint8Array, values: string[]): boolean {
+export function sweepFindsResidual(buf: Uint8Array, values: string[], skip: ByteRange[] = []): boolean {
+  const segments = segmentsOutside(buf, skip)
   for (const value of values) {
     for (const pat of patternsFor(value)) {
-      if (containsFolded(buf, pat)) return true
+      for (const seg of segments) {
+        if (containsFolded(seg, pat)) return true
+      }
     }
   }
   return false
+}
+
+/** Half-open byte range {@code [start, end)}. */
+export type ByteRange = readonly [number, number]
+
+/**
+ * The parts of {@code buf} outside {@code skip}. Pixel payloads are skipped by
+ * the sweep: they are high-entropy, so a 3-character name occurs in a few
+ * hundred MB of them by chance (about 100 times), and text IN the pixels is
+ * burned-in annotation — the preview + confirmation covers that, no byte
+ * search can. Everything else (headers, directories, every other chunk or
+ * tag) is swept.
+ */
+export function segmentsOutside(buf: Uint8Array, skip: ByteRange[]): Uint8Array[] {
+  const ranges = skip
+    .map(([s, e]) => [Math.max(0, s), Math.min(buf.length, e)] as [number, number])
+    .filter(([s, e]) => e > s)
+    .sort((a, b) => a[0] - b[0])
+  const out: Uint8Array[] = []
+  let pos = 0
+  for (const [s, e] of ranges) {
+    if (s > pos) out.push(buf.subarray(pos, s))
+    pos = Math.max(pos, e)
+  }
+  if (pos < buf.length) out.push(buf.subarray(pos))
+  return out
 }

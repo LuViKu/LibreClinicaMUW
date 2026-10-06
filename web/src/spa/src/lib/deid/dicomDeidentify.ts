@@ -512,3 +512,71 @@ export async function extractDicomPreview(read: DicomRead): Promise<RawPreview |
   }
   return { width: cols, height: rows, rgba }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Pixel regions (skipped by the residual sweep) and preview routing   */
+/* ------------------------------------------------------------------ */
+
+const BULK_PIXEL_TAGS = ['x7fe00010', 'x7fe00008', 'x7fe00009'] // PixelData, FloatPixelData, DoubleFloatPixelData
+
+interface ParsedElementLike {
+  length?: number
+  dataOffset: number
+  fragments?: Array<{ position: number; length: number }>
+}
+interface ParserLike {
+  parseDicom(bytes: Uint8Array): { elements: Record<string, ParsedElementLike> }
+}
+
+/**
+ * Byte ranges of the top-level bulk pixel elements in {@code bytes}
+ * (PixelData, FloatPixelData, DoubleFloatPixelData — the element VALUE, not its
+ * tag/length header), found with dicom-parser (zero-copy). Empty when the file
+ * cannot be walked: the sweep then covers everything, which can only refuse
+ * more, never less.
+ */
+export async function dicomPixelRanges(bytes: Uint8Array): Promise<Array<[number, number]>> {
+  try {
+    const mod = (await import('dicom-parser')) as { default?: ParserLike } & Partial<ParserLike>
+    const parser = (mod.default ?? mod) as ParserLike
+    const ds = parser.parseDicom(bytes)
+    const out: Array<[number, number]> = []
+    for (const tag of BULK_PIXEL_TAGS) {
+      const el = ds.elements[tag]
+      if (!el) continue
+      let end = -1
+      if (el.fragments && el.fragments.length > 0) {
+        end = Math.max(...el.fragments.map((f) => f.position + f.length))
+      } else if (typeof el.length === 'number' && el.length > 0) {
+        end = el.dataOffset + el.length
+      }
+      if (end > el.dataOffset && end <= bytes.length) out.push([el.dataOffset, end])
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+export type PreviewPath = 'native' | 'jpegBaseline' | 'cornerstone' | 'none'
+
+const CORNERSTONE_SYNTAXES = new Set([
+  '1.2.840.10008.1.2.4.57', // JPEG lossless
+  '1.2.840.10008.1.2.4.70', // JPEG lossless SV1
+  '1.2.840.10008.1.2.4.80', // JPEG-LS lossless
+  '1.2.840.10008.1.2.4.81', // JPEG-LS near-lossless
+  '1.2.840.10008.1.2.4.90', // JPEG 2000 lossless
+  '1.2.840.10008.1.2.4.91', // JPEG 2000
+  '1.2.840.10008.1.2.4.201', // HTJ2K lossless
+  '1.2.840.10008.1.2.4.202', // HTJ2K RPCL lossless
+  '1.2.840.10008.1.2.4.203', // HTJ2K
+  '1.2.840.10008.1.2.5', // RLE
+])
+
+/** Which decoder renders the first frame of a given transfer syntax. */
+export function previewPathFor(transferSyntax: string): PreviewPath {
+  if (NATIVE_SYNTAXES.has(transferSyntax)) return 'native'
+  if (JPEG_BASELINE.has(transferSyntax)) return 'jpegBaseline'
+  if (CORNERSTONE_SYNTAXES.has(transferSyntax)) return 'cornerstone'
+  return 'none'
+}

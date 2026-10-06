@@ -38,6 +38,12 @@ vi.mock('@/lib/deid/preview', async (orig) => ({
   previewToUrl: vi.fn(async () => 'blob:preview-1'),
 }))
 
+const cs = vi.hoisted(() => ({ cornerstonePreview: vi.fn() }))
+vi.mock('@/lib/deid/cornerstonePreview', async (orig) => ({
+  ...(await orig<typeof import('@/lib/deid/cornerstonePreview')>()),
+  cornerstonePreview: (...a: unknown[]) => cs.cornerstonePreview(...a),
+}))
+
 import { useUploadWorkbenchStore } from '@/stores/uploadWorkbench'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -69,11 +75,11 @@ const { DicomDict } = (dcmjs as unknown as {
   data: { DicomDict: new (meta: Record<string, unknown>) => { dict: Record<string, unknown>; write(): ArrayBuffer } }
 }).data
 
-function dicomForPatient(pid: string, extra: Record<string, unknown> = {}): File {
+function dicomForPatient(pid: string, extra: Record<string, unknown> = {}, syntax = '1.2.840.10008.1.2.1'): File {
   const d = new DicomDict({
     '00020002': { vr: 'UI', Value: ['1.2.840.10008.5.1.4.1.1.77.1.5.1'] },
     '00020003': { vr: 'UI', Value: ['1.2.3.4'] },
-    '00020010': { vr: 'UI', Value: ['1.2.840.10008.1.2.1'] },
+    '00020010': { vr: 'UI', Value: [syntax] },
   })
   d.dict = {
     '00080016': { vr: 'UI', Value: ['1.2.840.10008.5.1.4.1.1.77.1.5.1'] },
@@ -303,6 +309,24 @@ describe('de-identifying mode', () => {
     const text = new TextDecoder('latin1').decode(await fileBytes(req.file))
     for (const s of SECRET_STRINGS) expect(text).not.toContain(s)
     expect(everythingSent()).not.toContain('Maximilian_Mustermann')
+  })
+
+  it('DICOM in JPEG 2000: the preview comes from the Cornerstone decoder; a genuine failure gives the notice', async () => {
+    const J2K = '1.2.840.10008.1.2.4.90'
+    cs.cornerstonePreview.mockReset()
+    cs.cornerstonePreview.mockResolvedValueOnce({ width: 2, height: 2, rgba: new Uint8ClampedArray(16) })
+    const store = useUploadWorkbenchStore()
+    store.setMode('staff')
+    await store.addFiles([dicomForPatient(LABEL, {}, J2K)])
+    expect(cs.cornerstonePreview).toHaveBeenCalledTimes(1)
+    expect(store.rows[0]!.previewUrl).toBe('blob:preview-1')
+
+    store.reset()
+    store.setMode('staff')
+    cs.cornerstonePreview.mockResolvedValueOnce(null)
+    await store.addFiles([dicomForPatient(LABEL, {}, J2K)])
+    expect(store.rows[0]!.previewUrl).toBeNull()
+    expect(store.rows[0]!.state).not.toBe('error')
   })
 
   it('DICOM with BurnedInAnnotation=YES is refused and never offered for upload', async () => {

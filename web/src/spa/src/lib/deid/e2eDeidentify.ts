@@ -237,6 +237,39 @@ export function stripE2e(buf: Uint8Array, label: string): E2eStripResult {
 }
 
 /**
+ * Byte ranges of the image PIXELS of every image chunk (type 0x40000000):
+ * the SLO/fundus (ind 0, 8-bit) and B-scan (ind 1, 16-bit) payloads. The
+ * 20-byte image struct and the chunk header stay outside, as do all other
+ * chunks, the directory and the file header — those are swept. An image chunk
+ * of any other ind, or whose struct does not fit the file, is not skipped.
+ */
+export function e2ePixelRanges(buf: Uint8Array): Array<[number, number]> {
+  let chunks: E2eChunkRef[]
+  try {
+    chunks = listE2eChunks(buf)
+  } catch {
+    return []
+  }
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  const out: Array<[number, number]> = []
+  for (const c of chunks) {
+    if (c.type !== CHUNK_TYPE_IMAGE) continue
+    const ind = view.getUint16(c.headerOffset + CHUNK_IND_OFFSET, true)
+    const bytesPerPixel = ind === 0 ? 1 : ind === 1 ? 2 : 0
+    const p = c.headerOffset + CHUNK_HEADER_BYTES
+    if (bytesPerPixel === 0 || p + 20 > buf.length) continue
+    const height = view.getUint32(p + 12, true)
+    const width = view.getUint32(p + 16, true)
+    if (width === 0 || height === 0 || width > 65536 || height > 65536) continue
+    const start = p + 20
+    const end = start + width * height * bytesPerPixel
+    if (end > buf.length) continue
+    out.push([start, end])
+  }
+  return out
+}
+
+/**
  * Preview image of an E2E, if cheap: the first fundus/SLO image chunk
  * (type 0x40000000, ind 0, 8-bit), else the first B-scan (ind 1, 16-bit,
  * stretched). Null when neither is present.

@@ -11,11 +11,11 @@ import { describe, expect, it } from 'vitest'
 
 import { deidentifyFile } from '../../deid/pipeline'
 import { DeidError } from '../../deid/errors'
-import { extractE2ePreview, readE2eIdentity, stripE2e } from '../../deid/e2eDeidentify'
+import { e2ePixelRanges, extractE2ePreview, readE2eIdentity, stripE2e } from '../../deid/e2eDeidentify'
 import { parseE2eBytes } from '../../e2eParser'
 import {
   LABEL, PHI, TYPE_ACQ_INFO, TYPE_PATIENT, asFile, assembleE2e, e2eWith, fileBytes, fixtureBytes,
-  patientPayload, utf16le,
+  imageChunk, patientPayload, utf16le,
 } from './testUtils'
 
 const CHUNK_HEADER = 60
@@ -203,6 +203,26 @@ describe('deidentifyFile (e2e) — strip, sweep, hash', () => {
     } catch (e) {
       expect((e as Error).message).not.toMatch(/Mustermann|Maximilian|MRN/i)
     }
+  })
+
+  it('does NOT refuse when the name bytes occur inside a high-entropy pixel region', async () => {
+    const enc = new TextEncoder()
+    const planted = [enc.encode('Mustermann'), enc.encode('MAXIMILIAN'), utf16le('MRN-778899'), enc.encode(PHI.surname.slice(0, 3))]
+    const buf = e2eWith({ ...PHI, pid: LABEL }, [imageChunk(1, 1024, 1024, planted), imageChunk(0, 256, 256, planted)])
+    expect(e2ePixelRanges(buf)).toHaveLength(2)
+    expect(await code(deidentifyFile(asFile(buf), 'e2e', LABEL))).toBe('none')
+  })
+
+  it('still refuses the name in a non-pixel chunk of the same file, and in the image struct/header', async () => {
+    const extra = new Uint8Array(60)
+    extra.set(new TextEncoder().encode('Mustermann'), 4)
+    const big = imageChunk(1, 1024, 1024, [new TextEncoder().encode('Mustermann')])
+    const buf = e2eWith({ ...PHI, pid: LABEL }, [big, { type: TYPE_ACQ_INFO, payload: extra }])
+    expect(await code(deidentifyFile(asFile(buf), 'e2e', LABEL))).toBe('residual')
+    // A chunk whose ind the sweep does not know is not skipped at all.
+    const unknownInd = imageChunk(1, 64, 64, [new TextEncoder().encode('Mustermann')])
+    unknownInd.ind = 5
+    expect(await code(deidentifyFile(asFile(e2eWith({ ...PHI, pid: LABEL }, [unknownInd])), 'e2e', LABEL))).toBe('residual')
   })
 
   it('searches a large buffer in reasonable time', async () => {
