@@ -49,7 +49,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.table.sdv.SDVUtil;
  *
  * Processes the request of changing current study
  */
-@SuppressWarnings("all")
 public class ChangeStudyServlet extends SecureController {
     /**
 	 * 
@@ -130,7 +129,7 @@ public class ChangeStudyServlet extends SecureController {
 
             } else if ("submit".equalsIgnoreCase(action)) {
                 logger.info("submit");
-                changeStudy();
+                changeStudy(studies);
             }
         }
 
@@ -150,7 +149,8 @@ public class ChangeStudyServlet extends SecureController {
             int studyId = fp.getInt("studyId");
             logger.info("new study id:" + studyId);
             for (StudyUserRoleBean studyWithRole : studies) {
-                if (studyWithRole.getStudyId() == studyId) {
+                // a study listed without a role (the parent or a sibling of the user's site) cannot be switched to
+                if (studyWithRole.getStudyId() == studyId && !studyWithRole.isInvalid()) {
                     request.setAttribute("studyId", Integer.valueOf(studyId));
                     session.setAttribute("studyWithRole", studyWithRole);
                     request.setAttribute("currentStudy", currentStudy);
@@ -165,9 +165,30 @@ public class ChangeStudyServlet extends SecureController {
         }
     }
 
-    private void changeStudy() throws Exception {
+    private void changeStudy(ArrayList<StudyUserRoleBean> studies) throws Exception {
         FormProcessor fp = new FormProcessor(request);
         int studyId = fp.getInt("studyId");
+
+        // The switch binds the study the user confirmed, with the role held there: the submitted study must be
+        // the confirmed one, and the user must hold a live role (not INVALID) on exactly that study.
+        StudyUserRoleBean confirmed = (StudyUserRoleBean) session.getAttribute("studyWithRole");
+        StudyUserRoleBean liveRole = null;
+        if (confirmed != null && confirmed.getStudyId() == studyId) {
+            for (StudyUserRoleBean candidate : studies) {
+                if (candidate.getStudyId() == studyId && !candidate.isInvalid()) {
+                    liveRole = candidate;
+                    break;
+                }
+            }
+        }
+        if (liveRole == null) {
+            logger.warn("refused a study switch to study {} for {}: not confirmed, or no valid role there", studyId, ub.getName());
+            session.removeAttribute("studyWithRole");
+            addPageMessage(restext.getString("no_study_selected"));
+            request.setAttribute("studies", studies);
+            forwardPage(Page.CHANGE_STUDY);
+            return;
+        }
         int prevStudyId = currentStudy.getId();
 
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
@@ -273,7 +294,7 @@ public class ChangeStudyServlet extends SecureController {
                 }
             }
 
-            currentRole = (StudyUserRoleBean) session.getAttribute("studyWithRole");
+            currentRole = liveRole;
             session.setAttribute("userRole", currentRole);
             session.removeAttribute("studyWithRole");
             addPageMessage(restext.getString("current_study_changed_succesfully"));

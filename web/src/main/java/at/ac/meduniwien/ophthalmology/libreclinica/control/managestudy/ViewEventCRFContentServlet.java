@@ -32,7 +32,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * 
  *         Views the content of an event CRF
  */
-@SuppressWarnings("all")
 public class ViewEventCRFContentServlet extends SecureController {
 
     /**
@@ -102,6 +101,10 @@ public class ViewEventCRFContentServlet extends SecureController {
         }
 
         StudyEventBean seb = getStudyEvent(eventId);
+        // the check in getStudyEvent tests the event's definition (the parent study's, for a site)
+        assertStudyEventInScope(eventId);
+        assertEventCrfInScope(eventCRFId);
+        assertStudySubjectInScope(studySubId);
 
         StudySubjectDAO subdao = new StudySubjectDAO(sm.getDataSource());
         StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
