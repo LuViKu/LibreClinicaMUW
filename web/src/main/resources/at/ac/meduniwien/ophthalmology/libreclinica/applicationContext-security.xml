@@ -94,9 +94,9 @@
                 </property>
             </bean>
         </constructor-arg>
-        <!-- libreclinica.deployment.internet-facing: when true locked / 2FA-outdated /
-             bad-password are all reported as bad credentials. -->
-        <constructor-arg value="#{environment.getProperty('libreclinica.deployment.internet-facing', 'false')}"/>
+        <!-- The second constructor argument (internetFacing, default false) is set
+             from libreclinica.deployment.internet-facing by SecurityConfig. -->
+        <constructor-arg value="false"/>
     </bean>
 
      <!-- A second login of the same account expires the first session

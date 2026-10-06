@@ -43,7 +43,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigur
 public class SpaLoginFailureHandler implements AuthenticationFailureHandler {
 
     private final AuthenticationFailureHandler legacy;
-    private final boolean internetFacing;
+    private volatile boolean internetFacing;
 
     public SpaLoginFailureHandler(AuthenticationFailureHandler legacy) {
         this(legacy, false);
@@ -61,6 +61,14 @@ public class SpaLoginFailureHandler implements AuthenticationFailureHandler {
      */
     public SpaLoginFailureHandler(AuthenticationFailureHandler legacy, boolean internetFacing) {
         this.legacy = legacy;
+        this.internetFacing = internetFacing;
+    }
+
+    /**
+     * Set by {@code SecurityConfig} from {@code libreclinica.deployment.internet-facing}
+     * (the XML bean context has no property resolution).
+     */
+    public void setInternetFacing(boolean internetFacing) {
         this.internetFacing = internetFacing;
     }
 

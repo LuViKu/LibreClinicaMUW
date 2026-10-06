@@ -68,11 +68,6 @@ class SecurityConfigInternetFacingTest {
             "/pages/v3/api-docs.yaml",
             "/pages/swagger-ui.html",
             "/pages/swagger-ui/index.html",
-            "/v3/api-docs",
-            "/v3/api-docs/spa-api",
-            "/v3/api-docs.yaml",
-            "/swagger-ui.html",
-            "/swagger-ui/index.html",
             "/pages/auth/api/v1/system/systemstatus",
             "/pages/auth/api/v1/studies/",
             "/pages/auth/api/v1/discrepancynote/dnote",
@@ -153,6 +148,19 @@ class SecurityConfigInternetFacingTest {
                     new InternetFacingPathBlockFilter(SecurityConfig.internetFacingDeniedPaths(true)),
                     org.springframework.security.web.access.channel.ChannelProcessingFilter.class);
             return http.build();
+        }
+    }
+
+    @Test
+    void flagOn_bareSpringdocTwinsAreAnswered404() throws Exception {
+        // Not public in either mode (upstream serves springdoc under /pages only);
+        // on the internet-facing deployment they answer 404 rather than 401.
+        MockMvc on = mvc(On.class);
+        MockMvc off = mvc(Off.class);
+        for (String p : List.of("/v3/api-docs", "/v3/api-docs/spa-api", "/v3/api-docs.yaml",
+                "/swagger-ui.html", "/swagger-ui/index.html")) {
+            assertEquals(404, status(on, "GET", p), "flag on, GET " + p);
+            assertEquals(401, status(off, "GET", p), "flag off, GET " + p);
         }
     }
 

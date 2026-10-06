@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.InternetFacingPathBlockFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SpaLoginFailureHandler;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -347,7 +348,10 @@ public class SecurityConfig {
             PublicOctUploadRateLimitFilter publicOctUploadRateLimitFilter,
             // Second, internet-facing deployment: closes the portals, device
             // APIs and operational endpoints. Off for the internal deployment.
-            @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing) throws Exception {
+            @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing,
+            @Qualifier("failureHandler") SpaLoginFailureHandler failureHandler) throws Exception {
+        // One failure for every cause when internet-facing (see the handler).
+        failureHandler.setInternetFacing(internetFacing);
 
         // Phase E.6 (2026-06-03) — SPA-vs-legacy entry-point split.
         // The legacy form-login entry point at /pages/login/login emits
