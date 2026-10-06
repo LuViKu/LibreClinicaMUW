@@ -20,6 +20,8 @@ import { useI18n } from 'vue-i18n'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdReportScan from '../components/NamdReportScan.vue'
+import NamdPlaceholderBanner from '../components/NamdPlaceholderBanner.vue'
+import { isPlaceholderModel } from '../composables/useNamdAiRecommendation'
 import { totalFluid } from '../fluid'
 import { I } from '../icons'
 import { useRetinalJobStore } from '@/stores/retinalJob'
@@ -190,6 +192,9 @@ function printReport() {
     data-testid="namd-report-tab"
     class="bg-white rounded-muw border border-slate-200 shadow-muw-card print:shadow-none print:border-0 max-w-[820px] mx-auto p-8 print:p-0"
   >
+    <!-- Printed with the report: placeholder volumes must not pass as real. -->
+    <NamdPlaceholderBanner :visits="props.data.visits" class="mb-4" />
+
     <header class="flex items-start justify-between mb-6 pb-4 border-b border-slate-200">
       <div>
         <div class="font-serif text-2xl font-semibold text-muw-blue">
@@ -248,11 +253,11 @@ function printReport() {
       >
         <div>
           <span class="text-slate-500">CST:</span>
-          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.crt }} µm</span>
+          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.crt != null ? `${props.data.current.crt} µm` : '—' }}</span>
         </div>
         <div>
           <span class="text-slate-500">BCVA:</span>
-          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva }} L</span>
+          <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva ?? '—' }} L</span>
           <span
             v-if="props.data.current.bcvaRaw"
             class="ml-1 text-slate-400 text-xs"
@@ -260,7 +265,12 @@ function printReport() {
         </div>
         <div>
           <span class="text-slate-500">Total:</span>
-          <span class="ml-1 font-semibold tabular-nums">{{ totalFluid(props.data.current) }} nL</span>
+          <span class="ml-1 font-semibold tabular-nums">{{ totalFluid(props.data.current) ?? '—' }} nL</span>
+          <span
+            v-if="isPlaceholderModel(props.data.current.modelVersion)"
+            data-testid="namd-report-placeholder-current"
+            class="ml-1 text-[10px] font-semibold uppercase text-rose-700"
+          >{{ t('studyModules.namd.placeholder.badge') }}</span>
         </div>
       </div>
     </section>
@@ -352,7 +362,14 @@ function printReport() {
             class="border-b border-slate-100"
             :class="visit.dateMismatch ? 'bg-amber-50/50' : ''"
           >
-            <td class="py-1.5 px-2 font-medium text-slate-700">{{ visit.label }}</td>
+            <td class="py-1.5 px-2 font-medium text-slate-700">
+              {{ visit.label }}
+              <span
+                v-if="isPlaceholderModel(visit.modelVersion)"
+                :data-testid="`namd-report-placeholder-${visit.id}`"
+                class="block text-[10px] font-semibold uppercase text-rose-700"
+              >{{ t('studyModules.namd.placeholder.badge') }}</span>
+            </td>
             <!-- 2026-06-23 user-feedback round — flag when the planned
                  visit date doesn't line up with the .e2e acquisition
                  date (> DATE_MISMATCH_DAYS apart). The displayed date is
@@ -372,9 +389,9 @@ function printReport() {
               <span v-if="visit.dateMismatch" class="inline-block mr-1" aria-hidden="true">⚠</span>{{ visit.date || '—' }}
             </td>
             <template v-if="aiVisible">
-              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.irf }}</td>
-              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.srf }}</td>
-              <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.ped }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums" :class="isPlaceholderModel(visit.modelVersion) ? 'text-rose-700 italic' : ''">{{ visit.irf ?? '—' }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums" :class="isPlaceholderModel(visit.modelVersion) ? 'text-rose-700 italic' : ''">{{ visit.srf ?? '—' }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums" :class="isPlaceholderModel(visit.modelVersion) ? 'text-rose-700 italic' : ''">{{ visit.ped ?? '—' }}</td>
               <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.crt || '—' }}</td>
             </template>
             <td class="py-1.5 px-2 text-right tabular-nums">

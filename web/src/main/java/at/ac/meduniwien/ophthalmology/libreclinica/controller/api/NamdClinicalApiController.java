@@ -370,12 +370,16 @@ public class NamdClinicalApiController {
                         } catch (SQLException ignored) {
                             m.put("eventDate", null);
                         }
+                        // null = never recorded. It used to default to false,
+                        // which the rule engine read as "no haemorrhage" and so
+                        // recommended EXTEND on an eye nobody had examined.
+                        // A recorded "false" still arrives as false below.
                         Map<String, Object> od = new LinkedHashMap<>();
-                        od.put("hemorrhage", false);
-                        od.put("bcvaLossAttributedToNamd", false);
+                        od.put("hemorrhage", null);
+                        od.put("bcvaLossAttributedToNamd", null);
                         Map<String, Object> os = new LinkedHashMap<>();
-                        os.put("hemorrhage", false);
-                        os.put("bcvaLossAttributedToNamd", false);
+                        os.put("hemorrhage", null);
+                        os.put("bcvaLossAttributedToNamd", null);
                         m.put("od", od);
                         m.put("os", os);
                         return m;

@@ -42,6 +42,7 @@
         "bcvaAttrHint": "Klinische Einschätzung bei ≥ 5 Buchstaben Verlust vs. Vorvisite. Bestätigt den BCVA-basierten SHORTEN-Trigger.",
         "saved": "Gespeichert",
         "dirty": "Ungespeicherte Änderungen",
+        "unrecorded": "Noch nicht erfasst. Die Empfehlung benötigt beide Angaben — bitte beide beurteilen und speichern (auch ein „Nein“ muss ausdrücklich gespeichert werden).",
         "unavailable": "Diese Visite hat noch keinen CRF-Datensatz. Bitte die NAMD_VISIT-CRF für diese Visite anlegen, bevor klinische Befunde erfasst werden."
       },
       "overview": {
@@ -54,6 +55,7 @@
         "clinicalBcvaAttr": "Visusverlust nAMD-bedingt",
         "clinicalFlagYes": "Ja",
         "clinicalFlagNo": "Nein",
+        "clinicalFlagUnknown": "Nicht erfasst",
         "visitList": "Visiten-Verlauf (BCVA)",
         "bcvaTrend": "Visusverlauf",
         "armUnassigned": "Diese*r Patient*in ist noch keiner Studienarm-Gruppe zugeordnet. KI-Quantifizierung + KI-Empfehlung sind bis zur Zuteilung ausgeblendet."
@@ -155,6 +157,10 @@
         "skip": "Später",
         "alreadyPlanned": "Eine Visite ist bereits für den {date} geplant."
       },
+      "placeholder": {
+        "banner": "Platzhalter-Ergebnis — keine echte Segmentierung. Die Flüssigkeitswerte der Visite(n) {visits} stammen aus einem Platzhalter-Modell mit künstlichen Werten und dürfen nicht klinisch verwendet werden.",
+        "badge": "Platzhalter"
+      },
       "recommendation": {
         "headline": {
           "SHORTEN": "Intervall verkürzen",
@@ -163,6 +169,32 @@
         },
         "intervalProposed": "Vorgeschlagen: {weeks} Wochen",
         "firedTriggers": "Auslösende Befunde",
+        "insufficient": {
+          "headline": "Keine Empfehlung — unzureichende Daten",
+          "body": "Für eine Empfehlung fehlen folgende Angaben. Fehlende Werte werden nicht als „kein Befund“ gewertet:",
+          "placeholder": "Ergebnis aus Platzhalter-Modell — keine echte Segmentierung. Es wird keine Empfehlung angezeigt.",
+          "manual": "Die Behandlungsentscheidung kann unten trotzdem manuell dokumentiert werden.",
+          "fetchFailed": "Laden fehlgeschlagen: {sources}.",
+          "visit": {
+            "current": "Aktuelle Visite",
+            "previous": "Vorherige Visite",
+            "reference": "Referenzvisite"
+          },
+          "field": {
+            "irf": "IRF-Volumen",
+            "srf": "SRF-Volumen",
+            "ped": "PED-Volumen",
+            "fluidByRegion": "Flüssigkeit je ETDRS-Ring",
+            "bcva": "BCVA",
+            "hemorrhage": "Blutung (klinischer Befund)",
+            "bcvaAttributableToNamd": "BCVA-Verlust durch nAMD (klinischer Befund)"
+          },
+          "source": {
+            "jobDetail": "Segmentierungsergebnis",
+            "bcva": "BCVA-Verlauf",
+            "clinicalFlags": "Klinische Befunde"
+          }
+        },
         "thresholdSet": "Schwellenwert-Satz {version}.",
         "disclaimer": "Diese Empfehlung folgt dem Studienprotokoll. Die klinische Entscheidung trifft der Behandelnde.",
         "rationale": {
