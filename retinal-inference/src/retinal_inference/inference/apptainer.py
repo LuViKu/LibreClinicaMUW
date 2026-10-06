@@ -181,11 +181,13 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         return {"CUDA_VISIBLE_DEVICES": dev, "APPTAINERENV_CUDA_VISIBLE_DEVICES": dev}
 
     @staticmethod
-    def _srun(task: str) -> list[str]:
+    def _srun(task: str, gpu: bool = True) -> list[str]:
         """The ``srun`` prefix for one task (SLURM mode only).
 
         One blocking job per task. Job name is ``<prefix>-<task>`` -- never a
         patient / scan identifier (job names are world-visible in squeue).
+        ``gpu=False`` builds the CPU-only variant (no gres, no nodelist, IOWA's
+        own cpus/mem) used for the host-native IOWA step.
         """
         s = _config.settings
         s.validate_slurm()
@@ -193,19 +195,26 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             "srun",
             f"--job-name={s.apptainer_slurm_job_name}-{task}",
             f"--time={s.apptainer_slurm_time}",
-            f"--gres={s.apptainer_slurm_gres}",
             f"--account={s.apptainer_slurm_account}",
         ]
+        if gpu:
+            srun.append(f"--gres={s.apptainer_slurm_gres}")
         if s.apptainer_slurm_partition:
             srun.append(f"--partition={s.apptainer_slurm_partition}")
-        if s.apptainer_slurm_mem:
-            srun.append(f"--mem={s.apptainer_slurm_mem}")
-        if s.apptainer_slurm_cpus_per_task:
-            srun.append(f"--cpus-per-task={s.apptainer_slurm_cpus_per_task}")
+        mem = s.apptainer_slurm_mem if gpu else s.apptainer_slurm_iowa_mem
+        cpus = s.apptainer_slurm_cpus_per_task if gpu else s.apptainer_slurm_iowa_cpus_per_task
+        if mem:
+            srun.append(f"--mem={mem}")
+        if cpus:
+            srun.append(f"--cpus-per-task={cpus}")
         if s.apptainer_slurm_qos:
             srun.append(f"--qos={s.apptainer_slurm_qos}")
-        if s.apptainer_slurm_constraint:
+        if gpu and s.apptainer_slurm_constraint:
             srun.append(f"--constraint={s.apptainer_slurm_constraint}")
+        if s.apptainer_slurm_exclude:
+            srun.append(f"--exclude={s.apptainer_slurm_exclude}")
+        if gpu and s.apptainer_slurm_nodelist:
+            srun.append(f"--nodelist={s.apptainer_slurm_nodelist}")
         return srun
 
     def _apptainer(
@@ -342,6 +351,39 @@ class ApptainerAdapter(RetinalInferenceAdapter):
 
     # --- shared host-native steps (IOWA layer stack + BM), reused by ga/bm/layers
 
+    def _iowa_layers_slurm(self, dcm: Path, work: Path, s, env: dict[str, str]) -> Path:
+        """SLURM mode: the whole IOWA chain as ONE CPU-only srun job.
+
+        The /tmp staging workaround (IOWA SIGSEGVs on /scratch inputs) uses
+        node-local /tmp, which is not visible across nodes, so staging cannot be
+        done by the dispatcher. Instead the job itself stages onto the compute
+        node's own /tmp, runs binary + converter there, and copies the results
+        back to ``work`` (shared /scratch). Same behaviour as the direct path,
+        just on the node SLURM picked. Terminated via the usual SIGTERM path.
+        """
+        import shlex
+
+        q = shlex.quote
+        layers_csv = work / "layers_csv"
+        layerseg = work / "layerseg"
+        script = "\n".join([
+            "set -e",
+            'T="$(mktemp -d /tmp/iowa_XXXXXX)"',
+            "trap 'rm -rf \"$T\"' EXIT",
+            f'cp {q(str(dcm))} "$T/bscan.dcm"',
+            'mkdir "$T/layerseg"',
+            f'{q(s.ga_iowa_binary or "OCTLayerSeg3.6")} -oM "$T/bscan.dcm" '
+            '"$T/layerseg/lres.xml" "$T/layerseg/t1.xml" "$T/layerseg/t2.tif" "$T/layerseg/t3.xml"',
+            f'{q(s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV")} '
+            '--in "$T/layerseg/lres.xml" --intype iowaxml_ls '
+            '--out "$T/layers_csv" --outtype csv --rmdir_out 1',
+            f"rm -rf {q(str(layers_csv))} {q(str(layerseg))}",
+            f'cp -r "$T/layers_csv" {q(str(layers_csv))}',
+            f'cp -r "$T/layerseg" {q(str(layerseg))}',
+        ])
+        _exec(self._srun("iowa", gpu=False) + ["bash", "-c", script], env or None)
+        return layers_csv
+
     def _iowa_layers(self, dcm: Path, work: Path) -> Path:
         """Run the host-native IOWA chain -> a folder of 11 layer CSVs.
 
@@ -372,6 +414,8 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         # lives on /scratch and is the persistent artifact path).
         #
         # See PR #255 for the full diagnostic trail.
+        if s.apptainer_use_slurm:
+            return self._iowa_layers_slurm(dcm, work, s, env)
         import shutil as _shutil
         import tempfile as _tempfile
         with _tempfile.TemporaryDirectory(prefix="iowa_", dir="/tmp") as _tmp:

@@ -35,6 +35,11 @@
 #     RI_SLURM_CPUS         optional, --cpus-per-task
 #     RI_SLURM_QOS          optional
 #     RI_SLURM_CONSTRAINT   optional
+#     RI_SLURM_EXCLUDE      optional, nodes to avoid: recommended vn1,vn2,cn5
+#                           (vn1/vn2 unvalidated, cn5 DOWN)
+#     RI_SLURM_NODELIST     optional, restrict GPU jobs to these nodes
+#     RI_SLURM_IOWA_CPUS / RI_SLURM_IOWA_MEM  optional sizing of the CPU-only
+#                           IOWA job (ga/layers); it runs under srun, no gres
 #     RI_MAX_CONCURRENT     default 4 (direct mode: 1)
 #   No GPU is picked or pinned in this mode -- SLURM places each job.
 #
@@ -117,6 +122,10 @@ if [ "$RI_SLURM" = 1 ]; then
   [ -z "${RI_SLURM_CPUS:-}" ]       || export RETINAL_INFERENCE_APPTAINER_SLURM_CPUS_PER_TASK="$RI_SLURM_CPUS"
   [ -z "${RI_SLURM_QOS:-}" ]        || export RETINAL_INFERENCE_APPTAINER_SLURM_QOS="$RI_SLURM_QOS"
   [ -z "${RI_SLURM_CONSTRAINT:-}" ] || export RETINAL_INFERENCE_APPTAINER_SLURM_CONSTRAINT="$RI_SLURM_CONSTRAINT"
+  [ -z "${RI_SLURM_EXCLUDE:-}" ]    || export RETINAL_INFERENCE_APPTAINER_SLURM_EXCLUDE="$RI_SLURM_EXCLUDE"
+  [ -z "${RI_SLURM_NODELIST:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_NODELIST="$RI_SLURM_NODELIST"
+  [ -z "${RI_SLURM_IOWA_CPUS:-}" ]  || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_CPUS_PER_TASK="$RI_SLURM_IOWA_CPUS"
+  [ -z "${RI_SLURM_IOWA_MEM:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_MEM="$RI_SLURM_IOWA_MEM"
   export RETINAL_INFERENCE_MAX_CONCURRENT_RUNS="${RI_MAX_CONCURRENT:-4}"
   unset RETINAL_INFERENCE_APPTAINER_GPU_DEVICE RETINAL_INFERENCE_BM_GPU_DEVICE
 else

@@ -318,3 +318,66 @@ def test_health_slurm_mode_reports_partition_gres_no_account(
     assert body["max_concurrent_runs"] == 3
     assert body["gpu_device"] is None  # no pin in SLURM mode
     assert "ACCOUNT" not in resp.text
+
+
+# ---------- exclude / nodelist / IOWA under srun --------------------------------
+
+
+def test_srun_exclude_and_nodelist(slurm, monkeypatch) -> None:
+    monkeypatch.setattr(slurm, "apptainer_slurm_exclude", "vn1,vn2,cn5", raising=False)
+    monkeypatch.setattr(slurm, "apptainer_slurm_nodelist", "on3,cn6", raising=False)
+    cmd = ap.ApptainerAdapter._srun("fluid")
+    assert "--exclude=vn1,vn2,cn5" in cmd
+    assert "--nodelist=on3,cn6" in cmd
+
+
+def test_srun_exclude_absent_by_default(slurm) -> None:
+    cmd = ap.ApptainerAdapter._srun("fluid")
+    assert not any(a.startswith(("--exclude", "--nodelist")) for a in cmd)
+
+
+def test_cpu_srun_has_no_gres_and_own_sizing(slurm, monkeypatch) -> None:
+    monkeypatch.setattr(slurm, "apptainer_slurm_mem", "32G", raising=False)
+    monkeypatch.setattr(slurm, "apptainer_slurm_cpus_per_task", 8, raising=False)
+    monkeypatch.setattr(slurm, "apptainer_slurm_iowa_mem", "4G", raising=False)
+    monkeypatch.setattr(slurm, "apptainer_slurm_iowa_cpus_per_task", 2, raising=False)
+    monkeypatch.setattr(slurm, "apptainer_slurm_exclude", "vn1", raising=False)
+    monkeypatch.setattr(slurm, "apptainer_slurm_nodelist", "on3", raising=False)
+    cmd = ap.ApptainerAdapter._srun("iowa", gpu=False)
+    assert not any(a.startswith("--gres") for a in cmd)
+    assert not any(a.startswith("--nodelist") for a in cmd)
+    assert "--mem=4G" in cmd and "--cpus-per-task=2" in cmd
+    assert "--account=ACCOUNT" in cmd and "--partition=full_optima" in cmd
+    assert "--time=01:00:00" in cmd and "--exclude=vn1" in cmd
+    assert "--job-name=ri-iowa" in cmd
+
+
+def test_iowa_runs_under_cpu_srun_in_slurm_mode(slurm, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(slurm, "ga_iowa_binary", "/opt/OCTLayerSeg3.6", raising=False)
+    monkeypatch.setattr(slurm, "ga_iowa_converter", "/opt/conv", raising=False)
+    monkeypatch.setattr(slurm, "ga_iowa_ld_library_path", "/ioawa/lib", raising=False)
+    calls: list = []
+
+    def fake_exec(cmd, env=None):
+        calls.append((cmd, env))
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+    work = tmp_path / "work"
+    work.mkdir()
+    dcm = tmp_path / "in" / "bscan.dcm"
+    dcm.parent.mkdir()
+    dcm.write_bytes(b"x")
+    out = ap.ApptainerAdapter()._iowa_layers(dcm, work)
+    assert out == work / "layers_csv"
+    assert len(calls) == 1  # whole chain = one job
+    cmd, env = calls[0]
+    assert cmd[0] == "srun" and "--job-name=ri-iowa" in cmd
+    assert not any(a.startswith("--gres") for a in cmd)
+    script = cmd[-1]
+    assert cmd[-3:-1] == ["bash", "-c"]
+    # stages on the compute node's own /tmp, runs both binaries, copies back to work
+    assert "mktemp -d /tmp/iowa_" in script
+    assert "/opt/OCTLayerSeg3.6" in script and "/opt/conv" in script
+    assert str(work / "layers_csv") in script and str(work / "layerseg") in script
+    assert env["LD_LIBRARY_PATH"].startswith("/ioawa/lib")

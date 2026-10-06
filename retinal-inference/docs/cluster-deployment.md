@@ -441,7 +441,10 @@ outside SLURM) to SLURM mode. The resident server becomes a thin dispatcher; eac
 | `APPTAINER_SLURM_MEM` | none | e.g. `32G` |
 | `APPTAINER_SLURM_CPUS_PER_TASK` | none | |
 | `APPTAINER_SLURM_QOS` | none | |
-| `APPTAINER_SLURM_CONSTRAINT` | none | |
+| `APPTAINER_SLURM_CONSTRAINT` | none | feature tags cannot separate on3/cn6 from vn1/vn2 (identical `bigmem,intel,bigGPUmem`) |
+| `APPTAINER_SLURM_EXCLUDE` | none | `--exclude`; **recommended `vn1,vn2,cn5`** until vn1/vn2 are validated (cn5 is DOWN) |
+| `APPTAINER_SLURM_NODELIST` | none | `--nodelist` for GPU jobs, e.g. `on3,cn6` |
+| `APPTAINER_SLURM_IOWA_CPUS_PER_TASK`, `_IOWA_MEM` | none | sizing of the CPU-only IOWA job |
 | `APPTAINER_SLURM_JOB_NAME` | `ri` | job name is `<prefix>-<task>` (e.g. `ri-fluid`); never a patient or scan identifier, because job names are visible to all users in `squeue` |
 | `MAX_CONCURRENT_RUNS` | 1 direct / 4 SLURM | simultaneous `/run` executions in this process |
 
@@ -450,11 +453,17 @@ pr, ga) and the host-native `bm` venv. No `CUDA_VISIBLE_DEVICES` is pinned.
 `/health` reports `mode` (`direct` | `slurm`), `max_concurrent_runs` and, in SLURM
 mode, `slurm_partition` / `slurm_gres` (never the account).
 
-**What stays on the dispatcher host:** the IOWA step of `ga` and `layers`
-(`OCTLayerSeg3.6` + converter) is CPU-only, host-native and CentOS-6-era; it still
-runs where the server runs, not under `srun`. With several concurrent runs that is
-several IOWA processes on that host. Size `MAX_CONCURRENT_RUNS` accordingly, or ask
-whether the dispatcher host may be a node with spare CPU.
+**IOWA runs under SLURM too.** The IOWA step of `ga` and `layers`
+(`OCTLayerSeg3.6` + converter) is CPU-only and host-native, but the dispatcher
+host is itself a SLURM node the scheduler considers idle, so running it there
+would recreate the out-of-band load problem. In SLURM mode it is one CPU-only
+`srun` job (`ri-iowa`: same account/partition/time/qos/exclude, **no gres**, own
+`IOWA_CPUS_PER_TASK` / `IOWA_MEM`). The `/tmp` staging workaround (IOWA SIGSEGVs
+on `/scratch` inputs) uses node-local `/tmp`, so the *job* stages onto the compute
+node's `/tmp`, runs binary + converter, and copies `layers_csv` / `layerseg` back
+to the shared work dir. Whether the compute nodes' `/tmp` avoids the crash the way
+the dispatcher's did is unverified. The libs (`GA_IOWA_LD_LIBRARY_PATH`) must be
+visible on the node (they live under `/home/optima` and the shared home).
 
 **Cancellation.** If a request is abandoned or a job exceeds the 3600 s dispatcher
 timeout, the dispatcher sends `srun` SIGTERM (it forwards that and cancels the
@@ -491,8 +500,9 @@ Then one real scan per task with `RI_SLURM=1` (§3b) and compare to direct mode.
 
 `full_optima` can place a job on vn1/vn2, which have not been validated for this
 workload (and are also in `centos7_vn1`, possibly another OS image). Until each
-task has passed there, either restrict jobs to on3/cn6
-(`RI_SLURM_CONSTRAINT`, or ask the admins for a feature tag) or validate. On vn1
+task has passed there, either keep jobs off them with
+`RI_SLURM_EXCLUDE=vn1,vn2,cn5` (recommended setting for now; cn5 is DOWN; feature
+tags cannot separate the nodes) or validate. On vn1
 and vn2, via `srun --gres=gpu:nv2080ti:1 ...`, check:
 
 ```sh
@@ -512,9 +522,12 @@ account:
 ```sh
 export RETINAL_INFERENCE_AUTH_TOKEN='<shared-secret>'
 export RI_SLURM_ACCOUNT=ACCOUNT        # required
+export RI_SLURM_EXCLUDE=vn1,vn2,cn5   # until vn1/vn2 are validated
 # optional: RI_SLURM_PARTITION (full_optima) RI_SLURM_GRES (gpu:nv2080ti:1)
 #           RI_SLURM_TIME RI_SLURM_MEM RI_SLURM_CPUS RI_SLURM_QOS
-#           RI_SLURM_CONSTRAINT RI_MAX_CONCURRENT (4)
+#           RI_SLURM_CONSTRAINT RI_SLURM_NODELIST RI_MAX_CONCURRENT (4)
+#           RI_SLURM_EXCLUDE (recommended: vn1,vn2,cn5)
+#           RI_SLURM_IOWA_CPUS RI_SLURM_IOWA_MEM
 retinal-inference/scripts/start-cluster-server.sh --slurm --check
 retinal-inference/scripts/start-cluster-server.sh --slurm
 ```

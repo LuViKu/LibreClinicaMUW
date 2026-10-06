@@ -125,6 +125,15 @@ class Settings(BaseSettings):
     apptainer_slurm_cpus_per_task: int | None = None  # --cpus-per-task
     apptainer_slurm_qos: str | None = None  # --qos
     apptainer_slurm_constraint: str | None = None  # --constraint
+    # --exclude: nodes jobs must never land on (e.g. "vn1,vn2,cn5" until vn1/vn2
+    # are validated; feature tags cannot separate on3/cn6 from vn1/vn2).
+    apptainer_slurm_exclude: str | None = None
+    # --nodelist: restrict GPU jobs to these nodes (e.g. "on3,cn6").
+    apptainer_slurm_nodelist: str | None = None
+    # The host-native IOWA layer-segmentation step (ga / layers) is CPU-only and
+    # runs as its own srun job (no --gres) in SLURM mode, with its own sizing.
+    apptainer_slurm_iowa_cpus_per_task: int | None = None
+    apptainer_slurm_iowa_mem: str | None = None
     # --job-name is "<prefix>-<task>". Never contains patient / scan identifiers:
     # job names are visible to every cluster user via squeue.
     apptainer_slurm_job_name: str = "ri"
