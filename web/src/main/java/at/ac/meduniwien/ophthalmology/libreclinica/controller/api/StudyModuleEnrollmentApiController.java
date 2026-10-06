@@ -116,6 +116,8 @@ public class StudyModuleEnrollmentApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
+        ResponseEntity<?> notYours = StudyAdminAuthorization.refuseUnlessMayReadStudy(me, target, studyOid, dataSource);
+        if (notYours != null) return notYours;
 
         try {
             // Inherited rows are listed too, so a site's module list matches
