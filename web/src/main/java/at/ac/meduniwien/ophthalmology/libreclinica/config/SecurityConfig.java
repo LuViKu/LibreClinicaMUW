@@ -77,7 +77,6 @@ public class SecurityConfig {
     static final String[] PUBLIC_PATHS = {
             "/pages/login/login",
             "/SystemStatus",
-            "/RequestPassword",
             "/RequestAccount",
             "/Contact",
             "/includes/**",
