@@ -46,7 +46,6 @@ import java.util.Date;
  * 
  * Processes request of 'restore an event CRF from a event'
  */
-@SuppressWarnings("all")
 public class RestoreEventCRFServlet extends SecureController {
 	private static final long serialVersionUID = -2651073493567393033L;
 
@@ -87,6 +86,8 @@ public class RestoreEventCRFServlet extends SecureController {
             request.setAttribute("id", Integer.valueOf(studySubId).toString());
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
+            assertEventCrfInScope(eventCRFId);
+            assertStudySubjectInScope(studySubId);
             EventCRFBean eventCRF = (EventCRFBean) ecdao.findByPK(eventCRFId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);

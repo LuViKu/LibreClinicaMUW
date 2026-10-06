@@ -38,7 +38,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Restores a removed subject to a study
  */
-@SuppressWarnings("all")
 public class RestoreStudySubjectServlet extends SecureController {
     /**
 	 * 
@@ -94,6 +93,8 @@ public class RestoreStudySubjectServlet extends SecureController {
             SubjectBean subject = (SubjectBean) sdao.findByPK(subjectId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
+            // the subject being restored, whatever study the request names, must be the session's
+            assertRecordInScope(studySub.getStudyId());
 
             StudyDAO studydao = new StudyDAO(sm.getDataSource());
             StudyBean study = (StudyBean) studydao.findByPK(studyId);

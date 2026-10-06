@@ -45,6 +45,9 @@ public class StudyTreeScope {
             + " JOIN study s ON s.study_id = ss.study_id"
             + " WHERE ec.event_crf_id = ?";
 
+    private static final String STUDY_ROW =
+            "SELECT study_id, parent_study_id FROM study WHERE study_id = ?";
+
     private static final String STUDY_SUBJECT_STUDY =
             "SELECT s.study_id, s.parent_study_id FROM study_subject ss"
             + " JOIN study s ON s.study_id = ss.study_id"
@@ -132,6 +135,20 @@ public class StudyTreeScope {
     /** True when the event CRF's subject is in {@code currentStudy} or one of its sites. */
     public boolean containsEventCrf(StudyBean currentStudy, int eventCrfId) {
         return inTree(currentStudy, lookupStudy(EVENT_CRF_STUDY, eventCrfId));
+    }
+
+    /**
+     * True when {@code owningStudyId} (a record's owning study, typically its study subject's
+     * {@code study_id}) is {@code currentStudy} itself or one of its sites. The one rule behind every
+     * record-level check of the heritage servlets.
+     */
+    public boolean containsStudy(StudyBean currentStudy, int owningStudyId) {
+        return inTree(currentStudy, lookupStudy(STUDY_ROW, owningStudyId));
+    }
+
+    /** True when the study event's subject is in {@code currentStudy} or one of its sites. */
+    public boolean containsStudyEvent(StudyBean currentStudy, int studyEventId) {
+        return inTree(currentStudy, lookupStudy(STUDY_EVENT_STUDY, studyEventId));
     }
 
     /** True when the study subject is in {@code currentStudy} or one of its sites. */

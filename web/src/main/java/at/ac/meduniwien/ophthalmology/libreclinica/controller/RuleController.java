@@ -239,6 +239,15 @@ public class RuleController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         currentStudy = studyDao.findByOid(studyOid);
 
+        // As the other endpoints of this class: Study Director or Data Manager of that study (a site inherits the
+        // role held on its parent), nobody else; an unknown study is not told apart from a forbidden one.
+        try {
+            mayProceed(getUserAccount(), currentStudy);
+        } catch (Exception e) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return null;
+        }
+
         MetaDataCollector mdc = new MetaDataCollector(dataSource, currentStudy, getRuleSetRuleDao());
         AdminDataCollector adc = new AdminDataCollector(dataSource, currentStudy);
         // RulesDataCollector rdc = new RulesDataCollector(sm.getDataSource(), currentStudy,getRuleSetRuleDao());
