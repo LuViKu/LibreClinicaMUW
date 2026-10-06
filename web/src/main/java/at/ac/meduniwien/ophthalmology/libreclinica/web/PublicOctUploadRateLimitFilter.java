@@ -185,6 +185,13 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain chain)
             throws ServletException, IOException {
         String uri = request.getRequestURI();
+        // The guarded prefixes are context-relative; the app runs under
+        // /LibreClinica, so getRequestURI() carries that prefix and would
+        // never match without stripping it.
+        String ctx = request.getContextPath();
+        if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
+            uri = uri.substring(ctx.length());
+        }
         String prefix = guardedPrefixFor(uri);
         if (prefix == null) {
             chain.doFilter(request, response);

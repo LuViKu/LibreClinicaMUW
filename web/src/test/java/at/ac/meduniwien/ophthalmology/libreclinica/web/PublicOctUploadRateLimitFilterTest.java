@@ -210,6 +210,29 @@ class PublicOctUploadRateLimitFilterTest {
         assertEquals(200, invoke(filter, "10.0.0.12", heartbeat).getStatus());
     }
 
+    @Test
+    void guardsPathsUnderTheDeployedContextPath() throws Exception {
+        // Production serves the app under /LibreClinica, so getRequestURI()
+        // carries the prefix; the guard must still engage.
+        ClockableFilter filter = new ClockableFilter(0L);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invokeInContext(filter, "10.0.0.20").getStatus());
+        }
+        assertEquals(429, invokeInContext(filter, "10.0.0.20").getStatus());
+    }
+
+    private static MockHttpServletResponse invokeInContext(PublicOctUploadRateLimitFilter filter,
+                                                           String remoteAddr) throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST",
+                "/LibreClinica/pages/api/v1/public/oct-upload/resolve");
+        req.setContextPath("/LibreClinica");
+        req.setRequestURI("/LibreClinica/pages/api/v1/public/oct-upload/resolve");
+        req.setRemoteAddr(remoteAddr);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(req, resp, new MockFilterChain());
+        return resp;
+    }
+
     /* ---- helpers ----------------------------------------------------- */
 
     private static MockHttpServletResponse invoke(PublicOctUploadRateLimitFilter filter,
