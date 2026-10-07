@@ -37,7 +37,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
@@ -74,7 +74,7 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
         return ClinicalWriteFixtures.sessionAs(DATA_SOURCE, "manual_investigator");
     }
 
-    private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request, String body) {
+    private static AbstractMockHttpServletRequestBuilder<?> json(AbstractMockHttpServletRequestBuilder<?> request, String body) {
         return request.contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
@@ -83,7 +83,7 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     /** The writes of the SPA's CRF endpoints, against event CRF {@code id}. */
-    private static List<Supplier<MockHttpServletRequestBuilder>> writes(int id) {
+    private static List<Supplier<AbstractMockHttpServletRequestBuilder<?>>> writes(int id) {
         String crf = "/api/v1/eventCrfs/" + id;
         return List.of(
                 () -> json(post(crf + "/items"), "{\"values\":{\"I_WEIGHT_KG\":\"71.0\"}}"),
@@ -102,7 +102,7 @@ class ClinicalWriteStateDatabaseIT extends AbstractApiControllerDatabaseIT {
     /** Each write is refused with {@code code}, and none of them changed anything. */
     private void assertEveryWriteRefused(int eventCrfId, String code) throws Exception {
         String before = state(eventCrfId);
-        for (Supplier<MockHttpServletRequestBuilder> write : writes(eventCrfId)) {
+        for (Supplier<AbstractMockHttpServletRequestBuilder<?>> write : writes(eventCrfId)) {
             MvcResult result = mvc().perform(write.get().session(investigator())).andReturn();
             String body = result.getResponse().getContentAsString();
             String call = result.getRequest().getMethod() + " " + result.getRequest().getRequestURI();

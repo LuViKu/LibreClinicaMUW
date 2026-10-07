@@ -64,7 +64,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
 
 ############################################################
-FROM tomcat:10.1-jdk25-temurin
+FROM tomcat:11.0-jdk25-temurin
 
 # Phase B.1 JDK 21 baseline: legacy Spring/Hibernate reflection needs java.base
 # opens, Castor 1.4.1's BaseXercesJDK5Serializer touches an internal JDK class
@@ -96,7 +96,7 @@ LABEL org.opencontainers.image.vendor="Department of Ophthalmology and Optometry
 LABEL org.opencontainers.image.licenses="LGPL-2.1-or-later"
 LABEL org.opencontainers.image.source="https://github.com/LuViKu/LibreClinicaMUW"
 
-# 2026-07-10 — curl for the HEALTHCHECK below. The tomcat:10.1-jdk25-temurin
+# 2026-07-10 — curl for the HEALTHCHECK below. The tomcat:11.0-jdk25-temurin
 # base does NOT ship curl: the Java 21→25 bump swapped the base image and the
 # old "curl is preinstalled" assumption silently broke, so the container
 # reported `unhealthy` forever while the app served fine (observed on the
@@ -165,7 +165,7 @@ COPY --from=builder \
 # retinal-inference sidecar (retinal-inference/Dockerfile:12-13).
 #
 # curl is installed explicitly in the runtime stage above. Do NOT assume the
-# base image ships it — tomcat:10.1-jdk25-temurin does not, and the previous
+# base image ships it — tomcat:11.0-jdk25-temurin does not, and the previous
 # "preinstalled, no apt-get layer needed" note silently went stale when the
 # Java 25 bump changed the base (see the apt-get block above).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \

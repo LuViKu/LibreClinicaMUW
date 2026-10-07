@@ -65,7 +65,7 @@ class CrossSiteIsolationLeaksIT extends CrossSiteIsolationSupport {
     /* Unauthenticated endpoints                                               */
     /* ====================================================================== */
 
-    private static Resp anonymously(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req)
+    private static Resp anonymously(org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder<?> req)
             throws Exception {
         return call(req, new MockHttpSession());
     }

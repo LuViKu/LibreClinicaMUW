@@ -47,7 +47,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -224,7 +224,7 @@ class DeidentificationRequiredDatabaseIT extends AbstractApiControllerDatabaseIT
         return sb.toString();
     }
 
-    private static MockHttpServletRequestBuilder compliantE2e(byte[] bytes, String name) throws Exception {
+    private static AbstractMockHttpServletRequestBuilder<?> compliantE2e(byte[] bytes, String name) throws Exception {
         return multipart(BASE + "/commit")
                 .file(new MockMultipartFile("file", name, "application/octet-stream", bytes))
                 .param("patientId", LABEL)
@@ -235,7 +235,7 @@ class DeidentificationRequiredDatabaseIT extends AbstractApiControllerDatabaseIT
                 .param("deidSha256", sha256(bytes));
     }
 
-    private static MockHttpServletRequestBuilder compliantDicom(byte[] bytes, String name) throws Exception {
+    private static AbstractMockHttpServletRequestBuilder<?> compliantDicom(byte[] bytes, String name) throws Exception {
         return multipart(BASE + "/commit")
                 .file(new MockMultipartFile("file", name, "application/dicom", bytes))
                 .param("patientId", LABEL)

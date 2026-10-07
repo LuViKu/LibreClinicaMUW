@@ -34,7 +34,7 @@ import org.junit.jupiter.api.DynamicNode;
 import org.junit.jupiter.api.DynamicTest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * The endpoint matrix: one {@link CrossSiteIsolationSupport.Case} per
@@ -131,7 +131,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
 
     /* ---------------------------------------------------------------------- */
 
-    private static MockHttpServletRequestBuilder rethrow(Callable<MockHttpServletRequestBuilder> body) {
+    private static AbstractMockHttpServletRequestBuilder<?> rethrow(Callable<AbstractMockHttpServletRequestBuilder<?>> body) {
         try {
             return body.call();
         } catch (Exception e) {
@@ -164,7 +164,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
     }
 
-    private static MockHttpServletRequestBuilder bindNeutral(String i, Fx target, Fx itemOwner) {
+    private static AbstractMockHttpServletRequestBuilder<?> bindNeutral(String i, Fx target, Fx itemOwner) {
         return rethrow(() -> {
             int item = itemOwner == null ? neutralUnboundItem() : itemOwner.ingestUnbound;
             return json(post(i + item + "/bind"), "{\"studySubjectId\":" + target.ss + ",\"studyEventId\":"
@@ -686,7 +686,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
         Fx foreign = k.write ? newSet(other) : shared(other);
         if (k.exportOwned) adopt(foreign, userId(user(Who.INV, other)));
-        MockHttpServletRequestBuilder req = k.mixed != null ? k.mixed.apply(own, foreign) : k.req.apply(foreign);
+        AbstractMockHttpServletRequestBuilder<?> req = k.mixed != null ? k.mixed.apply(own, foreign) : k.req.apply(foreign);
         Map<String, String> before = snapshot();
         Resp r = call(req, session);
         Map<String, String> after = snapshot();

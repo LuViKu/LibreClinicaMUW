@@ -16,7 +16,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 | Framework | Spring Boot 3.5.16 + Java config (Spring 6.2.19 + Security 6.5.11; residual security XML) | (achieved — Phase C) |
 | Web | JSP + Spring MVC + 214 servlet registrations; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
 | Persistence | Hibernate 6.6 (jakarta, Boot-managed) + Liquibase 4.31.1 (pinned; LAX parsing + serial shims) + PostgreSQL 14 in production, 17 in dev/test/CI | (Liquibase 4 achieved — Phase D-Libs, 2026-10) + PostgreSQL 17 (runbook: docs/operations/postgresql-17-upgrade.md) |
-| Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR (optional follow-up — WAR retained) |
+| Packaging | WAR in Tomcat 11 (jakarta servlet 6.1) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |

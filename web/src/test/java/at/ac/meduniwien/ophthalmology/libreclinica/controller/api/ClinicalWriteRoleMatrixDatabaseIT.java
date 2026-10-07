@@ -58,7 +58,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
@@ -209,7 +209,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writesAMonitorMayNotMake")
-    void aMonitorIsRefused(String label, Supplier<MockHttpServletRequestBuilder> request)
+    void aMonitorIsRefused(String label, Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         int monitor = userId("manual_monitor");
         int auditRowsBefore = auditRowsBy(monitor);
@@ -246,7 +246,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writesTheResearchAssistantsMayNotMake")
     void aResearchAssistantIsRefusedWhereTheRuleIsNarrower(
-            String label, MockHttpSession session, Supplier<MockHttpServletRequestBuilder> request)
+            String label, MockHttpSession session, Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         mvc().perform(request.get().session(session))
                 .andExpect(status().isForbidden())
@@ -407,7 +407,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writesAPermittedRoleMayMake")
     void aPermittedRoleGetsPastTheCheck(String label, MockHttpSession session, int expectedStatus,
-                                        Supplier<MockHttpServletRequestBuilder> request)
+                                        Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         MvcResult result = mvc().perform(request.get().session(session)).andReturn();
         String body = result.getResponse().getContentAsString();
@@ -534,22 +534,22 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     /* Helpers                                                            */
     /* ------------------------------------------------------------------ */
 
-    private static Arguments write(String label, Supplier<MockHttpServletRequestBuilder> request) {
+    private static Arguments write(String label, Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label, request);
     }
 
     private static Arguments permitted(String label, String userName, int expectedStatus,
-                                       Supplier<MockHttpServletRequestBuilder> request) {
+                                       Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label + " as " + userName, sessionAs(userName), expectedStatus, request);
     }
 
     private static Arguments permitted(String label, Role role, int expectedStatus,
-                                       Supplier<MockHttpServletRequestBuilder> request) {
+                                       Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label, investigatorHolding(role), expectedStatus, request);
     }
 
     private static Arguments narrower(String label, Role role,
-                                      Supplier<MockHttpServletRequestBuilder> request) {
+                                      Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label + " as " + role.getName(), investigatorHolding(role), request);
     }
 
@@ -559,7 +559,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
         return session;
     }
 
-    private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request,
+    private static AbstractMockHttpServletRequestBuilder<?> json(AbstractMockHttpServletRequestBuilder<?> request,
                                                       String body) {
         return request.contentType(MediaType.APPLICATION_JSON).content(body);
     }
