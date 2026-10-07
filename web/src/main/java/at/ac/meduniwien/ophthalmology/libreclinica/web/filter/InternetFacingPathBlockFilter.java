@@ -12,7 +12,7 @@ import java.io.IOException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SecurityConfig;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -37,10 +37,10 @@ public class InternetFacingPathBlockFilter extends OncePerRequestFilter {
 
     private final RequestMatcher[] blocked;
 
-    public InternetFacingPathBlockFilter(String... antPatterns) {
-        this.blocked = new RequestMatcher[antPatterns.length];
-        for (int i = 0; i < antPatterns.length; i++) {
-            this.blocked[i] = new AntPathRequestMatcher(antPatterns[i]);
+    public InternetFacingPathBlockFilter(String... patterns) {
+        this.blocked = new RequestMatcher[patterns.length];
+        for (int i = 0; i < patterns.length; i++) {
+            this.blocked[i] = SecurityConfig.pathPattern(patterns[i]);
         }
     }
 

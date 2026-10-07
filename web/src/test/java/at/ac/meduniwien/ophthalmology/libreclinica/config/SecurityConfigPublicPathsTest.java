@@ -21,7 +21,7 @@ class SecurityConfigPublicPathsTest {
         request.setContextPath("/LibreClinica");
         request.setServletPath(servletPath);
         request.setPathInfo(pathInfo);
-        for (RequestMatcher matcher : SecurityConfig.antPaths(SecurityConfig.PUBLIC_PATHS)) {
+        for (RequestMatcher matcher : SecurityConfig.pathPatterns(SecurityConfig.PUBLIC_PATHS)) {
             if (matcher.matches(request)) {
                 return true;
             }

@@ -38,7 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurit
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
-import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
+import org.springframework.security.web.transport.HttpsRedirectFilter;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -64,13 +64,25 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * which does {@code Class.forName("javax.servlet.Filter")} — on a
  * jakarta-only classpath the class doesn't exist and the JVM throws
  * {@code NoClassDefFoundError} (not the {@code ClassNotFoundException} the
- * compat path catches). Pass explicit {@link AntPathRequestMatcher} instances
- * via {@link #antPaths(String...)} to bypass that check.
+ * compat path catches). Security 7 dropped that check and the Ant matcher; the
+ * rules still pass explicit {@link PathPatternRequestMatcher} instances
+ * via {@link #pathPatterns(String...)}, so they never depend on the MVC lookup.
  */
 @Configuration
 @EnableWebSecurity
 @EnableScheduling
 public class SecurityConfig {
+
+    /**
+     * Where the rate limiter and the internet-facing block sit in the chain.
+     * Security 6 anchored them before {@code ChannelProcessingFilter}, which
+     * Security 7 removed together with channel security. Its slot in the filter
+     * order is now empty and {@link HttpsRedirectFilter} is the next filter after
+     * it, so "before {@code HttpsRedirectFilter}" is the same position: after
+     * the encode-URL and eager-session filters, ahead of the security context,
+     * logout, pre-authentication and form login.
+     */
+    static final Class<HttpsRedirectFilter> RATE_LIMIT_ANCHOR = HttpsRedirectFilter.class;
 
     /**
      * Paths any caller may reach without a session. A live handler behind a
@@ -323,12 +335,12 @@ public class SecurityConfig {
             authorization(boolean internetFacing, boolean ssoEnabled, boolean deidRequired) {
         return auth -> {
             if (internetFacing) {
-                auth.requestMatchers(antPaths(internetFacingDeniedPaths(ssoEnabled))).denyAll();
+                auth.requestMatchers(pathPatterns(internetFacingDeniedPaths(ssoEnabled))).denyAll();
             }
             if (deidRequired) {
-                auth.requestMatchers(antPaths(DEIDENTIFICATION_CLOSED_PATHS)).denyAll();
+                auth.requestMatchers(pathPatterns(DEIDENTIFICATION_CLOSED_PATHS)).denyAll();
             }
-            auth.requestMatchers(antPaths(PUBLIC_PATHS)).permitAll()
+            auth.requestMatchers(pathPatterns(PUBLIC_PATHS)).permitAll()
                 .anyRequest().hasRole("USER");
         };
     }
@@ -391,7 +403,7 @@ public class SecurityConfig {
         // /pages/api/** (SPA channel) while keeping the 302 redirect
         // for every other unauthenticated request (legacy JSP channel).
         LinkedHashMap<RequestMatcher, AuthenticationEntryPoint> entryPoints = new LinkedHashMap<>();
-        entryPoints.put(PathPatternRequestMatcher.withDefaults().matcher("/pages/api/**"),
+        entryPoints.put(pathPattern("/pages/api/**"),
                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED));
         DelegatingAuthenticationEntryPoint splitEntryPoint =
                 new DelegatingAuthenticationEntryPoint(entryPoints);
@@ -417,7 +429,7 @@ public class SecurityConfig {
             .anonymous(_ -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
             .authorizeHttpRequests(authorization(internetFacing, ssoProperties.isEnabled(), deidRequired))
-            .addFilterBefore(publicOctUploadRateLimitFilter, WebAsyncManagerIntegrationFilter.class) // SPIKE: channel security removed in Security 7
+            .addFilterBefore(publicOctUploadRateLimitFilter, RATE_LIMIT_ANCHOR)
             .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
             .logout(logout -> logout
@@ -488,10 +500,23 @@ public class SecurityConfig {
         return http.build();
     }
 
-    static RequestMatcher[] antPaths(String... patterns) {
+    /**
+     * Matcher for one pattern. Spring 7 path patterns are strict about the
+     * trailing slash ({@code /Contact/} does not match {@code /Contact}), as the
+     * Ant matcher this replaces was; a pattern meant to cover the slash form
+     * says so ({@code /x/**}). Applied to the request path below the context
+     * path with the container's path parameters ({@code ;jsessionid=}) ignored.
+     * Used by the authorization rules, the entry-point split and
+     * {@link InternetFacingPathBlockFilter}.
+     */
+    public static RequestMatcher pathPattern(String pattern) {
+        return PathPatternRequestMatcher.withDefaults().matcher(pattern);
+    }
+
+    static RequestMatcher[] pathPatterns(String... patterns) {
         RequestMatcher[] matchers = new RequestMatcher[patterns.length];
         for (int i = 0; i < patterns.length; i++) {
-            matchers[i] = PathPatternRequestMatcher.withDefaults().matcher(patterns[i]);
+            matchers[i] = pathPattern(patterns[i]);
         }
         return matchers;
     }
