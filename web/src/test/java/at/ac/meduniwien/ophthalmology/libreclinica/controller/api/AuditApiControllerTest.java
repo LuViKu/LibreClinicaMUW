@@ -207,7 +207,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void sqlTemplateIncludesDatasetExportBranch() throws Exception {
-        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPE_TEMPLATE");
         f.setAccessible(true);
         String sql = (String) f.get(null);
         assertTrue(sql.contains("a.audit_table = 'dataset'"),
@@ -223,7 +223,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void sqlTemplatePlacesAutoTickAndIngestRowsByWhatTheyRecord() throws Exception {
-        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPE_TEMPLATE");
         f.setAccessible(true);
         String sql = (String) f.get(null);
         assertTrue(sql.contains("a.audit_log_event_type_id IS DISTINCT FROM 129"),
@@ -252,6 +252,21 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
         // A non-empty reason-for-change still wins, mirroring the legacy
         // mapping the SPA's existing variants depend on.
         assertEquals("reason-for-change", m.invoke(null, 52, "operator override"));
+    }
+
+    /**
+     * The CRF library's types: a CRF's name or description edited (142) and
+     * a batch move of event CRFs to another version (143) are admin rows; a
+     * signature removed by that move (144) is a signing row; an event CRF
+     * removed with its CRF or version (190, 191) is a data row.
+     */
+    @Test
+    void variantForTheCrfLibraryTypes() {
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.CRF_FIELD_UPDATED, null));
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_BATCH_MIGRATION, null));
+        assertEquals("signed", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_SIGNATURE_REMOVED, null));
+        assertEquals("data", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, null));
+        assertEquals("data", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION, null));
     }
 
     /**

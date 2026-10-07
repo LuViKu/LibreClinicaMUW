@@ -22,7 +22,7 @@
 	<td class="table_cell"><c:out value="${currRow.bean.status.name}" /></td>
 	<td class="table_cell"><fmt:message key="auth_type.${currRow.bean.authtype}" bundle="${resword}" /></td>
 	
-	<%-- ACTIONS --%>
+	<%-- ACTIONS. Remove, restore and unlock post small forms: their servlets refuse GET. --%>
 	<td class="table_cell">
 	 <table border="0" cellpadding="0" cellspacing="0">
 	 <tr>
@@ -43,9 +43,12 @@
 					</c:set> 
 					
 					<c:set var="onClick" value="return confirm('${confirmQuestion}');"/>
-					<td><a href="DeleteUser?action=4&userId=<c:out value="${currRow.bean.id}"/>" onClick="<c:out value="${onClick}" />"
-					onMouseDown="javascript:setImage('bt_Restor3','images/bt_Restore_d.gif');"
-				    onMouseUp="javascript:setImage('bt_Restore3','images/bt_Restore.gif');">	<img name="bt_Restore3" src="images/bt_Restore.gif" border="0" alt="<fmt:message key="restore" bundle="${resword}"/>" title="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="6"></a>
+					<td><form action="DeleteUser" method="post" style="display:inline; margin:0" onSubmit="<c:out value="${onClick}" />">
+						<input type="hidden" name="action" value="4"/>
+						<input type="hidden" name="userId" value="<c:out value="${currRow.bean.id}"/>"/>
+						<input type="image" name="bt_Restore3" src="images/bt_Restore.gif" alt="<fmt:message key="restore" bundle="${resword}"/>" title="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="6"
+						onMouseDown="javascript:setImage('bt_Restor3','images/bt_Restore_d.gif');"
+						onMouseUp="javascript:setImage('bt_Restore3','images/bt_Restore.gif');"></form>
 				   	</td>
 			</c:when>
 			<c:otherwise>
@@ -78,16 +81,19 @@
 				</c:set> 
 				
 				<c:set var="onClick" value="return confirm('${confirmQuestion}');"/>
-				<td><a href="DeleteUser?action=3&userId=<c:out value="${currRow.bean.id}"/>" onClick="<c:out value="${onClick}" />"
+				<td><form action="DeleteUser" method="post" style="display:inline; margin:0" onSubmit="<c:out value="${onClick}" />">
+					<input type="hidden" name="action" value="3"/>
+					<input type="hidden" name="userId" value="<c:out value="${currRow.bean.id}"/>"/>
+					<input type="image" name="bt_Remove1" src="images/bt_Remove.gif" alt="<fmt:message key="remove" bundle="${resword}"/>" title="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="6"
 					onMouseDown="javascript:setImage('bt_Remove1','images/bt_Remove_d.gif');"
-					onMouseUp="javascript:setImage('bt_Remove1','images/bt_Remove.gif');">
-					<img name="bt_Remove1" src="images/bt_Remove.gif" border="0" alt="<fmt:message key="remove" bundle="${resword}"/>" title="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="6"></a>
+					onMouseUp="javascript:setImage('bt_Remove1','images/bt_Remove.gif');"></form>
 				&nbsp;</td>
 				<c:if test='${currRow.bean.status.locked}'>
-					<td><a href="UnLockUser?userId=<c:out value="${currRow.bean.id}"/>"
+					<td><form action="UnLockUser" method="post" style="display:inline; margin:0">
+						<input type="hidden" name="userId" value="<c:out value="${currRow.bean.id}"/>"/>
+						<input type="image" name="bt_Unlock1" src="images/bt_Unlock.gif" alt="<fmt:message key="unlock" bundle="${resword}"/>" title="<fmt:message key="unlock" bundle="${resword}"/>" align="left" hspace="6"
 	                    onMouseDown="javascript:setImage('bt_Unlock1','images/bt_Unlock.gif');"
-	                    onMouseUp="javascript:setImage('bt_Unlock1','images/bt_Unlock.gif');"
-	                    ><img name="bt_Unlock1" src="images/bt_Unlock.gif" border="0" alt="<fmt:message key="unlock" bundle="${resword}"/>" title="<fmt:message key="unlock" bundle="${resword}"/>" align="left" hspace="6"></a>
+	                    onMouseUp="javascript:setImage('bt_Unlock1','images/bt_Unlock.gif');"></form>
 	                </td>
                 </c:if>
 			</c:otherwise>
@@ -174,16 +180,22 @@
 					</c:if>
 					<c:choose>
 					<c:when test='${sur.status.deleted}'>
-						<a href="DeleteStudyUserRole?studyId=<c:out value="${sur.studyId}" />&userName=<c:out value="${currRow.bean.name}"/>&action=4" onClick="<c:out value="${onClick}" />"
+						<form action="DeleteStudyUserRole" method="post" style="display:inline; margin:0" onSubmit="<c:out value="${onClick}" />">
+							<input type="hidden" name="studyId" value="<c:out value="${sur.studyId}" />"/>
+							<input type="hidden" name="userName" value="<c:out value="${currRow.bean.name}"/>"/>
+							<input type="hidden" name="action" value="4"/>
+							<input type="image" name="bt_Restore3" src="images/bt_Restore.gif" alt="<fmt:message key="restore" bundle="${resword}"/>" title="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="6"
 							onMouseDown="javascript:setImage('bt_Restor3','images/bt_Restore_d.gif');"
-						    onMouseUp="javascript:setImage('bt_Restore3','images/bt_Restore.gif');"
-						   	><img name="bt_Restore3" src="images/bt_Restore.gif" border="0" alt="<fmt:message key="restore" bundle="${resword}"/>" title="<fmt:message key="restore" bundle="${resword}"/>" align="left" hspace="6"></a>
+							onMouseUp="javascript:setImage('bt_Restore3','images/bt_Restore.gif');"></form>
 					</c:when>
 					<c:otherwise>
-						<a href="DeleteStudyUserRole?studyId=<c:out value="${sur.studyId}" />&userName=<c:out value="${currRow.bean.name}"/>&action=3" onClick="<c:out value="${onClick}" />"
+						<form action="DeleteStudyUserRole" method="post" style="display:inline; margin:0" onSubmit="<c:out value="${onClick}" />">
+							<input type="hidden" name="studyId" value="<c:out value="${sur.studyId}" />"/>
+							<input type="hidden" name="userName" value="<c:out value="${currRow.bean.name}"/>"/>
+							<input type="hidden" name="action" value="3"/>
+							<input type="image" name="bt_Remove3" src="images/bt_Remove.gif" alt="<fmt:message key="remove" bundle="${resword}"/>" title="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="6"
 							onMouseDown="javascript:setImage('bt_Remove3','images/bt_Remove_d.gif');"
-						    onMouseUp="javascript:setImage('bt_Remove3','images/bt_Remove.gif');"
-						   	><img name="bt_Remove3" src="images/bt_Remove.gif" border="0" alt="<fmt:message key="remove" bundle="${resword}"/>" title="<fmt:message key="remove" bundle="${resword}"/>" align="left" hspace="6"></a>
+							onMouseUp="javascript:setImage('bt_Remove3','images/bt_Remove.gif');"></form>
 					</c:otherwise>
 					</c:choose>
 				</td>

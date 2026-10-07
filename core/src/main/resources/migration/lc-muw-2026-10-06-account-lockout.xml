@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      Account lockout is on by default, at five failed logins.
+
+      Every database is seeded (migration/3.0/2009-04-02-3397.xml) with
+      user.lock.switch = FALSE and
+      user.lock.allowedFailedConsecutiveLoginAttempts = 3, so the lockout in
+      OpenClinicaUsernamePasswordAuthenticationFilter.lockAccount() never fires
+      until an administrator turns it on, and nobody does. Passwords can then be
+      guessed without limit.
+
+      This changeset turns it on only while the switch still has the seeded value
+      FALSE. An administrator who set it to anything else (TRUE, or a lower-case
+      false that records a decision) keeps their choice, as does one who changed
+      the threshold while leaving the switch off: the threshold is raised from the
+      seeded 3 to 5 only together with the switch, in the same step. The whole
+      changeset is skipped (MARK_RAN) otherwise, and a later run never revisits.
+
+      An administrator unlocks an account in the SPA (Users > Unlock, POST
+      /pages/api/v1/users/{username}/unlock) or in the legacy UI (UnLockUser).
+    -->
+    <changeSet id="2026-10-06-account-lockout-on" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM configuration
+                 WHERE key = 'user.lock.switch' AND value = 'FALSE'
+            </sqlCheck>
+        </preConditions>
+        <comment>Enable account lockout and raise the allowed failed attempts from the seeded 3 to 5, unless an administrator already changed the switch.</comment>
+
+        <update tableName="configuration">
+            <column name="value" value="5"/>
+            <where>key = 'user.lock.allowedFailedConsecutiveLoginAttempts' AND value = '3'</where>
+        </update>
+        <update tableName="configuration">
+            <column name="value" value="TRUE"/>
+            <where>key = 'user.lock.switch' AND value = 'FALSE'</where>
+        </update>
+
+        <rollback>
+            <update tableName="configuration">
+                <column name="value" value="FALSE"/>
+                <where>key = 'user.lock.switch'</where>
+            </update>
+            <update tableName="configuration">
+                <column name="value" value="3"/>
+                <where>key = 'user.lock.allowedFailedConsecutiveLoginAttempts'</where>
+            </update>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

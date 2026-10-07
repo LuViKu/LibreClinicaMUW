@@ -79,14 +79,6 @@ public class BuildStudyApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(BuildStudyApiController.class);
 
-    /** Count distinct users with any role on the study (or its sites). */
-    private static final String COUNT_USERS_SQL = """
-            SELECT COUNT(DISTINCT sur.user_id)
-            FROM study_user_role sur
-            WHERE sur.study_id = ?
-               OR sur.study_id IN (SELECT study_id FROM study WHERE parent_study_id = ?)
-            """;
-
     /** Count rules attached to the study. */
     private static final String COUNT_RULES_SQL = """
             SELECT COUNT(*) FROM rule WHERE study_id = ?
@@ -169,6 +161,12 @@ public class BuildStudyApiController {
      *       with {@link ValidationErrorBody} otherwise.</li>
      *   <li>Same auth + visibility guard as the GET — 401 / 404 /
      *       403 are emitted before any write.</li>
+     *   <li>The gate of the other study-build writes: 403 unless the
+     *       caller may edit the study
+     *       ({@link StudyAdminAuthorization#userMayEditStudy}), 409 while
+     *       the study is locked or frozen. Legacy <em>Mark Complete</em>
+     *       ({@code StudyModuleController}) admitted admin, director and
+     *       coordinator only.</li>
      * </ul>
      *
      * <p>Audit: writes one {@code audit_log_event} row of type 63
@@ -212,6 +210,16 @@ public class BuildStudyApiController {
 
         ResponseEntity<?> guard = visibilityGuard(study, oid, session, me);
         if (guard != null) return guard;
+
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit recording build-study progress on this study"));
+        }
+        if (!StudyAdminAuthorization.studyAcceptsWrites(study)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Study is " + study.getStatus().getName().toLowerCase(Locale.ROOT)
+                            + " — writes are refused until it is unlocked"));
+        }
 
         try (Connection c = dataSource.getConnection()) {
             try (PreparedStatement ps = c.prepareStatement(INSERT_ACK_SQL)) {

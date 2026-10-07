@@ -13,6 +13,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { isTristateParent } from './tristateReason'
 import FieldLabel from './FieldLabel.vue'
 import TextInput from './TextInput.vue'
 import DateInput from './DateInput.vue'
@@ -24,6 +25,7 @@ import FileUploadInput from './FileUploadInput.vue'
 
 import type { CrfItem } from '@/types/crf'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
+import { useAuthStore } from '@/stores/auth'
 
 interface Props {
   item: CrfItem
@@ -55,6 +57,14 @@ interface Props {
    * Undefined leaves the widget inactive.
    */
   parentValue?: unknown
+  /**
+   * Current text of the sibling reason item, for a TRISTATE_REASON parent.
+   * The reason lives on a separate item_data row, so the widget cannot read
+   * it from {@code modelValue} (which carries the Ja/Nein/Unbekannt token).
+   * Without this the inline textarea opened empty on a CRF that already had
+   * a reason saved.
+   */
+  tristateReason?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -66,6 +76,7 @@ const props = withDefaults(defineProps<Props>(), {
   suppressLabel: false,
   compact: false,
   parentValue: undefined,
+  tristateReason: '',
 })
 
 const emit = defineEmits<{
@@ -100,6 +111,14 @@ const hasError = computed(() => props.errorMessage != null)
  * OID-suffix heuristic below.
  */
 const catalogStore = useOphthFieldCatalogStore()
+
+/**
+ * Internet-facing deployment: a CRF attachment would carry whatever the file
+ * carries (a scan with a name in it, a PDF letter), and nothing strips it. The
+ * server refuses the upload too; this keeps the widget from offering it.
+ */
+const authStore = useAuthStore()
+const fileUploadBlocked = computed(() => authStore.user?.deidentificationRequired === true)
 const catalogEntry = computed(() => catalogStore.entryForOid(props.item.oid))
 
 const textBindings = computed(() => ({
@@ -217,18 +236,7 @@ const ophthPresentation = computed<OphthPresentation>(() => {
   // TRISTATE_REASON parent: detected via the *_TRISTATE OID suffix OR by
   // three options, one matching "unbekannt"/"unknown". Same select-one wire
   // shape as segmented-yesno (legacy XLS uploads stay compatible).
-  if (tail.endsWith('_TRISTATE')) {
-    return { widget: 'tristate-radio' }
-  }
-  if (
-    props.item.dataType === 'select-one' &&
-    props.item.options &&
-    props.item.options.length === 3 &&
-    props.item.options.some((o) => {
-      const c = String(o.code).toLowerCase()
-      return c === 'unbekannt' || c === 'unknown' || c === '2'
-    })
-  ) {
+  if (isTristateParent(props.item, null)) {
     return { widget: 'tristate-radio' }
   }
   if (tail.endsWith('_DONE') || tail.endsWith('_DURCHGEFUEHRT')) {
@@ -360,7 +368,16 @@ const tristateRadioName = computed(() => `tristate-radio-${props.item.oid}`)
  * its text is preserved in-memory (matches the {@code hiddenValues}
  * spec — the show-when machinery already guards persistence).
  */
-const tristateReason = ref<string>('')
+const tristateReason = ref<string>(props.tristateReason ?? '')
+// The sibling's value arrives asynchronously with the rest of the CRF, and
+// can change under us when another row is saved, so follow the prop rather
+// than only seeding once.
+watch(
+  () => props.tristateReason,
+  (incoming) => {
+    if ((incoming ?? '') !== tristateReason.value) tristateReason.value = incoming ?? ''
+  },
+)
 
 /** Tracks the reveal so we can autofocus the textarea exactly once. */
 const tristateReasonInput = ref<HTMLTextAreaElement | null>(null)
@@ -694,11 +711,17 @@ function fileRef(): { filename: string; bytes: number } | null {
         :too-big-message="t('crfEntry.file.tooBig')"
         :bad-extension-message="t('crfEntry.file.badExtension')"
         :busy="fileBusy"
-        :disabled="disabled"
+        :disabled="disabled || fileUploadBlocked"
         :error="hasError"
         @upload="(f: File) => emit('upload-file', f)"
         @clear="emit('clear-file')"
       />
+      <p
+        v-if="fileUploadBlocked"
+        class="mt-1.5 text-[12px] text-amber-800"
+        role="note"
+        :data-testid="`${inputId}-file-deid-blocked`"
+      >{{ t('crfEntry.file.deidBlocked') }}</p>
     </template>
 
     <template v-else-if="compact && (item.dataType === 'integer' || item.dataType === 'real' || item.dataType === 'string')">

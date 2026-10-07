@@ -215,6 +215,7 @@ public final class RetinalClusterHealth {
     }
 
     /** Probe every node concurrently, so one dead node costs one timeout, not N. Order is preserved. */
+    @SuppressWarnings("resource") // pool is shut down in finally (shutdownNow, no waiting); ExecutorService.close() would block on the probes
     public List<NodeStatus> probeAll(List<NodeSpec> specs) {
         if (specs.isEmpty()) return List.of();
         ExecutorService pool = Executors.newFixedThreadPool(specs.size());

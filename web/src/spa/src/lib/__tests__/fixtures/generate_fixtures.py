@@ -358,10 +358,78 @@ def make_multi_scan() -> bytes:
     return assemble_file(chunks)
 
 
+# ---------------------------------------------------------------------------
+# Browser de-identification (layer 1) fixtures.
+#
+# phi-original.e2e   a patient chunk full of identity (name, title, DOB, sex,
+#                    hospital ID) plus a fundus image and one OD volume.
+# phi-stripped.e2e   the SAME file as the browser layer must leave it: first
+#                    name / title / DOB / sex zero, surname + patient_id = the
+#                    study label, every other byte unchanged. Built here by an
+#                    implementation independent of the TypeScript one, so
+#                    deidentify.spec.ts comparing the two byte for byte checks
+#                    the contract, not the code against itself.
+#
+# Patient payload layout (oct_converter e2e_binary.patient_id_structure):
+#   first_name(31) surname(51) title(15) birthdate(u32) sex(1) patient_id(25)
+# ---------------------------------------------------------------------------
+
+PHI_LABEL = "HAE-042"
+PHI_FIRST_NAME = "Maximilian"
+PHI_SURNAME = "Mustermann"
+PHI_TITLE = "Dr."
+PHI_BIRTHDATE = 19700101  # stored as YYYYMMDD, which oct_converter accepts
+PHI_SEX = "M"
+PHI_PATIENT_ID = "MRN-778899"
+
+TYPE_IMAGE = 1073741824  # 0x40000000
+
+
+def build_phi_patient_payload(
+    first: str, surname: str, title: str, birthdate: int, sex: str, pid: str
+) -> bytes:
+    return (
+        pad(first.encode("latin-1"), 31)
+        + pad(surname.encode("latin-1"), 51)
+        + pad(title.encode("latin-1"), 15)
+        + struct.pack("<I", birthdate)
+        + pad(sex.encode("latin-1"), 1)
+        + pad(pid.encode("latin-1"), 25)
+    )
+
+
+def build_fundus_payload(width: int, height: int) -> bytes:
+    """20-byte image_structure (size, type, unknown, height, width) + 8-bit pixels."""
+    pixels = bytes((x * 7 + y * 13) % 256 for y in range(height) for x in range(width))
+    return struct.pack("<IIIII", len(pixels), 0, 0, height, width) + pixels
+
+
+def make_phi_scan(stripped: bool) -> bytes:
+    ticks = datetime_to_windows_ticks(datetime(2024, 5, 6, tzinfo=timezone.utc))
+    if stripped:
+        patient = build_phi_patient_payload("", PHI_LABEL, "", 0, "", PHI_LABEL)
+    else:
+        patient = build_phi_patient_payload(
+            PHI_FIRST_NAME, PHI_SURNAME, PHI_TITLE, PHI_BIRTHDATE, PHI_SEX, PHI_PATIENT_ID
+        )
+    chunks = [
+        ChunkPlan(TYPE_PATIENT_DATA, 7, 0, 0, -1, patient),
+        ChunkPlan(TYPE_IMAGE, 7, 30, 300, -1, build_fundus_payload(24, 16)),
+        ChunkPlan(TYPE_PRE_DATA, 7, 30, 301, -1, build_pre_data_payload("R")),
+        ChunkPlan(
+            TYPE_BSCAN_METADATA, 7, 30, 301, 0,
+            build_bscan_metadata_payload(num_images=25, acquisition_ticks=ticks),
+        ),
+    ]
+    return assemble_file(chunks)
+
+
 def main() -> None:
     here = Path(__file__).parent
     (here / "single-scan.e2e").write_bytes(make_single_scan())
     (here / "multi-scan-OD-OS.e2e").write_bytes(make_multi_scan())
+    (here / "phi-original.e2e").write_bytes(make_phi_scan(stripped=False))
+    (here / "phi-stripped.e2e").write_bytes(make_phi_scan(stripped=True))
     print(f"Wrote fixtures to {here}")
 
 

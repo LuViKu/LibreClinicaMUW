@@ -11,20 +11,15 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.sql.Types;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -34,14 +29,11 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,6 +104,18 @@ public class ImageIngestApiController {
         if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
         return access;
     }
+    private IngestItemVisibility visibility;
+
+    private IngestItemVisibility visibility() {
+        if (visibility == null) visibility = new IngestItemVisibility(dataSource, access());
+        return visibility;
+    }
+
+    /** 404 for an item that does not exist or that the session may not see (no existence oracle). */
+    private ResponseEntity<?> guardItem(long id, HttpSession session) {
+        if (visibility().canSee(id, session)) return null;
+        return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+    }
     private final StudySubjectFinder studySubjectFinder;
 
     @Autowired
@@ -157,6 +161,7 @@ public class ImageIngestApiController {
                 // image inbox asked for images, and handing them a 200 MB scan
                 // row with no preview would be a surprising answer.
                 + "  AND kind IN ('image', 'dicom') "
+                + "  AND " + visibility().predicate("ingest_item", session) + " "
                 + "ORDER BY received_at DESC LIMIT " + INBOX_LIMIT;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -219,6 +224,7 @@ public class ImageIngestApiController {
 
     // ----- GET /{id}/preview -----
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping("/{id:[0-9]+}/preview")
     public ResponseEntity<?> preview(@PathVariable("id") long id, HttpSession session,
                                      HttpServletResponse response) {
@@ -257,6 +263,9 @@ public class ImageIngestApiController {
             ResponseEntity<?> visGuard = access().guardStudyVisibility(subjectStudyId(boundSubjectId), session,
                     "This image belongs to a study you cannot access");
             if (visGuard != null) return visGuard;
+        } else {
+            ResponseEntity<?> itemGuard = guardItem(id, session);
+            if (itemGuard != null) return itemGuard;
         }
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for image " + id));
@@ -312,6 +321,8 @@ public class ImageIngestApiController {
         ResponseEntity<?> visGuard = access().guardStudyVisibility(studyId, session,
                 "the chosen subject belongs to a study you cannot access");
         if (visGuard != null) return visGuard;
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
 
         IngestBindService.Result r = new IngestBindService(dataSource).bind(
                 id, req.studySubjectId(), req.studyEventId(), req.eventCrfId(),
@@ -341,6 +352,8 @@ public class ImageIngestApiController {
         if (guard != null) return guard;
         ResponseEntity<?> roleGuard = guardReconcileRole(session);
         if (roleGuard != null) return roleGuard;
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
 
         IngestBindService.Result r = new IngestBindService(dataSource).dismiss(
                 id, req == null ? null : req.reason(),

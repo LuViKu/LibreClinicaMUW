@@ -15,13 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
-import java.sql.Types;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +32,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepo
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,6 +83,14 @@ public class PublicImageUploadController {
 
     private final DataSource dataSource;
     private final StudySubjectFinder studySubjectFinder;
+
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
 
     @Autowired
     public PublicImageUploadController(@Qualifier("dataSource") DataSource dataSource,
@@ -220,10 +221,14 @@ public class PublicImageUploadController {
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
             @RequestParam(value = "device", required = false) String device) {
 
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.accountlessClosed();
+        }
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }
-        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        String declaredType = file.getContentType();
+        String contentType = declaredType == null ? "" : declaredType.toLowerCase();
         if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
             return ResponseEntity.badRequest().body(Map.of("message", "only JPEG or PNG images are accepted"));
         }

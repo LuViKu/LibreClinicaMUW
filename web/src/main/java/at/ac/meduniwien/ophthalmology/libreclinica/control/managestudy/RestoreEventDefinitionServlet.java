@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -66,6 +68,12 @@ public class RestoreEventDefinitionServlet extends SecureController {
 
     }
 
+    /** GET shows the confirmation; restoring the event definition takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         String idString = request.getParameter("id");
@@ -116,7 +124,6 @@ public class RestoreEventDefinitionServlet extends SecureController {
             }
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
             request.setAttribute("participateFormStatus",participateFormStatus );
-            if (participateFormStatus.equals("enabled")) baseUrl();
                         
             request.setAttribute("definitionToRestore", sed);
             request.setAttribute("eventDefinitionCRFs", eventDefinitionCRFs);

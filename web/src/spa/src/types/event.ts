@@ -97,6 +97,27 @@ export function canCancelEvent(role: UserRole, status: StudyEventStatus): boolea
   return canEditEvent(role, status)
 }
 
+/*
+ * Controls for other clinical writes, each following its server rule in
+ * ClinicalWriteAuthorization's role matrix, so the SPA hides what the API
+ * refuses. The Monitor, who may view but not change data, gets none.
+ */
+
+/** Add a subject, start a CRF, enter data: ClinicalWriteAuthorization.roleMayEnterData. */
+export function canEnterData(role: UserRole): boolean {
+  return role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator'
+}
+
+/** Restore a removed CRF: EventCrfRestoreAuthorization (coordinator, director, admin). */
+export function canRestoreCrf(role: UserRole): boolean {
+  return role === 'CRC' || role === 'Data Manager' || role === 'Administrator'
+}
+
+/** File an image to a visit or take it off one: IngestBindAuthorization. */
+export function canBindVisitImages(role: UserRole): boolean {
+  return role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator'
+}
+
 /** Phase E A4 — body of PUT /api/v1/events/{id}. */
 export type UpdateEventRequest = components['schemas']['UpdateEventRequest']
 
@@ -118,10 +139,10 @@ export type EventCrfRowStatus =
   | 'stopped'
   | 'signed'
   /**
-   * Phase E.6 restore-quickwins — soft-deleted via
-   * {@code DELETE /api/v1/eventCrfs/{id}} (AUTO_DELETED in the DB).
-   * The EventDetailView surfaces a Restore action for this state;
-   * the row's data is preserved server-side.
+   * Removed, on its own ({@code POST /api/v1/eventCrfs/{id}/remove} or
+   * the legacy RemoveEventCRF page; DELETED in the DB) or with its visit
+   * (AUTO_DELETED). The EventDetailView surfaces a Restore action for
+   * this state; the row's data is preserved server-side.
    */
   | 'removed'
 
@@ -151,6 +172,20 @@ export interface EventDetailDto {
   ordinal: number
   repeating: boolean
   crfs: EventCrfRowDto[]
+}
+
+/** GET /pages/api/v1/eventCrfs/{id}/removal-impact — what removing the CRF takes out. */
+export interface EventCrfRemovalImpact {
+  /** Values entered on the CRF; the removal marks them removed with it. */
+  values: number
+  /** Open discrepancy-note threads on those values; the removal closes them. */
+  openNoteThreads: number
+}
+
+/** Body of POST /pages/api/v1/eventCrfs/{id}/remove. */
+export interface RemoveEventCrfRequest {
+  /** Why the CRF is removed; required, at most 1000 characters. */
+  reason: string
 }
 
 /*

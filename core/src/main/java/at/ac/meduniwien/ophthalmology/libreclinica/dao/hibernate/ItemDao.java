@@ -15,21 +15,9 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.ItemOidGenerator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.OidGenerator;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item;
-import org.hibernate.query.Query;
 import org.hibernate.query.NativeQuery;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class ItemDao extends AbstractDomainDao<Item> {
 
     @Override
@@ -45,40 +33,36 @@ public class ItemDao extends AbstractDomainDao<Item> {
         return (Item) q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings("rawtypes")
     public Item findByNameCrfId(String name, Integer crfId) {
         String query = "select distinct i.* from item i, item_form_metadata ifm,crf_version cv " + "where i.name = :name and i.item_id= ifm.item_id "
                 + "and ifm.crf_version_id=cv.crf_version_id " + "and cv.crf_id = :crfId";
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(Item.class);
+        NativeQuery<Item> q = getCurrentSession().createNativeQuery(query, Item.class);
         q.setParameter("name", name, String.class);
         q.setParameter("crfId", crfId, Integer.class);
-        return ((Item) q.getSingleResultOrNull());
+        return q.getSingleResultOrNull();
     }
-    
+
   public static final String findAllByCrfVersionIdQuery = "select distinct i.* from item i, item_form_metadata ifm " + "where i.item_id= ifm.item_id "
           + "and ifm.crf_version_id = :crfversionid";
 
-  @SuppressWarnings({"rawtypes", "unchecked"})
   public List<Item> findAllByCrfVersionId(Integer crfVersionId) {
-      NativeQuery q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery).addEntity(Item.class);
+      NativeQuery<Item> q = getCurrentSession().createNativeQuery(findAllByCrfVersionIdQuery, Item.class);
       q.setParameter("crfversionid", crfVersionId.intValue());
-      return (List<Item>) q.getResultList();
+      return q.getResultList();
   }
 
-  @SuppressWarnings("rawtypes")
     public int getItemDataTypeId(Item item) {
         String query = "select item_data_type_id from item where item_id = " + item.getItemId();
-        Query q = getCurrentSession().createNativeQuery(query);
-        return ((Number) q.getSingleResultOrNull()).intValue();
+        NativeQuery<Integer> q = getCurrentSession().createNativeQuery(query, Integer.class);
+        return q.getSingleResultOrNull().intValue();
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     public ArrayList<Item> findByItemGroupCrfVersionOrdered(Integer itemGroupId, Integer crfVersionId) {
         String query = "select distinct i.* from item i, item_group fg, item_group_metadata fgim " + " where fg.item_group_id= " + String.valueOf(itemGroupId)
                 + " and fg.item_group_id=fgim.item_group_id and fgim.crf_version_id= " + String.valueOf(crfVersionId)
                 + " and fgim.item_id=i.item_id order by i.item_id";
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(Item.class);
-        return (ArrayList<Item>) q.getResultList();
+        NativeQuery<Item> q = getCurrentSession().createNativeQuery(query, Item.class);
+        return new ArrayList<>(q.getResultList());
     }
 
     public String getValidOid(Item item, String crfName, String itemLabel, ArrayList<String> oidList) {

@@ -204,8 +204,8 @@ class FailureAuditDatabaseIT extends AbstractApiControllerDatabaseIT {
         // enough that any hit is conclusive.
         mockMvc.perform(get("/api/v1/audit").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[?(@.details =~ /.*" + marker + ".*/)]")
+                .andExpect(jsonPath("$.events").isArray())
+                .andExpect(jsonPath("$.events[?(@.details =~ /.*" + marker + ".*/)]")
                         .doesNotExist());
     }
 

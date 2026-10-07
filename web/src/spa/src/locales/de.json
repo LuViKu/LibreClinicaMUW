@@ -135,7 +135,8 @@
       "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
       "dataExportTitle": "Datenexport",
       "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen.",
-      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen."
+      "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen.",
+      "adminStudiesDesc": "Alle Studien und Standorte der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -149,6 +150,12 @@
     },
     "queue": {
       "loading": "Anzahl wird geladen"
+    },
+    "studyMetadata": {
+      "title": "Studienmetadaten (ODM)",
+      "description": "Das Studiendesign als CDISC-ODM-1.3-Datei herunterladen.",
+      "downloading": "Wird heruntergeladen…",
+      "failed": "Der Download ist fehlgeschlagen. Bitte erneut versuchen."
     }
   },
   "common": {
@@ -175,7 +182,7 @@
   },
   "adminJobs": {
     "title": "Geplante Jobs",
-    "subtitle": "Schreibgeschützte Übersicht aller Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind.",
+    "subtitle": "Alle Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind. Alte geplante Exporte lassen sich löschen; die Trigger der Plattform sind schreibgeschützt.",
     "refresh": "Aktualisieren",
     "refreshedAt": "Aktualisiert um {ts}",
     "loadFailed": "Job-Liste konnte nicht geladen werden.",
@@ -189,7 +196,16 @@
     "prevFire": "Letzter Lauf",
     "nextFire": "Nächster Lauf",
     "description": "Beschreibung",
-    "noJobs": "Keine geplanten Jobs."
+    "noJobs": "Keine geplanten Jobs.",
+    "legacy": {
+      "badge": "Alter Export-Job",
+      "note": "Geplante Exporte aus den klassischen Masken laufen weiter, bis sie hier gelöscht werden. Legen Sie einen solchen Export vor dem Löschen als Zeitplan seines Datensatzes neu an (Datenexport, Zeitpläne); dort entstehen auch neue Export-Zeitpläne.",
+      "dataset": "Datensatz {id}",
+      "unreadable": "gespeicherte Daten nicht lesbar",
+      "delete": "Löschen",
+      "confirmDelete": "Alten Export-Job „{name}“ löschen? Er läuft danach nicht mehr.",
+      "deleteFailed": "Der Job konnte nicht gelöscht werden."
+    }
   },
   "printableCrf": {
     "title": "Druckvorschau",
@@ -262,6 +278,18 @@
     "clusterMonitorHint": "Letzte Zeilen des Cron-Monitor-Logs auf der App-VM. Leer ist gut.",
     "clusterMonitorEmpty": "Keine Meldungen aufgezeichnet.",
     "clusterMonitorUnavailable": "Monitor-Log nicht lesbar: {path}",
+    "mail": {
+      "heading": "Ausgehende E-Mail",
+      "hint": "Sendet eine Testnachricht an die E-Mail-Adresse Ihres eigenen Kontos, über den Mailserver der Anwendung. Nach einem Deployment oder einer Änderung der Mail-Einstellungen verwenden.",
+      "send": "Test-E-Mail senden",
+      "sending": "Wird gesendet…",
+      "sent": "Test-E-Mail an {recipient} gesendet. Prüfen Sie, ob sie ankommt.",
+      "failed": "Senden an {recipient} fehlgeschlagen: {message}",
+      "failedGeneric": "Senden der Test-E-Mail fehlgeschlagen.",
+      "noAddress": "Ihr Konto hat keine E-Mail-Adresse. Tragen Sie zuerst eine im Profil ein.",
+      "noSender": "Auf dem Server ist keine Absenderadresse konfiguriert (adminEmail).",
+      "tooSoon": "Vor weniger als einer halben Minute wurde schon eine Test-E-Mail gesendet. Bitte kurz warten."
+    },
     "uploaders": {
       "heading": "Uploader an den Aufnahme-PCs",
       "hint": "Der Export Watcher (Clarus- und Spectralis-PC) und die Optomed Bridge melden sich alle zwei Minuten. Ein Programm, das sich nicht mehr meldet, erscheint als stumm; eines, das beendet oder mit dem PC heruntergefahren wurde, sagt das.",
@@ -376,8 +404,52 @@
     "maxLength": "Maximallänge",
     "expirationDays": "Ablauf (Tage)",
     "zeroDaysNote": "0 = läuft nie ab",
+    "zeroMaxNote": "0 = kein Maximum",
     "changeRequiredOnFirstLogin": "Passwort-Änderung bei erster Anmeldung erzwingen",
+    "lockout": "Kontosperre",
+    "lockoutEnabled": "Konto nach wiederholt fehlgeschlagener Anmeldung sperren",
+    "lockoutFailedAttempts": "Fehlgeschlagene Anmeldungen bis zur Sperre",
+    "lockoutNote": "1–25. Gilt ab der nächsten fehlgeschlagenen Anmeldung. Gesperrte Konten werden in der Nutzerverwaltung entsperrt.",
     "discard": "Neu laden"
+  },
+  "adminLoginHistory": {
+    "title": "Anmeldeverlauf",
+    "subtitle": "Jede An- und Abmeldung und jede fehlgeschlagene Anmeldung, auch über SSO. Neueste zuerst.",
+    "loadFailed": "Der Anmeldeverlauf konnte nicht geladen werden.",
+    "exportCsv": "CSV exportieren",
+    "exporting": "Wird exportiert…",
+    "exportHint": "Alle Zeilen, die die Filter auswählen, nicht nur diese Seite.",
+    "exportFailed": "Export des Anmeldeverlaufs fehlgeschlagen.",
+    "empty": "Keine Anmeldeversuche für diese Filter.",
+    "range": "{start}–{end} von {total}",
+    "pageOfTotal": "Seite {page} von {total}",
+    "prev": "Zurück",
+    "next": "Weiter",
+    "filter": {
+      "user": "Nutzer/-in",
+      "userPlaceholder": "Teil eines Nutzernamens",
+      "status": "Status",
+      "allStatuses": "Alle Status",
+      "allRefused": "Alle abgewiesenen Anmeldungen",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "col": {
+      "when": "Zeitpunkt",
+      "user": "Nutzername",
+      "status": "Status",
+      "details": "Details"
+    },
+    "status": {
+      "SUCCESSFUL_LOGIN": "Anmeldung erfolgreich",
+      "FAILED_LOGIN": "Anmeldung fehlgeschlagen",
+      "FAILED_LOGIN_LOCKED": "Abgewiesen: Konto gesperrt",
+      "SUCCESSFUL_LOGOUT": "Abmeldung",
+      "ACCESS_CODE_VIEWED": "Zugangscode angezeigt",
+      "SSO_LOGIN": "SSO-Anmeldung",
+      "SSO_LOGIN_FAILED": "SSO-Anmeldung abgewiesen",
+      "UNKNOWN": "Unbekannter Status ({code})"
+    }
   },
   "adminConfig": {
     "title": "Anwendungskonfiguration",
@@ -494,6 +566,8 @@
       "enrolledOn": "Aufnahmedatum",
       "gender": "Geschlecht",
       "yearOfBirth": "Geburtsjahr",
+      "dateOfBirth": "Geburtsdatum",
+      "personId": "Personen-ID",
       "groupLabel": "Gruppenzuordnung"
     },
     "placeholder": {
@@ -503,6 +577,7 @@
     },
     "helper": {
       "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
+      "personId": "Die studienübergreifende Kennung der Person; wer bereits in einer anderen Studie aufgenommen ist, wird daran erkannt.",
       "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
@@ -561,12 +636,13 @@
       "eventDate": "Visitendatum",
       "crf": "CRF",
       "requirement": "Anforderung",
-      "status": "Status"
+      "status": "Status",
+      "openQueries": "Offene Rückfragen",
+      "lastUpdated": "Zuletzt geändert"
     },
     "action": {
       "markAsVerified": "{count} als verifiziert markieren (SDV)",
       "cancelSelection": "Abbrechen",
-      "addQuery": "Rückfrage stellen",
       "openCrf": "CRF öffnen",
       "unverify": "Verifizierung zurücknehmen"
     },
@@ -586,22 +662,26 @@
       "title": "Als verifiziert markieren?",
       "body": "Alle {count} ausgewählten CRFs werden auf »Verifiziert« (SDV) gesetzt. Der Vorgang wird im Audit Trail dokumentiert.",
       "note": "Werden Daten an einem verifizierten CRF später geändert, wird der SDV-Status automatisch auf »Ausstehend« zurückgesetzt.",
-      "auditNote": "Audit-Trail-Eintrag mit monitor_demo + Zeitstempel.",
+      "auditNote": "Der Audit Trail hält {user} und den Zeitpunkt fest.",
       "cta": "{count} als verifiziert markieren"
     },
-    "query": {
-      "title": "Anmerkung hinzufügen",
-      "noteType": "Art der Anmerkung",
-      "descriptionLabel": "Beschreibung",
-      "descriptionPlaceholder": "Was ist klärungsbedürftig? Quelldokument-Referenz angeben…",
-      "submit": "Rückfrage absenden",
-      "auditTrailTell": "Audit-Trail-Eintrag mit monitor_demo · Zeitstempel",
-      "type": {
-        "query": "Rückfrage",
-        "failed-validation": "Fehlgeschlagene Validierung",
-        "annotation": "Notiz",
-        "reason-for-change": "Änderungsgrund"
-      }
+    "view": {
+      "label": "Ansicht",
+      "byCrf": "Nach CRF",
+      "bySubject": "Nach Teilnehmer"
+    },
+    "bySubject": {
+      "count": "{count} Teilnehmer",
+      "complete": "Abgeschlossene CRFs",
+      "verified": "Verifiziert",
+      "withQueries": "Mit offenen Rückfragen",
+      "verifiable": "Zu verifizieren",
+      "verify": "{count} CRF(s) verifizieren",
+      "allVerified": "Alle verifiziert",
+      "nothingToVerify": "Nichts zu verifizieren",
+      "confirmTitle": "Teilnehmer verifizieren?",
+      "confirmBody": "{count} CRF(s) von {subject} werden als verifiziert (SDV) markiert.",
+      "confirmScope": "Das umfasst die abgeschlossenen CRFs des Teilnehmers, die SDV erfordern. Ein CRF mit offener Rückfrage bleibt in der Liste, bis die Rückfrage geschlossen ist."
     }
   },
   "notes": {
@@ -657,16 +737,18 @@
       "export": "CSV exportieren",
       "exportCsv": "CSV exportieren",
       "exportForSubject": "CSV exportieren (Teilnehmer)",
-      "exporting": "Wird exportiert…"
+      "exporting": "Wird exportiert…",
+      "reopen": "Wieder öffnen"
     },
     "error": {
       "exportFailed": "Discrepancy-Export fehlgeschlagen"
     },
     "composer": {
       "label": {
-        "updated": "Antwort an Monitor",
+        "updated": "Antwort",
         "resolution-proposed": "Lösungsvorschlag",
-        "closed": "Schließbemerkung (optional)"
+        "closed": "Schließbemerkung (optional)",
+        "reopen": "Warum die Rückfrage wieder geöffnet wird"
       },
       "placeholder": "Antwort eingeben…",
       "placeholderClose": "Optional: Schließbemerkung…",
@@ -686,6 +768,17 @@
     },
     "email": {
       "subjectAssigned": "Rückfrage zugewiesen"
+    },
+    "field": {
+      "gender": "Geschlecht",
+      "date_of_birth": "Geburtsdatum",
+      "unique_identifier": "Personen-ID",
+      "enrollment_date": "Einschlussdatum",
+      "location": "Ort der Visite",
+      "start_date": "Visitendatum",
+      "end_date": "Ende der Visite",
+      "date_interviewed": "Datum des Interviews",
+      "interviewer_name": "Interviewer"
     }
   },
   "auditLog": {
@@ -709,7 +802,17 @@
       "allActors": "Alle Akteur/-innen",
       "variant": "Ereignistyp",
       "subject": "Teilnehmer",
-      "allSubjects": "Alle Teilnehmer"
+      "allSubjects": "Alle Teilnehmer",
+      "item": "Item",
+      "itemPlaceholder": "Item-OID, z. B. I_HEIGHT_CM",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "pager": {
+      "label": "Seiten des Audit-Logs",
+      "previous": "← Neuere",
+      "next": "Ältere →",
+      "position": "Seite {page} von {pages}"
     },
     "variant": {
       "all": "Alle Ereignistypen",
@@ -770,6 +873,7 @@
       "confirm": "Begründungen bestätigen",
       "cancel": "Abbrechen",
       "capturedChip": "Begründung erfasst",
+      "rowLabel": "{label} (Zeile {row})",
       "missingForItem": "Für diese Änderung ist eine Begründung erforderlich.",
       "fromTo": {
         "from": "Vorher",
@@ -791,7 +895,8 @@
       "replace": "Ersetzen",
       "removeConfirm": "Angehängte Datei entfernen? Das Löschen wird im Audit-Trail vermerkt.",
       "tooBig": "Datei überschreitet die zulässige Größe.",
-      "badExtension": "Dateityp ist nicht zulässig."
+      "badExtension": "Dateityp ist nicht zulässig.",
+      "deidBlocked": "Dateianhänge sind in diesem Internet-Betrieb deaktiviert: Sie können nicht auf identifizierende Inhalte geprüft werden."
     },
     "selectMulti": {
       "noneSelected": "Keine Auswahl"
@@ -846,7 +951,11 @@
       "statusNotApplicable": "Nicht anwendbar",
       "empty": "Noch keine Nachrichten.",
       "loadError": "Diskussion konnte nicht geladen werden.",
-      "submitError": "Änderung konnte nicht gespeichert werden."
+      "submitError": "Änderung konnte nicht gespeichert werden.",
+      "reopen": "Wieder öffnen",
+      "reassignLabel": "Neu zuweisen an (optional)",
+      "reassignPlaceholder": "Bisherige Zuweisung behalten",
+      "subjectLine": "Teilnehmer {subject} · {item}"
     },
     "bilateral": {
       "headerItem": "Merkmal",
@@ -1035,7 +1144,8 @@
     "disable": "Entfernen",
     "restore": "Wiederherstellen",
     "statusRemoved": "Entfernt",
-    "disableConfirm": "Gruppenklasse »{name}« entfernen? Bereits zugeordnete Teilnehmer/innen bleiben im Audit Trail; neue Zuordnungen verwenden die verbleibenden Klassen. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Gruppenklasse »{name}« entfernen? Die Zuordnungen von Teilnehmer/innen zu ihren Gruppen werden mit entfernt; beim Wiederherstellen der Klasse kommen sie zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableImpact": "Mit entfernt werden: {subjectAssignments} Zuordnung(en) von Teilnehmer/innen zu {groups} Gruppe(n).",
     "field": {
       "name": "Name der Gruppenklasse",
       "type": "Typ",
@@ -1320,25 +1430,60 @@
     "includeRemoved": "Entfernte anzeigen",
     "statusRemoved": "Entfernt",
     "disable": "Entfernen",
-    "disableConfirm": "CRF »{name}« entfernen? Bestehende Zuweisungen bleiben für den Audit Trail erhalten, neue Dateneingabe wird gesperrt. Die Aktion wird im Audit Trail dokumentiert.",
-    "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Laufende Dateneingaben in dieser Version bleiben unverändert; neue Dateneingaben verwenden die verbleibenden Versionen.",
+    "disableConfirm": "CRF »{name}« entfernen? Seine Versionen, seine Zuordnungen zu Visiten-Definitionen und alle darauf erfassten Event-CRFs samt Werten werden mit entfernt. Wiederherstellen holt sie zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Die auf dieser Version erfassten Event-CRFs samt Werten werden mit entfernt, signierte nicht. Visiten-Definitionen mit dieser Standardversion wechseln auf die neueste verfügbare Version. Wiederherstellen holt die entfernten Event-CRFs zurück.",
+    "restoreCrfConfirm": "CRF »{name}« wiederherstellen? Die mit ihm entfernten Versionen, Zuordnungen und Event-CRFs kommen zurück, mit dem Status, den sie hatten; eine für sich entfernte Version bleibt entfernt. Event-CRFs, deren Teilnehmer/in, Visite oder Zuordnung entfernt ist, bleiben entfernt, und von den älteren Seiten entfernte Event-CRFs kommen als verfügbar zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "edit": "Bearbeiten",
+    "editHeading": "CRF »{name}« bearbeiten",
+    "editOidStays": "Die OID {oid} bleibt gleich. Den Namen dürfen nur der/die Eigentümer/in als Data Manager oder ein/e Systemadministrator/in ändern.",
+    "submitEdit": "Speichern",
+    "detail": {
+      "back": "CRF-Bibliothek",
+      "itemsHeading": "Items ({count})",
+      "integrityHint": "Integritätsprüfung: Ein Item muss in jeder Version des CRF in derselben Item-Gruppe bleiben. Ein Problem betrifft eine Version, die Daten aufnimmt; eine Warnung nur Versionen, die das nicht mehr tun.",
+      "integritySummary": "{count} Item(s) wechseln die Item-Gruppe zwischen Versionen",
+      "integrity": {
+        "ok": "OK",
+        "warning": "Warnung",
+        "problem": "Problem"
+      },
+      "placement": "Gruppe »{group}« in Version »{version}«",
+      "noItems": "Noch keine Items in einer Version.",
+      "studiesHeading": "Studien, die dieses CRF verwenden",
+      "noStudies": "Keine Visiten-Definition einer Studie verwendet dieses CRF.",
+      "siteOf": "Standort von {study}",
+      "col": {
+        "version": "Version",
+        "name": "Name",
+        "description": "Beschreibung",
+        "dataType": "Datentyp",
+        "integrity": "Integritätsprüfung",
+        "study": "Studie",
+        "protocolId": "Protokoll-ID",
+        "status": "Status"
+      }
+    },
+    "statusAutoRemoved": "Mit dem CRF entfernt",
     "empty": "Noch keine CRFs in der Bibliothek.",
     "lock": "Sperren",
     "lockConfirm": "Version »{version}« von »{name}« sperren? Laufende Dateneingaben bleiben unverändert; die Version wird schreibgeschützt und Event-Definitionen, die sie als Standard nutzten, zeigen die nächste verfügbare Version.",
     "unlock": "Entsperren",
     "unlockConfirm": "Version »{version}« von »{name}« entsperren? Schreibvorgänge sind wieder möglich.",
     "restore": "Wiederherstellen",
-    "restoreConfirm": "Version »{version}« von »{name}« wiederherstellen? Die Version wird wieder verfügbar. Für Section- und Item-Daten-Kaskade ggf. den Legacy-Pfad /RestoreCRFVersion verwenden.",
+    "restoreConfirm": "Version »{version}« von »{name}« wiederherstellen? Die Version und die mit ihr entfernten Event-CRFs samt Werten kommen mit dem Status zurück, den sie hatten; eine gesperrt entfernte Version kommt gesperrt zurück.",
     "hardRemove": "Endgültig löschen",
     "hardRemoveConfirm": "Version »{version}« von »{name}« endgültig löschen? Diese Aktion entfernt die Zeile sowie alle zugehörigen Items / Sektionen / Antwortsets. Nur für Systemadministratoren. Die Aktion kann nicht rückgängig gemacht werden.",
     "hardRemoveBlocked": "Endgültiges Löschen der Version »{version}« nicht möglich — es bestehen noch Referenzen:",
     "hardRemoveBlocker": {
       "eventDefs": "{count} Event-Definition(en) verwenden diese Version als Standard:",
       "eventCrfs": "{count} Event-CRF-Zeile(n) enthalten Daten zu dieser Version (Stichprobe: {sample}).",
-      "remediation": "Standardversionen über den Migrationsdialog neu zuweisen und dann erneut versuchen."
+      "remediation": "Unter Versionsmigration die Standardversion dieser Visiten-Definitionen ändern und die auf dieser Version erfassten Event-CRFs auf eine andere Version verschieben; dann erneut versuchen."
     },
     "downloadXls": ".xls herunterladen",
     "downloadXlsFailed": "Download fehlgeschlagen: {message}",
+    "preview": "Vorschau",
+    "previewFailed": "Die Version konnte für die Vorschau nicht geladen werden: {message}",
+    "migrationAction": "Versionsmigration",
     "migrate": {
       "action": "Standardversion neu zuweisen",
       "dialogHeading": "Event-Def-Standardversion von »{from}« auf »{to}« umstellen",
@@ -2004,6 +2149,73 @@
       "reasonIfNotDone": "Grund (falls nicht durchgeführt)"
     }
   },
+  "crfMigration": {
+    "title": "Versionsmigration · {name}",
+    "intro": "Zwei verschiedene Vorgänge. Das Verschieben von Event-CRFs ändert die Version, auf der bestehende Daten angezeigt werden. Das Ändern der Standardversion legt nur fest, welche Version neue Event-CRFs bekommen; es verschiebt keine Daten.",
+    "noStudy": "Bitte zuerst eine Studie wählen: Event-CRFs werden innerhalb einer Studie verschoben.",
+    "move": {
+      "heading": "Bestehende Event-CRFs auf eine andere Version verschieben",
+      "intro": "Die Event-CRFs auf der aktuellen Version werden samt ihren Daten ab jetzt auf der neuen Version angezeigt. Werte von Items, die die neue Version nicht hat, bleiben in der Datenbank, werden aber nicht mehr angezeigt. Die SDV wird bei jedem verschobenen Event-CRF zurückgesetzt, und die Signaturen darüber werden entfernt. Gesperrte Daten werden nicht verschoben.",
+      "study": "Studie: {study}",
+      "source": "Aktuelle Version",
+      "target": "Neue Version",
+      "versionOption": "{name} ({count} Event-CRFs)",
+      "sites": "Standorte",
+      "allSites": "Die Studie und alle ihre Standorte",
+      "studyLevel": "{study} (auf Studienebene eingeschlossene Teilnehmer/innen)",
+      "events": "Visiten-Definitionen",
+      "allEvents": "Alle Visiten-Definitionen",
+      "subject": "Nur Teilnehmer/in (optional)",
+      "subjectHint": "Die Teilnehmer-ID, um die Event-CRFs einer Person zu verschieben, etwa eines, das auf der falschen Version erfasst wurde.",
+      "preview": "Vorschau",
+      "onlyThis": "Nur dieses",
+      "onlyEventCrf": "Nur Event-CRF #{id}",
+      "clearOnly": "Wieder alle zeigen",
+      "run": "{count} Event-CRF(s) verschieben"
+    },
+    "preview": {
+      "summary": "{count} Event-CRF(s) von {subjects} Teilnehmer/innen werden von Version »{from}« auf »{to}« verschoben.",
+      "warningHeading": "Bevor Sie verschieben",
+      "sdv": "Die Source Data Verification wird bei jedem verschobenen Event-CRF zurückgesetzt (derzeit {count} verifiziert).",
+      "signatures": "Signaturen über den verschobenen Event-CRFs werden entfernt: {subjects} signierte Teilnehmer/innen, {events} signierte Visite(n), {crfs} signierte Event-CRF(s).",
+      "hidden": "{count} erfasste(r) Wert(e) gehören zu Items, die Version »{to}« nicht hat; sie bleiben in der Datenbank, werden aber nicht mehr angezeigt:",
+      "locked": "{count} Event-CRF(s) sind gesperrt und werden nicht verschoben:",
+      "notOffered": "Nicht verschoben, weil die Visiten-Definition des Standorts nicht beide Versionen anbietet:",
+      "notOfferedRow": "{site} · {event}: {count} Event-CRF(s)",
+      "truncated": "Die ersten {shown} von {count} Event-CRFs sind aufgelistet.",
+      "confirm": "Mir ist bewusst, dass bei diesen {count} Event-CRF(s) die SDV zurückgesetzt und die Signaturen entfernt werden."
+    },
+    "skip": {
+      "subject-locked": "Teilnehmer/in gesperrt",
+      "event-locked": "Visite gesperrt",
+      "event-crf-locked": "Event-CRF gesperrt"
+    },
+    "flag": {
+      "sdv": "SDV",
+      "subject": "Signatur Teilnehmer/in",
+      "event": "Signatur Visite",
+      "crf": "Signatur CRF"
+    },
+    "col": {
+      "subject": "Teilnehmer/in",
+      "site": "Standort",
+      "event": "Visite",
+      "clears": "Setzt zurück"
+    },
+    "result": {
+      "summary": "{count} Event-CRF(s) von {subjects} Teilnehmer/innen von Version »{from}« auf »{to}« verschoben.",
+      "cleared": "SDV zurückgesetzt bei {sdv}; Signaturen entfernt: {subjects} Teilnehmer/innen, {events} Visite(n), {crfs} Event-CRF(s).",
+      "where": "Das Protokoll steht unten und lässt sich herunterladen; jede Änderung steht auch im",
+      "auditLog": "Audit Trail der Studie.",
+      "download": "Protokoll herunterladen (CSV)"
+    },
+    "defaults": {
+      "heading": "Standardversion für neue Event-CRFs ändern",
+      "intro": "Die Visiten-Definitionen mit dieser Standardversion bekommen eine andere. Nur ab jetzt angelegte Event-CRFs verwenden sie; bestehende Event-CRFs und ihre Daten bleiben auf ihrer Version.",
+      "from": "Aktuelle Standardversion",
+      "to": "Neue Standardversion"
+    }
+  },
   "crfPreview": {
     "openButton": "Live-Vorschau",
     "heading": "Vorschau · {crfName}",
@@ -2041,8 +2253,6 @@
     "edit": "Bearbeiten",
     "remove": "Entfernen",
     "removeConfirm": "CRF »{crf}« von Visite »{event}« lösen? Bereits erfasste Daten bleiben im Audit Trail; neue Eingaben enthalten dieses CRF nicht mehr. Die Aktion wird im Audit Trail dokumentiert.",
-    "showAdvanced": "Teilnehmer-Formular-Optionen anzeigen",
-    "hideAdvanced": "Teilnehmer-Formular-Optionen ausblenden",
     "auditNote": "Alle Zuweisungen, Rollenänderungen und Entfernungen werden im Audit Trail dokumentiert.",
     "sdvLabel": "Quelldatenvergleich",
     "required": "Pflicht",
@@ -2050,9 +2260,6 @@
     "electronicSignature": "Elektronische Unterschrift",
     "hideCrf": "Bei Dateneingabe ausgeblendet",
     "decisionCondition": "Entscheidungsbedingung",
-    "participantForm": "Teilnehmer-Formular (Enketo)",
-    "allowAnonymousSubmission": "Anonyme Übermittlung erlauben",
-    "submissionUrl": "Übermittlungs-URL",
     "sdv": {
       "NOTREQUIRED": "Nicht erforderlich",
       "PARTIALREQUIRED": "Teilweise",
@@ -2079,7 +2286,8 @@
       "saveError": "Inferenz-Task-Auswahl konnte nicht gespeichert werden."
     },
     "disable": "Entfernen",
-    "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Visite »{name}« entfernen? Ihre CRF-Zuordnungen und alle danach geplanten Termine werden mit entfernt, samt den dort erfassten CRFs und Werten. Beim Wiederherstellen der Visite kommt das mit Entfernte zurück. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableImpact": "Mit entfernt werden: {crfAssignments} CRF-Zuordnung(en), {visits} Termin(e) von {subjects} Teilnehmer/innen, {eventCrfs} CRF(s) und {itemValues} erfasste(r) Wert(e).",
     "restore": "Wiederherstellen",
     "restoreConfirm": "Visite »{name}« wiederherstellen? Automatisch entfernte CRFs und Item-Daten werden reaktiviert; manuell entfernte Zeilen bleiben entfernt. Die Aktion wird im Audit Trail dokumentiert.",
     "lock": "Sperren",
@@ -2164,8 +2372,14 @@
       "submit": "Änderungen speichern",
       "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
       "leaveUnchanged": "— Unverändert lassen —",
-      "parametersLink": "Parameter & Module"
-    }
+      "parametersLink": "Parameter & Module",
+      "downloadMetadata": "Metadaten herunterladen (ODM)",
+      "downloadFailed": "Die Metadaten konnten nicht heruntergeladen werden."
+    },
+    "protocolDescription": "Ausführliche Beschreibung",
+    "collaborators": "Kooperationspartner",
+    "contactEmail": "Kontakt-E-Mail",
+    "contactEmailHint": "Adresse der Projektleitung. Pflicht, solange die Anmelde-Benachrichtigung per E-Mail aktiv ist."
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
@@ -2245,7 +2459,8 @@
       "phone": "Telefon",
       "affiliation": "Institutszugehörigkeit",
       "submit": "Änderungen speichern",
-      "successFlash": "Profil aktualisiert."
+      "successFlash": "Profil aktualisiert.",
+      "requiredCleared": "Pflichtfeld: Es kann nicht geleert werden."
     },
     "lifecycle": {
       "disable": "Deaktivieren",
@@ -2288,7 +2503,41 @@
       "rolesForNewStudy": "Rollen für die neue Studie",
       "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
       "savedToast": "Rollen aktualisiert.",
-      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert.",
+      "legacyRole": {
+        "ra": "Dateneingabe (Altrolle)",
+        "ra2": "Dateneingabe 2 (Altrolle)"
+      },
+      "legacyHint": "Altrolle: Beim Speichern der Zeile bleibt sie erhalten. Zum Entfernen abwählen; hier lässt sie sich nicht neu vergeben."
+    },
+    "userType": {
+      "label": "Kontotyp",
+      "USER": "Nutzer/-in",
+      "SYSADMIN": "Fachliche Administration",
+      "TECHADMIN": "Technische Administration",
+      "help": "Die Administration verwaltet Nutzer/-innen und Studien plattformweit. Nur die technische Administration kann jemanden zur technischen Administration machen.",
+      "techOnly": "Nur die technische Administration kann den Kontotyp einer technischen Administration ändern."
+    },
+    "details": {
+      "action": "Angaben",
+      "title": "Kontoangaben",
+      "close": "Schließen",
+      "yes": "Ja",
+      "no": "Nein",
+      "dateBy": "{date} von {user}",
+      "username": "Benutzername",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "affiliation": "Institutszugehörigkeit",
+      "businessAdmin": "Fachliche Administration",
+      "technicalAdmin": "Technische Administration",
+      "status": "Status",
+      "auth": "Anmeldung",
+      "lastLogin": "Letzte Anmeldung",
+      "created": "Angelegt",
+      "updated": "Zuletzt geändert"
     }
   },
   "retinalParked": {
@@ -2501,7 +2750,8 @@
       "tokenExpired": "Vorschau abgelaufen",
       "reupload": "XML neu hochladen",
       "startOver": "Neu beginnen",
-      "failedHeading": "Commit fehlgeschlagen"
+      "failedHeading": "Commit fehlgeschlagen",
+      "ruleWarningsHeading": "Die Regeln der Studie meldeten"
     }
   },
   "signSubject": {
@@ -2672,7 +2922,6 @@
       "interviewDateEditable": "Interviewdatum editierbar",
       "secondaryLabelViewable": "Sekundäres Label sichtbar",
       "adminForcedReasonForChange": "Begründung nach Abschluss erzwingen",
-      "participantPortal": "Teilnehmerportal",
       "randomization": "Randomisierung"
     },
     "enums": {
@@ -2882,7 +3131,26 @@
     },
     "crf": {
       "restore": "CRF wiederherstellen",
-      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen."
+      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen.",
+      "remove": "Entfernen",
+      "removeDialog": {
+        "title": "CRF entfernen",
+        "subtitle": "{crf} {version} · {event} · {subject}",
+        "intro": "{crf} wird aus den Daten von Proband {subject} zur Visite {event} entfernt.",
+        "values": "Mit ihm entfernte erfasste Werte: {n}",
+        "notes": "Offene Rückfragen zu diesen Werten, die geschlossen werden: {n}",
+        "nothing": "Auf diesem CRF wurden keine Werte erfasst.",
+        "restoreHint": "Es wird nichts gelöscht. Wird das CRF wiederhergestellt, kommen seine Werte zurück; geschlossene Rückfragen bleiben geschlossen.",
+        "loading": "Es wird geprüft, was entfernt wird …",
+        "reasonLabel": "Grund für das Entfernen",
+        "reasonPlaceholder": "z. B. beim falschen Probanden erfasst",
+        "reasonRequired": "Bitte den Grund für das Entfernen angeben.",
+        "confirm": "CRF entfernen",
+        "removing": "Wird entfernt …",
+        "cancel": "Abbrechen",
+        "errorGeneric": "Das CRF konnte nicht entfernt werden.",
+        "errorNetwork": "Der Server ist nicht erreichbar."
+      }
     },
     "table": {
       "crfName": "CRF",
@@ -3204,7 +3472,7 @@
   "dataExport": {
     "title": "Datenexport",
     "subTrail": "Gespeicherte Datensätze der aktiven Studie",
-    "intro": "Bereits gespeicherte Datensätze als Export erneut ausführen und generierte Dateien herunterladen. Zum Anlegen neuer Datensätze bitte vorerst den klassischen /Extract Data-Assistenten verwenden — eine SPA-native Anlage folgt in einer späteren Phase.",
+    "intro": "Gespeicherte Datensätze exportieren und die erzeugten Dateien herunterladen. Neue Datensätze legen Sie mit „Neues Dataset“ an.",
     "sectionLabel": "Datenexport",
     "quickOdmButton": "Schnell-ODM-Export",
     "quickOdmRunning": "ODM wird generiert…",
@@ -3214,8 +3482,7 @@
     "hideFiles": "Dateien ausblenden",
     "noFilesYet": "Noch keine generierten Dateien — bitte einen Export ausführen.",
     "emptyTitle": "Für diese Studie sind noch keine Datensätze gespeichert.",
-    "emptyDescription": "Datensätze werden über den klassischen Extract-Data-Assistenten angelegt. Einmal gespeichert, erscheinen sie hier und können in der SPA erneut ausgeführt und heruntergeladen werden.",
-    "openLegacyWizard": "Klassischen Extract-Data-Assistenten öffnen",
+    "emptyDescription": "Ein Datensatz legt fest, welche Visiten, CRFs und Items ein Export enthält. Gespeicherte Datensätze erscheinen hier und können ausgeführt und heruntergeladen werden.",
     "column": {
       "name": "Datensatz",
       "owner": "Besitzer",
@@ -3243,11 +3510,53 @@
     },
     "job": {
       "label": "Komplettpaket",
+      "export": "Export als {format}",
       "queued": "In Warteschlange …",
       "running": "Wird erstellt …",
       "done": "Fertig.",
       "failed": "Fehlgeschlagen",
-      "download": "Herunterladen"
+      "download": "Herunterladen",
+      "cancel": "Export abbrechen",
+      "cancelling": "Wird angehalten …",
+      "cancelled": "Abgebrochen.",
+      "confirmCancel": "Diesen Export abbrechen? Wartet er noch, läuft er nicht mehr; läuft er schon, hält er am nächsten Prüfpunkt an und hinterlässt keine Datei."
+    },
+    "schedules": {
+      "button": "Zeitpläne",
+      "title": "Export-Zeitpläne",
+      "creatorOnly": "Ändern kann diesen Zeitplan nur, wer ihn angelegt hat, oder ein Systemadministrator.",
+      "add": "Zeitplan hinzufügen",
+      "empty": "Keine Zeitpläne für diesen Datensatz.",
+      "column": {
+        "when": "Wann",
+        "status": "Status",
+        "lastRun": "Letzter Lauf",
+        "contact": "Kontakt"
+      },
+      "status": {
+        "active": "Aktiv",
+        "paused": "Pausiert"
+      },
+      "nextRun": "nächster Lauf {date}",
+      "edit": "Bearbeiten",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "delete": "Löschen",
+      "confirmDelete": "Diesen Zeitplan löschen? Bereits exportierte Dateien bleiben erhalten.",
+      "createTitle": "Neuer Export-Zeitplan",
+      "editTitle": "Export-Zeitplan bearbeiten",
+      "subTitle": "Wiederkehrender Export von „{dataset}“.",
+      "cronLabel": "Wann (Quartz-Cron-Ausdruck)",
+      "cronHelp": "Sechs Felder: Sekunde, Minute, Stunde, Tag im Monat, Monat, Wochentag. In das offen gelassene Tagesfeld gehört ein ?.",
+      "cronRequired": "Bitte angeben, wann der Export laufen soll.",
+      "preset": {
+        "daily": "Täglich 02:00",
+        "weekly": "Montags 02:00",
+        "monthly": "Am 1. des Monats 02:00"
+      },
+      "emailLabel": "Kontakt-E-Mail (optional)",
+      "emailHelp": "Erhält eine Nachricht, wenn ein Lauf fertig ist oder fehlschlägt.",
+      "enabledLabel": "Nach diesem Zeitplan ausführen"
     },
     "modal": {
       "title": "Datensatz exportieren",
@@ -3620,6 +3929,26 @@
     },
     "actions": {
       "uploadWithoutVisit": "Ohne Visite hochladen"
+    },
+    "deid": {
+      "banner": "Internet-Betrieb: Es werden nur Heidelberg-.e2e- und DICOM-Dateien akzeptiert. Identifizierende Daten werden in Ihrem Browser entfernt, bevor etwas gesendet wird — prüfen Sie in jeder Vorschau, ob Name oder ID im Bild selbst sichtbar ist.",
+      "previewAlt": "Vorschau von {file}",
+      "noPreview": "Für diese Datei kann keine Vorschau angezeigt werden. Öffnen Sie sie zuerst in Ihrem Viewer und stellen Sie sicher, dass im Bild kein Patientenname und keine ID sichtbar ist.",
+      "confirmLabel": "Im Bild ist kein Patientenname und keine ID sichtbar",
+      "confirmAllLabel": "Alle Vorschauen geprüft: kein Patientenname, keine ID sichtbar",
+      "confirmFirst": "Bitte zuerst die Bestätigung unter der Vorschau setzen.",
+      "errors": {
+        "format": "{file}: hier nicht zulässig — nur Heidelberg-.e2e- und DICOM-Dateien können hochgeladen werden.",
+        "label": "{file}: Das Studien-Kürzel des Probanden kann nicht in die Datei geschrieben werden (zu lang oder ungewöhnliche Zeichen).",
+        "e2eNoPatientChunk": "{file}: Die .e2e-Datei enthält keinen lesbaren Patientendatenblock, die Anonymisierung ist nicht überprüfbar. Nicht hochgeladen.",
+        "e2eTruncated": "{file}: Die .e2e-Datei ist beschädigt (Patientenblock abgeschnitten). Nicht hochgeladen.",
+        "parse": "{file}: Die Datei konnte nicht gelesen oder anonymisiert werden. Nicht hochgeladen.",
+        "burnedIn": "{file}: Die DICOM-Datei meldet eingebrannte Annotationen (Identität im Bild). Nicht hochgeladen.",
+        "residual": "{file}: Nach dem Entfernen wurden in der Datei noch identifizierende Daten gefunden. Nicht hochgeladen.",
+        "verify": "{file}: Die anonymisierte Datei hat ihre eigene Prüfung nicht bestanden. Nicht hochgeladen.",
+        "laterality": "{file}: Bitte vor dem Hochladen das Auge (OD oder OS) wählen.",
+        "noSubject": "{file}: Bitte zuerst den Probanden wählen — das Kürzel wird in die Datei geschrieben."
+      }
     },
     "summary": {
       "fileSingular": "Datei",
@@ -4093,5 +4422,61 @@
   },
   "pageHeader": {
     "trail": "Pfad"
+  },
+  "adminStudies": {
+    "title": "Studien",
+    "subtitle": "Alle Studien der Plattform, auch entfernte: {studies} Studien, {sites} Standorte.",
+    "create": "Studie anlegen",
+    "searchPlaceholder": "Name, Protokoll-ID, OID oder PI suchen …",
+    "column": {
+      "name": "Name",
+      "uniqueIdentifier": "Eindeutige Protokoll-ID",
+      "oid": "OID",
+      "principalInvestigator": "Studienleitung",
+      "created": "Angelegt",
+      "status": "Status"
+    },
+    "empty": "Keine Studie passt zur Suche.",
+    "metadata": "Metadaten (ODM)",
+    "remove": "Entfernen",
+    "restore": "Wiederherstellen",
+    "sitesNote": "Standorte werden auf der Standortseite ihrer Studie entfernt und wiederhergestellt.",
+    "downloadFailed": "Die Metadaten von {study} konnten nicht heruntergeladen werden. {reason}",
+    "status": {
+      "AVAILABLE": "Verfügbar",
+      "PENDING": "Vorbereitung",
+      "FROZEN": "Eingefroren",
+      "LOCKED": "Gesperrt",
+      "REMOVED": "Entfernt",
+      "AUTO_REMOVED": "Mit der Studie entfernt",
+      "UNAVAILABLE": "Nicht verfügbar",
+      "PRIVATE": "Privat",
+      "UNKNOWN": "Unbekannt"
+    }
+  },
+  "studyLifecycle": {
+    "removeTitle": "Studie entfernen",
+    "restoreTitle": "Studie wiederherstellen",
+    "removeIntro": "Mit der Studie wird alles entfernt, was darunter liegt:",
+    "previewFailed": "Der Umfang der Entfernung konnte nicht ermittelt werden.",
+    "nothingUnder": "Unter dieser Studie liegt noch nichts anderes.",
+    "impact": {
+      "sites": "Standorte: {n}",
+      "roleBindings": "Rollenzuweisungen: {n}",
+      "subjects": "Studienteilnehmer/-innen: {n}",
+      "groupClasses": "Gruppenklassen: {n}",
+      "eventDefinitions": "Visiten-Definitionen: {n}",
+      "events": "Visiten: {n}",
+      "eventCrfs": "Ausgefüllte CRF-Bögen: {n}",
+      "itemData": "Eingetragene Werte: {n}",
+      "datasets": "Datensätze: {n}"
+    },
+    "removeReversible": "Es wird nichts gelöscht: Die Daten bleiben in der Datenbank, und eine entfernte Studie kann wiederhergestellt werden. Bis dahin kann niemand die Studie öffnen oder mit ihren Daten arbeiten.",
+    "restoreIntro": "Die Studie erhält den Status zurück, den sie beim Entfernen hatte, zusammen mit den Standorten, Rollenzuweisungen, Studienteilnehmer/-innen, Visiten und Daten, die mit ihr entfernt wurden. Was schon vorher für sich entfernt wurde, bleibt entfernt.",
+    "reason": "Begründung",
+    "reasonPlaceholder": "Wird im Audit-Trail festgehalten",
+    "reasonRequired": "Bitte eine Begründung angeben; sie wird im Audit-Trail festgehalten.",
+    "removeConfirm": "Studie entfernen",
+    "restoreConfirm": "Studie wiederherstellen"
   }
 }

@@ -31,7 +31,7 @@ from pathlib import Path
 import pydicom
 from pydicom.errors import InvalidDicomError
 
-from . import config, deidentify, store, tags
+from . import config, deidentify, store, tags, verify
 
 LOG = logging.getLogger("dicom_scp.describe")
 
@@ -71,9 +71,9 @@ def token_ok(presented: str | None, expected: str | None) -> bool:
     return hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
 
 
-def describe_file(path: Path, pseudonym: str | None, drop_private: bool) -> dict:
+def describe_file(path: Path, pseudonym: str | None, drop_private: bool, strict: bool = False) -> dict:
     """Pseudonymise, preview, and describe one file. Raises on a non-DICOM file."""
-    ds, changed = deidentify.rewrite(path, pseudonym, drop_private)
+    ds, changed = deidentify.rewrite(path, pseudonym, drop_private, strict)
     png = store.render_preview(ds, path.with_suffix(".png"))
     payload = tags.describe(ds)
     payload["previewPngPath"] = str(png) if png else None
@@ -105,7 +105,7 @@ class DescribeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 — http.server's naming
         settings = config.settings
-        if self.path not in ("/describe", "/fingerprint"):
+        if self.path not in ("/describe", "/fingerprint", "/verify"):
             self._json(404, {"message": "not found"})
             return
         if not token_ok(self.headers.get(TOKEN_HEADER), settings.ingest_token):
@@ -136,11 +136,22 @@ class DescribeHandler(BaseHTTPRequestHandler):
             self._json(400, {"message": "pseudonym must be a string"})
             return
 
+        strict = body.get("strict", False)
+        if not isinstance(strict, bool):
+            self._json(400, {"message": "strict must be a boolean"})
+            return
+        # The sidecar can also be pinned strict by its own environment, so a
+        # deployment that requires de-identification does not depend on every
+        # caller remembering to ask.
+        strict = strict or settings.deidentify_strict
+
         try:
             if self.path == "/fingerprint":
                 payload = fingerprint_file(path)
+            elif self.path == "/verify":
+                payload = verify.verify_file(path, pseudonym)
             else:
-                payload = describe_file(path, pseudonym, settings.deidentify_drop_private)
+                payload = describe_file(path, pseudonym, settings.deidentify_drop_private, strict)
         except InvalidDicomError:
             self._json(422, {"message": "not a DICOM file"})
             return
@@ -151,13 +162,34 @@ class DescribeHandler(BaseHTTPRequestHandler):
         self._json(200, payload)
 
 
-def start_in_background(settings: config.Settings) -> ThreadingHTTPServer | None:
-    """Serve ``/describe`` on a daemon thread; None when the port is 0 (disabled)."""
+def _make_server(settings: config.Settings) -> ThreadingHTTPServer | None:
     if settings.describe_port <= 0:
         LOG.info("describe endpoint: DISABLED (DICOM_SCP_DESCRIBE_PORT=0)")
         return None
     server = ThreadingHTTPServer((settings.describe_host, settings.describe_port), DescribeHandler)
     server.daemon_threads = True
+    return server
+
+
+def serve_forever(settings: config.Settings) -> None:
+    """Serve ``/describe`` and ``/verify`` in the foreground (describe-only mode)."""
+    server = _make_server(settings)
+    if server is None:
+        raise SystemExit("dicom-scp: describe-only mode needs DICOM_SCP_DESCRIBE_PORT > 0")
+    LOG.info("describe endpoint listening on %s:%s (roots: %s)",
+             settings.describe_host, server.server_address[1],
+             ", ".join(str(r) for r in settings.describe_root_paths))
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+
+
+def start_in_background(settings: config.Settings) -> ThreadingHTTPServer | None:
+    """Serve ``/describe`` on a daemon thread; None when the port is 0 (disabled)."""
+    server = _make_server(settings)
+    if server is None:
+        return None
     thread = threading.Thread(target=server.serve_forever, name="dicom-scp-describe", daemon=True)
     thread.start()
     LOG.info("describe endpoint listening on %s:%s (roots: %s)",

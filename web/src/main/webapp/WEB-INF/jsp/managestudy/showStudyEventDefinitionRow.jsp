@@ -24,13 +24,14 @@
 <tr valign="top">     
       <td class="table_cell_left">
       <%--<c:out value="${currRow.bean.ordinal}"/>--%>
+      <%-- The arrows post small forms: ChangeDefinitionOrdinal refuses GET. --%>
       <c:choose>
       <c:when test="${isFirstLink}">
       <c:choose>
         <c:when test="${count==0}">
             <c:choose>
             <c:when test="${defSize>1}">
-            <a href="ChangeDefinitionOrdinal?current=<c:out value="${nextRow.bean.id}"/>&previous=<c:out value="${currRow.bean.id}"/>"><img src="images/bt_sort_descending.gif" border="0" alt="<fmt:message key="move_down" bundle="${resword}"/>" title="<fmt:message key="move_down" bundle="${resword}"/>" /></a>
+            <form action="ChangeDefinitionOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${nextRow.bean.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${currRow.bean.id}"/>"/><input type="image" src="images/bt_sort_descending.gif" alt="<fmt:message key="move_down" bundle="${resword}"/>" title="<fmt:message key="move_down" bundle="${resword}"/>"/></form>
            </c:when>
            <c:otherwise>
             &nbsp;
@@ -38,11 +39,11 @@
            </c:choose>
         </c:when>
         <c:when test="${count==last}">
-           <a href="ChangeDefinitionOrdinal?current=<c:out value="${currRow.bean.id}"/>&previous=<c:out value="${prevRow.bean.id}"/>"><img src="images/bt_sort_ascending.gif" alt="<fmt:message key="move_up" bundle="${resword}"/>" title="<fmt:message key="move_up" bundle="${resword}"/>" border="0"/></a>         
+           <form action="ChangeDefinitionOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${currRow.bean.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${prevRow.bean.id}"/>"/><input type="image" src="images/bt_sort_ascending.gif" alt="<fmt:message key="move_up" bundle="${resword}"/>" title="<fmt:message key="move_up" bundle="${resword}"/>"/></form>
         </c:when>
         <c:otherwise>
-          <a href="ChangeDefinitionOrdinal?current=<c:out value="${currRow.bean.id}"/>&previous=<c:out value="${prevRow.bean.id}"/>"><img src="images/bt_sort_ascending.gif" alt="<fmt:message key="move_up" bundle="${resword}"/>" title="<fmt:message key="move_up" bundle="${resword}"/>" border="0" /></a>
-          <a href="ChangeDefinitionOrdinal?previous=<c:out value="${currRow.bean.id}"/>&current=<c:out value="${nextRow.bean.id}"/>"><img src="images/bt_sort_descending.gif" alt="<fmt:message key="move_down" bundle="${resword}"/>" title="<fmt:message key="move_down" bundle="${resword}"/>" border="0" /></a>
+          <form action="ChangeDefinitionOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${currRow.bean.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${prevRow.bean.id}"/>"/><input type="image" src="images/bt_sort_ascending.gif" alt="<fmt:message key="move_up" bundle="${resword}"/>" title="<fmt:message key="move_up" bundle="${resword}"/>"/></form>
+          <form action="ChangeDefinitionOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${nextRow.bean.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${currRow.bean.id}"/>"/><input type="image" src="images/bt_sort_descending.gif" alt="<fmt:message key="move_down" bundle="${resword}"/>" title="<fmt:message key="move_down" bundle="${resword}"/>"/></form>
         </c:otherwise>
       </c:choose>
         </c:when>

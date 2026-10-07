@@ -19,6 +19,15 @@ export type UserRole =
 
 export type AuthSource = 'sso' | 'local' | 'ldap'
 
+/**
+ * The account type: a user, a business administrator (`SYSADMIN`) or a
+ * technical administrator (`TECHADMIN`). Both administrator types are
+ * system administrators. The SPA role `Administrator` also covers the
+ * study-level `admin` role, so screens only a system administrator can use
+ * read this instead.
+ */
+export type AccountType = 'USER' | 'SYSADMIN' | 'TECHADMIN'
+
 export type AuthState =
   | 'anonymous'
   | 'profile-incomplete'
@@ -38,10 +47,18 @@ export type AuthState =
 export type AuthenticatedUser =
   Omit<Required<components['schemas']['MeDto']>,
        'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
-       | 'passwordChangeReason' | 'activeStudy'>
+       | 'passwordChangeReason' | 'activeStudy' | 'userType' | 'deidentificationRequired'>
   & {
     role: UserRole
     source: AuthSource
+    /** Optional for /me responses from before the field existed. */
+    userType?: AccountType
+    /**
+     * True on the internet-facing deployment: uploaded imaging files must
+     * be de-identified in the browser first (and the server refuses the
+     * ones that are not). Absent/false → today's behaviour.
+     */
+    deidentificationRequired?: boolean
     email: string | null
     siteLabel: string | null
     locale: string | null
@@ -143,7 +160,25 @@ export type ActiveStudySummary =
      * compatibility with M1-era /me responses that don't yet emit it.
      */
     protocolType?: string | null
+    /**
+     * What the session's binding on this study may write, computed by
+     * the server with the rules its write endpoints apply. The roles
+     * cannot say this: ra and ra2 are "Investigator" here, and a system
+     * administrator is "Administrator" whatever the binding. Absent from
+     * an older /me response, where callers fall back to the roles.
+     */
+    permissions?: StudyWritePermissions
   }
+
+/** See {@link ActiveStudySummary.permissions}; the backend's {@code MeDto.PermissionsDto}. */
+export interface StudyWritePermissions {
+  /** Enter or change CRF data, including re-running a retinal analysis. */
+  enterData: boolean
+  /** Edit a subject, or move an eye to another cohort. */
+  editSubject: boolean
+  /** Sign a subject. */
+  signSubject: boolean
+}
 
 /**
  * Phase E.4 M1 — one row in the user's available-studies list,
@@ -184,4 +219,18 @@ export interface SsoConfig {
   buttonLabel: string
   entryUrl: string | null
   providerHint: string | null
+}
+
+/**
+ * Why `j_spring_security_check` refused an SPA login (the `error` of its
+ * 401 body): a locked account, a two-factor set-up that has to be
+ * renewed, or anything else (unknown user, wrong password and disabled
+ * account alike).
+ */
+export type LoginFailureReason = 'bad_credentials' | 'locked' | '2fa_outdated'
+
+/** Body of the 401 the login filter answers an SPA login with. */
+export interface LoginFailure {
+  error: LoginFailureReason
+  message: string
 }

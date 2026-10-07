@@ -22,9 +22,12 @@
  *   1. Validates the rationale-required matrix.
  *   2. Snapshots the AI recommendation (rec + interval + triggers) as
  *      a JSON string into {@code I_NAMD_AI_REC_SNAPSHOT}.
- *   3. Computes {@code agreedWithAi} = action matches the rec's
- *      direction (TREAT for SHORTEN/KEEP; OBSERVE for EXTEND-only-
- *      at-no-injection visits) AND the interval matches the rec's.
+ *   3. Computes {@code agreedWithAi} = the action is consistent with the
+ *      rec's direction (SHORTEN/KEEP need TREAT; EXTEND accepts TREAT or
+ *      OBSERVE) AND the drug matches when the AI names one (it currently
+ *      does not) AND the interval matches the rec's. All must hold.
+ *      An insufficient-data result (rec null) is "no AI rec": agreed = null,
+ *      and the clinician decides unaided.
  *   4. POSTs all of action / drug / interval / rationale / date /
  *      AI snapshot / agreed in one batch. The backend
  *      {@code EventCrfsApiController} emits one summary
@@ -38,6 +41,7 @@
 
 import { computed, ref } from 'vue'
 import { NAMD_THRESHOLDS_VERSION } from '../composables/useNamdAiRecommendation'
+import { localIsoDate } from '../localDate'
 import { useI18n } from 'vue-i18n'
 import { I } from '../icons'
 import type { NamdAiRecommendation, NamdSubjectArm } from '../types'
@@ -91,8 +95,9 @@ const intervalWeeks = ref<number | null>(null)
 const rationaleCode = ref<RationaleCode | null>(null)
 const rationaleOther = ref('')
 // 2026-06-30 — defaults to today (ISO yyyy-MM-dd). Allows pre-dating
-// per the retrospective-data-phase memory.
-const decisionDate = ref<string>(new Date().toISOString().slice(0, 10))
+// per the retrospective-data-phase memory. The LOCAL calendar date: the UTC
+// date (toISOString) is yesterday for a clinician in Vienna before 01:00/02:00.
+const decisionDate = ref<string>(localIsoDate())
 const confirmed = ref(false)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
@@ -118,17 +123,31 @@ const CONTROL_PRESET: readonly RationaleCode[] = [
 ] as const
 
 /**
- * Did the doctor's action+interval match the AI rec?
- * SHORTEN/KEEP imply TREAT. EXTEND is consistent with TREAT too (at a
- * longer interval) — only OBSERVE is "extension via no injection".
- * Returns null on first visit (no AI rec).
+ * The AI rec the doctor can agree or disagree with. An insufficient-data
+ * result carries no recommendation (rec / intervalWeeks null) so there is
+ * nothing to agree with: treated like the first visit.
+ */
+const activeRec = computed<NamdAiRecommendation | null>(() => {
+  const r = props.aiRec
+  return r && r.rec != null && r.intervalWeeks != null ? r : null
+})
+
+/**
+ * Did the doctor's action + drug + interval match the AI rec?
+ * SHORTEN/KEEP imply TREAT. EXTEND is consistent with TREAT (at a longer
+ * interval) and with OBSERVE (extension via no injection). The drug is only
+ * compared when the AI recommends one (it currently does not).
+ * Returns null when there is no usable AI rec or the doctor has not chosen yet.
  */
 const agreedWithAi = computed<boolean | null>(() => {
-  if (!props.aiRec) return null
+  const rec = activeRec.value
+  if (!rec) return null
   const a = action.value
   if (a == null) return null
   if (intervalWeeks.value == null) return null
-  return intervalWeeks.value === props.aiRec.intervalWeeks
+  if (rec.rec !== 'EXTEND' && a !== 'TREAT') return false
+  if (rec.drug != null && drug.value !== rec.drug) return false
+  return intervalWeeks.value === rec.intervalWeeks
 })
 
 /**
@@ -143,7 +162,7 @@ const agreedWithAi = computed<boolean | null>(() => {
  */
 const rationaleRequired = computed<boolean>(() => {
   if (props.subjectArm === 'study') {
-    if (props.aiRec == null) return false
+    if (activeRec.value == null) return false
     return agreedWithAi.value === false
   }
   return true
@@ -198,6 +217,12 @@ async function confirm() {
     const snapshot = props.aiRec ? JSON.stringify({
       rec: props.aiRec.rec,
       intervalWeeks: props.aiRec.intervalWeeks,
+      // An insufficient-data / placeholder result is recorded as such, so the
+      // audit shows the doctor decided with NO recommendation on screen.
+      reason: props.aiRec.reason,
+      missing: props.aiRec.missing,
+      placeholderModel: props.aiRec.placeholderModel,
+      fetchFailures: props.aiRec.fetchFailures,
       // Both forms deliberately: the key stays interpretable when the wording
       // is revised, and the resolved sentence means a reader of this audit
       // years from now does not need the translation bundle to know why.

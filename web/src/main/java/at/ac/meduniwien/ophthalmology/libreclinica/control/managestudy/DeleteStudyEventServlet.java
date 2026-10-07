@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DisplayStudyEventBean;
@@ -27,7 +29,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectD
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
-@SuppressWarnings("all")
 
 public class DeleteStudyEventServlet extends SecureController{
     /**
@@ -54,6 +55,12 @@ public class DeleteStudyEventServlet extends SecureController{
 
     }
 
+    /** GET shows the confirmation; deleting the event takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         FormProcessor fp = new FormProcessor(request);
@@ -69,6 +76,8 @@ public class DeleteStudyEventServlet extends SecureController{
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
 
+            assertStudyEventInScope(studyEventId);
+            assertStudySubjectInScope(studySubId);
             StudyEventBean event = (StudyEventBean) sedao.findByPK(studyEventId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);

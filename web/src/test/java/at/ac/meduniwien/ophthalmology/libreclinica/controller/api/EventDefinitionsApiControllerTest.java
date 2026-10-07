@@ -261,4 +261,35 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
                 .andExpect(status().isUnauthorized());
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* Assignment flags                                                       */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void anAssignmentWriteLeavesTheParticipantFormFieldsAlone() throws Exception {
+        // The participant-form fields served the Enketo forms, which are not
+        // part of this build. A body that still carries them is read the way
+        // the dispatcher reads it, and only the other flags reach the bean.
+        EventCrfAssignmentRequest body = org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
+                .json().build()
+                .readValue("{\"required\":true,\"participantForm\":true,"
+                        + "\"allowAnonymousSubmission\":true,\"submissionUrl\":\"form-1\"}",
+                        EventCrfAssignmentRequest.class);
+        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean target =
+                new at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean();
+
+        java.lang.reflect.Method m = EventDefinitionsApiController.class.getDeclaredMethod(
+                "applyAssignmentFlags",
+                at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean.class,
+                EventCrfAssignmentRequest.class,
+                at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification.class);
+        m.setAccessible(true);
+        m.invoke(null, target, body, null);
+
+        org.junit.jupiter.api.Assertions.assertTrue(target.isRequiredCRF());
+        org.junit.jupiter.api.Assertions.assertFalse(target.isParticipantForm());
+        org.junit.jupiter.api.Assertions.assertFalse(target.isAllowAnonymousSubmission());
+        org.junit.jupiter.api.Assertions.assertNotEquals("form-1", target.getSubmissionUrl());
+    }
 }

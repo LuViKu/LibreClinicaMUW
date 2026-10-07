@@ -316,7 +316,7 @@ public final class ImageFingerprint {
         Map<String, MessageDigest> digests = new HashMap<>();
         for (ImageChunk img : images) {
             if (!volumeOrder.containsKey(img.volumeKey())) continue;
-            MessageDigest md = digests.computeIfAbsent(img.volumeKey(), k -> sha256());
+            MessageDigest md = digests.computeIfAbsent(img.volumeKey(), _ -> sha256());
             // Type, width and height, then the pixels; `size` and the unknown
             // word before the dimensions are left out.
             r.digest(md, img.payloadOffset() + IMAGE_PAYLOAD_TYPE_OFFSET, 4);

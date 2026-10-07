@@ -23,7 +23,7 @@ import org.xml.sax.XMLReader;
 
 /**
  * Parser factories for XML that comes from outside the application: uploaded
- * rules and ODM files, XForms, OpenRosa submissions.
+ * rules and ODM files.
  *
  * <p>None of these formats uses a document type declaration, so a DOCTYPE is
  * refused outright. That one feature stops external entities (file reads and

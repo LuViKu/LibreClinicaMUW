@@ -87,7 +87,6 @@ public class ViewSiteServlet extends SecureController {
         } else {
             idString = request.getAttribute("siteId").toString();
         }
-        logger.info("site id:" + idString);
         // A non-numeric id is as unusable as a missing one, so it takes the
         // same branch: page message + back to the site list, rather than a
         // NumberFormatException escaping into the container's 500 page.
@@ -143,7 +142,6 @@ public class ViewSiteServlet extends SecureController {
             StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();       
             request.setAttribute("participateFormStatus",participateFormStatus );            
-            if (participateFormStatus.equals("enabled")) baseUrl();
         
             request.setAttribute("participateFormStatus",participateFormStatus );
 

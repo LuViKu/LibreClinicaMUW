@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityAction;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -28,14 +30,9 @@ public class DeleteStudyUserRoleServlet extends SecureController {
 	 * 
 	 */
 	private static final long serialVersionUID = -2743608914099183533L;
-	public static final String PATH = "DeleteStudyUserRole";
     public static final String ARG_USERNAME = "userName";
     public static final String ARG_STUDYID = "studyId";
     public static final String ARG_ACTION = "action";
-
-    public static String getLink(String userName, int studyId, EntityAction action) {
-        return PATH + "?" + ARG_USERNAME + "=" + userName + "&" + ARG_STUDYID + "=" + studyId + "&" + ARG_ACTION + "=" + action.getId();
-    }
 
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
@@ -45,6 +42,12 @@ public class DeleteStudyUserRoleServlet extends SecureController {
         }
 
         return;
+    }
+
+    /** Removes or restores a study role: POST only. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return false;
     }
 
     @Override

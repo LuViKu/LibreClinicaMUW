@@ -16,7 +16,7 @@ export default defineConfig({
   storyMatch: ['src/components/**/*.story.vue'],
   theme: {
     title: 'LibreClinica MUW — Phase E primitives',
-    favicon: 'public/favicon.svg',
+    favicon: 'favicon.svg',
     logo: {
       square: './public/favicon.svg',
       light: './public/favicon.svg',

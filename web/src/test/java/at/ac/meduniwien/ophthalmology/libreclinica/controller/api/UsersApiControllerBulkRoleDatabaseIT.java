@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -29,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -59,6 +61,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final int BULK_USER_ID = 30001;
+    private static final int RESAVE_USER_ID = 30002;
 
     @BeforeAll
     static void seedBulkUser() throws Exception {
@@ -86,13 +89,22 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
                     "INSERT INTO study_user_role "
                     + "(role_name, study_id, status_id, owner_id, date_created, user_name) "
                     + "VALUES ('coordinator', 1, 1, 1, current_timestamp, 'bulk-user')");
+            // No roles yet: the test grants them through the API.
+            stmt.execute(
+                    "INSERT INTO user_account (user_id, user_name, passwd, first_name, last_name, "
+                    + "email, active_study, institutional_affiliation, status_id, owner_id, "
+                    + "date_created, user_type_id, enabled, account_non_locked, lock_counter, "
+                    + "run_webservices, authtype, enable_api_key) "
+                    + "VALUES (" + RESAVE_USER_ID + ", 'resave-user', 'x', 'Resave', 'User', "
+                    + "'resave@example.invalid', 1, 'MUW (test)', 1, 1, current_timestamp, 2, true, true, "
+                    + "0, false, 'STANDARD', false)");
         }
     }
 
     private MockMvc usersMockMvc() {
         SecurityManager securityManager = Mockito.mock(SecurityManager.class);
         Mockito.when(securityManager.genPassword()).thenReturn("Tmp-Bulk-12!");
-        Mockito.when(securityManager.encryptPassword(Mockito.anyString(), Mockito.anyBoolean()))
+        Mockito.when(securityManager.encryptPassword(ArgumentMatchers.anyString(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("{bcrypt}$2a$10$hashedplaceholder");
         UsersApiController controller = new UsersApiController(
                 DATA_SOURCE,
@@ -213,6 +225,36 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
                         "expected 2 active grants after additive POST");
             }
         }
+    }
+
+    /**
+     * A row granted through this API is stored under the role's display
+     * name (Investigator as "Data Specialist", monitor as "Monitor"), which
+     * is not the name the role list is compared with. Saving a list that
+     * keeps those roles must keep them, not add them again and then remove
+     * every row carrying that name.
+     */
+    @Test
+    void savingAListThatKeepsTheGrantedRolesKeepsThem() throws Exception {
+        for (String role : new String[] {"Investigator", "Monitor"}) {
+            usersMockMvc().perform(post("/api/v1/users/resave-user/roles")
+                    .contentType("application/json")
+                    .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"" + role + "\"}")
+                    .session(sysadminSession()))
+                    .andExpect(status().isCreated());
+        }
+        usersMockMvc().perform(put("/api/v1/users/resave-user/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"roles\":[\"Investigator\",\"Monitor\",\"CRC\"]}")
+                .session(sysadminSession()))
+                .andExpect(status().isOk());
+
+        usersMockMvc().perform(get("/api/v1/users/resave-user/roles").session(sysadminSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.active == true)]", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.active == true && @.role == 'Investigator')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.active == true && @.role == 'Monitor')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.active == true && @.role == 'CRC')]", hasSize(1)));
     }
 
     /**

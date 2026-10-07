@@ -47,7 +47,7 @@ public class Stdev extends AbstractFunction {
             return;
         }
 
-        if (values != null && values.length > 0) {
+        if (values.length > 0) {
             double v = (new StandardDeviation()).evaluate(values);
             value = Double.toString(v);
         } else {

@@ -22,6 +22,7 @@ import org.apache.commons.lang.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationListener;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -42,7 +43,7 @@ public class RuleSetListenerService implements ApplicationListener<OnStudyEventU
 
 
 @Override
-	public void onApplicationEvent(final OnStudyEventUpdated event) {
+	public void onApplicationEvent(final @NonNull OnStudyEventUpdated event) {
 	
 		LOGGER.debug("listening");
 	if (event.getContainer().getChangeDetails().getStartDateChanged() || event.getContainer().getChangeDetails().getStatusChanged()){ 

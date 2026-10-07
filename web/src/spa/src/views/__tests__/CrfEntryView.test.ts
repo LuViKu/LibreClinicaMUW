@@ -56,6 +56,8 @@ import { apiGet, apiPost } from '@/api/client'
 // eslint-disable-next-line import/first
 import CrfEntryView from '@/views/CrfEntryView.vue'
 // eslint-disable-next-line import/first
+import ReasonForChangeModal from '@/components/ReasonForChangeModal.vue'
+// eslint-disable-next-line import/first
 import { useAuthStore } from '@/stores/auth'
 // eslint-disable-next-line import/first
 import { useCrfEntryStore } from '@/stores/crfEntry'
@@ -115,8 +117,9 @@ function makeRouter(eventCrfOid = 'EC_TEST'): Router {
   })
 }
 
-function makeEntry(status: CrfEntryStatus): CrfEntry {
+function makeEntry(status: CrfEntryStatus, requiresReasonForChange = false): CrfEntry {
   return {
+    requiresReasonForChange,
     eventCrfOid: 'EC_TEST',
     subjectId: 'M-001',
     eventLabel: 'V1 Inclusion',
@@ -157,7 +160,7 @@ function makeEntry(status: CrfEntryStatus): CrfEntry {
   } as unknown as CrfEntry
 }
 
-async function mountView(opts: { status: CrfEntryStatus; role?: string }) {
+async function mountView(opts: { status: CrfEntryStatus; role?: string; requiresReason?: boolean }) {
   setActivePinia(createPinia())
   // Auth store drives canReopen — Investigator + 'complete' satisfies
   // canReopenCrf; Monitor doesn't.
@@ -191,7 +194,7 @@ async function mountView(opts: { status: CrfEntryStatus; role?: string }) {
       if (path.includes('/section-status')) return []
       if (path.includes('/lock-status')) return null
       if (path.includes('/notes')) return { eventCrfOid: 'EC_TEST', totalCount: 0, openCount: 0, byItemOid: {} }
-      return makeEntry(opts.status)
+      return makeEntry(opts.status, opts.requiresReason ?? false)
     }
     return null
   })
@@ -328,5 +331,45 @@ describe('CrfEntryView — save feedback', () => {
 
     const notifications = useNotificationsStore()
     expect(notifications.toasts.some((t) => t.kind === 'success' && t.message === 'Saved.')).toBe(true)
+  })
+})
+
+// A reopened CRF stays under administrative editing: Save asks for the
+// reason in the modal, and the save that follows carries it. Before the
+// modal was mounted, Save on such a CRF did nothing at all.
+describe('CrfEntryView — reason for change', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+  })
+
+  it('asks for the reason on Save, then saves with it', async () => {
+    const w = await mountView({ status: 'in-progress', requiresReason: true })
+    const store = useCrfEntryStore()
+    store.setValue('I_NAME', 'Neuer Wert')
+    await nextTick()
+    apiPostMock.mockResolvedValue({ status: 'in-progress', lastSavedAt: '2026-06-11T10:00:00.000Z' })
+
+    const saveBtn = w.findAll('button').find((b) => b.text() === 'Save draft')
+    await saveBtn!.trigger('click')
+    await flushPromises()
+
+    const saveCalls = () =>
+      apiPostMock.mock.calls.filter((call) => typeof call[0] === 'string' && call[0].endsWith('/items'))
+    expect(saveCalls()).toHaveLength(0)
+    const modal = w.findComponent(ReasonForChangeModal)
+    expect(modal.exists()).toBe(true)
+    expect(modal.props('open')).toBe(true)
+    expect(modal.props('prompts')).toEqual([
+      expect.objectContaining({ oid: 'I_NAME', label: 'Name', currentValue: 'Neuer Wert' }),
+    ])
+
+    modal.vm.$emit('confirm', { I_NAME: 'misspelt' })
+    await flushPromises()
+
+    const saveCall = saveCalls()[0]
+    expect(saveCall).toBeTruthy()
+    expect((saveCall![1] as { reasons?: Record<string, string> }).reasons).toEqual({ I_NAME: 'misspelt' })
+    expect(w.findComponent(ReasonForChangeModal).props('open')).toBe(false)
   })
 })

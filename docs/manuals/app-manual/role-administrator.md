@@ -169,10 +169,12 @@ back to the top.
 2. For a quick dump, click **Schnell-ODM-Export** (Quick ODM export). For a tailored extract, click **Neuer Datensatz** (New Dataset) and complete the dataset wizard.
 3. In the dataset table, expand **View files** to see generated files, **Open wizard** to edit a dataset (disabled once it has been run), or **Remove** / **Restore** to manage its lifecycle.
 4. Click **Export now** and pick a format — *odm*, *csv*, *tsv*, *excel*, *sas* or *spss* — then download the generated file.
+5. Click **Schedules** to set up recurring exports of the dataset. **Add schedule** takes a format, a time (a Quartz cron expression, with presets for daily, weekly and monthly runs) and an optional contact e-mail, which is mailed when a run finishes or fails. A schedule can be edited, paused, resumed or deleted, and a change applies at once.
+6. An export running in the background (the bundle, or a scheduled run) shows its progress under its dataset. **Cancel export** stops it: a waiting export does not run, and a running one stops at its next checkpoint and leaves no file.
 
 ![Datasets / Data Export](screenshots/administrator/10-datasets.png)
 
-**Notes:** Open to Administrator, Data Manager and Monitor. Tick **Entfernte einschließen** (Include removed) to show soft-deleted datasets. A dataset that has already run cannot be edited — clone or create a new one instead.
+**Notes:** Open to Administrator, Data Manager and Monitor. Tick **Entfernte einschließen** (Include removed) to show soft-deleted datasets. A dataset that has already run cannot be edited — clone or create a new one instead. Schedules replace the legacy *Create Scheduled Job: Export Dataset* screen; a schedule's exports run as the user who created it.
 
 ## 11. Import CRF Data
 
@@ -254,10 +256,11 @@ back to the top.
 1. Open **Geplante Jobs** (Scheduled Jobs) from the **System** rail (`/admin/jobs`).
 2. Review the scheduler status bar (name, started/standby) and the jobs table: name, group, state, previous and next fire times, description.
 3. Click **Aktualisieren** (Refresh) to re-poll.
+4. A scheduled export made with the legacy *Create Scheduled Job* screen (group *XsltTriggersExportJobs*) carries a **Legacy export** badge with its dataset, period, format and contact e-mail. It keeps running until it is deleted. Recreate it as a schedule of the dataset (**Datenexport** → **Schedules**), then click **Delete** here.
 
 ![Scheduled Jobs](screenshots/administrator/16-scheduled-jobs.png)
 
-**Notes:** Administrator-only and read-only. The state pill is colour-coded (NORMAL green, PAUSED amber, ERROR/BLOCKED red). An empty list shows *Keine Jobs* (No jobs).
+**Notes:** Administrator-only. Only legacy scheduled exports can be deleted here; every other trigger belongs to the platform and is read-only. New export schedules are set up per dataset under **Datenexport**. The state pill is colour-coded (NORMAL green, PAUSED amber, ERROR/BLOCKED red). An empty list shows *Keine Jobs* (No jobs).
 
 ## 17. Subject Detail, Study Identity and Parameters
 

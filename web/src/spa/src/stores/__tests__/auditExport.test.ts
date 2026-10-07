@@ -89,6 +89,24 @@ describe('useAuditLogStore.exportXlsx', () => {
     expect(url.search).toBe('')
   })
 
+  it('forwards the item and the date range, and never a page: the export holds every matching row', async () => {
+    mockFetch(okBinary())
+    const store = useAuditLogStore()
+    store.itemFilter = 'I_HEIGHT_CM'
+    store.fromDate = '2026-01-01'
+    store.toDate = '2026-06-30'
+    store.page = 3
+
+    await store.exportXlsx()
+
+    const url = new URL(calls[0].url, 'http://localhost')
+    expect(url.searchParams.get('item')).toBe('I_HEIGHT_CM')
+    expect(url.searchParams.get('from')).toBe('2026-01-01')
+    expect(url.searchParams.get('to')).toBe('2026-06-30')
+    expect(url.searchParams.has('page')).toBe(false)
+    expect(url.searchParams.has('pageSize')).toBe(false)
+  })
+
   it('surfaces a backend 500 as exportError without touching error', async () => {
     mockFetch(
       new Response(JSON.stringify({ message: 'Failed to render workbook' }), {

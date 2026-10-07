@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.config.LaxParsingSpringLiquibase;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AbstractApiControllerDatabaseIT;
 import liquibase.integration.spring.SpringLiquibase;
 
@@ -65,7 +66,7 @@ class LiquibaseChangelogIdempotencyIT extends AbstractApiControllerDatabaseIT {
         int before = changelogRowCount();
         assertTrue(before > 0, "the base class should already have migrated the schema");
 
-        SpringLiquibase again = new SpringLiquibase();
+        SpringLiquibase again = new LaxParsingSpringLiquibase();
         again.setDataSource(DATA_SOURCE);
         again.setChangeLog("classpath:migration/master.xml");
         again.setResourceLoader(new DefaultResourceLoader());
@@ -73,6 +74,25 @@ class LiquibaseChangelogIdempotencyIT extends AbstractApiControllerDatabaseIT {
 
         assertEquals(before, changelogRowCount(),
                 "a second run of master.xml applied changesets — a changeset is not idempotent");
+    }
+
+    /**
+     * Liquibase 3.6.3 created every {@code autoIncrement} column as
+     * {@code serial}, so every existing database has them that way. Liquibase 4
+     * would make them identity columns on PostgreSQL 10+;
+     * {@code SerialPostgresDatabase} keeps them serial, so the schema these
+     * tests run on is the one production runs on.
+     */
+    @Test
+    void autoIncrementColumnsAreSerialAsOnEveryExistingDatabase() throws Exception {
+        assertEquals(0, countOf("SELECT count(*) FROM information_schema.columns"
+                        + " WHERE table_schema = 'public' AND is_identity = 'YES'"),
+                "identity columns found: a new schema must keep the serial columns existing databases have");
+        assertEquals(1, countOf("SELECT count(*) FROM information_schema.columns"
+                        + " WHERE table_schema = 'public' AND table_name = 'study_subject'"
+                        + " AND column_name = 'study_subject_id'"
+                        + " AND column_default = 'nextval(''study_subject_study_subject_id_seq''::regclass)'"),
+                "study_subject.study_subject_id should default to its own serial sequence");
     }
 
     @Test
@@ -116,9 +136,13 @@ class LiquibaseChangelogIdempotencyIT extends AbstractApiControllerDatabaseIT {
     /* ---------------- helpers ---------------- */
 
     private int changelogRowCount() throws Exception {
+        return countOf("SELECT count(*) FROM databasechangelog");
+    }
+
+    private int countOf(String sql) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("SELECT count(*) FROM databasechangelog")) {
+             ResultSet rs = st.executeQuery(sql)) {
             rs.next();
             return rs.getInt(1);
         }

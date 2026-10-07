@@ -9,11 +9,14 @@ import SelectInput from '@/components/SelectInput.vue'
 import Modal from '@/components/Modal.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 
-import { useSdvStore } from '@/stores/sdv'
+import { useSdvStore, type SdvSubjectSummary } from '@/stores/sdv'
 import { useAuthStore } from '@/stores/auth'
 import type { SdvRow, SdvRequirement, SdvStatus } from '@/types/sdv'
 import { canUnverifySdv } from '@/types/sdv'
 import { formatDate } from '@/lib/dateFormat'
+import { downloadCsv } from '@/lib/csv'
+import { eventCrfLink } from '@/lib/crfLink'
+import { userRolesFromAuth } from '@/router'
 
 const { t } = useI18n()
 const sdv = useSdvStore()
@@ -22,6 +25,14 @@ const auth = useAuthStore()
 onMounted(() => {
   if (sdv.rows.length === 0) sdv.load()
 })
+
+/** "By CRF" lists the CRFs; "by subject" sums them per subject, as legacy's two SDV tabs. */
+const viewMode = ref<'crf' | 'subject'>('crf')
+
+/** A Monitor opens the CRF read-only; a role that enters data, for entry. */
+function crfLink(row: SdvRow): string {
+  return eventCrfLink(userRolesFromAuth(auth), row.eventCrfOid)
+}
 
 /* Phase E A6 — un-verify dialog state. */
 const unverifyTarget = ref<SdvRow | null>(null)
@@ -83,34 +94,52 @@ async function confirmVerify() {
   setTimeout(() => { justVerifiedCount.value = null }, 4_000)
 }
 
-type NoteType = 'query' | 'failed-validation' | 'annotation' | 'reason-for-change'
-const queryOpen = ref(false)
-const queryTarget = ref<SdvRow | null>(null)
-const queryType = ref<NoteType>('query')
-const queryDescription = ref('')
-function openAddQuery(row: SdvRow) {
-  queryTarget.value = row
-  queryType.value = 'query'
-  queryDescription.value = ''
-  queryOpen.value = true
-}
-function submitQuery() {
-  if (!queryTarget.value) return
-  // Optimistic: bump the row's open-queries counter + flip status to 'query'.
-  // Backend wiring lands in E.4 — see api-surface.md row 6.
-  const oid = queryTarget.value.eventCrfOid
-  const row = sdv.rows.find((r) => r.eventCrfOid === oid)
-  if (row) {
-    row.openQueries += 1
-    if (row.status === 'pending') row.status = 'query'
-  }
-  queryOpen.value = false
+/*
+ * A query is raised on a data point: an item of the CRF, which the row's
+ * "Open CRF" shows with a query control on every item. The row itself has
+ * none to attach one to, so it carries no "Add query".
+ */
+
+/* Verify a subject: its complete CRFs that need SDV and have no open query. */
+const subjectConfirm = ref<SdvSubjectSummary | null>(null)
+async function confirmVerifySubject() {
+  const target = subjectConfirm.value
+  subjectConfirm.value = null
+  if (!target) return
+  justVerifiedCount.value = await sdv.verifySubject(target.subjectId)
+  setTimeout(() => { justVerifiedCount.value = null }, 4_000)
 }
 
-const queryTargetCrfDescription = computed(() =>
-  queryTarget.value
-    ? `${queryTarget.value.subjectId} · ${queryTarget.value.eventLabel} · ${queryTarget.value.crfName}`
-    : '',
+/** Opens the subject's CRFs in the view by CRF. */
+function showSubjectCrfs(s: SdvSubjectSummary) {
+  sdv.query = s.subjectId
+  viewMode.value = 'crf'
+}
+
+/** The table on screen as CSV: the CRFs as filtered, or the subjects. */
+function exportCsv(): void {
+  const study = auth.user?.activeStudy?.oid ?? 'study'
+  const day = new Date().toISOString().slice(0, 10)
+  if (viewMode.value === 'subject') {
+    downloadCsv(`sdv-subjects-${study}-${day}.csv`, [
+      [t('sdv.column.subject'), t('sdv.column.site'), t('sdv.bySubject.complete'),
+        t('sdv.bySubject.verified'), t('sdv.bySubject.withQueries'), t('sdv.bySubject.verifiable')],
+      ...sdv.subjects.map((s) => [s.subjectId, s.siteLabel, s.complete, s.verified, s.withQueries,
+        s.verifiable.length]),
+    ])
+    return
+  }
+  downloadCsv(`sdv-${study}-${day}.csv`, [
+    [t('sdv.column.subject'), t('sdv.column.site'), t('sdv.column.event'), t('sdv.column.eventDate'),
+      t('sdv.column.crf'), t('sdv.column.requirement'), t('sdv.column.status'),
+      t('sdv.column.openQueries'), t('sdv.column.lastUpdated')],
+    ...sdv.filtered.map((r) => [r.subjectId, r.siteLabel, r.eventLabel, r.eventStartDate, r.crfName,
+      requirementLabel(r.requirement), statusLabel(r.status), r.openQueries, r.lastUpdatedAt]),
+  ])
+}
+
+const exportDisabled = computed(() =>
+  viewMode.value === 'subject' ? sdv.subjects.length === 0 : sdv.visibleCount === 0,
 )
 
 const statusOptions: { v: 'all' | SdvStatus; l: () => string }[] = [
@@ -139,8 +168,32 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
           <h1 class="text-xl font-semibold tracking-tight">{{ t('sdv.title') }}</h1>
         </div>
         <div class="flex items-center gap-2 text-xs">
-          <button class="px-3 py-1.5 border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <div class="inline-flex rounded-md border border-slate-200 overflow-hidden" role="group" :aria-label="t('sdv.view.label')">
+            <button
+              type="button"
+              class="px-3 py-1.5"
+              :class="viewMode === 'crf' ? 'bg-muw-blue-50 text-muw-blue font-medium' : 'bg-white text-slate-700 hover:bg-slate-50'"
+              :aria-pressed="viewMode === 'crf'"
+              data-testid="sdv-view-crf"
+              @click="viewMode = 'crf'"
+            >{{ t('sdv.view.byCrf') }}</button>
+            <button
+              type="button"
+              class="px-3 py-1.5 border-l border-slate-200"
+              :class="viewMode === 'subject' ? 'bg-muw-blue-50 text-muw-blue font-medium' : 'bg-white text-slate-700 hover:bg-slate-50'"
+              :aria-pressed="viewMode === 'subject'"
+              data-testid="sdv-view-subject"
+              @click="viewMode = 'subject'"
+            >{{ t('sdv.view.bySubject') }}</button>
+          </div>
+          <button
+            type="button"
+            class="px-3 py-1.5 border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="exportDisabled"
+            data-testid="sdv-export"
+            @click="exportCsv"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" x2="12" y1="15" y2="3" />
@@ -149,6 +202,8 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
           </button>
         </div>
       </div>
+
+      <p v-if="sdv.error" class="text-xs text-rose-700 mb-3" role="alert">{{ sdv.error }}</p>
 
       <!-- Filter row -->
       <div class="flex items-center gap-3 mb-4 text-xs">
@@ -169,22 +224,24 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
           </TextInput>
         </div>
 
-        <div class="w-44">
-          <SelectInput id="sdv-status-filter" :model-value="sdv.statusFilter" @update:model-value="(v) => sdv.statusFilter = v as 'all' | SdvStatus">
-            <option v-for="o in statusOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
-          </SelectInput>
-        </div>
+        <template v-if="viewMode === 'crf'">
+          <div class="w-44">
+            <SelectInput id="sdv-status-filter" :model-value="sdv.statusFilter" @update:model-value="(v) => sdv.statusFilter = v as 'all' | SdvStatus">
+              <option v-for="o in statusOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
+            </SelectInput>
+          </div>
 
-        <div class="w-52">
-          <SelectInput id="sdv-req-filter" :model-value="sdv.requirementFilter" @update:model-value="(v) => sdv.requirementFilter = v as 'all' | SdvRequirement">
-            <option v-for="o in requirementOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
-          </SelectInput>
-        </div>
+          <div class="w-52">
+            <SelectInput id="sdv-req-filter" :model-value="sdv.requirementFilter" @update:model-value="(v) => sdv.requirementFilter = v as 'all' | SdvRequirement">
+              <option v-for="o in requirementOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
+            </SelectInput>
+          </div>
 
-        <label class="inline-flex items-center gap-1.5 text-slate-600 cursor-pointer">
-          <input v-model="sdv.onlyWithQueries" type="checkbox" class="rounded text-muw-blue" />
-          {{ t('sdv.filter.onlyWithQueries') }}
-        </label>
+          <label class="inline-flex items-center gap-1.5 text-slate-600 cursor-pointer">
+            <input v-model="sdv.onlyWithQueries" type="checkbox" class="rounded text-muw-blue" />
+            {{ t('sdv.filter.onlyWithQueries') }}
+          </label>
+        </template>
 
         <button
           v-if="sdv.query || sdv.statusFilter !== 'all' || sdv.requirementFilter !== 'all' || sdv.onlyWithQueries"
@@ -195,14 +252,17 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
           {{ t('common.clear') }}
         </button>
 
-        <div class="ml-auto text-slate-500">
+        <div v-if="viewMode === 'crf'" class="ml-auto text-slate-500">
           {{ t('sdv.showingCount', { visible: sdv.visibleCount, total: sdv.totalCount, verifiable: sdv.verifiableCount }) }}
+        </div>
+        <div v-else class="ml-auto text-slate-500">
+          {{ t('sdv.bySubject.count', { count: sdv.subjects.length }) }}
         </div>
       </div>
 
       <!-- Bulk-action bar -->
       <div
-        v-if="sdv.selectedCount > 0"
+        v-if="viewMode === 'crf' && sdv.selectedCount > 0"
         class="flex items-center justify-between bg-muw-blue-50 border border-muw-blue-200 rounded-muw px-3 py-2 mb-3 text-xs"
         role="region"
         :aria-label="t('sdv.selectionAriaLabel')"
@@ -242,7 +302,7 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
         {{ t('sdv.toast.verifiedCount', { count: justVerifiedCount }) }}
       </div>
 
-      <DenseTable>
+      <DenseTable v-if="viewMode === 'crf'">
         <template #header>
           <tr class="border-b border-slate-200">
             <th scope="col" class="px-3 py-2 w-8">
@@ -300,19 +360,13 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
           </td>
           <td class="px-3 py-2 text-right">
             <button
-              class="text-muw-blue hover:underline text-xs mr-3"
-              @click="openAddQuery(row)"
-            >
-              {{ t('sdv.action.addQuery') }}
-            </button>
-            <button
               v-if="rowCanUnverify(row)"
               class="text-amber-700 hover:text-amber-900 underline text-xs mr-3"
               @click="openUnverify(row)"
             >
               {{ t('sdv.action.unverify') }}
             </button>
-            <RouterLink :to="`/event-crfs/${row.eventCrfOid}`" class="text-muw-blue hover:underline text-xs">
+            <RouterLink :to="crfLink(row)" class="text-muw-blue hover:underline text-xs" data-testid="sdv-open-crf">
               {{ t('sdv.action.openCrf') }}
             </RouterLink>
           </td>
@@ -321,6 +375,49 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
         <template #statusBar>
           <span>{{ t('sdv.showingCount', { visible: sdv.visibleCount, total: sdv.totalCount, verifiable: sdv.verifiableCount }) }}</span>
         </template>
+      </DenseTable>
+
+      <!-- View by subject: legacy "View By Study Subject ID". -->
+      <DenseTable v-else data-testid="sdv-subject-table">
+        <template #header>
+          <tr class="border-b border-slate-200">
+            <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('sdv.column.subject') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium">{{ t('sdv.column.site') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-28 text-right">{{ t('sdv.bySubject.complete') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-28 text-right">{{ t('sdv.bySubject.verified') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-32 text-right">{{ t('sdv.bySubject.withQueries') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium text-right w-56"></th>
+          </tr>
+        </template>
+
+        <tr v-if="sdv.isLoading">
+          <td :colspan="6" class="px-3 py-6 text-center text-slate-500 italic">{{ t('common.loading') }}</td>
+        </tr>
+        <tr v-else-if="sdv.subjects.length === 0">
+          <td :colspan="6" class="px-3 py-6 text-center text-slate-500">{{ t('sdv.empty') }}</td>
+        </tr>
+
+        <tr v-for="s in sdv.subjects" :key="s.subjectId" :data-testid="`sdv-subject-${s.subjectId}`">
+          <td class="px-3 py-2 font-medium">
+            <button type="button" class="text-muw-blue hover:underline" @click="showSubjectCrfs(s)">{{ s.subjectId }}</button>
+          </td>
+          <td class="px-3 py-2 text-slate-600">{{ s.siteLabel }}</td>
+          <td class="px-3 py-2 text-right text-slate-700">{{ s.complete }}</td>
+          <td class="px-3 py-2 text-right text-slate-700">{{ s.verified }}</td>
+          <td class="px-3 py-2 text-right text-slate-700">{{ s.withQueries }}</td>
+          <td class="px-3 py-2 text-right text-xs">
+            <button
+              v-if="s.verifiable.length > 0"
+              type="button"
+              class="px-3 py-1 bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 disabled:opacity-50"
+              :disabled="sdv.isVerifying"
+              :data-testid="`sdv-verify-subject-${s.subjectId}`"
+              @click="subjectConfirm = s"
+            >{{ t('sdv.bySubject.verify', { count: s.verifiable.length }) }}</button>
+            <span v-else-if="s.verified === s.complete" class="text-muw-teal-700">{{ t('sdv.bySubject.allVerified') }}</span>
+            <span v-else class="text-slate-400">{{ t('sdv.bySubject.nothingToVerify') }}</span>
+          </td>
+        </tr>
       </DenseTable>
     </div>
 
@@ -338,8 +435,8 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
       </p>
 
       <template #footer>
-        <div class="text-xs text-slate-500">
-          {{ t('sdv.confirm.auditNote') }}
+        <div class="text-xs text-slate-500" data-testid="sdv-confirm-audit-note">
+          {{ t('sdv.confirm.auditNote', { user: auth.user?.username ?? '' }) }}
         </div>
         <div class="flex items-center gap-2">
           <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700" @click="confirmOpen = false">
@@ -355,59 +452,38 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
       </template>
     </Modal>
 
-    <!-- Add Query modal -->
-    <Modal v-model:open="queryOpen" labelled-by="sdv-query-title" panel-class="max-w-2xl">
+    <!-- Verify-a-subject confirmation: states the subject and the count. -->
+    <Modal
+      :open="subjectConfirm !== null"
+      labelled-by="sdv-subject-confirm-title"
+      panel-class="max-w-md"
+      @update:open="(v: boolean) => { if (!v) subjectConfirm = null }"
+    >
       <template #header>
-        <div>
-          <h2 id="sdv-query-title" class="text-lg font-semibold tracking-tight">{{ t('sdv.query.title') }}</h2>
-          <p class="text-xs text-slate-500 mt-0.5">{{ queryTargetCrfDescription }}</p>
-        </div>
+        <h2 id="sdv-subject-confirm-title" class="text-lg font-semibold tracking-tight">{{ t('sdv.bySubject.confirmTitle') }}</h2>
       </template>
 
-      <div class="space-y-4">
-        <div>
-          <FieldLabel for="sdv-query-type" required>{{ t('sdv.query.noteType') }}</FieldLabel>
-          <div class="grid grid-cols-4 gap-2 text-xs">
-            <label
-              v-for="opt in (['query','failed-validation','annotation','reason-for-change'] as NoteType[])"
-              :key="opt"
-              class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border cursor-pointer font-medium transition-colors"
-              :class="queryType === opt
-                ? 'border-muw-blue-200 bg-muw-blue-50 text-muw-blue'
-                : 'border-slate-200 hover:bg-slate-50 text-slate-700'"
-            >
-              <input type="radio" name="sdv-query-type" :value="opt" :checked="queryType === opt" class="sr-only" @change="queryType = opt" />
-              <span>{{ t(`sdv.query.type.${opt}`) }}</span>
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <FieldLabel for="sdv-query-desc" required>{{ t('sdv.query.descriptionLabel') }}</FieldLabel>
-          <textarea
-            id="sdv-query-desc"
-            v-model="queryDescription"
-            class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 focus:outline-none muw-focus"
-            rows="4"
-            :placeholder="t('sdv.query.descriptionPlaceholder')"
-          ></textarea>
-        </div>
-      </div>
+      <p v-if="subjectConfirm" class="text-sm text-slate-700" data-testid="sdv-subject-confirm-body">
+        {{ t('sdv.bySubject.confirmBody', { count: subjectConfirm.verifiable.length, subject: subjectConfirm.subjectId }) }}
+      </p>
+      <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+        {{ t('sdv.bySubject.confirmScope') }}
+      </p>
 
       <template #footer>
         <div class="text-xs text-slate-500">
-          {{ t('sdv.query.auditTrailTell') }}
+          {{ t('sdv.confirm.auditNote', { user: auth.user?.username ?? '' }) }}
         </div>
         <div class="flex items-center gap-2">
-          <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700" @click="queryOpen = false">
+          <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700" @click="subjectConfirm = null">
             {{ t('common.cancel') }}
           </button>
           <button
             class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium"
-            :disabled="queryDescription.trim().length === 0"
-            @click="submitQuery"
+            data-testid="sdv-subject-confirm"
+            @click="confirmVerifySubject"
           >
-            {{ t('sdv.query.submit') }}
+            {{ t('sdv.confirm.cta', { count: subjectConfirm?.verifiable.length ?? 0 }) }}
           </button>
         </div>
       </template>

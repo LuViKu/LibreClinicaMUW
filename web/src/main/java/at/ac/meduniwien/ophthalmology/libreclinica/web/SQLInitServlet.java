@@ -38,9 +38,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.Configu
  *
  *
  */
-// 2026-06-28 — heritage null-analysis suppress; per-site
-// null-safety review is the deferred follow-up.
-@SuppressWarnings("null")
 public class SQLInitServlet extends HttpServlet {
 
     /**
@@ -158,13 +155,9 @@ public class SQLInitServlet extends HttpServlet {
     }
 
     public void copyTemplate(String theDir){
-        OutputStream out = null;
-        InputStream is = null;
         CoreResources cr = (CoreResources) SpringServletAccess.getApplicationContext(context).getBean("coreResources");
-        try {
-            is = cr.getInputStream(DownloadVersionSpreadSheetServlet.CRF_VERSION_TEMPLATE);
-            File excelOutFile = new File(theDir);
-            out = new FileOutputStream(excelOutFile);
+        try (InputStream is = cr.getInputStream(DownloadVersionSpreadSheetServlet.CRF_VERSION_TEMPLATE);
+             OutputStream out = new FileOutputStream(new File(theDir))) {
             byte[] buf = new byte[1024];
             int len;
             while ((len = is.read(buf)) > 0) {
@@ -172,12 +165,6 @@ public class SQLInitServlet extends HttpServlet {
             }
         } catch (Exception ex) {
             ex.printStackTrace();
-        }finally {
-            try{
-                is.close();
-                out.close();
-            }catch(Exception e){
-            }
         }
     }
 

@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DisplayStudyEventBean;
@@ -36,7 +38,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Removes a study subject and all the related data
  */
-@SuppressWarnings("all")
 public class RemoveStudySubjectServlet extends SecureController {
     /**
 	 * 
@@ -62,6 +63,12 @@ public class RemoveStudySubjectServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the confirmation; removing the study subject takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override
@@ -90,6 +97,8 @@ public class RemoveStudySubjectServlet extends SecureController {
             StudyDAO studydao = new StudyDAO(sm.getDataSource());
             StudyBean study = (StudyBean) studydao.findByPK(studyId);
 
+            // the subject being removed, whatever study the request names, must be the session's
+            assertRecordInScope(studySub.getStudyId());
             checkRoleByUserAndStudy(ub, study.getParentStudyId(), study.getId());
 
             // find study events

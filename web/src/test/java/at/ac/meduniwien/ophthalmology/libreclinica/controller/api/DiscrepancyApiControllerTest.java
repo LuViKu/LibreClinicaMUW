@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *       refs.</li>
  * </ul>
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
@@ -233,11 +234,73 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
-    void transitionMatrix_ClosedIsTerminal() {
-        // Any transition out of CLOSED is illegal at this endpoint.
+    void transitionMatrix_TheMonitorDataManagerAndAdminReopenAClosedQuery() {
+        // current=CLOSED(4) → new=UPDATED(2) re-opens the thread. Legacy
+        // ViewDiscrepancyNoteServlet sets a reply to a closed thread to
+        // Updated for every role but the Investigator: Monitor(6),
+        // director(3) and admin(1) may; Investigator(4) and CRC(2) may not.
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(4, 2, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(4, 2, 3));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(4, 2, 1));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(4, 2, 4));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(4, 2, 2));
+        // Nothing else leaves CLOSED, and a closed thread stays closed.
         org.junit.jupiter.api.Assertions.assertEquals(
                 NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
-                NoteTransitionMatrix.check(4, 2, 1));
+                NoteTransitionMatrix.check(4, 3, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
+                NoteTransitionMatrix.check(4, 4, 6));
+    }
+
+    @Test
+    void transitionMatrix_TheMonitorReQueriesAndClosesEveryOpenQuery() {
+        // Legacy ViewDiscrepancyNoteServlet: a Monitor may Update Note and
+        // Close Note on New, Updated and Resolution Proposed threads.
+        for (int current : new int[] {1, 2, 3}) {
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.OK,
+                    NoteTransitionMatrix.check(current, 2, 6), "→ updated from " + current);
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.OK,
+                    NoteTransitionMatrix.check(current, 4, 6), "→ closed from " + current);
+        }
+    }
+
+    @Test
+    void transitionMatrix_TheMonitorNeitherProposesNorWaivesAQuery() {
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(2, 3, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(1, 5, 6));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(2, 5, 6));
+    }
+
+    @Test
+    void transitionMatrix_OnlyTheMonitorClosesAQueryWithoutAProposedResolution() {
+        // New or Updated → CLOSED: Investigator(4), director(3), admin(1) refused.
+        for (int role : new int[] {1, 3, 4}) {
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                    NoteTransitionMatrix.check(1, 4, role), "new → closed, role " + role);
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                    NoteTransitionMatrix.check(2, 4, role), "updated → closed, role " + role);
+        }
     }
 
     @Test
@@ -331,6 +394,14 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                 NoteTransitionMatrix.canCreateType(3, 0));
     }
 
+    @Test
+    void anAnnotationAndAReasonForChangeStartNotApplicable() {
+        org.junit.jupiter.api.Assertions.assertEquals(5, DiscrepancyApiController.initialStatusId(2));
+        org.junit.jupiter.api.Assertions.assertEquals(5, DiscrepancyApiController.initialStatusId(4));
+        org.junit.jupiter.api.Assertions.assertEquals(1, DiscrepancyApiController.initialStatusId(3));
+        org.junit.jupiter.api.Assertions.assertEquals(1, DiscrepancyApiController.initialStatusId(1));
+    }
+
     /* ---------------------------------------------------------------------- */
     /* Phase E.6 dn — eventCrfOid scoping for repeating-event correctness    */
     /* ---------------------------------------------------------------------- */
@@ -422,5 +493,57 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                 NoteTransitionMatrix.statusIdForSpaName("banana"));
         org.junit.jupiter.api.Assertions.assertEquals(0,
                 NoteTransitionMatrix.statusIdForSpaName(null));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Ages                                                                   */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void anOpenNoteIsOpenSinceItsCreation() {
+        java.time.Instant created = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        java.time.Instant answered = java.time.Instant.parse("2026-09-20T10:00:00Z");
+        java.time.Instant now = java.time.Instant.parse("2026-09-30T11:00:00Z");
+        for (int open : new int[] {1, 2, 3}) {
+            org.junit.jupiter.api.Assertions.assertEquals(29,
+                    DiscrepancyApiController.daysOpen(open, created, answered, now));
+        }
+    }
+
+    @Test
+    void aClosedNoteWasOpenUntilItsLastEntry() {
+        java.time.Instant created = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        java.time.Instant closed = java.time.Instant.parse("2026-09-08T12:00:00Z");
+        java.time.Instant now = java.time.Instant.parse("2026-09-30T11:00:00Z");
+        org.junit.jupiter.api.Assertions.assertEquals(7,
+                DiscrepancyApiController.daysOpen(4, created, closed, now));
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                DiscrepancyApiController.daysOpen(5, created, closed, now), "not applicable");
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                DiscrepancyApiController.daysOpen(1, null, null, now), "creation unknown");
+    }
+
+    @Test
+    void theLastActivityIsTheNewestEntry() {
+        java.time.Instant created = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        java.time.Instant answered = java.time.Instant.parse("2026-09-20T10:00:00Z");
+        org.junit.jupiter.api.Assertions.assertEquals(created,
+                DiscrepancyApiController.lastActivity(created, null), "nobody answered");
+        org.junit.jupiter.api.Assertions.assertEquals(answered,
+                DiscrepancyApiController.lastActivity(created, answered));
+    }
+
+    @Test
+    void aThreadWhoseAnswersCannotBeReadIsAnErrorNotUnanswered() throws Exception {
+        // Before, a failed read returned no answers, and every thread then
+        // showed its creation date as its last activity and a closed one
+        // 0 days open, in a 200 response.
+        javax.sql.DataSource failing = Mockito.mock(javax.sql.DataSource.class);
+        Mockito.when(failing.getConnection()).thenThrow(new java.sql.SQLException("connection refused"));
+        DiscrepancyApiController controller = new DiscrepancyApiController(failing,
+                Mockito.mock(SiteVisibilityFilter.class));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.dao.DataAccessException.class,
+                () -> controller.latestChildActivity(java.util.List.of(1, 2)));
     }
 }

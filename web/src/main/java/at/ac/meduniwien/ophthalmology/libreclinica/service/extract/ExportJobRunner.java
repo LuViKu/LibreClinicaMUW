@@ -8,6 +8,9 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.extract;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import javax.sql.DataSource;
 
 import org.quartz.Job;
@@ -23,6 +26,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExportFormatBean
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobInterruptedException;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 
 /**
  * Phase E.6 — Data Export Phase 4.
@@ -59,6 +64,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
  * Same pattern as the existing
  * {@link at.ac.meduniwien.ophthalmology.libreclinica.web.job.ExampleSpringJob}.
  *
+ * <h2>Cancellation</h2>
+ *
+ * <p>A running job can be asked to stop ({@link #requestCancel(long)}).
+ * The worker gives its thread a {@link JobTerminationMonitor}, the
+ * cooperative mechanism the legacy extract jobs use: the ODM extract and
+ * the dataset bundle check it at their checkpoints and throw
+ * {@link JobInterruptedException}, and the job ends {@code cancelled}.
+ * No file is registered for it, as a file is registered only once the
+ * export is complete, and the part the ODM extract or the bundle had
+ * written is removed from disk. The tabular formats have no checkpoint and
+ * finish.
+ *
  * <h2>What this is NOT</h2>
  *
  * <p>This does not pre-empt or retry running jobs. A job that takes
@@ -72,6 +89,26 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 public class ExportJobRunner implements Job {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExportJobRunner.class);
+
+    /** The monitor of each job a worker of this JVM is running, by export_job id. */
+    private static final Map<Long, JobTerminationMonitor> RUNNING = new ConcurrentHashMap<>();
+
+    /**
+     * Ask the worker running {@code jobId} to stop at its next checkpoint.
+     * Returns {@code false} when no worker of this JVM is running it.
+     */
+    public static boolean requestCancel(long jobId) {
+        JobTerminationMonitor monitor = RUNNING.get(jobId);
+        if (monitor == null) return false;
+        monitor.terminate();
+        return true;
+    }
+
+    /** True while a worker of this JVM runs {@code jobId} and has been asked to stop. */
+    public static boolean isCancelRequested(long jobId) {
+        JobTerminationMonitor monitor = RUNNING.get(jobId);
+        return monitor != null && monitor.isTerminated();
+    }
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
@@ -90,19 +127,59 @@ public class ExportJobRunner implements Job {
         DataSource dataSource = appCtx.getBean("dataSource", DataSource.class);
         ExportFileMaterializer materializer = resolveMaterializer(appCtx);
 
-        runOnce(dataSource, materializer);
+        runOnce(dataSource, materializer, resolveNotifier(appCtx));
     }
 
     /**
-     * Package-visible for the unit test — drains exactly one queued
-     * row. Returns {@code true} if a job was processed, {@code false}
-     * if the queue was empty.
+     * Drains exactly one queued row, sending no completion mail. Returns
+     * {@code true} if a job was processed, {@code false} if the queue was
+     * empty.
      */
     public static boolean runOnce(DataSource dataSource, ExportFileMaterializer materializer) {
-        ExportJobDAO jobDao = new ExportJobDAO(dataSource);
-        ExportJobDAO.Row claimed = jobDao.claimNextQueued();
-        if (claimed == null) return false;
+        return runOnce(dataSource, materializer, null);
+    }
 
+    /**
+     * Drains exactly one queued row. When the row came from an
+     * {@code export_schedule}, {@code notifier} mails the schedule's
+     * contact address once the run is done or failed; a null notifier
+     * sends nothing. Returns {@code true} if a job was processed,
+     * {@code false} if the queue was empty.
+     */
+    public static boolean runOnce(DataSource dataSource, ExportFileMaterializer materializer,
+                                  ExportCompletionNotifier notifier) {
+        ExportJobDAO jobDao = new ExportJobDAO(dataSource);
+        // The extract's checkpoints read this thread's monitor;
+        // requestCancel reaches the same one through RUNNING. It is in
+        // RUNNING before the claim commits: a cancel that sees the job
+        // running must find the monitor, not answer that no worker of this
+        // server runs it.
+        long[] registered = {-1L};
+        ExportJobDAO.Row claimed = jobDao.claimNextQueued(id -> {
+            RUNNING.put(id, JobTerminationMonitor.createInstance("export_job " + id));
+            registered[0] = id;
+        });
+        if (claimed == null) {
+            if (registered[0] >= 0) RUNNING.remove(registered[0]);
+            JobTerminationMonitor.clear();
+            return false;
+        }
+        try {
+            process(dataSource, materializer, jobDao, claimed);
+        } finally {
+            RUNNING.remove(claimed.id);
+            // Quartz pools its threads: the next job must not inherit this monitor.
+            JobTerminationMonitor.clear();
+            // After the outcome is recorded: the mail reports it, it cannot change it.
+            if (notifier != null && claimed.scheduleId != null) {
+                notifier.notifyFinished(claimed.id);
+            }
+        }
+        return true;
+    }
+
+    private static void process(DataSource dataSource, ExportFileMaterializer materializer,
+                                ExportJobDAO jobDao, ExportJobDAO.Row claimed) {
         LOG.info("ExportJobRunner: picked up job_id={} dataset_id={} format={}",
                 claimed.id, claimed.datasetId, claimed.format);
 
@@ -112,7 +189,7 @@ public class ExportJobRunner implements Job {
             if (ds == null || ds.getId() == 0) {
                 jobDao.markFailed(claimed.id,
                         "Dataset " + claimed.datasetId + " no longer exists");
-                return true;
+                return;
             }
 
             long t0 = System.currentTimeMillis();
@@ -125,16 +202,18 @@ public class ExportJobRunner implements Job {
             if (archivedFileId <= 0) {
                 jobDao.markFailed(claimed.id,
                         "Archived-dataset-file insert returned no id");
-                return true;
+                return;
             }
             jobDao.markDone(claimed.id, archivedFileId);
             LOG.info("ExportJobRunner: completed job_id={} archived_dataset_file_id={} in {} ms",
                     claimed.id, archivedFileId, elapsedMs);
-            return true;
+        } catch (JobInterruptedException cancelled) {
+            // Stopped at a checkpoint, before any file was registered.
+            LOG.info("ExportJobRunner: job_id={} cancelled", claimed.id);
+            jobDao.markCancelled(claimed.id, "Cancelled");
         } catch (Throwable t) { // NOSONAR — Quartz can swallow Errors; record everything.
             LOG.error("ExportJobRunner: job_id=" + claimed.id + " failed", t);
             jobDao.markFailed(claimed.id, t.getClass().getSimpleName() + ": " + t.getMessage());
-            return true;
         }
     }
 
@@ -190,20 +269,38 @@ public class ExportJobRunner implements Job {
         }
     }
 
+    private static ExportCompletionNotifier resolveNotifier(ApplicationContext appCtx) {
+        try {
+            return appCtx.getBean(ExportCompletionNotifier.class);
+        } catch (Exception e) {
+            LOG.warn("No ExportCompletionNotifier bean; scheduled exports send no completion mail ({})",
+                    e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The {@code export_format} row a format is registered under. The
+     * constants carry that id as their term id; their
+     * {@code getExportFormatId()} is never set and answers 0, which no
+     * {@code export_format} row has.
+     */
     private static int formatIdFor(String format) {
-        if (format == null) return ExportFormatBean.TXTFILE.getExportFormatId();
+        if (format == null) return ExportFormatBean.TXTFILE.getId();
         switch (format.toLowerCase()) {
-            case "csv":
+            // as SynchronousExportMaterializer registers its CSV file
+            case "csv": return ExportFormatBean.CSVFILE.getId();
+            case "tsv":
             case "tab":
-            case "txt": return ExportFormatBean.TXTFILE.getExportFormatId();
+            case "txt": return ExportFormatBean.TXTFILE.getId();
             case "excel":
             case "xls":
-            case "xlsx": return ExportFormatBean.EXCELFILE.getExportFormatId();
-            case "pdf": return ExportFormatBean.PDFFILE.getExportFormatId();
+            case "xlsx": return ExportFormatBean.EXCELFILE.getId();
+            case "pdf": return ExportFormatBean.PDFFILE.getId();
             case "odm":
-            case "xml": return ExportFormatBean.XMLFILE.getExportFormatId();
-            case "bundle": return ExportFormatBean.ZIPFILE.getExportFormatId();
-            default: return ExportFormatBean.TXTFILE.getExportFormatId();
+            case "xml": return ExportFormatBean.XMLFILE.getId();
+            case "bundle": return ExportFormatBean.ZIPFILE.getId();
+            default: return ExportFormatBean.TXTFILE.getId();
         }
     }
 }

@@ -78,6 +78,26 @@ Precedence: any SHORTEN trigger wins. Otherwise any KEEP trigger wins.
 Otherwise, if every EXTEND condition holds, EXTEND. This ordering is
 deliberate — a reason to treat sooner is never outvoted by reasons to wait.
 
+### Unknown data (fail-closed, 2026-10)
+
+An input is either a measured value or **unknown** (never recorded, or its
+fetch failed). Unknown is not zero and not "no disease". The inputs are the
+biomarker volumes, the per-ring breakdown, BCVA (current and previous visit)
+and the two clinical flags (hemorrhage, BCVA loss attributed to nAMD). A flag
+the physician has not recorded is unknown; one recorded as "no" is a real "no".
+
+- A SHORTEN trigger that is positively established from known data still
+  fires, even if other inputs are missing (each trigger needs only its own
+  inputs). SHORTEN is the safe direction.
+- Otherwise, if any input the rules need is unknown, there is **no
+  recommendation**: the card says "insufficient data" and lists what is
+  missing. KEEP and EXTEND are never reachable from unknown inputs.
+- A visit whose segmentation came from the sidecar's placeholder model
+  (`model_version` starting with `placeholder`, fake volumes) never yields a
+  recommendation, SHORTEN included.
+- The clinician can still record their own decision; it is stored with no AI
+  agreement and the audit snapshot says why there was no recommendation.
+
 ### SHORTEN — treat sooner
 
 | Trigger | Fires when |

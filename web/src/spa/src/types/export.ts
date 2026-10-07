@@ -82,7 +82,7 @@ export interface ExportJobDto {
   id: number
   datasetId: number
   format: string
-  status: 'queued' | 'running' | 'done' | 'failed' | string
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | string
   progressPct: number
   submittedAt: string | null
   startedAt: string | null
@@ -91,6 +91,52 @@ export interface ExportJobDto {
   errorMessage: string | null
   /** Set once the job is done. */
   downloadUrl: string | null
+  /** A running job that was asked to stop and has not reached a checkpoint yet. */
+  cancelRequested?: boolean
+}
+
+/**
+ * R1-export — a recurring export of a dataset, as
+ * {@code GET /datasets/{id}/schedules} lists it and every schedule endpoint
+ * answers. {@code cronExpression} is Quartz syntax (six fields, seconds
+ * first). {@code enabled=false} is a pause: listed, not running, and
+ * {@code nextRunAt} null.
+ */
+export interface ExportScheduleDto {
+  id: number
+  datasetId: number
+  format: string
+  cronExpression: string
+  active: boolean
+  enabled: boolean
+  /** Contact address mailed when a run finishes or fails, or null. */
+  notifyEmail: string | null
+  createdAt: string | null
+  nextRunAt: string | null
+  lastRunAt: string | null
+  lastRunJobId: number | null
+  /** User id of the creator, whose account the scheduled runs execute as. */
+  createdBy: number
+  /** True for the creator and for a system administrator; others may only look. */
+  mayChange: boolean
+}
+
+/** Body of {@code POST /datasets/{id}/schedules}. */
+export interface CreateScheduleRequest {
+  format: ExportFormat
+  cronExpression: string
+  notifyEmail?: string
+}
+
+/**
+ * Body of {@code PATCH /schedules/{id}}. A field left out keeps its value;
+ * a blank {@code notifyEmail} removes the address.
+ */
+export interface UpdateScheduleRequest {
+  format?: ExportFormat
+  cronExpression?: string
+  enabled?: boolean
+  notifyEmail?: string
 }
 
 /** Wire shape of {@code POST /datasets/{id}/export}. */

@@ -15,18 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemData;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class ItemDataDao extends AbstractDomainDao<ItemData> {
 
     @Override
@@ -44,16 +33,14 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
 	public List<ItemData> findAllByEventCrf(Integer eventCrfId) {
         String query = "select * from item_data where event_crf_id = " + eventCrfId;
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemData.class);
-        
-        return (List<ItemData>) q.getResultList();
-      
+        NativeQuery<ItemData> q = getCurrentSession().createNativeQuery(query, ItemData.class);
+
+        return q.getResultList();
+
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
 	public List<ItemData> findByEventCrfGroup(Integer eventCrfId, Integer itemGroupId) {
         String query = "select id.* " + 
             "from item_data id " + 
@@ -62,9 +49,9 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
             "join item_group_metadata igm on i.item_id=igm.item_id and igm.crf_version_id = ec.crf_version_id " + 
             "where id.event_crf_id = " + eventCrfId + " and igm.item_group_id = " + itemGroupId + " " + 
             "order by id.ordinal, igm.ordinal";
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemData.class);
-        
-        return (List<ItemData>) q.getResultList();
+        NativeQuery<ItemData> q = getCurrentSession().createNativeQuery(query, ItemData.class);
+
+        return q.getResultList();
       
     }
 
@@ -76,12 +63,11 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
       
     }
 
-    @SuppressWarnings("rawtypes")
     public int getMaxGroupRepeat(Integer eventCrfId, Integer itemId) {
         getCurrentSession().flush();
         String query = "select max(ordinal) from item_data where event_crf_id = " + eventCrfId + " and item_id = " + itemId;
-        Query q = getCurrentSession().createNativeQuery(query);
-        Number result = (Number) q.getSingleResultOrNull();
+        NativeQuery<Integer> q = getCurrentSession().createNativeQuery(query, Integer.class);
+        Integer result = q.getSingleResultOrNull();
         if (result == null) return 0;
         else return result.intValue();
     }

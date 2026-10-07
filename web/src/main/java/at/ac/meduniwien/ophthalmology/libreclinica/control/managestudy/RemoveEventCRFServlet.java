@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -49,7 +51,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("all")
 public class RemoveEventCRFServlet extends SecureController {
 	private static final long serialVersionUID = -9018141066583773642L;
 
@@ -71,6 +72,12 @@ public class RemoveEventCRFServlet extends SecureController {
 
     }
 
+    /** GET shows the confirmation; removing the event CRF takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         FormProcessor fp = new FormProcessor(request);
@@ -87,6 +94,8 @@ public class RemoveEventCRFServlet extends SecureController {
             request.setAttribute("id", Integer.valueOf(studySubId).toString());
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
+            assertEventCrfInScope(eventCRFId);
+            assertStudySubjectInScope(studySubId);
             EventCRFBean eventCRF = (EventCRFBean) ecdao.findByPK(eventCRFId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);

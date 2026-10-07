@@ -3,10 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SelectInput from '@/components/SelectInput.vue'
+import TextInput from '@/components/TextInput.vue'
 import Timeline from '@/components/Timeline.vue'
 import TimelineMarker from '@/components/TimelineMarker.vue'
 import TimelineEvent from '@/components/TimelineEvent.vue'
 import AuditValueChange from '@/components/audit/AuditValueChange.vue'
+import AuditLogPager from '@/components/audit/AuditLogPager.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import SystemRail from '@/components/SystemRail.vue'
 
@@ -32,7 +34,21 @@ const store = useSystemAuditLogStore()
 
 onMounted(() => {
   if (store.events.length === 0) store.load()
+  if (store.actors.length === 0) store.loadFacets()
 })
+
+// The server filters and pages the whole trail: a changed filter reloads
+// from the first page. Typing an item OID reloads once the typing pauses.
+let itemTimer: ReturnType<typeof setTimeout> | undefined
+function setItemFilter(v: string): void {
+  store.itemFilter = v
+  clearTimeout(itemTimer)
+  itemTimer = setTimeout(() => { void store.applyFilters() }, 400)
+}
+function setFilter(apply: () => void): void {
+  apply()
+  void store.applyFilters()
+}
 
 function variantLabel(v: AuditEventVariant): string {
   return t(`auditLog.variant.${v}`)
@@ -105,7 +121,7 @@ function hasExpandable(ev: AuditEvent): boolean {
     <div class="flex flex-wrap items-end gap-3 mb-6 text-xs">
       <div class="w-44">
         <label class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">{{ t('auditLog.filter.actor') }}</label>
-        <SelectInput id="sal-actor" :model-value="store.actorFilter" @update:model-value="(v) => store.actorFilter = v as string">
+        <SelectInput id="sal-actor" :model-value="store.actorFilter" @update:model-value="(v) => setFilter(() => store.actorFilter = v as string)">
           <option value="">{{ t('auditLog.filter.allActors') }}</option>
           <option v-for="a in store.actors" :key="a" :value="a">{{ a }}</option>
         </SelectInput>
@@ -113,21 +129,36 @@ function hasExpandable(ev: AuditEvent): boolean {
 
       <div class="w-44">
         <label class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">{{ t('auditLog.filter.variant') }}</label>
-        <SelectInput id="sal-variant" :model-value="store.variantFilter" @update:model-value="(v) => store.variantFilter = v as 'all' | AuditEventVariant">
+        <SelectInput id="sal-variant" :model-value="store.variantFilter" @update:model-value="(v) => setFilter(() => store.variantFilter = v as 'all' | AuditEventVariant)">
           <option v-for="o in variantOptions" :key="o.v" :value="o.v">{{ o.l() }}</option>
         </SelectInput>
       </div>
 
       <div class="w-44">
         <label class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">{{ t('auditLog.filter.subject') }}</label>
-        <SelectInput id="sal-subject" :model-value="store.subjectFilter" @update:model-value="(v) => store.subjectFilter = v as string">
+        <SelectInput id="sal-subject" :model-value="store.subjectFilter" @update:model-value="(v) => setFilter(() => store.subjectFilter = v as string)">
           <option value="">{{ t('auditLog.filter.allSubjects') }}</option>
           <option v-for="s in store.subjects" :key="s" :value="s">{{ s }}</option>
         </SelectInput>
       </div>
 
+      <div class="w-44">
+        <label for="sal-item" class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">{{ t('auditLog.filter.item') }}</label>
+        <TextInput id="sal-item" :model-value="store.itemFilter" :placeholder="t('auditLog.filter.itemPlaceholder')" @update:model-value="setItemFilter" />
+      </div>
+
+      <div class="w-36">
+        <label for="sal-from" class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">{{ t('auditLog.filter.from') }}</label>
+        <TextInput id="sal-from" type="date" :model-value="store.fromDate" @update:model-value="(v) => setFilter(() => store.fromDate = v)" />
+      </div>
+
+      <div class="w-36">
+        <label for="sal-to" class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">{{ t('auditLog.filter.to') }}</label>
+        <TextInput id="sal-to" type="date" :model-value="store.toDate" @update:model-value="(v) => setFilter(() => store.toDate = v)" />
+      </div>
+
       <button
-        v-if="store.actorFilter || store.variantFilter !== 'all' || store.subjectFilter"
+        v-if="store.hasFilters"
         type="button"
         class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
         @click="store.clearFilters()"
@@ -198,6 +229,17 @@ function hasExpandable(ev: AuditEvent): boolean {
         </TimelineEvent>
       </template>
     </Timeline>
+
+    <AuditLogPager
+      :page="store.page"
+      :page-count="store.pageCount"
+      :total-count="store.totalCount"
+      :has-previous="store.hasPreviousPage"
+      :has-next="store.hasNextPage"
+      :disabled="store.isLoading"
+      @previous="store.previousPage()"
+      @next="store.nextPage()"
+    />
   </div>
   </div>
 </template>

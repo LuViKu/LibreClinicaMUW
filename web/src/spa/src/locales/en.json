@@ -135,7 +135,8 @@
       "auditLogDesc": "See who changed what, and when.",
       "dataExportTitle": "Data Export",
       "dataExportDesc": "Export datasets and download the generated files.",
-      "modalitiesDesc": "Maintain the imaging modalities and their CRF fields."
+      "modalitiesDesc": "Maintain the imaging modalities and their CRF fields.",
+      "adminStudiesDesc": "Every study and site on the platform: status, remove and restore, metadata download."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
@@ -149,6 +150,12 @@
     },
     "queue": {
       "loading": "Count is loading"
+    },
+    "studyMetadata": {
+      "title": "Study metadata (ODM)",
+      "description": "Download the study's design as a CDISC ODM 1.3 file.",
+      "downloading": "Downloading…",
+      "failed": "The download failed. Please try again."
     }
   },
   "common": {
@@ -175,7 +182,7 @@
   },
   "adminJobs": {
     "title": "Scheduled jobs",
-    "subtitle": "Read-only listing of every Quartz trigger registered against the application's shared scheduler.",
+    "subtitle": "Every Quartz trigger registered against the application's shared scheduler. Legacy scheduled exports can be deleted; the platform's own triggers are read-only.",
     "refresh": "Refresh",
     "refreshedAt": "Refreshed at {ts}",
     "loadFailed": "Failed to load scheduled jobs.",
@@ -189,7 +196,16 @@
     "prevFire": "Previous fire",
     "nextFire": "Next fire",
     "description": "Description",
-    "noJobs": "No scheduled jobs."
+    "noJobs": "No scheduled jobs.",
+    "legacy": {
+      "badge": "Legacy export",
+      "note": "Scheduled exports made with the legacy screens keep running until they are deleted here. Recreate one as a schedule of its dataset (Data Export, Schedules) before deleting it; new export schedules are set up there.",
+      "dataset": "dataset {id}",
+      "unreadable": "stored data unreadable",
+      "delete": "Delete",
+      "confirmDelete": "Delete the legacy export job \"{name}\"? It will not run again.",
+      "deleteFailed": "The job could not be deleted."
+    }
   },
   "printableCrf": {
     "title": "Print preview",
@@ -262,6 +278,18 @@
     "clusterMonitorHint": "Last lines of the app-VM cron monitor log. Empty is good.",
     "clusterMonitorEmpty": "No alerts recorded.",
     "clusterMonitorUnavailable": "Monitor log not readable: {path}",
+    "mail": {
+      "heading": "Outgoing e-mail",
+      "hint": "Sends a test message to the e-mail address of your own account, through the mail server the application uses. Use it after a deployment or a change to the mail settings.",
+      "send": "Send test e-mail",
+      "sending": "Sending…",
+      "sent": "Test e-mail sent to {recipient}. Check that it arrives.",
+      "failed": "Sending to {recipient} failed: {message}",
+      "failedGeneric": "Sending the test e-mail failed.",
+      "noAddress": "Your account has no e-mail address. Add one to your profile first.",
+      "noSender": "No sender address is configured on the server (adminEmail).",
+      "tooSoon": "A test e-mail was sent less than half a minute ago. Please wait a moment."
+    },
     "uploaders": {
       "heading": "Uploaders on the acquisition PCs",
       "hint": "The Export Watcher (Clarus and Spectralis PCs) and the Optomed Bridge report every two minutes. A program that stops reporting shows as silent; one that was closed, or whose PC was shut down, says so.",
@@ -376,8 +404,52 @@
     "maxLength": "Maximum length",
     "expirationDays": "Expiration (days)",
     "zeroDaysNote": "0 = never expires",
+    "zeroMaxNote": "0 = no maximum",
     "changeRequiredOnFirstLogin": "Force password change on first login",
+    "lockout": "Account lockout",
+    "lockoutEnabled": "Lock an account after repeated failed logins",
+    "lockoutFailedAttempts": "Failed logins before the account is locked",
+    "lockoutNote": "1–25. Applies from the next failed login. A locked account is unlocked under Users.",
     "discard": "Reload"
+  },
+  "adminLoginHistory": {
+    "title": "Login history",
+    "subtitle": "Every login, logout and failed login, SSO included. Newest first.",
+    "loadFailed": "Failed to load the login history.",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting…",
+    "exportHint": "Every row the filters select, not only this page.",
+    "exportFailed": "Failed to export the login history.",
+    "empty": "No login attempts match these filters.",
+    "range": "{start}–{end} of {total}",
+    "pageOfTotal": "Page {page} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "filter": {
+      "user": "User",
+      "userPlaceholder": "Part of a user name",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "allRefused": "All refused logins",
+      "from": "From",
+      "to": "To"
+    },
+    "col": {
+      "when": "When",
+      "user": "User name",
+      "status": "Status",
+      "details": "Details"
+    },
+    "status": {
+      "SUCCESSFUL_LOGIN": "Successful login",
+      "FAILED_LOGIN": "Failed login",
+      "FAILED_LOGIN_LOCKED": "Refused: account locked",
+      "SUCCESSFUL_LOGOUT": "Logout",
+      "ACCESS_CODE_VIEWED": "Access code viewed",
+      "SSO_LOGIN": "SSO login",
+      "SSO_LOGIN_FAILED": "SSO login refused",
+      "UNKNOWN": "Unknown status ({code})"
+    }
   },
   "adminConfig": {
     "title": "Application configuration",
@@ -494,6 +566,8 @@
       "enrolledOn": "Date of Enrolment",
       "gender": "Gender",
       "yearOfBirth": "Year of Birth",
+      "dateOfBirth": "Date of Birth",
+      "personId": "Person ID",
       "groupLabel": "Group assignment"
     },
     "placeholder": {
@@ -503,6 +577,7 @@
     },
     "helper": {
       "subjectId": "The identifier used in source documents. Cannot be edited after save.",
+      "personId": "The person's identifier across studies; a person already enrolled in another study is recognised by it.",
       "yearOfBirth": "Optional — depends on study configuration."
     },
     "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
@@ -561,12 +636,13 @@
       "eventDate": "Event date",
       "crf": "CRF",
       "requirement": "Requirement",
-      "status": "Status"
+      "status": "Status",
+      "openQueries": "Open queries",
+      "lastUpdated": "Last updated"
     },
     "action": {
       "markAsVerified": "Mark {count} as verified (SDV)",
       "cancelSelection": "Cancel",
-      "addQuery": "Add query",
       "openCrf": "Open CRF",
       "unverify": "Roll back verification"
     },
@@ -586,22 +662,26 @@
       "title": "Mark as verified?",
       "body": "All {count} selected CRFs will be flipped to Verified (SDV). The action is recorded in the audit log.",
       "note": "If data on a verified CRF is later changed, its SDV status resets to Pending automatically.",
-      "auditNote": "Audit trail entry will reference monitor_demo + the timestamp.",
+      "auditNote": "The audit trail records {user} and the time.",
       "cta": "Mark {count} as verified"
     },
-    "query": {
-      "title": "Add Note",
-      "noteType": "Note type",
-      "descriptionLabel": "Description",
-      "descriptionPlaceholder": "What needs clarifying? Reference the source document if relevant…",
-      "submit": "Submit query",
-      "auditTrailTell": "Audit trail entry will reference: monitor_demo · timestamp",
-      "type": {
-        "query": "Query",
-        "failed-validation": "Failed validation",
-        "annotation": "Annotation",
-        "reason-for-change": "Reason for change"
-      }
+    "view": {
+      "label": "View",
+      "byCrf": "By CRF",
+      "bySubject": "By subject"
+    },
+    "bySubject": {
+      "count": "{count} subject(s)",
+      "complete": "Complete CRFs",
+      "verified": "Verified",
+      "withQueries": "With open queries",
+      "verifiable": "Awaiting SDV",
+      "verify": "Verify {count} CRF(s)",
+      "allVerified": "All verified",
+      "nothingToVerify": "Nothing to verify",
+      "confirmTitle": "Verify the subject?",
+      "confirmBody": "{count} CRF(s) of {subject} will be marked verified (SDV).",
+      "confirmScope": "This covers the subject's complete CRFs that require SDV. A CRF with an open query stays in the queue until the query is closed."
     }
   },
   "notes": {
@@ -657,16 +737,18 @@
       "export": "Export CSV",
       "exportCsv": "Export CSV",
       "exportForSubject": "Export CSV (this subject)",
-      "exporting": "Exporting…"
+      "exporting": "Exporting…",
+      "reopen": "Re-open"
     },
     "error": {
       "exportFailed": "Discrepancy export failed"
     },
     "composer": {
       "label": {
-        "updated": "Reply to monitor",
+        "updated": "Reply",
         "resolution-proposed": "Proposed resolution",
-        "closed": "Closing comment (optional)"
+        "closed": "Closing comment (optional)",
+        "reopen": "Why the query is re-opened"
       },
       "placeholder": "Type your reply…",
       "placeholderClose": "Optional: closing comment…",
@@ -686,6 +768,17 @@
     },
     "email": {
       "subjectAssigned": "Discrepancy assigned"
+    },
+    "field": {
+      "gender": "Sex",
+      "date_of_birth": "Date of birth",
+      "unique_identifier": "Person ID",
+      "enrollment_date": "Enrolment date",
+      "location": "Visit location",
+      "start_date": "Visit date",
+      "end_date": "Visit end",
+      "date_interviewed": "Interview date",
+      "interviewer_name": "Interviewer"
     }
   },
   "auditLog": {
@@ -709,7 +802,17 @@
       "allActors": "All actors",
       "variant": "Event type",
       "subject": "Subject",
-      "allSubjects": "All subjects"
+      "allSubjects": "All subjects",
+      "item": "Item",
+      "itemPlaceholder": "Item OID, e.g. I_HEIGHT_CM",
+      "from": "From",
+      "to": "To"
+    },
+    "pager": {
+      "label": "Audit log pages",
+      "previous": "← Newer",
+      "next": "Older →",
+      "position": "Page {page} of {pages}"
     },
     "variant": {
       "all": "All event types",
@@ -770,6 +873,7 @@
       "confirm": "Confirm reasons",
       "cancel": "Cancel",
       "capturedChip": "Reason captured",
+      "rowLabel": "{label} (row {row})",
       "missingForItem": "A reason is required for this change.",
       "fromTo": {
         "from": "From",
@@ -791,7 +895,8 @@
       "replace": "Replace",
       "removeConfirm": "Remove the attached file? The deletion is recorded in the audit trail.",
       "tooBig": "File exceeds the configured size limit.",
-      "badExtension": "File type is not in the allowed list."
+      "badExtension": "File type is not in the allowed list.",
+      "deidBlocked": "File attachments are disabled on this internet-facing deployment: they cannot be checked for patient-identifying content."
     },
     "selectMulti": {
       "noneSelected": "None selected"
@@ -846,7 +951,11 @@
       "statusNotApplicable": "Not applicable",
       "empty": "No messages yet.",
       "loadError": "Could not load thread.",
-      "submitError": "Could not save change."
+      "submitError": "Could not save change.",
+      "reopen": "Re-open",
+      "reassignLabel": "Reassign to (optional)",
+      "reassignPlaceholder": "Keep the current assignee",
+      "subjectLine": "Subject {subject} · {item}"
     },
     "bilateral": {
       "headerItem": "Item",
@@ -1035,7 +1144,8 @@
     "disable": "Remove",
     "restore": "Restore",
     "statusRemoved": "Removed",
-    "disableConfirm": "Remove group class \"{name}\"? Subjects already classified into its groups stay in the audit trail; new classifications use the remaining classes. The action is recorded in the audit trail.",
+    "disableConfirm": "Remove group class \"{name}\"? The assignments of subjects to its groups are removed with it; restoring the class brings them back. The action is recorded in the audit trail.",
+    "disableImpact": "Removed with it: {subjectAssignments} subject assignment(s) to its {groups} group(s).",
     "field": {
       "name": "Group class name",
       "type": "Type",
@@ -1320,25 +1430,60 @@
     "includeRemoved": "Include removed",
     "statusRemoved": "Removed",
     "disable": "Remove",
-    "disableConfirm": "Remove CRF \"{name}\"? Active assignments stay intact for audit but new data entry is blocked. The action is recorded in the audit trail.",
-    "disableVersionConfirm": "Remove version \"{version}\" of \"{name}\"? Subjects currently entering data against this version are unaffected; new data entry will use the remaining versions.",
+    "disableConfirm": "Remove CRF \"{name}\"? Its versions, its assignments to event definitions and every event CRF entered on it, with the values, are removed with it. Restore brings them back. The action is recorded in the audit trail.",
+    "disableVersionConfirm": "Remove version \"{version}\" of \"{name}\"? The event CRFs entered on this version, with their values, are removed with it; signed event CRFs are not. Event definitions that default to it switch to the newest available version. Restore brings the removed event CRFs back.",
+    "restoreCrfConfirm": "Restore CRF \"{name}\"? The versions, assignments and event CRFs removed with it come back, at the status they had; a version removed on its own stays removed. Event CRFs whose subject, event or assignment is removed stay removed, and event CRFs the older screens removed come back available. The action is recorded in the audit trail.",
+    "edit": "Edit",
+    "editHeading": "Edit CRF \"{name}\"",
+    "editOidStays": "The OID {oid} stays the same. Only the CRF's owner, as Data Manager, or a system administrator may change the name.",
+    "submitEdit": "Save",
+    "detail": {
+      "back": "CRF library",
+      "itemsHeading": "Items ({count})",
+      "integrityHint": "Integrity check: an item has to stay in the same item group in every version of the CRF. A problem involves a version that takes data; a warning only versions that no longer do.",
+      "integritySummary": "{count} item(s) change their item group between versions",
+      "integrity": {
+        "ok": "OK",
+        "warning": "Warning",
+        "problem": "Problem"
+      },
+      "placement": "Group \"{group}\" in version \"{version}\"",
+      "noItems": "No items in any version yet.",
+      "studiesHeading": "Studies using this CRF",
+      "noStudies": "No study's event definitions use this CRF.",
+      "siteOf": "site of {study}",
+      "col": {
+        "version": "Version",
+        "name": "Name",
+        "description": "Description",
+        "dataType": "Data type",
+        "integrity": "Integrity check",
+        "study": "Study",
+        "protocolId": "Protocol ID",
+        "status": "Status"
+      }
+    },
+    "statusAutoRemoved": "Removed with the CRF",
     "empty": "No CRFs in the library yet.",
     "lock": "Lock",
     "lockConfirm": "Lock version \"{version}\" of \"{name}\"? Subjects entering data are unaffected; the version becomes read-only and event definitions that defaulted to it surface the next available version.",
     "unlock": "Unlock",
     "unlockConfirm": "Unlock version \"{version}\" of \"{name}\"? Writes resume for this version.",
     "restore": "Restore",
-    "restoreConfirm": "Restore version \"{version}\" of \"{name}\"? The version becomes available again. Run the legacy /RestoreCRFVersion path if you need the section + item_data cascade.",
+    "restoreConfirm": "Restore version \"{version}\" of \"{name}\"? The version and the event CRFs removed with it, with their values, come back at the status they had; a version removed while locked comes back locked.",
     "hardRemove": "Hard remove",
     "hardRemoveConfirm": "Permanently delete version \"{version}\" of \"{name}\"? This drops the row and every associated item / section / response set. Sysadmin only. The action cannot be undone.",
     "hardRemoveBlocked": "Cannot hard-remove version \"{version}\" — still referenced:",
     "hardRemoveBlocker": {
       "eventDefs": "{count} event definition(s) default to this version:",
       "eventCrfs": "{count} event-CRF row(s) carry data against this version (sample: {sample}).",
-      "remediation": "Run the Migrate dialog to reassign defaults to another version, then retry."
+      "remediation": "In Version migration, change the default version of these event definitions, and move the event CRFs entered on this version to another version; then retry."
     },
     "downloadXls": "Download .xls",
     "downloadXlsFailed": "Download failed: {message}",
+    "preview": "Preview",
+    "previewFailed": "The version could not be loaded for the preview: {message}",
+    "migrationAction": "Version migration",
     "migrate": {
       "action": "Reassign defaults",
       "dialogHeading": "Reassign event-def defaults from \"{from}\" to \"{to}\"",
@@ -2004,6 +2149,73 @@
       "reasonIfNotDone": "Reason (if not done)"
     }
   },
+  "crfMigration": {
+    "title": "Version migration · {name}",
+    "intro": "Two different operations. Moving event CRFs changes the version that existing data is shown on. Changing the default version only decides which version new event CRFs get; it moves no data.",
+    "noStudy": "Pick a study first: event CRFs are moved within one study.",
+    "move": {
+      "heading": "Move existing event CRFs to another version",
+      "intro": "The event CRFs on the current version, with the data entered on them, are shown on the new version from now on. Values of items the new version does not have stay in the database but are no longer shown. SDV is cleared on every moved event CRF, and the signatures over them are removed. Locked data is not moved.",
+      "study": "Study: {study}",
+      "source": "Current version",
+      "target": "New version",
+      "versionOption": "{name} ({count} event CRFs)",
+      "sites": "Sites",
+      "allSites": "The study and all its sites",
+      "studyLevel": "{study} (subjects enrolled at study level)",
+      "events": "Event definitions",
+      "allEvents": "All event definitions",
+      "subject": "Only subject (optional)",
+      "subjectHint": "The subject ID, to move one subject's event CRFs, for instance one entered on the wrong version.",
+      "preview": "Preview",
+      "onlyThis": "Only this one",
+      "onlyEventCrf": "Only event CRF #{id}",
+      "clearOnly": "Show all again",
+      "run": "Move {count} event CRF(s)"
+    },
+    "preview": {
+      "summary": "{count} event CRF(s) of {subjects} subject(s) will move from version \"{from}\" to \"{to}\".",
+      "warningHeading": "Before you move them",
+      "sdv": "Source data verification is cleared on every moved event CRF ({count} are verified now).",
+      "signatures": "Signatures over the moved event CRFs are removed: {subjects} signed subject(s), {events} signed event(s), {crfs} signed event CRF(s).",
+      "hidden": "{count} entered value(s) belong to items that version \"{to}\" does not have; they stay in the database but are no longer shown:",
+      "locked": "{count} event CRF(s) are locked and not moved:",
+      "notOffered": "Not moved, because the site's event definition does not offer both versions:",
+      "notOfferedRow": "{site} · {event}: {count} event CRF(s)",
+      "truncated": "The first {shown} of {count} event CRFs are listed.",
+      "confirm": "I understand that SDV is cleared and the signatures are removed for these {count} event CRF(s)."
+    },
+    "skip": {
+      "subject-locked": "subject locked",
+      "event-locked": "event locked",
+      "event-crf-locked": "event CRF locked"
+    },
+    "flag": {
+      "sdv": "SDV",
+      "subject": "subject signature",
+      "event": "event signature",
+      "crf": "CRF signature"
+    },
+    "col": {
+      "subject": "Subject",
+      "site": "Site",
+      "event": "Event",
+      "clears": "Clears"
+    },
+    "result": {
+      "summary": "Moved {count} event CRF(s) of {subjects} subject(s) from version \"{from}\" to \"{to}\".",
+      "cleared": "SDV cleared on {sdv}; signatures removed: {subjects} subject(s), {events} event(s), {crfs} event CRF(s).",
+      "where": "The log is below and can be downloaded; each change is also in the",
+      "auditLog": "study audit log.",
+      "download": "Download log (CSV)"
+    },
+    "defaults": {
+      "heading": "Change the default version for new event CRFs",
+      "intro": "The event definitions that default to one version get another as their default. Only event CRFs created from now on use it; existing event CRFs and their data stay on their version.",
+      "from": "Current default",
+      "to": "New default"
+    }
+  },
   "crfPreview": {
     "openButton": "Live preview",
     "heading": "Preview · {crfName}",
@@ -2041,8 +2253,6 @@
     "edit": "Edit",
     "remove": "Remove",
     "removeConfirm": "Detach CRF \"{crf}\" from event \"{event}\"? Existing data on this CRF stays in the audit trail; new entries against this event will no longer include the CRF. The action is recorded in the audit trail.",
-    "showAdvanced": "Show participant-form options",
-    "hideAdvanced": "Hide participant-form options",
     "auditNote": "All attaches, role changes and detaches are recorded in the audit trail.",
     "sdvLabel": "Source-data verification",
     "required": "Required",
@@ -2050,9 +2260,6 @@
     "electronicSignature": "Electronic signature",
     "hideCrf": "Hidden from data entry",
     "decisionCondition": "Decision condition",
-    "participantForm": "Participant form (Enketo)",
-    "allowAnonymousSubmission": "Allow anonymous submission",
-    "submissionUrl": "Submission URL",
     "sdv": {
       "NOTREQUIRED": "Not required",
       "PARTIALREQUIRED": "Partial",
@@ -2079,7 +2286,8 @@
       "saveError": "Could not save inference task selection."
     },
     "disable": "Remove",
-    "disableConfirm": "Remove event \"{name}\"? Existing CRFs scheduled against it remain in the audit trail but become inaccessible. The action is recorded in the audit trail.",
+    "disableConfirm": "Remove event \"{name}\"? Its CRF assignments and every visit scheduled from it are removed with it, together with the CRFs and values entered in those visits. Restoring the event brings back what was removed with it. The action is recorded in the audit trail.",
+    "disableImpact": "Removed with it: {crfAssignments} CRF assignment(s), {visits} visit(s) of {subjects} subject(s), {eventCrfs} CRF(s) and {itemValues} entered value(s).",
     "restore": "Restore",
     "restoreConfirm": "Restore event \"{name}\"? Auto-removed CRFs and item data flip back to available; rows that were explicitly removed stay removed. The action is recorded in the audit trail.",
     "lock": "Lock",
@@ -2164,8 +2372,14 @@
       "submit": "Save changes",
       "saved": "Saved. Changes are reflected throughout the platform.",
       "leaveUnchanged": "— Leave unchanged —",
-      "parametersLink": "Parameters & modules"
-    }
+      "parametersLink": "Parameters & modules",
+      "downloadMetadata": "Download metadata (ODM)",
+      "downloadFailed": "The metadata could not be downloaded."
+    },
+    "protocolDescription": "Detailed description",
+    "collaborators": "Collaborators",
+    "contactEmail": "Contact e-mail",
+    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on."
   },
   "manageUsers": {
     "title": "Manage Users",
@@ -2245,7 +2459,8 @@
       "phone": "Phone",
       "affiliation": "Institutional affiliation",
       "submit": "Save changes",
-      "successFlash": "Profile updated."
+      "successFlash": "Profile updated.",
+      "requiredCleared": "Required: this field cannot be emptied."
     },
     "lifecycle": {
       "disable": "Disable",
@@ -2288,7 +2503,41 @@
       "rolesForNewStudy": "Roles for the new study",
       "saveError": "Saving roles failed. Please try again.",
       "savedToast": "Roles updated.",
-      "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
+      "auditNote": "All grants, role changes, and revocations are recorded in the audit trail.",
+      "legacyRole": {
+        "ra": "Data Entry Person (legacy)",
+        "ra2": "Data Entry Person 2 (legacy)"
+      },
+      "legacyHint": "Legacy role: saving the row keeps it. Untick it to remove it; it cannot be granted again here."
+    },
+    "userType": {
+      "label": "Account type",
+      "USER": "User",
+      "SYSADMIN": "Business administrator",
+      "TECHADMIN": "Technical administrator",
+      "help": "Administrators manage users and studies across the platform. Only a technical administrator can make someone a technical administrator.",
+      "techOnly": "Only a technical administrator can change a technical administrator's account type."
+    },
+    "details": {
+      "action": "Details",
+      "title": "Account details",
+      "close": "Close",
+      "yes": "Yes",
+      "no": "No",
+      "dateBy": "{date} by {user}",
+      "username": "Username",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "E-mail",
+      "phone": "Phone",
+      "affiliation": "Institutional affiliation",
+      "businessAdmin": "Business administrator",
+      "technicalAdmin": "Technical administrator",
+      "status": "Status",
+      "auth": "Authentication",
+      "lastLogin": "Last login",
+      "created": "Created",
+      "updated": "Last updated"
     }
   },
   "retinalParked": {
@@ -2501,7 +2750,8 @@
       "tokenExpired": "Preview expired",
       "reupload": "Re-upload the XML",
       "startOver": "Start over",
-      "failedHeading": "Commit failed"
+      "failedHeading": "Commit failed",
+      "ruleWarningsHeading": "The study's rules reported"
     }
   },
   "signSubject": {
@@ -2672,7 +2922,6 @@
       "interviewDateEditable": "Interview date editable",
       "secondaryLabelViewable": "Secondary label viewable",
       "adminForcedReasonForChange": "Force reason-for-change after completion",
-      "participantPortal": "Participant portal",
       "randomization": "Randomization"
     },
     "enums": {
@@ -2882,7 +3131,26 @@
     },
     "crf": {
       "restore": "Restore CRF",
-      "restoreFailed": "Could not restore CRF — please retry."
+      "restoreFailed": "Could not restore CRF — please retry.",
+      "remove": "Remove",
+      "removeDialog": {
+        "title": "Remove CRF",
+        "subtitle": "{crf} {version} · {event} · {subject}",
+        "intro": "{crf} is taken out of the data of subject {subject} for visit {event}.",
+        "values": "Entered values removed with it: {n}",
+        "notes": "Open queries on those values, which are closed: {n}",
+        "nothing": "No values have been entered on it.",
+        "restoreHint": "Nothing is deleted. Restoring the CRF brings its values back; closed queries stay closed.",
+        "loading": "Checking what the removal takes out…",
+        "reasonLabel": "Reason for the removal",
+        "reasonPlaceholder": "e.g. entered on the wrong subject",
+        "reasonRequired": "Give the reason the CRF is removed.",
+        "confirm": "Remove CRF",
+        "removing": "Removing…",
+        "cancel": "Cancel",
+        "errorGeneric": "The CRF could not be removed.",
+        "errorNetwork": "The server could not be reached."
+      }
     },
     "table": {
       "crfName": "CRF",
@@ -3204,7 +3472,7 @@
   "dataExport": {
     "title": "Data Export",
     "subTrail": "Saved datasets for the active study",
-    "intro": "Trigger export runs against previously-saved datasets and download generated files. Use the legacy /Extract Data wizard to create new datasets — a SPA-native create flow will land in a later sub-phase.",
+    "intro": "Run exports of saved datasets and download the generated files. To define a new dataset, click New dataset.",
     "sectionLabel": "Data export",
     "quickOdmButton": "Quick ODM export",
     "quickOdmRunning": "Generating ODM…",
@@ -3214,8 +3482,7 @@
     "hideFiles": "Hide files",
     "noFilesYet": "No generated files yet — trigger an export to populate this list.",
     "emptyTitle": "No saved datasets for this study yet.",
-    "emptyDescription": "Datasets are created via the legacy Extract Data wizard. Once saved, they appear here so you can re-run and download them from the SPA.",
-    "openLegacyWizard": "Open legacy Extract Data wizard",
+    "emptyDescription": "A dataset defines which visits, CRFs and items an export contains. Saved datasets appear here, where you can run and download them.",
     "column": {
       "name": "Dataset",
       "owner": "Owner",
@@ -3243,11 +3510,53 @@
     },
     "job": {
       "label": "Bundle",
+      "export": "Export as {format}",
       "queued": "Queued …",
       "running": "Building …",
       "done": "Done.",
       "failed": "Failed",
-      "download": "Download"
+      "download": "Download",
+      "cancel": "Cancel export",
+      "cancelling": "Stopping …",
+      "cancelled": "Cancelled.",
+      "confirmCancel": "Cancel this export? If it is waiting it will not run; if it is running it stops at its next checkpoint and leaves no file."
+    },
+    "schedules": {
+      "button": "Schedules",
+      "title": "Export schedules",
+      "creatorOnly": "Only the creator of this schedule or a system administrator can change it.",
+      "add": "Add schedule",
+      "empty": "No schedules for this dataset.",
+      "column": {
+        "when": "When",
+        "status": "Status",
+        "lastRun": "Last run",
+        "contact": "Contact"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused"
+      },
+      "nextRun": "next {date}",
+      "edit": "Edit",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete",
+      "confirmDelete": "Delete this schedule? Files it has already exported are kept.",
+      "createTitle": "New export schedule",
+      "editTitle": "Edit export schedule",
+      "subTitle": "Recurring export of \"{dataset}\".",
+      "cronLabel": "When (Quartz cron expression)",
+      "cronHelp": "Six fields: second, minute, hour, day of month, month, day of week. Put ? in whichever day field you leave open.",
+      "cronRequired": "Enter when the export should run.",
+      "preset": {
+        "daily": "Daily 02:00",
+        "weekly": "Mondays 02:00",
+        "monthly": "1st of the month 02:00"
+      },
+      "emailLabel": "Contact e-mail (optional)",
+      "emailHelp": "Receives a mail when a run finishes or fails.",
+      "enabledLabel": "Run on this schedule"
     },
     "modal": {
       "title": "Export dataset",
@@ -3620,6 +3929,26 @@
     },
     "actions": {
       "uploadWithoutVisit": "Upload without visit"
+    },
+    "deid": {
+      "banner": "Internet-facing deployment: only Heidelberg .e2e and DICOM files are accepted. Identifying data is removed in your browser before anything is sent — check each preview for names or IDs in the picture itself.",
+      "previewAlt": "Preview of {file}",
+      "noPreview": "No preview can be shown for this file. Open it in your viewer first and make sure no patient name or ID is visible in the image.",
+      "confirmLabel": "No patient name or ID is visible in the image",
+      "confirmAllLabel": "All previews checked: no patient name or ID visible",
+      "confirmFirst": "Tick the confirmation under the preview first.",
+      "errors": {
+        "format": "{file}: not accepted here — only Heidelberg .e2e and DICOM files can be uploaded.",
+        "label": "{file}: the study subject label cannot be written into the file (too long or unusual characters).",
+        "e2eNoPatientChunk": "{file}: the .e2e file has no readable patient-data block, so de-identification cannot be verified. Not uploaded.",
+        "e2eTruncated": "{file}: the .e2e file is damaged (patient block cut off). Not uploaded.",
+        "parse": "{file}: the file could not be read or de-identified. Not uploaded.",
+        "burnedIn": "{file}: the DICOM file declares burned-in annotation (identity in the image). Not uploaded.",
+        "residual": "{file}: identifying data was still found in the file after removal. Not uploaded.",
+        "verify": "{file}: the de-identified file failed its own check. Not uploaded.",
+        "laterality": "{file}: choose the eye (OD or OS) before uploading.",
+        "noSubject": "{file}: pick the study subject first — the label is written into the file."
+      }
     },
     "summary": {
       "fileSingular": "file",
@@ -4093,5 +4422,61 @@
   },
   "pageHeader": {
     "trail": "Breadcrumb"
+  },
+  "adminStudies": {
+    "title": "Studies",
+    "subtitle": "Every study on the platform, removed ones included: {studies} studies, {sites} sites.",
+    "create": "Create study",
+    "searchPlaceholder": "Search name, protocol ID, OID or PI…",
+    "column": {
+      "name": "Name",
+      "uniqueIdentifier": "Unique protocol ID",
+      "oid": "OID",
+      "principalInvestigator": "Principal investigator",
+      "created": "Created",
+      "status": "Status"
+    },
+    "empty": "No study matches.",
+    "metadata": "Metadata (ODM)",
+    "remove": "Remove",
+    "restore": "Restore",
+    "sitesNote": "Sites are removed and restored on the Sites page of their study.",
+    "downloadFailed": "The metadata of {study} could not be downloaded. {reason}",
+    "status": {
+      "AVAILABLE": "Available",
+      "PENDING": "Pending",
+      "FROZEN": "Frozen",
+      "LOCKED": "Locked",
+      "REMOVED": "Removed",
+      "AUTO_REMOVED": "Removed with its study",
+      "UNAVAILABLE": "Unavailable",
+      "PRIVATE": "Private",
+      "UNKNOWN": "Unknown"
+    }
+  },
+  "studyLifecycle": {
+    "removeTitle": "Remove study",
+    "restoreTitle": "Restore study",
+    "removeIntro": "Removing the study also removes everything under it:",
+    "previewFailed": "Could not count what the removal would take.",
+    "nothingUnder": "Nothing else is under this study yet.",
+    "impact": {
+      "sites": "Sites: {n}",
+      "roleBindings": "Role bindings: {n}",
+      "subjects": "Subjects: {n}",
+      "groupClasses": "Subject group classes: {n}",
+      "eventDefinitions": "Event definitions: {n}",
+      "events": "Events: {n}",
+      "eventCrfs": "CRFs: {n}",
+      "itemData": "Entered values: {n}",
+      "datasets": "Datasets: {n}"
+    },
+    "removeReversible": "Nothing is deleted: the data stays in the database and a removed study can be restored. Until then nobody can open the study or work with its data.",
+    "restoreIntro": "The study returns to the status it had when it was removed, with the sites, role bindings, subjects, events and data that were removed with it. Anything removed on its own before the study stays removed.",
+    "reason": "Reason",
+    "reasonPlaceholder": "Recorded in the audit trail",
+    "reasonRequired": "Enter a reason; it is recorded in the audit trail.",
+    "removeConfirm": "Remove study",
+    "restoreConfirm": "Restore study"
   }
 }

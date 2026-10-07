@@ -43,8 +43,6 @@ class DataEntryServletPageTest {
     void anotherServletOrTheJspIsNotThisServlet() {
         assertFalse(DataEntryServlet.isServletPage("/InitialDataEntry", Page.DOUBLE_DATA_ENTRY_SERVLET));
         assertFalse(DataEntryServlet.isServletPage("/ViewSectionDataEntry", Page.ADMIN_EDIT_SERVLET));
-        // The heritage SCD check named the JSP constant, which no servlet page ever is.
-        assertFalse(DataEntryServlet.isServletPage("/InitialDataEntry", Page.INITIAL_DATA_ENTRY));
         assertFalse(DataEntryServlet.isServletPage(null, Page.ADMIN_EDIT_SERVLET));
     }
 

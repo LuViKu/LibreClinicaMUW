@@ -233,13 +233,20 @@ jobs:
     # database 'openclinica-TEST' on the postgres service container below
     # (user 'clinica' / password 'clinica' per core/src/test/resources/datainfo.properties).
     # Phase 0.2 + 0.3 (2026-05-28) wired this up end-to-end - see MIGRATION.md.
+    #
+    # The matrix version reaches both suites: the core ITs through the service
+    # container below, and the web *DatabaseIT classes (which start their own
+    # Testcontainers Postgres) through -Dit.postgres.image in the Maven step.
+    # 14 while production still runs it, 17 as the target the dev stack runs
+    # (docs/operations/postgresql-17-upgrade.md); drop 14 once production is
+    # upgraded.
     name: Integration tests (Postgres ${{ matrix.postgres }})
     needs: build
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ['14-alpine']
+        postgres: ['14-alpine', '17-alpine']
     services:
       postgres:
         image: postgres:${{ matrix.postgres }}
@@ -257,7 +264,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -265,13 +272,13 @@ jobs:
           cache: maven
 
       - name: Maven verify (integration-tests profile)
-        run: mvn -B -ntp -P integration-tests -DskipTests=false test
+        run: mvn -B -ntp -P integration-tests -DskipTests=false -Dit.postgres.image=postgres:${{ matrix.postgres }} test
 
       - name: Upload Surefire reports on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: surefire-reports-integration
+          name: surefire-reports-integration-pg${{ matrix.postgres }}
           path: |
             **/target/surefire-reports/**
             **/target/openclinica-test.log
@@ -282,7 +289,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: jacoco-coverage-integration
+          name: jacoco-coverage-integration-pg${{ matrix.postgres }}
           path: |
             **/target/site/jacoco/**
             **/target/jacoco.exec

@@ -61,16 +61,12 @@ public enum Page {
                 UPDATE_PROFILE_CONFIRM("/WEB-INF/jsp/login/updateProfileConfirm.jsp", "Confirm your profile"),
                 
 
-    /**
-     * Page for user to request password
-     */
                 CONTACT("/WEB-INF/jsp/login/contact.jsp", "Contact Form"),
                 
 
     /**
      * Page for user to request password
      */
-                REQUEST_PWD("/WEB-INF/jsp/login/requestPassword.jsp","Request passwod form"),
                 REQUEST_STUDY("/WEB-INF/jsp/login/requestStudy.jsp", "Request study access"),
 
 
@@ -88,10 +84,6 @@ public enum Page {
     REQUEST_ACCOUNT("/WEB-INF/jsp/login/requestAccount.jsp", "Request account form"),
 
     REQUEST_ACCOUNT_CONFIRM ("/WEB-INF/jsp/login/requestAccountConfirm.jsp", "Request account confirm"),
-    /**
-     * Page for user to confirm inputs of requesting password
-     */
-   REQUEST_PWD_CONFIRM ("/WEB-INF/jsp/login/requestPasswordConfirm.jsp", "Request passwod Confirm"),
 
     /**
      * Page for creating a user account.
@@ -123,7 +115,6 @@ public enum Page {
 
     CONFIGURATION ("/WEB-INF/jsp/admin/configuration.jsp", "Configuration"),
    CONFIGURATION_PASSWORD_REQUIREMENTS("/WEB-INF/jsp/admin/configurationPasswordRequirements.jsp", "Configuration"),
-   SYSTEM_STATUSe("/WEB-INF/jsp/admin/systemStatus.jsp", "System Status"),
 
     /**
      * Page for creating a study.
@@ -349,18 +340,14 @@ public enum Page {
     /**
      * Page for creating crf confirm.
      */
-    CREATE_CRF_CONFIRM ("/WEB-INF/jsp/admin/createCRFConfirm.jsp", "Create a new CRF Confirm"),
 
     /**
      * Page for creating crf version.
      */
     CREATE_CRF_VERSION ("/WEB-INF/jsp/admin/createCRFVersion.jsp", "Create a new CRF Version"),
-    UPLOAD_CRF_VERSION ("/WEB-INF/jsp/admin/uploadCRFVersionFile.jsp", "Upload a new CRF Version"),
 
     REMOVE_CRF_VERSION ("/WEB-INF/jsp/admin/removeCRFVersion.jsp", "Remove CRF Version"),
     RESTORE_CRF_VERSION ("/WEB-INF/jsp/admin/restoreCRFVersion.jsp", "Restore CRF Version"),
-
-    CREATE_XFORM_CRF_VERSION_SERVLET ("/WEB-INF/jsp/admin/createXformCRFVersion.jsp", "Create a new Xform CRF Version"),
 
     /**
      * Page for creating crf data imports
@@ -395,8 +382,6 @@ public enum Page {
      * Page for confirming crf version.
      */
     CREATE_CRF_VERSION_CONFIRM ("/WEB-INF/jsp/admin/createCRFVersionConfirm.jsp", "Create a new CRF Version Confirm"),
-    CREATE_CRF_VERSION_CONFIRMSQL ("/WEB-INF/jsp/admin/createCRFVersionConfirmSQL.jsp",
-            "Create a new CRF Version Confirm SQL"),
     CREATE_CRF_VERSION_DONE ("/WEB-INF/jsp/admin/createCRFVersionDone.jsp", "Create a new CRF Version Done"),
     REMOVE_CRF_VERSION_CONFIRM ("/WEB-INF/jsp/admin/removeCRFVersionConfirm.jsp", "Remove CRF Version Confirm"),
     CREATE_CRF_VERSION_NODELETE("/WEB-INF/jsp/admin/createCRFVersionNoDelete.jsp", "Create a new CRF cannot delete version"),
@@ -418,7 +403,6 @@ public enum Page {
      * Page for view all datasets, tbh
      */
     VIEW_DATASETS ("/WEB-INF/jsp/extract/viewDatasets.jsp", "View Datasets"),
-    VIEW_EMPTY_DATASETS ("/WEB-INF/jsp/extract/viewEmptyDatasets.jsp", "View Datasets"),
     VIEW_DATASET_DETAILS ("/WEB-INF/jsp/extract/viewDatasetDetails.jsp", "View Dataset Details"),
 
     EXPORT_DATASETS ("/WEB-INF/jsp/extract/exportDatasets.jsp", "Export Dataset"),
@@ -441,9 +425,6 @@ public enum Page {
     // Dataset and select discrepancy Attribute"),
     CREATE_DATASET_SELECT_ITEMS ("/WEB-INF/jsp/extract/selectItems.jsp", "Create Dataset and select Items"),
 
-   // CREATE_DATASET_APPLY_FILTER_SERVLET ("CreateDatasetApplyFilter", "Create Dataset Apply Filter"),
-    CREATE_DATASET_APPLY_FILTER ("/WEB-INF/jsp/extract/createDatasetApplyFilter.jsp", "Create Dataset Apply Filter"),
-
     CREATE_DATASET_VIEW_SELECTED ("/WEB-INF/jsp/extract/viewSelected.jsp", "View Selected Items"),
     CREATE_DATASET_VIEW_SELECTED_HTML ("/WEB-INF/jsp/extract/viewSelectedHtml.jsp", "View Selected Items in a static way"),
     REMOVE_DATASET ("/WEB-INF/jsp/extract/removeDataset.jsp", "Remove Dataset"),
@@ -462,7 +443,6 @@ public enum Page {
     CREATE_FILTER_SCREEN_3_2 ("/WEB-INF/jsp/extract/createFilterScreen3_2.jsp", "Create Filter Screen Three Point Two"),
     CREATE_FILTER_SCREEN_4 ("/WEB-INF/jsp/extract/createFilterScreen4.jsp", "Create Filter Screen Four"),
     CREATE_FILTER_SCREEN_5 ("/WEB-INF/jsp/extract/createFilterScreen5.jsp", "Create Filter Screen Five"),
-    CREATE_FILTER_CONFIRM ("/WEB-INF/jsp/extract/createFilterConfirm.jsp", "Create Filter Confirm"),
     VIEW_FILTER_DETAILS ("/WEB-INF/jsp/extract/viewFilterDetails.jsp", "View Filter Details"),
     EDIT_FILTER ("/WEB-INF/jsp/extract/editFilter.jsp", "Edit Filter"),
     EDIT_DATASET ("/WEB-INF/jsp/extract/editDataset.jsp", "Edit Dataset"),
@@ -493,7 +473,6 @@ public enum Page {
     VIEW_SINGLE_JOB ("/WEB-INF/jsp/" + "admin/viewSingleJob.jsp", "View Jobs"),
     // job creation and viewing pages, all under admin
     TECH_ADMIN_SYSTEM ("/WEB-INF/jsp/" + "techadmin/index.jsp", "Technical Administrator Menu"),
-    VIEW_SCHEDULER ("/WEB-INF/jsp/" + "admin/viewScheduler.jsp", "View System Scheduler"),
     ADMIN_SYSTEM_SERVLET ("/AdminSystem", "Administer System Servlet"),
     MANAGE_STUDY_SERVLET ("/ManageStudy", "Manage Study Servlet"),
 
@@ -524,7 +503,6 @@ public enum Page {
     INTERVIEWER ("/WEB-INF/jsp/" + "submit/interviewer.jsp", "Event CRF Interview Info Submission"),
     INTERVIEWER_ENTIRE_PAGE ("/WEB-INF/jsp/" + "submit/interviewerEntirePage.jsp", "Event CRF Interview Info Submission"),
 
-    INITIAL_DATA_ENTRY ("/WEB-INF/jsp/" + "submit/initialDataEntry.jsp", "Initial Data Entry"),
     INITIAL_DATA_ENTRY_SERVLET ("/InitialDataEntry", "Initial Data Entry"),
 
     DOUBLE_DATA_ENTRY ("/WEB-INF/jsp/" + "submit/doubleDataEntry.jsp", "Double Data Entry"),
@@ -542,7 +520,6 @@ public enum Page {
     RESTORE_USER_ROLE_IN_STUDY ("/WEB-INF/jsp/" + "managestudy/restoreStudyUserRole.jsp", "restore a user role in a study"),
     LIST_USER_IN_STUDY_SERVLET ("/ListStudyUser", "list users in a study"),
 
-    LIST_SUBJECT ("/WEB-INF/jsp/" + "managestudy/listSubject.jsp", "list subjects in a study"),
     LIST_SUBJECT_SERVLET ("/ListSubject", "list subjects in a study"),
     VIEW_SUBJECT ("/WEB-INF/jsp/" + "admin/viewSubject.jsp", "View Subject"),
 
@@ -653,8 +630,7 @@ public enum Page {
     VIEW_ALL_DEFAULT_CRF_VERSIONS_PRINT ("/WEB-INF/jsp/managestudy/defaultAllCrfVersionPrint.jsp",
             "View default crf versions print"),
      MANAGE_STUDY_MODULE ( "/pages/studymodule",null),
-     VIEW_SECTION_DATA_ENTRY_SERVLET_REST_URL ("/ViewSectionDataEntryRESTUrlServlet", "View Section Data Entry Servlet for REST Url call"),
-     PARTICIPANT_FORM_SERVLET("/WEB-INF/jsp/submit/participantFormServlet.jsp","Participant Form Servlet");
+     VIEW_SECTION_DATA_ENTRY_SERVLET_REST_URL ("/ViewSectionDataEntryRESTUrlServlet", "View Section Data Entry Servlet for REST Url call");
     
       	
   //  private final static String path = "/WEB-INF/jsp/";

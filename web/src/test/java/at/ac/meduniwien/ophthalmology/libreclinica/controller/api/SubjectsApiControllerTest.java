@@ -21,6 +21,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -62,6 +63,16 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new SubjectsApiController(mockDataSource(),
                 Mockito.mock(SecurityManager.class),
                 Mockito.mock(SiteVisibilityFilter.class)));
+    }
+
+    /**
+     * A session whose role may enter data (Investigator). The role check
+     * runs before the request is validated, so a validation test needs one.
+     */
+    private org.springframework.mock.web.MockHttpSession dataEntrySession() {
+        return (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithRole(
+                2, "physician", 1, "S_DEFAULTS1", "Default Study",
+                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1);
     }
 
     /* ---------------------------------------------------------------------- */
@@ -122,8 +133,7 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/subjects")
                 .contentType("application/json")
                 .content("{\"gender\":\"Z\",\"enrolledOn\":\"2099-01-01\"}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[?(@.field == 'gender')]").exists())
                 .andExpect(jsonPath("$.errors[?(@.field == 'enrolledOn')]").exists())
@@ -148,9 +158,9 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         // DataSource.
         SiteVisibilityFilter filter = Mockito.mock(SiteVisibilityFilter.class);
         Mockito.when(filter.visibleStudyIds(
-                        Mockito.any(UserAccountBean.class),
-                        Mockito.any(StudyBean.class),
-                        Mockito.any(StudyUserRoleBean.class)))
+                        ArgumentMatchers.any(UserAccountBean.class),
+                        ArgumentMatchers.any(StudyBean.class),
+                        ArgumentMatchers.any(StudyUserRoleBean.class)))
                 .thenThrow(new RuntimeException("FILTER_INVOKED"));
         SubjectsApiController controller = new SubjectsApiController(
                 mockDataSource(), Mockito.mock(SecurityManager.class), filter);
@@ -173,9 +183,9 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
 
         Mockito.verify(filter, Mockito.atLeastOnce())
                 .visibleStudyIds(
-                        Mockito.any(UserAccountBean.class),
-                        Mockito.any(StudyBean.class),
-                        Mockito.any(StudyUserRoleBean.class));
+                        ArgumentMatchers.any(UserAccountBean.class),
+                        ArgumentMatchers.any(StudyBean.class),
+                        ArgumentMatchers.any(StudyUserRoleBean.class));
     }
 
     @Test
@@ -183,8 +193,7 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/subjects")
                 .contentType("application/json")
                 .content("{}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors").isArray());
     }

@@ -110,6 +110,16 @@ public class ImportCRFDataService {
         String studyOID = odmContainer.getCrfDataPostImportContainer().getStudyOID();
         StudyBean studyBean = studyDAO.findByOid(studyOID);
         ArrayList<SubjectDataBean> subjectDataBeans = odmContainer.getCrfDataPostImportContainer().getSubjectData();
+        // validateStudyMetadata reports a key that is not a number; don't guess
+        // a visit. Checked for the whole file before the loop below creates
+        // event CRFs for the visits ahead of it.
+        for (SubjectDataBean subjectDataBean : subjectDataBeans) {
+            for (StudyEventDataBean studyEventDataBean : subjectDataBean.getStudyEventData()) {
+                if (studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey()) == null) {
+                    return null;
+                }
+            }
+        }
         for (SubjectDataBean subjectDataBean : subjectDataBeans) {
             ArrayList<StudyEventDataBean> studyEventDataBeans = subjectDataBean.getStudyEventData();
 
@@ -117,14 +127,14 @@ public class ImportCRFDataService {
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
                 // @pgawade 16-March-2011 Do not allow the data import
                 // if event status is one of the - stopped, signed,
                 // locked
@@ -220,14 +230,18 @@ public class ImportCRFDataService {
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (sampleOrdinal == null) {
+                    // validateStudyMetadata reports the key; don't guess a visit.
+                    return false;
+                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
                 // @pgawade 16-March-2011 Do not allow the data import
                 // if event status is one of the - stopped, signed,
                 // locked
@@ -296,14 +310,18 @@ public class ImportCRFDataService {
             for (StudyEventDataBean studyEventDataBean : studyEventDataBeans) {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
 
-                String sampleOrdinal = studyEventDataBean.getStudyEventRepeatKey() == null ? "1" : studyEventDataBean.getStudyEventRepeatKey();
+                Integer sampleOrdinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (sampleOrdinal == null) {
+                    // validateStudyMetadata reports the key; don't guess a visit.
+                    continue;
+                }
 
                 StudyEventDefinitionBean studyEventDefinitionBean = studyEventDefinitionDAO.findByOidAndStudy(studyEventDataBean.getStudyEventOID(),
                         studyBean.getId(), studyBean.getParentStudyId());
                 logger.info("find all by def and subject " + studyEventDefinitionBean.getName() + " study subject " + studySubjectBean.getName());
 
                 StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
-                        studyEventDefinitionBean.getId(), Integer.parseInt(sampleOrdinal));
+                        studyEventDefinitionBean.getId(), sampleOrdinal);
 
                 for (FormDataBean formDataBean : formDataBeans) {
 
@@ -395,12 +413,14 @@ public class ImportCRFDataService {
                 ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
                 logger.debug("iterating through study event data beans: found " + studyEventDataBean.getStudyEventOID());
 
-                int ordinal = 1;
-                try {
-                    ordinal = Integer.valueOf(studyEventDataBean.getStudyEventRepeatKey()).intValue();
-                } catch (Exception e) {
-                    // trying to catch NPEs, because tags can be without the
-                    // repeat key
+                // A missing key is visit 1; a key that is not a whole number names
+                // no visit, and the values must not be filed under the first one.
+                Integer ordinal = studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey());
+                if (ordinal == null) {
+                    MessageFormat mf = new MessageFormat("");
+                    mf.applyPattern(respage.getString("your_study_event_repeat_key_is_not_a_number"));
+                    throw new OpenClinicaException(mf.format(new Object[] { studyEventDataBean.getStudyEventOID(),
+                            subjectDataBean.getSubjectOID() }), "");
                 }
                 StudyEventBean studyEvent = (StudyEventBean) studyEventDAO.findByStudySubjectIdAndDefinitionIdAndOrdinal(studySubjectBean.getId(),
                         sedBean.getId(), ordinal);
@@ -478,20 +498,18 @@ public class ImportCRFDataService {
                                         ArrayList<ItemFormMetadataBean> metadataBeans = itemFormMetadataDAO.findAllByItemId(itemBean.getId());
                                         logger.debug("      found metadata item beans: " + metadataBeans.size());
                                         // groupOrdinal = the ordinal in item groups, for repeating items
-                                        int groupOrdinal = 1;
-                                        if (itemGroupDataBean.getItemGroupRepeatKey() != null) {
-                                            try {
-                                                groupOrdinal = Integer.valueOf(itemGroupDataBean.getItemGroupRepeatKey()).intValue();
-                                                if (groupOrdinal > groupMaxOrdinals.get(itemGroupDataBean.getItemGroupOID())) {
-                                                    groupMaxOrdinals.put(itemGroupDataBean.getItemGroupOID(),groupOrdinal);
-                                                }
-                                            } catch (Exception e) {
-                                                // do nothing here currently, we are
-                                                // looking for a number format
-                                                // exception
-                                                // from the above.
-                                                logger.debug("found npe for group ordinals, line 344!");
-                                            }
+                                        // A missing key is row 1; a key that is not a positive whole
+                                        // number names no row, and the value must not land in row 1.
+                                        Integer groupOrdinalKey = itemGroupOrdinal(itemGroupDataBean.getItemGroupRepeatKey());
+                                        if (groupOrdinalKey == null) {
+                                            MessageFormat mf = new MessageFormat("");
+                                            mf.applyPattern(respage.getString("your_item_group_repeat_key_is_not_a_number"));
+                                            throw new OpenClinicaException(mf.format(new Object[] { itemGroupDataBean.getItemGroupOID(),
+                                                    formDataBean.getFormOID(), subjectDataBean.getSubjectOID() }), "");
+                                        }
+                                        int groupOrdinal = groupOrdinalKey;
+                                        if (groupOrdinal > groupMaxOrdinals.get(itemGroupDataBean.getItemGroupOID())) {
+                                            groupMaxOrdinals.put(itemGroupDataBean.getItemGroupOID(), groupOrdinal);
                                         }
                                         ItemDataBean itemDataBean = createItemDataBean(itemBean, eventCRFBean, importItemDataBean.getValue(), ub, groupOrdinal);
                                         blankCheckItems.add(itemBean);
@@ -958,6 +976,11 @@ public class ImportCRFDataService {
                                 // Event in the Study.");
                                 logger.debug("logged an error with se oid " + sedOid + " and subject oid " + oid);
                             }
+                            if (studyEventOrdinal(studyEventDataBean.getStudyEventRepeatKey()) == null) {
+                                mf.applyPattern(respage.getString("your_study_event_repeat_key_is_not_a_number"));
+                                Object[] arguments = { sedOid, oid };
+                                errors.add(mf.format(arguments));
+                            }
 
                             ArrayList<FormDataBean> formDataBeans = studyEventDataBean.getFormData();
                             if (formDataBeans != null) {
@@ -1000,6 +1023,10 @@ public class ImportCRFDataService {
                                     if (itemGroupDataBeans != null) {
                                         for (ImportItemGroupDataBean itemGroupDataBean : itemGroupDataBeans) {
                                             String itemGroupOID = itemGroupDataBean.getItemGroupOID();
+                                            if (itemGroupOrdinal(itemGroupDataBean.getItemGroupRepeatKey()) == null) {
+                                                mf.applyPattern(respage.getString("your_item_group_repeat_key_is_not_a_number"));
+                                                errors.add(mf.format(new Object[] { itemGroupOID, formOid, oid }));
+                                            }
                                             List<ItemGroupBean> itemGroupBeans = itemGroupDAO.findAllByOid(itemGroupOID);
                                             if (itemGroupBeans != null) {
                                                 logger.debug("number of item group beans: " + itemGroupBeans.size());
@@ -1111,6 +1138,40 @@ public class ImportCRFDataService {
     private ItemDataDAO getItemDataDao() {
         itemDataDao = this.itemDataDao != null ? itemDataDao : new ItemDataDAO(ds);
         return itemDataDao;
+    }
+
+    /**
+     * The visit ordinal a StudyEventRepeatKey names: 1 when the file leaves
+     * the key out or empty, null when the key is not a whole number. Space
+     * around the number is ignored. The import's rule run reads keys the
+     * same way ({@code ImportDataRuleRunnerContainer.repeatKey}).
+     */
+    public static Integer studyEventOrdinal(String studyEventRepeatKey) {
+        if (studyEventRepeatKey == null || studyEventRepeatKey.trim().isEmpty()) {
+            return 1;
+        }
+        try {
+            return Integer.valueOf(studyEventRepeatKey.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * The row an ItemGroupRepeatKey names: 1 when the file leaves the key out
+     * or empty, null when the key is not a whole number of 1 or more. Space
+     * around the number is ignored.
+     */
+    public static Integer itemGroupOrdinal(String itemGroupRepeatKey) {
+        if (itemGroupRepeatKey == null || itemGroupRepeatKey.trim().isEmpty()) {
+            return 1;
+        }
+        try {
+            int ordinal = Integer.parseInt(itemGroupRepeatKey.trim());
+            return ordinal >= 1 ? ordinal : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

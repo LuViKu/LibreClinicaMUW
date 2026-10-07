@@ -539,6 +539,12 @@ export const useSubjectsStore = defineStore('subjects', () => {
        * convention applies in that case.
        */
       studyEye?: StudyEye | null
+      /**
+       * The full date of birth (ISO YYYY-MM-DD), where the study collects
+       * it; null leaves it as it is. Typed here until the generated API
+       * types carry it.
+       */
+      dateOfBirth?: string | null
     },
   ): Promise<{ ok: true; detail: SubjectDetail }
               | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
@@ -1158,7 +1164,36 @@ const allowedErrorFields: ReadonlyArray<AddSubjectErrorField> = [
   'gender',
   'yearOfBirth',
   'personId',
+  'dateOfBirth',
 ]
+
+/**
+ * Which subject identifiers the study collects, from its parameters, read
+ * as the server (and legacy AddNewSubject) reads them:
+ *  - `subjectPersonIdRequired`: required / optional / not_used;
+ *  - `collectDob`: '1' full date, '2' year only, '3' none. A study without
+ *    its own value reports the table default here, which the server reads
+ *    as the full date, so anything that is not '2' or '3' means full date;
+ *  - `genderRequired`: required unless 'false'.
+ * Without loaded parameters the strict defaults apply, as on the server.
+ */
+export interface SubjectIdentifierRules {
+  personId: 'required' | 'optional' | 'not_used'
+  dateOfBirth: 'full' | 'year' | 'none'
+  genderRequired: boolean
+}
+
+export function subjectIdentifierRules(
+  params: { subjectPersonIdRequired?: string; collectDob?: string; genderRequired?: string } | null | undefined,
+): SubjectIdentifierRules {
+  const pid = params?.subjectPersonIdRequired
+  const dob = params?.collectDob
+  return {
+    personId: pid === 'optional' || pid === 'not_used' ? pid : 'required',
+    dateOfBirth: dob === '2' ? 'year' : dob === '3' ? 'none' : 'full',
+    genderRequired: params?.genderRequired !== 'false',
+  }
+}
 
 function isAddSubjectError(value: unknown): value is AddSubjectError {
   if (value == null || typeof value !== 'object') return false
@@ -1177,7 +1212,10 @@ function isAddSubjectError(value: unknown): value is AddSubjectError {
  *    servlet leaves this to a study-config rule; we keep a soft
  *    client-side check matching the mockup's red ErrorText).
  *  - Enrolment date must be present + not in the future.
- *  - Gender must be one of the allowed codes.
+ *  - Gender must be one of the allowed codes, and is required unless the
+ *    study says otherwise.
+ *  - Person ID and date (or year) of birth as the study's parameters
+ *    require them ({@link SubjectIdentifierRules}).
  *  - Year of birth must be plausible (1900–current year).
  *
  * The backend remains authoritative — the SPA's validation is for UX
@@ -1187,10 +1225,14 @@ function isAddSubjectError(value: unknown): value is AddSubjectError {
 export function validateAddSubject(
   input: AddSubjectInput,
   existing: ReadonlyArray<Subject>,
-  options: { today?: string } = {},
+  options: { today?: string; rules?: SubjectIdentifierRules } = {},
 ): AddSubjectError[] {
   const errors: AddSubjectError[] = []
   const today = options.today ?? new Date().toISOString().slice(0, 10)
+  // Without the study's rules only the sex is required; the server
+  // applies the study's rules in any case.
+  const rules: SubjectIdentifierRules =
+    options.rules ?? { ...subjectIdentifierRules(null), personId: 'optional', dateOfBirth: 'none' }
 
   const id = input.id?.trim() ?? ''
   if (!id) errors.push({ field: 'id', message: 'Subject ID is required.' })
@@ -1206,9 +1248,27 @@ export function validateAddSubject(
   else if (input.enrolledOn > today)
     errors.push({ field: 'enrolledOn', message: 'Enrolment date must not be in the future.' })
 
-  if (!input.gender) errors.push({ field: 'gender', message: 'Gender is required.' })
-  else if (!(['F', 'M', 'O', 'U'] as const).includes(input.gender))
+  if (!input.gender) {
+    if (rules.genderRequired) errors.push({ field: 'gender', message: 'Gender is required.' })
+  } else if (!(['F', 'M', 'O', 'U'] as const).includes(input.gender))
     errors.push({ field: 'gender', message: `"${input.gender}" is not a valid gender code.` })
+
+  const personId = input.personId?.trim() ?? ''
+  if (rules.personId === 'required' && !personId)
+    errors.push({ field: 'personId', message: 'Person ID is required in this study.' })
+  else if (personId.length > 255)
+    errors.push({ field: 'personId', message: 'Person ID is too long (max 255 characters).' })
+
+  const dob = input.dateOfBirth?.trim() ?? ''
+  if (rules.dateOfBirth === 'full') {
+    if (!dob) errors.push({ field: 'dateOfBirth', message: 'Date of birth is required in this study.' })
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(dob))
+      errors.push({ field: 'dateOfBirth', message: 'Date of birth must be a valid date (YYYY-MM-DD).' })
+    else if (dob > today)
+      errors.push({ field: 'dateOfBirth', message: 'Date of birth must not be in the future.' })
+  } else if (rules.dateOfBirth === 'year' && input.yearOfBirth == null) {
+    errors.push({ field: 'yearOfBirth', message: 'Year of birth is required in this study.' })
+  }
 
   if (input.yearOfBirth != null) {
     const year = Number(input.yearOfBirth)

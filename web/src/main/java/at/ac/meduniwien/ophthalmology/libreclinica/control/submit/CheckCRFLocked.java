@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -27,7 +29,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * release their own locks — and {@code exitTo} is followed only when it is a
  * path inside this application.
  */
-@SuppressWarnings("all")
 public class CheckCRFLocked extends SecureController {
     /**
 	 *
@@ -37,12 +38,23 @@ public class CheckCRFLocked extends SecureController {
     /** Where the lock release lands when {@code exitTo} is missing or refused. */
     static final String DEFAULT_EXIT = "ListStudySubjects";
 
+    /** GET answers the lock query; releasing the caller's CRF locks (userId) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String ecId = request.getParameter("ecId");
+        return (ecId != null && !ecId.isEmpty()) || request.getParameter("userId") == null;
+    }
+
 	@Override
     protected void processRequest() throws Exception {
         int userId;
         String ecId = request.getParameter("ecId");
         if (ecId != null && !ecId.isEmpty()) {
             int crfId = Integer.parseInt(ecId);
+            if (crfId > 0) {
+                // whoever holds the lock is named: only for event CRFs of the session's study
+                assertEventCrfInScope(crfId);
+            }
             if (getCrfLocker().isLocked(crfId)) {
                 userId = getCrfLocker().getLockOwner(crfId);
                 UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());

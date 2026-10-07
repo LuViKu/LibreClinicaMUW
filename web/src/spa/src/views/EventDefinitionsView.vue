@@ -301,9 +301,15 @@ async function submitEdit() {
   }
 }
 
+// Removal takes the definition's visits, CRFs and values with it (as the
+// legacy removal does), so the prompt names them, with counts when the
+// server could supply them.
 async function onDisable(row: EventDefinition) {
   if (!studyOid.value) return
-  if (!(await confirm({ message: t('eventDefinitions.disableConfirm', { name: row.name }), danger: true }))) return
+  const impact = await eventDefs.removalImpact(studyOid.value, row.oid)
+  let message = t('eventDefinitions.disableConfirm', { name: row.name })
+  if (impact) message += ' ' + t('eventDefinitions.disableImpact', { ...impact })
+  if (!(await confirm({ message, danger: true }))) return
   await eventDefs.disable(studyOid.value, row.oid)
 }
 

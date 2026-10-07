@@ -13,6 +13,8 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.DisplayStudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -34,7 +36,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Assigns a study subject to another study
  */
-@SuppressWarnings("all")
 public class ReassignStudySubjectServlet extends SecureController {
     /**
 	 * 
@@ -61,6 +62,13 @@ public class ReassignStudySubjectServlet extends SecureController {
 
     }
 
+    /** GET shows the form or its confirmation; reassigning the subject takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty() || "confirm".equalsIgnoreCase(action);
+    }
+
     @Override
     public void processRequest() throws Exception {
         String action = request.getParameter("action");
@@ -76,6 +84,8 @@ public class ReassignStudySubjectServlet extends SecureController {
             return;
         } else {
             StudySubjectBean studySub = (StudySubjectBean) ssdao.findByPK(studySubId);
+            // the subject to move must be in the session's study tree
+            assertRecordInScope(studySub.getStudyId());
             int subjectId = studySub.getSubjectId();
             request.setAttribute("studySub", studySub);
             SubjectBean subject = (SubjectBean) subdao.findByPK(subjectId);
@@ -107,6 +117,8 @@ public class ReassignStudySubjectServlet extends SecureController {
                     forwardPage(Page.REASSIGN_STUDY_SUBJECT);
                     return;
                 }
+                // ... and so must the study or site it is moved to
+                assertRecordInScope(studyId);
                 StudyBean st = (StudyBean) sdao.findByPK(studyId);
                 if ("confirm".equalsIgnoreCase(action)) {
                     StudySubjectBean sub1 = (StudySubjectBean) ssdao.findAnotherBySameLabel(studySub.getLabel(), studyId, studySub.getId());

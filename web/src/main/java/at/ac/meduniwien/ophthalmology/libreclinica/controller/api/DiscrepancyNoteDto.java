@@ -49,8 +49,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                        string when unresolvable
  * @param description     free-text body
  * @param assignedTo      username of the assignee, or {@code null}
- * @param daysOpen        days since the note was created (computed by
- *                        the SQL query, surfaced via {@code days})
+ * @param daysOpen        days the note has been open: since it was
+ *                        created while it is open, until its last thread
+ *                        entry once closed, 0 when not applicable
+ *                        ({@code DiscrepancyApiController.daysOpen})
  * @param lastActivityAt  ISO-8601 of the most recent thread entry; for
  *                        parent-level notes without a thread this is
  *                        the {@code date_created} timestamp
@@ -69,6 +71,18 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                        when unresolvable
  * @param eventName       {@code study_event_definition.name} (e.g.
  *                        "V1 Inclusion"); null when unresolvable
+ * @param entityType      what the note is on, as legacy names it:
+ *                        {@code itemData}, or a field of a
+ *                        {@code subject}, {@code studySub},
+ *                        {@code studyEvent} or {@code eventCrf}
+ * @param column          the field, for a note that is not on item data
+ *                        ({@code date_of_birth}, {@code start_date}, …);
+ *                        {@code value} for item data
+ * @param entityId        the id of the row the note is on (subject,
+ *                        study subject, study event, event CRF or item
+ *                        data), as a string; null when unresolvable. For
+ *                        a field note {@code itemValue} carries the
+ *                        field's current value
  */
 @Schema(name = "DiscrepancyNoteDto")
 public record DiscrepancyNoteDto(
@@ -85,8 +99,32 @@ public record DiscrepancyNoteDto(
         String itemLabel,
         String itemValue,
         String eventCrfOid,
-        String eventName
+        String eventName,
+        String entityType,
+        String column,
+        String entityId
 ) {
+    /** The notes-deeplink shape, for a note whose entity is not reported. */
+    public DiscrepancyNoteDto(
+            String id,
+            String type,
+            String status,
+            String subjectId,
+            String itemOid,
+            String description,
+            String assignedTo,
+            int daysOpen,
+            String lastActivityAt,
+            List<DiscrepancyThreadEntryDto> thread,
+            String itemLabel,
+            String itemValue,
+            String eventCrfOid,
+            String eventName) {
+        this(id, type, status, subjectId, itemOid, description,
+                assignedTo, daysOpen, lastActivityAt, thread,
+                itemLabel, itemValue, eventCrfOid, eventName, null, null, null);
+    }
+
     /** Convenience constructor — defaults {@code thread} to an empty list
      *  AND nulls the deeplink context fields. */
     public DiscrepancyNoteDto(

@@ -11,6 +11,7 @@
  */
 
 import type { components } from './api'
+import type { AccountType } from './auth'
 
 export type UserRole =
   | 'Investigator'
@@ -19,6 +20,12 @@ export type UserRole =
   | 'Administrator'
   | 'CRC' /* Clinical Research Coordinator */
 
+/**
+ * The two legacy data entry roles. The SPA neither grants nor migrates
+ * them; a binding that holds one says so in {@link RoleBinding.legacyRole}.
+ */
+export type LegacyRole = 'ra' | 'ra2'
+
 export type UserAuth =
   | 'sso'              // institutional SSO via reverse-proxy pre-auth
   | 'local'            // local username/password (legacy + sponsor monitors)
@@ -26,7 +33,10 @@ export type UserAuth =
   | 'pending-invite'   // user invited, not logged in yet
 
 export type StudyUser =
-  Omit<Required<components['schemas']['StudyUserDto']>, 'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'>
+  Omit<Required<components['schemas']['StudyUserDto']>,
+       'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'
+       | 'firstName' | 'lastName' | 'phone' | 'institutionalAffiliation' | 'userType'
+       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername' | 'legacyRole'>
   & {
     role: UserRole
     auth: UserAuth
@@ -35,6 +45,27 @@ export type StudyUser =
     siteLabel: string | null
     /** ISO instant of last login, or null when never logged in. */
     lastLoginAt: string | null
+    /*
+     * The profile, account type and created / updated details: what the
+     * legacy View User page showed, and what the edit dialog pre-fills
+     * from and the access review reads. The server omits blank values.
+     */
+    firstName?: string | null
+    lastName?: string | null
+    phone?: string | null
+    institutionalAffiliation?: string | null
+    userType?: AccountType
+    /** ISO `yyyy-MM-dd`. */
+    createdDate?: string | null
+    ownerUsername?: string | null
+    /** ISO `yyyy-MM-dd`; absent when never updated. */
+    updatedDate?: string | null
+    updaterUsername?: string | null
+    /**
+     * Set when the row's role is a legacy data entry role. `role` then says
+     * Investigator, which the role is not; show this instead.
+     */
+    legacyRole?: LegacyRole | null
   }
 
 /**
@@ -56,7 +87,7 @@ export interface CreateUserInput {
   phone?: string | null
   studyId: number
   role: UserRole
-  userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN'
+  userType?: AccountType
   userSource?: 'local'
   authtype?: string | null
   runWebservices?: boolean
@@ -101,6 +132,12 @@ export interface RoleBinding {
   siteLabel: string | null
   role: UserRole
   active: boolean
+  /**
+   * Set when the binding holds a legacy data entry role. `role` then says
+   * Investigator, which the role is not: show this instead, and pass it in
+   * `legacyRoles` when saving the study's roles to keep it.
+   */
+  legacyRole?: LegacyRole | null
 }
 
 /**
@@ -108,7 +145,8 @@ export interface RoleBinding {
  *
  * Every field is optional: omit a field (or pass `undefined`) to
  * leave it unchanged. Pass an empty string only for fields that
- * legitimately may be cleared (currently `phone` and `authtype`).
+ * legitimately may be cleared (currently `phone` and `authtype`); the
+ * server refuses a blank name, e-mail or affiliation.
  *
  * `username` is NOT editable — identity rename is unsupported. Use
  * the A7.4 reset-password endpoint for credential changes and the
@@ -120,7 +158,7 @@ export interface UpdateUserInput {
   email?: string
   phone?: string
   institutionalAffiliation?: string
-  userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN'
+  userType?: AccountType
   authtype?: string
   runWebservices?: boolean
 }

@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -106,7 +107,8 @@ class SDVControllerSecurityTest {
     }
 
     private static boolean redirectedToMainMenu(MockHttpServletResponse resp) {
-        return resp.getRedirectedUrl() != null && resp.getRedirectedUrl().contains("/MainMenu");
+        String url = resp.getRedirectedUrl();
+        return url != null && url.contains("/MainMenu");
     }
 
     // ---- role check on every mutating handler -------------------------------
@@ -154,7 +156,7 @@ class SDVControllerSecurityTest {
     @Test
     void aSessionWithoutARoleIsRefused() {
         MockHttpServletRequest req = session(Role.MONITOR);
-        req.getSession().removeAttribute("userRole");
+        Objects.requireNonNull(req.getSession()).removeAttribute("userRole");
         MockHttpServletResponse resp = new MockHttpServletResponse();
         controller.sdvOneCRFFormHandler(req, resp, OWN_EVENT_CRF, "viewAllSubjectSDVtmp", new ModelMap());
 

@@ -151,7 +151,9 @@
 <table border="0" cellpadding="0" cellspacing="0">
 <tr>
 <td>
-<input type="button" name="Submit" id="submit" value="<fmt:message key="submit" bundle="${resword}"/>" class="button_long" onClick="window.location.href='RunRule?${submitLinkParams}';"/></td>
+<%-- Submit applies the rule actions: RunRule takes that as a POST only. --%>
+<form action="RunRule?<c:out value="${submitLinkParams}"/>" method="post" style="margin:0">
+<input type="submit" name="Submit" id="submit" value="<fmt:message key="submit" bundle="${resword}"/>" class="button_long"/></form></td>
 </td>
 <td>
 <input type="button" name="Cancel" id="cancel" value="<fmt:message key="cancel" bundle="${resword}"/>" class="button_long" onClick="window.location.href='ViewRuleAssignment';"/></td>

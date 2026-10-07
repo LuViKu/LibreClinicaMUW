@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -163,7 +164,7 @@ class RetinalBlindingEndpointDatabaseIT extends AbstractApiControllerDatabaseIT 
 
     private MockMvc mockMvc() {
         SiteVisibilityFilter filter = Mockito.mock(SiteVisibilityFilter.class);
-        Mockito.when(filter.visibleStudyIds(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(filter.visibleStudyIds(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(java.util.Set.of(studyId));
         RemoteRetinalInferenceClient remote = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remote.isConfigured()).thenReturn(false);

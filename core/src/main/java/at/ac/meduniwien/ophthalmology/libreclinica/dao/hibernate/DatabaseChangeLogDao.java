@@ -25,12 +25,7 @@ import org.hibernate.query.Query;
  * EntityManager. Same rationale as {@link AbstractDomainDao} — Spring 6's
  * hibernate5 legacy package can't link against Hibernate 6.
  */
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DatabaseChangeLogDao {
 
     @PersistenceContext
@@ -60,7 +55,7 @@ public class DatabaseChangeLogDao {
     }
 
     public Long count() {
-        return (Long) getCurrentSession().createQuery("select count(*) from " + domainClass().getName()).uniqueResult();
+        return getCurrentSession().createQuery("select count(*) from " + domainClass().getName(), Long.class).uniqueResult();
     }
 
     protected Session getCurrentSession() {

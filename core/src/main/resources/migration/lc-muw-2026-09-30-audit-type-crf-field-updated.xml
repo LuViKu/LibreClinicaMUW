@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      CRF library (JSP retirement R1.2): audit type for the SPA's edit of a
+      CRF's name and description.
+    -->
+
+    <!--
+      142 — a CRF's name or description changed. One row per field, with the
+      old and the new value.
+    -->
+    <changeSet id="2026-09-30-audit-type-crf-field-updated" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 142;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="142"/>
+            <column name="name" value="crf_field_updated"/>
+            <column name="display_name" value="CRF name or description changed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 142</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

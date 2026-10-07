@@ -91,6 +91,13 @@ class HealthResponse(BaseModel):
     node: str | None = None
     gpu_device: str | None = None
     gpu_name: str | None = None
+    # Dispatch mode: "slurm" (one srun job per task) or "direct" (runs on this
+    # node). In SLURM mode the dispatcher pins no GPU, so gpu_device/gpu_name are
+    # None and the partition/gres below say where jobs are sent. No account name.
+    mode: str = "direct"
+    max_concurrent_runs: int = 1
+    slurm_partition: str | None = None
+    slurm_gres: str | None = None
 
 
 class JobStatusResponse(BaseModel):

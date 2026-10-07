@@ -135,6 +135,12 @@ public class UpdateJobExportServlet extends SecureController {
         // EMAIL, TAB, CDISC, SPSS, PERIOD, DATE_START_JOB
     }
 
+    /** GET shows the form; rescheduling the job (action=confirmall) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirmall".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     protected void processRequest() throws Exception {
         FormProcessor fp = new FormProcessor(request);

@@ -139,11 +139,12 @@
   </c:choose>
    <tr valign="top">
     <td class="table_cell_left">
+      <%-- The arrows post small forms: ChangeDefinitionCRFOrdinal refuses GET. --%>
       <c:choose>
         <c:when test="${status.first}">
           <c:choose>
            <c:when test="${defSize>1}">
-               <a href="ChangeDefinitionCRFOrdinal?current=<c:out value="${nextCrf.id}"/>&previous=<c:out value="${crf.id}"/>&id=<c:out value="${definition.id}"/>&currentOrdinal=<c:out value="${nextCrf.ordinal}"/>&previousOrdinal=<c:out value="${crf.ordinal}"/>"><img src="images/bt_sort_descending.gif" border="0" alt="move down" title="move down"/></a>
+               <form action="ChangeDefinitionCRFOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${nextCrf.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${crf.id}"/>"/><input type="hidden" name="id" value="<c:out value="${definition.id}"/>"/><input type="hidden" name="currentOrdinal" value="<c:out value="${nextCrf.ordinal}"/>"/><input type="hidden" name="previousOrdinal" value="<c:out value="${crf.ordinal}"/>"/><input type="image" src="images/bt_sort_descending.gif" alt="move down" title="move down"/></form>
            </c:when>
            <c:otherwise>
              &nbsp;
@@ -151,11 +152,11 @@
           </c:choose>         
         </c:when>
         <c:when test="${status.last}">
-            <a href="ChangeDefinitionCRFOrdinal?current=<c:out value="${crf.id}"/>&previous=<c:out value="${prevCrf.id}"/>&id=<c:out value="${definition.id}"/>&currentOrdinal=<c:out value="${crf.ordinal}"/>&previousOrdinal=<c:out value="${prevCrf.ordinal}"/>"><img src="images/bt_sort_ascending.gif" alt="move up" title="move up" border="0"/></a>
+            <form action="ChangeDefinitionCRFOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${crf.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${prevCrf.id}"/>"/><input type="hidden" name="id" value="<c:out value="${definition.id}"/>"/><input type="hidden" name="currentOrdinal" value="<c:out value="${crf.ordinal}"/>"/><input type="hidden" name="previousOrdinal" value="<c:out value="${prevCrf.ordinal}"/>"/><input type="image" src="images/bt_sort_ascending.gif" alt="move up" title="move up"/></form>
         </c:when>
         <c:otherwise>
-            <a href="ChangeDefinitionCRFOrdinal?current=<c:out value="${crf.id}"/>&previous=<c:out value="${prevCrf.id}"/>&id=<c:out value="${definition.id}"/>&currentOrdinal=<c:out value="${crf.ordinal}"/>&previousOrdinal=<c:out value="${prevCrf.ordinal}"/>"><img src="images/bt_sort_ascending.gif" alt="move up" title="move up" border="0" /></a>
-            <a href="ChangeDefinitionCRFOrdinal?previous=<c:out value="${crf.id}"/>&current=<c:out value="${nextCrf.id}"/>&id=<c:out value="${definition.id}"/>&previousOrdinal=<c:out value="${crf.ordinal}"/>&currentOrdinal=<c:out value="${nextCrf.ordinal}"/>"><img src="images/bt_sort_descending.gif" alt="move down" title="move up" border="0" /></a>
+            <form action="ChangeDefinitionCRFOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="current" value="<c:out value="${crf.id}"/>"/><input type="hidden" name="previous" value="<c:out value="${prevCrf.id}"/>"/><input type="hidden" name="id" value="<c:out value="${definition.id}"/>"/><input type="hidden" name="currentOrdinal" value="<c:out value="${crf.ordinal}"/>"/><input type="hidden" name="previousOrdinal" value="<c:out value="${prevCrf.ordinal}"/>"/><input type="image" src="images/bt_sort_ascending.gif" alt="move up" title="move up"/></form>
+            <form action="ChangeDefinitionCRFOrdinal" method="post" style="display:inline; margin:0"><input type="hidden" name="previous" value="<c:out value="${crf.id}"/>"/><input type="hidden" name="current" value="<c:out value="${nextCrf.id}"/>"/><input type="hidden" name="id" value="<c:out value="${definition.id}"/>"/><input type="hidden" name="previousOrdinal" value="<c:out value="${crf.ordinal}"/>"/><input type="hidden" name="currentOrdinal" value="<c:out value="${nextCrf.ordinal}"/>"/><input type="image" src="images/bt_sort_descending.gif" alt="move down" title="move up"/></form>
         </c:otherwise>
       </c:choose>
     </td>             

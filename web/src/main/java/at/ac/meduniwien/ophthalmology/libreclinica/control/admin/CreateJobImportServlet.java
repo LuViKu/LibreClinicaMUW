@@ -15,6 +15,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
@@ -125,6 +127,12 @@ public class CreateJobImportServlet extends SecureController {
         request.setAttribute(HOURS, Integer.valueOf(fp2.getInt(HOURS)).toString());
         request.setAttribute(MINUTES, Integer.valueOf(fp2.getInt(MINUTES)).toString());
 
+    }
+
+    /** GET shows the form; scheduling the job (action=confirmall) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirmall".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override

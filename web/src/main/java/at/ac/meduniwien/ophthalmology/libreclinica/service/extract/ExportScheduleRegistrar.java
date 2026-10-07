@@ -36,8 +36,17 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.stereotype.Component;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.DatasetsApiController;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
 /**
  * Phase E.6 — Data Export Phase 4.
@@ -53,7 +62,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO
  *   <li>Loads every active {@code export_schedule} row, validates its
  *       cron, and registers a per-schedule cron trigger backed by
  *       {@link ScheduleFireJob} — that job inserts a fresh queued
- *       row + stamps the schedule's {@code last_run_at}.</li>
+ *       row + stamps the schedule's {@code last_run_at}. A paused row
+ *       ({@code enabled=false}) gets no trigger.</li>
  * </ol>
  *
  * <p>Public API for the controller:
@@ -64,7 +74,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportScheduleDAO
  *       new trigger goes live without an app restart.</li>
  *   <li>{@link #unregisterSchedule(long)} — call after a
  *       {@code DELETE /schedules/{id}} so the soft-deleted row stops
- *       firing.</li>
+ *       firing, and after a pause.</li>
+ *   <li>An edit of an enabled schedule calls
+ *       {@link #registerSchedule(long, int, String, String)} again: it
+ *       replaces the job and its trigger, so the new cron and format
+ *       apply from the next fire on, without a restart.</li>
  *   <li>{@link #computeNextFireTime(String)} — helper that returns
  *       the next fire instant for a given cron, used by the
  *       controller to populate {@code next_run_at} on insert.</li>
@@ -147,7 +161,15 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
         ExportScheduleDAO dao = new ExportScheduleDAO(dataSource);
         List<ExportScheduleDAO.Row> active = dao.findAllActive();
         int registered = 0;
+        int paused = 0;
         for (ExportScheduleDAO.Row row : active) {
+            if (!row.enabled) {
+                // The job store is persistent: remove a trigger a failed
+                // pause may have left behind rather than trust there is none.
+                unregisterSchedule(row.id);
+                paused++;
+                continue;
+            }
             try {
                 registerScheduleInternal(row.id, row.datasetId, row.format, row.cronExpression);
                 registered++;
@@ -156,8 +178,8 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
                         row.id, row.datasetId, row.cronExpression, e.getMessage());
             }
         }
-        LOG.info("ExportScheduleRegistrar: registered {}/{} active schedules at boot",
-                registered, active.size());
+        LOG.info("ExportScheduleRegistrar: registered {}/{} enabled schedules at boot ({} paused)",
+                registered, active.size() - paused, paused);
     }
 
     /* ------------------------------------------------------------------ */
@@ -185,6 +207,10 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
 
     /** Returns the next fire instant for the given cron, or null if it never fires again. */
     public Instant computeNextFireTime(String cronExpression) {
+        return nextFireTime(cronExpression);
+    }
+
+    private static Instant nextFireTime(String cronExpression) {
         try {
             CronExpression cron = new CronExpression(cronExpression);
             Date next = cron.getNextValidTimeAfter(new Date());
@@ -256,9 +282,6 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
         public void execute(JobExecutionContext context) throws JobExecutionException {
             JobDataMap data = context.getMergedJobDataMap();
             long scheduleId = data.getLong(KEY_SCHEDULE_ID);
-            int datasetId = data.getInt(KEY_DATASET_ID);
-            String format = data.getString(KEY_FORMAT);
-            String cron = data.getString(KEY_CRON);
 
             try {
                 org.springframework.context.ApplicationContext appCtx =
@@ -268,37 +291,91 @@ public class ExportScheduleRegistrar implements ApplicationListener<ContextRefre
                     LOG.error("ScheduleFireJob: missing applicationContext for schedule_id={}", scheduleId);
                     return;
                 }
-                DataSource dataSource = appCtx.getBean("dataSource", DataSource.class);
-                ExportScheduleDAO scheduleDao = new ExportScheduleDAO(dataSource);
-                ExportScheduleDAO.Row row = scheduleDao.findById(scheduleId);
-                if (row == null) {
-                    LOG.warn("ScheduleFireJob: schedule_id={} not found; was it deleted?", scheduleId);
-                    return;
-                }
-                if (!row.active) {
-                    LOG.info("ScheduleFireJob: schedule_id={} is inactive; skipping", scheduleId);
-                    return;
-                }
-                // Enqueue as if the creator had hit POST /export.
-                ExportJobDAO jobDao = new ExportJobDAO(dataSource);
-                long jobId = jobDao.insertQueued(datasetId, format, row.createdBy);
-
-                Instant now = Instant.now();
-                Instant next = null;
-                try {
-                    CronExpression ce = new CronExpression(cron);
-                    Date nextDate = ce.getNextValidTimeAfter(new Date());
-                    next = nextDate == null ? null : nextDate.toInstant();
-                } catch (Exception e) {
-                    // cron was validated on POST, so this shouldn't happen
-                    LOG.warn("Cron '{}' rejected at fire time: {}", cron, e.getMessage());
-                }
-                scheduleDao.stampRun(scheduleId, jobId, now, next);
-                LOG.info("ScheduleFireJob: schedule_id={} fired -> queued export_job id={}",
-                        scheduleId, jobId);
+                fire(appCtx.getBean("dataSource", DataSource.class), scheduleId);
             } catch (Throwable t) { // NOSONAR
                 LOG.error("ScheduleFireJob: schedule_id=" + scheduleId + " failed", t);
             }
+        }
+
+        /**
+         * One tick of a schedule: queue an export as if the schedule's
+         * creator had asked for one, and stamp the run on the schedule.
+         *
+         * <p>The row, not the trigger's job data, says what to export. An
+         * edit re-registers the trigger, but should that fail the row
+         * still wins, and a deleted or paused schedule queues nothing even
+         * if a trigger outlived the change.
+         *
+         * <p>The creator is authorised again on every tick, as a request of
+         * theirs would be: an account that was removed, locked or disabled,
+         * or that no longer holds a role allowed to export in the dataset's
+         * study, queues nothing. The schedule itself is left as it is, so it
+         * runs again if the access comes back.
+         *
+         * @return the queued {@code export_job} id, or {@code -1} when the
+         *         schedule no longer runs or the insert failed
+         */
+        private static long fire(DataSource dataSource, long scheduleId) {
+            ExportScheduleDAO scheduleDao = new ExportScheduleDAO(dataSource);
+            ExportScheduleDAO.Row row = scheduleDao.findById(scheduleId);
+            if (row == null) {
+                LOG.warn("ScheduleFireJob: schedule_id={} not found; was it deleted?", scheduleId);
+                return -1L;
+            }
+            if (!row.active || !row.enabled) {
+                LOG.info("ScheduleFireJob: schedule_id={} is {}; skipping",
+                        scheduleId, row.active ? "paused" : "inactive");
+                return -1L;
+            }
+            String refusal = creatorMayNotExport(dataSource, row);
+            if (refusal != null) {
+                LOG.warn("ScheduleFireJob: schedule_id={} skipped: its creator (user_id={}) {}",
+                        scheduleId, row.createdBy, refusal);
+                return -1L;
+            }
+            // Enqueue as if the creator had hit POST /export, tagged with the
+            // schedule so the worker can mail its contact address.
+            long jobId = new ExportJobDAO(dataSource)
+                    .insertQueued(row.datasetId, row.format, row.createdBy, row.id);
+
+            Instant next = nextFireTime(row.cronExpression);
+            scheduleDao.stampRun(scheduleId, jobId, Instant.now(), next);
+            LOG.info("ScheduleFireJob: schedule_id={} fired -> queued export_job id={}",
+                    scheduleId, jobId);
+            return jobId;
+        }
+
+        /**
+         * Why the schedule's creator may not export its dataset now, or
+         * {@code null} if they may: the account is usable, and they are a
+         * sysadmin or hold an active export role on the dataset's study or
+         * on the study it is a site of. The same predicate the export
+         * endpoints apply to a request.
+         */
+        private static String creatorMayNotExport(DataSource dataSource, ExportScheduleDAO.Row row) {
+            UserAccountDAO users = new UserAccountDAO(dataSource);
+            UserAccountBean creator = users.findByPK(row.createdBy);
+            if (creator == null || creator.getId() == 0) return "no longer exists";
+            Status status = creator.getStatus();
+            if (status == null || status.isDeleted() || status.isLocked()) return "is removed or locked";
+            if (Boolean.FALSE.equals(creator.getEnabled())
+                    || Boolean.FALSE.equals(creator.getAccountNonLocked())) {
+                return "is disabled or locked";
+            }
+            if (creator.isSysAdmin()) return null;
+
+            DatasetBean ds = (DatasetBean) new DatasetDAO(dataSource).findByPK(row.datasetId);
+            if (ds == null || ds.getId() == 0) return "has no dataset to export";
+            StudyBean study = (StudyBean) new StudyDAO(dataSource).findByPK(ds.getStudyId());
+            int parentId = study == null ? 0 : study.getParentStudyId();
+            for (StudyUserRoleBean grant : users.findAllRolesByUserName(creator.getName())) {
+                if (grant == null || grant.getStatus() == null
+                        || grant.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                boolean onStudy = grant.getStudyId() == ds.getStudyId()
+                        || (parentId > 0 && grant.getStudyId() == parentId);
+                if (onStudy && DatasetsApiController.roleMayExportData(creator, grant)) return null;
+            }
+            return "no longer holds a role that may export in the dataset's study";
         }
     }
 }

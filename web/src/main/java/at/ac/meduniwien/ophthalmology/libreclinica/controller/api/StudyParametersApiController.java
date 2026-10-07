@@ -51,7 +51,9 @@ import org.springframework.web.bind.annotation.RestController;
  * since OC 2.5 (subject-id generation, DOB collection, discrepancy
  * management, interviewer/date defaults, randomization, participant
  * portal etc.) so DMs can configure these from the SPA without
- * bouncing to the legacy {@code /CreateSubStudy} JSP.
+ * bouncing to the legacy {@code /CreateSubStudy} JSP. The participant
+ * portal is not part of this build, so {@code participantPortal} is
+ * reported but no longer written.
  *
  * <h2>Auth model</h2>
  * <ul>
@@ -124,8 +126,6 @@ public class StudyParametersApiController {
     private static final Set<String> BOOL_VALUES = Set.of("true", "false");
     private static final Set<String> REQUIRED_OPTIONAL_NOTUSED =
             Set.of("required", "optional", "not_used");
-    private static final Set<String> REQUIRED_OPTIONAL =
-            Set.of("required", "optional");
     private static final Set<String> BLANK_PREPOPULATED =
             Set.of("blank", "pre-populated");
     private static final Set<String> SUBJECT_ID_GEN =
@@ -169,6 +169,8 @@ public class StudyParametersApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
+        ResponseEntity<?> notYours = StudyAdminAuthorization.refuseUnlessMayReadStudy(me, target, studyOid, dataSource);
+        if (notYours != null) return notYours;
         Map<String, String> values = loadHandles(target.getId());
         return ResponseEntity.ok(toDto(studyOid, values));
     }
@@ -408,7 +410,6 @@ public class StudyParametersApiController {
         if (body.interviewDateEditable() != null)   out.put("interviewDateEditable",   body.interviewDateEditable());
         if (body.secondaryLabelViewable() != null)  out.put("secondaryLabelViewable",  body.secondaryLabelViewable());
         if (body.adminForcedReasonForChange() != null) out.put("adminForcedReasonForChange", body.adminForcedReasonForChange());
-        if (body.participantPortal() != null)       out.put("participantPortal",       body.participantPortal());
         if (body.randomization() != null)           out.put("randomization",           body.randomization());
         return out;
     }
@@ -439,7 +440,6 @@ public class StudyParametersApiController {
         checkEnum(body.interviewDateEditable(),   "interviewDateEditable",   BOOL_VALUES, out);
         checkEnum(body.secondaryLabelViewable(),  "secondaryLabelViewable",  BOOL_VALUES, out);
         checkEnum(body.adminForcedReasonForChange(), "adminForcedReasonForChange", BOOL_VALUES, out);
-        checkEnum(body.participantPortal(),       "participantPortal",       ENABLED_DISABLED, out);
         checkEnum(body.randomization(),           "randomization",           ENABLED_DISABLED, out);
         return out;
     }

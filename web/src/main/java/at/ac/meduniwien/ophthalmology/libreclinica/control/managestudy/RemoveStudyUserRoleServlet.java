@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -28,7 +30,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author jxu
  */
-@SuppressWarnings("all")
 public class RemoveStudyUserRoleServlet extends SecureController {
 
 	private static final long serialVersionUID = 9002693250126772488L;
@@ -50,6 +51,12 @@ public class RemoveStudyUserRoleServlet extends SecureController {
         throw new InsufficientPermissionException(Page.LIST_USER_IN_STUDY_SERVLET, resexception.getString("not_study_director"), "1");
     }
 
+    /** GET shows the confirmation; removing the role takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
 
@@ -65,6 +72,8 @@ public class RemoveStudyUserRoleServlet extends SecureController {
         } else {
 
             String action = request.getParameter("action");
+            // the role's study (site) must be the session's study or one of its sites
+            assertRecordInScope(new FormProcessor(request).getInt("studyId"));
             UserAccountBean user = udao.findByUserName(name);
 
             if ("confirm".equalsIgnoreCase(action)) {

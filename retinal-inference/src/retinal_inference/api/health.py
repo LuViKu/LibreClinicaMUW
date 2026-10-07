@@ -59,7 +59,10 @@ def _gpu_name(device: str | None) -> str | None:
 def health() -> HealthResponse:
     adapter = get_adapter()
     # Read through the module so reload_settings() (tests) is honoured.
-    device = _config.settings.apptainer_gpu_device
+    cfg = _config.settings
+    slurm = cfg.slurm_mode
+    # In SLURM mode no GPU is pinned: SLURM places each job.
+    device = None if slurm else cfg.apptainer_gpu_device
     return HealthResponse(
         status="ok",
         adapter=type(adapter).__name__.removesuffix("Adapter").lower(),
@@ -68,4 +71,8 @@ def health() -> HealthResponse:
         node=socket.gethostname().split(".", 1)[0] or None,
         gpu_device=device,
         gpu_name=_gpu_name(device),
+        mode="slurm" if slurm else "direct",
+        max_concurrent_runs=cfg.effective_max_concurrent_runs,
+        slurm_partition=cfg.apptainer_slurm_partition if slurm else None,
+        slurm_gres=cfg.apptainer_slurm_gres if slurm else None,
     )

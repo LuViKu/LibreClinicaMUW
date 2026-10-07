@@ -263,6 +263,60 @@ public class SystemHealthApiController {
         return ResponseEntity.accepted().body(Map.of("scanning", true, "started", started));
     }
 
+    /* ====================================================================== */
+    /* De-identification scan (layer 3)                                       */
+    /* ====================================================================== */
+
+    /** Null (hand-built controllers) answers as "not available". */
+    private DeidentificationScanner deidScanner;
+
+    @Autowired(required = false)
+    void setDeidentificationScanner(DeidentificationScanner deidScanner) {
+        this.deidScanner = deidScanner;
+    }
+
+    @Operation(operationId = "deidentificationStatus",
+               summary = "The newest de-identification scan of stored files and ingest rows, and its findings")
+    @GetMapping(value = "/deidentification", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deidentification(HttpSession session) {
+        ResponseEntity<?> guard = requireSysadmin(session);
+        if (guard != null) return guard;
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("required", deidScanner != null && deidScanner.isRequired());
+        body.put("running", deidScanner != null && deidScanner.isRunning());
+        DeidentificationScanner.Report r = deidScanner == null ? null : deidScanner.last();
+        if (r == null) {
+            body.put("lastScan", null);
+            return ResponseEntity.ok(body);
+        }
+        Map<String, Object> last = new LinkedHashMap<>();
+        last.put("startedAt", r.startedAt().toString());
+        last.put("finishedAt", r.finishedAt().toString());
+        last.put("trigger", r.trigger());
+        last.put("e2eFilesChecked", r.e2eFilesChecked());
+        last.put("dicomFilesChecked", r.dicomFilesChecked());
+        last.put("rowsChecked", r.rowsChecked());
+        last.put("findingCount", r.findingCount());
+        // A scan that could not check something is not a clean scan.
+        last.put("incomplete", r.incomplete());
+        last.put("findings", r.findings());
+        body.put("lastScan", last);
+        return ResponseEntity.ok(body);
+    }
+
+    @Operation(operationId = "scanDeidentification",
+               summary = "Re-verify every stored E2E and DICOM file and the ingest rows now (202)")
+    @PostMapping(value = "/deidentification/scan", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> scanDeidentification(HttpSession session) {
+        ResponseEntity<?> guard = requireSysadmin(session);
+        if (guard != null) return guard;
+        if (deidScanner == null) {
+            return ResponseEntity.status(503).body(Map.of("message", "the de-identification scan is not available"));
+        }
+        boolean started = deidScanner.requestScan();
+        return ResponseEntity.accepted().body(Map.of("running", true, "started", started));
+    }
+
     private static Timestamp latestSample(Connection c) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT max(sampled_at) FROM storage_usage_sample WHERE store_key <> ?")) {
@@ -302,8 +356,8 @@ public class SystemHealthApiController {
             stores.add(m);
 
             if (s.fsKey() != null && s.fsTotal() != null) {
-                storesByFs.computeIfAbsent(s.fsKey(), k -> new ArrayList<>()).add(s.key());
-                filesystems.computeIfAbsent(s.fsKey(), k -> filesystem(s, b));
+                storesByFs.computeIfAbsent(s.fsKey(), _ -> new ArrayList<>()).add(s.key());
+                filesystems.computeIfAbsent(s.fsKey(), _ -> filesystem(s, b));
             }
         }
         for (Map.Entry<String, Map<String, Object>> e : filesystems.entrySet()) {

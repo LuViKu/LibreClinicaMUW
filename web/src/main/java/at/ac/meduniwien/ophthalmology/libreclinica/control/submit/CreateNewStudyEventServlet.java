@@ -21,6 +21,8 @@ import java.util.Locale;
 
 import javax.sql.DataSource;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -41,6 +43,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 
 @SuppressWarnings("all")
 
@@ -86,6 +89,8 @@ public class CreateNewStudyEventServlet extends SecureController {
 
     private FormProcessor fp;
 
+    private StudyTreeScope studyTreeScope;
+
     public final static String[] INPUT_STUDY_EVENT_DEFINITION_SCHEDULED =
         { "studyEventDefinitionScheduled0", "studyEventDefinitionScheduled1", "studyEventDefinitionScheduled2", "studyEventDefinitionScheduled3" };
     public final static String[] INPUT_SCHEDULED_LOCATION = { "locationScheduled0", "locationScheduled1", "locationScheduled2", "locationScheduled3" };
@@ -93,6 +98,12 @@ public class CreateNewStudyEventServlet extends SecureController {
     public final static String[] INPUT_ENDDATE_PREFIX_SCHEDULED = { "endScheduled0", "endScheduled1", "endScheduled2", "endScheduled3" };
     public final static String[] DISPLAY_SCHEDULED = { "display0", "display1", "display2", "display3" };
     public final static int ADDITIONAL_SCHEDULED_NUM = 4;
+
+    /** GET shows the form; scheduling the event (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
+    }
 
     @Override
     protected void processRequest() throws Exception {
@@ -104,7 +115,7 @@ public class CreateNewStudyEventServlet extends SecureController {
         // input from manage subject matrix, user has specified definition id
         int studyEventDefinitionId = fp.getInt(INPUT_STUDY_EVENT_DEFINITION);
 
-        // NOTE: make this sensitive to permissions
+        // mayProceed has refused a subject id outside the current study tree
         StudySubjectDAO sdao = new StudySubjectDAO(sm.getDataSource());
         StudySubjectBean ssb;
         if (studySubjectId <= 0) {
@@ -128,7 +139,7 @@ public class CreateNewStudyEventServlet extends SecureController {
         // or remove it altogether tbh 10/2009
         // ArrayList subjects = sdao.findAllActiveByStudyOrderByLabel(currentStudy);
 
-        // NOTE: make this sensitive to permissions
+        // mayProceed has refused a definition id the current study does not schedule from
         StudyEventDefinitionDAO seddao = new StudyEventDefinitionDAO(sm.getDataSource());
 
         StudyBean studyWithEventDefinitions = currentStudy;
@@ -612,11 +623,39 @@ public class CreateNewStudyEventServlet extends SecureController {
         String noAccessMessage = respage.getString("not_create_new_event") + " " + respage.getString("change_study_contact_sysadmin");
 
         if (SubmitDataServlet.maySubmitData(ub, currentRole)) {
+            mayUseRequestedRecords();
             return;
         }
 
         addPageMessage(noAccessMessage);
         throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName, "1");
+    }
+
+    /**
+     * The study subject and event definition the request names by id must be
+     * ones the session's current study works with: the subject in the study or
+     * one of its sites, the definition among those the study schedules from.
+     * The form shows both before anything validates them.
+     */
+    private void mayUseRequestedRecords() throws InsufficientPermissionException {
+        FormProcessor params = new FormProcessor(request);
+        int studySubjectId = params.getInt(INPUT_STUDY_SUBJECT_ID_FROM_VIEWSUBJECT);
+        if (studySubjectId > 0 && !studyTreeScope().containsStudySubject(currentStudy, studySubjectId)) {
+            addPageMessage(respage.getString("required_study_subject_not_belong"));
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
+        }
+        int definitionId = params.getInt(INPUT_STUDY_EVENT_DEFINITION);
+        if (definitionId > 0 && !studyTreeScope().containsEventDefinition(currentStudy, definitionId)) {
+            addPageMessage(resexception.getString("not_select_valid_entity_current_study"));
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
+        }
+    }
+
+    private StudyTreeScope studyTreeScope() {
+        if (studyTreeScope == null) {
+            studyTreeScope = new StudyTreeScope(sm.getDataSource());
+        }
+        return studyTreeScope;
     }
 
     /**

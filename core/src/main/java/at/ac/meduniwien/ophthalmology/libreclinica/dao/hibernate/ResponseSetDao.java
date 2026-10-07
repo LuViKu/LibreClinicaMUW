@@ -15,18 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseSet;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
 
     @Override
@@ -42,12 +31,11 @@ public class ResponseSetDao extends AbstractDomainDao<ResponseSet> {
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
     public List<ResponseSet> findAllByItemId(int itemId) {
         String query = "select rs.* from item_form_metadata ifm join response_set rs on ifm.response_set_id = rs.response_set_id " + "where ifm.item_id = "
                 + itemId;
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ResponseSet.class);
-        return (List<ResponseSet>) q.getResultList();
+        NativeQuery<ResponseSet> q = getCurrentSession().createNativeQuery(query, ResponseSet.class);
+        return q.getResultList();
     }
 
 }

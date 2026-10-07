@@ -17,23 +17,24 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
  * Phase E.6 — thin XSSF helper for the audit-export endpoint.
  *
- * <p>Wraps {@link XSSFWorkbook} with a small, opinionated API:
- * a single sheet, an optional bold header row, and freeze-pane
+ * <p>Wraps a streaming {@link SXSSFWorkbook} with a small, opinionated
+ * API: a single sheet, an optional bold header row, and freeze-pane
  * defaults that match the SPA's audit-log UX (header row pinned at
  * the top, columns auto-sized at finish-time).
  *
- * <p>Why XSSF, not SXSSF (streamed): audit-log queries are capped at
- * 500 rows (see {@link
- * at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuditApiController#STUDY_SCOPED_AUDIT_SQL_TEMPLATE}),
- * so the entire workbook fits comfortably in heap. Streaming would
- * add complexity (auto-sizing requires holding the rows anyway).
+ * <p>Why SXSSF (streamed): the audit export writes every row of the
+ * trail that matches its filters, not the newest 500 as it did
+ * until 2026-09-30. SXSSF keeps {@value #ROW_WINDOW} rows in heap and
+ * flushes the rest to a temporary file; the columns it auto-sizes are
+ * tracked as rows are written, so the widths still cover every row.
  *
  * <h2>Usage</h2>
  *
@@ -52,12 +53,16 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
  */
 public final class XlsxWorkbookBuilder implements AutoCloseable {
 
-    private final XSSFWorkbook workbook;
-    private final Sheet sheet;
+    /** Rows SXSSF keeps in memory; older rows are flushed to its temporary file. */
+    static final int ROW_WINDOW = 200;
+
+    private final SXSSFWorkbook workbook;
+    private final SXSSFSheet sheet;
     private final CellStyle headerStyle;
     private int rowIdx;
     private int headerCellCount;
 
+    @SuppressWarnings("resource") // the template workbook is wrapped by the SXSSFWorkbook, which close() releases
     public XlsxWorkbookBuilder(String sheetName) {
         // Phase E.6 (POI 5.3.0 + JDK 21 + Saxon 8.7 on classpath):
         // Saxon 8.7 (pulled in by LibreClinica-core for ODM XSLT) wins
@@ -75,19 +80,21 @@ public final class XlsxWorkbookBuilder implements AutoCloseable {
         // XSSFWorkbook normalises sheet names (max 31 chars, no
         // special chars). Pass the raw caller string through
         // WorkbookUtil to surface invalid names cleanly.
-        this.workbook = new XSSFWorkbook();
+        XSSFWorkbook template = new XSSFWorkbook();
         // Phase E.6: stamp explicit Dublin Core metadata so the
         // marshaller writes deterministic values instead of relying
         // on now()-based defaults (also helps reproducible-builds).
         try {
-            workbook.getProperties().getCoreProperties().setCreator("LibreClinicaMUW");
-            workbook.getProperties().getCoreProperties().setTitle("LibreClinica export");
+            template.getProperties().getCoreProperties().setCreator("LibreClinicaMUW");
+            template.getProperties().getCoreProperties().setTitle("LibreClinica export");
         } catch (Exception ignored) {
             // best-effort metadata — failure here must not abort the export
         }
+        this.workbook = new SXSSFWorkbook(template, ROW_WINDOW);
         String safe = org.apache.poi.ss.util.WorkbookUtil
                 .createSafeSheetName(sheetName == null ? "Sheet1" : sheetName);
         this.sheet = workbook.createSheet(safe);
+        this.sheet.trackAllColumnsForAutoSizing();
         this.headerStyle = createHeaderStyle(workbook);
     }
 
@@ -170,8 +177,10 @@ public final class XlsxWorkbookBuilder implements AutoCloseable {
         return rowIdx == 0 ? 0 : Math.max(rowIdx - 1, 0);
     }
 
+    /** Releases the workbook and deletes SXSSF's temporary file. */
     @Override
     public void close() throws IOException {
+        workbook.dispose();
         workbook.close();
     }
 

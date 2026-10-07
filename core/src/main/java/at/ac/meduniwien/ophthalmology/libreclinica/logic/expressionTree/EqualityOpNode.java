@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.logic.expressionTree;
 
+import java.math.BigDecimal;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 
 /**
@@ -35,22 +37,10 @@ public class EqualityOpNode extends ExpressionNode {
 
     @Override
     String testCalculate() throws OpenClinicaSystemException {
-        String x = null;
-        String y = null;
         String l = left.testValue();
         String r = right.testValue();
-        try {
-            Float fx = Float.valueOf(l);
-            Float fy = Float.valueOf(r);
-            x = fx.toString();
-            y = fy.toString();
-        } catch (NumberFormatException nfe) {
-            // Don't do anything cause we were just testing above.
-        }
-        if (x == null && y == null) {
-            x = String.valueOf(l);
-            y = String.valueOf(r);
-        }
+        String[] operands = legacyOperands(l, r);
+        String y = operands[1];
     	boolean isEventStatusParamExist = left.getNumber().endsWith(STATUS);
         if( (isEventStatusParamExist) 
         	&& !y.equals("not_scheduled")              
@@ -63,32 +53,65 @@ public class EqualityOpNode extends ExpressionNode {
         	&& !y.equals("scheduled")              
                 )
         	  throw new OpenClinicaSystemException("OCRERR_0038", new String[] { y });
-        	
 
-        return calc(x, y);
+
+        return compare(l, r);
     }
 
     @Override
     Object calculate() throws OpenClinicaSystemException {
-        String x = null;
-        String y = null;
-        String l = (String) left.value();
-        String r = (String) right.value();
+        return compare((String) left.value(), (String) right.value());
+    }
+
+    /**
+     * Two numbers are equal when their values are, exactly: compared as
+     * {@link BigDecimal}, so {@code 1.0 eq 1} holds while
+     * {@code 123456789 eq 123456790} does not. Comparing them as
+     * {@link Float}, as this did, made any two numbers equal that agree in
+     * their first seven or so digits, which a long numeric code or a large
+     * count does. Everything else compares as before ({@link #legacyOperands}):
+     * text as text, {@code contains} on the operands' text.
+     */
+    private String compare(String l, String r) throws OpenClinicaSystemException {
+        if (op != Operator.CONTAINS) {
+            BigDecimal dl = decimal(l);
+            BigDecimal dr = decimal(r);
+            if (dl != null && dr != null) {
+                boolean equal = dl.compareTo(dr) == 0;
+                return String.valueOf(op == Operator.EQUAL ? equal : !equal);
+            }
+        }
+        String[] operands = legacyOperands(l, r);
+        return calc(operands[0], operands[1]);
+    }
+
+    /** A plain decimal number, or null; an exponent beyond ±1000 is left to the Float reading. */
+    private static BigDecimal decimal(String s) {
+        if (s == null || s.trim().isEmpty()) {
+            return null;
+        }
         try {
-            Float fx = Float.valueOf(l);
-            Float fy = Float.valueOf(r);
-            x = fx.toString();
-            y = fy.toString();
+            BigDecimal d = new BigDecimal(s.trim());
+            return Math.abs(d.scale()) > 1000 ? null : d;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * The operands as this compared them before: both read as {@link Float}
+     * where both are numbers to it (which also covers {@code NaN} and a
+     * trailing {@code f} or {@code d}), else as text.
+     */
+    private static String[] legacyOperands(String l, String r) {
+        try {
+            if (l != null && r != null) {
+                return new String[] { Float.valueOf(l).toString(), Float.valueOf(r).toString() };
+            }
         } catch (NumberFormatException nfe) {
-            // Don't do anything cause we were just testing above.
+            // Not both numbers: compared as text.
         }
-        if (x == null && y == null) {
-            x = String.valueOf(l);
-            y = String.valueOf(r);
-        }
-
-        	return calc(x, y);
-
+        return new String[] { String.valueOf(l), String.valueOf(r) };
     }
 
     private String calc(String x, String y) throws OpenClinicaSystemException {

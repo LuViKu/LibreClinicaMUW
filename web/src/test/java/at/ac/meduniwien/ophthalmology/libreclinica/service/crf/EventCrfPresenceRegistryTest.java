@@ -102,6 +102,7 @@ class EventCrfPresenceRegistryTest {
         assertEquals(1, fresh.get().userId());
     }
 
+    @SuppressWarnings("resource") // the pool is shut down in finally (shutdownNow)
     @Test
     void concurrentHeartbeatsDontLoseUpdates() throws Exception {
         EventCrfPresenceRegistry r = new EventCrfPresenceRegistry();

@@ -58,7 +58,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author Krikor Krumlian 10/26/2006
  */
-@SuppressWarnings("all")
 public class PrintDataEntryServlet extends DataEntryServlet {
 
     /**
@@ -113,6 +112,10 @@ public class PrintDataEntryServlet extends DataEntryServlet {
             request.setAttribute("isInternetExplorer", "true");
         }
 
+        if (eventCRFId > 0 && !new at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope(getDataSource()).containsEventCrf(currentStudy, eventCRFId)) {
+            addPageMessage(respage.getString("required_event_CRF_belong"), request);
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("event_CRF_not_belong_current_study"), "1");
+        }
         if (eventCRFId == 0) {
             ecb = new EventCRFBean();
             // super.ecb.setCRFVersionId(sb.getCRFVersionId());

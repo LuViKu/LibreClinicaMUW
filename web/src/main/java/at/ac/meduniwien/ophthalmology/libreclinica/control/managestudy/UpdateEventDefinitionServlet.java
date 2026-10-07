@@ -15,6 +15,8 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NullValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
@@ -78,6 +80,13 @@ public class UpdateEventDefinitionServlet extends SecureController {
         throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
     }
 
+    /** GET shows the form; the confirmation and the update take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
+    }
+
     @Override
     public void processRequest() throws Exception {
         String action = request.getParameter("action");
@@ -110,7 +119,6 @@ public class UpdateEventDefinitionServlet extends SecureController {
         StudyEventDefinitionBean sed = (StudyEventDefinitionBean) session.getAttribute("definition");
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
         String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-        if (participateFormStatus.equals("enabled")) baseUrl();
 
         request.setAttribute("participateFormStatus",participateFormStatus );
 

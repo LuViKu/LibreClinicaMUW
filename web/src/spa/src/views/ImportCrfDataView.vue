@@ -16,7 +16,7 @@ import type { ImportCrfPreviewRow, ImportOverwriteMode } from '@/types/importCrf
 const { t } = useI18n()
 
 const store = useImportCrfStore()
-const { preview, extraRows, commitResult, isUploading, isCommitting, error, tokenExpired } = storeToRefs(store)
+const { preview, extraRows, commitResult, isUploading, isCommitting, error, tokenExpired, commitIssues } = storeToRefs(store)
 
 const step = ref(0)
 
@@ -279,6 +279,12 @@ function variantFor(s: ImportCrfPreviewRow['status']): 'success' | 'warning' | '
                 <dt class="text-left text-muw-teal-700">{{ t('importCrf.commit.discrepancyNotes') }}</dt>
                 <dd class="text-right font-mono font-semibold">{{ commitResult.discrepancyNotes }}</dd>
               </dl>
+              <div v-if="commitResult.ruleWarnings?.length" class="mt-4 text-left max-w-md mx-auto">
+                <h3 class="text-xs font-semibold text-muw-teal-900">{{ t('importCrf.commit.ruleWarningsHeading') }}</h3>
+                <ul class="mt-1 text-xs text-muw-teal-800 space-y-0.5">
+                  <li v-for="(w, idx) in commitResult.ruleWarnings" :key="idx" class="font-mono">{{ w }}</li>
+                </ul>
+              </div>
               <button
                 class="mt-4 px-4 py-1.5 text-xs bg-muw-teal-700 text-white rounded-md hover:bg-muw-teal-800 font-medium"
                 @click="startOver"
@@ -288,6 +294,9 @@ function variantFor(s: ImportCrfPreviewRow['status']): 'success' | 'warning' | '
             <div v-else-if="error" class="rounded-muw border border-rose-200 bg-rose-50 p-6 text-center">
               <h2 class="text-sm font-semibold mt-3 text-rose-900">{{ t('importCrf.commit.failedHeading') }}</h2>
               <p class="text-xs text-rose-700 mt-1">{{ error }}</p>
+              <ul v-if="commitIssues.length" class="mt-2 text-xs text-rose-800 space-y-0.5 text-left max-w-xl mx-auto">
+                <li v-for="(i, idx) in commitIssues" :key="idx" class="font-mono">{{ i }}</li>
+              </ul>
               <div class="mt-4 flex justify-center gap-3">
                 <button class="text-xs text-slate-500 hover:text-slate-700" @click="step = 2">← {{ t('common.back') }}</button>
                 <button

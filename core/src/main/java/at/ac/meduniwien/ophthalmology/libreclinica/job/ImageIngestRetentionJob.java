@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.context.ApplicationContext;
+import org.springframework.lang.NonNull;
 import org.springframework.scheduling.quartz.QuartzJobBean;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
@@ -33,7 +34,7 @@ public class ImageIngestRetentionJob extends QuartzJobBean {
     private static final Logger LOG = LoggerFactory.getLogger(ImageIngestRetentionJob.class);
 
     @Override
-    protected void executeInternal(JobExecutionContext context) throws JobExecutionException {
+    protected void executeInternal(@NonNull JobExecutionContext context) throws JobExecutionException {
         DataSource ds = null;
         try {
             ApplicationContext appContext =

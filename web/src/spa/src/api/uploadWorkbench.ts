@@ -16,6 +16,7 @@ import type {
 } from '@/api/octPortal'
 import { sha256OfFile } from '@/api/octPortal'
 import { listDueVisits } from '@/api/events'
+import { apiGet } from '@/api/client'
 
 export type { EventCandidate, PublicStudyEvent, PublicSubjectHit, ResolveCandidate, ResolveScanResult }
 export { sha256OfFile }
@@ -171,6 +172,21 @@ export function localIsoToday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/**
+ * The study labels of the subjects the signed-in user can see in the active
+ * study (the subject matrix endpoint is scoped by session and active study).
+ * The de-identifying upload matches a file's header patient ID against this
+ * list LOCALLY — the header value is never sent anywhere.
+ */
+export async function listVisibleSubjectLabels(): Promise<string[]> {
+  const subjects = await apiGet<Array<{ id?: string | null }>>('/pages/api/v1/subjects')
+  const labels: string[] = []
+  for (const s of subjects ?? []) {
+    if (typeof s.id === 'string' && s.id.length > 0) labels.push(s.id)
+  }
+  return labels
+}
+
 /* ---------------- the upload ---------------- */
 
 export interface CommitRequest {
@@ -187,6 +203,14 @@ export interface CommitRequest {
   park?: boolean
   /** Image only: which camera, when the page knows. */
   device?: string | null
+  /**
+   * De-identifying deployment: the operator confirmed the preview shows no
+   * patient name/ID, and this is the SHA-256 (hex) of the file AFTER the
+   * browser stripped it. The server verifies the hash against the bytes it
+   * received and records user + time.
+   */
+  deidConfirmed?: boolean
+  deidSha256?: string | null
 }
 
 export interface CommitResponse {
@@ -231,6 +255,10 @@ export function commitFile(
   if (req.studyEventId != null) form.append('studyEventId', String(req.studyEventId))
   if (req.park) form.append('park', 'true')
   if (req.device) form.append('device', req.device)
+  if (req.deidConfirmed) {
+    form.append('deidConfirmed', 'true')
+    if (req.deidSha256) form.append('deidSha256', req.deidSha256)
+  }
 
   return new Promise<CommitResponse>((resolve, reject) => {
     const xhr = new XMLHttpRequest()

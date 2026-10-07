@@ -78,7 +78,7 @@ public class ScoreValidator {
         if (exp.contains("getexternalvalue") || exp.contains("getExternalValue")) {
         	// System.out.println("^^^ got to first error block ^^^");
             errors = processExternalValues(exp);
-            if (errors != null && errors.length() > 1)
+            if (errors.length() > 1)
                 return false;
                 
             return true;
@@ -202,7 +202,7 @@ public class ScoreValidator {
                 + "; ");
         }
 
-        if (errors != null && errors.length() > 1)
+        if (errors.length() > 1)
             return false;
 
         return true;
@@ -399,7 +399,7 @@ public class ScoreValidator {
             }
         }
 
-        if (errors != null && errors.length() > 1)
+        if (errors.length() > 1)
             return false;
 
         return true;

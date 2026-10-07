@@ -31,6 +31,7 @@ import org.junit.rules.TemporaryFolder;
  * unmarshaller must refuse a DOCTYPE — and with it every entity declaration —
  * whichever JAXP parser wins the service lookup; plain documents still bind.
  */
+@SuppressWarnings("resource") // in-memory streams and objects only; nothing here holds an OS resource
 public class OdmJaxbContextXxeTest {
 
     private static final String SECRET = "TOP-SECRET-MARKER-9d2e";
@@ -116,19 +117,6 @@ public class OdmJaxbContextXxeTest {
         try {
             jaxb.unmarshalRulesImport(utf8(xml));
             fail("a rules import with a DOCTYPE was accepted");
-        } catch (IllegalStateException expected) {
-            // refused
-        }
-    }
-
-    @Test
-    public void xformWithDoctypeIsRefused() {
-        String xml = "<?xml version=\"1.0\"?>\n"
-                + "<!DOCTYPE html [<!ENTITY t \"expanded\">]>\n"
-                + "<h:html xmlns:h=\"http://www.w3.org/1999/xhtml\"><h:head><h:title>&t;</h:title></h:head></h:html>";
-        try {
-            jaxb.unmarshalXform(xml);
-            fail("an XForm with a DOCTYPE was accepted");
         } catch (IllegalStateException expected) {
             // refused
         }

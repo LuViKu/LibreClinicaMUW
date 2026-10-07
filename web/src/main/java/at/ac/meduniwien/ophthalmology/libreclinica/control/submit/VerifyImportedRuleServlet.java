@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 import java.text.MessageFormat;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
@@ -32,6 +34,12 @@ public class VerifyImportedRuleServlet extends SecureController {
 
     Locale locale;
     RuleSetServiceInterface ruleSetService;
+
+    /** GET shows the rules to verify; saving them (action=save) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"save".equalsIgnoreCase(request.getParameter("action"));
+    }
 
     @Override
     public void processRequest() throws Exception {

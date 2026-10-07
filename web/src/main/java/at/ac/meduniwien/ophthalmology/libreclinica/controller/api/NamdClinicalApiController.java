@@ -21,8 +21,14 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfWriteRules;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudyBindings;
 
@@ -172,7 +178,7 @@ public class NamdClinicalApiController {
         ResponseEntity<?> denied = access.guardSession(session);
         if (denied != null) return denied;
         Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
+        try (Connection _ = dataSource.getConnection()) {
             subjectStudyId = access.studyIdForStudySubject(studySubjectId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(
@@ -316,7 +322,7 @@ public class NamdClinicalApiController {
         ResponseEntity<?> denied = access.guardSession(session);
         if (denied != null) return denied;
         Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
+        try (Connection _ = dataSource.getConnection()) {
             subjectStudyId = access.studyIdForStudySubject(studySubjectId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(
@@ -364,12 +370,16 @@ public class NamdClinicalApiController {
                         } catch (SQLException ignored) {
                             m.put("eventDate", null);
                         }
+                        // null = never recorded. It used to default to false,
+                        // which the rule engine read as "no haemorrhage" and so
+                        // recommended EXTEND on an eye nobody had examined.
+                        // A recorded "false" still arrives as false below.
                         Map<String, Object> od = new LinkedHashMap<>();
-                        od.put("hemorrhage", false);
-                        od.put("bcvaLossAttributedToNamd", false);
+                        od.put("hemorrhage", null);
+                        od.put("bcvaLossAttributedToNamd", null);
                         Map<String, Object> os = new LinkedHashMap<>();
-                        os.put("hemorrhage", false);
-                        os.put("bcvaLossAttributedToNamd", false);
+                        os.put("hemorrhage", null);
+                        os.put("bcvaLossAttributedToNamd", null);
                         m.put("od", od);
                         m.put("os", os);
                         return m;
@@ -445,6 +455,9 @@ public class NamdClinicalApiController {
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) return roleRefusal;
 
         try (Connection c = dataSource.getConnection()) {
             c.setAutoCommit(false);
@@ -470,6 +483,13 @@ public class NamdClinicalApiController {
             ResponseEntity<?> visGuard = access.guardStudyVisibilityAllowingDeepLink(studyId, session,
                     "study_event " + studyEventId + " is outside your site visibility");
             if (visGuard != null) return visGuard;
+            StudyEventBean event = (StudyEventBean) new StudyEventDAO(dataSource).findByPK(studyEventId);
+            StudySubjectBean subject = (StudySubjectBean) new StudySubjectDAO(dataSource)
+                    .findByPK(event.getStudySubjectId());
+            ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource,
+                    (StudyBean) session.getAttribute("study"), subject, event, null,
+                    "saving clinical flags");
+            if (closed != null) return closed;
 
             // The visit CRF this study records flags on. P3.5: asked of the
             // study rather than assumed, falling back to the OID the nAMD
@@ -510,6 +530,16 @@ public class NamdClinicalApiController {
             }
             int eventCrfId = instance.eventCrfId();
 
+            // No change to data that is removed, locked or signed, at the
+            // CRF, visit, subject or study (EventCrfWriteRules).
+            EventCrfWriteRules.Refusal refusal = EventCrfWriteRules.refusal(c, eventCrfId);
+            if (refusal != null) {
+                c.rollback();
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "The visit CRF " + refusal.reason() + "; the flags were not saved",
+                        "code", "EVENT_CRF_" + refusal.name()));
+            }
+
             // Resolve item_ids for the four per-eye flag items on this CRF
             // version. An item the version does not carry is skipped rather
             // than created: a flag with nowhere to go means the CRF and the
@@ -534,10 +564,15 @@ public class NamdClinicalApiController {
             // Walk the body's per-eye maps + upsert each provided flag.
             Map<String, Object> od = castMap(body.get("od"));
             Map<String, Object> os = castMap(body.get("os"));
+            boolean changed = false;
             for (FlagRole role : flagRoles) {
                 Map<String, Object> eyeBody = "od".equals(role.eye()) ? od : os;
-                upsertFlag(c, itemIds, role.itemOid(), eyeBody, role.field(),
+                changed |= upsertFlag(c, itemIds, role.itemOid(), eyeBody, role.field(),
                         eventCrfId, currentUser.getId());
+            }
+            // A changed value ends the CRF's source data verification.
+            if (changed) {
+                EventCrfWriteRules.withdrawVerification(c, eventCrfId, currentUser.getId());
             }
 
             c.commit();
@@ -569,16 +604,22 @@ public class NamdClinicalApiController {
      * for these non-repeating items.
      *
      * <p>Skips silently when the CRF version doesn't carry that item
-     * (defensive — production installs may drift from the demo seed).
+     * (defensive — production installs may drift from the demo seed),
+     * and leaves a value that would not change alone. A flag is a
+     * person's entry, so the row it writes carries no machine provenance.
+     * The {@code item_data} triggers audit the change.
+     *
+     * @return whether the stored value changed
      */
-    private static void upsertFlag(Connection c, Map<String, Integer> itemIds,
-                                   String itemOid, Map<String, Object> eyeBody,
-                                   String bodyKey, int eventCrfId, int userId) throws SQLException {
+    private static boolean upsertFlag(Connection c, Map<String, Integer> itemIds,
+                                      String itemOid, Map<String, Object> eyeBody,
+                                      String bodyKey, int eventCrfId, int userId) throws SQLException {
         Integer itemId = itemIds.get(itemOid);
-        if (itemId == null) return;
-        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return;
+        if (itemId == null) return false;
+        if (eyeBody == null || !eyeBody.containsKey(bodyKey)) return false;
         Object raw = eyeBody.get(bodyKey);
         String value = raw instanceof Boolean ? String.valueOf(raw) : String.valueOf(raw);
+        if (value.equals(liveValue(c, itemId, eventCrfId))) return false;
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO item_data ("
                         + "  item_id, event_crf_id, status_id, value, "
@@ -588,12 +629,30 @@ public class NamdClinicalApiController {
                         + "SET value = EXCLUDED.value, "
                         + "    date_updated = now(), "
                         + "    update_id = EXCLUDED.owner_id, "
-                        + "    deleted = false")) {
+                        + "    deleted = false, "
+                        + "    source_kind = NULL, "
+                        + "    source_retinal_job_id = NULL, "
+                        + "    source_ingest_item_id = NULL")) {
             ps.setInt(1, itemId);
             ps.setInt(2, eventCrfId);
             ps.setString(3, value);
             ps.setInt(4, userId);
             ps.executeUpdate();
+        }
+        return true;
+    }
+
+    /** The value in the flag's row, or null when there is none or it was deleted. */
+    private static String liveValue(Connection c, int itemId, int eventCrfId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT value FROM item_data "
+                        + " WHERE item_id = ? AND event_crf_id = ? AND ordinal = 1 "
+                        + "   AND COALESCE(deleted, false) = false")) {
+            ps.setInt(1, itemId);
+            ps.setInt(2, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
         }
     }
 
@@ -627,7 +686,7 @@ public class NamdClinicalApiController {
                     "message", "CRT compute service is not wired in this context"));
         }
         Integer subjectStudyId;
-        try (Connection c = dataSource.getConnection()) {
+        try (Connection _ = dataSource.getConnection()) {
             subjectStudyId = access.studyIdForStudySubject(studySubjectId);
         } catch (SQLException sqlEx) {
             return ResponseEntity.internalServerError().body(Map.of(

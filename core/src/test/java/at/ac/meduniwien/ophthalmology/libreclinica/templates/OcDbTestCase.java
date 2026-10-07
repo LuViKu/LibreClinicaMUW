@@ -55,7 +55,9 @@ public abstract class OcDbTestCase extends DataSourceBasedDBTestCase {
 
     @Override
     protected IDataSet getDataSet() throws Exception {
-        return new FlatXmlDataSet(OcDbTestCase.class.getResourceAsStream(getTestDataFilePath()));
+        try (java.io.InputStream in = OcDbTestCase.class.getResourceAsStream(getTestDataFilePath())) {
+            return new FlatXmlDataSet(in);
+        }
     }
 
     @Override
@@ -71,7 +73,9 @@ public abstract class OcDbTestCase extends DataSourceBasedDBTestCase {
 
     private void loadProperties() {
         try {
-            properties.load(OcDbTestCase.class.getResourceAsStream(getPropertiesFilePath()));
+            try (java.io.InputStream in = OcDbTestCase.class.getResourceAsStream(getPropertiesFilePath())) {
+                properties.load(in);
+            }
         } catch (Exception ioExc) {
             logger.error("Properties does not able to load properly: ", ioExc);
         }

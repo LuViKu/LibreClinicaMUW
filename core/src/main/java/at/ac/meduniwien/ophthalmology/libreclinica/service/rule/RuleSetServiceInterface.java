@@ -31,7 +31,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ViewRuleAssignmentFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ViewRuleAssignmentSort;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBulkExecuteContainer;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBulkExecuteContainerTwo;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBasedViewContainer;
@@ -108,10 +107,12 @@ public interface RuleSetServiceInterface {
     public List<RuleSetRuleBean> getWithFilterAndSort(ViewRuleAssignmentFilter viewRuleAssignmentFilter, ViewRuleAssignmentSort viewRuleAssignmentSort,
             int rowStart, int rowEnd);
 
-    // . TODO: why are we including study but not using it in query
+    /**
+     * The rule set with this id if it belongs to {@code study} or, when
+     * {@code study} is a site, to its parent. Otherwise null, as for an id that
+     * does not exist.
+     */
     public abstract RuleSetBean getRuleSetById(StudyBean study, String id);
-
-    public abstract List<RuleSetRuleBean> getRuleSetById(StudyBean study, String id, RuleBean ruleBean);
 
     public abstract List<RuleSetBean> getRuleSetsByCrfAndStudy(CRFBean crfBean, StudyBean study);
 

@@ -1,0 +1,5 @@
+pages: 1
+--- page 1 ---
+M-001,available,S_DEFAULTS1,0,201,200,2020-10-06,2020-10-07,,,Query,Updated,Baseline
+visit,,Optical coherence tomography,initial data entry,,,CST_OD,"\u00D6dem, 312 \u00B5m
+\u2265 threshold",Reply 1,Checked against the source scan; value confirmed.,manual_dm,1

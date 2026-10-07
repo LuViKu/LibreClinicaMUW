@@ -684,15 +684,6 @@
        </td>
     </tr>
 	    
-    <c:if test="${portalURL!= '' && portalURL!= null}">   
-    <tr valign="top">
-        <td class="table_header_column"><fmt:message key="participant_portal" bundle="${resword}"/></td>
-        <td class="table_cell">
-            <fmt:message key="${studyToView.studyParameterConfig.participantPortal}" bundle="${resword}"/>
-       </td>
-      </tr>
-   </c:if>    
-
     <c:if test="${moduleManager!= '' && moduleManager!= null}">
     <tr valign="top">
         <td class="table_header_column"><fmt:message key="randomization" bundle="${resword}"/></td>

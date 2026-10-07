@@ -19,7 +19,14 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const emit = defineEmits<{ 'confirm-all': [] }>()
+const emit = defineEmits<{ 'confirm-all': []; 'tick-all-previews': [checked: boolean] }>()
+
+/** De-identifying deployment: rows waiting for their preview confirmation. */
+const deidRows = computed(() => props.rows.filter((r) => r.needsDeidConfirm && r.state === 'suggested'))
+const allTicked = computed(() => deidRows.value.length > 0 && deidRows.value.every((r) => r.deidConfirmed === true))
+const confirmable = computed(
+  () => props.rows.filter((r) => r.state === 'suggested' && (!r.needsDeidConfirm || r.deidConfirmed === true)).length,
+)
 
 const totalCount = computed(() => props.rows.length)
 const byKind = computed(() => ({
@@ -61,15 +68,29 @@ const counts = computed(() => ({
       <PortalStatusPill v-if="counts.duplicate" tone="ok">{{ counts.duplicate }} {{ t('uploadPortal.summary.duplicate') }}</PortalStatusPill>
       <PortalStatusPill v-if="counts.held" tone="suggest">{{ counts.held }} {{ t('uploadPortal.summary.held') }}</PortalStatusPill>
       <PortalStatusPill v-if="counts.error" tone="bad">{{ counts.error }} {{ t('uploadPortal.summary.refused') }}</PortalStatusPill>
+      <label
+        v-if="deidRows.length > 1"
+        class="ml-1 inline-flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer"
+      >
+        <input
+          type="checkbox"
+          class="h-4 w-4"
+          :checked="allTicked"
+          data-testid="deid-confirm-all-previews"
+          @change="emit('tick-all-previews', ($event.target as HTMLInputElement).checked)"
+        />
+        {{ t('uploadPortal.deid.confirmAllLabel') }}
+      </label>
       <button
         v-if="counts.suggested > 0"
         type="button"
-        class="ml-1 px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap"
+        class="ml-1 px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         data-testid="confirm-all"
+        :disabled="confirmable === 0"
         @click="emit('confirm-all')"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-        {{ t('uploadPortal.summary.confirmAll', { n: counts.suggested }) }}
+        {{ t('uploadPortal.summary.confirmAll', { n: confirmable }) }}
       </button>
     </div>
   </div>

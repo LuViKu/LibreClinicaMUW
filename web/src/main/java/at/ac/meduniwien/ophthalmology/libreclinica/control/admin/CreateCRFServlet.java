@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 import java.util.Date;
 import java.util.Locale;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -20,7 +22,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validator;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
@@ -69,6 +70,13 @@ public class CreateCRFServlet extends SecureController {
 
     }
 
+    /** GET shows the form; creating the CRF (action=confirm) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
+    }
+
     @Override
     public void processRequest() throws Exception {
         CRFDAO cdao = new CRFDAO(sm.getDataSource());
@@ -79,7 +87,6 @@ public class CreateCRFServlet extends SecureController {
         // checks which module the requests are from
         String module = fp.getString(MODULE);
         request.setAttribute(MODULE, module);
-        request.setAttribute("xformEnabled", CoreResources.getField("xform.enabled"));
 
         // add the list here so that users can tell about crf creation
         // process together with workflow, tbh

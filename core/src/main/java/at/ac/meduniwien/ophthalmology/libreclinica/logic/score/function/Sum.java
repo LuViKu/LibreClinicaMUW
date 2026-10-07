@@ -51,7 +51,7 @@ public class Sum extends AbstractFunction {
             return;
         }
 
-        if (values != null && values.length > 0) {
+        if (values.length > 0) {
             double v = StatUtils.sum(values);
             value = Double.toString(v);
         } else {

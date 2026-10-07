@@ -45,6 +45,16 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator.class)));
     }
 
+    /**
+     * A session whose role may enter data (Investigator). The role check
+     * runs before the request is validated, so a validation test needs one.
+     */
+    private org.springframework.mock.web.MockHttpSession dataEntrySession() {
+        return (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithRole(
+                2, "physician", 1, "S_DEFAULTS1", "Default Study",
+                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1);
+    }
+
     /* ---------------------------------------------------------------------- */
     /* GET /api/v1/events                                                     */
     /* ---------------------------------------------------------------------- */
@@ -110,8 +120,7 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/events")
                 .contentType("application/json")
                 .content("{}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("'subjectId' is required")));
@@ -122,8 +131,7 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/events")
                 .contentType("application/json")
                 .content("{\"subjectId\":\"M-001\"}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("'eventDefinitionOid' is required")));
@@ -134,8 +142,7 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/events")
                 .contentType("application/json")
                 .content("{\"subjectId\":\"M-001\",\"eventDefinitionOid\":\"SE_V1\"}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("'dateStarted' is required")));
@@ -150,8 +157,7 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
                     .contentType("application/json")
                     .content("{\"subjectId\":\"M-001\",\"eventDefinitionOid\":\"SE_V1\","
                             + "\"dateStarted\":\"2026-06-01\",\"timeStarted\":\"" + bad + "\"}")
-                    .session((org.springframework.mock.web.MockHttpSession)
-                            authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                    .session(dataEntrySession()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.message")
                             .value(containsString("'timeStarted' must be HH:mm")));
@@ -182,8 +188,7 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/events")
                 .contentType("application/json")
                 .content("{\"subjectId\":\"M-001\",\"eventDefinitionOid\":\"SE_V1\",\"dateStarted\":\"not-a-date\"}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .session(dataEntrySession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("must be YYYY-MM-DD")));

@@ -81,7 +81,11 @@
 						<c:out value="${extract.filedescription}"/>&nbsp;
 					</c:otherwise>
 				</c:choose>
-				<a href='pages/extract?id=<c:out value="${extract.id}"/>&datasetId=<c:out value="${dataset.id}"/>'>
+				<%-- Starting an export posts a small form: pages/extract refuses GET. --%>
+				<form action="pages/extract" method="post" style="display:inline; margin:0">
+				<input type="hidden" name="id" value="<c:out value="${extract.id}"/>"/>
+				<input type="hidden" name="datasetId" value="<c:out value="${dataset.id}"/>"/>
+				<a href="#" onClick="this.parentNode.submit(); return false;">
 				<c:choose>
 					<c:when test="${fn:startsWith(extract.linkText, '&')==true}">
 						<fmt:message key="${fn:substringAfter(extract.linkText, '&')}" bundle="${restext}"/>&nbsp;
@@ -90,7 +94,7 @@
 						<c:out value="${extract.linkText}"/>&nbsp;
 					</c:otherwise>
 				</c:choose>
-				</a>
+				</a></form>
 				<%--<c:out value="${extract.linkText}"/>--%>
 			</li>
     </c:forEach>	

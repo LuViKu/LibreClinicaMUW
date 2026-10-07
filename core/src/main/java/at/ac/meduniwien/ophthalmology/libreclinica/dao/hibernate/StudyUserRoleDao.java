@@ -15,18 +15,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRole;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount;
 import org.hibernate.query.Query;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole> {
 
     @Override
@@ -34,11 +23,14 @@ public class StudyUserRoleDao extends CompositeIdAbstractDomainDao<StudyUserRole
         return StudyUserRole.class;
     }
 
-    @SuppressWarnings("unchecked")
     public ArrayList<StudyUserRole> findAllUserRolesByUserAccount(UserAccount userAccount, int studyId, int parentStudyId) {
-        String query = "from " + getDomainClassName()
-                + "   where   user_name=:username  AND  status_id=1  AND  ( study_id=:studyId OR study_id=:parentStudyId) ";
-        Query<StudyUserRole> q = getCurrentSession().createQuery(query);
+        // user_name, status_id and study_id are mapped as attributes of the
+        // embedded id. Hibernate 6 resolves only attribute paths, so the bare
+        // column names are a semantic error.
+        String query = "from " + getDomainClassName() + " sur"
+                + " where sur.id.userName = :username and sur.id.statusId = 1"
+                + " and (sur.id.studyId = :studyId or sur.id.studyId = :parentStudyId)";
+        Query<StudyUserRole> q = getCurrentSession().createQuery(query, StudyUserRole.class);
         q.setParameter("username", userAccount.getUserName());
         q.setParameter("studyId", studyId);
         q.setParameter("parentStudyId", parentStudyId);

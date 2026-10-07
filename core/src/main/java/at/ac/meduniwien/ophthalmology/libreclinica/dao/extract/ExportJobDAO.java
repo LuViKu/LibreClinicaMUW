@@ -18,6 +18,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongConsumer;
 
 import javax.sql.DataSource;
 
@@ -55,6 +56,8 @@ public class ExportJobDAO {
     public static final String STATUS_RUNNING = "running";
     public static final String STATUS_DONE = "done";
     public static final String STATUS_FAILED = "failed";
+    /** Stopped on request: queued and never run, or stopped at a checkpoint. */
+    public static final String STATUS_CANCELLED = "cancelled";
 
     private final DataSource dataSource;
 
@@ -68,14 +71,25 @@ public class ExportJobDAO {
      * 500 response).
      */
     public long insertQueued(int datasetId, String format, int submittedByUserId) {
+        return insertQueued(datasetId, format, submittedByUserId, null);
+    }
+
+    /**
+     * As {@link #insertQueued(int, String, int)}, for a run of an
+     * {@code export_schedule}: {@code scheduleId} lets the worker find the
+     * schedule's contact address when the run finishes.
+     */
+    public long insertQueued(int datasetId, String format, int submittedByUserId, Long scheduleId) {
         String sql = "INSERT INTO export_job "
-                + "(dataset_id, format, status, submitted_by) "
-                + "VALUES (?, ?, '" + STATUS_QUEUED + "', ?)";
+                + "(dataset_id, format, status, submitted_by, schedule_id) "
+                + "VALUES (?, ?, '" + STATUS_QUEUED + "', ?, ?)";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, datasetId);
             ps.setString(2, format);
             ps.setInt(3, submittedByUserId);
+            if (scheduleId == null) ps.setNull(4, Types.BIGINT);
+            else ps.setLong(4, scheduleId);
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) return rs.getLong(1);
@@ -100,7 +114,18 @@ public class ExportJobDAO {
      * {@code runExport} and gets recorded as {@code failed}.
      */
     public Row claimNextQueued() {
-        String select = "SELECT id, dataset_id, format, submitted_by "
+        return claimNextQueued(null);
+    }
+
+    /**
+     * As {@link #claimNextQueued()}, calling {@code beforeCommit} with the
+     * claimed id while the row is still locked and not yet visible as
+     * {@code running}. Whatever it registers is in place before anyone can
+     * see the job running. If the claim then fails to commit, this returns
+     * {@code null} and the caller undoes the registration.
+     */
+    public Row claimNextQueued(LongConsumer beforeCommit) {
+        String select = "SELECT id, dataset_id, format, submitted_by, schedule_id "
                 + "FROM export_job WHERE status = '" + STATUS_QUEUED + "' "
                 + "ORDER BY submitted_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED";
         String update = "UPDATE export_job SET status = '" + STATUS_RUNNING + "', "
@@ -118,6 +143,8 @@ public class ExportJobDAO {
                         picked.datasetId = rs.getInt(2);
                         picked.format = rs.getString(3);
                         picked.submittedBy = rs.getInt(4);
+                        long scheduleId = rs.getLong(5);
+                        picked.scheduleId = rs.wasNull() ? null : scheduleId;
                         picked.status = STATUS_RUNNING;
                     }
                 }
@@ -129,9 +156,11 @@ public class ExportJobDAO {
                     ps.setLong(1, picked.id);
                     ps.executeUpdate();
                 }
+                if (beforeCommit != null) beforeCommit.accept(picked.id);
                 c.commit();
                 return picked;
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
+                // Restoring auto-commit below would commit the claim.
                 c.rollback();
                 throw e;
             } finally {
@@ -170,11 +199,70 @@ public class ExportJobDAO {
         }
     }
 
+    /**
+     * Cancel a job no worker has claimed. Atomic against
+     * {@link #claimNextQueued()}: the status condition is re-checked once a
+     * claim in progress commits, so a job is either cancelled here or
+     * claimed there, never both. Returns {@code false} once the job is no
+     * longer queued.
+     */
+    public boolean cancelIfQueued(long jobId, String reason) {
+        String sql = "UPDATE export_job SET status = '" + STATUS_CANCELLED + "', "
+                + "finished_at = now(), error_message = ? "
+                + "WHERE id = ? AND status = '" + STATUS_QUEUED + "'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, truncate(reason));
+            ps.setLong(2, jobId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOG.error("cancelIfQueued failed for job_id={}: {}", jobId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Note who asked a running job to stop. The job stays {@code running}
+     * until its worker reaches a checkpoint, and a job that finishes first
+     * clears the note on {@link #markDone(long, int)}.
+     */
+    public void noteCancelRequest(long jobId, String reason) {
+        String sql = "UPDATE export_job SET error_message = ? "
+                + "WHERE id = ? AND status = '" + STATUS_RUNNING + "'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, truncate(reason));
+            ps.setLong(2, jobId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.error("noteCancelRequest failed for job_id={}: {}", jobId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * A running job that stopped at a checkpoint. Keeps the note
+     * {@link #noteCancelRequest(long, String)} left, else records
+     * {@code reason}.
+     */
+    public void markCancelled(long jobId, String reason) {
+        String sql = "UPDATE export_job SET status = '" + STATUS_CANCELLED + "', "
+                + "finished_at = now(), error_message = COALESCE(error_message, ?) "
+                + "WHERE id = ? AND status = '" + STATUS_RUNNING + "'";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, truncate(reason));
+            ps.setLong(2, jobId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.error("markCancelled failed for job_id={}: {}", jobId, e.getMessage(), e);
+        }
+    }
+
     /** Find by id. Returns null if not found. */
     public Row findById(long jobId) {
         String sql = "SELECT id, dataset_id, format, status, submitted_by, "
                 + "submitted_at, started_at, finished_at, "
-                + "archived_dataset_file_id, error_message "
+                + "archived_dataset_file_id, error_message, schedule_id "
                 + "FROM export_job WHERE id = ?";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -201,7 +289,7 @@ public class ExportJobDAO {
                                   int page, int pageSize) {
         StringBuilder sql = new StringBuilder("SELECT id, dataset_id, format, status, submitted_by, ")
                 .append("submitted_at, started_at, finished_at, ")
-                .append("archived_dataset_file_id, error_message ")
+                .append("archived_dataset_file_id, error_message, schedule_id ")
                 .append("FROM export_job WHERE 1=1 ");
         List<Object> params = new ArrayList<>(4);
         if (requestedByUserId != null) {
@@ -280,7 +368,7 @@ public class ExportJobDAO {
     public List<Row> findRecentByStudy(int studyId) {
         String sql = "SELECT ej.id, ej.dataset_id, ej.format, ej.status, ej.submitted_by, "
                 + "ej.submitted_at, ej.started_at, ej.finished_at, "
-                + "ej.archived_dataset_file_id, ej.error_message "
+                + "ej.archived_dataset_file_id, ej.error_message, ej.schedule_id "
                 + "FROM export_job ej "
                 + "JOIN dataset d ON d.dataset_id = ej.dataset_id "
                 + "WHERE d.study_id = ? "
@@ -315,6 +403,8 @@ public class ExportJobDAO {
         int adfId = rs.getInt("archived_dataset_file_id");
         r.archivedDatasetFileId = rs.wasNull() ? null : adfId;
         r.errorMessage = rs.getString("error_message");
+        long scheduleId = rs.getLong("schedule_id");
+        r.scheduleId = rs.wasNull() ? null : scheduleId;
         return r;
     }
 
@@ -341,9 +431,7 @@ public class ExportJobDAO {
         public Instant finishedAt;
         public Integer archivedDatasetFileId;
         public String errorMessage;
+        /** The export_schedule this run came from; null for a run started by hand. */
+        public Long scheduleId;
     }
-
-    /** Suppress the unused-import warning Eclipse-format flags for Types. */
-    @SuppressWarnings("unused")
-    private static final int UNUSED_TYPES_REF = Types.INTEGER;
 }

@@ -21,6 +21,7 @@ import org.w3c.dom.Document;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
+@SuppressWarnings("resource") // in-memory streams and objects only; nothing here holds an OS resource
 public class SecureXmlFactoriesTest {
 
     private static final String PLAIN = "<?xml version=\"1.0\"?><form><item>42</item></form>";

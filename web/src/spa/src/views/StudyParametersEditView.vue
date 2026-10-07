@@ -18,9 +18,11 @@ import { ALLOWED, type UpdateStudyParametersInput } from '@/types/studyParameter
 /**
  * Phase E.6 study-params — Study parameters edit view.
  *
- * Renders the 18 study_parameter_value handles as a section-grouped
+ * Renders 17 of the 18 study_parameter_value handles as a section-grouped
  * form (Subject ID / Discrepancy / Interviewer / Modules) and submits
  * the partial patch via {@link useStudyParametersStore.update}.
+ * participantPortal is left out: the participant portal is not part of
+ * this build, and the backend no longer writes that handle.
  *
  * Auth: gated by router meta {@code role: 'Administrator'} mirroring
  * StudyIdentityEditView. The backend re-checks authoritatively via
@@ -60,7 +62,6 @@ interface FormShape {
   interviewDateEditable: string
   secondaryLabelViewable: string
   adminForcedReasonForChange: string
-  participantPortal: string
   randomization: string
 }
 const HANDLES: (keyof FormShape)[] = [
@@ -80,7 +81,6 @@ const HANDLES: (keyof FormShape)[] = [
   'interviewDateEditable',
   'secondaryLabelViewable',
   'adminForcedReasonForChange',
-  'participantPortal',
   'randomization',
 ]
 const form = ref<FormShape>(blankForm())
@@ -104,7 +104,6 @@ function blankForm(): FormShape {
     interviewDateEditable: 'true',
     secondaryLabelViewable: 'false',
     adminForcedReasonForChange: 'true',
-    participantPortal: 'disabled',
     randomization: 'disabled',
   }
 }
@@ -334,12 +333,6 @@ const enumLabel = (group: string, value: string) =>
       <section class="space-y-4 mb-6">
         <h2 class="text-sm font-medium text-slate-700">{{ t('studyParameters.sections.modules') }}</h2>
         <div class="grid grid-cols-2 gap-3">
-          <div>
-            <FieldLabel for="sp-participantPortal">{{ t('studyParameters.fields.participantPortal') }}</FieldLabel>
-            <SelectInput id="sp-participantPortal" v-model="form.participantPortal">
-              <option v-for="o in ALLOWED.enabledDisabled" :key="o" :value="o">{{ enumLabel('enabledDisabled', o) }}</option>
-            </SelectInput>
-          </div>
           <div>
             <FieldLabel for="sp-randomization">{{ t('studyParameters.fields.randomization') }}</FieldLabel>
             <SelectInput id="sp-randomization" v-model="form.randomization">

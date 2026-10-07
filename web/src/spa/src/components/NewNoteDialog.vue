@@ -10,7 +10,7 @@ import UserAutocomplete from '@/components/UserAutocomplete.vue'
 
 import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
-import { canCreateNoteType, type DiscrepancyNote, type NoteType } from '@/types/note'
+import { canCreateNoteType, type DiscrepancyNote, type NoteField, type NoteType } from '@/types/note'
 import type { UserRole } from '@/types/auth'
 
 /**
@@ -57,11 +57,17 @@ interface Props {
   eventCrfOid: string
   itemLabel?: string
   prefill?: Prefill | null
+  /**
+   * The note goes on this field of the subject, a visit or a CRF header
+   * instead of an item; `itemOid` is ignored then.
+   */
+  field?: NoteField | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   itemLabel: undefined,
   prefill: null,
+  field: null,
 })
 
 const emit = defineEmits<{
@@ -120,11 +126,12 @@ async function submit(): Promise<void> {
   if (!canSubmit.value) return
   const created = await notes.createNote({
     subjectId: props.subjectId,
-    itemOid: props.itemOid,
+    itemOid: props.field ? '' : props.itemOid,
     eventCrfOid: props.eventCrfOid,
     description: description.value.trim(),
     type: type.value,
     assignedTo: assignedTo.value ? assignedTo.value : null,
+    ...(props.field ? { field: props.field } : {}),
   })
   if (created) {
     emit('created', created)

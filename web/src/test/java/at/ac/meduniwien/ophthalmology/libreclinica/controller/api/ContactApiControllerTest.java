@@ -23,6 +23,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.OpenClinicaMailSender;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -92,9 +93,9 @@ class ContactApiControllerTest extends AbstractApiControllerTest {
         verify(sender).sendEmail(
                 eq("admin@example.org"),
                 eq("anne@example.org"),
-                Mockito.argThat(s -> s.startsWith("[LibreClinicaMUW Contact]") &&
+                ArgumentMatchers.argThat(s -> s.startsWith("[LibreClinicaMUW Contact]") &&
                         s.contains("CRF rendering issue")),
-                Mockito.argThat(b -> b.contains("Anne Tester") &&
+                ArgumentMatchers.argThat(b -> b.contains("Anne Tester") &&
                         b.contains("blank panel on visit 3")),
                 eq(false));
     }

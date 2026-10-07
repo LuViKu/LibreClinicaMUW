@@ -28,6 +28,7 @@ import org.junit.Test;
  * CRF data import reaches that path — it calls {@code returnFiles} without a
  * directory — so what was exposed was clinical data.
  */
+@SuppressWarnings("resource") // the default FileSystem is never closed
 public class FileUploadHelperTempDirectoryTest {
 
     @Test

@@ -255,3 +255,84 @@ describe('InviteUserDialog — SSO branch (Phase E.6)', () => {
     wrapper.unmount()
   })
 })
+
+/**
+ * The account type: the dialog creates an ordinary user unless the
+ * operator picks an administrator type, and offers the technical
+ * administrator type to a technical administrator only.
+ */
+describe('InviteUserDialog — account type', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedAuthWithStudy()
+    vi.mocked(apiPost).mockReset()
+    vi.mocked(apiPost).mockResolvedValue({
+      user: { id: '43', username: 'newadmin', displayName: 'New Admin', email: null, role: 'Investigator',
+        siteLabel: null, auth: 'pending-invite', lastLoginAt: null, active: true, locked: false },
+      generatedPassword: 'P@ssw0rd!',
+    })
+  })
+
+  function fillRequired() {
+    const setVal = (sel: string, val: string) => {
+      const el = document.body.querySelector(sel) as HTMLInputElement
+      el.value = val
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    setVal('#invite-username', 'newadmin')
+    setVal('#invite-firstname', 'New')
+    setVal('#invite-lastname', 'Admin')
+    setVal('#invite-email', 'newadmin@example.org')
+    setVal('#invite-affiliation', 'Dept. of Ophthalmology')
+  }
+
+  function userTypeSelect(): HTMLSelectElement {
+    return document.body.querySelector('#invite-usertype') as HTMLSelectElement
+  }
+
+  async function submit() {
+    const buttons = Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
+    buttons.find((b) => b.textContent?.trim() === 'Create user')!.click()
+    await flushPromises()
+  }
+
+  it('creates an ordinary user by default', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    fillRequired()
+    await nextTick()
+    await submit()
+    const [, payload] = vi.mocked(apiPost).mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload.userType).toBe('USER')
+    wrapper.unmount()
+  })
+
+  it('creates a business administrator when that type is picked', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    fillRequired()
+    const select = userTypeSelect()
+    select.value = 'SYSADMIN'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+    await submit()
+    const [, payload] = vi.mocked(apiPost).mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload.userType).toBe('SYSADMIN')
+    wrapper.unmount()
+  })
+
+  it('offers the technical administrator type to a technical administrator only', async () => {
+    const options = () => Array.from(userTypeSelect().options).map((o) => o.value)
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(options()).toEqual(['USER', 'SYSADMIN'])
+    wrapper.unmount()
+
+    const auth = useAuthStore()
+    auth.user = { ...auth.user, userType: 'TECHADMIN' } as unknown as ReturnType<typeof useAuthStore>['user']
+    const again = mountDialog()
+    await flushPromises()
+    expect(options()).toEqual(['USER', 'SYSADMIN', 'TECHADMIN'])
+    again.unmount()
+  })
+})

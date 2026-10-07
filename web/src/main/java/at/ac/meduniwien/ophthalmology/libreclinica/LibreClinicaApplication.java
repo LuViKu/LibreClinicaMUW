@@ -154,6 +154,7 @@ public class LibreClinicaApplication extends SpringBootServletInitializer {
         return application.sources(LibreClinicaApplication.class);
     }
 
+    @SuppressWarnings("resource") // the application context runs for the life of the JVM; the container closes it on shutdown
     public static void main(String[] args) {
         SpringApplication.run(LibreClinicaApplication.class, args);
     }

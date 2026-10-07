@@ -415,12 +415,24 @@
             WHERE EVENT_CRF_ID=?
         </sql>
     </query>
-    <!-- Phase E A5 — inverse of markCompleteIDE; see eventcrf_dao.xml -->
+    <!-- Stamp the event CRF as updated; see eventcrf_dao.xml -->
     <query>
-        <name>markIncompleteIDE</name>
+        <name>touch</name>
+        <sql>
+            UPDATE EVENT_CRF
+            SET DATE_UPDATED=sysdate
+            , UPDATE_ID=?
+            WHERE EVENT_CRF_ID=?
+        </sql>
+    </query>
+    <!-- Phase E A5 — inverse of the completion markers; see eventcrf_dao.xml -->
+    <query>
+        <name>markIncomplete</name>
         <sql>
             UPDATE EVENT_CRF
             SET DATE_COMPLETED=NULL
+            , DATE_VALIDATE_COMPLETED=NULL
+            , STATUS_ID=CASE WHEN STATUS_ID IN (2, 4) THEN 1 ELSE STATUS_ID END
             WHERE EVENT_CRF_ID=?
         </sql>
     </query>

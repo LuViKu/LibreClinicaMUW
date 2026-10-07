@@ -34,6 +34,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
  *
  * <p>Phase C playbook §C.0.4 — §C.0.10.
  */
+@SuppressWarnings("resource") // the current Session belongs to the test transaction, which closes it
 public class InfrastructureBeansContractIT extends AbstractContractIT {
 
     // ─────────────────────────── C.0.4 SecurityFilterChain ────────────────────────────

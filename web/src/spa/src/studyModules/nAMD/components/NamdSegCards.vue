@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 import FluidDot from './primitives/FluidDot.vue'
 import DeltaChip from './primitives/DeltaChip.vue'
 import type { FluidKey } from '../fluid'
+import { isPlaceholderModel } from '../composables/useNamdAiRecommendation'
 import type { NamdVisit } from '../types'
 
 interface Props {
@@ -26,11 +27,14 @@ const props = defineProps<Props>()
 const { t } = useI18n()
 
 const KEYS: FluidKey[] = ['IRF', 'SRF', 'PED']
-const ACCESSORS: Record<FluidKey, (v: NamdVisit) => number> = {
+const ACCESSORS: Record<FluidKey, (v: NamdVisit) => number | null> = {
   IRF: (v) => v.irf,
   SRF: (v) => v.srf,
   PED: (v) => v.ped,
 }
+
+// Fake volumes from the placeholder model: every card says so.
+const placeholder = computed(() => isPlaceholderModel(props.current?.modelVersion))
 
 const rows = computed(() =>
   KEYS.map((k) => {
@@ -51,8 +55,16 @@ const rows = computed(() =>
       v-for="row in rows"
       :key="row.k"
       :data-testid="`namd-seg-card-${row.k}`"
-      class="rounded-md border border-slate-100 bg-slate-50 p-2.5"
+      class="rounded-md border p-2.5"
+      :class="placeholder ? 'border-rose-300 bg-rose-50' : 'border-slate-100 bg-slate-50'"
     >
+      <div
+        v-if="placeholder"
+        data-testid="namd-seg-placeholder"
+        class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-rose-700"
+      >
+        {{ t('studyModules.namd.placeholder.badge') }}
+      </div>
       <div class="flex items-center gap-1.5">
         <FluidDot :k="row.k" :size="10" />
         <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
