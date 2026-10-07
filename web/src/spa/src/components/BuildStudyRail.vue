@@ -31,7 +31,9 @@ interface RailItem {
   exact?: boolean
 }
 
-const DM_ADMIN: UserRole[] = ['Data Manager', 'Administrator']
+// The roles the backend lets build a study (StudyAdminAuthorization: director
+// and coordinator bound to the study, or a system administrator).
+const DM_ADMIN: UserRole[] = ['Data Manager', 'CRC', 'Administrator']
 
 const { t } = useI18n()
 const route = useRoute()

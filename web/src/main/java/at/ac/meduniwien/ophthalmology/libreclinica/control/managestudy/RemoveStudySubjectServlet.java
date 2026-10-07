@@ -159,7 +159,7 @@ public class RemoveStudySubjectServlet extends SecureController {
                                         item.setStatus(Status.AUTO_DELETED);
                                         item.setUpdater(ub);
                                         item.setUpdatedDate(new Date());
-                                        iddao.update(item);
+                                        iddao.updateStatusOnly(item);
                                     }
                                 }
                             }

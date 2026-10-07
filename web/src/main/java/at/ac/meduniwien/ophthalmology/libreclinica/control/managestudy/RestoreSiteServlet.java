@@ -232,7 +232,7 @@ public class RestoreSiteServlet extends SecureController {
                                             item.setStatus(item.getOldStatus());
                                             item.setUpdater(ub);
                                             item.setUpdatedDate(new Date());
-                                            iddao.update(item);
+                                            iddao.updateStatusOnly(item);
                                         }
                                     }
                                 }

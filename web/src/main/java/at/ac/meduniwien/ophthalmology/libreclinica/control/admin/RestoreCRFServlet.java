@@ -152,7 +152,7 @@ public class RestoreCRFServlet extends SecureController {
                                 item.setStatus(Status.AVAILABLE);
                                 item.setUpdater(ub);
                                 item.setUpdatedDate(new Date());
-                                idao.update(item);
+                                idao.updateStatusOnly(item);
                             }
                         }
                     }

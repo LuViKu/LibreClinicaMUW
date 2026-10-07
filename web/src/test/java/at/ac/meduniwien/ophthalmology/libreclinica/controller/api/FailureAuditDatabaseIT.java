@@ -14,7 +14,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import java.util.Locale;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -323,11 +327,13 @@ class FailureAuditDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /**
      * Session bound to user #1 (seeded "root") with study #1 active +
-     * an Admin role on it. {@link SiteVisibilityFilter#visibleStudyIds}
+     * a Data Manager (director) role on it, a role that may read the study
+     * audit log. {@link SiteVisibilityFilter#visibleStudyIds}
      * returns the full top-level tree, so the audit-log list endpoint
      * is willing to render rows for study #1.
      */
     private static MockHttpSession adminSessionForStudy(int studyId) {
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
         MockHttpSession session = new MockHttpSession();
         UserAccountBean ub = new UserAccountBean();
         ub.setId(1);
@@ -338,8 +344,10 @@ class FailureAuditDatabaseIT extends AbstractApiControllerDatabaseIT {
         study.setOid("S_DEFAULTS1");
         study.setName("default-study");
         session.setAttribute("study", study);
-        // No userRole bound — the audit-log endpoint reads it with a
-        // null-tolerant downstream visibility check.
+        StudyUserRoleBean role = new StudyUserRoleBean();
+        role.setRole(Role.STUDYDIRECTOR);
+        role.setStudyId(studyId);
+        session.setAttribute("userRole", role);
         return session;
     }
 }

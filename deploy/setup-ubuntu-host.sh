@@ -1214,6 +1214,23 @@ section "systemd unit"
 # which means a compose profile alone can never add one: on the beta.9 host
 # COMPOSE_PROFILES=dicom was set and the sidecar still did not come up. The
 # list therefore follows the profile.
+# Other apps behind this nginx (DR-038). They run as their own compose
+# projects and meet nginx on the external docker network `edge`; nginx picks
+# up their server blocks from ${CONFIG_DIR}/nginx-sites (outside the checkout,
+# which this script resets). A block is installed only when its certificate
+# and key exist: nginx refuses to start on a missing ssl_certificate, and that
+# would take the eCRF down with it. Re-run this script after installing a cert.
+NGINX_SITES_DIR="${CONFIG_DIR}/nginx-sites"
+install -d -m 0755 "$NGINX_SITES_DIR"
+if [[ -s "${CONFIG_DIR}/tls/einteilung-augen.crt" && -s "${CONFIG_DIR}/tls/einteilung-augen.key" ]]; then
+  install -m 0644 "${INSTALL_PREFIX}/deploy/nginx/dutyplan.conf" "${NGINX_SITES_DIR}/dutyplan.conf"
+  log "DutyPlan server block active (certificate found)"
+else
+  rm -f "${NGINX_SITES_DIR}/dutyplan.conf"
+  log "DutyPlan server block not active (no ${CONFIG_DIR}/tls/einteilung-augen.{crt,key} yet)"
+fi
+docker network inspect edge >/dev/null 2>&1 || { docker network create edge >/dev/null && log "Created docker network 'edge'"; }
+
 COMPOSE_SERVICES="libreclinica db retinal-inference nginx"
 if [[ "$DICOM_PROFILE_ON" == "1" ]]; then
   COMPOSE_SERVICES="${COMPOSE_SERVICES} dicom-scp"
@@ -1243,6 +1260,10 @@ EnvironmentFile=${ENV_FILE}
 # Bring up only the production-relevant services. mailcrab is excluded
 # because production SMTP is the institutional MUW relay (configure via
 # ${RUNTIME_CONFIG}/datainfo.properties).
+# nginx joins the external network 'edge' (DR-038); compose refuses to start a
+# service whose external network is missing, so make sure it exists on every
+# start, reboots included. The leading '-' ignores "already exists".
+ExecStartPre=-/usr/bin/docker network create edge
 ExecStart=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml up --remove-orphans -d ${COMPOSE_SERVICES}
 ExecStop=/usr/bin/docker compose -f compose.yaml -f deploy/compose.production.yaml down
 TimeoutStartSec=900

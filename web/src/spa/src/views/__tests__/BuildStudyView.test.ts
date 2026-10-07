@@ -97,8 +97,8 @@ async function mountView(status: StudyBuildStatus) {
   const auth = useAuthStore()
   auth.user = {
     id: 1,
-    username: 'root',
-    name: 'Root User',
+    username: 'dm',
+    name: 'Data Manager',
     role: 'Administrator',
     activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study' },
   } as unknown as typeof auth.user
@@ -113,11 +113,7 @@ async function mountView(status: StudyBuildStatus) {
   return { wrapper, study }
 }
 
-// 2026-06-25 — the BuildStudyView ack-button UX has been reshaped since
-// these specs were written (testid+layout drift). Mark the three failing
-// cases obsolete so CI stays green; the contract is exercised by the
-// e2e test pack. Track-as TODO for the next BuildStudyView refresh.
-describe.skip('BuildStudyView — operator-discretion ack', () => {
+describe('BuildStudyView — operator-discretion ack', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })

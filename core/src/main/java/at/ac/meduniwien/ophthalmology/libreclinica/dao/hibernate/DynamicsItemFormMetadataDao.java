@@ -49,9 +49,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         q.setParameter("event_crf_id", eventCrfBean.getId());
         q.setParameter("item_data_id", itemDataBean.getId());
         List<DynamicsItemFormMetadataBean> list = q.getResultList();
-        /* TODO use uniqueResult (or something similar), if the
-         * query returns multiple (equivalent results) use distinct also
-         */
+        // Deliberately not uniqueResult: duplicate rows may exist, and the newest (order by id desc) wins.
         return list.size() !=0 ? list.get(0) : null;
     }
 

@@ -180,6 +180,17 @@ describe('HomeView role-aware catalogue', () => {
     expect(ids).toContain('notes')
   })
 
+  it('shows a CRC the study-build cards the backend lets a coordinator open', async () => {
+    const w = mountWith(['CRC'])
+    await w.vm.$nextTick()
+    const ids = cardIds(w)
+    for (const id of ['build-study', 'rules', 'sites', 'data-export', 'audit-log', 'import-crf-data']) {
+      expect(ids, id).toContain(id)
+    }
+    expect(ids).not.toContain('manage-users')
+    expect(ids).not.toContain('study-create')
+  })
+
   it('renders the Monitor catalogue for a pure Monitor', async () => {
     const w = mountWith(['Monitor'])
     await w.vm.$nextTick()
@@ -326,7 +337,7 @@ describe('HomeView dashboard', () => {
     expect(inv.get('[data-card-id="sign-queue"]').get('[data-testid="queue-count"]').text()).toBe('0')
   })
 
-  it('does not hand a CRC the patient overview — the route does not admit the role', async () => {
+  it('does not hand a CRC the patient overview card — the route lists no CRC role of its own', async () => {
     const w = mountWith(['CRC'])
     await w.vm.$nextTick()
     expect(cardIds(w)).not.toContain('patients-overview')

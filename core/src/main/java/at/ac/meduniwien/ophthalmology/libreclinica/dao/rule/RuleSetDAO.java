@@ -400,9 +400,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         return ruleSetBean;
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
@@ -411,9 +409,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
@@ -422,9 +418,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */

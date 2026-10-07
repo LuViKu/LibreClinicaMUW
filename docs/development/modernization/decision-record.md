@@ -993,6 +993,37 @@ The two are not alike. The database upgrade is operational and bounded: a dump a
 
 ---
 
+## DR-038 — DutyPlan is served through the eCRF nginx, never at the eCRF's expense
+
+**Status:** Accepted (2026-10-03)
+
+**Context.** DutyPlan, a small separate web app (FastAPI, one container, its own
+repository and compose project), runs on the eCRF VM. The eCRF's nginx sidecar
+already owns ports 80 and 443 there, and opening another port is not wanted.
+
+**Decision.** The eCRF nginx gets one more name-based server block for
+`einteilung.augen.meduniwien.ac.at` ([deploy/nginx/dutyplan.conf](../../../deploy/nginx/dutyplan.conf)),
+forwarding to `dutyplan:8000` over an external docker network `edge` that both
+compose projects join. DutyPlan stays out of the LibreClinica compose files. Three
+rules keep a DutyPlan problem from ever affecting the eCRF:
+
+- the block is installed (in `/etc/libreclinica/nginx-sites`, included by
+  `ecrf.conf`) only when its own certificate exists, because nginx exits on a
+  missing `ssl_certificate`;
+- the upstream is resolved per request, so a stopped DutyPlan is a 502 on its own
+  hostname, not an nginx startup failure;
+- the `edge` network is created by the setup script and before every start of
+  the systemd unit, because compose refuses to start a service whose external
+  network is missing.
+
+DutyPlan has its own certificate, so the eCRF certificate is never reissued for it.
+
+**Consequences.** One more certificate to renew (second cron line in
+[deploy/nginx/README.md](../../../deploy/nginx/README.md)). nginx keeps `default`
+in its network list explicitly; without it, it would lose the eCRF backend.
+
+---
+
 ## Future decisions (open)
 
 *Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*

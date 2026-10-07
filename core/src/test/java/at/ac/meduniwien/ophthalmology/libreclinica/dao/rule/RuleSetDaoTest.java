@@ -94,33 +94,6 @@ public class RuleSetDaoTest extends HibernateOcDbTestCase {
         assertEquals("The size of the RuleSetRules is not 2", Integer.valueOf(2), Integer.valueOf(ruleSet.getRuleSetRules().get(0).getActions().size()));
     }
 
-    //JN:The following commented out tests are failing, suspicion is and arnd studyid and the way it is set, TODO:revisit
-/*    public void testFindAllByStudy() {
-
-   //     RuleSetDao ruleSetDao = (RuleSetDao) getContext().getBean("ruleSetDao");
-        List<RuleSetBean> ruleSets = null;
-        StudyBean study = new StudyBean();
-        study.setId(1);
-        ruleSets = ruleSetDao.findAllByStudy(study);
-        assertEquals("The RuleSets List size should be 2", 2, ruleSets.size());
-    }
-
-    public void testFindByCrfVersionOrCrfAndStudyAndStudyEventDefinition() {
-        CRFBean crfBean = new CRFBean();
-        crfBean.setId(2);
-        CRFVersionBean crfVersionBean = new CRFVersionBean();
-        crfVersionBean.setId(2);
-        StudyBean studyBean = new StudyBean();
-        studyBean.setId(1);
-        StudyEventDefinitionBean sed = new StudyEventDefinitionBean();
-        sed.setId(2);
-
-        RuleSetDao ruleSetDao = (RuleSetDao) getContext().getBean("ruleSetDao");
-        List<RuleSetBean> persistentRuleSets = ruleSetDao.findByCrfVersionOrCrfAndStudyAndStudyEventDefinition(crfVersionBean, crfBean, studyBean, sed);
-        assertNotNull("The returned ruleSet was null", persistentRuleSets);
-        assertEquals("The List size of ruleset objects should be 2 ", persistentRuleSets.size(), 2);
-
-    }*/
     public void testSaveOrUpdate() {
         // RuleSetDao ruleSetDao = (RuleSetDao) getContext().getBean("ruleSetDao");
       //   RuleDao ruleDao = (RuleDao) getContext().getBean("ruleDao");

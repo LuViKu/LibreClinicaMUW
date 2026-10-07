@@ -105,21 +105,6 @@ public class UpdateJobImportServlet extends SecureController {
         }
         // System.out.println("found list of studies: " + finalList.toString());
         addEntityList("studies", finalList, respage.getString("a_user_cannot_be_created_no_study_as_active"), Page.ADMIN_SYSTEM);
-        // tbh >>
-        // HashMap presetValues = new HashMap();
-        // Calendar calendar = new GregorianCalendar();
-        // calendar.setTime(jobDate);
-        // presetValues.put(CreateJobImportServlet.DATE_START_JOB + "Hour",
-        // calendar.get(Calendar.HOUR_OF_DAY));
-        // presetValues.put(CreateJobImportServlet.DATE_START_JOB + "Minute",
-        // calendar.get(Calendar.MINUTE));
-        // // TODO this will have to match l10n formatting
-        // presetValues.put(CreateJobImportServlet.DATE_START_JOB + "Date",
-        // (calendar.get(Calendar.MONTH) + 1) + "/" +
-        // calendar.get(Calendar.DATE) + "/"
-        // + calendar.get(Calendar.YEAR));
-        // fp2.setPresetValues(presetValues);
-        // setPresetValues(fp2.getPresetValues());
 
     }
 

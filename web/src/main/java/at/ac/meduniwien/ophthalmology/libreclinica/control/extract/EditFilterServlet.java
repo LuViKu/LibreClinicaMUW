@@ -102,8 +102,7 @@ public class EditFilterServlet extends SecureController {
                 FilterDAO fdao = new FilterDAO(sm.getDataSource());
                 EntityBeanTable table = fp.getEntityBeanTable();
 
-                ArrayList<FilterBean> filters = fdao.findAll();// TODO make
-                // findAllByProject
+                ArrayList<FilterBean> filters = fdao.findAll(); // FilterDAO has no per-study query; all filters are listed
                 ArrayList<FilterRow> filterRows = FilterRow.generateRowsFromBeans(filters);
 
                 String[] columns =

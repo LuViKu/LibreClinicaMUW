@@ -945,25 +945,6 @@ public class ExtractBean {
         }// for
     }// addStudySubjectData
 
-    /*
-     * public void addStudySubjectData(Integer studySubjectId, String
-     * studySubjectLabel, Date dateOfBirth, String gender, Integer
-     * subjectStatusId, Boolean dobCollected, String uniqueIdentifier, String
-     * subjectSecondaryLabel) { if (!subjectsAdded.containsKey(studySubjectId))
-     * { StudySubjectBean sub = new StudySubjectBean();
-     * sub.setId(studySubjectId.intValue()); sub.setLabel(studySubjectLabel);
-     *
-     * sub.setDateOfBirth(dateOfBirth); if (gender != null && gender.length() >
-     * 0) { sub.setGender(gender.charAt(0)); } else { sub.setGender(' '); }
-     * sub.setStatus(Status.get(subjectStatusId.intValue())); //
-     * sub.setSecondaryLabel(secondaryID);//????
-     * sub.setUniqueIdentifier(uniqueIdentifier);
-     * sub.setSecondaryLabel(subjectSecondaryLabel); //
-     * sub.setEnrollmentDate(enrollmentDate); // TODO need to find enrollment
-     * date, later, tbh subjects.add(sub); subjectsAdded.put(studySubjectId,
-     * Boolean.TRUE); } }
-     */
-
     /**
      * @vbc 08/06/2008 NEW EXTRACT DATA IMPLEMENTATION Combines the two HashMaps
      *      into eventData entries - the data is already filtered for null

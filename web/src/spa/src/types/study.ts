@@ -7,7 +7,7 @@
  * is driven by these states; each task carries `count`, `status`, and
  * a deep-link `to` route for the SPA to consume.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): wire types derived from
+ * Phase E.5 follow-up (2026-06-02): wire types derived from
  * the openapi-typescript-generated {@code components.schemas}; narrow
  * id + status literal unions stay hand-typed.
  */

@@ -175,12 +175,6 @@ public class AssignUserToStudyServlet extends SecureController {
                 u.setName(name);
                 u.setEmail(email);
                 u.setActiveStudyId(ub.getActiveStudyId());
-                /* TODO setOwner is not compatible to UserAccountDao.findById (returns UserAccount), 
-                 * but it is compatible to UserAccountDAO.findByPK (returns UserAccountBean), 
-                 * there is already an instance variable userDaoDomain (of type UserAccountDao) 
-                 * for SecureController and to me it does not seem to be a good solution to add an 
-                 * instance variable of type UserAccountDAO additionally  
-                 */
                 u.setOwnerId(id);
                 addedUsers.add(id);
 
@@ -225,12 +219,6 @@ public class AssignUserToStudyServlet extends SecureController {
                     u.setId(idSelected);
                     u.setName(userAccountDao.findByPK(idSelected).getName());
                     u.setActiveStudyId(ub.getActiveStudyId());
-                    /* TODO setOwner is not compatible to UserAccountDao.findById (returns UserAccount), 
-                     * but it is compatible to UserAccountDAO.findByPK (returns UserAccountBean), 
-                     * there is already an instance variable userDaoDomain (of type UserAccountDao) 
-                     * for SecureController and to me it does not seem to be a good solution to add an 
-                     * instance variable of type UserAccountDAO additionally  
-                     */
                     u.setOwnerId(idSelected);
 
                     StudyUserRoleBean sub = new StudyUserRoleBean();

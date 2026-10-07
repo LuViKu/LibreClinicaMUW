@@ -152,7 +152,7 @@ public class RemoveCRFVersionServlet extends SecureController {
                                 item.setStatus(Status.AUTO_DELETED);
                                 item.setUpdater(ub);
                                 item.setUpdatedDate(new Date());
-                                idao.update(item);
+                                idao.updateStatusOnly(item);
                             }
                         }
                     }

@@ -34,12 +34,14 @@ const USERS: PrimaryNavItem = { id: 'manage-users', to: '/manage-users', labelKe
 const SITES: PrimaryNavItem = { id: 'sites', to: '/sites', labelKey: 'nav.sites' }
 
 /**
- * Per role, in the order the role reaches for them. Mirrors the router's
- * role meta: CRC has no due-visits or inbox route, so it gets neither link.
+ * Per role, in the order the role reaches for them. Every link is a route
+ * the role's own meta lists (the unit test checks it). A CRC also enters the
+ * Investigator routes (due visits, inbox) through `roleSatisfies`, but the
+ * nav keeps to its subject work and, since D5, the study build and export.
  */
 export const PRIMARY_NAV: Record<UserRole, PrimaryNavItem[]> = {
   Investigator: [SUBJECTS, NOTES, DUE_VISITS, INBOX],
-  CRC: [SUBJECTS, NOTES],
+  CRC: [SUBJECTS, NOTES, BUILD, EXPORT],
   Monitor: [SUBJECTS, SDV, NOTES, AUDIT],
   'Data Manager': [BUILD, INBOX, EXPORT, NOTES],
   Administrator: [USERS, SITES, EXPORT, AUDIT],
