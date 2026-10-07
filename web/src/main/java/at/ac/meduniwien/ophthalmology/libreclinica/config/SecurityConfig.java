@@ -64,9 +64,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * which does {@code Class.forName("javax.servlet.Filter")} — on a
  * jakarta-only classpath the class doesn't exist and the JVM throws
  * {@code NoClassDefFoundError} (not the {@code ClassNotFoundException} the
- * compat path catches). Security 7 dropped that check and the Ant matcher; the
+ * compat path catches). Security 7 has no Ant matcher at all; the
  * rules still pass explicit {@link PathPatternRequestMatcher} instances
- * via {@link #pathPatterns(String...)}, so they never depend on the MVC lookup.
+ * via {@link #pathPatterns(String...)}, so the rules never depend on the MVC lookup.
  */
 @Configuration
 @EnableWebSecurity
