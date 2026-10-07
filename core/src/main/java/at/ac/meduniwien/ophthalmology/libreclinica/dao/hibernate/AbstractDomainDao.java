@@ -80,19 +80,15 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
     }
 
     /**
-     * Still {@link Session#saveOrUpdate}, deprecated since Hibernate 6.0 and
-     * gone in 7. Neither replacement keeps its contract: {@code merge} returns
-     * a managed copy and leaves a detached argument detached, and
-     * {@code persist} rejects a detached entity reached by cascade. Callers
-     * rely on the argument itself becoming persistent (the rule import saves
-     * graphs that were loaded in an earlier request), so the move belongs with
-     * the Hibernate 7 upgrade, caller by caller.
+     * Persist a new entity (the instance itself becomes managed and gets its
+     * id), or merge a detached one. <b>Use the returned instance:</b> for a
+     * detached argument it is the managed copy and the argument stays detached.
+     * See {@link SessionSaveSupport} for the rules.
      */
-    @SuppressWarnings("deprecation")
     @Transactional
     public T saveOrUpdate(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        return getCurrentSession().merge(domainObject); // SPIKE: saveOrUpdate removed in Hibernate 7
+        return SessionSaveSupport.saveOrUpdate(getCurrentSession(), domainObject);
     }
 
     /**
@@ -108,7 +104,7 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
     @Transactional
     public Serializable save(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        getCurrentSession().persist(domainObject); // SPIKE stand-in kept from the gate
+        getCurrentSession().persist(domainObject);
         return (Serializable) getCurrentSession().getIdentifier(domainObject);
     }
 

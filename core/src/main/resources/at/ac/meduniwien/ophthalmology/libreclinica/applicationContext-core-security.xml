@@ -41,7 +41,8 @@
             <list>
                 <ref bean="ldapAuthenticationProvider"/>
                 <bean class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
-                    <constructor-arg ref="ocUserDetailsService"/><!-- SPIKE: Security 7 removed setUserDetailsService -->
+                    <!-- Security 7: the UserDetailsService is a constructor argument -->
+                    <constructor-arg ref="ocUserDetailsService"/>
                     <property name="passwordEncoder" ref="passwordEncoder"/>
                 </bean>
             </list>
