@@ -66,23 +66,16 @@ import org.springframework.context.annotation.ImportResource;
                 QuartzAutoConfiguration.class,
                 // C.7 removes: MailSenderAutoConfiguration
                 MailSenderAutoConfiguration.class,
-                // C.10/C.14: applicationContext-core-security.xml provides
-                // ocUserDetailsService; UserDetailsServiceAutoConfiguration
-                // excluded to stop Boot's generated-password banner.
-                // SPIKE: UserDetailsServiceAutoConfiguration has no Boot 4 module on this classpath
-                // SecurityAutoConfiguration is NOT excluded — Boot needs to
-                // provide the DelegatingFilterProxyRegistrationBean for
-                // springSecurityFilterChain. SecurityFilterAutoConfiguration
-                // would auto-register a SECOND DelegatingFilterProxy though —
-                // exclude that one specifically.
-                // SPIKE: SecurityFilterAutoConfiguration has no Boot 4 module on this classpath
-                // C.13 removes: LiquibaseAutoConfiguration
-                // SPIKE: LiquibaseAutoConfiguration has no Boot 4 module on this classpath
-                // Phase C.14: LdapAutoConfiguration tries to wire
-                // ObjectDirectoryMapper using ConverterUtils which is not in
-                // our pinned spring-ldap version. LDAP usage is via
-                // contextSource + ldapAuthenticationProvider XML beans.
-                // SPIKE: LdapAutoConfiguration has no Boot 4 module on this classpath
+                // Boot 4 split auto-configuration into modules. The Boot 3
+                // exclusions UserDetailsServiceAutoConfiguration,
+                // SecurityFilterAutoConfiguration, LiquibaseAutoConfiguration
+                // and LdapAutoConfiguration are gone with them: their modules
+                // (spring-boot-security, -liquibase, -ldap) are not on this
+                // classpath, so there is nothing to exclude. If spring-boot-security
+                // is ever added, exclude UserDetailsServiceAutoConfiguration (the
+                // ocUserDetailsService in applicationContext-core-security.xml
+                // replaces it) and the SecurityFilterAutoConfiguration decision
+                // needs a second look.
                 // Phase E.5 follow-up (2026-06-01): springdoc bean-creation
                 // configs excluded from the ROOT context so the same beans
                 // can be re-imported by WebMvcConfig into the `pages`
