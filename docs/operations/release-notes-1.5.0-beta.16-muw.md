@@ -10,7 +10,7 @@ For older releases see [release-notes-1.5.0-beta.15-muw.md](release-notes-1.5.0-
 2. **The setup script must run before the restart.** The production compose file now requires `POSTGRES_PASSWORD` and mounts the nginx sites directory and the `edge` network. The script provides all three.
 3. **Users will notice.** The legacy administration screens close, a large set of legacy links become POST-only, account lockout is on, and the self-service "forgot password" page is gone.
 
-Work through [Upgrading the app VM](#upgrading-the-app-vm) in order, then through [What needs a human to check](#what-needs-a-human-to-check-after-the-upgrade). **Read [The upload rate limit now works](#the-upload-rate-limit-now-works--watch-the-acquisition-pcs-8a9779085-fe87f5387) before the upgrade**: it changes what the acquisition PCs see.
+Work through [Upgrading the app VM](#upgrading-the-app-vm) in order, then through [What needs a human to check](#what-needs-a-human-to-check-after-the-upgrade).
 
 ---
 
@@ -162,19 +162,15 @@ These apply to **this** deployment too:
 - **Unchanged here:** body limits, timeouts and rate limiting. Those are per mode, and this deployment keeps the old values.
 - **DutyPlan** (DR-038) is served at `https://einteilung.augen.meduniwien.ac.at` through this nginx, over the external Docker network `edge`. Its server block is installed only once its certificate is in `/etc/libreclinica/tls/einteilung-augen.{crt,key}`, so a missing DutyPlan certificate can never stop the eCRF's nginx.
 
-### The upload rate limit now works — watch the acquisition PCs (8a9779085, fe87f5387)
+### The upload rate limit works, on the internet-facing deployment only (8a9779085, fe87f5387)
 
-The public-upload rate limit compared paths without the `/LibreClinica` context, so it had never throttled anything. It now works on both deployments:
+The public-upload rate limit compared paths without the `/LibreClinica` context, so it had never throttled anything. That is fixed, and the limit is now keyed on the client address Tomcat resolves rather than on a self-set `X-Forwarded-For`.
 
-- **The budgets.** Lookups are capped at 30 per hour per address and portal. Commits on the combined upload page get 300 per hour, and heartbeats 240 per hour.
-- **The key** is the client address Tomcat resolves, not a self-set `X-Forwarded-For`.
-
-**This changes what the Export Watcher and the Optomed Bridge see.** Both call `/public/upload/resolve` to find the visit of a capture:
-
-- the Watcher once per sweep;
-- the Bridge once per file.
-
-On a `429` they file that capture **without a visit**, and it waits unbound in the ingest inbox. On a busy clinic day a single acquisition PC can pass 30 lookups an hour. Nothing is lost, but captures may need binding by hand. See step 10, and [Still open](#still-open-at-this-release) for the fix this needs.
+- **It throttles only when the deployment is internet-facing.** That mode already answers `404` on the public portals and the device API, so there the limit is a second layer. The budgets:
+  - lookups: 30 per hour per address and portal;
+  - commits on the combined upload page: 300 per hour;
+  - heartbeats: 240 per hour.
+- **On this deployment it stays off, as it always effectively was.** The Export Watcher and the Optomed Bridge look up the visit of every capture through `/public/upload/resolve`. When refused, they file the capture without a visit. A 30-per-hour budget would have left captures unbound on a busy clinic day.
 
 ### The database layer moves (#388, #385, #376)
 
@@ -320,9 +316,7 @@ Do this outside clinic hours. The restart takes a few minutes, and everyone sign
 
 9. **Start the bake-in clock.** Record the upgrade date in `docs/development/modernization/phase-e-retirement-log.md` as the start of the six-month bake-in for waves W0 and W1. Review `<log dir>-legacy-access.log` monthly.
 
-10. **On the first clinic day, watch the ingest inbox and the uploader heartbeats.** Captures filed without a visit, and `rate-limited` problems in the uploader panel of *System Status*, mean the rate limit is biting. Bind those captures by hand, and report it: the fix is listed under [Still open](#still-open-at-this-release).
-
-11. **Watch the first working day more closely than usual.** Liquibase, Hibernate, Quartz and the PDF library all moved, and every clinical write gained a check. A refusal that should not happen shows as a `403` or `409` in the SPA with a reason; note the request id and send it in.
+10. **Watch the first working day more closely than usual.** Liquibase, Hibernate, Quartz and the PDF library all moved, and every clinical write gained a check. A refusal that should not happen shows as a `403` or `409` in the SPA with a reason; note the request id and send it in.
 
 ---
 
@@ -345,10 +339,7 @@ Do this outside clinic hours. The restart takes a few minutes, and everyone sign
 
 ## Still open at this release
 
-- **The upload rate limit and the uploaders.** On a `429`, the Export Watcher and the Optomed Bridge file captures unbound. The fix needs one or more of these:
-  - a larger lookup budget for the internal deployment, or the limit only in the internet-facing mode;
-  - the uploaders postponing instead of filing unbound;
-  - the Bridge batching its lookups.
+- **The uploaders and a rate limit.** Before the public portals could be throttled on this deployment, the uploaders would have to postpone a refused capture instead of filing it unbound, and the Bridge would have to batch its lookups.
 - **CVE-2026-47884 in `spring-webmvc` 6.2.19** (critical, in `XsltView`). The app configures no XSLT view, only the JSP resolver, so it is not reachable. The only fixed release is Spring 7.0.9, which needs Spring Boot 4, and open-source support for Spring 6.2 has ended. Until it is recorded as accepted, the Trivy step of the Security scan fails.
 - **Administrative correction of signed data.** Legacy allowed it and withdrew the signature. Both UIs now refuse it. Decide whether that correction path is needed.
 - **SPA annotations stored as "New"** before #390 are not migrated. Migrating them would be an audited data change.
