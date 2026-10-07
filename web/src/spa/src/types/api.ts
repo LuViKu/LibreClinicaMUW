@@ -3883,23 +3883,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/deidentification": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The newest de-identification scan of stored files and ingest rows, and its findings */
-        get: operations["deidentificationStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/storage": {
         parameters: {
             query?: never;
@@ -3973,6 +3956,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listJobs_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/deidentification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest de-identification scan of stored files and ingest rows, and its findings */
+        get: operations["deidentificationStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9643,6 +9643,8 @@ export interface operations {
                 studyEventId?: number;
                 park?: boolean;
                 device?: string;
+                deidConfirmed?: string;
+                deidSha256?: string;
             };
             header?: never;
             path?: never;
@@ -13146,26 +13148,6 @@ export interface operations {
             };
         };
     };
-    deidentificationStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
     storageUsage: {
         parameters: {
             query?: never;
@@ -13259,6 +13241,26 @@ export interface operations {
         };
     };
     listJobs_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deidentificationStatus: {
         parameters: {
             query?: never;
             header?: never;

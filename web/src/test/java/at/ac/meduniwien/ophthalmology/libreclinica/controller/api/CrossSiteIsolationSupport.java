@@ -214,6 +214,20 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
 
     static RetinalArtifactStorageService artifactStore;
 
+    /** The DATAINFO this class found, restored after it so the next class sees no change. */
+    private static java.util.Properties savedDatainfo;
+
+    @org.junit.jupiter.api.AfterAll
+    static void restoreDatainfo() throws Exception {
+        java.lang.reflect.Field dataInfo = CoreResources.class.getDeclaredField("DATAINFO");
+        dataInfo.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) dataInfo.get(null);
+        if (live != null && savedDatainfo != null) {
+            live.clear();
+            live.putAll(savedDatainfo);
+        }
+    }
+
     @BeforeAll
     static void seedWorld() throws Exception {
         // Another class of the same JVM left a MockMvc, sessions and fixtures bound to its own database.
@@ -224,6 +238,23 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         CrossSiteIsolationMatrix.reset();
         fileRoot = Files.createTempDirectory("isolation-it-");
         bscanRoot = Files.createDirectories(fileRoot.resolve("bscan-store"));
+        // The direct OCT upload and the staff upload write to
+        // core.retinalInference.e2eUploadsPath and core.ingest.storePath, which
+        // otherwise fall back to /var/lib/libreclinica. Other IT classes set and
+        // restore them, so without this the own-site controls depended on which
+        // class ran before (the OCT one failed on the CI runner).
+        java.lang.reflect.Field dataInfo = CoreResources.class.getDeclaredField("DATAINFO");
+        dataInfo.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) dataInfo.get(null);
+        savedDatainfo = new java.util.Properties();
+        if (live != null) {
+            savedDatainfo.putAll(live);
+            live.setProperty("core.retinalInference.e2eUploadsPath",
+                    Files.createDirectories(fileRoot.resolve("e2e-uploads")).toString());
+            // Same for the staff upload's artifact store (default /var/lib/libreclinica/ingest).
+            live.setProperty(at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore.CONFIG_KEY_STORE_PATH,
+                    Files.createDirectories(fileRoot.resolve("ingest-store")).toString());
+        }
         final String bscanRootStr = bscanRoot.toString();
         artifactStore = new RetinalArtifactStorageService() {
             @Override
