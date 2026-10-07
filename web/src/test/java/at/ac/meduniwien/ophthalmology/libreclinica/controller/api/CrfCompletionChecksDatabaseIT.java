@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -40,7 +42,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The checks legacy data entry makes on a CRF's values, made by the server
@@ -69,7 +70,7 @@ class CrfCompletionChecksDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int IFM_BP_SYS = 5;
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new EventCrfsApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new EventCrfsApiController(DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE),
                         Mockito.mock(CrfFileStorageService.class),
                         new EventCrfPresenceRegistry(),
@@ -440,7 +441,7 @@ class CrfCompletionChecksDatabaseIT extends AbstractApiControllerDatabaseIT {
     /* ------------------------------------------------------------------ */
 
     private MockMvc discrepancies() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new DiscrepancyApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

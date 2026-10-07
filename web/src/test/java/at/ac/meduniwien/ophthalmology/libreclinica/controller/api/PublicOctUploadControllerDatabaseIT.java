@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,7 +37,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
@@ -94,7 +95,7 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
     private MockMvc mockMvc() {
         StudySubjectFinder finder = new StudySubjectFinder(DATA_SOURCE);
         PublicOctUploadController c = new PublicOctUploadController(DATA_SOURCE, finder);
-        return MockMvcBuilders.standaloneSetup(c)
+        return ProductionMvc.standalone(c)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

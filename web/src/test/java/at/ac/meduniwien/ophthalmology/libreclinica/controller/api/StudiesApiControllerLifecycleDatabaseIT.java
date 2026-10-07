@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Removing and restoring a study through {@code POST /studies/{oid}/disable}
@@ -473,7 +474,7 @@ class StudiesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatab
     /* ------------------------------------------------------------------ */
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new StudiesApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new StudiesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -69,7 +71,6 @@ import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DatasetItemStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -281,7 +282,7 @@ class ExportSchedulesApiDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new ExportJobsApiController(DATA_SOURCE,
                                 new ExportScheduleRegistrar(SCHEDULER, DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())

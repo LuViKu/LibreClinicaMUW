@@ -1,0 +1,2 @@
+# Golden fixtures are byte-exact comparisons; never let git rewrite their line endings.
+web/src/test/resources/golden/** -text

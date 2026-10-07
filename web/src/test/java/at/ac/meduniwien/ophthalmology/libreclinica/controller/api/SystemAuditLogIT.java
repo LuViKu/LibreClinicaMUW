@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -25,7 +27,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -107,7 +108,7 @@ class SystemAuditLogIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void nonAdministratorIsForbidden() throws Exception {
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller()).build();
+        MockMvc mockMvc = ProductionMvc.standalone(controller()).build();
         mockMvc.perform(get("/api/v1/audit/system").session(nonAdminSession()))
                 .andExpect(status().isForbidden());
     }
@@ -134,7 +135,7 @@ class SystemAuditLogIT extends AbstractApiControllerDatabaseIT {
         // Sanity: the failure row landed.
         assertOperationFailureRowExists(marker);
 
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller()).build();
+        MockMvc mockMvc = ProductionMvc.standalone(controller()).build();
         mockMvc.perform(get("/api/v1/audit/system").session(sysAdminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.events").isArray())
@@ -173,7 +174,7 @@ class SystemAuditLogIT extends AbstractApiControllerDatabaseIT {
             long fileRestore = insertAudit(128, "ingest_item", 0, "status", "DISMISSED;reason=x", "UNBOUND");
             rows.addAll(List.of(reopen, crfRestore, ddeComplete, rfc, siteMove, fileRestore));
 
-            MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller()).build();
+            MockMvc mockMvc = ProductionMvc.standalone(controller()).build();
             mockMvc.perform(get("/api/v1/audit/system").session(sysAdminSession()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath(at(dateChange, "title")).value(hasItem("Study event start date changed")))

@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.http.converter.xml.MarshallingHttpMessageConverter;
@@ -279,11 +280,20 @@ public class WebMvcConfig {
         // Jackson-base64-stringified payload. Without this converter
         // the SPA's openapi-typescript codegen fetches `"eyJ..."` and
         // fails to parse.
-        a.setMessageConverters(List.of(
-                new ByteArrayHttpMessageConverter(),
-                marshallingHttpMessageConverter,
+        a.setMessageConverters(apiMessageConverters(marshallingHttpMessageConverter,
                 jacksonMessageConverter));
         return a;
+    }
+
+    /**
+     * The converter list of the {@code pages} dispatcher, in order. A static
+     * method so a test can build MockMvc on exactly what production reads and
+     * writes with, rather than on MockMvc's own defaults.
+     */
+    public static List<HttpMessageConverter<?>> apiMessageConverters(
+            MarshallingHttpMessageConverter marshalling,
+            HttpMessageConverter<?> json) {
+        return List.of(new ByteArrayHttpMessageConverter(), marshalling, json);
     }
 
     @Bean

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,7 +60,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Source data verification stays consistent with the data, against a real
@@ -102,7 +103,7 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
                 return attachments;
             }
         };
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventCrfsApiController(dataSource, filter, storage,
                                 new EventCrfPresenceRegistry(),
                                 new RetinalResultItemDataPopulator(dataSource)),
@@ -340,7 +341,7 @@ class SdvIntegrityDatabaseIT extends AbstractApiControllerDatabaseIT {
                 User.withUsername("manual_investigator").password("x").authorities("ROLE_USER").build(),
                 null, List.of()));
         try {
-            MockMvcBuilders.standaloneSetup(new SubjectsApiController(DATA_SOURCE, passwords,
+            ProductionMvc.standalone(new SubjectsApiController(DATA_SOURCE, passwords,
                             new SiteVisibilityFilter(DATA_SOURCE)))
                     .setControllerAdvice(new ApiExceptionHandler())
                     .build()

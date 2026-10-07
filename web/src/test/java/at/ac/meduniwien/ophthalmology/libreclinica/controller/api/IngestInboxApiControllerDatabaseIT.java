@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -83,7 +84,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new IngestInboxApiController(
+        return ProductionMvc.standalone(new IngestInboxApiController(
                         DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE),
                         new StudySubjectFinder(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
@@ -501,7 +502,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
 
         MockHttpSession sysadmin = dm();
         ((UserAccountBean) sysadmin.getAttribute("userBean")).addUserType(UserType.SYSADMIN);
-        MockMvcBuilders.standaloneSetup(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
+        ProductionMvc.standalone(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .build()
                 .perform(get("/api/v1/audit/system").session(sysadmin))
                 .andExpect(status().isOk())
@@ -549,7 +550,7 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
 
         MockHttpSession studyLog = sessionAs(Role.ADMIN);
         ((StudyUserRoleBean) studyLog.getAttribute("userRole")).setStudyId(1);
-        MockMvcBuilders.standaloneSetup(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
+        ProductionMvc.standalone(new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .build()
                 .perform(get("/api/v1/audit").session(studyLog))
                 .andExpect(status().isOk())

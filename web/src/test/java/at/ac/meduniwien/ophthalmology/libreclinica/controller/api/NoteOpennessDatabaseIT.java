@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -26,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Only a question is an open discrepancy. An annotation or a reason for
@@ -47,7 +48,7 @@ class NoteOpennessDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mvc() {
         SiteVisibilityFilter filter = new SiteVisibilityFilter(DATA_SOURCE);
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new DiscrepancyApiController(DATA_SOURCE, filter),
                         new SdvApiController(DATA_SOURCE, filter))
                 .setControllerAdvice(new ApiExceptionHandler())

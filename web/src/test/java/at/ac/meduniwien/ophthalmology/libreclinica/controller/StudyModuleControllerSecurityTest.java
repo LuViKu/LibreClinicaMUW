@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -30,7 +32,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.web.bind.support.SimpleSessionStatus;
 
@@ -91,7 +92,7 @@ class StudyModuleControllerSecurityTest {
     @ParameterizedTest
     @ValueSource(strings = {"deactivaterandomization", "reactivaterandomization"})
     void aGetCannotFlipAModule(String action) throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        MockMvc mvc = ProductionMvc.standalone(controller).build();
 
         mvc.perform(get("/studymodule/" + STUDY_OID + "/" + action).session(sessionOf(Role.COORDINATOR)))
                 .andExpect(status().isMethodNotAllowed());
@@ -146,7 +147,7 @@ class StudyModuleControllerSecurityTest {
 
     @Test
     void theFormBindsTheModuleStatesButNotTheRowOrStudyId() throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        MockMvc mvc = ProductionMvc.standalone(controller).build();
         MockHttpSession session = sessionOf(Role.COORDINATOR);
         StudyModuleStatus sms = new StudyModuleStatus();
         sms.setId(5);

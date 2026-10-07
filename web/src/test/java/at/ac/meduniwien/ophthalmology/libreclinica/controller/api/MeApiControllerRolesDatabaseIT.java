@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,7 +24,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Multi-role (M1 backend) — Testcontainers IT pinning the {@code /me}
@@ -72,7 +73,7 @@ class MeApiControllerRolesDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new MeApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new MeApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -100,14 +101,14 @@ class MeApiControllerRolesDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void getMeSaysWhetherDeidentificationIsRequired() throws Exception {
         MeApiController off = new MeApiController(DATA_SOURCE);
-        MockMvcBuilders.standaloneSetup(off).setControllerAdvice(new ApiExceptionHandler()).build()
+        ProductionMvc.standalone(off).setControllerAdvice(new ApiExceptionHandler()).build()
                 .perform(get("/api/v1/me").session(multiRoleSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.deidentificationRequired").value(false));
 
         MeApiController on = new MeApiController(DATA_SOURCE);
         on.setDeidentificationPolicy(DeidentificationPolicy.of(true));
-        MockMvcBuilders.standaloneSetup(on).setControllerAdvice(new ApiExceptionHandler()).build()
+        ProductionMvc.standalone(on).setControllerAdvice(new ApiExceptionHandler()).build()
                 .perform(get("/api/v1/me").session(multiRoleSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.deidentificationRequired").value(true));

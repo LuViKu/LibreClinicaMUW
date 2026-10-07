@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -33,7 +35,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,7 +83,7 @@ class SystemHealthDatabaseIT extends AbstractApiControllerDatabaseIT {
                 return config.getOrDefault(key, fallback);
             }
         };
-        return MockMvcBuilders.standaloneSetup(c).setControllerAdvice(new ApiExceptionHandler()).build();
+        return ProductionMvc.standalone(c).setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     private StorageUsageSampler sampler() {
@@ -102,7 +103,7 @@ class SystemHealthDatabaseIT extends AbstractApiControllerDatabaseIT {
                 return config.getOrDefault(key, fallback);
             }
         };
-        return MockMvcBuilders.standaloneSetup(c).setControllerAdvice(new ApiExceptionHandler()).build();
+        return ProductionMvc.standalone(c).setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     private static MockHttpSession sysadmin() {

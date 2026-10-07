@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,7 +61,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The role matrix of the SPA's clinical-data write APIs
@@ -93,7 +94,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 Mockito.mock(RetinalArtifactStorageService.class),
                 Mockito.mock(RetinalMetricComputer.class),
                 new RetinalJobStatusBroadcaster());
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventCrfsApiController(DATA_SOURCE, filter,
                                 Mockito.mock(CrfFileStorageService.class),
                                 new EventCrfPresenceRegistry(),

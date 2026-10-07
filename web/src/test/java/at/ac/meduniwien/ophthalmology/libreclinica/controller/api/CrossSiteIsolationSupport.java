@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -59,7 +61,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.junit.jupiter.api.BeforeAll;
 import org.mockito.Mockito;
 
@@ -586,7 +587,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         NamdClinicalApiController namd = new NamdClinicalApiController(DATA_SOURCE, FILTER);
         namd.setCrtComputeService(Mockito.mock(
                 at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.class));
-        MVC = MockMvcBuilders.standaloneSetup(
+        MVC = ProductionMvc.standalone(
                         new MeApiController(DATA_SOURCE),
                         new SubjectsApiController(DATA_SOURCE, securityManager, FILTER),
                         new EventCrfsApiController(DATA_SOURCE, FILTER,

@@ -1409,17 +1409,23 @@ public class DatasetsApiController {
      * wire is ever executed as a stored SQL string. An edit replaces the whole
      * set — the wizard has no notion of editing one row.
      */
+    private static final ObjectMapper FILTER_JSON = new ObjectMapper();
+
+    /** The JSON stored in {@code filter} for one wizard filter row. */
+    static String filterJson(DatasetFilterDto f) throws com.fasterxml.jackson.core.JsonProcessingException {
+        return FILTER_JSON.writeValueAsString(f);
+    }
+
     private void persistFilters(int datasetId, List<DatasetFilterDto> filters, UserAccountBean owner) {
         try {
             List<DatasetFilterDAO.PersistableFilter> rows = new ArrayList<>();
             if (filters != null) {
-                ObjectMapper mapper = new ObjectMapper();
                 for (DatasetFilterDto f : filters) {
                     if (f == null || f.itemOid() == null || f.operator() == null) continue;
                     rows.add(new DatasetFilterDAO.PersistableFilter(
                             f.itemOid() + " " + f.operator(),
                             "",
-                            mapper.writeValueAsString(f)));
+                            filterJson(f)));
                 }
             }
             new DatasetFilterDAO(dataSource).replaceAll(datasetId, owner, rows);

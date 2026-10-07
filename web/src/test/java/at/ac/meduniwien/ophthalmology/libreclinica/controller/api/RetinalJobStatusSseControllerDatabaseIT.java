@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -19,7 +21,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
@@ -78,7 +79,7 @@ class RetinalJobStatusSseControllerDatabaseIT extends AbstractApiControllerDatab
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new RetinalJobStatusSseController(DATA_SOURCE, visibilityFilter, broadcaster))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

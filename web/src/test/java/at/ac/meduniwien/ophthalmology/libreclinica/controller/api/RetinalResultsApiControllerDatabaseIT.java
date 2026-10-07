@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,7 +49,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Phase E.7 Wave 3 — happy-path IT against Testcontainers Postgres
@@ -207,7 +208,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         // the local-queue branch (status=queued, not remote_pending).
         RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remoteClient.isConfigured()).thenReturn(false);
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new RetinalResultsApiController(
                         DATA_SOURCE, visibilityFilter, artifactStore,
                         new StudySubjectFinder(DATA_SOURCE),
@@ -236,7 +237,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
      * two builders beats a second copy that drifts from this one.
      */
     private MockMvc artifactsMockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new RetinalJobArtifactsApiController(DATA_SOURCE, visibilityFilter, artifactStore))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
@@ -248,7 +249,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         SiteVisibilityFilter emptyFilter = Mockito.mock(SiteVisibilityFilter.class);
         Mockito.when(emptyFilter.visibleStudyIds(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(java.util.Set.of());
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new RetinalResultsApiController(
                         DATA_SOURCE, emptyFilter, artifactStore,
                         new StudySubjectFinder(DATA_SOURCE),

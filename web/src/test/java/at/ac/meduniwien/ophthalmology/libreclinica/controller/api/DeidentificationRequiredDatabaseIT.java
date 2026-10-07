@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -48,7 +50,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -189,7 +190,7 @@ class DeidentificationRequiredDatabaseIT extends AbstractApiControllerDatabaseIT
                         new DicomDescribeClient(
                                 "http://127.0.0.1:" + STUB.getAddress().getPort() + "/describe", TOKEN)));
         c.setDeidentificationPolicy(DeidentificationPolicy.of(required));
-        return MockMvcBuilders.standaloneSetup(c).setControllerAdvice(new ApiExceptionHandler()).build();
+        return ProductionMvc.standalone(c).setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     private MockHttpSession dm() {

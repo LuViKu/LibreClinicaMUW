@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -25,7 +27,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * A Monitor may re-query, reply to, reassign, close and re-open a query, as
@@ -50,7 +51,7 @@ class MonitorQueryAuthorityDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int ITEM_DATA = 29;
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new DiscrepancyApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

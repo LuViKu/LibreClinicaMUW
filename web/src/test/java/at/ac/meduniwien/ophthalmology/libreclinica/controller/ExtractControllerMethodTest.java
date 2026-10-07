@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -24,7 +26,6 @@ import org.quartz.Scheduler;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -47,7 +48,7 @@ class ExtractControllerMethodTest {
         ExtractController controller = new ExtractController();
         scheduler = mock(Scheduler.class);
         ReflectionTestUtils.setField(controller, "scheduler", scheduler);
-        mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mvc = ProductionMvc.standalone(controller).build();
     }
 
     /** A session whose role may not export, so a request that reaches the controller is sent home. */

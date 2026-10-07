@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * 2026-06-10 — Testcontainers IT for the explicit-targetLabel collision
@@ -96,7 +97,7 @@ class EyeTransitionLabelCollisionDatabaseIT extends AbstractApiControllerDatabas
         EyeCohortTransitionsApiController controller = new EyeCohortTransitionsApiController(
                 DATA_SOURCE,
                 new SiteVisibilityFilter(DATA_SOURCE));
-        return MockMvcBuilders.standaloneSetup(controller).build();
+        return ProductionMvc.standalone(controller).build();
     }
 
     /**

@@ -652,6 +652,11 @@ public class RetinalInferenceApiController {
      * to the remote envelope's placeholder fields — the operator can
      * still browse the segmentation and re-run.
      */
+    /** The {@code retinal_inference_result.output_payload} JSONB text. */
+    static String payloadJson(Map<String, Object> payloadMap) throws com.fasterxml.jackson.core.JsonProcessingException {
+        return JSON.writeValueAsString(payloadMap);
+    }
+
     private void insertResult(Connection c, long jobId, String task,
                               RemoteRunResult remote, Path artifactDir,
                               ComputedMetrics metrics) throws SQLException {
@@ -660,7 +665,7 @@ public class RetinalInferenceApiController {
                 : remote.outputPayload();
         String payloadJson;
         try {
-            payloadJson = JSON.writeValueAsString(payloadMap);
+            payloadJson = payloadJson(payloadMap);
         } catch (Exception jsonEx) {
             throw new SQLException("Failed to serialise output_payload for job " + jobId, jsonEx);
         }

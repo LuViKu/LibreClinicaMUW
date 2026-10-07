@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,7 +37,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * {@code POST /api/v1/me/activeStudy} for a system administrator who holds
@@ -157,7 +158,7 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
     /* ------------------------------------------------------------------ */
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new MeApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new MeApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

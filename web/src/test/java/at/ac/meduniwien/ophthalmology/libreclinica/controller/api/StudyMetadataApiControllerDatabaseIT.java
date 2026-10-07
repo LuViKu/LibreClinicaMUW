@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -45,7 +47,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.StaticWebApplicationContext;
 
@@ -200,7 +201,7 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new StudyMetadataApiController(DATA_SOURCE, RULES, CORE))
+        return ProductionMvc.standalone(new StudyMetadataApiController(DATA_SOURCE, RULES, CORE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

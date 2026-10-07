@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -48,7 +50,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
@@ -194,7 +195,7 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 new PublicOctUploadController(DATA_SOURCE, finder),
                 new PublicImageUploadController(DATA_SOURCE, finder),
                 new IngestUploadService(DATA_SOURCE, new IngestArtifactStore(), describe));
-        return MockMvcBuilders.standaloneSetup(c)
+        return ProductionMvc.standalone(c)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,7 +41,6 @@ import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * 2026-06-30 — IT for the nAMD treat-and-extend treatment-decision
@@ -158,7 +159,7 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
     }
 
     private MockMvc buildEventCrfsMockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new EventCrfsApiController(
                         DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE),
@@ -171,7 +172,7 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
 
     /** P3.6 — the clinical-flags timeline moved out of the retinal controller. */
     private MockMvc buildNamdClinicalMockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new NamdClinicalApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

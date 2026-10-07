@@ -29,12 +29,28 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 class CrfsApiControllerTest extends AbstractApiControllerTest {
 
-    private MockMvc mockMvcWith() {
-        return mockMvcFor(new CrfsApiController(mockDataSource(),
+    private CrfsApiController controller() {
+        return new CrfsApiController(mockDataSource(),
                 Mockito.mock(CrfSpreadsheetParserService.class),
                 new CrfJsonToWorkbookAdapter(),
                 new CrfJsonValidator(),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class)));
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class));
+    }
+
+    private MockMvc mockMvcWith() {
+        return mockMvcFor(controller());
+    }
+
+    /**
+     * {@code uploadVersion} takes {@code String} multipart parts, which the
+     * production converter list cannot read (RequestPartConverterGapTest); the
+     * guards under test run before any body is used.
+     */
+    private MockMvc mockMvcForUpload() {
+        return at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc
+                .standaloneWithStringParts(controller())
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
     }
 
     @Test
@@ -89,7 +105,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 "file", "demo.xls", "application/vnd.ms-excel", new byte[]{0x1, 0x2});
         MockMultipartFile versionName = new MockMultipartFile(
                 "versionName", "", "text/plain", "v1.0".getBytes());
-        mockMvcWith().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
+        mockMvcForUpload().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
                 .file(file)
                 .file(versionName)
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
@@ -102,7 +118,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 "file", "demo.pdf", "application/pdf", new byte[]{0x25, 0x50});
         MockMultipartFile versionName = new MockMultipartFile(
                 "versionName", "", "text/plain", "v1.0".getBytes());
-        mockMvcWith().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
+        mockMvcForUpload().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
                 .file(file)
                 .file(versionName)
                 .session((org.springframework.mock.web.MockHttpSession)
@@ -118,7 +134,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 "file", "demo.xls", "application/vnd.ms-excel", new byte[0]);
         MockMultipartFile versionName = new MockMultipartFile(
                 "versionName", "", "text/plain", "v1.0".getBytes());
-        mockMvcWith().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
+        mockMvcForUpload().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
                 .file(emptyFile)
                 .file(versionName)
                 .session((org.springframework.mock.web.MockHttpSession)
