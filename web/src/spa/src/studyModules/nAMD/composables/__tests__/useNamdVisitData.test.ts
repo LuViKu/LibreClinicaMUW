@@ -11,6 +11,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { ACTIVITY_THRESHOLD_NL } from '../../fluid'
+import { mm3ToNl } from '../useNamdVisitData'
 import {
   ABSENT_NL,
   CENTRAL_SRF_STRICT_INCREASE_NL,
@@ -18,16 +19,6 @@ import {
   NAMD_THRESHOLDS_VERSION,
   SRF_RING_1_3_INCREASE_NL,
 } from '../useNamdAiRecommendation'
-
-/**
- * The conversion under test. Kept as a local copy because the composable does
- * not export it and the arithmetic is the whole point — if this and the
- * composable ever disagree, the composable's own trigger tests fail.
- */
-function mm3ToNl(v: number | null | undefined): number {
-  if (v == null) return 0
-  return Math.round(v * 1000)
-}
 
 describe('mm³ → nL', () => {
   it('converts by the definition: 1 mm³ is 1000 nL', () => {
@@ -43,9 +34,10 @@ describe('mm³ → nL', () => {
     expect(mm3ToNl(0.0004)).toBe(0)
   })
 
-  it('treats a missing measurement as zero rather than NaN', () => {
-    expect(mm3ToNl(null)).toBe(0)
-    expect(mm3ToNl(undefined)).toBe(0)
+  it('keeps a missing measurement unknown (null) — never zero, never NaN', () => {
+    // 2026-10: this used to assert 0, which the rule engine read as "no fluid".
+    expect(mm3ToNl(null)).toBeNull()
+    expect(mm3ToNl(undefined)).toBeNull()
   })
 
   it('has no negative surprise for a zero measurement', () => {

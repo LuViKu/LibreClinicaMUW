@@ -29,7 +29,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * release their own locks — and {@code exitTo} is followed only when it is a
  * path inside this application.
  */
-@SuppressWarnings("all")
 public class CheckCRFLocked extends SecureController {
     /**
 	 *
@@ -52,6 +51,10 @@ public class CheckCRFLocked extends SecureController {
         String ecId = request.getParameter("ecId");
         if (ecId != null && !ecId.isEmpty()) {
             int crfId = Integer.parseInt(ecId);
+            if (crfId > 0) {
+                // whoever holds the lock is named: only for event CRFs of the session's study
+                assertEventCrfInScope(crfId);
+            }
             if (getCrfLocker().isLocked(crfId)) {
                 userId = getCrfLocker().getLockOwner(crfId);
                 UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());

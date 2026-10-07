@@ -23,7 +23,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu
  */
-@SuppressWarnings("all")
 public class ViewStudyUserServlet extends SecureController {
 
 	private static final long serialVersionUID = -3392123982341988217L;
@@ -53,6 +52,8 @@ public class ViewStudyUserServlet extends SecureController {
             forwardPage(Page.LIST_USER_IN_STUDY_SERVLET);
      	} else {
             int studyId = Integer.parseInt(studyIdString.trim());
+            // the study (site) whose user this is must be the session's study or one of its sites
+            assertRecordInScope(studyId);
 
             UserAccountBean user = udao.findByUserName(name);
             request.setAttribute("user", user);

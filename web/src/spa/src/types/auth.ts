@@ -47,12 +47,18 @@ export type AuthState =
 export type AuthenticatedUser =
   Omit<Required<components['schemas']['MeDto']>,
        'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
-       | 'passwordChangeReason' | 'activeStudy' | 'userType'>
+       | 'passwordChangeReason' | 'activeStudy' | 'userType' | 'deidentificationRequired'>
   & {
     role: UserRole
     source: AuthSource
     /** Optional for /me responses from before the field existed. */
     userType?: AccountType
+    /**
+     * True on the internet-facing deployment: uploaded imaging files must
+     * be de-identified in the browser first (and the server refuses the
+     * ones that are not). Absent/false → today's behaviour.
+     */
+    deidentificationRequired?: boolean
     email: string | null
     siteLabel: string | null
     locale: string | null

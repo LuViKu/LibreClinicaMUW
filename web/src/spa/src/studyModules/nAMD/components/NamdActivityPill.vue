@@ -21,11 +21,13 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-const isActive = computed(() => (props.activeFluidNl ?? 0) > ACTIVITY_THRESHOLD_NL)
+const isActive = computed(() => props.activeFluidNl != null && props.activeFluidNl > ACTIVITY_THRESHOLD_NL)
 </script>
 
 <template>
-  <Pill :tone="isActive ? 'active' : 'dry'">
+  <!-- Unknown volume is "—", never "dry". -->
+  <Pill v-if="props.activeFluidNl == null" tone="mute">—</Pill>
+  <Pill v-else :tone="isActive ? 'active' : 'dry'">
     {{ isActive ? t('studyModules.namd.activityActive') : t('studyModules.namd.activityDry') }}
   </Pill>
 </template>

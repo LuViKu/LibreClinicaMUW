@@ -60,7 +60,8 @@ const pillEyes = computed<Laterality[]>(() => {
 
 const totalFluidLabel = computed(() => {
   if (!props.current) return '—'
-  return `${Math.round(totalFluid(props.current))}`
+  const total = totalFluid(props.current)
+  return total == null ? '—' : `${Math.round(total)}`
 })
 </script>
 
@@ -140,7 +141,7 @@ const totalFluidLabel = computed(() => {
             {{ t('studyModules.namd.banner.totalFluid') }}
           </div>
           <div class="text-[15px] font-semibold text-slate-900 tabular-nums">
-            {{ totalFluidLabel }} nL
+            {{ totalFluidLabel }}{{ totalFluidLabel === '—' ? '' : ' nL' }}
           </div>
         </div>
       </div>

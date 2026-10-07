@@ -44,7 +44,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu Processes request to update a study subject
  */
-@SuppressWarnings("all")
 public class UpdateStudySubjectServlet extends SecureController {
 	private static final long serialVersionUID = -8773308388221272583L;
 
@@ -101,6 +100,12 @@ public class UpdateStudySubjectServlet extends SecureController {
             }
 
             StudySubjectBean sub = (StudySubjectBean) subdao.findByPK(studySubId);
+            // every action: the subject named by the request, and the one the earlier steps left in the session
+            assertRecordInScope(sub.getStudyId());
+            Object sessionSubject = session.getAttribute("studySub");
+            if (sessionSubject instanceof StudySubjectBean && ((StudySubjectBean) sessionSubject).getStudyId() > 0) {
+                assertRecordInScope(((StudySubjectBean) sessionSubject).getStudyId());
+            }
 
             StudyGroupClassDAO sgcdao = new StudyGroupClassDAO(sm.getDataSource());
             StudyGroupDAO sgdao = new StudyGroupDAO(sm.getDataSource());

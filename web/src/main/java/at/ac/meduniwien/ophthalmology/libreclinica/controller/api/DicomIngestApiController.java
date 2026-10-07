@@ -76,6 +76,14 @@ public class DicomIngestApiController {
 
     private final DataSource dataSource;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired
     public DicomIngestApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
@@ -104,6 +112,14 @@ public class DicomIngestApiController {
     public ResponseEntity<?> ingest(
             @RequestBody DicomIngestRequest req,
             @RequestHeader(value = TOKEN_HEADER, required = false) String token) {
+
+        // The C-STORE hand-off files a camera's DICOM as received, unverified
+        // and carrying the hospital's patient. Refused whenever
+        // de-identification is required, internet-facing or not; the sidecar
+        // then answers the camera with a failure instead of keeping the file.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.response(403, java.util.List.of("dicomHandoffClosed"));
+        }
 
         // Shared-secret gate — mirrors the sidecar's own auth check.
         String expected = cfg("core.dicom.ingest.token", "");

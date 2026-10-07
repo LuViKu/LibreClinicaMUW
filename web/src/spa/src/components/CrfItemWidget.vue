@@ -25,6 +25,7 @@ import FileUploadInput from './FileUploadInput.vue'
 
 import type { CrfItem } from '@/types/crf'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
+import { useAuthStore } from '@/stores/auth'
 
 interface Props {
   item: CrfItem
@@ -110,6 +111,14 @@ const hasError = computed(() => props.errorMessage != null)
  * OID-suffix heuristic below.
  */
 const catalogStore = useOphthFieldCatalogStore()
+
+/**
+ * Internet-facing deployment: a CRF attachment would carry whatever the file
+ * carries (a scan with a name in it, a PDF letter), and nothing strips it. The
+ * server refuses the upload too; this keeps the widget from offering it.
+ */
+const authStore = useAuthStore()
+const fileUploadBlocked = computed(() => authStore.user?.deidentificationRequired === true)
 const catalogEntry = computed(() => catalogStore.entryForOid(props.item.oid))
 
 const textBindings = computed(() => ({
@@ -702,11 +711,17 @@ function fileRef(): { filename: string; bytes: number } | null {
         :too-big-message="t('crfEntry.file.tooBig')"
         :bad-extension-message="t('crfEntry.file.badExtension')"
         :busy="fileBusy"
-        :disabled="disabled"
+        :disabled="disabled || fileUploadBlocked"
         :error="hasError"
         @upload="(f: File) => emit('upload-file', f)"
         @clear="emit('clear-file')"
       />
+      <p
+        v-if="fileUploadBlocked"
+        class="mt-1.5 text-[12px] text-amber-800"
+        role="note"
+        :data-testid="`${inputId}-file-deid-blocked`"
+      >{{ t('crfEntry.file.deidBlocked') }}</p>
     </template>
 
     <template v-else-if="compact && (item.dataType === 'integer' || item.dataType === 'real' || item.dataType === 'string')">

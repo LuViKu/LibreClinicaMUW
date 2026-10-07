@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import tempfile
+import threading
 import urllib.error
 from collections import OrderedDict
 from pathlib import Path
@@ -32,6 +33,7 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile, st
 
 from retinal_inference import config as _config
 from retinal_inference.inference.adapter import (
+    cancel_event,
     FastScreenUnavailable,
     UnsupportedTaskError,
     get_adapter,
@@ -48,10 +50,37 @@ LOG = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Single-request-at-a-time per sidecar process — keeps the shared tempdir's
-# disk pressure bounded (see plan § Open items + risks). uvicorn workers are
-# the unit of parallelism if the operator wants concurrency.
-_run_lock = asyncio.Lock()
+# Concurrency cap for /run (``max_concurrent_runs``; auto = 1 direct, 4 SLURM).
+#
+# Why this used to be a global Lock (investigated 2026-10-06):
+#   * Direct mode: every task shares ONE pinned GPU (CUDA_VISIBLE_DEVICES, picked
+#     at startup) on a node other tenants also use. Two concurrent models on that
+#     card is the CUDA-OOM failure the launcher already fights. This is the real
+#     reason and it only applies to direct mode.
+#   * Disk pressure on the shared tempdir (the original comment) -- minor.
+#   * It was NOT protecting shared state: each request gets its own
+#     ``mkdtemp`` under shared_tmpdir, the IOWA step stages into its own
+#     ``mkdtemp`` under /tmp, the adapter is read-only after construction, there
+#     are no metrics, and the idempotency cache is only touched from the event
+#     loop thread (never from the worker thread).
+#   * Side effect: the handler called the blocking adapter directly on the event
+#     loop, so a run froze the whole server (even /health). The adapter now runs
+#     in a worker thread so the loop stays responsive and N runs can overlap.
+# In SLURM mode GPU placement is SLURM's job, so the cap only bounds dispatcher
+# threads / /scratch use.
+_semaphore: asyncio.Semaphore | None = None
+_semaphore_key: tuple[int, int] | None = None
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    """Semaphore for the running loop and the current limit (rebuilt if either changes)."""
+    global _semaphore, _semaphore_key
+    limit = _config.settings.effective_max_concurrent_runs
+    key = (id(asyncio.get_running_loop()), limit)
+    if _semaphore is None or _semaphore_key != key:
+        _semaphore = asyncio.Semaphore(limit)
+        _semaphore_key = key
+    return _semaphore
 
 # Idempotency LRU. Maps caller-supplied Idempotency-Key → envelope so a
 # retry (network blip on the Java side) returns the cached result without
@@ -153,7 +182,7 @@ async def run(
     typed_task: TaskName = task  # type: ignore[assignment]
     typed_laterality: Literal["OD", "OS"] = laterality  # type: ignore[assignment]
 
-    async with _run_lock:
+    async with _get_semaphore():
         return await _run_locked(
             file=file,
             task=typed_task,
@@ -205,13 +234,26 @@ async def _run_locked(
         try:
             # Both adapters write their artifacts back into the same tempdir
             # (host-bind shared) via out_dir_override.
-            result = adapter.full_volume(
-                task,
-                input_path,
-                laterality,
-                out_dir_override=tempdir,
-                scan_index=scan_index,
-            )
+            # Worker thread: keeps the event loop (and /health) responsive and lets
+            # concurrent runs overlap. The cancel event tells the adapter to
+            # terminate its subprocess (srun -> SLURM cancels the job) if this
+            # request is cancelled.
+            cancel = threading.Event()
+            token = cancel_event.set(cancel)
+            try:
+                result = await asyncio.to_thread(
+                    adapter.full_volume,
+                    task,
+                    input_path,
+                    laterality,
+                    out_dir_override=tempdir,
+                    scan_index=scan_index,
+                )
+            except asyncio.CancelledError:
+                cancel.set()
+                raise
+            finally:
+                cancel_event.reset(token)
         except FastScreenUnavailable as e:
             # full_volume shouldn't raise this, but be defensive.
             raise HTTPException(status_code=500, detail=str(e)) from e

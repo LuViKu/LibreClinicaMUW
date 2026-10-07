@@ -37,6 +37,26 @@
  * pragmatically and should be revisited with the clinical lead
  * before production cut-over.
  *
+ * <h2>Fail-closed on unknown data (2026-10)</h2>
+ *
+ * <p>Every input is either a measured value or {@code null} = unknown (never
+ * recorded, or its fetch failed). Unknown is NOT zero and NOT "no disease":
+ * the engine used to read it that way, so a visit with no biomarkers, no BCVA
+ * or no flags could be told to EXTEND. Now:
+ *
+ * <ul>
+ *   <li>A SHORTEN trigger that is positively established from KNOWN data still
+ *     fires even when other inputs are missing. Conservative by construction:
+ *     SHORTEN is the safe direction, and a known worsening is not cancelled by
+ *     an unrelated gap. Each trigger is only evaluated on the inputs it needs.</li>
+ *   <li>Otherwise, if ANY input the rules need is unknown, the result is
+ *     {@code rec: null, reason: 'INSUFFICIENT_DATA', missing: [...]}. KEEP and
+ *     EXTEND are never reachable from unknown inputs (KEEP is a "no worsening
+ *     found" verdict and is as unsafe on unknown data as EXTEND).</li>
+ *   <li>A visit whose job came from a placeholder model (fake deterministic
+ *     volumes) never yields a recommendation, SHORTEN included.</li>
+ * </ul>
+ *
  * <p>First visit (no {@code prev}): the rule engine has nothing to
  * compare against. Returns null — the Overview tab falls through to a
  * "Loading-Phase — monatliche Injektion" copy block instead of a rec
@@ -46,7 +66,7 @@
 // Rule specification, thresholds in both units, and the sign-off record:
 // docs/development/study-modules/namd-treat-and-extend-rules.md
 import { computed, type ComputedRef } from 'vue'
-import type { NamdAiRecommendation, NamdTriggerHit, NamdVisit } from '../types'
+import type { NamdAiRecommendation, NamdFetchFailure, NamdMissingInput, NamdTriggerHit, NamdVisit } from '../types'
 
 // ─── Tunable thresholds ────────────────────────────────────────────
 //
@@ -93,13 +113,51 @@ export const MAX_EXTEND_WEEKS = 16
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-function central1mmSrf(v: NamdVisit | null): number {
-  return v?.fluidByRegion?.c1?.srf ?? 0
+/** Central-1mm SRF (nL), or null when the per-ring breakdown is unknown. */
+function central1mmSrf(v: NamdVisit): number | null {
+  return v.fluidByRegion?.c1?.srf ?? null
 }
-/** SRF inside the 1–3 mm ring annulus (central_3mm − central_1mm). */
-function ring1to3Srf(v: NamdVisit | null): number {
-  if (!v?.fluidByRegion) return 0
+/** SRF inside the 1–3 mm ring annulus (central_3mm − central_1mm), or null when unknown. */
+function ring1to3Srf(v: NamdVisit): number | null {
+  if (!v.fluidByRegion) return null
   return Math.max(0, v.fluidByRegion.c3.srf - v.fluidByRegion.c1.srf)
+}
+
+/**
+ * True for the model version the inference sidecar's placeholder adapter
+ * stamps on its fake deterministic volumes ("placeholder-v1", ...). Exported so
+ * the workspace can warn about it too.
+ */
+export function isPlaceholderModel(modelVersion: string | null | undefined): boolean {
+  return typeof modelVersion === 'string' && modelVersion.trim().toLowerCase().startsWith('placeholder')
+}
+
+/** Rule inputs of one visit that are unknown. */
+function missingFluidAndBcva(v: NamdVisit, scope: 'current' | 'previous'): NamdMissingInput[] {
+  const m: NamdMissingInput[] = []
+  if (v.irf == null) m.push(`${scope}.irf`)
+  if (v.srf == null) m.push(`${scope}.srf`)
+  if (v.ped == null) m.push(`${scope}.ped`)
+  if (v.fluidByRegion == null) m.push(`${scope}.fluidByRegion`)
+  if (v.bcva == null) m.push(`${scope}.bcva`)
+  return m
+}
+
+function insufficient(
+  missing: NamdMissingInput[],
+  placeholderModel: boolean,
+  fetchFailures: NamdFetchFailure[],
+): NamdAiRecommendation {
+  return {
+    rec: null,
+    reason: 'INSUFFICIENT_DATA',
+    missing,
+    placeholderModel,
+    fetchFailures,
+    intervalWeeks: null,
+    rationale: null,
+    triggersFired: [],
+  }
 }
 
 function hit(
@@ -173,101 +231,7 @@ export function useNamdAiRecommendation(
       return null
     }
 
-    const fired: NamdTriggerHit[] = []
-
-    // ─── SHORTEN bucket ───
-    const irfPrev = prevV.irf
-    const irfCur = cur.irf
-    const dIrf = irfCur - irfPrev
-    if (irfPrev <= ABSENT_NL && irfCur > ABSENT_NL) {
-      fired.push(hit('DE_NOVO_IRF', 'SHORTEN', irfCur, ABSENT_NL))
-    }
-    if (dIrf > IRF_INCREASE_NL) {
-      fired.push(hit('IRF_INCREASE', 'SHORTEN', dIrf, IRF_INCREASE_NL))
-    }
-    if (irfPrev > ABSENT_NL && irfCur > ABSENT_NL && irfCur < irfPrev) {
-      const dropFraction = (irfPrev - irfCur) / irfPrev
-      if (dropFraction < IRF_DECREASE_SUFFICIENT_PCT) {
-        fired.push(hit('IRF_DECREASE_INSUFFICIENT', 'SHORTEN',
-          dropFraction, IRF_DECREASE_SUFFICIENT_PCT))
-      }
-    }
-
-    const srfC1Prev = central1mmSrf(prevV)
-    const srfC1Cur = central1mmSrf(cur)
-    if (srfC1Prev <= ABSENT_NL && srfC1Cur > ABSENT_NL) {
-      fired.push(hit('DE_NOVO_CENTRAL_SRF', 'SHORTEN', srfC1Cur, ABSENT_NL))
-    }
-    const dCentralSrf = srfC1Cur - srfC1Prev
-    if (dCentralSrf > CENTRAL_SRF_STRICT_INCREASE_NL) {
-      fired.push(hit('CENTRAL_SRF_INCREASE', 'SHORTEN',
-        dCentralSrf, CENTRAL_SRF_STRICT_INCREASE_NL))
-    }
-
-    const srfRingPrev = ring1to3Srf(prevV)
-    const srfRingCur = ring1to3Srf(cur)
-    const dRing = srfRingCur - srfRingPrev
-    let ringIncrease = dRing >= SRF_RING_1_3_INCREASE_NL
-    if (!ringIncrease && reference?.value) {
-      const cum = srfRingCur - ring1to3Srf(reference.value)
-      if (cum >= SRF_RING_1_3_INCREASE_NL) ringIncrease = true
-    }
-    if (!ringIncrease && nadirSrfRing1to3Nl?.value != null) {
-      const cum = srfRingCur - nadirSrfRing1to3Nl.value
-      if (cum >= SRF_RING_1_3_INCREASE_NL) ringIncrease = true
-    }
-    if (ringIncrease) {
-      fired.push(hit('SRF_RING_1_3_INCREASE', 'SHORTEN', dRing, SRF_RING_1_3_INCREASE_NL))
-    }
-
-    if (cur.hemorrhage) {
-      fired.push(hit('NEW_HEMORRHAGE', 'SHORTEN'))
-    }
-    const dBcva = cur.bcva - prevV.bcva
-    if (dBcva <= -BCVA_LOSS_LETTERS && cur.bcvaAttributableToNamd) {
-      fired.push(hit('BCVA_LOSS_5_LETTERS', 'SHORTEN', dBcva, -BCVA_LOSS_LETTERS))
-    }
-
-    const shortens = fired.filter((t) => t.bucket === 'SHORTEN')
-
-    // ─── KEEP bucket — only relevant when no SHORTEN fired ───
-    if (shortens.length === 0) {
-      if (irfPrev > ABSENT_NL && irfCur > ABSENT_NL) {
-        const dropFraction = (irfPrev - irfCur) / irfPrev
-        if (dropFraction >= IRF_DECREASE_SUFFICIENT_PCT) {
-          fired.push(hit('RESIDUAL_IRF_HALVED', 'KEEP', dropFraction, IRF_DECREASE_SUFFICIENT_PCT))
-        } else if (Math.abs(dIrf) <= IRF_INCREASE_NL) {
-          fired.push(hit('RESIDUAL_IRF_STABLE', 'KEEP', dIrf, IRF_INCREASE_NL))
-        }
-      }
-      if (srfC1Cur > ABSENT_NL && srfC1Cur <= srfC1Prev) {
-        fired.push(hit('CENTRAL_SRF_IMPROVING', 'KEEP', dCentralSrf, 0))
-      }
-      const dActivity = (cur.irf + cur.srf + cur.ped) - (prevV.irf + prevV.srf + prevV.ped)
-      if (dActivity < 0 && (cur.irf + cur.srf + cur.ped) > ABSENT_NL) {
-        fired.push(hit('ACTIVITY_IMPROVING', 'KEEP', dActivity, 0))
-      }
-    }
-
-    // ─── EXTEND eligibility — all 4 conditions must hold ───
-    const irfAbsent = irfCur <= ABSENT_NL
-    const centralSrfAbsent = srfC1Cur <= ABSENT_NL
-    const noHemorrhageOrBcvaLoss = !cur.hemorrhage
-      && !(dBcva <= -BCVA_LOSS_LETTERS && cur.bcvaAttributableToNamd)
-    // "no SRF anywhere" OR "only isolated stable SRF in the 1–3 mm ring"
-    const ringStableOrAbsent = srfRingCur <= ABSENT_NL
-      || (Math.abs(dRing) <= SRF_RING_1_3_INCREASE_NL && srfRingCur <= srfRingPrev + ABSENT_NL)
-
-    if (irfAbsent) fired.push(hit('IRF_ABSENT', 'EXTEND', irfCur, ABSENT_NL))
-    if (centralSrfAbsent) fired.push(hit('CENTRAL_SRF_ABSENT', 'EXTEND', srfC1Cur, ABSENT_NL))
-    if (noHemorrhageOrBcvaLoss) fired.push(hit('NO_HEMORRHAGE_OR_BCVA_LOSS', 'EXTEND'))
-    if (ringStableOrAbsent) fired.push(hit('SRF_ISOLATED_1_3_STABLE', 'EXTEND', srfRingCur, ABSENT_NL))
-
-    const allExtendOk = irfAbsent && centralSrfAbsent
-      && noHemorrhageOrBcvaLoss && ringStableOrAbsent
-
-    // ─── Pick the rec ───
-    let rec: NamdAiRecommendation['rec']
+    // The interval a SHORTEN proposes steps down from; shared by both exits.
     // 2026-07-06 — derive the "last applied interval" from the week
     // gap between prev and current. `prevV.interval` is set from the
     // NAMD_DECISION_INTERVAL_WEEKS CRF item (when present) — but the
@@ -278,6 +242,162 @@ export function useNamdAiRecommendation(
     const spanWeeks = cur.week - prevV.week
     const baseInterval = prevV.interval
       ?? (spanWeeks > 0 ? spanWeeks : LOADING_INTERVAL_WEEKS)
+
+    const fetchFailures = [...new Set<NamdFetchFailure>([
+      ...(cur.fetchFailures ?? []),
+      ...(prevV.fetchFailures ?? []),
+    ])]
+
+    // A placeholder model's volumes are fake: refuse outright, SHORTEN included.
+    const placeholderModel = isPlaceholderModel(cur.modelVersion) || isPlaceholderModel(prevV.modelVersion)
+    if (placeholderModel) return insufficient([], true, fetchFailures)
+
+    // ─── What do we not know? ───
+    const missing: NamdMissingInput[] = [
+      ...missingFluidAndBcva(prevV, 'previous'),
+      ...missingFluidAndBcva(cur, 'current'),
+    ]
+    if (cur.hemorrhage == null) missing.push('current.hemorrhage')
+    if (cur.bcvaAttributableToNamd == null) missing.push('current.bcvaAttributableToNamd')
+    if (reference?.value && reference.value.fluidByRegion == null) missing.push('reference.fluidByRegion')
+
+    const fired: NamdTriggerHit[] = []
+
+    // ─── SHORTEN bucket — each trigger only on the inputs it needs ───
+    const irfPrev = prevV.irf
+    const irfCur = cur.irf
+    if (irfPrev != null && irfCur != null) {
+      const dIrf = irfCur - irfPrev
+      if (irfPrev <= ABSENT_NL && irfCur > ABSENT_NL) {
+        fired.push(hit('DE_NOVO_IRF', 'SHORTEN', irfCur, ABSENT_NL))
+      }
+      if (dIrf > IRF_INCREASE_NL) {
+        fired.push(hit('IRF_INCREASE', 'SHORTEN', dIrf, IRF_INCREASE_NL))
+      }
+      if (irfPrev > ABSENT_NL && irfCur > ABSENT_NL && irfCur < irfPrev) {
+        const dropFraction = (irfPrev - irfCur) / irfPrev
+        if (dropFraction < IRF_DECREASE_SUFFICIENT_PCT) {
+          fired.push(hit('IRF_DECREASE_INSUFFICIENT', 'SHORTEN',
+            dropFraction, IRF_DECREASE_SUFFICIENT_PCT))
+        }
+      }
+    }
+
+    const srfC1Prev = central1mmSrf(prevV)
+    const srfC1Cur = central1mmSrf(cur)
+    if (srfC1Prev != null && srfC1Cur != null) {
+      if (srfC1Prev <= ABSENT_NL && srfC1Cur > ABSENT_NL) {
+        fired.push(hit('DE_NOVO_CENTRAL_SRF', 'SHORTEN', srfC1Cur, ABSENT_NL))
+      }
+      const dCentralSrf = srfC1Cur - srfC1Prev
+      if (dCentralSrf > CENTRAL_SRF_STRICT_INCREASE_NL) {
+        fired.push(hit('CENTRAL_SRF_INCREASE', 'SHORTEN',
+          dCentralSrf, CENTRAL_SRF_STRICT_INCREASE_NL))
+      }
+    }
+
+    const srfRingPrev = ring1to3Srf(prevV)
+    const srfRingCur = ring1to3Srf(cur)
+    if (srfRingPrev != null && srfRingCur != null) {
+      const dRing = srfRingCur - srfRingPrev
+      let ringIncrease = dRing >= SRF_RING_1_3_INCREASE_NL
+      if (!ringIncrease && reference?.value) {
+        const refRing = ring1to3Srf(reference.value)
+        if (refRing != null && srfRingCur - refRing >= SRF_RING_1_3_INCREASE_NL) ringIncrease = true
+      }
+      if (!ringIncrease && nadirSrfRing1to3Nl?.value != null) {
+        const cum = srfRingCur - nadirSrfRing1to3Nl.value
+        if (cum >= SRF_RING_1_3_INCREASE_NL) ringIncrease = true
+      }
+      if (ringIncrease) {
+        fired.push(hit('SRF_RING_1_3_INCREASE', 'SHORTEN', dRing, SRF_RING_1_3_INCREASE_NL))
+      }
+    }
+
+    // Only a RECORDED true counts; null (unknown) is handled by the gate below.
+    if (cur.hemorrhage === true) {
+      fired.push(hit('NEW_HEMORRHAGE', 'SHORTEN'))
+    }
+    if (cur.bcva != null && prevV.bcva != null && cur.bcvaAttributableToNamd === true) {
+      const dBcva = cur.bcva - prevV.bcva
+      if (dBcva <= -BCVA_LOSS_LETTERS) {
+        fired.push(hit('BCVA_LOSS_5_LETTERS', 'SHORTEN', dBcva, -BCVA_LOSS_LETTERS))
+      }
+    }
+
+    const shortens = fired.filter((t) => t.bucket === 'SHORTEN')
+
+    // ─── Fail-closed gate ───
+    // Unknown inputs: a SHORTEN established from known data still stands; KEEP
+    // and EXTEND are not reachable, so anything else is insufficient data.
+    if (missing.length > 0) {
+      if (shortens.length === 0) return insufficient(missing, false, fetchFailures)
+      return {
+        rec: 'SHORTEN',
+        reason: null,
+        missing,
+        placeholderModel: false,
+        fetchFailures,
+        intervalWeeks: Math.max(baseInterval - SHIFT_WEEKS, LOADING_INTERVAL_WEEKS),
+        rationale: rationaleFor(shortens[0]),
+        triggersFired: shortens,
+      }
+    }
+
+    // Past the gate every input is known; the assertions below only restate that.
+    const irfPrevK = irfPrev as number
+    const irfCurK = irfCur as number
+    const dIrf = irfCurK - irfPrevK
+    const srfC1PrevK = srfC1Prev as number
+    const srfC1CurK = srfC1Cur as number
+    const dCentralSrf = srfC1CurK - srfC1PrevK
+    const srfRingPrevK = srfRingPrev as number
+    const srfRingCurK = srfRingCur as number
+    const dRing = srfRingCurK - srfRingPrevK
+    const dBcva = (cur.bcva as number) - (prevV.bcva as number)
+    const totalPrev = irfPrevK + (prevV.srf as number) + (prevV.ped as number)
+    const totalCur = irfCurK + (cur.srf as number) + (cur.ped as number)
+
+    // ─── KEEP bucket — only relevant when no SHORTEN fired ───
+    if (shortens.length === 0) {
+      if (irfPrevK > ABSENT_NL && irfCurK > ABSENT_NL) {
+        const dropFraction = (irfPrevK - irfCurK) / irfPrevK
+        if (dropFraction >= IRF_DECREASE_SUFFICIENT_PCT) {
+          fired.push(hit('RESIDUAL_IRF_HALVED', 'KEEP', dropFraction, IRF_DECREASE_SUFFICIENT_PCT))
+        } else if (Math.abs(dIrf) <= IRF_INCREASE_NL) {
+          fired.push(hit('RESIDUAL_IRF_STABLE', 'KEEP', dIrf, IRF_INCREASE_NL))
+        }
+      }
+      if (srfC1CurK > ABSENT_NL && srfC1CurK <= srfC1PrevK) {
+        fired.push(hit('CENTRAL_SRF_IMPROVING', 'KEEP', dCentralSrf, 0))
+      }
+      const dActivity = totalCur - totalPrev
+      if (dActivity < 0 && totalCur > ABSENT_NL) {
+        fired.push(hit('ACTIVITY_IMPROVING', 'KEEP', dActivity, 0))
+      }
+    }
+
+    // ─── EXTEND eligibility — all 4 conditions must hold ───
+    const irfAbsent = irfCurK <= ABSENT_NL
+    const centralSrfAbsent = srfC1CurK <= ABSENT_NL
+    // Both flags are RECORDED here (the gate above rules out null), so
+    // `=== false` is a physician's "no", not a default.
+    const noHemorrhageOrBcvaLoss = cur.hemorrhage === false
+      && !(dBcva <= -BCVA_LOSS_LETTERS && cur.bcvaAttributableToNamd === true)
+    // "no SRF anywhere" OR "only isolated stable SRF in the 1–3 mm ring"
+    const ringStableOrAbsent = srfRingCurK <= ABSENT_NL
+      || (Math.abs(dRing) <= SRF_RING_1_3_INCREASE_NL && srfRingCurK <= srfRingPrevK + ABSENT_NL)
+
+    if (irfAbsent) fired.push(hit('IRF_ABSENT', 'EXTEND', irfCurK, ABSENT_NL))
+    if (centralSrfAbsent) fired.push(hit('CENTRAL_SRF_ABSENT', 'EXTEND', srfC1CurK, ABSENT_NL))
+    if (noHemorrhageOrBcvaLoss) fired.push(hit('NO_HEMORRHAGE_OR_BCVA_LOSS', 'EXTEND'))
+    if (ringStableOrAbsent) fired.push(hit('SRF_ISOLATED_1_3_STABLE', 'EXTEND', srfRingCurK, ABSENT_NL))
+
+    const allExtendOk = irfAbsent && centralSrfAbsent
+      && noHemorrhageOrBcvaLoss && ringStableOrAbsent
+
+    // ─── Pick the rec ───
+    let rec: 'SHORTEN' | 'KEEP' | 'EXTEND'
     let next: number
     if (shortens.length > 0) {
       rec = 'SHORTEN'
@@ -306,6 +426,10 @@ export function useNamdAiRecommendation(
     const top = fired.find((t) => t.bucket === topBucket)
     return {
       rec,
+      reason: null,
+      missing: [],
+      placeholderModel: false,
+      fetchFailures,
       intervalWeeks: next,
       rationale: rationaleFor(top),
       triggersFired: fired,

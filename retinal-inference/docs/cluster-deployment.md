@@ -17,14 +17,14 @@ LibreClinica (app VM, 149.148.170.183) — converts .e2e → bscan.dcm (PHI-reda
 inference server  (bare venv Python 3.11 on the cluster; ADAPTER=apptainer; DICOM-only)
    │  per scan: write bscan.dcm into a tempdir on /scratch, run the model's .sif
    ▼
-   singularity exec --nv <model>.sif …   (direct now; srun-per-scan once a SLURM account exists)
+   singularity exec --nv <model>.sif …   (direct now; srun-per-scan in SLURM mode, §4)
    → parse output → JSON envelope → tempdir deleted (stateless)
 ```
 
 Confirmed cluster facts (June 2026): same internal network (cn5↔app VM route, HTTP
 302); `/scratch` is shared NFS (3.4 T free); SLURM caps every partition at 2 days;
 **the user has no SLURM association yet** (so `srun` is blocked — direct mode until
-an admin grants an account, likely `optima`); the container runtime is
+an admin grants an account; account name unknown, see §4); the container runtime is
 **`singularity 3.8.7` at `/usr/bin/singularity`** (no `apptainer`, no module).
 
 ## 1a. Which nodes can actually run this (GPU architecture)
@@ -399,17 +399,163 @@ Validate the config before reloading, since this file also serves the eCRF:
 sudo nginx -t && sudo docker compose exec nginx nginx -s reload
 ```
 
-## 4. Flip to SLURM (production, after an account is granted)
+## 4. SLURM mode (decided 2026-10-06: one `srun` job per scan)
+
+**Decision.** Move from direct mode (a resident uvicorn on on3, failover to cn6,
+outside SLURM) to SLURM mode. The resident server becomes a thin dispatcher; each
+`/run` task executes as one blocking `srun` job on a Turing GPU. Reasons:
+
+- **Direct mode is invisible to SLURM.** `sinfo` shows on3 and cn6 as `State=IDLE`
+  while our server holds their GPUs, so SLURM schedules *other users' jobs onto the
+  same cards*. That is the likely cause of the CUDA OOM kills (§1a). Under SLURM
+  every card we use is allocated to us for the length of the job.
+- No hand-picked GPU index (`pick_idle_gpu` was a startup-time guess).
+- Several scans can run at once on different cards (`max_concurrent_runs`).
+- The long-lived footprint on a contended node disappears.
+
+### Facts gathered 2026-10-06
+
+- User `lkuchernig` has **no SLURM association yet** (requested from the admins);
+  the account name is unknown. It is a **required** setting in SLURM mode.
+- Partition `full_optima` (MaxTime 2d) contains every Turing node: on3
+  `gpu:nv2080ti:6`, cn6 `:4`, vn1 `:4`, vn2 `:4`, cn5 (DOWN)
+  `nvtitanxp:3,nv2080ti:2,nvtitanv:1` -- and also non-Turing nodes (on1 `nvk80`,
+  on2 `nv3080ti`, on4 `nva6000`/`nva6000ada`, on5 `nva6000`) plus CPU-only cn1,
+  cn2, on0. vn1/vn2 are also in `centos7_vn1` (possibly a different OS image).
+- **Typed GRES works:** `--gres=gpu:nv2080ti:1` restricts the job to 2080 Ti nodes.
+  This is **mandatory**: `pr` and `bm` fail on Ampere/Ada with "no kernel image"
+  (§1a), and an untyped `gpu:1` request can land there.
+- QoS: `normal` (no limits, no per-user limits), `longrunning`, `jobarray`,
+  `*_msc`, ...
+
+### Settings
+
+| Env var (`RETINAL_INFERENCE_` prefix) | Default | Notes |
+|---|---|---|
+| `APPTAINER_USE_SLURM` | `false` | `true` = SLURM mode |
+| `APPTAINER_SLURM_ACCOUNT` | none | **Required** in SLURM mode; startup fails without it |
+| `APPTAINER_SLURM_PARTITION` | none (SLURM default) | use `full_optima` |
+| `APPTAINER_SLURM_GRES` | `gpu:nv2080ti:1` | must be typed (`gpu:<type>:<n>`); an untyped value is refused at startup |
+| `APPTAINER_SLURM_ALLOW_UNTYPED_GRES` | `false` | explicit override for the check above (not recommended) |
+| `APPTAINER_SLURM_TIME` | `01:00:00` | walltime per job |
+| `APPTAINER_SLURM_MEM` | none | e.g. `32G` |
+| `APPTAINER_SLURM_CPUS_PER_TASK` | none | |
+| `APPTAINER_SLURM_QOS` | none | |
+| `APPTAINER_SLURM_CONSTRAINT` | none | feature tags cannot separate on3/cn6 from vn1/vn2 (identical `bigmem,intel,bigGPUmem`) |
+| `APPTAINER_SLURM_EXCLUDE` | none | `--exclude`; **recommended `vn1,vn2,cn5`** until vn1/vn2 are validated (cn5 is DOWN) |
+| `APPTAINER_SLURM_NODELIST` | none | `--nodelist` for GPU jobs, e.g. `on3,cn6` |
+| `APPTAINER_SLURM_IOWA_CPUS_PER_TASK`, `_IOWA_MEM` | none | sizing of the CPU-only IOWA job |
+| `APPTAINER_SLURM_JOB_NAME` | `ri` | job name is `<prefix>-<task>` (e.g. `ri-fluid`); never a patient or scan identifier, because job names are visible to all users in `squeue` |
+| `MAX_CONCURRENT_RUNS` | 1 direct / 4 SLURM | simultaneous `/run` executions in this process |
+
+In SLURM mode **all** GPU work goes through `srun`: the `.sif` tasks (fluid, onl,
+pr, ga) and the host-native `bm` venv. No `CUDA_VISIBLE_DEVICES` is pinned.
+`/health` reports `mode` (`direct` | `slurm`), `max_concurrent_runs` and, in SLURM
+mode, `slurm_partition` / `slurm_gres` (never the account).
+
+**IOWA runs under SLURM too.** The IOWA step of `ga` and `layers`
+(`OCTLayerSeg3.6` + converter) is CPU-only and host-native, but the dispatcher
+host is itself a SLURM node the scheduler considers idle, so running it there
+would recreate the out-of-band load problem. In SLURM mode it is one CPU-only
+`srun` job (`ri-iowa`: same account/partition/time/qos/exclude, **no gres**, own
+`IOWA_CPUS_PER_TASK` / `IOWA_MEM`). The `/tmp` staging workaround (IOWA SIGSEGVs
+on `/scratch` inputs) uses node-local `/tmp`, so the *job* stages onto the compute
+node's `/tmp`, runs binary + converter, and copies `layers_csv` / `layerseg` back
+to the shared work dir. Whether the compute nodes' `/tmp` avoids the crash the way
+the dispatcher's did is unverified. The libs (`GA_IOWA_LD_LIBRARY_PATH`) must be
+visible on the node (they live under `/home/optima` and the shared home).
+
+**Cancellation.** If a request is abandoned or a job exceeds the 3600 s dispatcher
+timeout, the dispatcher sends `srun` SIGTERM (it forwards that and cancels the
+job), and SIGKILL only after 15 s. Check `squeue -u $USER` after a forced restart
+for orphans; `scancel -u $USER --name=ri-fluid` etc. removes them.
+
+### Admin request
+
+Ask the OPTIMA admins for:
+
+1. A SLURM **association** for `lkuchernig` (tell us the account name).
+2. Access to partition **`full_optima`** with QoS `normal`.
+3. Confirmation that **typed GRES** `gpu:nv2080ti:N` is the supported way to pick
+   Turing cards (and that on3/cn6/vn1/vn2 stay the 2080 Ti nodes).
+4. Optionally: a **priority QoS or a small reservation** (e.g. one 2080 Ti on cn6)
+   so clinical scans do not queue behind long research jobs.
+5. Where the **dispatcher** may run: a long-lived uvicorn on a login/CPU node
+   (on0, cn1, cn2, or on3/cn6 itself), or must it be elsewhere? It needs
+   `/scratch`, `/home/optima`, `srun`, and to be reachable from the app VM.
+
+### Verify before switching
+
 ```sh
-RETINAL_INFERENCE_APPTAINER_USE_SLURM=true \
-RETINAL_INFERENCE_APPTAINER_SLURM_PARTITION=full_optima \
-RETINAL_INFERENCE_APPTAINER_SLURM_ACCOUNT=<account> \
-RETINAL_INFERENCE_APPTAINER_SLURM_TIME=01:00:00 \
-RETINAL_INFERENCE_APPTAINER_SLURM_GRES=gpu:1
+sacctmgr show assoc user=$USER format=user,account,partition,qos     # association exists
+sinfo -p full_optima -o "%N %G %t"                                    # Turing nodes up
+scontrol show partition full_optima                                   # MaxTime, AllowQos
+srun --account=ACCOUNT --partition=full_optima --gres=gpu:nv2080ti:1 \
+     --time=00:05:00 nvidia-smi -L                                    # must print a 2080 Ti
 ```
-Each scan then runs as one blocking `srun … apptainer exec --nv …` job (no GPU
-pin — SLURM assigns it). `shared_tmpdir` MUST stay on the shared FS so the
-compute node sees the `bscan.dcm`.
+
+Then one real scan per task with `RI_SLURM=1` (§3b) and compare to direct mode.
+
+### Per-task validation on vn1 / vn2 (before relying on them)
+
+`full_optima` can place a job on vn1/vn2, which have not been validated for this
+workload (and are also in `centos7_vn1`, possibly another OS image). Until each
+task has passed there, either keep jobs off them with
+`RI_SLURM_EXCLUDE=vn1,vn2,cn5` (recommended setting for now; cn5 is DOWN; feature
+tags cannot separate the nodes) or validate. On vn1
+and vn2, via `srun --gres=gpu:nv2080ti:1 ...`, check:
+
+```sh
+ls /home/optima/octreader /home/optima/$USER          # shared NFS home visible
+ls /scratch/$USER/retinal-inference/tmp               # shared_tmpdir visible
+ls -l /usr/bin/singularity && singularity --version   # 3.8.7
+```
+
+then run all six tasks end to end. Same bar as §1a: a node that answers but fails
+two tasks is worse than one that is down.
+
+### Env block (SLURM mode)
+
+Use the tracked launcher; it sets everything below and refuses to start without the
+account:
+
+```sh
+export RETINAL_INFERENCE_AUTH_TOKEN='<shared-secret>'
+export RI_SLURM_ACCOUNT=ACCOUNT        # required
+export RI_SLURM_EXCLUDE=vn1,vn2,cn5   # until vn1/vn2 are validated
+# optional: RI_SLURM_PARTITION (full_optima) RI_SLURM_GRES (gpu:nv2080ti:1)
+#           RI_SLURM_TIME RI_SLURM_MEM RI_SLURM_CPUS RI_SLURM_QOS
+#           RI_SLURM_CONSTRAINT RI_SLURM_NODELIST RI_MAX_CONCURRENT (4)
+#           RI_SLURM_EXCLUDE (recommended: vn1,vn2,cn5)
+#           RI_SLURM_IOWA_CPUS RI_SLURM_IOWA_MEM
+retinal-inference/scripts/start-cluster-server.sh --slurm --check
+retinal-inference/scripts/start-cluster-server.sh --slurm
+```
+
+By hand that is:
+
+```sh
+RETINAL_INFERENCE_APPTAINER_USE_SLURM=true
+RETINAL_INFERENCE_APPTAINER_SLURM_ACCOUNT=ACCOUNT
+RETINAL_INFERENCE_APPTAINER_SLURM_PARTITION=full_optima
+RETINAL_INFERENCE_APPTAINER_SLURM_GRES=gpu:nv2080ti:1
+RETINAL_INFERENCE_APPTAINER_SLURM_TIME=01:00:00
+RETINAL_INFERENCE_MAX_CONCURRENT_RUNS=4
+```
+
+`shared_tmpdir` MUST stay on the shared FS so the compute node sees the
+`bscan.dcm`. The watchdog (§3c) is unchanged: it watches the dispatcher process.
+For systemd, set `RI_SLURM=1` and the `RI_SLURM_*` vars in the unit's environment.
+
+### Rollback to direct mode
+
+```sh
+unset RI_SLURM RI_SLURM_ACCOUNT        # or: RI_SLURM=0
+retinal-inference/scripts/start-cluster-server.sh
+```
+
+That restores `APPTAINER_USE_SLURM=false`, the idle-GPU pick and
+`MAX_CONCURRENT_RUNS=1`. Cancel any leftover jobs with `scancel -u $USER`.
 
 ## 5. Wire the app VM
 Set `core.retinalInference.remotePushUrl` to the sidecar's **base URL** and the
@@ -482,5 +628,12 @@ the clinical metric — so there is no server-side metric to eyeball. See each
 - **ONL/PR clinical metric**: the server returns the raw surface CSVs only; the
   Java backend computes the ONL thickness / PR depth (µm). Confirm the exact
   clinical definition Java-side.
+- **SLURM account name + association** for `lkuchernig` (requested; SLURM mode
+  cannot start without it).
 - **Dispatcher host / persistence policy**: confirm a long-lived service is
-  allowed on a node, else submit from the app VM over SSH.
+  allowed on a node (which one, given IOWA runs on it), else submit from the app VM
+  over SSH.
+- **Priority QoS / reservation** for clinical scans (§4 admin request).
+- **vn1 / vn2** per-task validation (§4) before `full_optima` may place jobs there.
+- **Concurrency cap** (`MAX_CONCURRENT_RUNS`, default 4 in SLURM mode): tune after
+  observing queue wait and IOWA CPU load on the dispatcher host.

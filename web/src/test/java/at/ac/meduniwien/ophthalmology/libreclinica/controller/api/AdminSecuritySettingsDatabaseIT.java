@@ -340,19 +340,24 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void aLockoutChangeIsStoredAsTheLegacyFormStoredItAndAudited() throws Exception {
-        JsonNode after = save("{\"lockoutEnabled\":true,\"lockoutFailedAttempts\":5}");
-        assertTrue(after.path("lockoutEnabled").asBoolean(), "the answer carries the stored switch");
-        assertEquals(5, after.path("lockoutFailedAttempts").asInt(-1));
+        // lc-muw-2026-10-06-account-lockout turns the lockout on, at five
+        // attempts, wherever the seeded "off, three" was still in place.
+        assertEquals("TRUE", SEEDED.get(SWITCH), "the lockout is on by default");
+        assertEquals("5", SEEDED.get(ATTEMPTS), "five failed attempts by default");
 
-        assertEquals("TRUE", stored(SWITCH));
-        assertEquals("5", stored(ATTEMPTS));
+        JsonNode after = save("{\"lockoutEnabled\":false,\"lockoutFailedAttempts\":7}");
+        assertFalse(after.path("lockoutEnabled").asBoolean(), "the answer carries the stored switch");
+        assertEquals(7, after.path("lockoutFailedAttempts").asInt(-1));
+
+        assertEquals("FALSE", stored(SWITCH));
+        assertEquals("7", stored(ATTEMPTS));
         assertEquals(List.of(
-                        List.of(SWITCH, SEEDED.get(SWITCH), "TRUE", "1", "true"),
-                        List.of(ATTEMPTS, SEEDED.get(ATTEMPTS), "5", "1", "true")),
+                        List.of(SWITCH, SEEDED.get(SWITCH), "FALSE", "1", "true"),
+                        List.of(ATTEMPTS, SEEDED.get(ATTEMPTS), "7", "1", "true")),
                 auditRows());
 
-        save("{\"lockoutEnabled\":false}");
-        assertEquals("FALSE", stored(SWITCH));
+        save("{\"lockoutEnabled\":true}");
+        assertEquals("TRUE", stored(SWITCH));
         assertEquals(3, auditRows().size());
     }
 
@@ -367,7 +372,7 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void theSystemAuditLogNamesTheSettingThatChanged() throws Exception {
-        save("{\"lockoutEnabled\":true}");
+        save("{\"lockoutEnabled\":false}");
 
         MockMvc audit = MockMvcBuilders.standaloneSetup(
                         new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
@@ -383,8 +388,8 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals("System setting changed", row.get("title").asText());
         assertEquals("admin", row.get("variant").asText());
         assertEquals("root", row.get("actor").asText());
-        assertEquals("no", row.get("before").asText());
-        assertEquals("yes", row.get("after").asText());
+        assertEquals("yes", row.get("before").asText());
+        assertEquals("no", row.get("after").asText());
     }
 
     @Test

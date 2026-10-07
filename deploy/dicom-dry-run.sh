@@ -49,6 +49,8 @@ if [ -n "${COMPOSE_FILES:-}" ]; then
   COMPOSE=(docker compose ${COMPOSE_FILES})
 elif [ -f deploy/compose.production.yaml ]; then
   COMPOSE=(docker compose -f compose.yaml -f deploy/compose.production.yaml)
+  # The overlay requires POSTGRES_PASSWORD (no fallback); take it from the host env file.
+  [ -r /etc/libreclinica/env ] && COMPOSE+=(--env-file /etc/libreclinica/env)
 else
   COMPOSE=(docker compose)
 fi

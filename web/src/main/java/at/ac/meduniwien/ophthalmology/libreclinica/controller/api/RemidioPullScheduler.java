@@ -124,6 +124,18 @@ public class RemidioPullScheduler {
         this.dataSource = dataSource;
     }
 
+    /** Null (hand-built schedulers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
+    boolean pullClosed() {
+        return DeidentificationPolicy.required(deidPolicy);
+    }
+
     @Scheduled(fixedDelay = 30_000, initialDelay = 90_000)
     public void tick() {
         if (!enabled()) return;
@@ -135,7 +147,7 @@ public class RemidioPullScheduler {
             // The sync first: a visit scheduled a minute ago should be on the
             // phone before its capture could possibly come back through the pull.
             if (patientSyncEnabled()) syncOnce();
-            runOnce();
+            if (!pullClosed()) runOnce();
         } finally {
             running.set(false);
         }
@@ -230,6 +242,13 @@ public class RemidioPullScheduler {
      * @return the pass's summary, or empty when nothing ran
      */
     public Optional<RemidioPullService.Summary> runOnce() {
+        // The pull files images straight from a third party's cloud, with
+        // nothing verifying them: refused, on the schedule and by hand, while
+        // de-identification is required.
+        if (pullClosed()) {
+            lastError = "closed: de-identification is required";
+            return Optional.empty();
+        }
         lastAttempt = Instant.now();
         Settings settings = Settings.fromConfig();
         if (!settings.isConfigured()) {

@@ -99,6 +99,14 @@
 			     NOTE: this profile does NOT yet bootstrap the database schema;
 			     test schema setup via Liquibase is pending work for Phase 0.2. -->
 			<id>integration-tests</id>
+			<properties>
+				<!-- @Tag("isolation-leak") classes record known, accepted findings
+				     and fail by design (CrossSiteIsolationLeaksIT: the anonymous
+				     upload portals, open on the internal deployment and closed on
+				     the internet-facing one). Run them on purpose with
+				     -DexcludedGroups= -Dgroups=isolation-leak. -->
+				<excludedGroups>isolation-leak</excludedGroups>
+			</properties>
 			<build>
 				<pluginManagement>
 					<plugins>

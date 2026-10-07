@@ -29,13 +29,17 @@ export const FLUID: Record<FluidKey, FluidMeta> = {
   PED: { color: '#a855f7', long: 'Pigmentepithelabhebung', short: 'PED' },
 }
 
-/** Sum of the three fluid biomarkers for a visit (in nL). */
-export function totalFluid(v: { irf: number; srf: number; ped: number }): number {
+/**
+ * Sum of the three fluid biomarkers for a visit (in nL). Null when any of the
+ * three is unknown — a partial sum would read as a smaller, "safer" total.
+ */
+export function totalFluid(v: { irf: number | null; srf: number | null; ped: number | null }): number | null {
+  if (v.irf == null || v.srf == null || v.ped == null) return null
   return v.irf + v.srf + v.ped
 }
 
-/** Activity-trigger sum (nL). Above {@link ACTIVITY_THRESHOLD_NL} the patient is "Exsudation aktiv". */
-export function activeFluid(v: { irf: number; srf: number; ped: number }): number {
+/** Activity-trigger sum (nL). Above {@link ACTIVITY_THRESHOLD_NL} the patient is "Exsudation aktiv". Null when unknown. */
+export function activeFluid(v: { irf: number | null; srf: number | null; ped: number | null }): number | null {
   return totalFluid(v)
 }
 

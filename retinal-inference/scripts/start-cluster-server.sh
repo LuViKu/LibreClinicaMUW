@@ -23,6 +23,25 @@
 #   start-cluster-server.sh --foreground # exec uvicorn in fg (for systemd)
 #   start-cluster-server.sh --check      # verify env + invariants, don't launch
 #   …               --strict             # refuse to start degraded (see below)
+#   …               --slurm              # SLURM mode (same as RI_SLURM=1), see below
+#
+# SLURM MODE (one `srun` job per scan; the server is only a dispatcher)
+#   RI_SLURM=1 (or --slurm) plus, all via env:
+#     RI_SLURM_ACCOUNT      REQUIRED  SLURM account (no default association here)
+#     RI_SLURM_PARTITION    default full_optima
+#     RI_SLURM_GRES         default gpu:nv2080ti:1 (typed: pr/bm fail on Ampere)
+#     RI_SLURM_TIME         default 01:00:00 per job
+#     RI_SLURM_MEM          optional, e.g. 32G
+#     RI_SLURM_CPUS         optional, --cpus-per-task
+#     RI_SLURM_QOS          optional
+#     RI_SLURM_CONSTRAINT   optional
+#     RI_SLURM_EXCLUDE      optional, nodes to avoid: recommended vn1,vn2,cn5
+#                           (vn1/vn2 unvalidated, cn5 DOWN)
+#     RI_SLURM_NODELIST     optional, restrict GPU jobs to these nodes
+#     RI_SLURM_IOWA_CPUS / RI_SLURM_IOWA_MEM  optional sizing of the CPU-only
+#                           IOWA job (ga/layers); it runs under srun, no gres
+#     RI_MAX_CONCURRENT     default 4 (direct mode: 1)
+#   No GPU is picked or pinned in this mode -- SLURM places each job.
 #
 # Every path can be overridden by exporting the matching env var first.
 # =============================================================================
@@ -30,12 +49,14 @@ set -euo pipefail
 
 MODE="background"
 STRICT=0
+: "${RI_SLURM:=0}"
 for arg in "$@"; do
   case "$arg" in
     --strict)                       STRICT=1 ;;
+    --slurm)                        RI_SLURM=1 ;;
     --check|--foreground|background) MODE="$arg" ;;
     *) printf '\033[1;31m[ri]\033[0m %s\n' \
-         "unknown argument: $arg (use: background | --foreground | --check [--strict])" >&2
+         "unknown argument: $arg (use: background | --foreground | --check [--strict] [--slurm])" >&2
        exit 1 ;;
   esac
 done
@@ -88,8 +109,30 @@ export RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED=true
 export RETINAL_INFERENCE_WORKER_ENABLED=false
 export RETINAL_INFERENCE_SHARED_TMPDIR="$RI_SCRATCH/tmp"
 export RETINAL_INFERENCE_APPTAINER_BIN=singularity
-export RETINAL_INFERENCE_APPTAINER_USE_SLURM=false
-export RETINAL_INFERENCE_APPTAINER_GPU_DEVICE="${RETINAL_INFERENCE_APPTAINER_GPU_DEVICE:-$(pick_idle_gpu)}"
+if [ "$RI_SLURM" = 1 ]; then
+  # SLURM mode: no GPU is picked or pinned here -- each srun job gets its own
+  # device from SLURM (and CUDA_VISIBLE_DEVICES from the job environment).
+  [ -n "${RI_SLURM_ACCOUNT:-}" ] || die "SLURM mode needs RI_SLURM_ACCOUNT (ask the admins which account lkuchernig belongs to)"
+  export RETINAL_INFERENCE_APPTAINER_USE_SLURM=true
+  export RETINAL_INFERENCE_APPTAINER_SLURM_ACCOUNT="$RI_SLURM_ACCOUNT"
+  export RETINAL_INFERENCE_APPTAINER_SLURM_PARTITION="${RI_SLURM_PARTITION:-full_optima}"
+  export RETINAL_INFERENCE_APPTAINER_SLURM_GRES="${RI_SLURM_GRES:-gpu:nv2080ti:1}"
+  export RETINAL_INFERENCE_APPTAINER_SLURM_TIME="${RI_SLURM_TIME:-01:00:00}"
+  [ -z "${RI_SLURM_MEM:-}" ]        || export RETINAL_INFERENCE_APPTAINER_SLURM_MEM="$RI_SLURM_MEM"
+  [ -z "${RI_SLURM_CPUS:-}" ]       || export RETINAL_INFERENCE_APPTAINER_SLURM_CPUS_PER_TASK="$RI_SLURM_CPUS"
+  [ -z "${RI_SLURM_QOS:-}" ]        || export RETINAL_INFERENCE_APPTAINER_SLURM_QOS="$RI_SLURM_QOS"
+  [ -z "${RI_SLURM_CONSTRAINT:-}" ] || export RETINAL_INFERENCE_APPTAINER_SLURM_CONSTRAINT="$RI_SLURM_CONSTRAINT"
+  [ -z "${RI_SLURM_EXCLUDE:-}" ]    || export RETINAL_INFERENCE_APPTAINER_SLURM_EXCLUDE="$RI_SLURM_EXCLUDE"
+  [ -z "${RI_SLURM_NODELIST:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_NODELIST="$RI_SLURM_NODELIST"
+  [ -z "${RI_SLURM_IOWA_CPUS:-}" ]  || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_CPUS_PER_TASK="$RI_SLURM_IOWA_CPUS"
+  [ -z "${RI_SLURM_IOWA_MEM:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_MEM="$RI_SLURM_IOWA_MEM"
+  export RETINAL_INFERENCE_MAX_CONCURRENT_RUNS="${RI_MAX_CONCURRENT:-4}"
+  unset RETINAL_INFERENCE_APPTAINER_GPU_DEVICE RETINAL_INFERENCE_BM_GPU_DEVICE
+else
+  export RETINAL_INFERENCE_APPTAINER_USE_SLURM=false
+  export RETINAL_INFERENCE_MAX_CONCURRENT_RUNS="${RI_MAX_CONCURRENT:-1}"
+  export RETINAL_INFERENCE_APPTAINER_GPU_DEVICE="${RETINAL_INFERENCE_APPTAINER_GPU_DEVICE:-$(pick_idle_gpu)}"
+fi
 
 # Shared secret must match core.retinalInference.remotePushToken on the app VM.
 #
@@ -125,7 +168,9 @@ export RETINAL_INFERENCE_GA_IOWA_LD_LIBRARY_PATH="$RI_HOME/ri-env/lib:$RI_SHARED
 # IOWA env + the BM env, so it comes for free once both groups are set.
 export RETINAL_INFERENCE_BM_PYTHON="$RI_SHARED/Processor_Implementations/sese_bm_final/venv/bin/python3"
 export RETINAL_INFERENCE_BM_CODE="$RI_SHARED/Processor_Implementations/sese_bm_final/code"
-export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-$RETINAL_INFERENCE_APPTAINER_GPU_DEVICE}"
+if [ "$RI_SLURM" != 1 ]; then
+  export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-$RETINAL_INFERENCE_APPTAINER_GPU_DEVICE}"
+fi
 
 # ----------------------------- BM_LD_LIBRARY_PATH -----------------------------
 # The BM venv python needs the LMOD module lib dirs (libpython3.8.so et al).
@@ -222,7 +267,12 @@ preflight() {
     die "muw-e2e-converter IS installed in the cluster env — violates DR-024. Uninstall it."
   fi
   log "DR-024 invariant holds (muw-e2e-converter absent)"
-  log "GPU device: $RETINAL_INFERENCE_APPTAINER_GPU_DEVICE (bm: $RETINAL_INFERENCE_BM_GPU_DEVICE)"
+  if [ "$RI_SLURM" = 1 ]; then
+    log "SLURM mode: partition=$RETINAL_INFERENCE_APPTAINER_SLURM_PARTITION gres=$RETINAL_INFERENCE_APPTAINER_SLURM_GRES max_concurrent=$RETINAL_INFERENCE_MAX_CONCURRENT_RUNS (no GPU pin)"
+    command -v srun >/dev/null 2>&1 || die "srun not found on this host (SLURM mode)"
+  else
+    log "GPU device: $RETINAL_INFERENCE_APPTAINER_GPU_DEVICE (bm: $RETINAL_INFERENCE_BM_GPU_DEVICE)"
+  fi
   if [ -n "${RETINAL_INFERENCE_BM_LD_LIBRARY_PATH:-}" ]; then
     log "BM_LD_LIBRARY_PATH derived (${#RETINAL_INFERENCE_BM_LD_LIBRARY_PATH} chars)"
   else

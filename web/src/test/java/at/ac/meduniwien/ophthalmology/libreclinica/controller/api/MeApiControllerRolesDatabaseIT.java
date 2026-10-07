@@ -96,6 +96,23 @@ class MeApiControllerRolesDatabaseIT extends AbstractApiControllerDatabaseIT {
         return session;
     }
 
+    /** The upload page reads this to know whether to strip a file in the browser. */
+    @Test
+    void getMeSaysWhetherDeidentificationIsRequired() throws Exception {
+        MeApiController off = new MeApiController(DATA_SOURCE);
+        MockMvcBuilders.standaloneSetup(off).setControllerAdvice(new ApiExceptionHandler()).build()
+                .perform(get("/api/v1/me").session(multiRoleSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deidentificationRequired").value(false));
+
+        MeApiController on = new MeApiController(DATA_SOURCE);
+        on.setDeidentificationPolicy(DeidentificationPolicy.of(true));
+        MockMvcBuilders.standaloneSetup(on).setControllerAdvice(new ApiExceptionHandler()).build()
+                .perform(get("/api/v1/me").session(multiRoleSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deidentificationRequired").value(true));
+    }
+
     @Test
     void getMeReturnsAllActiveRolesSortedByPriority() throws Exception {
         mockMvc().perform(get("/api/v1/me").session(multiRoleSession()))

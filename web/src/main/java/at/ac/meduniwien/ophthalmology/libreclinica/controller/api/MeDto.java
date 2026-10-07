@@ -85,7 +85,15 @@ public record MeDto(
         boolean mustChangePassword,
         String passwordChangeReason,
         ActiveStudyDto activeStudy,
-        String userType
+        String userType,
+        /**
+         * True when this deployment requires every uploaded file to be
+         * de-identified ({@code libreclinica.ingest.deidentification.required},
+         * default: the internet-facing flag). The upload page then strips the
+         * file in the browser and sends {@code deidConfirmed} + {@code deidSha256};
+         * the server verifies regardless.
+         */
+        boolean deidentificationRequired
 ) {
 
     /** Allowed values of the {@code passwordChangeReason} field. */

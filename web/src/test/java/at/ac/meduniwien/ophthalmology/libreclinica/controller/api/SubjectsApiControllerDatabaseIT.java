@@ -261,11 +261,27 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 
+        // A caller with no enrolment of this person in a study she can see gets
+        // nothing at all: the person's PID, sex, date of birth and names belong
+        // to a study she has no access to (cross-site isolation).
         mockMvc.perform(post("/api/v1/subjects/match-preflight")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"firstName\":\"Hidden\",\"lastName\":\"Enrolment\","
                         + "\"dateOfBirth\":\"1980-06-20\"}")
                 .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // A system administrator reads every patient: the candidate comes back,
+        // its enrolment hidden from the visible list and counted.
+        org.springframework.mock.web.MockHttpSession admin = authenticatedSession();
+        ((at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean) admin.getAttribute("userBean"))
+                .addUserType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType.SYSADMIN);
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Hidden\",\"lastName\":\"Enrolment\","
+                        + "\"dateOfBirth\":\"1980-06-20\"}")
+                .session(admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].subjectId").value(HIDDEN_SUBJECT_ID))

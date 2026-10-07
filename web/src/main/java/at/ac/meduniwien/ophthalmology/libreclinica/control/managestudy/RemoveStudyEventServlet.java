@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Removes a study event and all its related event CRFs, items
  */
-@SuppressWarnings("all")
 public class RemoveStudyEventServlet extends SecureController {
     /**
 	 * 
@@ -96,6 +95,8 @@ public class RemoveStudyEventServlet extends SecureController {
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
 
+            assertStudyEventInScope(studyEventId);
+            assertStudySubjectInScope(studySubId);
             StudyEventBean event = (StudyEventBean) sedao.findByPK(studyEventId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);

@@ -48,14 +48,14 @@ const MAX_LETTERS = 90
 const Y_PAD_LETTERS = 3
 
 const present = computed<NamdVisit[]>(() =>
-  props.visits.filter((v) => v.bcva > 0),
+  props.visits.filter((v) => (v.bcva ?? 0) > 0),
 )
 
 const yRange = computed<{ lo: number; hi: number }>(() => {
   if (present.value.length === 0) {
     return { lo: MIN_LETTERS, hi: MAX_LETTERS }
   }
-  const vals = present.value.map((v) => v.bcva)
+  const vals = present.value.map((v) => v.bcva as number)
   const lo = Math.max(MIN_LETTERS, Math.min(...vals) - Y_PAD_LETTERS)
   const hi = Math.min(MAX_LETTERS, Math.max(...vals) + Y_PAD_LETTERS)
   // Defensive: a zero-width band stretches to a sensible 10-letter band.
@@ -88,8 +88,8 @@ interface BcvaPoint {
 
 const points = computed<BcvaPoint[]>(() =>
   props.visits
-    .map((v, idx) => ({ v, idx, x: xAt(idx), y: yBcva(v.bcva) }))
-    .filter((p) => p.v.bcva > 0),
+    .map((v, idx) => ({ v, idx, x: xAt(idx), y: yBcva(v.bcva ?? 0) }))
+    .filter((p) => (p.v.bcva ?? 0) > 0),
 )
 
 /**

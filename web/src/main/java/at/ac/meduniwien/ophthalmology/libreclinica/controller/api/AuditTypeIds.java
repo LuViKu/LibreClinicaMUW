@@ -532,4 +532,28 @@ public final class AuditTypeIds {
     public static final int EVENT_CRF_REMOVED_WITH_CRF       = 190;
     /** An event CRF auto-removed with its CRF version. */
     public static final int EVENT_CRF_REMOVED_WITH_VERSION   = 191;
+
+    /*
+     * 192-194 (lc-muw-2026-10-07-audit-types-deidentification.xml): the
+     * server-side de-identification check of uploaded files on a deployment
+     * that requires it ({@code DeidUploadGate}, {@code DeidentificationScanner}).
+     * None carries a value read from a file: field names and a SHA-256 only.
+     */
+
+    /**
+     * An accepted upload's de-identification confirmation: written against the
+     * new {@code ingest_item}, by the uploading user; {@code new_value} is
+     * {@code sha256=<hex>;confirmed_by=<user id>}, {@code audit_date} the time.
+     */
+    public static final int DEID_UPLOAD_CONFIRMED            = 192;
+    /**
+     * An upload refused for not being de-identified: {@code entity_name} is
+     * {@code DEID_REQUIRED: <field names>}, {@code new_value} the file's SHA-256.
+     */
+    public static final int DEID_UPLOAD_REJECTED             = 193;
+    /**
+     * A stored file, or an ingest row, found by the nightly scan to carry
+     * something the upload check would have refused; field names and SHA-256 only.
+     */
+    public static final int DEID_SCAN_FINDING                = 194;
 }

@@ -385,7 +385,7 @@ public class Validator {
     /**
      * Longest e-mail address accepted (RFC 5321 path limit minus the angle
      * brackets). The {@link #EMAIL} pattern backtracks polynomially on long
-     * input, and it runs on unauthenticated forms (Contact, RequestPassword,
+     * input, and it runs on unauthenticated forms (Contact,
      * RequestAccount), so the length is checked before the pattern.
      */
     public static final int MAX_EMAIL_LENGTH = 254;

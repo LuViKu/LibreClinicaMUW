@@ -2441,6 +2441,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/deidentification/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-verify every stored E2E and DICOM file and the ingest rows now (202) */
+        post: operations["scanDeidentification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/schedules/{id}": {
         parameters: {
             query?: never;
@@ -3947,6 +3964,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/deidentification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest de-identification scan of stored files and ingest rows, and its findings */
+        get: operations["deidentificationStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/config": {
         parameters: {
             query?: never;
@@ -4604,6 +4638,7 @@ export interface components {
             passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
             userType?: string;
+            deidentificationRequired?: boolean;
         };
         PermissionsDto: {
             enterData?: boolean;
@@ -9608,6 +9643,8 @@ export interface operations {
                 studyEventId?: number;
                 park?: boolean;
                 device?: string;
+                deidConfirmed?: string;
+                deidSha256?: string;
             };
             header?: never;
             path?: never;
@@ -11013,6 +11050,26 @@ export interface operations {
         };
     };
     rescanStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    scanDeidentification: {
         parameters: {
             query?: never;
             header?: never;
@@ -13184,6 +13241,26 @@ export interface operations {
         };
     };
     listJobs_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deidentificationStatus: {
         parameters: {
             query?: never;
             header?: never;

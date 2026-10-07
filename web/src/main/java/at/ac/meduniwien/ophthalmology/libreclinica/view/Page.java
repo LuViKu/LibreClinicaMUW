@@ -61,16 +61,12 @@ public enum Page {
                 UPDATE_PROFILE_CONFIRM("/WEB-INF/jsp/login/updateProfileConfirm.jsp", "Confirm your profile"),
                 
 
-    /**
-     * Page for user to request password
-     */
                 CONTACT("/WEB-INF/jsp/login/contact.jsp", "Contact Form"),
                 
 
     /**
      * Page for user to request password
      */
-                REQUEST_PWD("/WEB-INF/jsp/login/requestPassword.jsp","Request passwod form"),
                 REQUEST_STUDY("/WEB-INF/jsp/login/requestStudy.jsp", "Request study access"),
 
 
@@ -88,10 +84,6 @@ public enum Page {
     REQUEST_ACCOUNT("/WEB-INF/jsp/login/requestAccount.jsp", "Request account form"),
 
     REQUEST_ACCOUNT_CONFIRM ("/WEB-INF/jsp/login/requestAccountConfirm.jsp", "Request account confirm"),
-    /**
-     * Page for user to confirm inputs of requesting password
-     */
-   REQUEST_PWD_CONFIRM ("/WEB-INF/jsp/login/requestPasswordConfirm.jsp", "Request passwod Confirm"),
 
     /**
      * Page for creating a user account.

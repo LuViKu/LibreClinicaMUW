@@ -116,6 +116,18 @@ public class RetinalResultsApiController {
         return access;
     }
 
+    private IngestItemVisibility itemVisibility;
+
+    /**
+     * A parked job (no visit yet) belongs to the pool of its ingest item: visible
+     * when that item is (origin study of a staff upload), open to every reconciler
+     * when it has none (anonymous portal), like the ingest inbox itself.
+     */
+    private boolean mayWorkOnJob(long jobId, HttpSession session) {
+        if (itemVisibility == null) itemVisibility = new IngestItemVisibility(dataSource, access());
+        return itemVisibility.canSeeJob(jobId, session);
+    }
+
     /** P3.6 — the job row, its visibility and its files, shared with the split-out controllers. */
     private RetinalJobAccess jobs;
 
@@ -785,6 +797,11 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(403).body(Map.of("message", ctx.errorMessage()));
         }
 
+        if (!mayWorkOnJob(jobId, session)) {
+            // Before any state check: a foreign parked job is "not found", not "already bound".
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
         BindOutcome outcome = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                 eventCrfId, ctx.currentUser(), ctx.currentStudy());
         return switch (outcome.status()) {
@@ -929,6 +946,9 @@ public class RetinalResultsApiController {
             if (batchForbidden) {
                 out = new BindOutcome(jobId, BindOutcomeStatus.FORBIDDEN,
                         null, ctx.errorMessage());
+            } else if (!mayWorkOnJob(jobId, session)) {
+                out = new BindOutcome(jobId, BindOutcomeStatus.NOT_FOUND, null,
+                        "No retinal_inference_job with id " + jobId);
             } else {
                 out = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                         eventCrfId, ctx.currentUser(), ctx.currentStudy());
@@ -1184,10 +1204,8 @@ public class RetinalResultsApiController {
         // (e.g. planned-visit binding before the dispatch gate was
         // relaxed) — same end state regardless of which way they got
         // there, same fix.
-        if (!"failed".equals(job.status) && !"remote_pending".equals(job.status)) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
-        }
+        // (The status check follows the visibility check below: answered first,
+        // a 409 would tell a caller the status of a job of a study they cannot see.)
         // 2026-06-23 — accept either binding path. Planned-visit jobs
         // have event_crf_id=null + a valid study_event_id; resolve the
         // owning study_subject via whichever is set.
@@ -1222,6 +1240,10 @@ public class RetinalResultsApiController {
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Job " + jobId + " belongs to a different study"));
+        }
+        if (!"failed".equals(job.status) && !"remote_pending".equals(job.status)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
         }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
@@ -1386,16 +1408,8 @@ public class RetinalResultsApiController {
                     "message", "Source job " + sourceJobId + " has no visit binding — "
                             + "park it to a visit first via /bind"));
         }
-        if (newTask.equals(source.task)) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Source job is already task=" + newTask
-                            + "; use /retry to re-dispatch the same task"));
-        }
-        if (sourceSha256 == null || sourceSha256.isBlank()) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Source job is missing e2e_sha256 — predates the "
-                            + "dedup gate; cannot rerun-as safely"));
-        }
+        // (The task and sha256 state checks follow the visibility check below, so
+        // a job of a study the caller cannot see answers 403 and not a state oracle.)
 
         // ---- visibility check via the source job's binding -----------
         // Prefer event_crf when available (already-opened-CRF flow). Fall
@@ -1444,6 +1458,16 @@ public class RetinalResultsApiController {
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Source job " + sourceJobId + " belongs to a different study"));
+        }
+        if (newTask.equals(source.task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Source job is already task=" + newTask
+                            + "; use /retry to re-dispatch the same task"));
+        }
+        if (sourceSha256 == null || sourceSha256.isBlank()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Source job is missing e2e_sha256 — predates the "
+                            + "dedup gate; cannot rerun-as safely"));
         }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(

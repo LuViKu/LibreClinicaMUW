@@ -76,6 +76,14 @@ public class PublicUploadController {
     private final PublicImageUploadController images;
     private final IngestUploadService uploads;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired
     public PublicUploadController(@Qualifier("dataSource") DataSource dataSource,
                                   StudySubjectFinder studySubjectFinder,
@@ -166,6 +174,9 @@ public class PublicUploadController {
             @RequestParam(value = "disambiguated", defaultValue = "false") boolean disambiguated,
             @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount) {
 
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.accountlessClosed();
+        }
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }

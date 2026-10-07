@@ -87,7 +87,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ContactServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.EnterpriseServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.LogoutServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestPasswordServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ResetPasswordServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.UpdateProfileServlet;
@@ -606,8 +605,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg121 = ctx.addServlet("RequestAccountServlet", RequestAccountServlet.class);
             reg121.addMapping("/RequestAccount");
 
-            ServletRegistration.Dynamic reg122 = ctx.addServlet("RequestPasswordServlet", RequestPasswordServlet.class);
-            reg122.addMapping("/RequestPassword");
 
             ServletRegistration.Dynamic reg123 = ctx.addServlet("RequestStudyServlet", RequestStudyServlet.class);
             reg123.addMapping("/RequestStudy");

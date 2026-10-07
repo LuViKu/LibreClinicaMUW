@@ -169,6 +169,8 @@ public class StudyParametersApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
+        ResponseEntity<?> notYours = StudyAdminAuthorization.refuseUnlessMayReadStudy(me, target, studyOid, dataSource);
+        if (notYours != null) return notYours;
         Map<String, String> values = loadHandles(target.getId());
         return ResponseEntity.ok(toDto(studyOid, values));
     }

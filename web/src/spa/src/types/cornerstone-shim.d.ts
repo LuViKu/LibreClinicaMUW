@@ -18,6 +18,15 @@ declare module '@cornerstonejs/dicom-image-loader' {
   export default loader
 }
 
+declare module 'dcmjs' {
+  // dcmjs ships no type declarations. lib/deid/dicomDeidentify.ts narrows the
+  // few calls it makes (DicomMessage.readFile, DicomDict.write) to its own
+  // structural types; everything else stays untyped on purpose.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dcmjs: any
+  export default dcmjs
+}
+
 declare module 'dicom-parser' {
   // dicom-parser ships actual types upstream but they don't satisfy
   // the loose `external.dicomParser = ...` assignment site we use.

@@ -218,8 +218,28 @@ interface VolumeAccumulator {
  *
  * @throws Error if the file is too short or the header magic is missing.
  */
-export async function parseE2e(file: File): Promise<E2eScan[]> {
+export async function parseE2e(file: File, options: ParseE2eOptions = {}): Promise<E2eScan[]> {
   const buf = new Uint8Array(await file.arrayBuffer());
+  return parseE2eBytes(buf, options);
+}
+
+/** Options for {@link parseE2e} / {@link parseE2eBytes}. */
+export interface ParseE2eOptions {
+  /**
+   * Default {@code true}: when the canonical {@code patient_id} slot is empty,
+   * fall back to the surname and then the first-name slot (MUW's convention for
+   * Heidelberg-anonymised exports).
+   *
+   * Pass {@code false} where a name must never be taken for an identifier —
+   * the de-identifying upload (browser layer 1) matches on the
+   * {@code patient_id} slot ONLY.
+   */
+  headerFallback?: boolean;
+}
+
+/** {@link parseE2e} over bytes already in memory (the de-identification worker has them). */
+export function parseE2eBytes(buf: Uint8Array, options: ParseE2eOptions = {}): E2eScan[] {
+  const headerFallback = options.headerFallback !== false;
   if (buf.length < FILE_HEADER_BYTES + MAIN_DIRECTORY_BYTES) {
     throw new Error(
       `parseE2e: file too short (${buf.length} bytes) — missing E2E header magic`,
@@ -315,7 +335,7 @@ export async function parseE2e(file: File): Promise<E2eScan[]> {
         // first_name is also probed as a last resort — some sites stash
         // an internal MRN/db-id there.
         let patientId = canonical;
-        if (patientId.length === 0) {
+        if (headerFallback && patientId.length === 0) {
           patientId = decodeLatin1(
             buf.subarray(
               payloadOffset + PATIENT_DATA_SURNAME_OFFSET,
@@ -323,7 +343,7 @@ export async function parseE2e(file: File): Promise<E2eScan[]> {
             ),
           ).trim();
         }
-        if (patientId.length === 0) {
+        if (headerFallback && patientId.length === 0) {
           patientId = decodeLatin1(
             buf.subarray(
               payloadOffset + PATIENT_DATA_FIRST_NAME_OFFSET,

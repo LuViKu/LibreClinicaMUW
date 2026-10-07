@@ -45,7 +45,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller("extractController")
 @RequestMapping("/extract")
-@SuppressWarnings("all")
 public class ExtractController {
     @Autowired
     @Qualifier("sidebarInit")
@@ -99,9 +98,22 @@ public class ExtractController {
         UserAccountBean userBean = (UserAccountBean) request.getSession().getAttribute("userBean");
         CoreResources cr =  new CoreResources();
 
-        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(Integer.valueOf(id).intValue(),datasetId);
-
         DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(Integer.valueOf(datasetId).intValue());
+        // the dataset must be the session study's or one of its sites' (as ExportDatasetServlet requires)
+        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean sessionStudy =
+                (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean) request.getSession().getAttribute("study");
+        if (dsBean == null || !new at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope(dataSource)
+                .containsStudy(sessionStudy, dsBean.getStudyId())) {
+            logger.warn("refused an extract of dataset {}: not in the session's study", datasetId);
+            try {
+                response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
+            } catch (Exception e) {
+                logger.error("Error in redirecting the response: ", e);
+            }
+            return null;
+        }
+
+        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(Integer.valueOf(id).intValue(),datasetId);
         // set the job in motion
         String[] files = epBean.getFileName();
         String exportFileName;

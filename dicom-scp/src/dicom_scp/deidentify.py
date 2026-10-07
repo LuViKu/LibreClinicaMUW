@@ -71,6 +71,27 @@ CLEARED = (
     "StudyID",
 )
 
+#: Cleared as well when ``strict`` (the app requires de-identification):
+#: demographics and free text a camera or PACS fills with something
+#: identifying, and device/station names that can point at a clinic. ``verify``
+#: refuses an upload that carries any of them; this is the second line.
+STRICT_CLEARED = (
+    "PatientSex",
+    "PatientSize",
+    "PatientWeight",
+    "PatientBirthName",
+    "StudyDescription",
+    "SeriesDescription",
+    "ImageComments",
+    "PerformedProcedureStepDescription",
+    "RequestedProcedureDescription",
+    "ProtocolName",
+    "DeviceSerialNumber",
+    "StationName",
+    "InstitutionalDepartmentName",
+    "OperatorsName",
+)
+
 #: Sequences that only ever carry identity — removed outright.
 REMOVED = (
     "OtherPatientIDsSequence",
@@ -95,20 +116,26 @@ def _clean_pseudonym(raw: str | None) -> str:
     return "".join(c for c in s if c.isprintable() and c not in "^=\\")
 
 
-def pseudonymise(ds: Dataset, pseudonym: str | None, drop_private: bool = False) -> list[str]:
+def pseudonymise(ds: Dataset, pseudonym: str | None, drop_private: bool = False,
+                 strict: bool = False) -> list[str]:
     """Rewrite the identity attributes of ``ds`` in memory.
 
     Returns the keywords whose value actually changed, so a caller can tell an
     already-clean file from one that carried a patient. The de-identification
     stamp itself is not counted.
+
+    ``strict`` is the de-identification-required mode: the ``STRICT_CLEARED``
+    attributes are emptied as well and private tags are always dropped.
     """
     label = _clean_pseudonym(pseudonym)
     changed: list[str] = []
+    if strict:
+        drop_private = True
 
     for kw in IDENTITY:
         if _set(ds, kw, label):
             changed.append(kw)
-    for kw in CLEARED:
+    for kw in CLEARED + (STRICT_CLEARED if strict else ()):
         tag = tag_for_keyword(kw)
         if tag is None or tag not in ds:
             continue
@@ -145,7 +172,8 @@ def _set(ds: Dataset, keyword: str, value: str) -> bool:
     return old != value
 
 
-def rewrite(path: Path, pseudonym: str | None, drop_private: bool = False) -> tuple[Dataset, list[str]]:
+def rewrite(path: Path, pseudonym: str | None, drop_private: bool = False,
+            strict: bool = False) -> tuple[Dataset, list[str]]:
     """Pseudonymise the file at ``path`` in place.
 
     Reads the object, rewrites the identity attributes, and replaces the file
@@ -153,7 +181,7 @@ def rewrite(path: Path, pseudonym: str | None, drop_private: bool = False) -> tu
     Raises ``pydicom.errors.InvalidDicomError`` when the file is not DICOM.
     """
     ds = pydicom.dcmread(str(path))
-    changed = pseudonymise(ds, pseudonym, drop_private)
+    changed = pseudonymise(ds, pseudonym, drop_private, strict)
 
     tmp = path.with_name(path.name + ".deid.tmp")
     try:
