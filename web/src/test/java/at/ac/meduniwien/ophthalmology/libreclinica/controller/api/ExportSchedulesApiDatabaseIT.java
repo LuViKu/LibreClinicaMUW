@@ -45,7 +45,7 @@ import java.util.stream.Stream;
 
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;

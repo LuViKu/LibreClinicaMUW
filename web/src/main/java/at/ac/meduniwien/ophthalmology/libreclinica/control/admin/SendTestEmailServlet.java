@@ -7,11 +7,13 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.MediaType;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.EmailEngine;
@@ -65,7 +67,7 @@ public class SendTestEmailServlet extends SecureController {
             message = e.getMessage();
         }
 
-        ObjectMapper om = new ObjectMapper();
+        ObjectMapper om = Json.mapper();
         ObjectNode res = om.createObjectNode();
         res.put("type", type);
         res.put("message", message);

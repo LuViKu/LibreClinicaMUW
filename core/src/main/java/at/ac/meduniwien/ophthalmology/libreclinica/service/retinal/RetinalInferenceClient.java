@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -83,7 +85,7 @@ public class RetinalInferenceClient {
             SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
             rf.setConnectTimeout((int) FAST_SCREEN_TIMEOUT.toMillis());
             rf.setReadTimeout((int) FAST_SCREEN_TIMEOUT.toMillis());
-            RestTemplate rest = new RestTemplate(rf);
+            RestTemplate rest = Json.restTemplate(rf);
 
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("job_id", jobId);

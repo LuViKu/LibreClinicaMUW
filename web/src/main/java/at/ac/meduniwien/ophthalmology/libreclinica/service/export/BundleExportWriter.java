@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.export;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -27,7 +29,7 @@ import java.util.zip.ZipOutputStream;
 
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +71,7 @@ public final class BundleExportWriter {
 
     private static final Logger LOG = LoggerFactory.getLogger(BundleExportWriter.class);
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
 
     /** Kinds already compressed; deflating them costs CPU and gains nothing. */
     private static final List<String> STORE_AS_IS =

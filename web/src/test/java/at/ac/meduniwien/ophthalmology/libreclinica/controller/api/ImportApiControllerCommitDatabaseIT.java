@@ -43,8 +43,8 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code POST /api/v1/import/commit} writes an ODM file through the legacy
@@ -371,7 +371,7 @@ class ImportApiControllerCommitDatabaseIT extends AbstractApiControllerDatabaseI
         try {
             JsonNode node = JSON.readTree(previewJson);
             return node.get("previewToken").asText();
-        } catch (java.io.IOException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new IllegalStateException(e);
         }
     }

@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.ResourceHttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -22,8 +23,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.webmvc.WebMvcConfig;
  * the {@code jacksonMessageConverter} bean method, the same code the
  * {@code pages} dispatcher is wired from.
  *
- * <p>Like production it has no {@code StringHttpMessageConverter}: a
- * {@code String} response body is written as a JSON string.
+ * <p>Like production it has no {@code StringHttpMessageConverter} and no
+ * {@code ResourceHttpMessageConverter}: a {@code String} response body is
+ * written as a JSON string, and one with a non-JSON content type is refused.
  */
 public final class ProductionMvc {
 
@@ -56,14 +58,16 @@ public final class ProductionMvc {
     }
 
     /**
-     * {@link #standalone} plus a trailing {@link StringHttpMessageConverter}, for
-     * controllers with a {@code String} {@code @RequestPart}. Production has no
-     * such converter (see {@code RequestPartConverterGapTest}); this exists so
-     * their guard-logic tests keep running until that is decided.
+     * {@link #standalone} plus trailing {@link StringHttpMessageConverter} and
+     * {@link ResourceHttpMessageConverter}: what production's list lacks for
+     * three endpoints (see {@code ConverterListGapTest} for each and why). Their
+     * tests use this so they keep checking what they are about (guards, access
+     * rules) until the gap is decided; anything else must use {@link #standalone}.
      */
-    public static StandaloneMockMvcBuilder standaloneWithStringParts(Object... controllers) {
+    public static StandaloneMockMvcBuilder standaloneWithGapFillers(Object... controllers) {
         List<HttpMessageConverter<?>> all = new java.util.ArrayList<>(converters());
         all.add(new StringHttpMessageConverter());
+        all.add(new ResourceHttpMessageConverter());
         return MockMvcBuilders.standaloneSetup(controllers)
                 .setMessageConverters(all.toArray(new HttpMessageConverter<?>[0]));
     }

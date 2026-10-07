@@ -265,9 +265,9 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         // Asserted on the parsed body rather than with a JSONPath filter: a
         // filter over a present-but-null field still matches the row, so
         // `[?(@.suggestion)]` cannot express "has no suggestion".
-        com.fasterxml.jackson.databind.JsonNode row = null;
-        for (com.fasterxml.jackson.databind.JsonNode n :
-                new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).get("images")) {
+        tools.jackson.databind.JsonNode row = null;
+        for (tools.jackson.databind.JsonNode n :
+                new tools.jackson.databind.ObjectMapper().readTree(body).get("images")) {
             if (n.get("id").asLong() == id) row = n;
         }
         assertNotNull(row, "the unbound row should be listed");

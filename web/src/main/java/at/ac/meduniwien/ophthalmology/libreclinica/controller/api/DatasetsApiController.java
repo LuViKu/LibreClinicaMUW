@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 import java.io.File;
@@ -59,7 +61,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetFilterDAO;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -1409,11 +1410,9 @@ public class DatasetsApiController {
      * wire is ever executed as a stored SQL string. An edit replaces the whole
      * set — the wizard has no notion of editing one row.
      */
-    private static final ObjectMapper FILTER_JSON = new ObjectMapper();
-
     /** The JSON stored in {@code filter} for one wizard filter row. */
-    static String filterJson(DatasetFilterDto f) throws com.fasterxml.jackson.core.JsonProcessingException {
-        return FILTER_JSON.writeValueAsString(f);
+    static String filterJson(DatasetFilterDto f) {
+        return Json.mapper().writeValueAsString(f);
     }
 
     private void persistFilters(int datasetId, List<DatasetFilterDto> filters, UserAccountBean owner) {

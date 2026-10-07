@@ -29,8 +29,8 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.LaxParsingSpringLiquibase;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import liquibase.integration.spring.SpringLiquibase;
 

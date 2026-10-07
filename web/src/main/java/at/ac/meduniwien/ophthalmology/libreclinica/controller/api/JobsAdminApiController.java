@@ -183,9 +183,9 @@ public class JobsAdminApiController {
                 row.put("group", group);
                 row.put("description", trigger.getDescription());
                 row.put("priority", trigger.getPriority());
-                row.put("previousFireTime", trigger.getPreviousFireTime());
-                row.put("nextFireTime", trigger.getNextFireTime());
-                row.put("finalFireTime", trigger.getFinalFireTime());
+                row.put("previousFireTime", iso(trigger.getPreviousFireTime()));
+                row.put("nextFireTime", iso(trigger.getNextFireTime()));
+                row.put("finalFireTime", iso(trigger.getFinalFireTime()));
                 row.put("state", scheduler.getTriggerState(key).name());
                 JobKey jobKey = trigger.getJobKey();
                 if (jobKey != null) {
@@ -199,6 +199,17 @@ public class JobsAdminApiController {
             }
         }
         return out;
+    }
+
+    /**
+     * ISO-8601 UTC text ({@code 2026-10-07T10:15:30Z}), which is what the SPA's
+     * {@code AdminJobsView} parses. Quartz's {@link java.util.Date} must not
+     * reach the JSON mapper: it would go out as epoch milliseconds, a number
+     * the view renders as "Invalid Date". Formatting here keeps the wire form
+     * independent of mapper configuration.
+     */
+    static String iso(java.util.Date date) {
+        return date == null ? null : date.toInstant().toString();
     }
 
     private Map<String, Object> unreadableRow(TriggerKey key, String group) {

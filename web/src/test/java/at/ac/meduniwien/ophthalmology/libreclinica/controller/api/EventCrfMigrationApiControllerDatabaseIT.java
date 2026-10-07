@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.EventCrfVersionMigrationService;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;

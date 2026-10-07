@@ -48,7 +48,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
      */
     private MockMvc mockMvcForUpload() {
         return at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc
-                .standaloneWithStringParts(controller())
+                .standaloneWithGapFillers(controller())
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.ingest;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -18,9 +20,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,7 +103,7 @@ public class DicomDescribeClient {
     private final String url;
     private final String token;
     private final HttpClient http;
-    private final ObjectMapper json = new ObjectMapper();
+    private final ObjectMapper json = Json.mapper();
 
     /** Reads {@link #KEY_URL} and {@link #KEY_TOKEN} from the runtime configuration. */
     public DicomDescribeClient() {
@@ -159,7 +162,7 @@ public class DicomDescribeClient {
                     .header(TOKEN_HEADER, token)
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
                     .build();
-        } catch (IllegalArgumentException | IOException bad) {
+        } catch (IllegalArgumentException | JacksonException bad) {
             throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
                     "the DICOM describe URL is not usable: " + bad.getMessage());
         }
@@ -185,7 +188,7 @@ public class DicomDescribeClient {
         }
         try {
             return parse(json.readTree(response.body()));
-        } catch (IOException | RuntimeException malformed) {
+        } catch (RuntimeException malformed) {
             LOG.warn("DICOM describe sidecar answered something that is not a description: {}",
                     malformed.getClass().getSimpleName());
             throw new DescribeException(DescribeException.Reason.REJECTED,
@@ -229,7 +232,7 @@ public class DicomDescribeClient {
                     .header(TOKEN_HEADER, token)
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
                     .build();
-        } catch (IllegalArgumentException | IOException bad) {
+        } catch (IllegalArgumentException | JacksonException bad) {
             throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
                     "the DICOM describe URL is not usable: " + bad.getMessage());
         }
@@ -253,7 +256,7 @@ public class DicomDescribeClient {
         }
         try {
             return text(json.readTree(response.body()), "pixelSha256");
-        } catch (IOException | RuntimeException malformed) {
+        } catch (RuntimeException malformed) {
             throw new DescribeException(DescribeException.Reason.REJECTED,
                     "the DICOM describe sidecar answered malformed JSON");
         }
@@ -305,7 +308,7 @@ public class DicomDescribeClient {
                     .header(TOKEN_HEADER, token)
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
                     .build();
-        } catch (IllegalArgumentException | IOException bad) {
+        } catch (IllegalArgumentException | JacksonException bad) {
             throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
                     "the DICOM describe URL is not usable: " + bad.getMessage());
         }
@@ -330,11 +333,11 @@ public class DicomDescribeClient {
         try {
             JsonNode n = json.readTree(response.body());
             java.util.List<String> violations = new java.util.ArrayList<>();
-            for (JsonNode v : n.path("violations")) violations.add(v.asText());
+            for (JsonNode v : n.path("violations")) violations.add(Json.text(v));
             // Fail-closed: only an explicit ok=true with no violations passes.
             boolean ok = n.path("ok").asBoolean(false) && violations.isEmpty();
             return new Verification(ok, violations);
-        } catch (IOException | RuntimeException malformed) {
+        } catch (RuntimeException malformed) {
             throw new DescribeException(DescribeException.Reason.REJECTED,
                     "the DICOM describe sidecar answered malformed JSON");
         }
@@ -352,7 +355,7 @@ public class DicomDescribeClient {
     private static String text(JsonNode n, String field) {
         JsonNode v = n.get(field);
         if (v == null || v.isNull()) return null;
-        String s = v.asText().trim();
+        String s = Json.text(v).trim();
         return s.isEmpty() ? null : s;
     }
 

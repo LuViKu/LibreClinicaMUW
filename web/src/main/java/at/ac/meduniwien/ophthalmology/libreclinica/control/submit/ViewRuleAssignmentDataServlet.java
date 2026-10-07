@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,7 +41,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * DataTables-protocol JSON endpoint for the "Manage Rules" table.
@@ -93,7 +94,7 @@ public class ViewRuleAssignmentDataServlet extends SecureController {
             Map<String, Object> err = new HashMap<>();
             err.put("error", String.valueOf(e));
             try (OutputStream out = response.getOutputStream()) {
-                new ObjectMapper().writeValue(out, err);
+                Json.mapper().writeValue(out, err);
             }
             throw e;  // re-throw so it still hits SecureController's logger.
         }
@@ -227,7 +228,7 @@ public class ViewRuleAssignmentDataServlet extends SecureController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 

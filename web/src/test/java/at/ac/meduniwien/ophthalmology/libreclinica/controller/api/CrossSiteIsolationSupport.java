@@ -587,7 +587,10 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         NamdClinicalApiController namd = new NamdClinicalApiController(DATA_SOURCE, FILTER);
         namd.setCrtComputeService(Mockito.mock(
                 at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.class));
-        MVC = ProductionMvc.standalone(
+        // downloadItemFile returns a Resource, which production's converter list
+        // cannot write (ConverterListGapTest); the matrix is about who may reach
+        // what, so it gets the gap filled.
+        MVC = ProductionMvc.standaloneWithGapFillers(
                         new MeApiController(DATA_SOURCE),
                         new SubjectsApiController(DATA_SOURCE, securityManager, FILTER),
                         new EventCrfsApiController(DATA_SOURCE, FILTER,

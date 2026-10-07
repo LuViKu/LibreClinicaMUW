@@ -54,7 +54,6 @@
 		<spring.version>7.0.9</spring.version>
 		<spring.security.version>7.1.1</spring.security.version>
 		<db.test>localhost</db.test>
-		<jackson.version>2.21.5</jackson.version>
 		<saxon.version>8.7</saxon.version>
 		<!-- Hibernate ORM is not pinned here: the Spring Boot BOM manages
 		     hibernate-core and hibernate-jcache (6.6.53.Final at Boot 3.5.16).
@@ -244,21 +243,13 @@
 
 	<dependencyManagement>
 		<dependencies>
-			<!-- 2026-09-29: Jackson BOM imported BEFORE the Boot BOM (BOM
-			     imports are first-wins) so the helper modules Boot pulls in
-			     (jackson-datatype-jdk8 / -jsr310, jackson-module-parameter-
-			     names, jackson-dataformat-yaml via springdoc) resolve to the
-			     same ${jackson.version} as jackson-core / -databind /
-			     -annotations. Without it they followed Boot's jackson-bom
-			     (2.19.0 at Boot 3.5.0, 2.21.4 at 3.5.16) — modules newer than
-			     databind, which Jackson does not support. -->
-			<dependency>
-				<groupId>com.fasterxml.jackson</groupId>
-				<artifactId>jackson-bom</artifactId>
-				<version>${jackson.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+			<!-- Jackson: no pins and no extra BOM import. The application is on
+			     Jackson 3 (tools.jackson.*), managed by Boot's jackson-bom.
+			     Boot also manages Jackson 2 (jackson-2-bom) for what still
+			     needs it: com.fasterxml.jackson.annotation (shared by both
+			     lines) and, transitively, logstash-logback-encoder and
+			     swagger-core. See docs/development/modernization/
+			     spring-boot-4-jackson-3.md. -->
 			<!-- 2026-09-29: same reason for JAXB. jaxb-runtime is pinned to
 			     ${jaxb.runtime.version} below, but its siblings jaxb-core and
 			     txw2 (and angus-activation) followed Boot's BOM, so Boot
@@ -359,21 +350,6 @@
 				<version>${selenium.version}</version>
 				<scope>test</scope>
 			</dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-core</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-annotations</artifactId>
-                <version>2.21</version>
-            </dependency>
             <!-- Phase B.4: commons-fileupload 1.x targets javax.servlet.
                  commons-fileupload2-jakarta-servlet6 is the jakarta-namespaced
                  successor. API surface differs (org.apache.commons.fileupload2.*);
@@ -1558,6 +1534,15 @@
 				<includes>
 					<include>**/*.properties</include>
 					<include>**/*.xml</include>
+				</includes>
+			</testResource>
+			<!-- Byte-exact fixtures (see GoldenFiles): never filtered, since
+			     filtering would rewrite ${...} and re-encode what is compared. -->
+			<testResource>
+				<directory>src/test/resources</directory>
+				<filtering>false</filtering>
+				<includes>
+					<include>golden/**</include>
 				</includes>
 			</testResource>
 		</testResources>

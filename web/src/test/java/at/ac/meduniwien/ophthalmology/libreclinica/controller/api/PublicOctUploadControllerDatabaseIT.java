@@ -243,7 +243,7 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
                 .andExpect(jsonPath("$.ingestItemId").isNumber())
                 .andReturn();
 
-        long itemId = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+        long itemId = tools.jackson.databind.json.JsonMapper.builder().build()
                 .readTree(res.getResponse().getContentAsString())
                 .get("ingestItemId").asLong();
         try {

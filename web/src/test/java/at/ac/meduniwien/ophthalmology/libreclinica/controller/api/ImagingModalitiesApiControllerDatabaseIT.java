@@ -23,7 +23,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

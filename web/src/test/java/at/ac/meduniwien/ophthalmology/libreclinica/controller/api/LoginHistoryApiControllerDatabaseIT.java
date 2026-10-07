@@ -34,8 +34,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;

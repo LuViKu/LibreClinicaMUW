@@ -88,7 +88,7 @@ class StoredJsonGoldenTest {
         payload.put("exp", new BigDecimal("1E+3"));
         payload.put("flag", true);
         payload.put("surface_csvs", List.of("upper.csv", "lower.csv"));
-        payload.put("note", "µm — <ok> & \"q\"");
+        payload.put("note", "µm — <ok> & \"q\" \uD83D\uDE00 a/b");
         payload.put("nan", Double.NaN);
         GoldenFiles.assertMatches("json/retinal-output-payload.json",
                 RetinalInferenceApiController.payloadJson(payload));

@@ -10,6 +10,8 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.util.Locale;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,8 +29,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Controller
 @RequestMapping(value = "/auth/api/v1/clinicaldata")
@@ -55,7 +57,7 @@ public class ODMClinicalDataController {
 
 		String result = odmClinicaDataResource.getODMClinicaldata(
 				studyOID,formVersionOID,studyEventOID,studySubjectIdentifier,includeDns,includeAudits,request);
-		ObjectMapper objectMapper = new ObjectMapper();
+		ObjectMapper objectMapper = Json.mapper();
 		return objectMapper.readTree(result);
 
 	}

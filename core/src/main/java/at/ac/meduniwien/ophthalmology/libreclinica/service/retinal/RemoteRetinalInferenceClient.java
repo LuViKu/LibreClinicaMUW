@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -257,7 +259,7 @@ public class RemoteRetinalInferenceClient {
         SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
         rf.setConnectTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
         rf.setReadTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
-        return new RestTemplate(rf);
+        return Json.restTemplate(rf);
     }
 
     /**

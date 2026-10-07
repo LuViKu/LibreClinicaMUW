@@ -22,7 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.http.converter.xml.MarshallingHttpMessageConverter;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 import org.springframework.web.multipart.MultipartResolver;
@@ -34,7 +34,10 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 
+import tools.jackson.databind.json.JsonMapper;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.SidebarEnumConstants;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.SidebarInit;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.helper.SetUpUserInterceptor;
@@ -231,9 +234,25 @@ public class WebMvcConfig {
         return new StringHttpMessageConverter();
     }
 
+    /**
+     * The application's one {@link JsonMapper}, as a bean for anything in
+     * this context that wants to inject it. It is the instance
+     * {@link Json#mapper()} hands to non-Spring code, not a second one.
+     */
     @Bean
-    public MappingJackson2HttpMessageConverter jacksonMessageConverter() {
-        MappingJackson2HttpMessageConverter mc = new MappingJackson2HttpMessageConverter();
+    public JsonMapper applicationJsonMapper() {
+        return Json.mapper();
+    }
+
+    /**
+     * Jackson 3 converter on the shared mapper. Spring 7's default
+     * constructor would build its own mapper from Spring's defaults (dates
+     * as ISO text, null primitives rejected ...); this one reads and writes
+     * what Jackson 2 did, see {@link Json}.
+     */
+    @Bean
+    public JacksonJsonHttpMessageConverter jacksonMessageConverter() {
+        JacksonJsonHttpMessageConverter mc = new JacksonJsonHttpMessageConverter(Json.mapper());
         mc.setSupportedMediaTypes(List.of(MediaType.APPLICATION_JSON));
         return mc;
     }
@@ -263,7 +282,8 @@ public class WebMvcConfig {
             MarshallingHttpMessageConverter marshallingHttpMessageConverter,
             // Phase D.6 (DR-014): explicit @Qualifier — Phase C.15
             // un-excluded WebMvcAutoConfiguration which registers its
-            // own `mappingJackson2HttpMessageConverter` bean alongside
+            // own JSON converter bean (`mappingJackson2HttpMessageConverter`,
+            // now `jacksonJsonHttpMessageConverter`) alongside
             // our `jacksonMessageConverter`. Without the qualifier,
             // by-type injection here was ambiguous → the `pages`
             // DispatcherServlet failed to initialise → GET
@@ -271,7 +291,7 @@ public class WebMvcConfig {
             // The qualifier is the surgical fix; the root issue is
             // logged in the Phase E known-issues file. Now resolved.
             @org.springframework.beans.factory.annotation.Qualifier("jacksonMessageConverter")
-                    MappingJackson2HttpMessageConverter jacksonMessageConverter) {
+                    JacksonJsonHttpMessageConverter jacksonMessageConverter) {
         RequestMappingHandlerAdapter a = new RequestMappingHandlerAdapter();
         // Phase E.5 follow-up (2026-06-01): ByteArrayHttpMessageConverter
         // ordered FIRST so springdoc's OpenApiResource.openapiJson()

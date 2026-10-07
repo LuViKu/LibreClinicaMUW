@@ -55,7 +55,7 @@ class BundleManifestGoldenTest {
                 "S-001", "S_STUDY1", "kuchernig", new BundleExportWriter.Policy(true),
                 acquisitions, crfFiles, inference,
                 List.of(new BundleExportWriter.Omission("inference/5/fluid.npz", "ai-withheld"),
-                        new BundleExportWriter.Omission("acq/9", "file \"missing\" on disk")),
+                        new BundleExportWriter.Omission("acq/9", "file \"missing\" on disk \uD83D\uDE00 a/b")),
                 7, 123_456_789_012L);
         // The only clock-dependent value; the key keeps its position.
         manifest.put("generatedAt", "2026-10-07T10:00:00Z");

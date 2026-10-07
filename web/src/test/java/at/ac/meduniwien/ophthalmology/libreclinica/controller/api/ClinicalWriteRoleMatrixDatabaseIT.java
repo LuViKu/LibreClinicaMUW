@@ -47,7 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResult
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.RetinalMetricComputer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

@@ -42,8 +42,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationS
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

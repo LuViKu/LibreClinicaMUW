@@ -1,8 +1,9 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
+import tools.jackson.core.ObjectReadContext;
+import tools.jackson.core.json.JsonFactory;
+import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +62,7 @@ public class TerminologyIngestService {
     private static final Logger LOG = LoggerFactory.getLogger(TerminologyIngestService.class);
 
     private final DataSource dataSource;
-    private final JsonFactory jsonFactory = new JsonFactory();
+    private final JsonFactory jsonFactory = JsonFactory.builderWithJackson2Defaults().build();
 
     public TerminologyIngestService(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
@@ -179,7 +180,7 @@ public class TerminologyIngestService {
     private int streamConceptsToCsv(InputStream json, StringBuilder csv, String codeSystem, long versionId,
                                     int[] declaredOut, String[] versionOut) throws IOException {
         int loaded = 0;
-        try (JsonParser p = jsonFactory.createParser(json)) {
+        try (JsonParser p = jsonFactory.createParser(ObjectReadContext.empty(), json)) {
             if (p.nextToken() != JsonToken.START_OBJECT) {
                 throw new IOException("Expected a FHIR CodeSystem JSON object at the root");
             }

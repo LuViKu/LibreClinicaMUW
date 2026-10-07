@@ -74,11 +74,13 @@ public class ApiExceptionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+    /** What a client is told when the request body cannot be read. */
+    static final String UNREADABLE_BODY_MESSAGE = "The request body is missing or is not valid JSON of the expected shape.";
+
     /** Malformed request body / missing required param / wrong type. */
     @ExceptionHandler({
             MissingServletRequestParameterException.class,
             MethodArgumentTypeMismatchException.class,
-            HttpMessageNotReadableException.class,
             IllegalArgumentException.class,
     })
     public ResponseEntity<ValidationErrorBody> handleBadRequest(Exception e) {
@@ -88,6 +90,23 @@ public class ApiExceptionHandler {
                 .body(new ValidationErrorBody(
                         e.getMessage() == null ? "Bad request" : e.getMessage(),
                         List.of()));
+    }
+
+    /**
+     * A request body that is not JSON, not the expected shape, or absent.
+     *
+     * <p>The exception's own message is the parser's ("JSON parse error:
+     * Unexpected end-of-input ...", or the controller method signature for a
+     * missing body), which differs between Jackson versions and names internals;
+     * the response says the same thing whichever library reads the body. The
+     * cause is in the debug log.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ValidationErrorBody> handleUnreadableBody(HttpMessageNotReadableException e) {
+        LOG.debug("API 400 unreadable request body: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ValidationErrorBody(UNREADABLE_BODY_MESSAGE, List.of()));
     }
 
     /** SQL failures from the DAO layer (connection issues, constraint violations, etc.). */

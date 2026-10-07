@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -81,7 +83,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -167,7 +169,7 @@ public class EventCrfsApiController {
     private static final Logger LOG = LoggerFactory.getLogger(EventCrfsApiController.class);
 
     /** #26 binding store — parses the terminology fill map (jsonb) at entry. */
-    private static final ObjectMapper TERMINOLOGY_JSON = new ObjectMapper();
+    private static final ObjectMapper TERMINOLOGY_JSON = Json.strict();
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;

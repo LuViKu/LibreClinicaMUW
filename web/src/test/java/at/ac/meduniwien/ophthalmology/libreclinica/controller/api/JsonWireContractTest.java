@@ -208,13 +208,21 @@ class JsonWireContractTest {
     }
 
     @Test
-    void anUnreadableBodyDoesNotLeakParserInternals() throws Exception {
-        String body = mvc.perform(post("/contract/bind").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"eventCrfId\":"))
+    void anUnreadableBodyGetsTheSameMessageWhateverTheParserSaid() throws Exception {
+        String truncated = badRequestBody("{\"eventCrfId\":");
+        String wrongType = badRequestBody("{\"eventCrfId\":[1,2]}");
+        String notJson = badRequestBody("<xml/>");
+        String expected = "{\"message\":\"" + ApiExceptionHandler.UNREADABLE_BODY_MESSAGE + "\",\"errors\":[]}";
+        assertEquals(expected, truncated);
+        assertEquals(expected, wrongType);
+        assertEquals(expected, notJson);
+        assertFalse(truncated.contains("com.fasterxml") || truncated.contains("tools.jackson"), truncated);
+    }
+
+    private String badRequestBody(String json) throws Exception {
+        return mvc.perform(post("/contract/bind").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isBadRequest())
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertFalse(body.contains("com.fasterxml"), body);
-        assertFalse(body.contains("tools.jackson"), body);
-        assertFalse(body.contains("line:"), body);
     }
 
     /* ------------------------------------------------------------------ */

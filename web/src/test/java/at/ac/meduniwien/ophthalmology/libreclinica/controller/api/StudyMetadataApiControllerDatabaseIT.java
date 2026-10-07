@@ -201,7 +201,9 @@ class StudyMetadataApiControllerDatabaseIT extends AbstractApiControllerDatabase
     }
 
     private MockMvc mockMvc() {
-        return ProductionMvc.standalone(new StudyMetadataApiController(DATA_SOURCE, RULES, CORE))
+        // The download is a String body with an application/xml content type,
+        // which production's converter list cannot write (ConverterListGapTest).
+        return ProductionMvc.standaloneWithGapFillers(new StudyMetadataApiController(DATA_SOURCE, RULES, CORE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

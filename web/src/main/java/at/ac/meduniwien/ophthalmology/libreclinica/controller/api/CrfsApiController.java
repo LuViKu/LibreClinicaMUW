@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 import java.io.IOException;
@@ -57,7 +59,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -138,7 +140,7 @@ public class CrfsApiController {
     private static final Logger LOG = LoggerFactory.getLogger(CrfsApiController.class);
 
     /** #26 binding store — serialises/parses the terminology fill map (jsonb). */
-    private static final ObjectMapper TERMINOLOGY_JSON = new ObjectMapper();
+    private static final ObjectMapper TERMINOLOGY_JSON = Json.strict();
 
     private final DataSource dataSource;
     private final CrfSpreadsheetParserService parserService;

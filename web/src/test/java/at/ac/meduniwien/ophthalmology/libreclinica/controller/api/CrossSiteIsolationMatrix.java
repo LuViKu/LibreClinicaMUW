@@ -588,11 +588,11 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     /** Audit rows the iso users wrote while being refused name the foreign label they typed; they are not site data. */
     static String withoutAuditOfTheTestUsers(String body) {
         try {
-            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
-            com.fasterxml.jackson.databind.JsonNode events = root.get("events");
+            tools.jackson.databind.JsonNode root = new tools.jackson.databind.ObjectMapper().readTree(body);
+            tools.jackson.databind.JsonNode events = root.get("events");
             if (events == null || !events.isArray()) return body;
-            com.fasterxml.jackson.databind.node.ArrayNode kept = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();
-            for (com.fasterxml.jackson.databind.JsonNode e : events) {
+            tools.jackson.databind.node.ArrayNode kept = new tools.jackson.databind.ObjectMapper().createArrayNode();
+            for (tools.jackson.databind.JsonNode e : events) {
                 String actor = e.path("actor").asText("");
                 if (!actor.startsWith("iso_")) kept.add(e);
             }

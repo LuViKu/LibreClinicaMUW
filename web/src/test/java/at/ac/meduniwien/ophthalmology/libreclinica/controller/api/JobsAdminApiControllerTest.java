@@ -147,6 +147,33 @@ class JobsAdminApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.jobs[0].description").value("Nightly XML export"));
     }
 
+    @Test
+    void fireTimesAreIsoUtcStringsNotEpochMillis() throws Exception {
+        // AdminJobsView.vue parses these with new Date(string); a number
+        // (Quartz's java.util.Date through the mapper) rendered "Invalid Date".
+        Scheduler s = Mockito.mock(Scheduler.class);
+        when(s.getSchedulerName()).thenReturn("public");
+        when(s.getTriggerGroupNames()).thenReturn(List.of("DEFAULT"));
+        TriggerKey tk = new TriggerKey("nightly-export", "DEFAULT");
+        when(s.getTriggerKeys(any())).thenReturn(new HashSet<>(Set.of(tk)));
+        Trigger trigger = Mockito.mock(Trigger.class);
+        when(trigger.getPreviousFireTime()).thenReturn(new Date(1718800000000L));
+        when(trigger.getNextFireTime()).thenReturn(new Date(1718886400123L));
+        when(trigger.getFinalFireTime()).thenReturn(null);
+        when(trigger.getJobKey()).thenReturn(new JobKey("export-runner", "DEFAULT"));
+        when(s.getTrigger(tk)).thenReturn(trigger);
+        when(s.getTriggerState(tk)).thenReturn(TriggerState.NORMAL);
+
+        mockMvcWith(s)
+                .perform(get("/api/v1/admin/jobs")
+                        .session((MockHttpSession)
+                                authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.jobs[0].previousFireTime").value("2024-06-19T12:26:40Z"))
+                .andExpect(jsonPath("$.jobs[0].nextFireTime").value("2024-06-20T12:26:40.123Z"))
+                .andExpect(jsonPath("$.jobs[0].finalFireTime").value(Matchers.nullValue()));
+    }
+
     /* ====================================================================== */
     /* Scheduler failure                                                      */
     /* ====================================================================== */
