@@ -180,7 +180,7 @@ public class ExportJobRunner implements Job {
             process(dataSource, materializer, jobDao, claimed);
         } finally {
             if (previousLocale == null) {
-                ResourceBundleProvider.localeMap.remove(Thread.currentThread());
+                ResourceBundleProvider.clearLocale();
             } else {
                 ResourceBundleProvider.updateLocale(previousLocale);
             }
