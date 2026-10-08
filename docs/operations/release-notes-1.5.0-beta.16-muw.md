@@ -303,7 +303,7 @@ Do this outside clinic hours. The restart takes a few minutes, and everyone sign
    sudo systemctl start libreclinica-backup-db.service   # or take a pg_dump as in the runbook, §1
    IMAGE=ghcr.io/luviku/libreclinicamuw:1.5.0-beta.16-muw sudo -E /opt/libreclinica/deploy/dry-run-migration.sh
    ```
-   It boots the new image against a throwaway copy of the newest backup and lists the changesets it applied. Expect the fifteen files above, nothing else, and a healthy start. **Keep that dump.** It is the only way back: see the runbook, [§5](deploy-runbook.md#5-rollback).
+   It boots the new image against a throwaway copy of the newest backup and lists the changesets it applied. Expect the sixteen files above, nothing else, and a healthy start. **Keep that dump.** It is the only way back: see the runbook, [§5](deploy-runbook.md#5-rollback).
 
 3. **Re-create the legacy XSLT export jobs.** The legacy job screens close with this release. Before the upgrade, list them on the legacy jobs screen (`/ViewJob`). After the upgrade, create each as a dataset schedule on `/export`, then delete the old one on `/admin/jobs`. Legacy jobs keep running until they are deleted; they just cannot be edited or paused any more.
 
