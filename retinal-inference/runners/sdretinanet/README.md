@@ -66,3 +66,22 @@ Run one volume that the SWITCHER study also segmented through the cluster, then 
 - the `layers/*.yml` values and confidence;
 - the `lesions/*.png` indices, which is where a different overlap rule would show;
 - the eCRF's ETDRS numbers against `etdrs_long.csv` for that FileSetId.
+
+### Result of the first comparison (2026-10-08)
+
+One EyleaHD volume (49 B-scans) was run through this image on an A6000 and compared with its SWITCHER segmentation (`VSC_EyleaHD_SDRetinaNet`), quantified with `namd_switcher` in both cases.
+
+- **Boundaries:**
+  - Valid/invalid agrees on 99.98% of A-scans.
+  - Positions are 0.35 px apart on average and identical on 68% of A-scans.
+  - CRT is −0.5% (−2.5 µm), total retina within 1 µm in the 3 and 6 mm discs, the choroid about 2–3% thinner.
+- **Lesions:**
+  - Classes almost never swap (27 px), so the overlap rule is not the cause.
+  - Every disagreeing pixel lies on a mask outline, and SWITCHER's masks are slightly wider.
+  - At threshold 0.5, 6 mm volumes are PED +2%, IRF −13%, SRF −24%, SHRM −38%, SDD −35%.
+- **Neither setting explains it.**
+  - TTA levels 0–3 change almost nothing (3 equals 2).
+  - Thresholds 0.2–0.4 move each class toward SWITCHER at a different value, and none reaches a Dice near 1.
+  - The boundaries, which the threshold does not affect, differ in every run.
+
+**Conclusion:** the SWITCHER segmentations were made with a different build or pipeline of SD-RetinaNet than this image's AOT models. The defaults stay at the model author's values (`--tta_level 2 --threshold 0.5`), untuned. Thickness metrics agree within about 0.5%, lesion volumes do not, so **do not use this task for lesion endpoints that must match SWITCHER** until the pipeline that produced `VSC_*_SDRetinaNet` is known.
