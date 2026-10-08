@@ -50,6 +50,7 @@ public class InitUpdateStudyServlet extends SecureController {
      */
     @Override
     public void processRequest() throws Exception {
+        CreateStudyServlet.ensureOptionMaps();
 
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
         String idString = request.getParameter("id");

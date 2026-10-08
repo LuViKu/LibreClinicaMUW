@@ -103,11 +103,19 @@ public class CreateStudyServlet extends SecureController {
 
     static HashMap<String, String> timingMap = new LinkedHashMap<String, String>();
 
-    static {
-        // problem here -- if you go directly to the servlet, the resource
-        // bundles are not initialized
-        // and the servlet throws a fatal error.
-        // try {
+    /**
+     * Fills the option maps from the static resource bundles. This used to be a
+     * static initialiser, which runs when the class is first loaded - and that
+     * is on the first request that reaches any servlet using these maps, before
+     * SecureController.process has set {@code resadmin}. The NPE failed the
+     * class load for good (NoClassDefFoundError on every later use) until the
+     * next restart. Callers invoke this from processRequest, where the bundles
+     * are set; it fills the maps once.
+     */
+    static synchronized void ensureOptionMaps() {
+        if (!facRecruitStatusMap.isEmpty()) {
+            return;
+        }
         facRecruitStatusMap.put("not_yet_recruiting", resadmin.getString("not_yet_recruiting"));
         facRecruitStatusMap.put("recruiting", resadmin.getString("recruiting"));
         facRecruitStatusMap.put("no_longer_recruiting", resadmin.getString("no_longer_recruiting"));
@@ -183,9 +191,6 @@ public class CreateStudyServlet extends SecureController {
 
         timingMap.put("retrospective", resadmin.getString("retrospective"));
         timingMap.put("prospective", resadmin.getString("prospective"));
-        // } catch (NullPointerException e) {
-        // e.printStackTrace();
-        // }
     }
     /*
      * static { facRecruitStatusMap.put("Not yet recruiting", "Not yet
@@ -276,6 +281,7 @@ public class CreateStudyServlet extends SecureController {
      */
     @Override
     public void processRequest() throws Exception {
+        CreateStudyServlet.ensureOptionMaps();
         // updateMaps();
         String action = request.getParameter("action");
         resetPanel();
