@@ -172,6 +172,13 @@ if [ "$RI_SLURM" != 1 ]; then
   export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-$RETINAL_INFERENCE_APPTAINER_GPU_DEVICE}"
 fi
 
+# sdretinanet — the SD-RetinaNet standalone .sif (copied out of
+# bfazekas03/singularity-images/lesions-layerseg-standalone) and the
+# --output_formatter that makes it write the native layers/ + lesions/ files.
+# Optional: when either file is missing the task is left out (see preflight).
+: "${RI_SDRETINANET_SIF:=$RI_HOME/ri/retinanet-spectralis_main.sif}"
+: "${RI_SDRETINANET_FORMATTER:=$RI_REPO/runners/sdretinanet/format_output.py}"
+
 # ----------------------------- BM_LD_LIBRARY_PATH -----------------------------
 # The BM venv python needs the LMOD module lib dirs (libpython3.8.so et al).
 # Derive them rather than hardcoding the ~2 KB path — and derive them in a
@@ -221,8 +228,22 @@ if [ -z "${RETINAL_INFERENCE_BM_LD_LIBRARY_PATH:-}" ]; then
 fi
 
 # ----------------------------- preflight --------------------------------------
-ALL_TASKS="bm fluid ga layers onl pr"
+ALL_TASKS="bm fluid ga layers onl pr sdretinanet"
 EXPECTED_TASKS="$ALL_TASKS"
+
+# sdretinanet needs both its .sif and its formatter. Without them it is left out
+# and the server starts degraded, like bm/layers below; it never costs the others.
+if [ -r "$RI_SDRETINANET_SIF" ] && [ -r "$RI_SDRETINANET_FORMATTER" ]; then
+  export RETINAL_INFERENCE_SDRETINANET_SIF="$RI_SDRETINANET_SIF"
+  export RETINAL_INFERENCE_SDRETINANET_FORMATTER="$RI_SDRETINANET_FORMATTER"
+else
+  if [ "$STRICT" = 1 ] || [ "$MODE" = "--check" ]; then
+    die "sdretinanet: need $RI_SDRETINANET_SIF and $RI_SDRETINANET_FORMATTER (set RI_SDRETINANET_SIF / RI_SDRETINANET_FORMATTER)"
+  fi
+  warn "DEGRADED: starting WITHOUT 'sdretinanet' — $RI_SDRETINANET_SIF or $RI_SDRETINANET_FORMATTER is missing"
+  unset RETINAL_INFERENCE_SDRETINANET_SIF RETINAL_INFERENCE_SDRETINANET_FORMATTER
+  EXPECTED_TASKS="bm fluid ga layers onl pr"
+fi
 
 # A missing BM_LD_LIBRARY_PATH costs us `bm` and `layers`. It must NOT cost us
 # the other four.
@@ -250,7 +271,9 @@ if [ -z "$RETINAL_INFERENCE_BM_LD_LIBRARY_PATH" ]; then
   # Unset rather than export empty: the adapter keys capability off the var
   # being absent, and an empty string is not reliably falsy on the Python side.
   unset RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
-  EXPECTED_TASKS="fluid ga onl pr"
+  EXPECTED_TASKS="$(printf '%s
+' $EXPECTED_TASKS | grep -vx -e bm -e layers | tr '
+' ' ' | sed 's/ $//')"
 else
   export RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
 fi
@@ -295,7 +318,10 @@ assert_tasks() {
   if [ "$EXPECTED_TASKS" = "$ALL_TASKS" ]; then
     log "all tasks registered: $EXPECTED_TASKS"
   else
-    warn "DEGRADED but serving: registered [$EXPECTED_TASKS]; bm + layers absent"
+    warn "DEGRADED but serving: registered [$EXPECTED_TASKS]; absent: $(printf '%s
+' $ALL_TASKS | grep -vxF "$(printf '%s
+' $EXPECTED_TASKS)" | tr '
+' ' ')"
   fi
   log "health: $health"
 }

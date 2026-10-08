@@ -140,6 +140,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             "onl": s.onl_sif,
             "pr": s.pr_sif,
             "ga": s.ga_sif,
+            "sdretinanet": s.sdretinanet_sif,
         }
 
     @property
@@ -547,6 +548,37 @@ class ApptainerAdapter(RetinalInferenceAdapter):
                 "output_payload": {"surface_csvs": names},
                 "pixel_scale_mm": axial, "artifact_names": names}
 
+    def _sdretinanet(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
+        import pydicom
+
+        from retinal_inference.inference import sdretinanet_native as native
+
+        s = _config.settings
+        dcm = dcm_dir / "bscan.dcm"
+        out = work / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        binds = [f"{dcm_dir}:/in", f"{out}:/out"]
+        args = ["/in/bscan.dcm", "/out",
+                "--tta_level", str(s.sdretinanet_tta_level),
+                "--threshold", str(s.sdretinanet_threshold)]
+        if s.sdretinanet_formatter:
+            # The formatter writes the native layers/ + lesions/ files with the
+            # writer module mounted beside it (runners/sdretinanet/README.md).
+            binds.append(f"{s.sdretinanet_formatter}:/opt/ri/sdretinanet_formatter.py:ro")
+            binds.append(f"{Path(native.__file__)}:/opt/ri/sdretinanet_native.py:ro")
+            args += ["--output_formatter", "/opt/ri/sdretinanet_formatter.py"]
+        cmd = self._apptainer("run", s.sdretinanet_sif or "", binds, args, task="sdretinanet")
+        _exec(cmd, self._gpu_env("sdretinanet"))
+        n_frames = int(getattr(pydicom.dcmread(str(dcm), stop_before_pixels=True),
+                               "NumberOfFrames", 1))
+        # Fails closed on missing or partial output (e.g. no formatter configured).
+        archive = work / native.ARCHIVE
+        native.pack_archive(out, archive, expected_bscans=n_frames)
+        axial = _spacing_mm(dcm)[0]
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"segmentation_file": native.ARCHIVE, "n_bscans": n_frames},
+                "pixel_scale_mm": axial, "artifact_names": [native.ARCHIVE]}
+
     def full_volume(
         self,
         task: TaskName,
@@ -574,7 +606,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
 
         handler = {"fluid": self._fluid, "onl": self._onl,
                    "pr": self._pr, "ga": self._ga, "bm": self._bm,
-                   "layers": self._layers}[task]
+                   "layers": self._layers, "sdretinanet": self._sdretinanet}[task]
 
         if out_dir_override is not None:
             work = Path(out_dir_override)

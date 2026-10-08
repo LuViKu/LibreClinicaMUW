@@ -188,6 +188,19 @@ class Settings(BaseSettings):
     bm_ld_library_path: str | None = None  # colon-joined LMOD module lib dirs
     bm_gpu_device: str | None = None  # CUDA_VISIBLE_DEVICES (app pins device 0)
 
+    # --- SD-RetinaNet (layers + lesions) ----------------------------------------
+    # The standalone image (code, AOT models and fold config baked in):
+    #   .../lesions-layerseg-standalone/retinanet-spectralis_main.sif
+    # Its runscript is main.py <input> <output_folder> [--tta_level] [--threshold]
+    # [--output_formatter]. The eCRF stores the model's native layerlib/lesionlib
+    # files, so after the run the output folder must hold layers/NNN.yml and
+    # lesions/NNN.png; sdretinanet_formatter is the --output_formatter file that
+    # writes them (bind-mounted read-only into the container).
+    sdretinanet_sif: str | None = None
+    sdretinanet_formatter: Path | None = None
+    sdretinanet_tta_level: int = 2
+    sdretinanet_threshold: str = "0.5"
+
     @property
     def effective_max_concurrent_runs(self) -> int:
         if self.max_concurrent_runs is not None:

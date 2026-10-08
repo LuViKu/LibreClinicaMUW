@@ -86,6 +86,7 @@ ships for `sese_pr`). Resolved canonical paths:
 | fluid | `$PI/sese_retinsight_fluid/code/v2.5.0/fluid_segmentation.sif` | — (baked) | — (baked) |
 | onl | `$PI/sese_onl/singularity/sese_onl.sif` | `$PI/sese_onl/code/outernuclearlayer-segmentation` | `$PI/sese_onl/weights/cross_val_ga` (5-fold ensemble; single-model alt `…/weights/onl_seg_vanilla_unet.pth`) |
 | pr | **build** from `runners/pr/apptainer.def` → `/scratch/$USER/ri/pr.sif` | `$PI/sese_pr/code/photoreceptors-segmentation` | `$PI/sese_pr/weights/u2net-cross-entropy` |
+| sdretinanet | copy `/home/optima/bfazekas03/singularity-images/lesions-layerseg-standalone/retinanet-spectralis_main.sif` → `$RI_HOME/ri/` | — (baked) | — (baked, AOT) |
 | ga (gated) | `$PI/sese_ga/pytorch_optima_dl.v4.sif` | `$PI/sese_ga/code` (`common/`+`prepare_data/` are empty on disk — the real ones live inside the `.sif`) | `$PI/sese_ga/weights/filly_checkpoints` (5× `w.ckpt`) |
 
 > **GA's IOWA step (binary located).** GA needs an 11-layer IOWA segmentation as
@@ -612,6 +613,15 @@ cluster `/run`. Leave `preprocessUrl` **blank** for single-host dev — there th
 DICOM or an `.e2e`, auto-detected, so a misconfig degrades rather than corrupts.)
 
 ## 6. Per-model validation (first real run)
+
+**sdretinanet** runs the image with `runners/sdretinanet/format_output.py` as
+its `--output_formatter`, which writes the native `layers/NNN.yml` +
+`lesions/NNN.png` the eCRF stores ([runners/sdretinanet/README.md](../runners/sdretinanet/README.md)).
+The launcher enables the task only when both `RI_SDRETINANET_SIF` (default
+`$RI_HOME/ri/retinanet-spectralis_main.sif`) and `RI_SDRETINANET_FORMATTER`
+(default `runners/sdretinanet/format_output.py`) exist; otherwise it starts
+degraded without it. Validate on a scan that the SWITCHER study also segmented
+and compare the two outputs file by file.
 For each task: POST a real `.e2e`, confirm the model **accepts the synthesized
 `bscan.dcm`** and the expected output artifacts are produced (`fluidseg.npz`
 labels; ONL OPL-HFL + BMEIS surface CSVs; PR BMEIS + OB-OPR surface CSVs; GA

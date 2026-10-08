@@ -67,7 +67,10 @@ def health() -> HealthResponse:
         status="ok",
         adapter=type(adapter).__name__.removesuffix("Adapter").lower(),
         model_version=adapter.model_version,
-        supported_tasks=sorted(SUPPORTED_TASKS),
+        # What this node can run, not every task the code knows: a task whose
+        # model is not configured must show up as missing, so the launcher's
+        # assert_tasks and the app-side cluster monitor can report it degraded.
+        supported_tasks=sorted(t for t in SUPPORTED_TASKS if adapter.supports(t)),
         node=socket.gethostname().split(".", 1)[0] or None,
         gpu_device=device,
         gpu_name=_gpu_name(device),
