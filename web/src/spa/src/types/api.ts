@@ -11884,7 +11884,9 @@ export interface operations {
     };
     streamSegmentation: {
         parameters: {
-            query?: never;
+            query?: {
+                part?: string;
+            };
             header?: never;
             path: {
                 jobId: number;
