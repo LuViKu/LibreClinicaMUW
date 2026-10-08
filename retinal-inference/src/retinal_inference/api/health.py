@@ -9,6 +9,7 @@ from functools import lru_cache
 from fastapi import APIRouter
 
 from retinal_inference import config as _config
+from retinal_inference.devices import task_devices_declaration
 from retinal_inference.inference.adapter import get_adapter
 from retinal_inference.models.responses import HealthResponse
 from retinal_inference.tasks import SUPPORTED_TASKS
@@ -78,4 +79,5 @@ def health() -> HealthResponse:
         max_concurrent_runs=cfg.effective_max_concurrent_runs,
         slurm_partition=cfg.apptainer_slurm_partition if slurm else None,
         slurm_gres=cfg.apptainer_slurm_gres if slurm else None,
+        task_devices=task_devices_declaration(),
     )
