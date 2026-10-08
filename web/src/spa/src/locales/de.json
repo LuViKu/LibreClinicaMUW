@@ -4164,7 +4164,8 @@
       "ga": "GA-Fläche",
       "bmeis": "BMEIS",
       "layers": "Schichtsegmentierung (IOWA + BM)",
-      "bm": "Bruch-Membran"
+      "bm": "Bruch-Membran",
+      "sdretinanet": "SD-RetinaNet Schichten + Läsionen"
     },
     "empty": {
       "awaitingSidecar": "Warte auf Sidecar …",
@@ -4185,11 +4186,13 @@
       "gaArea": "GA-Fläche",
       "onlThickness": "ONL-Dicke",
       "prThickness": "PR-Dicke",
+      "crt": "CRT",
       "validAscans": "{valid} / {total} A-Scans gültig",
       "subtitle": {
         "notDetected": "nicht detektiert",
         "affected": "{count} von {total} B-Scans betroffen",
-        "totalLoad": "Fluid-Last gesamt"
+        "totalLoad": "Fluid-Last gesamt",
+        "crtCentral": "Zentral 1 mm, ILM–BM"
       }
     },
     "etdrs": {
@@ -4300,6 +4303,16 @@
       "legendTitle": "Netzhautschichten",
       "allOn": "Alle ein",
       "allOff": "Alle aus"
+    },
+    "lesions": {
+      "legendTitle": "Läsionen"
+    },
+    "sdretinanet": {
+      "caution": {
+        "geometryMissing": "Scan-Geometrie nicht verfügbar: Dicken-, CRT- und ETDRS-Werte konnten nicht berechnet werden.",
+        "foveaNeedsReview": "Die erkannte Fovea muss geprüft werden: CRT- und ETDRS-Werte sind möglicherweise dezentriert.",
+        "gridCenterFallback": "Keine Fovea erkannt; das ETDRS-Raster ist stattdessen auf die Scanmitte zentriert."
+      }
     },
     "correction": {
       "tools": {

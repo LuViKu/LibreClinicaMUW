@@ -290,4 +290,40 @@ public class SegmentationEnvelopeLoaderTest {
         assertNotNull(env.correctedSurfaceIndices());
         assertEquals(0, env.correctedSurfaceIndices().size());
     }
+
+    private static final Path SDRETINANET = java.nio.file.Paths.get("src/test/resources/retinal/metrics/sdretinanet");
+
+    @Test
+    public void testLoadSdRetinaNet_surfacesByDefault() throws Exception {
+        SegmentationEnvelope env = SegmentationEnvelopeLoader.load("sdretinanet", SDRETINANET);
+        assertNotNull(env);
+        assertEquals("surface_y", env.kind());
+        assertEquals("float32", env.dtype());
+        assertArrayEquals(new int[]{12, 33, 64}, env.shape());
+        assertEquals("ILM", env.labels().get(0));
+        assertEquals("HL-S", env.labels().get(11));
+        assertEquals(12 * 33 * 64 * 4, env.data().length);
+        ByteBuffer bb = ByteBuffer.wrap(env.data()).order(ByteOrder.LITTLE_ENDIAN);
+        // confidence-0 A-scan 0 is sent as 0 ("no value")
+        assertEquals(0f, bb.getFloat(0), 0f);
+        assertEquals(10f, bb.getFloat(5 * 4), 1.5f);
+    }
+
+    @Test
+    public void testLoadSdRetinaNet_lesionsPart() throws Exception {
+        SegmentationEnvelope env = SegmentationEnvelopeLoader.load(
+                "sdretinanet", SDRETINANET, SegmentationEnvelopeLoader.PART_LESIONS);
+        assertNotNull(env);
+        assertEquals("lesion_packed", env.kind());
+        assertArrayEquals(new int[]{33, 80, 64}, env.shape());
+        assertEquals(List.of("Cyst", "SRF", "PED", "SHRM", "Pseudodrusen", "ORT", "+HRF"), env.labels());
+        assertEquals(33 * 80 * 64, env.data().length);
+        // cyst + HRF at (18, 30, 36): main id 1 with bit 7
+        assertEquals(0x81, env.data()[(18 * 80 + 30) * 64 + 36] & 0xFF);
+    }
+
+    @Test
+    public void testLoadSdRetinaNet_missingOutputIsNull() throws Exception {
+        assertNull(SegmentationEnvelopeLoader.load("sdretinanet", tmp.getRoot().toPath()));
+    }
 }

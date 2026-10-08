@@ -60,6 +60,7 @@ public class RetinalMetricComputer {
             case "onl"   -> OnlMetric.compute(segDir, geom, laterality);
             case "pr"    -> PrMetric.compute(segDir, geom, laterality);
             case "ga"    -> GaMetric.compute(segDir, geom, laterality);
+            case "sdretinanet" -> SdRetinaNetMetric.compute(segDir, geom, laterality);
             default -> throw new IllegalArgumentException("unknown retinal task: " + task);
         };
     }

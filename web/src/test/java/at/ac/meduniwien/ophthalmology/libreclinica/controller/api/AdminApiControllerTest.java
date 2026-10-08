@@ -358,7 +358,7 @@ class AdminApiControllerTest extends AbstractApiControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.configured").value(true))
                     .andExpect(jsonPath("$.remotePushUrl").value("http://nginx:8088"))
-                    .andExpect(jsonPath("$.expectedTasks", Matchers.hasSize(6)))
+                    .andExpect(jsonPath("$.expectedTasks", Matchers.hasSize(7)))
                     .andExpect(jsonPath("$.nodes", Matchers.hasSize(2)))
                     .andExpect(jsonPath("$.nodes[0].name").value("on3"))
                     .andExpect(jsonPath("$.nodes[0].state").value("healthy"))

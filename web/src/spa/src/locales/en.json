@@ -4161,7 +4161,8 @@
       "ga": "GA area",
       "bmeis": "BMEIS",
       "layers": "Layer segmentation (IOWA + BM)",
-      "bm": "Bruch's membrane"
+      "bm": "Bruch's membrane",
+      "sdretinanet": "SD-RetinaNet layers + lesions"
     },
     "empty": {
       "awaitingSidecar": "Awaiting sidecar…",
@@ -4182,11 +4183,13 @@
       "gaArea": "GA area",
       "onlThickness": "ONL thickness",
       "prThickness": "PR thickness",
+      "crt": "CRT",
       "validAscans": "{valid} / {total} A-scans valid",
       "subtitle": {
         "notDetected": "not detected",
         "affected": "{count} of {total} B-scans affected",
-        "totalLoad": "Total fluid load"
+        "totalLoad": "Total fluid load",
+        "crtCentral": "Central 1 mm, ILM–BM"
       }
     },
     "etdrs": {
@@ -4297,6 +4300,16 @@
       "legendTitle": "Retinal layers",
       "allOn": "All on",
       "allOff": "All off"
+    },
+    "lesions": {
+      "legendTitle": "Lesions"
+    },
+    "sdretinanet": {
+      "caution": {
+        "geometryMissing": "Scan geometry was unavailable: thickness, CRT and ETDRS values could not be computed.",
+        "foveaNeedsReview": "The detected fovea needs review: CRT and ETDRS values may be off-centre.",
+        "gridCenterFallback": "No fovea was detected; the ETDRS grid is centred on the scan centre instead."
+      }
     },
     "correction": {
       "tools": {

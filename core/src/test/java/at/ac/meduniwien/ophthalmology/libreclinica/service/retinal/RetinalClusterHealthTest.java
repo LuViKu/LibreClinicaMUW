@@ -44,7 +44,7 @@ public class RetinalClusterHealthTest {
 
     private static final String FULL_HEALTH = "{\"status\":\"ok\",\"adapter\":\"apptainer\","
             + "\"model_version\":\"optima-apptainer-v1\","
-            + "\"supported_tasks\":[\"bm\",\"fluid\",\"ga\",\"layers\",\"onl\",\"pr\"],"
+            + "\"supported_tasks\":[\"bm\",\"fluid\",\"ga\",\"layers\",\"onl\",\"pr\",\"sdretinanet\"],"
             + "\"node\":\"on3\",\"gpu_device\":\"2\",\"gpu_name\":\"NVIDIA GeForce RTX 2080 Ti\"}";
 
     private HttpServer server;
@@ -93,7 +93,7 @@ public class RetinalClusterHealthTest {
         NodeStatus s = RetinalClusterHealth.classify(ON3, 200, FULL_HEALTH, 12);
         assertEquals("healthy", s.state());
         assertTrue(s.missingTasks().isEmpty());
-        assertEquals(6, s.supportedTasks().size());
+        assertEquals(7, s.supportedTasks().size());
         assertEquals("on3", s.node());
         assertEquals("2", s.gpuDevice());
         assertEquals("NVIDIA GeForce RTX 2080 Ti", s.gpuName());
@@ -107,7 +107,7 @@ public class RetinalClusterHealthTest {
         String body = "{\"status\":\"ok\",\"supported_tasks\":[\"fluid\",\"ga\",\"onl\",\"pr\"]}";
         NodeStatus s = RetinalClusterHealth.classify(ON3, 200, body, 5);
         assertEquals("degraded", s.state());
-        assertEquals(List.of("bm", "layers"), s.missingTasks());
+        assertEquals(List.of("bm", "layers", "sdretinanet"), s.missingTasks());
         assertNull(s.node()); // older sidecar without the node fields: tolerated
     }
 

@@ -29,6 +29,12 @@ validated end-to-end (see [cluster-deployment.md](cluster-deployment.md)).
 | onl | `*OPL-HFL*.csv`, `*BMEIS*.csv` (two surfaces) | `surface_csvs` |
 | pr | `*BMEIS*.csv`, `*OB?OPR*.csv` (two surfaces) | `surface_csvs` |
 | ga | `001-RPEL.csv`, `002-EZL.csv`, `003-ELM.csv` (+ the 11 IOWA layer CSVs, kept) | `rpel_csv` |
+| sdretinanet | `sdretinanet.zip`: `layers/NNN.yml` (layerlib) + `lesions/NNN.png` (lesionlib), one each per B-scan | `segmentation_file`, `n_bscans` |
+
+**sdretinanet** is computed by `SdRetinaNetMetric`, a port of the SWITCHER
+study's `namd_switcher` quantification (fovea, ETDRS discs/rings, 18 layer
+thicknesses, 7 lesion classes). `core/src/test/resources/retinal/metrics/sdretinanet/generate_fixture.py`
+regenerates its fixture and the reference values from the Python code.
 
 **Surface CSV format** (the layer CSVs): a grid of per-(B-scan × A-scan) **row
 indices** (y of the surface in the B-scan), with `U` for undefined/missing columns.

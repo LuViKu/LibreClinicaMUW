@@ -16,8 +16,11 @@ import type {
   ImagingRequirement,
 } from '@/types/eventDefinition'
 
-/** Tasks the runner registry recognises, in the order the chips are shown. */
-export const RETINAL_TASK_OPTIONS: readonly string[] = ['fluid', 'ga', 'onl', 'pr', 'layers'] as const
+/**
+ * Tasks the runner registry recognises, in the order the chips are shown.
+ * Mirrors ALLOWED_RETINAL_TASKS in EventDefinitionsApiController.java.
+ */
+export const RETINAL_TASK_OPTIONS: readonly string[] = ['fluid', 'ga', 'onl', 'pr', 'layers', 'sdretinanet'] as const
 
 export interface PlanRow {
   modalityId: number

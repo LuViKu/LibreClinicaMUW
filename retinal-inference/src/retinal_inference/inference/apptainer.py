@@ -140,6 +140,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             "onl": s.onl_sif,
             "pr": s.pr_sif,
             "ga": s.ga_sif,
+            "sdretinanet": s.sdretinanet_sif,
         }
 
     @property
@@ -149,6 +150,12 @@ class ApptainerAdapter(RetinalInferenceAdapter):
     def supports(self, task: TaskName) -> bool:
         if task not in SUPPORTED_TASKS:
             return False
+        # sdretinanet needs the readable model copy and the formatter as well.
+        # SLURM mode only: the server nodes are Turing, the models need sm_80+.
+        if task == "sdretinanet":
+            s = _config.settings
+            return bool(s.apptainer_use_slurm and s.sdretinanet_sif
+                        and s.sdretinanet_models and s.sdretinanet_formatter)
         # BM is host-native (venv, no .sif) — gate it on its code/python instead.
         if task == "bm":
             s = _config.settings
@@ -197,8 +204,11 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             f"--time={s.apptainer_slurm_time}",
             f"--account={s.apptainer_slurm_account}",
         ]
+        # sdretinanet's models need sm_80+, every other GPU task Turing or older
+        own_gpu = task == "sdretinanet"
         if gpu:
-            srun.append(f"--gres={s.apptainer_slurm_gres}")
+            gres = s.apptainer_slurm_sdretinanet_gres if own_gpu else s.apptainer_slurm_gres
+            srun.append(f"--gres={gres}")
         if s.apptainer_slurm_partition:
             srun.append(f"--partition={s.apptainer_slurm_partition}")
         mem = s.apptainer_slurm_mem if gpu else s.apptainer_slurm_iowa_mem
@@ -209,19 +219,23 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             srun.append(f"--cpus-per-task={cpus}")
         if s.apptainer_slurm_qos:
             srun.append(f"--qos={s.apptainer_slurm_qos}")
-        if gpu and s.apptainer_slurm_constraint:
+        if gpu and s.apptainer_slurm_constraint and not own_gpu:
             srun.append(f"--constraint={s.apptainer_slurm_constraint}")
         if s.apptainer_slurm_exclude:
             srun.append(f"--exclude={s.apptainer_slurm_exclude}")
-        if gpu and s.apptainer_slurm_nodelist:
-            srun.append(f"--nodelist={s.apptainer_slurm_nodelist}")
+        nodelist = s.apptainer_slurm_sdretinanet_nodelist if own_gpu else s.apptainer_slurm_nodelist
+        if gpu and nodelist:
+            srun.append(f"--nodelist={nodelist}")
         return srun
 
     def _apptainer(
-        self, verb: str, sif: str, binds: list[str], args: list[str], task: str = "task"
+        self, verb: str, sif: str, binds: list[str], args: list[str], task: str = "task",
+        pwd: str | None = None,
     ) -> list[str]:
         s = _config.settings
         cmd = [s.apptainer_bin, verb, "-e", "--nv", "--no-home"]
+        if pwd:
+            cmd += ["--pwd", pwd]
         if binds:
             cmd += ["--bind", ",".join(binds)]
         cmd += [sif, *args]
@@ -547,6 +561,42 @@ class ApptainerAdapter(RetinalInferenceAdapter):
                 "output_payload": {"surface_csvs": names},
                 "pixel_scale_mm": axial, "artifact_names": names}
 
+    def _sdretinanet(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
+        import pydicom
+
+        from retinal_inference.inference import sdretinanet_native as native
+
+        s = _config.settings
+        dcm = dcm_dir / "bscan.dcm"
+        out = work / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        binds = [f"{dcm_dir}:/in", f"{out}:/out"]
+        if s.sdretinanet_models:
+            binds.append(f"{s.sdretinanet_models}:/app/aot_models_spectralis:ro")
+        args = ["/in/bscan.dcm", "/out",
+                "--tta_level", str(s.sdretinanet_tta_level),
+                "--threshold", str(s.sdretinanet_threshold)]
+        if s.sdretinanet_formatter:
+            # The formatter writes the native layers/ + lesions/ files with the
+            # writer module mounted beside it (runners/sdretinanet/README.md).
+            binds.append(f"{s.sdretinanet_formatter}:/opt/ri/sdretinanet_formatter.py:ro")
+            binds.append(f"{Path(native.__file__)}:/opt/ri/sdretinanet_native.py:ro")
+            args += ["--output_formatter", "/opt/ri/sdretinanet_formatter.py"]
+        # main.py opens fold_0.json and aot_models_spectralis/ relative to the
+        # working directory; both are baked into /app (checked 2026-10-08).
+        cmd = self._apptainer("run", s.sdretinanet_sif or "", binds, args, task="sdretinanet",
+                              pwd="/app")
+        _exec(cmd, self._gpu_env("sdretinanet"))
+        n_frames = int(getattr(pydicom.dcmread(str(dcm), stop_before_pixels=True),
+                               "NumberOfFrames", 1))
+        # Fails closed on missing or partial output (e.g. no formatter configured).
+        archive = work / native.ARCHIVE
+        native.pack_archive(out, archive, expected_bscans=n_frames)
+        axial = _spacing_mm(dcm)[0]
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"segmentation_file": native.ARCHIVE, "n_bscans": n_frames},
+                "pixel_scale_mm": axial, "artifact_names": [native.ARCHIVE]}
+
     def full_volume(
         self,
         task: TaskName,
@@ -574,7 +624,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
 
         handler = {"fluid": self._fluid, "onl": self._onl,
                    "pr": self._pr, "ga": self._ga, "bm": self._bm,
-                   "layers": self._layers}[task]
+                   "layers": self._layers, "sdretinanet": self._sdretinanet}[task]
 
         if out_dir_override is not None:
             work = Path(out_dir_override)

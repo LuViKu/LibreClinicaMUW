@@ -1322,7 +1322,7 @@ public class RetinalResultsApiController {
      *  `bm` is intentionally absent — `layers` already covers it.
      *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
     private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
-            java.util.Set.of("fluid", "ga", "onl", "pr", "layers");
+            java.util.Set.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet");
 
     /**
      * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})
