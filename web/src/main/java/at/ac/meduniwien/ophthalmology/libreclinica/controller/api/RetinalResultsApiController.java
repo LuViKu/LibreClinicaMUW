@@ -216,7 +216,24 @@ public class RetinalResultsApiController {
              * Null when the subject is in neither (non-T-and-E
              * studies pass through unchanged).
              */
-            String subjectArm) { }
+            String subjectArm,
+            /*
+             * 2026-10-09 — where the job lives, for the job page's trail and
+             * canonical address (/subjects/{subjectLabel}/jobs/{subjectSeq}).
+             * All null when the scan is filed to no visit.
+             */
+            String subjectLabel,
+            Integer subjectSeq,
+            Integer studyEventId,
+            /** The visit definition's name, " #n" appended for a repeating one. */
+            String visitName,
+            /** The visit's date, ISO yyyy-MM-dd. */
+            String visitDate,
+            /** Every analysis of the same scan, this one included, oldest first. */
+            List<JobSibling> siblings) { }
+
+    /** Another analysis of the scan a job read; {@code subjectSeq} null when it has no visit. */
+    public record JobSibling(long jobId, Integer subjectSeq, String task, String status) { }
 
     public record RetinalJobSummaryDto(
             long jobId,
@@ -362,6 +379,30 @@ public class RetinalResultsApiController {
             confidence = null;
         }
 
+        // Where the job lives and what else the scan was analysed for. Read
+        // after the visibility guard: a refused caller learns none of it.
+        RetinalJobAccess.JobAddress address = null;
+        RetinalJobAccess.JobVisit visit = null;
+        List<JobSibling> siblings = List.of();
+        try (Connection c = dataSource.getConnection()) {
+            visit = RetinalJobAccess.visitOf(c, jobId);
+            List<RetinalJobAccess.SiblingJob> sibs = RetinalJobAccess.siblingsOf(c, jobId);
+            List<Long> ids = new ArrayList<>();
+            ids.add(jobId);
+            for (RetinalJobAccess.SiblingJob sj : sibs) ids.add(sj.jobId());
+            Map<Long, RetinalJobAccess.JobAddress> addresses = RetinalJobAccess.addressesOf(c, ids);
+            address = addresses.get(jobId);
+            List<JobSibling> list = new ArrayList<>();
+            for (RetinalJobAccess.SiblingJob sj : sibs) {
+                RetinalJobAccess.JobAddress a = addresses.get(sj.jobId());
+                list.add(new JobSibling(sj.jobId(), a == null ? null : a.subjectSeq(), sj.task(), sj.status()));
+            }
+            siblings = list;
+        } catch (SQLException sqlEx) {
+            // The page still shows the job; it loses its trail and switcher.
+            LOG.warn("location lookup failed for job {}: {}", jobId, sqlEx.getMessage());
+        }
+
         RetinalJobDetailDto dto = new RetinalJobDetailDto(
                 row.jobId,
                 row.eventCrfId,
@@ -380,7 +421,13 @@ public class RetinalResultsApiController {
                 fundusUrl,
                 geometryUrl,
                 bscanDcmUrl,
-                subjectArm);
+                subjectArm,
+                address == null ? null : address.subjectLabel(),
+                address == null ? null : address.subjectSeq(),
+                visit == null ? null : visit.studyEventId(),
+                visit == null ? null : visit.name(),
+                visit == null ? null : visit.date(),
+                siblings);
         return ResponseEntity.ok(dto);
     }
 
@@ -1573,6 +1620,7 @@ public class RetinalResultsApiController {
         resp.put("jobId", newJobId);
         resp.put("task", newTask);
         resp.put("status", "remote_pending");
+        RetinalJobAccess.putAddress(dataSource, newJobId, resp);
         return ResponseEntity.accepted().body(resp);
     }
 
@@ -1606,11 +1654,13 @@ public class RetinalResultsApiController {
         }
     }
 
-    private static ResponseEntity<?> rerunTwinConflict(long existingJobId) {
-        return ResponseEntity.status(409).body(Map.of(
-                "message", "A job already exists for this scan + task — "
-                        + "navigate there instead",
-                "existingJobId", existingJobId));
+    private ResponseEntity<?> rerunTwinConflict(long existingJobId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("message", "A job already exists for this scan + task — navigate there instead");
+        body.put("existingJobId", existingJobId);
+        // The twin reads the same scan as the source the caller may see.
+        RetinalJobAccess.putAddress(dataSource, existingJobId, body);
+        return ResponseEntity.status(409).body(body);
     }
 
     /** Slim row carrier for the failed-job retry handoff. */

@@ -137,8 +137,9 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO retinal_inference_job (task, e2e_path, eye_laterality, status, enqueued_at, "
-                             + "scan_index, ingest_item_id) VALUES (?, '/nowhere.e2e', 'OD', ?, now(), 0, ?) "
-                             + "RETURNING job_id")) {
+                             + "scan_index, ingest_item_id, study_event_id) "
+                             + "SELECT ?, '/nowhere.e2e', 'OD', ?, now(), 0, ingest_item_id, bound_study_event_id "
+                             + "  FROM ingest_item WHERE ingest_item_id = ? RETURNING job_id")) {
             ps.setString(1, task);
             ps.setString(2, status);
             ps.setLong(3, itemId);
@@ -178,6 +179,8 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         assertEquals(202, a.status(), a.body().toString());
         long jobId = a.body().get("jobId").asLong();
+        assertEquals(1, a.body().get("subjectSeq").asInt(), "the subject's first job: " + a.body());
+        assertTrue(a.body().get("subjectLabel").asText().startsWith("SA-"), a.body().toString());
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT task, status, ingest_item_id, study_event_id, scan_index, e2e_sha256 "
@@ -221,6 +224,7 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(scan.get("analysable").asBoolean());
         assertEquals(1, scan.get("analyses").size(), "the cancelled job is not listed: " + scan);
         assertEquals(done, scan.get("analyses").get(0).get("jobId").asLong());
+        assertEquals(1, scan.get("analyses").get(0).get("subjectSeq").asInt());
         assertEquals("fluid", scan.get("analyses").get(0).get("task").asText());
         assertEquals("done", scan.get("analyses").get(0).get("status").asText());
         assertEquals(false, image.get("analysable").asBoolean());
@@ -385,6 +389,8 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
                         .session(investigator()))
                 .andReturn().getResponse();
         assertEquals(409, again.getStatus(), again.getContentAsString());
-        assertEquals(rerun, JSON.readTree(again.getContentAsString()).get("existingJobId").asLong());
+        JsonNode twin = JSON.readTree(again.getContentAsString());
+        assertEquals(rerun, twin.get("existingJobId").asLong());
+        assertEquals(2, twin.get("subjectSeq").asInt(), "the re-run is the subject's second job: " + twin);
     }
 }
