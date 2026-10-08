@@ -8,6 +8,8 @@ SD-RetinaNet (Fazekas et al., [arXiv 2509.20864](https://arxiv.org/abs/2509.2086
 
 Copy it to `$RI_HOME/ri/retinanet-spectralis_main.sif`; the launcher looks there (override with `RI_SDRETINANET_SIF`). Code, AOT-compiled models and `fold_0.json` are baked in, so nothing else is needed. The image is built for Heidelberg Spectralis volumes.
 
+**GPU.** The models are AOT-compiled for **sm_80**, according to the `e_flags` of the cubins inside `model0.pt2`. They run on Ampere and Ada: an A6000 run succeeded on 2026-10-08. On the Turing 2080 Ti nodes they fail with `CUDA driver error: device kernel image is invalid`. That is the opposite of `pr` and `bm`, which need Turing or older. So the task runs only in SLURM mode, with its own request `RI_SLURM_SDRETINANET_GRES` (default `gpu:nva6000:1`; `gpu:nv3080ti:1` and `gpu:nva6000ada:1` also fit). The global node list and constraint do not apply to it.
+
 ## What the image does
 
 Its runscript is `main.py`:

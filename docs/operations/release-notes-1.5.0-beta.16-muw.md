@@ -378,6 +378,6 @@ Do this outside clinic hours. The restart takes a few minutes, and everyone sign
 - **SD-RetinaNet on the cluster.** Three things before a study enables it:
   - Copy `retinanet-spectralis_main.sif` to `$RI_HOME/ri/`, and its models `model0..4.pt2` to `$RI_HOME/ri/sdretinanet_aot_models/`. The image's own copy of the models cannot be read by other users.
   - Validate the output on a volume the SWITCHER study also segmented, file by file and against its ETDRS numbers. The output formatter gives an overlapped pixel to the most probable main lesion class, and the step that produced the SWITCHER files may not have done that ([runners/sdretinanet/README.md](../../retinal-inference/runners/sdretinanet/README.md)).
-  - Check whether the image runs on Ampere nodes. Until then the global `gpu:nv2080ti:1` request keeps it on the 2080 Ti nodes.
+  - The server must run in SLURM mode for this task. Its models are compiled for sm_80: they run on the A6000 / 3080 Ti / A6000 Ada nodes and fail on the 2080 Ti nodes the other tasks use, so the task requests its own GPU type (`RI_SLURM_SDRETINANET_GRES`, default `gpu:nva6000:1`).
 - **PostgreSQL 14 reaches end of life on 2026-11-12.** Plan the move with [postgresql-17-upgrade.md](postgresql-17-upgrade.md).
 - **The internet-facing deployment's go-live gates** are open questions for MUW IT, the DPO and the clinical lead: [multicenter-internet-readiness.md](multicenter-internet-readiness.md).

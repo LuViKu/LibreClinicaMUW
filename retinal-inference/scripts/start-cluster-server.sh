@@ -38,6 +38,9 @@
 #     RI_SLURM_EXCLUDE      optional, nodes to avoid: recommended vn1,vn2,cn5
 #                           (vn1/vn2 unvalidated, cn5 DOWN)
 #     RI_SLURM_NODELIST     optional, restrict GPU jobs to these nodes
+#     RI_SLURM_SDRETINANET_GRES      default gpu:nva6000:1 -- sdretinanet's models
+#                           are compiled for sm_80 and fail on the 2080 Ti nodes
+#     RI_SLURM_SDRETINANET_NODELIST  optional; RI_SLURM_NODELIST does not apply to it
 #     RI_SLURM_IOWA_CPUS / RI_SLURM_IOWA_MEM  optional sizing of the CPU-only
 #                           IOWA job (ga/layers); it runs under srun, no gres
 #     RI_MAX_CONCURRENT     default 4 (direct mode: 1)
@@ -124,6 +127,8 @@ if [ "$RI_SLURM" = 1 ]; then
   [ -z "${RI_SLURM_CONSTRAINT:-}" ] || export RETINAL_INFERENCE_APPTAINER_SLURM_CONSTRAINT="$RI_SLURM_CONSTRAINT"
   [ -z "${RI_SLURM_EXCLUDE:-}" ]    || export RETINAL_INFERENCE_APPTAINER_SLURM_EXCLUDE="$RI_SLURM_EXCLUDE"
   [ -z "${RI_SLURM_NODELIST:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_NODELIST="$RI_SLURM_NODELIST"
+  export RETINAL_INFERENCE_APPTAINER_SLURM_SDRETINANET_GRES="${RI_SLURM_SDRETINANET_GRES:-gpu:nva6000:1}"
+  [ -z "${RI_SLURM_SDRETINANET_NODELIST:-}" ] || export RETINAL_INFERENCE_APPTAINER_SLURM_SDRETINANET_NODELIST="$RI_SLURM_SDRETINANET_NODELIST"
   [ -z "${RI_SLURM_IOWA_CPUS:-}" ]  || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_CPUS_PER_TASK="$RI_SLURM_IOWA_CPUS"
   [ -z "${RI_SLURM_IOWA_MEM:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_MEM="$RI_SLURM_IOWA_MEM"
   export RETINAL_INFERENCE_MAX_CONCURRENT_RUNS="${RI_MAX_CONCURRENT:-4}"
@@ -234,17 +239,19 @@ fi
 ALL_TASKS="bm fluid ga layers onl pr sdretinanet"
 EXPECTED_TASKS="$ALL_TASKS"
 
-# sdretinanet needs both its .sif and its formatter. Without them it is left out
-# and the server starts degraded, like bm/layers below; it never costs the others.
-if [ -r "$RI_SDRETINANET_SIF" ] && [ -r "$RI_SDRETINANET_FORMATTER" ] && [ -r "$RI_SDRETINANET_MODELS/model0.pt2" ]; then
+# sdretinanet needs its .sif, formatter and models, and SLURM mode: the models
+# are compiled for sm_80 and the server's own Turing GPU cannot run them. Without
+# any of these it is left out and the server starts degraded, like bm/layers
+# below; it never costs the others.
+if [ "$RI_SLURM" = 1 ] && [ -r "$RI_SDRETINANET_SIF" ] && [ -r "$RI_SDRETINANET_FORMATTER" ] && [ -r "$RI_SDRETINANET_MODELS/model0.pt2" ]; then
   export RETINAL_INFERENCE_SDRETINANET_SIF="$RI_SDRETINANET_SIF"
   export RETINAL_INFERENCE_SDRETINANET_FORMATTER="$RI_SDRETINANET_FORMATTER"
   export RETINAL_INFERENCE_SDRETINANET_MODELS="$RI_SDRETINANET_MODELS"
 else
   if [ "$STRICT" = 1 ] || [ "$MODE" = "--check" ]; then
-    die "sdretinanet: need $RI_SDRETINANET_SIF, $RI_SDRETINANET_FORMATTER and $RI_SDRETINANET_MODELS/model*.pt2 (set RI_SDRETINANET_SIF / _FORMATTER / _MODELS)"
+    die "sdretinanet: needs SLURM mode plus $RI_SDRETINANET_SIF, $RI_SDRETINANET_FORMATTER and $RI_SDRETINANET_MODELS/model*.pt2 (set RI_SDRETINANET_SIF / _FORMATTER / _MODELS)"
   fi
-  warn "DEGRADED: starting WITHOUT 'sdretinanet' — its .sif, formatter or models ($RI_SDRETINANET_MODELS) are missing"
+  warn "DEGRADED: starting WITHOUT 'sdretinanet' — it needs SLURM mode plus its .sif, formatter and models ($RI_SDRETINANET_MODELS)"
   unset RETINAL_INFERENCE_SDRETINANET_SIF RETINAL_INFERENCE_SDRETINANET_FORMATTER RETINAL_INFERENCE_SDRETINANET_MODELS
   EXPECTED_TASKS="bm fluid ga layers onl pr"
 fi

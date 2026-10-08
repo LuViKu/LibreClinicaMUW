@@ -201,6 +201,14 @@ class Settings(BaseSettings):
     # The image's own /app/aot_models_spectralis is not readable for other users
     # (checked 2026-10-08), so a readable copy of model0..4.pt2 is bound over it.
     sdretinanet_models: Path | None = None
+    # The models are AOT-compiled for sm_80 (checked 2026-10-08: cubin e_flags;
+    # a run on an A6000 succeeded, on a 2080 Ti it failed with "device kernel
+    # image is invalid"). So they need Ampere/Ada (A6000, 3080 Ti, A6000 Ada), not
+    # the Turing nodes the other tasks need: sdretinanet runs in SLURM mode only,
+    # with its own typed gres, and the global nodelist/constraint (which pin the
+    # Turing nodes) do not apply to it -- its own nodelist does.
+    apptainer_slurm_sdretinanet_gres: str = "gpu:nva6000:1"
+    apptainer_slurm_sdretinanet_nodelist: str | None = None
     sdretinanet_tta_level: int = 2
     sdretinanet_threshold: str = "0.5"
 
@@ -235,6 +243,14 @@ class Settings(BaseSettings):
                 "Ampere/Ada node where the pr and bm tasks fail ('no kernel image'). Use a "
                 "typed request such as 'gpu:nv2080ti:1', or set "
                 "RETINAL_INFERENCE_APPTAINER_SLURM_ALLOW_UNTYPED_GRES=true to override."
+            )
+        if not self.apptainer_slurm_allow_untyped_gres and not is_typed_gres(
+            self.apptainer_slurm_sdretinanet_gres
+        ):
+            raise RuntimeError(
+                f"SLURM gres '{self.apptainer_slurm_sdretinanet_gres}' for sdretinanet is "
+                "untyped; its models are compiled for sm_80 and fail on the Turing nodes. "
+                "Use a typed request such as 'gpu:nva6000:1'."
             )
 
 

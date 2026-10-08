@@ -100,6 +100,8 @@ def _configure(monkeypatch, formatter: str | None = "/ri/sdretinanet_formatter.p
     monkeypatch.setattr(_config.settings, "sdretinanet_sif", "/sif/retinanet.sif", raising=False)
     monkeypatch.setattr(_config.settings, "sdretinanet_formatter", formatter, raising=False)
     monkeypatch.setattr(_config.settings, "sdretinanet_models", "/ri/sdretinanet_aot_models", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_account", "optima", raising=False)
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.0039, 0.0116, 0.12))
     import pydicom
     monkeypatch.setattr(pydicom, "dcmread", lambda *a, **k: types.SimpleNamespace(NumberOfFrames=3))
@@ -130,6 +132,7 @@ def test_handler_runs_the_sif_and_ships_one_archive(monkeypatch, tmp_path) -> No
     res = adapter.full_volume("sdretinanet", _dcm_dir(tmp_path), "OD", out_dir_override=work)
 
     cmd = captured["cmd"]
+    cmd = cmd[cmd.index(_config.settings.apptainer_bin):]  # drop the srun prefix
     assert cmd[1] == "run" and "/sif/retinanet.sif" in cmd
     # main.py reads fold_0.json + aot_models_spectralis/ from the working dir
     assert cmd[cmd.index("--pwd") + 1] == "/app"
@@ -186,10 +189,22 @@ def test_handler_rejects_a_bscan_count_mismatch(monkeypatch, tmp_path) -> None:
                                           out_dir_override=tmp_path / "work")
 
 
+def test_direct_mode_does_not_offer_sdretinanet(monkeypatch) -> None:
+    # the server's own (Turing) GPU cannot run the sm_80 models
+    _configure(monkeypatch)
+    monkeypatch.setattr(_config.settings, "apptainer_use_slurm", False, raising=False)
+    assert not ap.ApptainerAdapter().supports("sdretinanet")
+
+
 def test_slurm_mode_wraps_sdretinanet_in_srun(monkeypatch, tmp_path) -> None:
     _configure(monkeypatch)
-    monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)
-    monkeypatch.setattr(_config.settings, "apptainer_slurm_account", "optima", raising=False)
+    # the Turing pins of the other tasks must not reach this job
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_gres", "gpu:nv2080ti:1", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_nodelist", "on3,cn6", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_constraint", "turing", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_sdretinanet_gres", "gpu:nva6000:1",
+                        raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_sdretinanet_nodelist", None, raising=False)
     captured: dict = {}
 
     def fake_exec(cmd, env=None):
@@ -205,7 +220,24 @@ def test_slurm_mode_wraps_sdretinanet_in_srun(monkeypatch, tmp_path) -> None:
     cmd = captured["cmd"]
     assert cmd[0] == "srun"
     assert "--job-name=ri-sdretinanet" in cmd
-    assert any(c.startswith("--gres=") for c in cmd)
+    assert "--gres=gpu:nva6000:1" in cmd
+    assert not any(c.startswith(("--nodelist=", "--constraint=")) for c in cmd)
+
+
+def test_other_tasks_keep_the_turing_gres(monkeypatch) -> None:
+    _configure(monkeypatch)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_gres", "gpu:nv2080ti:1", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_nodelist", "on3,cn6", raising=False)
+    srun = ap.ApptainerAdapter._srun("pr")
+    assert "--gres=gpu:nv2080ti:1" in srun and "--nodelist=on3,cn6" in srun
+
+
+def test_untyped_sdretinanet_gres_is_refused(monkeypatch) -> None:
+    _configure(monkeypatch)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_sdretinanet_gres", "gpu:1", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_allow_untyped_gres", False, raising=False)
+    with pytest.raises(RuntimeError, match="sdretinanet"):
+        ap.ApptainerAdapter()
 
 
 # --- the --output_formatter, loaded the way main.py loads it ------------------
