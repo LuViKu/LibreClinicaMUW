@@ -644,9 +644,9 @@ Surprisingly few — the Data Manager sees most of LibreClinica. Things this rol
 - **LDAP / SSO bind config** — system-level
 - **Force first-login password change** as a target of an action — DM can reset a user's password, but only Admin can mass-reset
 
-The MUW-customised role matrix may differ — verify in the [security-config.xml](../../../../web/src/main/webapp/WEB-INF/security-config.xml) for current bindings.
+The MUW-customised role matrix may differ — verify in the [SecurityConfig.java](../../../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/SecurityConfig.java) (it replaced the former `security-config.xml`) for current bindings.
 
-**On this build (2026-09-30):** every job screen (`/ViewAllJobs`, `/ViewJob`, `/ViewSingleJob`, `/CreateJobExport`) is sysadmin-only; the director and coordinator branch in their `mayProceed` is commented out, so none is "partly DM-visible". Account creation and password resets are sysadmin-only as well (§10). The study-role checks live in each servlet's `mayProceed`; `security-config.xml` holds only generic URL patterns.
+**On this build (2026-09-30):** every job screen (`/ViewAllJobs`, `/ViewJob`, `/ViewSingleJob`, `/CreateJobExport`) is sysadmin-only; the director and coordinator branch in their `mayProceed` is commented out, so none is "partly DM-visible". Account creation and password resets are sysadmin-only as well (§10). The study-role checks live in each servlet's `mayProceed`; `SecurityConfig.java` (the former `security-config.xml`) holds only generic URL patterns.
 
 ---
 
@@ -823,7 +823,7 @@ JSPs behind the features catalogued in the 2026-09-30 pass:
 - **Schedule recurring data extracts** — Quartz job UI not exercised
 - **Study state transitions** (Available → Pending → Frozen → Locked) — workflow rules not captured
 - **Import Data wizard** (CDISC ODM XML import) — landing page captured, multi-step wizard not walked
-- **The MUW-specific role matrix** — per [DR-003](../decision-record.md#dr-003) we hard-fork upstream, so MUW may have additional or modified role bindings in `security-config.xml`. Verify before SPA implementation.
+- **The MUW-specific role matrix** — per [DR-003](../decision-record.md#dr-003) we hard-fork upstream, so MUW may have additional or modified role bindings in the Spring Security configuration (now `SecurityConfig.java`, formerly `security-config.xml`). Verify before SPA implementation.
 
 Recommended next pass: drill one level deeper specifically from Build Study (click each of the 7 task rows in turn) and from Manage Users (click Edit on a user) — these two flows alone capture ~80% of the DM workflow's actual detail.
 

@@ -195,19 +195,35 @@ gate runs on Linux, as `CLAUDE.md` says.
   * `EventCrfsApiController.downloadItemFile` returns a `FileSystemResource`:
     the same.
 
-  Each answers 500 with this list. Other controllers hit the same wall earlier
-  and stream to the response or return `byte[]` instead (see the comments in
+  Each answered 500 (or 415) with this list. Other controllers hit the same wall
+  earlier and stream to the response or return `byte[]` instead (see the comments in
   `RetinalJobArtifactsApiController`, `ImageIngestApiController`,
-  `SubjectExportApiController`), so the list is evidently the live one. These
-  three are probably broken in production today, on Boot 3.5 as well; this was
-  not verified against a running instance. They were left alone, because the
-  stage keeps the converter list as it is and a `StringHttpMessageConverter`
-  changes how every `String` response is written.
-  `ConverterListGapTest` records all three; the tests of those endpoints use
-  `ProductionMvc.standaloneWithGapFillers`, which appends a String and a
-  Resource converter so they keep checking what they are about (guards, access
-  rules). Fixing the endpoints (return `byte[]`, as the others do) or the list
-  is a separate decision.
+  `SubjectExportApiController`).
+
+  **Confirmed on the production line.** lc-develop (Boot 3.5, Jackson 2) has the same
+  list in `WebMvcConfig`, and the same three controller signatures. A probe built on
+  that list, with Spring 6.2's converters, answers 415 for the multipart text field
+  (with or without `text/plain`) and 500 for the `application/xml` String and the
+  Resource (`HttpMessageNotWritableException: No converter for ... with preset
+  Content-Type`). The SPA calls all three: `crfLibrary.ts` `uploadVersion` (CRF
+  version upload form), `api/studyMetadata.ts` (study metadata download) and
+  `crfEntry.ts` (file item download). Not exercised against a running instance by
+  this stage's author, so the user impact is derived from the converter list and the
+  SPA's calls, not observed.
+
+  **Fixed, in a separate commit** (so it can be cherry-picked onto lc-develop),
+  without touching the list: `uploadVersion` reads its three text fields with
+  `@RequestParam` (the servlet container exposes a form field without a filename as
+  a parameter, whatever its content type); `metadata` writes the document as UTF-8
+  `byte[]`; `downloadItemFile` reads the file into a `byte[]`. A global
+  `StringHttpMessageConverter` was rejected because it changes how every
+  `@ResponseBody String` is written. The regression tests (`PagesDispatcherMvc`,
+  built from the `requestMappingHandlerAdapter` bean method, not MockMvc's
+  defaults) are `CrfsApiControllerUploadFormDatabaseIT`,
+  `StudyMetadataDownloadDatabaseIT` and `ItemFileDownloadDatabaseIT`. The gap
+  fillers (`ProductionMvc.standaloneWithGapFillers`) are gone.
+  `ConverterListGapTest` stays: it still records, with the list as it is, what a
+  new endpoint must not do.
 
 ## OpenAPI (springdoc 3)
 
@@ -225,7 +241,7 @@ unaffected.
   was covered by the contract and golden tests, the web unit suite and the
   database ITs, and the unauthenticated live checks (startup, login page, the
   retired-page JSON from `LegacyServletTelemetryFilter`, the OpenAPI document).
-* Decide the `String` `@RequestPart` gap above.
+* ~~Decide the `String` `@RequestPart` gap above.~~ Done: the three endpoints were fixed (see above).
 * `springdoc` and `swagger-core` still bring Jackson 2; drop it when springdoc
   does.
 * `logstash-logback-encoder` 7.4 needs Jackson 2 at runtime; a Jackson 3 release

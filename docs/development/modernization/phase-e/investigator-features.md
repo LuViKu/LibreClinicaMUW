@@ -50,7 +50,7 @@ The 2026-05-28 text is kept as recorded. Its servlet names use the pre-DR-010 `o
 ![Login screen](screenshots/investigator/01-LCDemo.png)
 
 - **URL:** `/pages/login/login` (Spring MVC) → submits to `/j_spring_security_check`
-- **Spring Security config:** [web/src/main/webapp/WEB-INF/security-config.xml](../../../../web/src/main/webapp/WEB-INF/security-config.xml)
+- **Spring Security config:** [SecurityConfig.java](../../../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/SecurityConfig.java) (it replaced the former `security-config.xml`)
 - **Inputs:** `j_username`, `j_password`, plus a 2FA code when `2fa.activated=true` (see [administrator manual](../../../manuals/administrator-manual.md))
 - **Buttons:** Login, Submit Password Request, Cancel
 - **Side flows reachable from login:** "Forgot Password?" → `RequestPassword` form (7 inputs: username, email, challenge Q/A, new password, etc.)
