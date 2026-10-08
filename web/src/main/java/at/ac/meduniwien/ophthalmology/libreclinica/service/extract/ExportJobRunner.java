@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.extract;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExportFormatBean
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobInterruptedException;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 
@@ -164,9 +169,21 @@ public class ExportJobRunner implements Job {
             JobTerminationMonitor.clear();
             return false;
         }
+        // A Quartz worker has no request to take a locale from, and the extract
+        // reads the per-thread resource bundles (ResourceBundleProvider.getResBundle
+        // NPEs when none is bound), so every queued export died. Bind the
+        // requesting user's locale for the run and put the thread back afterwards:
+        // Quartz pools its threads.
+        Locale previousLocale = ResourceBundleProvider.getLocale();
+        ResourceBundleProvider.updateLocale(resolveLocale(dataSource, claimed.submittedBy));
         try {
             process(dataSource, materializer, jobDao, claimed);
         } finally {
+            if (previousLocale == null) {
+                ResourceBundleProvider.localeMap.remove(Thread.currentThread());
+            } else {
+                ResourceBundleProvider.updateLocale(previousLocale);
+            }
             RUNNING.remove(claimed.id);
             // Quartz pools its threads: the next job must not inherit this monitor.
             JobTerminationMonitor.clear();
@@ -176,6 +193,31 @@ public class ExportJobRunner implements Job {
             }
         }
         return true;
+    }
+
+    /**
+     * The locale the requesting user stored on their profile
+     * ({@code user_account.locale}); English (the application default,
+     * as in LocaleResolver) when none is stored or it cannot be read.
+     */
+    static Locale resolveLocale(DataSource dataSource, int userId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT locale FROM user_account WHERE user_id = ?")) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String v = rs.getString(1);
+                    if (v != null && !v.isBlank()) {
+                        Locale l = Locale.forLanguageTag(v.trim().replace('_', '-'));
+                        if (!l.getLanguage().isEmpty()) return l;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("No stored locale for user_id={}: {}", userId, e.getMessage());
+        }
+        return Locale.ENGLISH;
     }
 
     private static void process(DataSource dataSource, ExportFileMaterializer materializer,

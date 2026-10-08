@@ -473,6 +473,42 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
         assertTrue(text.contains("M-001"), "tab export should list the seeded subjects");
     }
 
+    /**
+     * DEFECT PIN - a queued export is run by a Quartz worker thread, which has
+     * no request and therefore no bound locale. Every queued CSV/ODM export
+     * died in ResourceBundleProvider.getResBundle with a NullPointerException.
+     * The direct materializer calls above all run on the test thread, where
+     * the base class binds a locale, so they could never see it.
+     */
+    @Test
+    void queuedExportRunsOnAWorkerThreadThatHasNoLocaleBound() throws Exception {
+        DatasetBean ds = persistDataset("IT_QUEUED_" + System.nanoTime());
+        var jobDao = new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ExportJobDAO(DATA_SOURCE);
+        long jobId = jobDao.insertQueued(ds.getId(), "csv", 1);
+
+        var worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            var outcome = worker.submit(() -> {
+                assertEquals(null, at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider.getLocale(),
+                        "a fresh worker thread has no locale, as in Quartz");
+                boolean ran = at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportJobRunner
+                        .runOnce(DATA_SOURCE, materializer());
+                assertEquals(null, at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider.getLocale(),
+                        "the locale must be cleared again: Quartz pools its threads");
+                return ran;
+            });
+            assertTrue(outcome.get(), "the queued job should have been claimed");
+        } finally {
+            worker.shutdownNow();
+        }
+
+        var row = jobDao.findById(jobId);
+        assertEquals("done", row.status, "job should be done, error was: " + row.errorMessage);
+        assertNotNull(row.archivedDatasetFileId);
+        String text = readArchive(archivePathFor(row.archivedDatasetFileId));
+        assertTrue(text.contains("M-001"), "the queued csv export should list the seeded subjects");
+    }
+
     /** CSV goes through a different report bean; it died in the same place. */
     @Test
     void csvExport_containsTheSeededSubjects() throws Exception {
