@@ -1469,6 +1469,12 @@ public class RetinalResultsApiController {
                     "message", "Source job is missing e2e_sha256 — predates the "
                             + "dedup gate; cannot rerun-as safely"));
         }
+        if (RetinalJobAccess.scanFileMissing(source.e2ePath)) {
+            // Refuse up front rather than create a job that fails at dispatch.
+            return ResponseEntity.status(409).body(Map.of(
+                    "code", "SCAN_FILE_MISSING",
+                    "message", RetinalJobAccess.SCAN_FILE_MISSING));
+        }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Remote GPU sidecar not configured — rerun-as unavailable"));
