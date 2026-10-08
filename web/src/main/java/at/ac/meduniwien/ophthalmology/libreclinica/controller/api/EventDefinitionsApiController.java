@@ -152,7 +152,7 @@ public class EventDefinitionsApiController {
      *  was the last stop where the request 400'd before reaching
      *  the DB. Mirrors RetinalResultsApiController.ALLOWED_RERUN_TASKS. */
     private static final Set<String> ALLOWED_RETINAL_TASKS =
-            Set.of("fluid", "ga", "onl", "pr", "layers");
+            Set.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet");
 
     /**
      * GET — list the default retinal-inference tasks the upload portal

@@ -113,7 +113,7 @@ public class RetinalInferenceApiController {
      * a GPU host exist. {@code bm} (Bruch's membrane) and {@code layers} (the full
      * IOWA surface stack) run through the same async worker path.
      */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers");
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers", "sdretinanet");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");

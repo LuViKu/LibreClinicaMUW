@@ -28,6 +28,9 @@ import java.util.zip.ZipInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.io.SdRetinaNetReader;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.io.SdRetinaNetVolume;
+
 /**
  * 2026-06-22 — load a CRF-version-style binary segmentation envelope
  * directly from the persisted runner artifact dir.
@@ -97,8 +100,28 @@ public final class SegmentationEnvelopeLoader {
      * yet wired (controller maps null → 501 Not Implemented).
      */
     public static SegmentationEnvelope load(String task, Path bscanMasksDir) throws IOException {
+        return load(task, bscanMasksDir, null);
+    }
+
+    /** Envelope part for tasks that ship two: {@code surfaces} (default) or {@code lesions}. */
+    public static final String PART_LESIONS = "lesions";
+
+    /**
+     * As {@link #load(String, Path)}, choosing the part for a task that
+     * serves more than one envelope. Only {@code sdretinanet} does: its layer
+     * boundaries by default, its lesion masks for {@link #PART_LESIONS}.
+     */
+    public static SegmentationEnvelope load(String task, Path bscanMasksDir, String part) throws IOException {
         if (task == null || bscanMasksDir == null) return null;
         switch (task) {
+            case "sdretinanet" -> {
+                if (!SdRetinaNetReader.present(bscanMasksDir)) {
+                    LOG.warn("sdretinanet output missing under {}", bscanMasksDir);
+                    return null;
+                }
+                SdRetinaNetVolume vol = SdRetinaNetReader.read(bscanMasksDir);
+                return PART_LESIONS.equals(part) ? sdRetinaNetLesions(vol) : sdRetinaNetSurfaces(vol);
+            }
             case "fluid" -> {
                 return loadFluid(bscanMasksDir);
             }
@@ -140,6 +163,42 @@ public final class SegmentationEnvelopeLoader {
                 return null;
             }
         }
+    }
+
+    /**
+     * sdretinanet boundaries as {@code surface_y} float32 {@code (n_layers, z,
+     * cols)}, labelled with the model's layer names. Confidence-0 A-scans are
+     * sent as 0, the "no value" the other surface tasks use.
+     */
+    private static SegmentationEnvelope sdRetinaNetSurfaces(SdRetinaNetVolume vol) {
+        int nLayers = vol.layerNames().size();
+        ByteBuffer bb = ByteBuffer.allocate(nLayers * vol.nBscans() * vol.width() * 4)
+                .order(ByteOrder.LITTLE_ENDIAN);
+        for (int l = 0; l < nLayers; l++) {
+            for (int b = 0; b < vol.nBscans(); b++) {
+                for (int a = 0; a < vol.width(); a++) {
+                    float v = vol.boundary(b, l, a);
+                    bb.putFloat(Float.isNaN(v) ? 0f : v);
+                }
+            }
+        }
+        return new SegmentationEnvelope("surface_y", "float32",
+                new int[]{nLayers, vol.nBscans(), vol.width()}, vol.layerNames(), "sdretinanet", bb.array());
+    }
+
+    /**
+     * sdretinanet lesions as {@code lesion_packed} uint8 {@code (z, rows,
+     * cols)}: the lesionlib packing, byte for byte. Labels list the main
+     * lesions, then the overlay lesions prefixed with {@code +}. A decoder takes
+     * {@code K} = the number of {@code +} labels; overlay {@code k} is bit
+     * {@code 7 - k} and the main id ({@code i + 1} for main label {@code i}) is
+     * the value masked to its low {@code 8 - K} bits.
+     */
+    private static SegmentationEnvelope sdRetinaNetLesions(SdRetinaNetVolume vol) {
+        List<String> labels = new ArrayList<>(vol.mainLesions());
+        for (String o : vol.overlayLesions()) labels.add("+" + o);
+        return new SegmentationEnvelope("lesion_packed", "uint8",
+                new int[]{vol.nBscans(), vol.height(), vol.width()}, labels, "sdretinanet", vol.packedLesions());
     }
 
     /** fluid: read {@code fluidseg.npz/segmentation.npy} and emit a uint8 volume envelope. */

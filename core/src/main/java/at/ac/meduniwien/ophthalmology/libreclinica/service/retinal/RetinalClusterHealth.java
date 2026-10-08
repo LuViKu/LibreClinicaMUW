@@ -58,7 +58,7 @@ public final class RetinalClusterHealth {
 
     /** The full task set a healthy server registers. Anything less is degraded. */
     public static final List<String> EXPECTED_TASKS =
-            List.of("bm", "fluid", "ga", "layers", "onl", "pr");
+            List.of("bm", "fluid", "ga", "layers", "onl", "pr", "sdretinanet");
 
     /** A node to probe: a display name and the sidecar's base URL (no {@code /health}). */
     public record NodeSpec(String name, String url) { }
