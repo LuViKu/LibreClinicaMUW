@@ -1,6 +1,5 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -42,9 +41,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
  * this reason (see the comments in {@code RetinalJobArtifactsApiController} and
  * {@code SubjectExportApiController}).
  *
- * <p>Tests of those endpoints use {@link ProductionMvc#standaloneWithGapFillers}.
- * If the list gains the two converters this test must flip and that helper go.
- * Not changed in the Jackson 3 stage, which keeps the list as it was.
+ * <p>The three endpoints named above no longer depend on the missing converters:
+ * they read the text fields as request parameters and write {@code byte[]}. The
+ * tests here remain true and pin the reason: a new endpoint that takes a text
+ * {@code @RequestPart} or returns a {@code String} or {@code Resource} body with a
+ * non-JSON content type fails the same way. If the list gains the converters,
+ * this test must flip. (Not a reason to add a global {@code StringHttpMessageConverter}:
+ * it would change how every {@code @ResponseBody String} is written.)
  */
 class ConverterListGapTest {
 
@@ -99,13 +102,4 @@ class ConverterListGapTest {
         assertInstanceOf(HttpMessageNotWritableException.class, e);
     }
 
-    @Test
-    void theGapFillersMakeAllThreeWork() throws Exception {
-        MockMvc filled = ProductionMvc.standaloneWithGapFillers(new Probe()).build();
-        assertEquals("<a/>", filled.perform(get("/xml-string")).andReturn().getResponse().getContentAsString());
-        assertEquals("abc", filled.perform(get("/resource")).andReturn().getResponse().getContentAsString());
-        assertEquals(200, filled.perform(multipart("/part")
-                .file(new MockMultipartFile("name", "", "text/plain", "v1".getBytes())))
-                .andReturn().getResponse().getStatus());
-    }
 }

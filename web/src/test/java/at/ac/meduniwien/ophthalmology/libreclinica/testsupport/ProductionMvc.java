@@ -5,8 +5,6 @@ import java.util.List;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
-import org.springframework.http.converter.ResourceHttpMessageConverter;
-import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.test.web.servlet.setup.StandaloneMockMvcBuilder;
@@ -55,21 +53,6 @@ public final class ProductionMvc {
             }
         }
         throw new IllegalStateException("no production converter reads " + type);
-    }
-
-    /**
-     * {@link #standalone} plus trailing {@link StringHttpMessageConverter} and
-     * {@link ResourceHttpMessageConverter}: what production's list lacks for
-     * three endpoints (see {@code ConverterListGapTest} for each and why). Their
-     * tests use this so they keep checking what they are about (guards, access
-     * rules) until the gap is decided; anything else must use {@link #standalone}.
-     */
-    public static StandaloneMockMvcBuilder standaloneWithGapFillers(Object... controllers) {
-        List<HttpMessageConverter<?>> all = new java.util.ArrayList<>(converters());
-        all.add(new StringHttpMessageConverter());
-        all.add(new ResourceHttpMessageConverter());
-        return MockMvcBuilders.standaloneSetup(controllers)
-                .setMessageConverters(all.toArray(new HttpMessageConverter<?>[0]));
     }
 
     /**
